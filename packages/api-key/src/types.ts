@@ -254,8 +254,10 @@ export interface ApiKeyConfigurationOptions {
 	 * returns optimistic data before the database is updated. If the deferred update
 	 * fails, the database will have stale values. Only enable if your application
 	 * can tolerate this trade-off for improved latency. Concurrent verifications
-	 * can be accepted from the same persisted counter snapshot, so strict concurrent
-	 * quota and rate-limit enforcement requires synchronous updates.
+	 * can be accepted from the same persisted counter snapshot. Synchronous guarded
+	 * enforcement is available only for database storage and secondary storage with
+	 * database fallback. Secondary-storage-only enforcement currently uses a
+	 * best-effort read-modify-write flow until atomic consumption is implemented.
 	 *
 	 * @default false
 	 */

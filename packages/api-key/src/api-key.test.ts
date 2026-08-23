@@ -3483,6 +3483,178 @@ describe("api-key", async () => {
 	});
 
 	describe("deferUpdates option", () => {
+		let onValidate: (() => Promise<void>) | null = null;
+		const customAPIKeyValidator = async () => {
+			const hook = onValidate;
+			onValidate = null;
+			if (hook) await hook();
+			return true;
+		};
+
+		const getDeferredDatabaseTestInstance = async () => {
+			const deferredPromises: Array<Promise<unknown>> = [];
+			const instance = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (promise: Promise<unknown>) => {
+							deferredPromises.push(promise);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+						customAPIKeyValidator,
+					}),
+				],
+			});
+			return { ...instance, deferredPromises };
+		};
+
+		afterEach(() => {
+			onValidate = null;
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("rechecks a stale quota denial against the database", async () => {
+			const { auth, deferredPromises, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					remaining: 0,
+					refillAmount: 2,
+					refillInterval: 60_000,
+				},
+			});
+			const authContext = await auth.$context;
+			onValidate = async () => {
+				await authContext.adapter.update<ApiKey>({
+					model: "apikey",
+					where: [{ field: "id", value: key.id }],
+					update: { remaining: 2 },
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.key?.remaining).toBe(1);
+			const stored = await authContext.adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+			});
+			expect(stored?.remaining).toBe(1);
+			await Promise.all(deferredPromises);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("retains a genuine database quota denial", async () => {
+			const { auth, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					remaining: 0,
+					refillAmount: 2,
+					refillInterval: 60_000,
+				},
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(false);
+			expect(result.error?.code).toBe("USAGE_EXCEEDED");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("rechecks a stale rate-limit denial against the database", async () => {
+			const { auth, deferredPromises, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					rateLimitMax: 1,
+					rateLimitTimeWindow: 60_000,
+				},
+			});
+			const authContext = await auth.$context;
+			await authContext.adapter.update<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+				update: { requestCount: 1, lastRequest: new Date() },
+			});
+			onValidate = async () => {
+				await authContext.adapter.update<ApiKey>({
+					model: "apikey",
+					where: [{ field: "id", value: key.id }],
+					update: { rateLimitMax: 2, rateLimitTimeWindow: 120_000 },
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.key?.requestCount).toBe(2);
+			const stored = await authContext.adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+			});
+			expect(stored).toMatchObject({
+				requestCount: 2,
+				rateLimitMax: 2,
+				rateLimitTimeWindow: 120_000,
+			});
+			await Promise.all(deferredPromises);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("retains a genuine database rate-limit denial with details", async () => {
+			const { auth, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					rateLimitMax: 1,
+					rateLimitTimeWindow: 60_000,
+				},
+			});
+			const authContext = await auth.$context;
+			await authContext.adapter.update<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+				update: { requestCount: 1, lastRequest: new Date() },
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(false);
+			expect(result.error).toMatchObject({
+				code: "RATE_LIMITED",
+				details: { tryAgainIn: expect.any(Number) },
+			});
+		});
+
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10921
 		 */

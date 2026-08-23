@@ -196,7 +196,36 @@ async function claimUsageInDatabase({
 		});
 	}
 
-	const mutations = getOptimisticUsageMutations(apiKey, opts);
+	let mutations: Partial<ApiKey>;
+	try {
+		mutations = getOptimisticUsageMutations(apiKey, opts);
+	} catch (error) {
+		if (
+			!isAPIError(error) ||
+			(error.body?.code !== "USAGE_EXCEEDED" &&
+				error.body?.code !== "RATE_LIMITED")
+		) {
+			throw error;
+		}
+
+		const freshApiKey = await ctx.context.adapter.findOne<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{ field: "id", value: apiKey.id },
+				{ field: "key", value: hashedKey },
+			],
+		});
+		if (!freshApiKey) {
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+		}
+
+		return claimUsageInDatabaseAuthoritatively({
+			ctx,
+			apiKey: freshApiKey,
+			opts,
+			hashedKey,
+		});
+	}
 	await ctx.context.runInBackgroundOrAwait(
 		claimUsageInDatabaseAuthoritatively({
 			ctx,
