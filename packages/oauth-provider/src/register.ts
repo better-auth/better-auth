@@ -4,10 +4,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
-import {
-	isHostBearingPrivateUseRedirectUri,
-	isReverseDomainPrivateUseRedirectUri,
-} from "@better-auth/core/utils/redirect-uri";
+import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
@@ -230,10 +227,7 @@ function validateClientRedirectUri(
 
 	if (
 		FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) ||
-		!(
-			isReverseDomainPrivateUseRedirectUri(url) ||
-			isHostBearingPrivateUseRedirectUri(url)
-		)
+		!isNativePrivateUseRedirectUri(url)
 	) {
 		invalidRedirectUri(
 			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with an authority: ${redirectUri}`,

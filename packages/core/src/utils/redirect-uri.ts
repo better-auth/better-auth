@@ -53,6 +53,14 @@ export function isHostBearingPrivateUseRedirectUri(uri: URL): boolean {
 	return uri.pathname.startsWith("/");
 }
 
+/** RFC 8252 recommended form or a host-bearing non-reserved custom scheme. */
+export function isNativePrivateUseRedirectUri(uri: URL): boolean {
+	return (
+		isReverseDomainPrivateUseRedirectUri(uri) ||
+		isHostBearingPrivateUseRedirectUri(uri)
+	);
+}
+
 /**
  * Zod schema for OAuth redirect URIs and other developer-supplied URLs that the
  * server stores and later hands back to a browser.

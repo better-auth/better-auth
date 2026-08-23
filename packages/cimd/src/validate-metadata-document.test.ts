@@ -665,14 +665,25 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
-	it("rejects a private-use redirect URI with a naming authority", () => {
+	it("accepts a host-bearing private-use redirect URI", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
-			client_name: "Invalid Private-use Client",
+			client_name: "Host-bearing Private-use Client",
 			redirect_uris: ["com.example.app://host/callback"],
 		});
-		expect(result.valid).toBe(false);
-		expect(result.error).toContain("redirect_uris");
+		expect(result.valid).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10946
+	 */
+	it("accepts Cursor's host-bearing cursor:// redirect URI", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Cursor MCP Client",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(result.valid).toBe(true);
 	});
 
 	it.each([
