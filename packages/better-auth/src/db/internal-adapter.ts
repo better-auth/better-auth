@@ -213,16 +213,6 @@ export const createInternalAdapter = (
 			model: "user",
 			where: [{ field: "id", value: session.userId }],
 		});
-		if (!user || !secondaryStorage) return user;
-
-		const sessionTTL = getTTLSeconds(new Date(session.expiresAt));
-		if (sessionTTL > 0) {
-			await secondaryStorage.set(
-				session.token,
-				JSON.stringify({ session, user }),
-				sessionTTL,
-			);
-		}
 		return user;
 	}
 
@@ -710,6 +700,8 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
+						let cachedSession: Session;
+						let cachedUser: User | null | undefined;
 						try {
 							const s = (
 								typeof sessionStringified === "string"
@@ -724,27 +716,29 @@ export const createInternalAdapter = (
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
 							}
-							const user = await resolveCachedSessionUser(s.session, s.user);
-							if (!user) continue;
-							const session = {
-								session: {
-									...s.session,
-									expiresAt: new Date(s.session.expiresAt),
-								},
-								user: {
-									...user,
-									createdAt: new Date(user.createdAt),
-									updatedAt: new Date(user.updatedAt),
-								},
-							} as {
-								session: Session;
-								user: User;
+							cachedSession = {
+								...s.session,
+								expiresAt,
 							};
-							sessions.push(session);
+							cachedUser = s.user;
 						} catch {
 							// Skip invalid/corrupt session data
 							continue;
 						}
+
+						const user = await resolveCachedSessionUser(
+							cachedSession,
+							cachedUser,
+						);
+						if (!user) continue;
+						sessions.push({
+							session: cachedSession,
+							user: {
+								...user,
+								createdAt: new Date(user.createdAt),
+								updatedAt: new Date(user.updatedAt),
+							},
+						});
 					}
 				}
 				return sessions;
