@@ -3483,6 +3483,81 @@ describe("api-key", async () => {
 	});
 
 	describe("deferUpdates option", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("does not block database verification on a deferred usage write", async () => {
+			const deferredPromises: Array<Promise<unknown>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (promise: Promise<unknown>) => {
+							deferredPromises.push(promise);
+						},
+					},
+				},
+				plugins: [apiKey({ deferUpdates: true })],
+			});
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id, remaining: 2 },
+			});
+			const authContext = await auth.$context;
+			const originalIncrementOne = authContext.adapter.incrementOne.bind(
+				authContext.adapter,
+			);
+			let releaseWrite!: () => void;
+			const writeGate = new Promise<void>((resolve) => {
+				releaseWrite = resolve;
+			});
+			let markWriteStarted!: () => void;
+			const writeStarted = new Promise<void>((resolve) => {
+				markWriteStarted = resolve;
+			});
+			let shouldBlock = true;
+			vi.spyOn(authContext.adapter, "incrementOne").mockImplementation(
+				async (input) => {
+					if (input.model === "apikey" && shouldBlock) {
+						shouldBlock = false;
+						markWriteStarted();
+						await writeGate;
+					}
+					return originalIncrementOne(input);
+				},
+			);
+
+			let settled = false;
+			const verification = auth.api
+				.verifyApiKey({
+					body: { key: key.key },
+				})
+				.then((result) => {
+					settled = true;
+					return result;
+				});
+			await writeStarted;
+			for (let turn = 0; turn < 10 && !settled; turn++) {
+				await Promise.resolve();
+				await new Promise<void>((resolve) => setTimeout(resolve, 0));
+			}
+
+			try {
+				expect(settled).toBe(true);
+				if (settled) {
+					const result = await verification;
+					expect(result.valid).toBe(true);
+					expect(result.key?.remaining).toBe(1);
+				}
+			} finally {
+				releaseWrite();
+				await verification;
+				await Promise.all(deferredPromises);
+			}
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
 		it("should defer updates when deferUpdates is enabled with global backgroundTasks", async () => {
 			const deferredPromises: Array<Promise<unknown>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
@@ -3523,6 +3598,9 @@ describe("api-key", async () => {
 			expect(updatedKey.lastRequest).not.toBeNull();
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
 		it("should still validate rate limits correctly with deferred updates", async () => {
 			const deferredPromises: Array<Promise<unknown>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
@@ -3571,6 +3649,9 @@ describe("api-key", async () => {
 			expect((result3.error as any)?.details).toHaveProperty("tryAgainIn");
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
 		it("should defer remaining count updates", async () => {
 			const deferredPromises: Array<Promise<unknown>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
@@ -3611,6 +3692,9 @@ describe("api-key", async () => {
 			expect(updatedKey.remaining).toBe(9);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
 		it("should not defer updates when backgroundTasks handler is not configured", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
@@ -3623,15 +3707,48 @@ describe("api-key", async () => {
 			const { headers, user } = await signInWithTestUser();
 
 			const key = await auth.api.createApiKey({
-				body: { userId: user.id },
-				headers,
+				body: { userId: user.id, remaining: 2 },
 			});
+			const authContext = await auth.$context;
+			const originalIncrementOne = authContext.adapter.incrementOne.bind(
+				authContext.adapter,
+			);
+			let releaseWrite!: () => void;
+			const writeGate = new Promise<void>((resolve) => {
+				releaseWrite = resolve;
+			});
+			let markWriteStarted!: () => void;
+			const writeStarted = new Promise<void>((resolve) => {
+				markWriteStarted = resolve;
+			});
+			let shouldBlock = true;
+			vi.spyOn(authContext.adapter, "incrementOne").mockImplementation(
+				async (input) => {
+					if (input.model === "apikey" && shouldBlock) {
+						shouldBlock = false;
+						markWriteStarted();
+						await writeGate;
+					}
+					return originalIncrementOne(input);
+				},
+			);
 
-			const result = await auth.api.verifyApiKey({
-				body: { key: key.key },
-			});
+			let settled = false;
+			const verification = auth.api
+				.verifyApiKey({
+					body: { key: key.key },
+				})
+				.then((result) => {
+					settled = true;
+					return result;
+				});
+			await writeStarted;
+			expect(settled).toBe(false);
+			releaseWrite();
+			const result = await verification;
 
 			expect(result.valid).toBe(true);
+			expect(result.key?.remaining).toBe(1);
 
 			// Without advanced.backgroundTasks handler, updates should happen synchronously
 			const updatedKey = await auth.api.getApiKey({
@@ -3639,6 +3756,7 @@ describe("api-key", async () => {
 				headers,
 			});
 			expect(updatedKey.lastRequest).not.toBeNull();
+			expect(updatedKey.remaining).toBe(1);
 		});
 	});
 
