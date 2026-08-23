@@ -11,11 +11,25 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Deep structural equality for JSON-serializable values.
- * Handles: primitives, null, arrays, and plain objects.
+ * Handles: primitives, null, arrays, plain objects, and dates.
  * Short-circuits on referential equality at every recursion level.
+ *
+ * Dates are compared by instant because the client parser revives ISO strings
+ * into `Date` instances, so payloads reaching this function routinely hold
+ * dates that are equal but never identical.
  */
 export function isJsonEqual(a: unknown, b: unknown): boolean {
 	if (a === b) return true;
+
+	if (a instanceof Date || b instanceof Date) {
+		// `Object.is` so two invalid dates (NaN) still compare equal, which
+		// keeps the gate stable instead of reporting a change on every set.
+		return (
+			a instanceof Date &&
+			b instanceof Date &&
+			Object.is(a.getTime(), b.getTime())
+		);
+	}
 
 	if (Array.isArray(a) && Array.isArray(b)) {
 		if (a.length !== b.length) return false;
