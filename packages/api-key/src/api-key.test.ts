@@ -3076,7 +3076,7 @@ describe("api-key", async () => {
 			});
 			const hashedKey = await defaultKeyHasher(createdKey.key);
 			const originalSet = fallbackStorage.set.bind(fallbackStorage);
-			const set = vi
+			const setSpy = vi
 				.spyOn(fallbackStorage, "set")
 				.mockImplementation(async (key, value, ttl) => {
 					if (key === `api-key:${hashedKey}`) {
@@ -3091,7 +3091,7 @@ describe("api-key", async () => {
 					body: { key: createdKey.key },
 				});
 			} finally {
-				set.mockRestore();
+				setSpy.mockRestore();
 			}
 
 			expect(result.valid).toBe(true);
