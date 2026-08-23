@@ -1,4 +1,5 @@
-import { tryGetCurrentAuthEndpointContext } from "../context/endpoint-context";
+import type { AuthEndpointContext } from "../context/endpoint-context";
+import { __getCurrentEndpointContext } from "../context/global";
 import { getColorDepth } from "./color-depth";
 
 export const TTY_COLORS = {
@@ -146,7 +147,8 @@ export const createLogger = (options?: Logger | undefined): InternalLogger => {
 const defaultLogger = createLogger();
 
 const getCurrentLogger = (): InternalLogger => {
-	const currentLogger = tryGetCurrentAuthEndpointContext()?.context.logger;
+	const currentLogger =
+		__getCurrentEndpointContext<AuthEndpointContext>()?.context.logger;
 	return currentLogger && currentLogger !== logger
 		? currentLogger
 		: defaultLogger;
