@@ -74,6 +74,68 @@ export async function validateApiKey({
 		}
 	}
 
+	await validateApiKeyPolicy({ ctx, apiKey, opts, permissions });
+
+	// A non-refillable key that is already exhausted is removed and rejected.
+	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
+		const deleteExhaustedKey = async () => {
+			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+				await deleteApiKey(ctx, apiKey, opts);
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [{ field: "id", value: apiKey.id }],
+				});
+			} else if (opts.storage === "secondary-storage") {
+				await deleteApiKey(ctx, apiKey, opts);
+			} else {
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [{ field: "id", value: apiKey.id }],
+				});
+			}
+		};
+
+		if (opts.deferUpdates) {
+			ctx.context.runInBackground(
+				deleteExhaustedKey().catch((error) => {
+					ctx.context.logger.error("Deferred update failed:", error);
+				}),
+			);
+		} else {
+			await deleteExhaustedKey();
+		}
+
+		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
+	}
+
+	const usesDatabase =
+		opts.storage === "database" ||
+		(opts.storage === "secondary-storage" && opts.fallbackToDatabase);
+
+	const newApiKey = usesDatabase
+		? await claimUsageInDatabase({
+				ctx,
+				apiKey,
+				opts,
+				hashedKey,
+				permissions,
+			})
+		: await claimUsageInSecondaryStorage({ ctx, apiKey, opts, hashedKey });
+
+	return { apiKey: newApiKey, opts };
+}
+
+async function validateApiKeyPolicy({
+	ctx,
+	apiKey,
+	opts,
+	permissions,
+}: {
+	ctx: GenericEndpointContext;
+	apiKey: ApiKey;
+	opts: PredefinedApiKeyOptions;
+	permissions?: Record<string, string[]> | undefined;
+}): Promise<void> {
 	if (apiKey.enabled === false) {
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
 	}
@@ -129,48 +191,6 @@ export async function validateApiKey({
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
 	}
-
-	// A non-refillable key that is already exhausted is removed and rejected.
-	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
-		const deleteExhaustedKey = async () => {
-			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-				await deleteApiKey(ctx, apiKey, opts);
-				await ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
-				});
-			} else if (opts.storage === "secondary-storage") {
-				await deleteApiKey(ctx, apiKey, opts);
-			} else {
-				await ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
-				});
-			}
-		};
-
-		if (opts.deferUpdates) {
-			ctx.context.runInBackground(
-				deleteExhaustedKey().catch((error) => {
-					ctx.context.logger.error("Deferred update failed:", error);
-				}),
-			);
-		} else {
-			await deleteExhaustedKey();
-		}
-
-		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
-	}
-
-	const usesDatabase =
-		opts.storage === "database" ||
-		(opts.storage === "secondary-storage" && opts.fallbackToDatabase);
-
-	const newApiKey = usesDatabase
-		? await claimUsageInDatabase({ ctx, apiKey, opts, hashedKey })
-		: await claimUsageInSecondaryStorage({ ctx, apiKey, opts, hashedKey });
-
-	return { apiKey: newApiKey, opts };
 }
 
 async function claimUsageInDatabase({
@@ -178,11 +198,13 @@ async function claimUsageInDatabase({
 	apiKey,
 	opts,
 	hashedKey,
+	permissions,
 }: {
 	ctx: GenericEndpointContext;
 	apiKey: ApiKey;
 	opts: PredefinedApiKeyOptions;
 	hashedKey: string;
+	permissions?: Record<string, string[]> | undefined;
 }): Promise<ApiKey> {
 	const canDefer =
 		opts.deferUpdates &&
@@ -218,6 +240,19 @@ async function claimUsageInDatabase({
 		if (!freshApiKey) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 		}
+		if (!configIdMatches(freshApiKey.configId, apiKey.configId)) {
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+		}
+
+		await validateApiKeyPolicy({
+			ctx,
+			apiKey: freshApiKey,
+			opts,
+			permissions,
+		});
+		// Reject a known fresh quota or rate-limit denial before the guarded
+		// database path can consume the other counter.
+		getOptimisticUsageMutations(freshApiKey, opts);
 
 		return claimUsageInDatabaseAuthoritatively({
 			ctx,

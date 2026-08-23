@@ -3556,6 +3556,181 @@ describe("api-key", async () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10921
 		 */
+		it("rejects a key disabled while recovering from a stale quota denial", async () => {
+			const { auth, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					remaining: 0,
+					refillAmount: 2,
+					refillInterval: 60_000,
+				},
+			});
+			const authContext = await auth.$context;
+			onValidate = async () => {
+				await authContext.adapter.update<ApiKey>({
+					model: "apikey",
+					where: [{ field: "id", value: key.id }],
+					update: { enabled: false, remaining: 2 },
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(false);
+			expect(result.error?.code).toBe("KEY_DISABLED");
+			const stored = await authContext.adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+			});
+			expect(stored).toMatchObject({ enabled: false, remaining: 2 });
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("rejects a key reconfigured while recovering from a stale quota denial", async () => {
+			const { auth, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					remaining: 0,
+					refillAmount: 2,
+					refillInterval: 60_000,
+				},
+			});
+			const authContext = await auth.$context;
+			onValidate = async () => {
+				await authContext.adapter.update<ApiKey>({
+					model: "apikey",
+					where: [{ field: "id", value: key.id }],
+					update: { configId: "other", remaining: 2 },
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(false);
+			expect(result.error?.code).toBe("INVALID_API_KEY");
+			const stored = await authContext.adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+			});
+			expect(stored).toMatchObject({ configId: "other", remaining: 2 });
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("rejects and removes a key expired while recovering from a stale quota denial", async () => {
+			const { auth, deferredPromises, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					remaining: 0,
+					refillAmount: 2,
+					refillInterval: 60_000,
+				},
+			});
+			const authContext = await auth.$context;
+			const incrementOne = vi.spyOn(authContext.adapter, "incrementOne");
+			onValidate = async () => {
+				await authContext.adapter.update<ApiKey>({
+					model: "apikey",
+					where: [{ field: "id", value: key.id }],
+					update: {
+						expiresAt: new Date(Date.now() - 1_000),
+						remaining: 2,
+					},
+				});
+			};
+
+			try {
+				const result = await auth.api.verifyApiKey({
+					body: { key: key.key },
+				});
+
+				expect(result.valid).toBe(false);
+				expect(result.error?.code).toBe("KEY_EXPIRED");
+				expect(incrementOne).not.toHaveBeenCalled();
+			} finally {
+				incrementOne.mockRestore();
+				await Promise.all(deferredPromises);
+			}
+			const stored = await authContext.adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+			});
+			expect(stored).toBeNull();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
+		it("rejects permissions removed while recovering from a stale rate-limit denial", async () => {
+			const { auth, signInWithTestUser } =
+				await getDeferredDatabaseTestInstance();
+			const { user } = await signInWithTestUser();
+			const key = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					permissions: { files: ["read"] },
+					remaining: 2,
+					rateLimitMax: 1,
+					rateLimitTimeWindow: 60_000,
+				},
+			});
+			const authContext = await auth.$context;
+			await authContext.adapter.update<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+				update: { requestCount: 1, lastRequest: new Date() },
+			});
+			onValidate = async () => {
+				await authContext.adapter.update<ApiKey>({
+					model: "apikey",
+					where: [{ field: "id", value: key.id }],
+					update: {
+						permissions: JSON.stringify({ files: [] }),
+						rateLimitMax: 2,
+					},
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: key.key,
+					permissions: { files: ["read"] },
+				},
+			});
+
+			expect(result.valid).toBe(false);
+			expect(result.error?.code).toBe("KEY_NOT_FOUND");
+			const stored = await authContext.adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+			});
+			expect(stored).toMatchObject({
+				permissions: JSON.stringify({ files: [] }),
+				rateLimitMax: 2,
+				remaining: 2,
+				requestCount: 1,
+			});
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10921
+		 */
 		it("retains a genuine database quota denial", async () => {
 			const { auth, signInWithTestUser } =
 				await getDeferredDatabaseTestInstance();
@@ -3633,6 +3808,7 @@ describe("api-key", async () => {
 			const key = await auth.api.createApiKey({
 				body: {
 					userId: user.id,
+					remaining: 2,
 					rateLimitMax: 1,
 					rateLimitTimeWindow: 60_000,
 				},
@@ -3653,6 +3829,11 @@ describe("api-key", async () => {
 				code: "RATE_LIMITED",
 				details: { tryAgainIn: expect.any(Number) },
 			});
+			const stored = await authContext.adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: key.id }],
+			});
+			expect(stored?.remaining).toBe(2);
 		});
 
 		/**
