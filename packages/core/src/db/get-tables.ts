@@ -27,6 +27,7 @@ function mergeTableIndexes(
 }
 
 const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
+	const usesIssuerIdentity = options.account?.identityStrategy === "issuer";
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -251,20 +252,26 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 		account: {
 			modelName: options.account?.modelName || "account",
 			indexes: mergeTableIndexes(
-				[
-					{
-						fields: ["issuer", "accountId"],
-						unique: true,
-					},
-				],
+				usesIssuerIdentity
+					? [
+							{
+								fields: ["issuer", "accountId"],
+								unique: true,
+							},
+						]
+					: undefined,
 				account?.indexes,
 			),
 			fields: {
-				issuer: {
-					type: "string",
-					required: true,
-					fieldName: options.account?.fields?.issuer || "issuer",
-				},
+				...(usesIssuerIdentity
+					? {
+							issuer: {
+								type: "string" as const,
+								required: true,
+								fieldName: options.account?.fields?.issuer || "issuer",
+							},
+						}
+					: {}),
 				accountId: {
 					type: "string",
 					required: true,

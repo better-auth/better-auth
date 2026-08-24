@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { AccountKey } from "@better-auth/core/db";
 import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import {
@@ -6,6 +7,10 @@ import {
 	BetterAuthError,
 } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
+
+type AccountIdentityStrategy = NonNullable<
+	BetterAuthOptions["account"]
+>["identityStrategy"];
 
 /**
  * Exposes a provider-declared profile as the raw claim record used by
@@ -23,6 +28,7 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
+	identityStrategy?: AccountIdentityStrategy,
 ): Promise<AccountKey> {
 	const accountKeyContext = { tokens, profile };
 	const accountSubject = provider.accountSubject;
@@ -36,6 +42,10 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 		accountId === "null"
 	) {
 		throw new BetterAuthError("OAUTH_ACCOUNT_SUBJECT_INVALID");
+	}
+
+	if (identityStrategy !== "issuer") {
+		return { providerId: provider.id, accountId };
 	}
 
 	const accountIssuer = provider.accountIssuer;
@@ -68,9 +78,15 @@ export async function resolveOAuthAccountKeyForAPI<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
+	identityStrategy?: AccountIdentityStrategy,
 ): Promise<AccountKey> {
 	try {
-		return await resolveOAuthAccountKey(provider, tokens, profile);
+		return await resolveOAuthAccountKey(
+			provider,
+			tokens,
+			profile,
+			identityStrategy,
+		);
 	} catch {
 		throw APIError.from(
 			"UNAUTHORIZED",

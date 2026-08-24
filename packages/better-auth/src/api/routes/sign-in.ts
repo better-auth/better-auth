@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	additionalAuthorizationParamsSchema,
@@ -323,6 +324,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					provider,
 					oauthTokens,
 					userInfo.data,
+					c.context.options.account?.identityStrategy,
 				);
 				const providerProfile = toOAuthProfileRecord(userInfo.data);
 				const data = await handleOAuthUserInfo(c, {
@@ -529,12 +531,20 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				email.toLowerCase(),
 				{ includeAccounts: true },
 			);
-			const credentialIssuer = createLocalAccountIssuer("credential");
+			const credentialKey = resolveAccountIdentity(
+				ctx.context.options.account?.identityStrategy,
+				{
+					providerId: "credential",
+					issuer: createLocalAccountIssuer("credential"),
+					accountId: userRecord?.user.id ?? "",
+				},
+			).key;
 			const credentialAccount = userRecord?.accounts.find(
 				(account) =>
-					account.providerId === "credential" &&
-					account.issuer === credentialIssuer &&
-					account.accountId === userRecord.user.id,
+					account.accountId === userRecord.user.id &&
+					(credentialKey.issuer !== undefined
+						? account.issuer === credentialKey.issuer
+						: account.providerId === credentialKey.providerId),
 			);
 
 			if (!userRecord || !credentialAccount) {

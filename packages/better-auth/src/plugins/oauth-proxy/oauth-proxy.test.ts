@@ -552,7 +552,7 @@ describe("oauth-proxy", async () => {
 				};
 				account: {
 					providerId: string;
-					issuer: string;
+					issuer?: string;
 					accountId: string;
 					accessToken?: string;
 					refreshToken?: string;
@@ -566,7 +566,7 @@ describe("oauth-proxy", async () => {
 			expect(payload.userInfo.email).toBe("user@email.com");
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
-			expect(payload.account.issuer).toBe("https://accounts.google.com");
+			expect(payload.account).not.toHaveProperty("issuer");
 			expect(payload.account.accountId).toBe("1234567890");
 			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
@@ -1213,7 +1213,6 @@ describe("oauth-proxy", async () => {
 			expect(accounts).toContainEqual(
 				expect.objectContaining({
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "1234567890",
 				}),
 			);

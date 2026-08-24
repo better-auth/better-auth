@@ -6,6 +6,7 @@ import {
 	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
 import { createEmailVerificationToken } from "../api";
@@ -41,8 +42,30 @@ export async function handleOAuthUserInfo(
 		requireExactAccountBinding?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const {
+		userInfo,
+		account: inputAccount,
+		callbackURL,
+		disableSignUp,
+		overrideUserInfo,
+	} = opts;
+	const { issuer: inputIssuer, ...accountWithoutIssuer } = inputAccount;
+	const resolvedIdentity = resolveAccountIdentity(
+		c.context.options.account?.identityStrategy,
+		{
+			providerId: inputAccount.providerId,
+			accountId: inputAccount.accountId,
+			issuer: inputIssuer,
+		},
+	);
+	const account = { ...accountWithoutIssuer, ...resolvedIdentity.fields };
+	const accountKey = resolvedIdentity.key;
+	const accountIssuer =
+		"issuer" in resolvedIdentity.fields
+			? resolvedIdentity.fields.issuer
+			: undefined;
+	const accountIdentityFields =
+		accountIssuer === undefined ? {} : { issuer: accountIssuer };
 	const source = opts.source ?? {
 		method: "oauth",
 		oauth: { providerId: account.providerId },
@@ -51,10 +74,7 @@ export async function handleOAuthUserInfo(
 		!!opts.selectedUser || opts.requireExactAccountBinding === true;
 	let pendingAccountCookie: Account | null = null;
 	const accountOwner = await c.context.internalAdapter
-		.findAccountOwnerByKey({
-			issuer: account.issuer,
-			accountId: account.accountId,
-		})
+		.findAccountOwnerByKey(accountKey)
 		.catch((e) => {
 			c.context.logger.error(
 				"Better auth was unable to query your database.\nError: ",
@@ -145,7 +165,10 @@ export async function handleOAuthUserInfo(
 			dbUser.linkedAccount ??
 			dbUser.accounts.find(
 				(acc) =>
-					acc.issuer === account.issuer && acc.accountId === account.accountId,
+					(accountIssuer === undefined
+						? acc.providerId === account.providerId
+						: acc.issuer === accountIssuer) &&
+					acc.accountId === account.accountId,
 			);
 		if (!linkedAccount) {
 			const accountLinking = c.context.options.account?.accountLinking;
@@ -186,7 +209,7 @@ export async function handleOAuthUserInfo(
 				});
 				const createdAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
-					issuer: account.issuer,
+					...accountIdentityFields,
 					accountId: account.accountId,
 					userId: dbUser.user.id,
 					accessToken: await setTokenUtil(account.accessToken, c.context),
@@ -204,7 +227,8 @@ export async function handleOAuthUserInfo(
 				}
 				if (
 					requireExactAccountBinding &&
-					(createdAccount.issuer !== account.issuer ||
+					((accountIssuer !== undefined &&
+						createdAccount.issuer !== accountIssuer) ||
 						createdAccount.accountId !== account.accountId ||
 						createdAccount.providerId !== account.providerId ||
 						createdAccount.userId !== dbUser.user.id)
@@ -305,7 +329,8 @@ export async function handleOAuthUserInfo(
 				}
 				if (
 					requireExactAccountBinding &&
-					(updatedAccount.issuer !== account.issuer ||
+					((accountIssuer !== undefined &&
+						updatedAccount.issuer !== accountIssuer) ||
 						updatedAccount.accountId !== account.accountId ||
 						updatedAccount.providerId !== account.providerId ||
 						updatedAccount.userId !== dbUser.user.id)
@@ -410,7 +435,7 @@ export async function handleOAuthUserInfo(
 				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 				scope: account.scope,
 				providerId: account.providerId,
-				issuer: account.issuer,
+				...accountIdentityFields,
 				accountId: account.accountId,
 			};
 			const { createdUser, createdAccount } = await runWithTransaction(
@@ -435,7 +460,8 @@ export async function handleOAuthUserInfo(
 			);
 			if (
 				requireExactAccountBinding &&
-				(createdAccount.issuer !== account.issuer ||
+				((accountIssuer !== undefined &&
+					createdAccount.issuer !== accountIssuer) ||
 					createdAccount.accountId !== account.accountId ||
 					createdAccount.providerId !== account.providerId ||
 					createdAccount.userId !== createdUser.id)

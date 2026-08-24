@@ -9,7 +9,7 @@ import { coreSchema } from "./shared";
 
 export const accountSchema = coreSchema.extend({
 	providerId: z.string(),
-	issuer: z.string(),
+	issuer: z.string().optional(),
 	accountId: z.string(),
 	userId: z.coerce.string(),
 	accessToken: z.string().nullish(),
@@ -39,7 +39,76 @@ export const accountSchema = coreSchema.extend({
 export type BaseAccount = z.infer<typeof accountSchema>;
 
 /** The stable provider-side key used to recognize an account. */
-export type AccountKey = Readonly<Pick<BaseAccount, "issuer" | "accountId">>;
+export type AccountKey = Readonly<
+	| {
+			providerId: string;
+			accountId: string;
+			issuer?: never;
+	  }
+	| {
+			issuer: string;
+			accountId: string;
+			providerId?: never;
+	  }
+>;
+
+export type AccountIdentityStrategy = "provider-id" | "issuer";
+
+type AccountIdentityInput = Readonly<{
+	providerId: string;
+	accountId: string;
+	issuer?: string | undefined;
+}>;
+
+type ResolvedAccountIdentity = Readonly<
+	| {
+			key: Extract<AccountKey, { providerId: string }>;
+			fields: {
+				providerId: string;
+				accountId: string;
+			};
+	  }
+	| {
+			key: Extract<AccountKey, { issuer: string }>;
+			fields: {
+				providerId: string;
+				accountId: string;
+				issuer: string;
+			};
+	  }
+>;
+
+/**
+ * Resolves the account lookup key and database fields for the selected
+ * identity strategy. An omitted strategy preserves v1.6 provider identity.
+ */
+export function resolveAccountIdentity(
+	identityStrategy: AccountIdentityStrategy | undefined,
+	input: AccountIdentityInput,
+): ResolvedAccountIdentity {
+	if (identityStrategy !== "issuer") {
+		return {
+			key: { providerId: input.providerId, accountId: input.accountId },
+			fields: { providerId: input.providerId, accountId: input.accountId },
+		};
+	}
+	if (
+		input.issuer === undefined ||
+		input.issuer.trim().length === 0 ||
+		input.issuer === "undefined" ||
+		input.issuer === "null"
+	) {
+		throw new Error("Issuer-scoped account identity requires a valid issuer");
+	}
+	return {
+		key: { issuer: input.issuer, accountId: input.accountId },
+		fields: {
+			providerId: input.providerId,
+			accountId: input.accountId,
+			issuer: input.issuer,
+		},
+	};
+}
 
 function encodeAccountIssuerProviderId(providerId: string): string {
 	return encodeURIComponent(providerId);
@@ -68,7 +137,10 @@ export type Account<
 	DBOptions extends BetterAuthOptions["account"] = BetterAuthOptions["account"],
 	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
 > = Prettify<
-	BaseAccount &
+	Omit<BaseAccount, "issuer"> &
+		(NonNullable<DBOptions> extends { identityStrategy: "issuer" }
+			? { issuer: string }
+			: { issuer?: string }) &
 		InferDBFieldsFromOptions<DBOptions> &
 		InferDBFieldsFromPlugins<"account", Plugins>
 >;

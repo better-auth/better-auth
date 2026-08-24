@@ -215,7 +215,7 @@ describe("account", async () => {
 			(account) => account.id === storedAccount.id,
 		);
 		assert(googleAccount, "google account should be listed");
-		expect(googleAccount.issuer).toBe("https://accounts.google.com");
+		expect(googleAccount).not.toHaveProperty("issuer");
 		expect(googleAccount.accountId).toBe("local-account-selector-subject");
 		expect(googleAccount.id).not.toBe(googleAccount.accountId);
 
@@ -328,7 +328,6 @@ describe("account", async () => {
 				account: {
 					id: googleAccount.id,
 					providerId: googleAccount.providerId,
-					issuer: googleAccount.issuer,
 					accountId: googleAccount.accountId,
 				},
 				data: expect.any(Object),
@@ -505,6 +504,7 @@ describe("account", async () => {
 				},
 			},
 			account: {
+				identityStrategy: "issuer",
 				accountLinking: {
 					allowDifferentEmails: true,
 				},
@@ -932,6 +932,7 @@ describe("account", async () => {
 				},
 			},
 			account: {
+				identityStrategy: "issuer",
 				accountLinking: {
 					allowDifferentEmails: true,
 				},
@@ -2778,7 +2779,11 @@ describe("account resolution in stateless mode", async () => {
 					refreshCache: { updateAge: 60 * 60 },
 				},
 			},
-			account: { storeStateStrategy: "cookie", storeAccountCookie: true },
+			account: {
+				identityStrategy: "issuer",
+				storeStateStrategy: "cookie",
+				storeAccountCookie: true,
+			},
 			plugins: [
 				genericOAuth({
 					config: [

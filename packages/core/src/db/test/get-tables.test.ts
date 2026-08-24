@@ -4,6 +4,7 @@ import type { AccountKey } from "../schema/account";
 import {
 	createLocalAccountIssuer,
 	createOAuthAccountIssuer,
+	resolveAccountIdentity,
 } from "../schema/account";
 import type { SecondaryStorage } from "../type";
 
@@ -16,6 +17,49 @@ const secondaryStorageStub: SecondaryStorage = {
 };
 
 describe("getAuthTables", () => {
+	it("uses the v1.6 provider-scoped account schema by default", () => {
+		const tables = getAuthTables({});
+
+		expect(tables.account?.fields.issuer).toBeUndefined();
+		expect(tables.account?.indexes).not.toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+	});
+
+	it("omits issuer from default account identity fields", () => {
+		expect(
+			resolveAccountIdentity(undefined, {
+				providerId: "google",
+				accountId: "subject",
+				issuer: "https://accounts.google.com",
+			}),
+		).toEqual({
+			key: { providerId: "google", accountId: "subject" },
+			fields: { providerId: "google", accountId: "subject" },
+		});
+	});
+
+	it("keeps issuer in explicitly issuer-scoped account identity fields", () => {
+		expect(
+			resolveAccountIdentity("issuer", {
+				providerId: "google",
+				accountId: "subject",
+				issuer: "https://accounts.google.com",
+			}),
+		).toEqual({
+			key: {
+				issuer: "https://accounts.google.com",
+				accountId: "subject",
+			},
+			fields: {
+				providerId: "google",
+				accountId: "subject",
+				issuer: "https://accounts.google.com",
+			},
+		});
+	});
+
 	it("creates a local account key without changing the provider account id", () => {
 		const credentialAccountKey: AccountKey = {
 			issuer: createLocalAccountIssuer("credential"),
@@ -103,6 +147,7 @@ describe("getAuthTables", () => {
 	it("defines the issuer-scoped account key with configured field names", () => {
 		const tables = getAuthTables({
 			account: {
+				identityStrategy: "issuer",
 				fields: {
 					issuer: "identity_issuer",
 					accountId: "provider_subject",

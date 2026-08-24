@@ -12,8 +12,10 @@ import {
 	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import type { AccountKey } from "@better-auth/core/db";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -49,6 +51,18 @@ type ActiveSessionReference = {
 	readonly token: string;
 	readonly expiresAt: number;
 };
+
+function getAccountKeyWhere(accountKey: AccountKey): Where[] {
+	return accountKey.issuer !== undefined
+		? [
+				{ field: "issuer", value: accountKey.issuer },
+				{ field: "accountId", value: accountKey.accountId },
+			]
+		: [
+				{ field: "providerId", value: accountKey.providerId },
+				{ field: "accountId", value: accountKey.accountId },
+			];
+}
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -999,21 +1013,12 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findAccountOwnerByKey: async ({ issuer, accountId }) => {
+		findAccountOwnerByKey: async (accountKey) => {
 			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
 				model: "account",
-				where: [
-					{
-						field: "issuer",
-						value: issuer,
-					},
-					{
-						field: "accountId",
-						value: accountId,
-					},
-				],
+				where: getAccountKeyWhere(accountKey),
 				join: {
 					user: true,
 				},
@@ -1136,6 +1141,14 @@ export const createInternalAdapter = (
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
+			const accountKey = resolveAccountIdentity(
+				options.account?.identityStrategy,
+				{
+					providerId: "credential",
+					issuer: createLocalAccountIssuer("credential"),
+					accountId: userId,
+				},
+			).key;
 			await updateManyWithHooks(
 				{
 					password,
@@ -1145,18 +1158,7 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
-					{
-						field: "providerId",
-						value: "credential",
-					},
-					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
-					},
-					{
-						field: "accountId",
-						value: userId,
-					},
+					...getAccountKeyWhere(accountKey),
 				],
 				"account",
 				undefined,
@@ -1177,33 +1179,26 @@ export const createInternalAdapter = (
 			return accounts;
 		},
 		findCredentialAccount: async (userId: string) => {
+			const accountKey: AccountKey =
+				options.account?.identityStrategy === "issuer"
+					? {
+							issuer: createLocalAccountIssuer("credential"),
+							accountId: userId,
+						}
+					: { providerId: "credential", accountId: userId };
 			return (await getCurrentAdapter(adapter)).findOne<Account>({
 				model: "account",
 				where: [
 					{ field: "userId", value: userId },
-					{ field: "providerId", value: "credential" },
-					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
-					},
-					{ field: "accountId", value: userId },
+					...getAccountKeyWhere(accountKey),
 				],
 			});
 		},
-		findAccountByKey: async ({ issuer, accountId }) => {
+		findAccountByKey: async (accountKey) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
 					model: "account",
-					where: [
-						{
-							field: "issuer",
-							value: issuer,
-						},
-						{
-							field: "accountId",
-							value: accountId,
-						},
-					],
+					where: getAccountKeyWhere(accountKey),
 				},
 			);
 			return account;

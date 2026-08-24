@@ -27,9 +27,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "idToken": {
             "type": "string",
           },
-          "issuer": {
-            "type": "string",
-          },
           "password": {
             "type": "string",
           },
@@ -56,7 +53,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         },
         "required": [
           "id",
-          "issuer",
           "accountId",
           "providerId",
           "userId",
@@ -241,7 +237,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "required": [
                         "id",
                         "providerId",
-                        "issuer",
                         "accountId",
                       ],
                       "type": "object",
@@ -2249,7 +2244,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "providerId",
                       "createdAt",
                       "updatedAt",
-                      "issuer",
                       "accountId",
                       "userId",
                       "scopes",

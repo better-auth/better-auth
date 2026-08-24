@@ -472,6 +472,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	account: {
 		modelName: "accounts",
+		identityStrategy: "provider-id",
 		fields: {
 			userId: "user_id"
 		},
@@ -489,6 +490,10 @@ export const auth = betterAuth({
 
 * `modelName`: The model name for the account
 * `fields`: Map fields to different column names
+
+### `identityStrategy`
+
+Controls the database key Better Auth uses to recognize a provider account. The default `"provider-id"` strategy uses `(providerId, accountId)` and does not add or persist an `issuer` field. Set `"issuer"` to use `(issuer, accountId)` and include the required issuer field and compound index in generated schemas. Keep the value consistent across every instance connected to the database, and follow the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy) before changing it on existing data.
 
 ### `encryptOAuthTokens`
 

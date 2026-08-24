@@ -195,7 +195,10 @@ describe("SSO OIDC user resolution HTTP", () => {
 			},
 			onTestFinished,
 			{
-				account: { storeAccountCookie: true },
+				account: {
+					identityStrategy: "issuer",
+					storeAccountCookie: true,
+				},
 				user: {
 					validateUserInfo({ source }: { source: { action: string } }) {
 						validationActions.push(source.action);
@@ -284,6 +287,49 @@ describe("SSO OIDC user resolution HTTP", () => {
 			providerId: "workforce",
 			userId: selectedUser.id,
 		});
+	});
+
+	it("uses the provider-scoped identity in resolution hooks and stored accounts", async ({
+		onTestFinished,
+	}) => {
+		subject = "provider-scoped-directory-user";
+		email = "provider-scoped@example.com";
+		const inputs: SSOUserResolutionInput[] = [];
+		const instance = await createInstance(
+			{
+				resolveUser(input) {
+					inputs.push(input);
+					return { action: "continue" };
+				},
+			},
+			onTestFinished,
+			{ account: { identityStrategy: "provider-id" } },
+		);
+
+		const signIn = await completeSignIn(instance.baseURL);
+		expect(signIn.callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(inputs).toHaveLength(1);
+		expect(inputs[0]).toMatchObject({
+			protocol: "oidc",
+			providerId: "workforce",
+			accountKey: {
+				providerId: "workforce",
+				accountId: subject,
+			},
+		});
+		const accounts = await instance.db.findMany<Account>({
+			model: "account",
+			where: [],
+		});
+		expect(accounts).toEqual([
+			expect.objectContaining({
+				accountId: subject,
+				providerId: "workforce",
+			}),
+		]);
+		expect(accounts[0]?.issuer).toBeUndefined();
 	});
 
 	it("preserves an unverified selected profile on a same-email first link", async ({
@@ -538,7 +584,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 
-	it("rejects another provider alias for an existing subject even on default resolution", async ({
+	it("rejects another provider alias for an existing subject under issuer-scoped identity", async ({
 		onTestFinished,
 	}) => {
 		subject = "provider-conflict-user";
@@ -546,7 +592,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		const instance = await createInstance(
 			{ resolveUser: () => ({ action: "continue" }) },
 			onTestFinished,
-			{},
+			{ account: { identityStrategy: "issuer" } },
 			[provider("workforce"), provider("another-workforce")],
 		);
 		expect(

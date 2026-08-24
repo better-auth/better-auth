@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
@@ -974,9 +975,14 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.user.id,
-					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
-					accountId: user.user.id,
+					...resolveAccountIdentity(
+						ctx.context.options.account?.identityStrategy,
+						{
+							providerId: "credential",
+							issuer: createLocalAccountIssuer("credential"),
+							accountId: user.user.id,
+						},
+					).fields,
 					password: passwordHash,
 				});
 			} else {

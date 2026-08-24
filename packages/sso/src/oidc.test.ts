@@ -14,6 +14,7 @@ const server = new OAuth2Server();
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			account: { identityStrategy: "issuer" },
 			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
