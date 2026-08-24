@@ -659,6 +659,55 @@ export async function checkOAuthClient(
 			});
 		}
 	}
+
+	// Front-channel logout never signs anything, so unlike the back-channel URI
+	// this one has no JWT-plugin requirement. Every other constraint mirrors the
+	// back-channel treatment above so both logout URIs hold to one policy.
+	if (clientWithDefaults.frontchannel_logout_uri !== undefined) {
+		let url: URL;
+		try {
+			url = new URL(clientWithDefaults.frontchannel_logout_uri);
+		} catch {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "frontchannel_logout_uri must be an absolute URL",
+			});
+		}
+		// The OP extends this URI with `iss`/`sid` query parameters, so a
+		// fragment has no defined meaning; check the raw value rather than
+		// `url.hash`, which is empty for a bare trailing `#`.
+		if (clientWithDefaults.frontchannel_logout_uri.includes("#")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must not include a fragment component",
+			});
+		}
+		if (url.protocol !== "https:") {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "frontchannel_logout_uri must use https",
+			});
+		}
+		if (url.username || url.password) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must not contain credentials",
+			});
+		}
+		// The OP points every end-user's browser at this URI from its own logout
+		// page, so a non-public host would make that page a way to drive browsers
+		// at internal endpoints — the browser-side analogue of the SSRF guard on
+		// the back-channel target.
+		if (isPrivateHostname(url.hostname)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must not point to a private or reserved address",
+			});
+		}
+	}
 }
 
 interface CreateOAuthClientRegistrationBaseInput {
@@ -1271,6 +1320,8 @@ export function oauthToSchema(
 		post_logout_redirect_uris: postLogoutRedirectUris,
 		backchannel_logout_uri: backchannelLogoutUri,
 		backchannel_logout_session_required: backchannelLogoutSessionRequired,
+		frontchannel_logout_uri: frontchannelLogoutUri,
+		frontchannel_logout_session_required: frontchannelLogoutSessionRequired,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -1326,6 +1377,8 @@ export function oauthToSchema(
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -1378,6 +1431,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -1440,6 +1495,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		backchannel_logout_uri: backchannelLogoutUri ?? undefined,
 		backchannel_logout_session_required:
 			backchannelLogoutSessionRequired ?? undefined,
+		frontchannel_logout_uri: frontchannelLogoutUri ?? undefined,
+		frontchannel_logout_session_required:
+			frontchannelLogoutSessionRequired ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
 		response_types: responseTypes ?? undefined,
