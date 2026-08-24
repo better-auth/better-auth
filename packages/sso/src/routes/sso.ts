@@ -1620,6 +1620,10 @@ async function handleOIDCCallback(
 				"id_token_userinfo_subject_mismatch",
 			);
 		}
+		// We use the ID token's email if the user info endpoint happens to not return an email.
+		const fallbackEmail = verifiedIdToken
+			? readStringClaim(verifiedIdToken.payload, mapping.email || "email")
+			: undefined;
 		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
@@ -1629,7 +1633,8 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: readStringClaim(rawUserInfo, "sub"),
-			email: readStringClaim(rawUserInfo, mapping.email || "email"),
+			email:
+				readStringClaim(rawUserInfo, mapping.email || "email") || fallbackEmail,
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
