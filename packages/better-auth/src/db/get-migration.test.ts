@@ -1392,6 +1392,74 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		);
 	});
 
+	it.each([
+		{
+			expected: {
+				automaticNamespaceResolution: { resolved: 2, total: 2 },
+				externalAccounts: 2,
+				manualReviewProviders: [],
+				projectedCollisions: 0,
+				totalAccounts: 3,
+			},
+			strategy: "provider-id" as const,
+		},
+		{
+			expected: {
+				automaticNamespaceResolution: { resolved: 2, total: 2 },
+				externalAccounts: 2,
+				manualReviewProviders: [],
+				projectedCollisions: 0,
+				totalAccounts: 3,
+			},
+			strategy: "issuer" as const,
+		},
+	])("reports $strategy namespace readiness", async ({
+		expected,
+		strategy,
+	}) => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyAccountTable(db);
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: strategy },
+			database: db,
+			socialProviders: socialConfig,
+		};
+
+		const migration = await getMigrations(config, { throwOnUnsafe: false });
+
+		expect(migration.accountIdentity).toMatchObject(expected);
+	});
+
+	it("reports distinct projected issuer identity collisions", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"issuer" text,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES
+				('a1', 'subject', 'https://issuer.example.com', 'custom-a', 'u1', '2020-01-01', '2020-01-01'),
+				('a2', 'subject', 'https://issuer.example.com', 'custom-b', 'u2', '2020-01-01', '2020-01-01'),
+				('a3', 'subject', 'https://issuer.example.com', 'custom-c', 'u3', '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
+			database: db,
+		};
+
+		const migration = await getMigrations(config, { throwOnUnsafe: false });
+
+		expect(migration.accountIdentity.projectedCollisions).toBe(1);
+	});
+
 	it("keeps an already-migrated v1.7 issuer database unchanged by default", async () => {
 		const db = new DatabaseSync(":memory:");
 		const publishedV17Config: BetterAuthOptions = {
@@ -1857,6 +1925,45 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				accountCount: 1,
 				code: "issuer-required",
 				providerId: "github",
+				reason: "unconfigured-provider",
+				table: "account",
+			},
+		]);
+	});
+
+	it("reports an unconfigured SIWE provider as requiring issuer review", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES ('a1', '0x1234', 'siwe', 'u1', '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
+			database: db,
+		};
+
+		const migration = await getMigrations(config, { throwOnUnsafe: false });
+
+		expect(migration.accountIdentity).toMatchObject({
+			automaticNamespaceResolution: { resolved: 0, total: 1 },
+			externalAccounts: 1,
+			manualReviewProviders: ["siwe"],
+		});
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			{
+				accountCount: 1,
+				code: "issuer-required",
+				providerId: "siwe",
 				reason: "unconfigured-provider",
 				table: "account",
 			},

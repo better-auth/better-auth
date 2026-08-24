@@ -145,6 +145,7 @@ it("plans an explicit provider-id upgrade against Drizzle snake_case columns", a
 		expect(inspection.accountIdentity).toMatchObject({
 			selectedStrategy: "provider-id",
 			detectedStrategy: "provider-id",
+			totalAccounts: 1,
 		});
 		expect(inspection.migrationBlockers).not.toContainEqual(
 			expect.objectContaining({

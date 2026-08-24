@@ -612,6 +612,13 @@ export interface AccountIdentityMigrationAssessment {
 		| undefined;
 	migrationRequired: boolean;
 	requiresRekey: boolean;
+	totalAccounts: number;
+	externalAccounts: number;
+	automaticNamespaceResolution?:
+		| { resolved: number; total: number }
+		| undefined;
+	projectedCollisions: number;
+	manualReviewProviders: string[];
 }
 
 /** Inspects the configured account-identity path without changing the database. */
@@ -633,6 +640,10 @@ export async function inspectAccountIdentityMigration(
 		physicalSchema,
 		migrationRequired: false,
 		requiresRekey: false,
+		totalAccounts: 0,
+		externalAccounts: 0,
+		projectedCollisions: 0,
+		manualReviewProviders: [],
 	});
 	if (!accountSchema) return createEmptyAssessment();
 	const physicalSchema = {
@@ -675,26 +686,28 @@ export async function inspectAccountIdentityMigration(
 	).length;
 	const physicalSchemaComplete =
 		columns.has(issuerColumn) && accountsWithIssuer === accounts.length;
+	const configuredIdentity = await resolveConfiguredIssuerState(
+		config,
+		"issuer",
+	);
+	const resolveProviderKind = (providerId: string): ProviderIdentityKind =>
+		configuredIdentity.providerKinds[providerId] ??
+		(providerId === "credential" ? "local" : "external");
 	let detectedStrategy: AccountIdentityMigrationAssessment["detectedStrategy"];
 	if (!physicalSchemaComplete) {
 		detectedStrategy = accountsWithIssuer === 0 ? "provider-id" : "mixed";
 	} else {
-		const configured = await resolveConfiguredIssuerState(config, "issuer");
 		let providerScopedEvidence = false;
 		let issuerScopedEvidence = false;
 		for (const account of accounts) {
 			const storedIssuer = readStoredIssuer(account.issuer);
 			if (!storedIssuer) continue;
-			const identityKind =
-				configured.providerKinds[account.providerId] ??
-				(account.providerId === "credential" || account.providerId === "siwe"
-					? "local"
-					: "external");
+			const identityKind = resolveProviderKind(account.providerId);
 			const providerScopedIssuer = createProviderScopedMigrationIssuer(
 				account.providerId,
 				identityKind,
 			);
-			const configuredIssuer = configured.issuers[account.providerId];
+			const configuredIssuer = configuredIdentity.issuers[account.providerId];
 			if (configuredIssuer === providerScopedIssuer) continue;
 			if (storedIssuer === providerScopedIssuer) {
 				providerScopedEvidence = true;
@@ -714,12 +727,60 @@ export async function inspectAccountIdentityMigration(
 	const requiresRekey =
 		physicalSchemaComplete &&
 		(detectedStrategy === "mixed" || detectedStrategy !== selectedStrategy);
+	const externalAccountRows = accounts.filter(
+		(account) => resolveProviderKind(account.providerId) === "external",
+	);
+	const resolveProjectedNamespace = (account: (typeof accounts)[number]) => {
+		if (selectedStrategy === "provider-id") {
+			return createProviderScopedMigrationIssuer(
+				account.providerId,
+				resolveProviderKind(account.providerId),
+			);
+		}
+		return (
+			readStoredIssuer(account.issuer) ||
+			configuredIdentity.issuers[account.providerId]
+		);
+	};
+	const projectedIdentities = new Set<string>();
+	const projectedCollisionIdentities = new Set<string>();
+	for (const account of accounts) {
+		const namespace = resolveProjectedNamespace(account);
+		if (!namespace) continue;
+		const identity = JSON.stringify([namespace, account.providerAccountId]);
+		if (projectedIdentities.has(identity)) {
+			projectedCollisionIdentities.add(identity);
+		} else {
+			projectedIdentities.add(identity);
+		}
+	}
+	const manualReviewProviders =
+		selectedStrategy === "issuer"
+			? [
+					...new Set(
+						externalAccountRows
+							.filter((account) => !resolveProjectedNamespace(account))
+							.map((account) => account.providerId),
+					),
+				].sort()
+			: [];
+	const automaticallyResolvedExternalAccounts = externalAccountRows.filter(
+		(account) => Boolean(resolveProjectedNamespace(account)),
+	).length;
 	return {
 		selectedStrategy,
 		detectedStrategy,
 		physicalSchema,
 		migrationRequired: !physicalSchemaComplete || requiresRekey,
 		requiresRekey,
+		totalAccounts: accounts.length,
+		externalAccounts: externalAccountRows.length,
+		automaticNamespaceResolution: {
+			resolved: automaticallyResolvedExternalAccounts,
+			total: externalAccountRows.length,
+		},
+		projectedCollisions: projectedCollisionIdentities.size,
+		manualReviewProviders,
 	};
 }
 

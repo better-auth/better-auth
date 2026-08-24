@@ -199,6 +199,20 @@ export function printHumanMigrationPlan(
 		`Account identity: ${migrationPlan.accountIdentity.selectedStrategy} (database: ${migrationPlan.accountIdentity.detectedStrategy})`,
 	);
 	console.log(
+		`Accounts: ${migrationPlan.accountIdentity.totalAccounts} total, ${migrationPlan.accountIdentity.externalAccounts} external`,
+	);
+	if (migrationPlan.accountIdentity.automaticIssuerResolution) {
+		console.log(
+			`Automatic issuer resolution: ${migrationPlan.accountIdentity.automaticIssuerResolution.resolved}/${migrationPlan.accountIdentity.automaticIssuerResolution.total}`,
+		);
+	}
+	console.log(
+		`Projected collisions: ${migrationPlan.accountIdentity.projectedCollisions}`,
+	);
+	console.log(
+		`Providers requiring manual issuer review: ${migrationPlan.accountIdentity.manualReviewProviders.join(", ") || "none"}`,
+	);
+	console.log(
 		`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
 	);
 	for (const blocker of migrationPlan.blockers) {

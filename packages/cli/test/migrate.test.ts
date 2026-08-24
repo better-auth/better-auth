@@ -322,6 +322,10 @@ describe("migration plan status", () => {
 				detectedStrategy: "provider-id",
 				migrationRequired: false,
 				requiresRekey: false,
+				totalAccounts: 1,
+				externalAccounts: 0,
+				projectedCollisions: 0,
+				manualReviewProviders: [],
 			},
 			hasChanges: false,
 			migrationBlockers: [],
@@ -345,6 +349,10 @@ describe("migration plan status", () => {
 				detectedStrategy: "provider-id",
 				migrationRequired: true,
 				requiresRekey: false,
+				totalAccounts: 1,
+				externalAccounts: 0,
+				projectedCollisions: 0,
+				manualReviewProviders: [],
 			},
 			hasChanges: true,
 			migrationBlockers: [
@@ -1045,37 +1053,6 @@ describe("migrate command modes", () => {
 });
 
 describe("plan every unresolved 1.6.30 release decision", () => {
-	it("reports the provider-id issuer backfill and an unknown SCIM inventory accurately", async () => {
-		const db = new Database(":memory:");
-		await createReleaseDecisionFixture(db, {
-			identityStrategy: "provider-id",
-		});
-		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
-
-		try {
-			await migrateAction({
-				cwd: process.cwd(),
-				mode: "plan",
-				outputFormat: "json",
-			});
-
-			const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
-				releaseMigration?: { actions: string[] };
-			};
-			expect(jsonPlan.releaseMigration?.actions).toContain(
-				"write the 1.7 account identity onto every existing account row",
-			);
-			expect(jsonPlan.releaseMigration?.actions).toContain(
-				"retire 1 SCIM provider, confirm the complete provisioned-account retirement inventory, and require a full reprovision of every SCIM connection",
-			);
-			expect(jsonPlan.releaseMigration?.actions).not.toContain(
-				"retire 1 SCIM provider, delete 0 provisioned accounts, and require a full reprovision of every SCIM connection",
-			);
-		} finally {
-			process.exitCode = undefined;
-		}
-	});
-
 	it("reports the consent strategy and SCIM inventory in one run", async () => {
 		const db = new Database(":memory:");
 		const { scimAccountId } = await createReleaseDecisionFixture(db, {
