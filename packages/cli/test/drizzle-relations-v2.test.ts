@@ -94,6 +94,41 @@ describe("drizzle schema generation for drizzle-orm 1.0", () => {
 		);
 	});
 
+	it("prefers the installed drizzle-orm version over a declared range spanning 0.x and 1.x", async () => {
+		// A range like this (matching the drizzle adapter's own peer range)
+		// resolves its lowest version via `semver.minVersion` to a 0.x release
+		// even when the actually-installed version is 1.x.
+		await withTmpProject(
+			{ dependencies: { "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0" } },
+			async (cwd) => {
+				const nodeModulesDir = path.join(cwd, "node_modules", "drizzle-orm");
+				fs.mkdirSync(nodeModulesDir, { recursive: true });
+				fs.writeFileSync(
+					path.join(nodeModulesDir, "package.json"),
+					JSON.stringify({ name: "drizzle-orm", version: "1.0.0-rc.4" }),
+				);
+
+				const schema = await generateDrizzleSchema({
+					file: "test.drizzle",
+					cwd,
+					adapter: drizzleAdapter(
+						{},
+						{ provider: "sqlite", schema: {} },
+					)({} as BetterAuthOptions),
+					options: {
+						database: drizzleAdapter({}, { provider: "sqlite", schema: {} }),
+						plugins: [],
+					},
+				});
+
+				expect(schema.code).toContain(
+					"export const authRelations = defineRelationsPart(",
+				);
+				expect(schema.code).not.toContain("relations(");
+			},
+		);
+	});
+
 	it("keeps emitting the classic relations() API when no cwd is provided", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",

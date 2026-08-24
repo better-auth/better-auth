@@ -35,12 +35,50 @@ export function getPrismaVersion(cwd?: string): number | null {
 }
 
 /**
- * Reads the declared `drizzle-orm` dependency range from package.json and
- * returns its major version, so callers can tell drizzle-orm 1.0 (which
- * removed the `relations()` API in favor of `defineRelations`/
- * `defineRelationsPart`) apart from the 0.x releases.
+ * Reads the actually-installed version of a package from its
+ * `node_modules/<name>/package.json`. This reflects what will really be
+ * resolved, unlike a declared dependency range: a range like
+ * `"^0.45.2 || >=1.0.0-rc.1"` would report its lowest satisfying version via
+ * `semver.minVersion` even when the installed version is much newer.
+ */
+function getInstalledPackageVersion(
+	cwd: string,
+	packageName: string,
+): string | null {
+	try {
+		const packageJsonPath = path.join(
+			cwd,
+			"node_modules",
+			packageName,
+			"package.json",
+		);
+		const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+		return typeof packageJson.version === "string" ? packageJson.version : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Returns the major version of the project's `drizzle-orm`, so callers can
+ * tell drizzle-orm 1.0 (which removed the `relations()` API in favor of
+ * `defineRelations`/`defineRelationsPart`) apart from the 0.x releases.
+ *
+ * Prefers the actually-installed version (`node_modules/drizzle-orm`) and
+ * only falls back to the declared dependency range in package.json when
+ * that isn't available (e.g. dependencies haven't been installed yet).
  */
 export function getDrizzleVersion(cwd?: string): number | null {
+	if (cwd) {
+		const installedVersion = getInstalledPackageVersion(cwd, "drizzle-orm");
+		if (installedVersion) {
+			const parsed = semver.parse(installedVersion);
+			if (parsed) {
+				return parsed.major;
+			}
+		}
+	}
+
 	try {
 		const packageInfo = getPackageInfo(cwd);
 		const drizzleVersionRange =
