@@ -17,7 +17,7 @@ describe("updateUser", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					sendChangeEmailVerification: async ({
+					sendChangeEmailConfirmation: async ({
 						user,
 						newEmail,
 						url,
@@ -265,6 +265,79 @@ describe("updateUser", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
+	 */
+	it("should preserve the replacement session in secondary storage", async () => {
+		const store = new Map<string, string>();
+		const {
+			client: secondaryStorageClient,
+			testUser: secondaryStorageUser,
+			signInWithTestUser: signInWithSecondaryStorageUser,
+			sessionSetter: setSecondaryStorageSession,
+		} = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+		const { headers: previousSessionHeaders, user: signedInUser } =
+			await signInWithSecondaryStorageUser();
+		const replacementSessionHeaders = new Headers();
+
+		const passwordChange = await secondaryStorageClient.changePassword({
+			newPassword: "new-secondary-storage-password",
+			currentPassword: secondaryStorageUser.password,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers: previousSessionHeaders,
+				onSuccess: setSecondaryStorageSession(replacementSessionHeaders),
+			},
+		});
+
+		expect(passwordChange.data?.token).toBeDefined();
+		const previousSession = await secondaryStorageClient.getSession({
+			fetchOptions: { headers: previousSessionHeaders },
+		});
+		expect(previousSession.data).toBeNull();
+
+		const replacementSession = await secondaryStorageClient.getSession({
+			fetchOptions: {
+				headers: replacementSessionHeaders,
+				throw: true,
+			},
+		});
+		if (!replacementSession) {
+			throw new Error("Replacement session was not created");
+		}
+		expect(replacementSession.user.id).toBe(signedInUser.id);
+		expect(replacementSession.session.token).toBe(passwordChange.data?.token);
+
+		const activeSessions = JSON.parse(
+			store.get(`active-sessions-${signedInUser.id}`) ?? "[]",
+		) as { token: string; expiresAt: number }[];
+		expect(activeSessions).toEqual([
+			expect.objectContaining({ token: passwordChange.data?.token }),
+		]);
+	});
+
 	it("shouldn't pass defaults", async () => {
 		const { client, sessionSetter, db } = await getTestInstance(
 			{
@@ -332,6 +405,16 @@ describe("updateUser", async () => {
 					get(key) {
 						return store.get(key) || null;
 					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
 					delete(key) {
 						store.delete(key);
 					},
@@ -364,6 +447,68 @@ describe("updateUser", async () => {
 		});
 
 		expect(firstSession?.user.name).toBe("updatedName");
+	});
+
+	it("should not write to secondary storage multiple times for the same session token during updateUser", async () => {
+		const store = new Map<string, string>();
+		const writeLog: { key: string; timestamp: number }[] = [];
+
+		const { auth, signInWithTestUser: signIn } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					writeLog.push({ key, timestamp: Date.now() });
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// Clear any previous state
+		store.clear();
+		writeLog.length = 0;
+
+		const { headers } = await signIn();
+
+		// Get the session token that was just created
+		const sessionTokens = Array.from(store.keys()).filter(
+			(k) => !k.startsWith("active-sessions-"),
+		);
+		expect(sessionTokens.length).toBe(1);
+		const sessionToken = sessionTokens[0];
+
+		// Clear the write log before updateUser call
+		writeLog.length = 0;
+
+		// Use auth.api.updateUser directly to reproduce the issue
+		await auth.api.updateUser({
+			body: {
+				name: "updatedName",
+			},
+			headers,
+		});
+
+		// Count how many times the same session token was written
+		const sessionTokenWrites = writeLog.filter(
+			(log) => log.key === sessionToken,
+		);
+
+		// Should only write once per session token, not multiple times
+		expect(sessionTokenWrites.length).toBe(1);
 	});
 
 	it("should not allow updating user with additional fields that are input: false", async () => {
@@ -439,6 +584,53 @@ describe("delete user", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8173
+	 */
+	it("should require password when session is no longer fresh", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			session: {
+				freshAge: 1,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const sessionId = currentSession.data?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(Date.now() - 5_000),
+			},
+		});
+
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("SESSION_EXPIRED");
+	});
+
 	it("should delete every session from deleted user", async () => {
 		const store = new Map<string, string>();
 		const { client, signInWithTestUser } = await getTestInstance({
@@ -453,6 +645,16 @@ describe("delete user", async () => {
 				},
 				get(key) {
 					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
 				},
 				delete(key) {
 					store.delete(key);
@@ -521,6 +723,62 @@ describe("delete user", async () => {
 		});
 	});
 
+	// The delete-account token is single-use: two concurrent callbacks with
+	// the same token must delete the account exactly once. Whichever request
+	// consumes the verification row first wins; the loser sees an invalid
+	// token. The destructive beforeDelete/afterDelete hooks must each fire
+	// once, and no verification row may survive the deletion.
+	it("should delete only once when the same token is used concurrently", async () => {
+		let token = "";
+		const beforeDelete = vi.fn(async () => {
+			// Widen the race so both requests pass the token lookup before
+			// either one finishes the destructive work.
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		});
+		const afterDelete = vi.fn(async () => {});
+		const { client, signInWithTestUser, testUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data, _) {
+						token = data.token;
+					},
+					beforeDelete,
+					afterDelete,
+				},
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const requestRes = await client.deleteUser({
+				password: testUser.password,
+			});
+			expect(requestRes.data).toMatchObject({ success: true });
+			expect(token.length).toBe(32);
+
+			const [first, second] = await Promise.all([
+				client.deleteUser({ token }),
+				client.deleteUser({ token }),
+			]);
+
+			const successes = [first, second].filter(
+				(res) => res.data && (res.data as { success?: boolean }).success,
+			);
+			const failures = [first, second].filter((res) => res.error);
+			expect(successes.length).toBe(1);
+			expect(failures.length).toBe(1);
+
+			expect(beforeDelete).toHaveBeenCalledTimes(1);
+			expect(afterDelete).toHaveBeenCalledTimes(1);
+
+			const remaining = await db.findMany({
+				model: "verification",
+				where: [{ field: "identifier", value: `delete-account-${token}` }],
+			});
+			expect(remaining.length).toBe(0);
+		});
+	});
+
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
 		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
 			await getTestInstance(
@@ -581,5 +839,324 @@ describe("delete user", async () => {
 		});
 
 		expect(sessionAfterPasswordChange.data).toBeNull();
+	});
+
+	it("rejects /delete-user/callback when the backing session was revoked", async () => {
+		let token = "";
+		const { client, auth, db, sessionSetter } = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				user: {
+					deleteUser: {
+						enabled: true,
+						async sendDeleteAccountVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const email = `delete-callback-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await client.signUp.email({ email, password, name: "Delete Callback" });
+
+		const headers = new Headers();
+		await client.signIn.email({
+			email,
+			password,
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+
+		// Materialize the cookie cache and capture the backing session token.
+		const sessionRes = await client.getSession({ fetchOptions: { headers } });
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+
+		// Request deletion while the session is still valid to obtain a token.
+		await client.deleteUser({ password, fetchOptions: { headers } });
+		expect(token.length).toBe(32);
+
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+
+		// The GET callback (the email-link path) must not complete deletion from
+		// the stale cookie-cache session now that the backing row is gone.
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/delete-user/callback?token=${token}`,
+				{ method: "GET", headers: { cookie: headers.get("cookie") ?? "" } },
+			),
+		);
+		expect(response.status).toBe(404);
+	});
+});
+
+describe("change-email enumeration protection", async () => {
+	const { client, signInWithTestUser, testUser, sessionSetter } =
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail() {},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+	it("should return 200 when target email already exists", async () => {
+		// Create a second user to be the "existing" target
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Other User",
+			email: "other-user@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		// Sign in as test user and try to change email to the existing one
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "other-user@test.com",
+			});
+			// Should return success, not throw
+			expect(res.data?.status).toBe(true);
+		});
+	});
+
+	it("should not change the user's email", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data?.user.email).toBe(testUser.email);
+		});
+	});
+});
+
+describe("change-email without sendVerificationEmail", async () => {
+	const { client, signInWithTestUser, sessionSetter } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	it("should return the same error for existing and non-existing emails", async () => {
+		// Create a second user
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Existing User",
+			email: "existing-no-verif@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const resExisting = await client.changeEmail({
+				newEmail: "existing-no-verif@test.com",
+			});
+			const resNonExisting = await client.changeEmail({
+				newEmail: "does-not-exist@test.com",
+			});
+
+			// Both should fail with the same error
+			expect(resExisting.error?.status).toBe(400);
+			expect(resNonExisting.error?.status).toBe(400);
+			expect(resExisting.error?.message).toBe(resNonExisting.error?.message);
+		});
+	});
+});
+
+describe("change-email callbackURL preservation", async () => {
+	const sendChangeEmail = vi.fn();
+	const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail() {},
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+				sendChangeEmailConfirmation: async ({ url }) => {
+					sendChangeEmail(url);
+				},
+			},
+		},
+	});
+
+	it("preserves a callbackURL that carries its own query string", async () => {
+		// Verified user routes through the sendChangeEmailConfirmation branch.
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const callback = "/dashboard?tab=settings&from=email";
+
+		await runWithUser(async () => {
+			await client.changeEmail({
+				newEmail: "new-email@email.com",
+				callbackURL: callback,
+			});
+		});
+
+		expect(sendChangeEmail).toHaveBeenCalledOnce();
+		const sent = sendChangeEmail.mock.calls[0]?.[0] as string;
+		expect(sent).toBeTypeOf("string");
+
+		// Round-tripping through URLSearchParams recovers the callbackURL verbatim.
+		const parsed = new URL(sent);
+		expect(parsed.searchParams.get("callbackURL")).toBe(callback);
+		// The trailing `from=email` segment must not leak into the outer URL.
+		expect(parsed.searchParams.get("from")).toBeNull();
+	});
+});
+
+describe("change-email rejects confirmation-only config for verified users", async () => {
+	// Verified user with sendChangeEmailConfirmation but no sendVerificationEmail
+	// cannot complete the flow: the confirmation step generates a second token
+	// that requires sendVerificationEmail to deliver. The request must fail at
+	// the gate rather than return a misleading success.
+	const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+				sendChangeEmailConfirmation: async () => {},
+			},
+		},
+	});
+
+	it("returns 400 when sendVerificationEmail is not configured", async () => {
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "unreachable@email.com",
+			});
+			expect(res.error?.status).toBe(400);
+		});
+	});
+});
+
+describe("credential identity across email changes", async () => {
+	const { client, db, sessionSetter } = await getTestInstance(
+		{
+			user: {
+				changeEmail: {
+					enabled: true,
+					updateEmailWithoutVerification: true,
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+
+	it("keeps one credential account when the user changes their sign-in email", async () => {
+		const originalEmail = "credential-email-change@example.com";
+		const changedEmail = "changed-credential-email@example.com";
+		const password = "credential-password";
+		const sessionHeaders = new Headers();
+		const signUp = await client.signUp.email({
+			name: "Credential Email Change",
+			email: originalEmail,
+			password,
+			fetchOptions: {
+				onSuccess: sessionSetter(sessionHeaders),
+			},
+		});
+		expect(signUp.error).toBeNull();
+		const userId = signUp.data!.user.id;
+		const accountsBefore = await db.findMany<Account>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accountsBefore).toHaveLength(1);
+		expect(accountsBefore[0]).toMatchObject({
+			providerId: "credential",
+			issuer: "local:credential",
+			accountId: userId,
+		});
+
+		const changeEmail = await client.changeEmail({
+			newEmail: changedEmail,
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(changeEmail.data?.status).toBe(true);
+
+		const oldEmailSignIn = await client.signIn.email({
+			email: originalEmail,
+			password,
+		});
+		expect(oldEmailSignIn.data).toBeNull();
+		const changedEmailSignIn = await client.signIn.email({
+			email: changedEmail,
+			password,
+		});
+		expect(changedEmailSignIn.data?.user.id).toBe(userId);
+
+		const accountsAfter = await db.findMany<Account>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accountsAfter).toHaveLength(1);
+		expect(accountsAfter[0]).toMatchObject({
+			id: accountsBefore[0]!.id,
+			providerId: "credential",
+			issuer: "local:credential",
+			accountId: userId,
+		});
+	});
+});
+
+describe("setPassword", async () => {
+	it("sets the password on the existing passwordless credential account", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance();
+		const context = await auth.$context;
+		const { headers, user } = await signInWithTestUser();
+		const credentialAccount =
+			await context.internalAdapter.findCredentialAccount(user.id);
+		expect(credentialAccount).toBeTruthy();
+		await context.internalAdapter.updateAccount(credentialAccount!.id, {
+			password: null,
+		});
+
+		await expect(
+			auth.api.setPassword({
+				body: { newPassword: "new-password" },
+				headers,
+			}),
+		).resolves.toMatchObject({ status: true });
+
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		const credentialAccounts = accounts.filter(
+			(account) => account.providerId === "credential",
+		);
+		expect(credentialAccounts).toHaveLength(1);
+		await expect(
+			context.password.verify({
+				hash: credentialAccounts[0]!.password!,
+				password: "new-password",
+			}),
+		).resolves.toBe(true);
 	});
 });

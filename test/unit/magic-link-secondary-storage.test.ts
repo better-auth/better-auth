@@ -1,0 +1,359 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import { magicLinkClient } from "better-auth/client/plugins";
+import { magicLink } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
+import { describe, expect, it } from "vitest";
+
+interface VerificationEmail {
+	email: string;
+	token: string;
+	url: string;
+}
+
+function createStringSecondaryStorage(
+	store: Map<string, string>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, value);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(count));
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+}
+
+function createParsedSecondaryStorage(
+	store: Map<string, unknown>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, safeJSONParse<unknown>(value));
+		},
+		get(key) {
+			return store.get(key) ?? null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) ?? null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, count);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+}
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8228
+ */
+describe("magic link with secondary storage (string return)", async () => {
+	const store = new Map<string, string>();
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+
+	const { testUser, sessionSetter, client } = await getTestInstance(
+		{
+			secondaryStorage: createStringSecondaryStorage(store),
+			rateLimit: {
+				enabled: false,
+			},
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [magicLinkClient()],
+			},
+		},
+	);
+
+	it("should send and verify magic link", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		expect(verificationEmail.email).toBe(testUser.email);
+		expect(verificationEmail.url).toContain(
+			"http://localhost:3000/api/auth/magic-link/verify",
+		);
+
+		// Verify a verification entry exists in store
+		const verificationKeys = [...store.keys()].filter((k) =>
+			k.startsWith("verification:"),
+		);
+		expect(verificationKeys.length).toBeGreaterThan(0);
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token")!,
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(response.data?.token).toBeDefined();
+		const betterAuthCookie = headers.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
+	});
+
+	it("should sign up new user via magic link", async () => {
+		const email = "new-secondary-user@test.com";
+		await client.signIn.magicLink({
+			email,
+			name: "New User",
+		});
+
+		const headers = new Headers();
+		await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token")!,
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(session.data?.user).toMatchObject({
+			name: "New User",
+			email,
+			emailVerified: true,
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-x88r-fmh4
+	 */
+	it("consumes the token atomically on first verify, INVALID_TOKEN on retries", async () => {
+		const attemptStore = new Map<string, string>();
+		let attemptEmail: VerificationEmail = { email: "", token: "", url: "" };
+
+		const {
+			testUser: tu,
+			sessionSetter: ss,
+			client: c,
+		} = await getTestInstance(
+			{
+				secondaryStorage: createStringSecondaryStorage(attemptStore),
+				rateLimit: { enabled: false },
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							attemptEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+			},
+		);
+
+		await c.signIn.magicLink({ email: tu.email });
+		const token = new URL(attemptEmail.url).searchParams.get("token")!;
+
+		const firstHeaders = new Headers();
+		const firstResponse = await c.magicLink.verify({
+			query: { token },
+			fetchOptions: { onSuccess: ss(firstHeaders) },
+		});
+		expect(firstResponse.data?.token).toBeDefined();
+
+		for (let i = 0; i < 3; i++) {
+			await c.magicLink.verify(
+				{ query: { token } },
+				{
+					onError(context) {
+						expect(context.response.status).toBe(302);
+						const location = context.response.headers.get("location");
+						expect(location).toContain("?error=INVALID_TOKEN");
+					},
+				},
+			);
+		}
+	});
+
+	it("should delete expired verification on verify", async () => {
+		const expiredStore = new Map<string, string>();
+		let expiredEmail: VerificationEmail = { email: "", token: "", url: "" };
+
+		const { testUser: tu, client: c } = await getTestInstance(
+			{
+				secondaryStorage: createStringSecondaryStorage(expiredStore),
+				rateLimit: { enabled: false },
+				plugins: [
+					magicLink({
+						expiresIn: 1, // 1 second
+						async sendMagicLink(data) {
+							expiredEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+			},
+		);
+
+		await c.signIn.magicLink({ email: tu.email });
+		const token = new URL(expiredEmail.url).searchParams.get("token")!;
+
+		// Wait for token to expire
+		await new Promise((r) => setTimeout(r, 1500));
+
+		await c.magicLink.verify(
+			{ query: { token } },
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=INVALID_TOKEN");
+				},
+			},
+		);
+	});
+});
+
+/**
+ * Same tests but secondary storage returns already-parsed objects (like some
+ * Redis client wrappers do). This exercises the `new Date()` defensive path
+ * in updateVerificationByIdentifier.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/8228
+ */
+describe("magic link with secondary storage (pre-parsed object return)", async () => {
+	const store = new Map<string, unknown>();
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+
+	const { testUser, sessionSetter, client } = await getTestInstance(
+		{
+			secondaryStorage: createParsedSecondaryStorage(store),
+			rateLimit: {
+				enabled: false,
+			},
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [magicLinkClient()],
+			},
+		},
+	);
+
+	it("should send and verify magic link", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		expect(verificationEmail.email).toBe(testUser.email);
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token")!,
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(response.data?.token).toBeDefined();
+		const betterAuthCookie = headers.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-hc7v-x88r-fmh4
+	 */
+	it("consumes the token atomically with pre-parsed storage, INVALID_TOKEN on retries", async () => {
+		const attemptStore = new Map<string, unknown>();
+		let attemptEmail: VerificationEmail = { email: "", token: "", url: "" };
+
+		const {
+			testUser: tu,
+			sessionSetter: ss,
+			client: c,
+		} = await getTestInstance(
+			{
+				secondaryStorage: createParsedSecondaryStorage(attemptStore),
+				rateLimit: { enabled: false },
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							attemptEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+			},
+		);
+
+		await c.signIn.magicLink({ email: tu.email });
+		const token = new URL(attemptEmail.url).searchParams.get("token")!;
+
+		const firstHeaders = new Headers();
+		const firstResponse = await c.magicLink.verify({
+			query: { token },
+			fetchOptions: { onSuccess: ss(firstHeaders) },
+		});
+		expect(firstResponse.data?.token).toBeDefined();
+
+		for (let i = 0; i < 2; i++) {
+			await c.magicLink.verify(
+				{ query: { token } },
+				{
+					onError(context) {
+						expect(context.response.status).toBe(302);
+						const location = context.response.headers.get("location");
+						expect(location).toContain("?error=INVALID_TOKEN");
+					},
+				},
+			);
+		}
+	});
+});

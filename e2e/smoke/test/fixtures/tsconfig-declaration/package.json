@@ -3,14 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
-    "@better-auth/sso": "workspace:*",
-    "@better-auth/stripe": "workspace:*",
+    "@better-auth/api-key": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
+    "@better-auth/sso": "workspace:*",
+    "@better-auth/stripe": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^20.0.0"
+    "stripe": "^22.0.1"
   }
 }

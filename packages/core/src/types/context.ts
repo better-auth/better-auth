@@ -9,32 +9,76 @@ import type {
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
+import type { AccountKey } from "../db/schema/account";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
-import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
-import type { LiteralString } from "./helper";
+import type {
+	BetterAuthCookie,
+	BetterAuthCookies,
+	CookieCachePayload,
+} from "./cookie";
+import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	UserProvisioningSource,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
+import type { SecretConfig } from "./secret";
+
+/**
+ * @internal
+ */
+type InferPluginID<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"]
+			: never
+		: never;
+
+/**
+ * @internal
+ */
+type InferPluginOptions<
+	O extends BetterAuthOptions,
+	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"] extends ID
+				? P extends { options: infer O }
+					? O
+					: never
+				: never
+			: never
+		: never;
 
 /**
  * Mutators are defined in each plugin
  *
  * @example
  * ```ts
+ * interface MyPluginOptions {
+ *   useFeature: boolean
+ * }
+ *
+ * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
+ *   id: 'my-plugin',
+ *   version: '1.0.0',
+ *   options,
+ * } satisfies BetterAuthPlugin);
+ *
  * declare module "@better-auth/core" {
- *  interface BetterAuthPluginRegistry<Auth, Context> {
- *    'jwt': {
- *      creator: typeof jwt
+ *  interface BetterAuthPluginRegistry<AuthOptions, Options> {
+ *    'my-plugin': {
+ *      creator: Options extends MyPluginOptions ? typeof createMyPlugin<Options>: typeof createMyPlugin
  *    }
  *  }
  * }
  * ```
  */
 // biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
-export interface BetterAuthPluginRegistry<Auth, Context> {}
+export interface BetterAuthPluginRegistry<AuthOptions, Options> {}
 export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 	unknown,
 	unknown
@@ -44,6 +88,24 @@ export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = EndpointContext<string, any> & {
 	context: AuthContext<Options>;
+};
+
+/**
+ * Signs and verifies session cookie-cache values.
+ */
+export type CookieCacheSigner = {
+	sign: (
+		ctx: GenericEndpointContext,
+		payload: CookieCachePayload,
+		expiresIn: number,
+	) => Promise<string>;
+	verify: (
+		ctx: GenericEndpointContext,
+		token: string,
+	) => Promise<{
+		payload: CookieCachePayload;
+		expiresAt: number;
+	} | null>;
 };
 
 export interface InternalAdapter<
@@ -59,6 +121,11 @@ export interface InternalAdapter<
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
 			Record<string, any>,
+		/**
+		 * Provisioning source. The creation seam adds `action: "create-user"` and
+		 * runs the `user.validateUserInfo` gate.
+		 */
+		source: UserProvisioningSource,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(
@@ -67,7 +134,10 @@ export interface InternalAdapter<
 			T,
 	): Promise<T & Account>;
 
-	listSessions(userId: string): Promise<Session[]>;
+	listSessions(
+		userId: string,
+		options?: { onlyActiveSessions?: boolean | undefined } | undefined,
+	): Promise<Session[]>;
 
 	listUsers(
 		limit?: number | undefined,
@@ -85,6 +155,9 @@ export interface InternalAdapter<
 		dontRememberMe?: boolean | undefined,
 		override?: (Partial<Session> & Record<string, any>) | undefined,
 		overrideAll?: boolean | undefined,
+		storageOptions?:
+			| { deferSecondaryStorageWrites?: boolean | undefined }
+			| undefined,
 	): Promise<Session>;
 
 	findSession(token: string): Promise<{
@@ -94,6 +167,11 @@ export interface InternalAdapter<
 
 	findSessions(
 		sessionTokens: string[],
+		options?:
+			| {
+					onlyActiveSessions?: boolean | undefined;
+			  }
+			| undefined,
 	): Promise<{ session: Session; user: User }[]>;
 
 	updateSession(
@@ -105,19 +183,35 @@ export interface InternalAdapter<
 
 	deleteAccounts(userId: string): Promise<void>;
 
-	deleteAccount(accountId: string): Promise<void>;
+	/**
+	 * Delete an account by its primary key.
+	 *
+	 * @param id - The account row's primary key, not its provider account ID.
+	 */
+	deleteAccount(id: string): Promise<void>;
 
-	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
+	/**
+	 * Delete every session belonging to a user.
+	 */
+	deleteUserSessions(userId: string): Promise<void>;
 
-	findOAuthUser(
-		email: string,
-		accountId: string,
-		providerId: string,
-	): Promise<{
-		user: User;
-		linkedAccount: Account | null;
-		accounts: Account[];
-	} | null>;
+	/**
+	 * Delete sessions by their session tokens.
+	 */
+	deleteSessions(sessionTokens: string[]): Promise<void>;
+
+	findAccountOwnerByKey(accountKey: AccountKey): Promise<
+		| {
+				kind: "owned";
+				user: User;
+				account: Account;
+		  }
+		| {
+				kind: "orphaned";
+				account: Account;
+		  }
+		| null
+	>;
 
 	findUserByEmail(
 		email: string,
@@ -145,12 +239,10 @@ export interface InternalAdapter<
 
 	findAccounts(userId: string): Promise<Account[]>;
 
-	findAccount(accountId: string): Promise<Account | null>;
+	/** Find the credential account whose stable local subject is the user ID. */
+	findCredentialAccount(userId: string): Promise<Account | null>;
 
-	findAccountByProviderId(
-		accountId: string,
-		providerId: string,
-	): Promise<Account | null>;
+	findAccountByKey(accountKey: AccountKey): Promise<Account | null>;
 
 	findAccountByUserId(userId: string): Promise<Account[]>;
 
@@ -163,14 +255,47 @@ export interface InternalAdapter<
 
 	findVerificationValue(identifier: string): Promise<Verification | null>;
 
-	deleteVerificationValue(id: string): Promise<void>;
-
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
-	updateVerificationValue(
-		id: string,
+	/**
+	 * Atomically consume a single-use verification row by `identifier` and
+	 * return it. Only the first concurrent caller receives the latest row;
+	 * subsequent callers receive `null`. Consuming one row invalidates the
+	 * whole identifier so stale rows cannot be replayed. Rows past their
+	 * `expiresAt` are treated as already invalid: the row is deleted but
+	 * `null` is returned, so callers do not need to gate on `expiresAt`
+	 * themselves. Callers MUST gate any state change (issue session, mint
+	 * token, change password) on a non-null result.
+	 *
+	 * Replaces the racy `findVerificationValue` + `deleteVerificationByIdentifier`
+	 * pair at single-use credential consumption sites.
+	 */
+	consumeVerificationValue(identifier: string): Promise<Verification | null>;
+
+	/**
+	 * First-writer-wins create keyed by a deterministic primary key derived from
+	 * `identifier`. Returns `true` when this caller created the row and `false`
+	 * when a row for the same identifier already existed.
+	 *
+	 * The dual of `consumeVerificationValue`: reserve races to create a marker
+	 * exactly once, where consume races to delete one exactly once. Use it for
+	 * replay tombstones (a SAML assertion id, a JWT `jti`) where the first caller
+	 * wins. The database path is atomic via the primary key. Secondary-storage-only
+	 * verification is not supported for reservation and runtime implementations
+	 * should fail closed unless verification is backed by the database.
+	 */
+	reserveVerificationValue(data: {
+		identifier: string;
+		value: string;
+		expiresAt: Date;
+	}): Promise<boolean>;
+
+	updateVerificationByIdentifier(
+		identifier: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
+
+	refreshUserSessions(user: User): Promise<void>;
 }
 
 type CreateCookieGetterFn = (
@@ -183,12 +308,21 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
-export type PluginContext = {
-	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+export type PluginContext<Options extends BetterAuthOptions> = {
+	getPlugin: <
+		ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+		PluginOptions extends InferPluginOptions<Options, ID>,
+	>(
 		pluginId: ID,
 	) =>
 		| (ID extends BetterAuthPluginRegistryIdentifier
-				? ReturnType<BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]>
+				? BetterAuthPluginRegistry<Options, PluginOptions>[ID] extends {
+						creator: infer C;
+					}
+					? C extends (...args: any[]) => infer R
+						? R
+						: never
+					: never
 				: BetterAuthPlugin)
 		| null;
 	/**
@@ -206,7 +340,7 @@ export type PluginContext = {
 	 */
 	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
-	) => boolean;
+	) => ID extends InferPluginID<Options> ? true : boolean;
 };
 
 export type InfoContext = {
@@ -216,10 +350,15 @@ export type InfoContext = {
 };
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
-	PluginContext &
+	PluginContext<Options> &
 		InfoContext & {
 			options: Options;
 			trustedOrigins: string[];
+			/**
+			 * Resolved list of trusted providers for account linking.
+			 * Populated from "account.accountLinking.trustedProviders" (supports static array or async function).
+			 */
+			trustedProviders: string[];
 			/**
 			 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
 			 * @param url The url to verify against the "trustedOrigins" configuration
@@ -241,7 +380,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};
@@ -281,10 +420,12 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;
+			secretConfig: string | SecretConfig;
 			sessionConfig: {
 				updateAge: number;
 				expiresIn: number;
 				freshAge: number;
+				cookieCacheSigner?: CookieCacheSigner | undefined;
 				cookieRefreshCache:
 					| false
 					| {
@@ -341,7 +482,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
 			 * Defaults to a no-op that just runs the promise.
 			 */
-			runInBackground: (promise: Promise<void>) => void;
+			runInBackground: (promise: Promise<unknown>) => void;
 			/**
 			 * Runs a task in the background if `runInBackground` is configured,
 			 * otherwise awaits the task directly.
@@ -351,6 +492,6 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * mitigation), but still ensure the operation completes.
 			 */
 			runInBackgroundOrAwait: (
-				promise: Promise<unknown> | Promise<void> | void | unknown,
-			) => Promise<unknown>;
+				promise: Promise<unknown> | void,
+			) => Awaitable<unknown>;
 		};

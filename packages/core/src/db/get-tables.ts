@@ -1,9 +1,32 @@
 import type { BetterAuthOptions } from "../types";
-import type { BetterAuthDBSchema, DBFieldAttribute } from "./type";
+import { resolveDatabaseSchemaIndexes } from "./database-index";
+import type {
+	BetterAuthDBSchema,
+	DBFieldAttribute,
+	DBTableIndex,
+} from "./type";
 
-export const getAuthTables = (
-	options: BetterAuthOptions,
-): BetterAuthDBSchema => {
+function mergeTableIndexes(
+	...indexCollections: ReadonlyArray<readonly DBTableIndex[] | undefined>
+) {
+	const indexes: DBTableIndex[] = [];
+	const seenIndexDefinitions = new Set<string>();
+	for (const index of indexCollections.flatMap(
+		(collection) => collection ?? [],
+	)) {
+		const definition = JSON.stringify([
+			index.name ?? null,
+			index.fields,
+			index.unique ?? false,
+		]);
+		if (seenIndexDefinitions.has(definition)) continue;
+		seenIndexDefinitions.add(definition);
+		indexes.push(index);
+	}
+	return indexes;
+}
+
+const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -14,14 +37,22 @@ export const getAuthTables = (
 						...acc[key]?.fields,
 						...value.fields,
 					},
+					indexes: mergeTableIndexes(acc[key]?.indexes, value.indexes),
 					modelName: value.modelName || key,
+					disableMigrations:
+						value.disableMigration ?? acc[key]?.disableMigrations,
 				};
 			}
 			return acc;
 		},
 		{} as Record<
 			string,
-			{ fields: Record<string, DBFieldAttribute>; modelName: string }
+			{
+				fields: Record<string, DBFieldAttribute>;
+				indexes?: readonly DBTableIndex[] | undefined;
+				modelName: string;
+				disableMigrations?: boolean | undefined;
+			}
 		>,
 	);
 
@@ -32,16 +63,21 @@ export const getAuthTables = (
 			fields: {
 				key: {
 					type: "string",
+					unique: true,
+					required: true,
 					fieldName: options.rateLimit?.fields?.key || "key",
 				},
 				count: {
 					type: "number",
+					required: true,
 					fieldName: options.rateLimit?.fields?.count || "count",
 				},
 				lastRequest: {
 					type: "number",
 					bigint: true,
+					required: true,
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
+					defaultValue: () => Date.now(),
 				},
 			},
 		},
@@ -50,9 +86,51 @@ export const getAuthTables = (
 	const { user, session, account, verification, ...pluginTables } =
 		pluginSchema;
 
+	const verificationTable = {
+		verification: {
+			modelName: options.verification?.modelName || "verification",
+			indexes: verification?.indexes,
+			fields: {
+				identifier: {
+					type: "string",
+					required: true,
+					fieldName: options.verification?.fields?.identifier || "identifier",
+					index: true,
+				},
+				value: {
+					type: "string",
+					required: true,
+					fieldName: options.verification?.fields?.value || "value",
+				},
+				expiresAt: {
+					type: "date",
+					required: true,
+					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					fieldName: options.verification?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					onUpdate: () => new Date(),
+					fieldName: options.verification?.fields?.updatedAt || "updatedAt",
+				},
+				...verification?.fields,
+				...options.verification?.additionalFields,
+			},
+			order: 4,
+		},
+	} satisfies BetterAuthDBSchema;
+
 	const sessionTable = {
 		session: {
 			modelName: options.session?.modelName || "session",
+			indexes: session?.indexes,
 			fields: {
 				expiresAt: {
 					type: "date",
@@ -91,7 +169,18 @@ export const getAuthTables = (
 					type: "string",
 					fieldName: options.session?.fields?.userId || "userId",
 					references: {
-						model: options.user?.modelName || "user",
+						// Use the canonical user schema key here rather than
+						// `options.user.modelName`. Downstream consumers (e.g.
+						// `getSchema`, `getMigrations`, and the runtime adapter
+						// resolvers) treat `references.model` as a schema key
+						// and look it up via `tables[references.model]` /
+						// `getDefaultModelName`. Writing the modelName alias
+						// here would collide when a user picks a modelName that
+						// matches another schema key (for example
+						// `user.modelName = "account"`), causing the FK to
+						// resolve to the wrong table.
+						// @see https://github.com/better-auth/better-auth/issues/8111
+						model: "user",
 						field: "id",
 						onDelete: "cascade",
 					},
@@ -105,9 +194,10 @@ export const getAuthTables = (
 		},
 	} satisfies BetterAuthDBSchema;
 
-	return {
+	const authTables = {
 		user: {
 			modelName: options.user?.modelName || "user",
+			indexes: user?.indexes,
 			fields: {
 				name: {
 					type: "string",
@@ -117,6 +207,8 @@ export const getAuthTables = (
 				},
 				email: {
 					type: "string",
+					// TODO(#9124): drop required+unique in v2; use a partial unique
+					// index where email is not null (see schema/user.ts).
 					unique: true,
 					required: true,
 					fieldName: options.user?.fields?.email || "email",
@@ -158,7 +250,21 @@ export const getAuthTables = (
 			: {}),
 		account: {
 			modelName: options.account?.modelName || "account",
+			indexes: mergeTableIndexes(
+				[
+					{
+						fields: ["issuer", "accountId"],
+						unique: true,
+					},
+				],
+				account?.indexes,
+			),
 			fields: {
+				issuer: {
+					type: "string",
+					required: true,
+					fieldName: options.account?.fields?.issuer || "issuer",
+				},
 				accountId: {
 					type: "string",
 					required: true,
@@ -172,7 +278,11 @@ export const getAuthTables = (
 				userId: {
 					type: "string",
 					references: {
-						model: options.user?.modelName || "user",
+						// See note on `session.userId.references.model` above:
+						// always use the canonical user schema key so the FK
+						// target survives `user.modelName` aliasing.
+						// @see https://github.com/better-auth/better-auth/issues/8111
+						model: "user",
 						field: "id",
 						onDelete: "cascade",
 					},
@@ -242,44 +352,32 @@ export const getAuthTables = (
 			},
 			order: 3,
 		},
-		verification: {
-			modelName: options.verification?.modelName || "verification",
-			fields: {
-				identifier: {
-					type: "string",
-					required: true,
-					fieldName: options.verification?.fields?.identifier || "identifier",
-					index: true,
-				},
-				value: {
-					type: "string",
-					required: true,
-					fieldName: options.verification?.fields?.value || "value",
-				},
-				expiresAt: {
-					type: "date",
-					required: true,
-					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
-				},
-				createdAt: {
-					type: "date",
-					required: true,
-					defaultValue: () => new Date(),
-					fieldName: options.verification?.fields?.createdAt || "createdAt",
-				},
-				updatedAt: {
-					type: "date",
-					required: true,
-					defaultValue: () => new Date(),
-					onUpdate: () => new Date(),
-					fieldName: options.verification?.fields?.updatedAt || "updatedAt",
-				},
-				...verification?.fields,
-				...options.verification?.additionalFields,
-			},
-			order: 4,
-		},
+		...(!options.secondaryStorage || options.verification?.storeInDatabase
+			? verificationTable
+			: {}),
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;
+
+	return authTables;
 };
+
+export function getAuthTablesWithResolvedIndexes(options: BetterAuthOptions) {
+	const tables = buildAuthTables(options);
+	const indexesByTable = resolveDatabaseSchemaIndexes(
+		Object.values(tables)
+			.filter(
+				(table) => !("disableMigrations" in table) || !table.disableMigrations,
+			)
+			.map((table) => ({
+				fields: table.fields,
+				indexes: "indexes" in table ? table.indexes : undefined,
+				tableName: table.modelName,
+			})),
+	);
+
+	return { indexesByTable, tables };
+}
+
+export const getAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema =>
+	getAuthTablesWithResolvedIndexes(options).tables;

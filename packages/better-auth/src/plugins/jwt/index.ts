@@ -8,21 +8,22 @@ import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwksAdapter } from "./adapter";
+import { createCookieCacheSigner } from "./cookie-cache";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
-export { signJWT } from "./sign";
+export { resolveSigningKey, signJWT } from "./sign";
 export type * from "./types";
 export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		jwt: {
 			creator: typeof jwt;
 		};
@@ -50,7 +51,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Alg is required to be specified when using remote url (needed in openid metadata)
 	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(
-			"options.jwks.keyPairConfig.alg must be specified when using the oidc plugin with options.jwks.remoteUrl",
+			"options.jwks.keyPairConfig.alg must be specified when options.jwks.remoteUrl is used for OpenID metadata",
 		);
 	}
 
@@ -68,7 +69,42 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 
 	return {
 		id: "jwt",
+		version: PACKAGE_VERSION,
 		options: options as NoInfer<O>,
+		init(ctx) {
+			if (!options?.sessionCookieCache) {
+				return;
+			}
+
+			if (ctx.options.session?.cookieCache?.strategy !== "jwt") {
+				throw new BetterAuthError(
+					'`jwt({ sessionCookieCache: true })` requires `session.cookieCache.strategy = "jwt"`.',
+				);
+			}
+
+			if (options.jwt?.sign) {
+				throw new BetterAuthError(
+					"`jwt({ sessionCookieCache: true })` requires locally managed JWT plugin keys and does not support `jwt.sign`.",
+				);
+			}
+
+			const gracePeriod = options.jwks?.gracePeriod;
+			const cookieMaxAge = ctx.options.session.cookieCache.maxAge || 60 * 5;
+			if (gracePeriod !== undefined && cookieMaxAge > gracePeriod) {
+				ctx.logger.warn(
+					`[better-auth] \`session.cookieCache.maxAge\` (${cookieMaxAge}s) exceeds the JWT plugin JWKS grace period (${gracePeriod}s). Rotated keys may stop verifying cookie-cache JWTs before the cookie expires.`,
+				);
+			}
+
+			return {
+				context: {
+					sessionConfig: {
+						...ctx.sessionConfig,
+						cookieCacheSigner: createCookieCacheSigner(options),
+					},
+				},
+			};
+		},
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				jwksPath,
@@ -247,7 +283,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					});
 				},
 			),
-			signJWT: createAuthEndpoint(
+			signJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {
@@ -271,7 +307,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 					return c.json({ token: jwt });
 				},
 			),
-			verifyJWT: createAuthEndpoint(
+			verifyJWT: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					metadata: {

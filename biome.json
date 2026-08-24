@@ -37,7 +37,7 @@
         "noRestrictedTypes": "off",
         "noRestrictedGlobals": "off"
       },
-      "recommended": false,
+      "preset": "none",
       "suspicious": {
         "noImplicitAnyLet": "warn",
         "noDuplicateObjectKeys": "warn",
@@ -132,6 +132,7 @@
       "!**/dist",
       "!**/coverage",
       "!**/build",
+      "!**/demo/electron/out",
       "!**/.next",
       "!**/.svelte-kit",
       "!**/.contentlayer",
@@ -140,10 +141,13 @@
       "!**/.source",
       "!**/.expo",
       "!**/.cache",
+      "!**/.tsc",
       "!**/dev/cloudflare/drizzle",
       "!**/playwright-report",
       "!**/.output",
-      "!**/.tmp"
+      "!**/.tmp",
+      "!**/tmp-docs-fetch",
+      "!**/.claude/worktrees/**"
     ]
   }
 }

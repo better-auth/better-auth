@@ -1,14 +1,15 @@
 # Better Auth CLI
 
 Better Auth comes with a built-in CLI to help you manage the database schema
-needed for both core functionality and plugins.
+needed for both core functionality and plugins, and to create an initial admin user
+for projects using the Admin plugin.
 
 ### **Init**
 
 The CLI includes an `init` command to add Better Auth to your project.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest init
+npx auth@latest init
 ```
 
 ### **Generate**
@@ -20,7 +21,7 @@ If you’re using the built-in Kysely adapter, it will generate an SQL file you
 can run directly on your database.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 ### **Migrate**
@@ -31,7 +32,17 @@ For other adapters, you’ll need to apply the schema using your ORM’s migrati
 tool.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest migrate
+npx auth@latest migrate
+```
+
+### **Create Admin**
+
+Create the first admin user for an app using the Admin plugin. The command
+uses your Better Auth config and prompts before creating an admin when users
+already exist. The created admin email is marked as verified by default.
+
+```bash title="terminal"
+npx auth@latest create-admin --email admin@example.com --name "Admin" --role admin
 ```
 
 ### **Secret**
@@ -40,7 +51,7 @@ The CLI also provides a way to generate a secret key for your Better Auth
 instance.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest secret
+npx auth@latest secret
 ```
 
 ## License

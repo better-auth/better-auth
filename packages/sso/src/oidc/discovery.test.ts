@@ -1,8 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	assertEndpointResolvesPublic,
+	assertServerFetchedOIDCEndpointsAllowed,
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
+	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
+	fetchOIDCEndpointResponse,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
 	normalizeUrl,
@@ -17,7 +21,20 @@ vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
 }));
 
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
+
 import { betterFetch } from "@better-fetch/fetch";
+
+beforeEach(() => {
+	vi.mocked(betterFetch).mockReset();
+	lookupMock.mockReset();
+	lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 /**
  * Mock OIDC Discovery Document
@@ -306,21 +323,21 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_post");
 		});
 
-		it("should default to client_secret_basic when only unsupported methods are advertised", () => {
+		it("should select private_key_jwt when it is the only supported method", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: ["private_key_jwt"],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
-		it("should default to client_secret_basic for tls_client_auth only", () => {
+		it("should select private_key_jwt when only tls_client_auth and private_key_jwt are supported", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [
 					"tls_client_auth",
 					"private_key_jwt",
 				],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
 		it("should default to client_secret_basic if not specified in discovery", () => {
@@ -333,6 +350,28 @@ describe("OIDC Discovery", () => {
 		it("should default to client_secret_basic for empty array", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [],
+			});
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+		});
+
+		it("should preserve explicit private_key_jwt when passed as existing", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: [
+					"private_key_jwt",
+					"client_secret_basic",
+				],
+			});
+			expect(selectTokenEndpointAuthMethod(doc, "private_key_jwt")).toBe(
+				"private_key_jwt",
+			);
+		});
+
+		it("should prefer client_secret_basic over private_key_jwt when both are supported", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: [
+					"private_key_jwt",
+					"client_secret_basic",
+				],
 			});
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
 		});
@@ -560,7 +599,7 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it.each([
+		it.for([
 			[
 				"/oauth2/token",
 				"https://idp.example.com/base",
@@ -577,8 +616,11 @@ describe("OIDC Discovery", () => {
 				"issuer with trailing slash",
 			],
 			["//oauth2/token", "https://idp.example.com/base//", "multiple slashes"],
-		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", (endpoint, issuer) => {
-			expect(normalizeUrl("url", endpoint, issuer)).toBe(
+		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", ([
+			endpoint,
+			issuer,
+		]) => {
+			expect(normalizeUrl("url", endpoint!, issuer!)).toBe(
 				"https://idp.example.com/base/oauth2/token",
 			);
 		});
@@ -625,22 +667,28 @@ describe("OIDC Discovery", () => {
 			).toBe(true);
 		});
 
-		it("should return false if both tokenEndpoint and jwksEndpoint are present", () => {
+		it("should return false if tokenEndpoint, jwksEndpoint and authorizationEndpoint are all present", () => {
+			expect(
+				needsRuntimeDiscovery({
+					tokenEndpoint: "https://idp.example.com/oauth2/token",
+					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
+					authorizationEndpoint: "https://idp.example.com/oauth2/authorize",
+				}),
+			).toBe(false);
+		});
+
+		it("should return true if authorizationEndpoint is missing", () => {
 			expect(
 				needsRuntimeDiscovery({
 					tokenEndpoint: "https://idp.example.com/oauth2/token",
 					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
 				}),
-			).toBe(false);
+			).toBe(true);
 		});
 	});
 
 	describe("fetchDiscoveryDocument", () => {
 		const mockBetterFetch = betterFetch as ReturnType<typeof vi.fn>;
-
-		beforeEach(() => {
-			vi.clearAllMocks();
-		});
 
 		it("should fetch and parse valid discovery document", async () => {
 			const expectedDoc = createMockDiscoveryDocument();
@@ -793,10 +841,6 @@ describe("OIDC Discovery", () => {
 		const mockBetterFetch = betterFetch as ReturnType<typeof vi.fn>;
 		const issuer = "https://idp.example.com";
 		const isTrustedOrigin = vi.fn().mockReturnValue(true);
-
-		beforeEach(() => {
-			vi.clearAllMocks();
-		});
 
 		it("should return hydrated config from valid discovery", async () => {
 			const discoveryDoc = createMockDiscoveryDocument({
@@ -1027,13 +1071,29 @@ describe("OIDC Discovery", () => {
 					authorization_endpoint: `${issuer}/authorize`,
 					token_endpoint: `${issuer}/token`,
 					jwks_uri: `${issuer}/jwks`,
-					token_endpoint_auth_methods_supported: ["private_key_jwt"],
+					token_endpoint_auth_methods_supported: ["tls_client_auth"],
 				},
 				error: null,
 			});
 
 			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
 			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
+		});
+
+		it("should select private_key_jwt from discovery when it is the only supported method", async () => {
+			mockBetterFetch.mockResolvedValueOnce({
+				data: {
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					jwks_uri: `${issuer}/jwks`,
+					token_endpoint_auth_methods_supported: ["private_key_jwt"],
+				},
+				error: null,
+			});
+
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
+			expect(result.tokenEndpointAuthentication).toBe("private_key_jwt");
 		});
 
 		it("should fill missing fields from discovery when existing config is partial", async () => {
@@ -1153,5 +1213,293 @@ describe("OIDC Discovery", () => {
 				}),
 			);
 		});
+	});
+});
+
+describe("ensureRuntimeDiscovery", () => {
+	const isTrustedOrigin = () => true;
+	const issuer = "https://idp.example.com";
+
+	const baseConfig = {
+		issuer,
+		clientId: "client-id",
+		clientSecret: "client-secret",
+		pkce: true,
+		discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
+	};
+
+	const mockDiscoveryDoc = createMockDiscoveryDocument();
+
+	beforeEach(() => {
+		vi.mocked(betterFetch).mockResolvedValue({
+			data: mockDiscoveryDoc,
+			error: null,
+		});
+	});
+
+	it("returns config unchanged when discovery is not needed", async () => {
+		const completeConfig = {
+			...baseConfig,
+			authorizationEndpoint: `${issuer}/oauth2/authorize`,
+			tokenEndpoint: `${issuer}/oauth2/token`,
+			jwksEndpoint: `${issuer}/.well-known/jwks.json`,
+		};
+		const result = await ensureRuntimeDiscovery(
+			completeConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result).toBe(completeConfig);
+		expect(betterFetch).not.toHaveBeenCalled();
+	});
+
+	it("hydrates missing endpoints when discovery is needed", async () => {
+		const result = await ensureRuntimeDiscovery(
+			baseConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result.authorizationEndpoint).toBe(
+			mockDiscoveryDoc.authorization_endpoint,
+		);
+		expect(result.tokenEndpoint).toBe(mockDiscoveryDoc.token_endpoint);
+		expect(result.jwksEndpoint).toBe(mockDiscoveryDoc.jwks_uri);
+		expect(result.userInfoEndpoint).toBe(mockDiscoveryDoc.userinfo_endpoint);
+	});
+
+	it("preserves existing config fields not returned by discovery", async () => {
+		const result = await ensureRuntimeDiscovery(
+			baseConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result.clientId).toBe(baseConfig.clientId);
+		expect(result.clientSecret).toBe(baseConfig.clientSecret);
+		expect(result.pkce).toBe(baseConfig.pkce);
+	});
+
+	it("throws when discovery fails", async () => {
+		vi.mocked(betterFetch).mockResolvedValue({
+			data: null,
+			error: { message: "Network error" },
+		});
+		await expect(
+			ensureRuntimeDiscovery(baseConfig, issuer, isTrustedOrigin),
+		).rejects.toThrow(DiscoveryError);
+	});
+
+	it("throws DiscoveryError for untrusted origin", async () => {
+		await expect(
+			ensureRuntimeDiscovery(baseConfig, issuer, () => false),
+		).rejects.toThrow(
+			expect.objectContaining({ code: "discovery_untrusted_origin" }),
+		);
+	});
+
+	it("rejects a stored endpoint whose DNS resolves to an internal address", async () => {
+		const completeConfig = {
+			...baseConfig,
+			authorizationEndpoint: "https://idp.internal.example/oauth2/authorize",
+			tokenEndpoint: "https://idp.internal.example/oauth2/token",
+			jwksEndpoint: "https://idp.internal.example/.well-known/jwks.json",
+		};
+		lookupMock.mockResolvedValue([{ address: "169.254.169.254", family: 4 }]);
+		await expect(
+			ensureRuntimeDiscovery(completeConfig, issuer, () => false),
+		).rejects.toThrow(
+			expect.objectContaining({ code: "discovery_private_host" }),
+		);
+		expect(betterFetch).not.toHaveBeenCalled();
+	});
+});
+
+describe("resolved-address guard", () => {
+	beforeEach(() => {
+		lookupMock.mockReset();
+	});
+
+	const notTrusted = () => false;
+
+	describe("assertEndpointResolvesPublic", () => {
+		it.each([
+			["loopback", "127.0.0.1"],
+			["link-local / cloud metadata", "169.254.169.254"],
+			["private RFC 1918", "10.0.0.5"],
+			["IPv6 loopback", "::1"],
+		])("rejects an FQDN that resolves to %s (%s)", async (_label, address) => {
+			lookupMock.mockResolvedValue([{ address, family: 4 }]);
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://idp.internal.example/token",
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+		});
+
+		it("allows an FQDN that resolves to a public address", async () => {
+			lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://idp.example.com/token",
+					notTrusted,
+				),
+			).resolves.toBeUndefined();
+		});
+
+		it("rejects if ANY resolved address is internal (mixed result)", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "127.0.0.1", family: 4 },
+			]);
+			await expect(
+				assertEndpointResolvesPublic(
+					"jwksEndpoint",
+					"https://idp.internal.example/jwks",
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+		});
+
+		it("skips DNS resolution for operator-allowlisted origins (internal IdP escape hatch)", async () => {
+			await assertEndpointResolvesPublic(
+				"tokenEndpoint",
+				"https://internal-idp.corp/token",
+				() => true,
+			);
+			expect(lookupMock).not.toHaveBeenCalled();
+		});
+
+		it("does not resolve IP-literal hosts (already covered by the sync check)", async () => {
+			await assertEndpointResolvesPublic(
+				"tokenEndpoint",
+				"https://93.184.216.34/token",
+				notTrusted,
+			);
+			expect(lookupMock).not.toHaveBeenCalled();
+		});
+
+		it("does not throw when resolution itself fails (lets the fetch surface it)", async () => {
+			lookupMock.mockRejectedValue(new Error("ENOTFOUND"));
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://idp.example.com/token",
+					notTrusted,
+				),
+			).resolves.toBeUndefined();
+		});
+	});
+
+	describe("assertServerFetchedOIDCEndpointsAllowed", () => {
+		it("checks token, userinfo, and jwks endpoints", async () => {
+			lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			await assertServerFetchedOIDCEndpointsAllowed(
+				{
+					tokenEndpoint: "https://idp.example.com/token",
+					userInfoEndpoint: "https://idp.example.com/userinfo",
+					jwksEndpoint: "https://idp.example.com/jwks",
+				},
+				notTrusted,
+			);
+			expect(lookupMock).toHaveBeenCalledTimes(3);
+		});
+
+		it("rejects when the userinfo endpoint resolves internally", async () => {
+			lookupMock.mockResolvedValue([{ address: "10.1.2.3", family: 4 }]);
+			await expect(
+				assertServerFetchedOIDCEndpointsAllowed(
+					{ userInfoEndpoint: "https://idp.internal.example/userinfo" },
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+		});
+
+		it("rejects a syntactically-private endpoint before any DNS lookup", async () => {
+			await expect(
+				assertServerFetchedOIDCEndpointsAllowed(
+					{ tokenEndpoint: "https://169.254.169.254/token" },
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+			expect(lookupMock).not.toHaveBeenCalled();
+		});
+	});
+});
+
+describe("fetchDiscoveryDocument redirect handling", () => {
+	it("disables automatic redirect following", async () => {
+		vi.mocked(betterFetch).mockResolvedValueOnce({
+			data: createMockDiscoveryDocument(),
+			error: null,
+		});
+		await fetchDiscoveryDocument(
+			"https://idp.example.com/.well-known/openid-configuration",
+			undefined,
+			() => true,
+		);
+		expect(betterFetch).toHaveBeenCalledWith(
+			"https://idp.example.com/.well-known/openid-configuration",
+			expect.objectContaining({ redirect: "manual" }),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10052
+	 */
+	it("rejects redirect responses after using manual redirect mode", async () => {
+		vi.mocked(betterFetch).mockResolvedValueOnce({
+			data: null,
+			error: { status: 302, statusText: "Found", message: "Found" },
+		});
+		await expect(
+			fetchDiscoveryDocument(
+				"https://idp.example.com/.well-known/openid-configuration",
+				undefined,
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+	});
+});
+
+describe("fetchOIDCEndpointResponse redirect handling", () => {
+	it("uses manual redirect mode and rejects redirect responses", async () => {
+		const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			new Response(null, {
+				status: 302,
+				headers: { location: "https://idp.example.com/final-jwks" },
+			}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			fetchOIDCEndpointResponse(
+				"jwksEndpoint",
+				"https://idp.example.com/jwks",
+				{ method: "GET" },
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://idp.example.com/jwks",
+			expect.objectContaining({ redirect: "manual" }),
+		);
 	});
 });

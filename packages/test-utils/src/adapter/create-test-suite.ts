@@ -5,7 +5,7 @@ import type {
 	User,
 	Verification,
 } from "@better-auth/core/db";
-import { getAuthTables } from "@better-auth/core/db";
+import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import {
 	createAdapterFactory,
@@ -14,6 +14,7 @@ import {
 } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
+import type { Auth } from "better-auth";
 import { betterAuth } from "better-auth";
 import { test } from "vitest";
 import type { Logger } from "./test-adapter";
@@ -178,7 +179,7 @@ export const createTestSuite = <
 	},
 	tests: (
 		helpers: {
-			adapter: DBAdapter<BetterAuthOptions>;
+			adapter: DBAdapter;
 			log: Logger;
 			generate: GenerateFn;
 			insertRandom: InsertRandomFn;
@@ -205,7 +206,7 @@ export const createTestSuite = <
 			) => (Record<string, any> & {
 				id: string;
 			})[];
-			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
+			getAuth: () => Promise<Auth>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
 			customIdGenerator?: () => any | Promise<any> | undefined;
 			transformIdOutput?: (id: any) => string | undefined;
@@ -254,15 +255,14 @@ export const createTestSuite = <
 
 			let adapter = await helpers.adapter();
 			const wrapperAdapter = (
-				overrideOptions?: BetterAuthOptions | undefined,
+				resolvedOptions?: BetterAuthOptions | undefined,
 			) => {
-				const options = deepmerge(
+				const options =
+					resolvedOptions ??
 					deepmerge(
-						helpers.getBetterAuthOptions(),
 						config?.defaultBetterAuthOptions || {},
-					),
-					overrideOptions || {},
-				);
+						helpers.getBetterAuthOptions(),
+					);
 				const adapterConfig = {
 					adapterId: helpers.adapterDisplayName,
 					...(adapter.options?.adapterConfig || {}),
@@ -271,16 +271,25 @@ export const createTestSuite = <
 					disableTransformInput: true,
 					disableTransformJoin: true,
 				};
+				// Snapshot the real adapter's transaction here so the wrapper always
+				// delegates to it, even when subsequent helper calls reassign
+				// `adapter` (e.g. `adapter = await helpers.adapter()` inside the
+				// proxied methods below). Previously this code mutated
+				// `adapter.transaction = undefined`, which left later
+				// `wrapperAdapter()` invocations with a snapshot of `undefined` and
+				// silently degraded `wrapper.transaction(cb)` to the no-op
+				// `createAsIsTransaction` path — breaking real rollback semantics
+				// for adapters that opt into `transaction: true`.
+				const adapterTransaction = adapter.transaction;
 				const adapterCreator = (
 					options: BetterAuthOptions,
 				): DBAdapter<BetterAuthOptions> =>
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
-							transaction: adapter.transaction,
+							transaction: adapterTransaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
-							adapter.transaction = undefined as any;
 							return {
 								count: async (args: any) => {
 									adapter = await helpers.adapter();
@@ -316,6 +325,22 @@ export const createTestSuite = <
 									adapter = await helpers.adapter();
 									const res = await adapter.updateMany(args);
 									return res as any;
+								},
+								consumeOne: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["consumeOne"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.consumeOne<T>(args);
+								},
+								incrementOne: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["incrementOne"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.incrementOne<T>(args);
 								},
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
@@ -497,6 +522,7 @@ export const createTestSuite = <
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
+						issuer: createLocalAccountIssuer("test"),
 						accountId: generateId(),
 						providerId: "test",
 						userId: generateId(),
@@ -624,14 +650,17 @@ export const createTestSuite = <
 					}),
 					getAuth: async () => {
 						adapter = await helpers.adapter();
+						const options = deepmerge(
+							config?.defaultBetterAuthOptions || {},
+							helpers.getBetterAuthOptions(),
+						);
 						const auth = betterAuth({
-							...helpers.getBetterAuthOptions(),
-							...(config?.defaultBetterAuthOptions || {}),
+							...options,
 							database: (options: BetterAuthOptions) => {
 								const adapter = wrapperAdapter(options);
 								return adapter;
 							},
-						});
+						} as BetterAuthOptions);
 						return auth;
 					},
 					log: helpers.log,

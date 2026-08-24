@@ -1,9 +1,6 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
-import {
-	createAuthMiddleware,
-	magicLink,
-	oAuthProxy,
-} from "better-auth/plugins";
+import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";
@@ -75,6 +72,10 @@ describe("expo", async () => {
 						storage: {
 							getItem: (key) => storage.get(key) || null,
 							setItem: async (key, value) => storage.set(key, value),
+							getItemAsync: async (key) => storage.get(key) || null,
+							setItemAsync: async (key, value) => {
+								storage.set(key, value);
+							},
 						},
 					}),
 				],
@@ -153,6 +154,10 @@ describe("expo", async () => {
 							storage: {
 								getItem: (key) => storage.get(key) || null,
 								setItem: async (key, value) => storage.set(key, value),
+								getItemAsync: async (key) => storage.get(key) || null,
+								setItemAsync: async (key, value) => {
+									storage.set(key, value);
+								},
 							},
 							webBrowserOptions: {
 								preferEphemeralSession: true,
@@ -176,9 +181,35 @@ describe("expo", async () => {
 	});
 
 	it("should get cookies", async () => {
-		const c = client.getCookie();
+		const c = await client.getCookie();
 		expect(c).includes("better-auth.session_token");
 	});
+
+	it("should remove expired cookies from store when Max-Age=0", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const prevCookie = JSON.stringify({
+			"better-auth.session_token": { value: "abc123", expires: null },
+			"better-auth.session_data": { value: "xyz789", expires: null },
+		});
+		// Server sends Max-Age=0 to delete the cookies
+		const header =
+			"better-auth.session_token=; Max-Age=0, better-auth.session_data=; Max-Age=0";
+		const result = JSON.parse(getSetCookie(header, prevCookie));
+		expect(result["better-auth.session_token"]).toBeUndefined();
+		expect(result["better-auth.session_data"]).toBeUndefined();
+	});
+
+	it("should remove cookies with past Expires from store", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const prevCookie = JSON.stringify({
+			"better-auth.session_token": { value: "abc123", expires: null },
+		});
+		const pastDate = new Date(Date.now() - 1000).toUTCString();
+		const header = `better-auth.session_token=; Expires=${pastDate}`;
+		const result = JSON.parse(getSetCookie(header, prevCookie));
+		expect(result["better-auth.session_token"]).toBeUndefined();
+	});
+
 	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
 		const header =
 			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
@@ -331,6 +362,10 @@ describe("expo", async () => {
 							storage: {
 								getItem: (key) => storage.get(key) || null,
 								setItem: async (key, value) => storage.set(key, value),
+								getItemAsync: async (key) => storage.get(key) || null,
+								setItemAsync: async (key, value) => {
+									storage.set(key, value);
+								},
 							},
 						}),
 					],
@@ -344,6 +379,114 @@ describe("expo", async () => {
 		});
 		expect(origin).toBe("better-auth://");
 		expect(originalOrigin).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8404
+	 * @see https://github.com/better-auth/better-auth/issues/7014
+	 */
+	describe("origin override regression", () => {
+		it("should preserve the incoming request instance when headers are mutable", async () => {
+			let originalRequest: Request | undefined;
+			let currentRequest: Request | undefined;
+			const storage = new Map<string, string>();
+			const { client, testUser } = await getTestInstance(
+				{
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							currentRequest = ctx.request;
+						}),
+					},
+					plugins: [
+						{
+							id: "test",
+							async onRequest(request) {
+								originalRequest = request;
+							},
+						},
+						expo(),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (key) => storage.get(key) || null,
+									setItem: async (key, value) => storage.set(key, value),
+									getItemAsync: async (key) => storage.get(key) || null,
+									setItemAsync: async (key, value) => {
+										storage.set(key, value);
+									},
+								},
+							}),
+						],
+					},
+				},
+			);
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://localhost:3000/callback",
+			});
+			expect(currentRequest).toBe(originalRequest);
+		});
+
+		it("should clone the request when origin header mutation fails", async () => {
+			let origin = null;
+			let originalRequest: Request | undefined;
+			let currentRequest: Request | undefined;
+			const storage = new Map<string, string>();
+			const { client, testUser } = await getTestInstance(
+				{
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							currentRequest = ctx.request;
+							origin = ctx.request?.headers.get("origin");
+						}),
+					},
+					plugins: [
+						{
+							id: "test",
+							async onRequest(request) {
+								originalRequest = request;
+								Object.defineProperty(request.headers, "set", {
+									configurable: true,
+									value: () => {
+										throw new Error("immutable headers");
+									},
+								});
+							},
+						},
+						expo(),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (key) => storage.get(key) || null,
+									setItem: async (key, value) => storage.set(key, value),
+									getItemAsync: async (key) => storage.get(key) || null,
+									setItemAsync: async (key, value) => {
+										storage.set(key, value);
+									},
+								},
+							}),
+						],
+					},
+				},
+			);
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://localhost:3000/callback",
+			});
+			expect(origin).toBe("better-auth://");
+			expect(currentRequest).toBeDefined();
+			expect(currentRequest).not.toBe(originalRequest);
+		});
 	});
 
 	it("should not modify origin header if origin is set", async () => {
@@ -394,6 +537,134 @@ describe("expo", async () => {
 		expect(origin).toBe(null);
 	});
 
+	it("should not send cookie or expo-origin headers for ID token requests", async () => {
+		let cookieHeader: string | null | undefined = null;
+		let expoOriginHeader: string | null | undefined = null;
+		let originHeader: string | null | undefined = null;
+		const storage = new Map<string, string>();
+
+		// Pre-populate storage with a cookie to verify it's NOT sent
+		storage.set(
+			"better-auth_cookie",
+			JSON.stringify({
+				"better-auth.session_token": {
+					value: "existing-token",
+					expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						cookieHeader = ctx.request?.headers.get("cookie");
+						expoOriginHeader = ctx.request?.headers.get("expo-origin");
+						originHeader = ctx.request?.headers.get("origin");
+					}),
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo()],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+								getItemAsync: async (key) => storage.get(key) || null,
+								setItemAsync: async (key, value) => {
+									storage.set(key, value);
+								},
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		// ID token request - should NOT have cookie or expo-origin headers
+		await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: "fake-id-token",
+			},
+		});
+
+		expect(cookieHeader).toBeNull();
+		expect(expoOriginHeader).toBeNull();
+		expect(originHeader).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9900
+	 */
+	it("should send cookie for link-social ID token requests", async () => {
+		let cookieHeader: string | null | undefined = null;
+		let expoOriginHeader: string | null | undefined = null;
+		const storage = new Map<string, string>();
+
+		storage.set(
+			"better-auth_cookie",
+			JSON.stringify({
+				"better-auth.session_token": {
+					value: "existing-token",
+					expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						cookieHeader = ctx.request?.headers.get("cookie");
+						expoOriginHeader = ctx.request?.headers.get("expo-origin");
+					}),
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo()],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+								getItemAsync: async (key) => storage.get(key) || null,
+								setItemAsync: async (key, value) => {
+									storage.set(key, value);
+								},
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		await client.linkSocial({
+			provider: "google",
+			idToken: {
+				token: "fake-id-token",
+			},
+		});
+
+		expect(cookieHeader).toContain("better-auth.session_token=existing-token");
+		expect(expoOriginHeader).toBeNull();
+	});
+
 	it("should preserve existing cookies on link-social", async () => {
 		await client.signIn.email({
 			email: testUser.email,
@@ -427,9 +698,45 @@ describe("expo", async () => {
 		});
 	});
 
-	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
-		fn.mockClear();
+	it("should not corrupt cookies when redirect URL has no cookie param", async () => {
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
 
+		const storedCookieBefore = storage.get("better-auth_cookie");
+		expect(storedCookieBefore).toBeDefined();
+		const parsedCookieBefore = JSON.parse(storedCookieBefore || "");
+		expect(parsedCookieBefore["better-auth.session_token"]).toBeDefined();
+
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard", // No cookie param
+		});
+
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		// Cookies should be preserved, not corrupted with "null" key
+		const storedCookieAfter = storage.get("better-auth_cookie");
+		expect(storedCookieAfter).toBeDefined();
+		const parsedCookieAfter = JSON.parse(storedCookieAfter || "");
+
+		// Should NOT have "null" as a cookie key
+		expect(parsedCookieAfter["null"]).toBeUndefined();
+
+		// Original session_token should still exist
+		expect(parsedCookieAfter["better-auth.session_token"]).toBeDefined();
+		expect(parsedCookieAfter["better-auth.session_token"]?.value).toBe(
+			parsedCookieBefore["better-auth.session_token"]?.value,
+		);
+	});
+
+	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -465,6 +772,10 @@ describe("expo with cookieCache", async () => {
 						storage: {
 							getItem: (key) => storage.get(key) || null,
 							setItem: async (key, value) => storage.set(key, value),
+							getItemAsync: async (key) => storage.get(key) || null,
+							setItemAsync: async (key, value) => {
+								storage.set(key, value);
+							},
 						},
 					}),
 				],
@@ -597,17 +908,208 @@ describe("expo with cookieCache", async () => {
 
 	it("should normalize colons in secure storage name via storage adapter", async () => {
 		const map = new Map<string, string>();
+		const setItem = vi.fn((name: string, value: string) => {
+			map.set(name, value);
+		});
+		const setItemAsync = vi.fn(async (name: string, value: string) => {
+			map.set(name, value);
+		});
 		const storage = storageAdapter({
 			getItem(name) {
 				return map.get(name) || null;
 			},
-			setItem(name, value) {
-				map.set(name, value);
+			setItem,
+			async getItemAsync(name) {
+				return map.get(name) || null;
 			},
+			setItemAsync,
 		});
 		storage.setItem("better-auth:session_token", "123");
 		expect(map.has("better-auth_session_token")).toBe(true);
 		expect(map.has("better-auth:session_token")).toBe(false);
+		expect(setItem).toHaveBeenCalledWith("better-auth_session_token", "123");
+		expect(setItemAsync).not.toHaveBeenCalled();
+
+		await storage.setItemAsync("better-auth:session_token", "456");
+		expect(setItemAsync).toHaveBeenCalledWith(
+			"better-auth_session_token",
+			"456",
+		);
+	});
+
+	/**
+	 * Large provider tokens (e.g. Keycloak) overflow the device storage ceiling,
+	 * so the adapter must split and reassemble the value instead of dropping it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9151
+	 * @see https://github.com/better-auth/better-auth/issues/9814
+	 */
+	it("should round-trip a value larger than the per-write storage limit", async () => {
+		const WRITE_LIMIT = 2048;
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => {
+				if (value.length > WRITE_LIMIT) {
+					throw new Error("value exceeds storage limit");
+				}
+				map.set(name, value);
+			},
+			getItemAsync: async (name) => map.get(name) ?? null,
+			setItemAsync: async (name, value) => {
+				if (value.length > WRITE_LIMIT) {
+					throw new Error("value exceeds storage limit");
+				}
+				map.set(name, value);
+			},
+		});
+
+		const large = "x".repeat(10_000);
+		storage.setItem("better-auth_cookie", large);
+
+		// No single physical write may exceed the backend limit.
+		for (const value of map.values()) {
+			expect(value.length).toBeLessThanOrEqual(WRITE_LIMIT);
+		}
+		// The value is split across several keys, not stored under the base key.
+		expect(map.size).toBeGreaterThan(1);
+		expect(storage.getItem("better-auth_cookie")).toBe(large);
+
+		await storage.setItemAsync("better-auth_cookie_async", large);
+		const storedValue = await storage.getItemAsync("better-auth_cookie_async");
+		expect(storedValue).toBe(large);
+	});
+
+	it("should store a value within the limit under the base key unchanged", () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+			getItemAsync: async (name) => map.get(name) ?? null,
+			setItemAsync: async (name, value) => {
+				map.set(name, value);
+			},
+		});
+
+		const small = JSON.stringify({ token: "abc" });
+		storage.setItem("better-auth_cookie", small);
+
+		expect(map.get("better-auth_cookie")).toBe(small);
+		expect(map.size).toBe(1);
+		expect(storage.getItem("better-auth_cookie")).toBe(small);
+	});
+
+	it("should read back a value written before chunking existed", () => {
+		// Pre-fix installs stored the whole jar under the base key.
+		const map = new Map<string, string>([
+			["better-auth_cookie", JSON.stringify({ legacy: true })],
+		]);
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+			getItemAsync: async (name) => map.get(name) ?? null,
+			setItemAsync: async (name, value) => {
+				map.set(name, value);
+			},
+		});
+
+		expect(storage.getItem("better-auth_cookie")).toBe(
+			JSON.stringify({ legacy: true }),
+		);
+	});
+
+	it("should fail closed when a chunk is missing", () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+			getItemAsync: async (name) => map.get(name) ?? null,
+			setItemAsync: async (name, value) => {
+				map.set(name, value);
+			},
+		});
+
+		storage.setItem("better-auth_cookie", "y".repeat(5_000));
+		// Simulate a torn write: drop one data chunk.
+		map.delete("better-auth_cookie.1");
+
+		expect(storage.getItem("better-auth_cookie")).toBeNull();
+	});
+
+	it("should not return mixed old/new data when a chunked overwrite is interrupted", () => {
+		const map = new Map<string, string>();
+		let failAfter = Number.POSITIVE_INFINITY;
+		let writes = 0;
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => {
+				if (writes++ >= failAfter) {
+					throw new Error("interrupted");
+				}
+				map.set(name, value);
+			},
+			getItemAsync: async (name) => map.get(name) ?? null,
+			setItemAsync: async (name, value) => {
+				if (writes++ >= failAfter) {
+					throw new Error("interrupted");
+				}
+				map.set(name, value);
+			},
+		});
+
+		const oldValue = "a".repeat(5_000);
+		storage.setItem("better-auth_cookie", oldValue);
+		expect(storage.getItem("better-auth_cookie")).toBe(oldValue);
+
+		// Overwrite with another large value, failing after the marker clear and
+		// the first chunk so the remaining chunks keep their old data.
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		writes = 0;
+		failAfter = 2;
+		storage.setItem("better-auth_cookie", "b".repeat(5_000));
+		error.mockRestore();
+
+		// The reassembled value must never splice old "a" chunks into the new write.
+		const result = storage.getItem("better-auth_cookie");
+		expect(result ?? "").not.toContain("a");
+	});
+
+	it("should shrink from chunked to a single value without bleeding stale chunks", () => {
+		const map = new Map<string, string>();
+		const storage = storageAdapter({
+			getItem: (name) => map.get(name) ?? null,
+			setItem: (name, value) => map.set(name, value),
+			getItemAsync: async (name) => map.get(name) ?? null,
+			setItemAsync: async (name, value) => {
+				map.set(name, value);
+			},
+		});
+
+		storage.setItem("better-auth_cookie", "z".repeat(5_000));
+		storage.setItem("better-auth_cookie", "small");
+
+		expect(storage.getItem("better-auth_cookie")).toBe("small");
+	});
+
+	it("should log instead of throw when the backend rejects a write", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const storage = storageAdapter({
+			getItem: () => null,
+			setItem: () => {
+				throw new Error("keychain rejected write");
+			},
+			getItemAsync: async () => null,
+			setItemAsync: async () => {
+				throw new Error("keychain rejected write");
+			},
+		});
+
+		expect(() => storage.setItem("better-auth_cookie", "value")).not.toThrow();
+		await expect(
+			storage.setItemAsync("better-auth_cookie", "value"),
+		).resolves.toBeUndefined();
+		expect(error).toHaveBeenCalledTimes(2);
+		error.mockRestore();
 	});
 });
 
@@ -635,6 +1137,10 @@ describe("expo with cookie storeStateStrategy", async () => {
 						storage: {
 							getItem: (key) => storage.get(key) || null,
 							setItem: async (key, value) => storage.set(key, value),
+							getItemAsync: async (key) => storage.get(key) || null,
+							setItemAsync: async (key, value) => {
+								storage.set(key, value);
+							},
 						},
 					}),
 				],
@@ -651,8 +1157,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should include oauthState param in proxy URL", async () => {
-		fn.mockClear();
-
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -667,8 +1171,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should set oauth_state cookie in browser context via expo-authorization-proxy (cookie strategy)", async () => {
-		fn.mockClear();
-
 		const expoWebBrowser = await import("expo-web-browser");
 		const { parseSetCookieHeader } = await import("../src/client");
 
@@ -737,6 +1239,10 @@ describe("expo deep link cookie injection", async () => {
 						storage: {
 							getItem: (key) => storage.get(key) || null,
 							setItem: async (key, value) => storage.set(key, value),
+							getItemAsync: async (key) => storage.get(key) || null,
+							setItemAsync: async (key, value) => {
+								storage.set(key, value);
+							},
 						},
 					}),
 					magicLinkClient(),
@@ -751,6 +1257,7 @@ describe("expo deep link cookie injection", async () => {
 			callbackURL: "myapp:///dashboard",
 		});
 
+		let redirectHandled = false;
 		const { error } = await client.magicLink.verify({
 			query: {
 				token: magicLinkToken,
@@ -758,6 +1265,7 @@ describe("expo deep link cookie injection", async () => {
 			},
 			fetchOptions: {
 				onError(context) {
+					redirectHandled = true;
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
 					expect(location).toContain("myapp://");
@@ -769,7 +1277,77 @@ describe("expo deep link cookie injection", async () => {
 				},
 			},
 		});
-		expect(error).toBeDefined();
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6810
+ */
+describe("expo deep link cookie injection with wildcard trustedOrigins", async () => {
+	let magicLinkToken = "";
+	const storage = new Map<string, string>();
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				expo(),
+				magicLink({
+					async sendMagicLink({ token }) {
+						magicLinkToken = token;
+					},
+				}),
+			],
+			trustedOrigins: ["myapp://*"],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+							getItemAsync: async (key) => storage.get(key) || null,
+							setItemAsync: async (key, value) => {
+								storage.set(key, value);
+							},
+						},
+					}),
+					magicLinkClient(),
+				],
+			},
+		},
+	);
+
+	it("should inject cookie into deep link for wildcard trusted origin", async () => {
+		await client.signIn.magicLink({
+			email: "wildcard-test@example.com",
+			callbackURL: "myapp:///dashboard",
+		});
+
+		let redirectHandled = false;
+		const { error } = await client.magicLink.verify({
+			query: {
+				token: magicLinkToken,
+				callbackURL: "myapp:///dashboard",
+			},
+			fetchOptions: {
+				onError(context) {
+					redirectHandled = true;
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("myapp://");
+
+					const url = new URL(location!);
+					const cookie = url.searchParams.get("cookie");
+					expect(cookie).toBeDefined();
+					expect(cookie).toContain("better-auth.session_token");
+				},
+			},
+		});
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
 	});
 });
 
@@ -799,6 +1377,10 @@ describe("expo deep link cookie injection for verify-email", async () => {
 						storage: {
 							getItem: (key) => storage.get(key) || null,
 							setItem: async (key, value) => storage.set(key, value),
+							getItemAsync: async (key) => storage.get(key) || null,
+							setItemAsync: async (key, value) => {
+								storage.set(key, value);
+							},
 						},
 					}),
 				],
@@ -815,6 +1397,7 @@ describe("expo deep link cookie injection for verify-email", async () => {
 
 		expect(verificationToken).toBeTruthy();
 
+		let redirectHandled = false;
 		const { error } = await client.verifyEmail(
 			{
 				query: {
@@ -824,6 +1407,7 @@ describe("expo deep link cookie injection for verify-email", async () => {
 			},
 			{
 				onError(context) {
+					redirectHandled = true;
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
 					expect(location).toContain("myapp://");
@@ -835,6 +1419,365 @@ describe("expo deep link cookie injection for verify-email", async () => {
 				},
 			},
 		);
-		expect(error).toBeDefined();
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10382
+ */
+describe("expo secure storage availability", () => {
+	it("rejects asynchronously when SecureStore is unavailable", async () => {
+		const storageError = new Error("User interaction is not allowed");
+		const getItem = vi.fn(() => {
+			throw storageError;
+		});
+		const getItemAsync = vi.fn().mockRejectedValue(storageError);
+		const { client } = await getTestInstance(
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem,
+								getItemAsync,
+								setItem: vi.fn(),
+								setItemAsync: vi.fn(async () => {}),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		expect(getItemAsync).not.toHaveBeenCalled();
+		expect(getItem).not.toHaveBeenCalled();
+		await expect(client.getSession()).rejects.toBe(storageError);
+		expect(getItemAsync).toHaveBeenCalled();
+		expect(getItem).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8952
+ */
+describe("expo session cache hydration", async () => {
+	it("shares cold-start hydration without restoring stale session data", async () => {
+		let resolveSessionCacheRead: (value: string | null) => void = () => {};
+		const sessionCacheRead = new Promise<string | null>((resolve) => {
+			resolveSessionCacheRead = resolve;
+		});
+		const getItemAsync = vi.fn((key: string) => {
+			if (key === "better-auth_session_data") {
+				return sessionCacheRead;
+			}
+			return Promise.resolve(null);
+		});
+		const { client } = await getTestInstance(
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: () => null,
+								setItem: () => {},
+								getItemAsync,
+								setItemAsync: async () => {},
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		const firstRequest = client.getSession();
+		const secondRequest = client.getSession();
+		await vi.waitFor(() => {
+			expect(getItemAsync).toHaveBeenCalledWith("better-auth_session_data");
+		});
+
+		const sessionAtom = client.$store.atoms.session!;
+		const now = new Date();
+		const serverSession = {
+			user: {
+				id: "server-user",
+				name: "Server User",
+				email: "server@example.com",
+				emailVerified: true,
+				createdAt: now,
+				updatedAt: now,
+			},
+			session: {
+				id: "server-session",
+				userId: "server-user",
+				token: "server-token",
+				expiresAt: new Date(now.getTime() + 60_000),
+				createdAt: now,
+				updatedAt: now,
+			},
+		};
+		sessionAtom.set({
+			...sessionAtom.get(),
+			data: serverSession,
+			error: null,
+		});
+		resolveSessionCacheRead(
+			JSON.stringify({
+				user: { id: "cached-user" },
+				session: {
+					id: "cached-session",
+					expiresAt: new Date(Date.now() + 60_000).toISOString(),
+				},
+			}),
+		);
+		await Promise.all([firstRequest, secondRequest]);
+
+		const sessionCacheReads = getItemAsync.mock.calls.filter(
+			([key]) => key === "better-auth_session_data",
+		);
+		expect(sessionAtom.get().data).toEqual(serverSession);
+		expect(sessionCacheReads).toHaveLength(1);
+	});
+
+	it("preserves additional fields through the cache round-trip", async () => {
+		const storage = new Map<string, string>();
+		const getItemAsync = vi.fn(async (key: string) => storage.get(key) || null);
+		const sharedClientOptions = {
+			storage: {
+				getItem: (key: string) => storage.get(key) || null,
+				setItem: (key: string, value: string) => storage.set(key, value),
+				getItemAsync,
+				setItemAsync: async (key: string, value: string) => {
+					storage.set(key, value);
+				},
+			},
+		};
+		const serverConfig = {
+			emailAndPassword: { enabled: true },
+			user: {
+				additionalFields: {
+					favoriteColor: {
+						type: "string" as const,
+						defaultValue: "blue",
+					},
+				},
+			},
+			session: {
+				additionalFields: {
+					deviceLabel: {
+						type: "string" as const,
+						defaultValue: "test-device",
+					},
+				},
+			},
+			plugins: [expo()],
+			trustedOrigins: ["better-auth://"],
+		};
+
+		const { client: writer, testUser } = await getTestInstance(serverConfig, {
+			clientOptions: { plugins: [expoClient(sharedClientOptions)] },
+		});
+		await writer.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await writer.getSession();
+
+		const { client: coldStart } = await getTestInstance(serverConfig, {
+			clientOptions: { plugins: [expoClient(sharedClientOptions)] },
+		});
+		getItemAsync.mockClear();
+		await coldStart.getSession();
+		expect(getItemAsync).toHaveBeenCalledWith("better-auth_session_data");
+		const atom = coldStart.$store.atoms.session!.get();
+		expect(atom.data).toMatchObject({
+			user: { favoriteColor: "blue" },
+			session: { deviceLabel: "test-device" },
+		});
+
+		getItemAsync.mockClear();
+		await coldStart.getSession();
+		expect(getItemAsync).not.toHaveBeenCalledWith("better-auth_session_data");
+	});
+
+	it.each([
+		["expired", new Date(Date.now() - 60_000).toISOString()],
+		["missing", undefined],
+		["invalid", "not-a-date"],
+	])("does not hydrate when session.expiresAt is %s", async (_label, expiresAt) => {
+		const storage = new Map<string, string>();
+		storage.set(
+			"better-auth_session_data",
+			JSON.stringify({
+				user: { id: "u1" },
+				session: { id: "s1", expiresAt },
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (k) => storage.get(k) || null,
+								setItem: (k, v) => storage.set(k, v),
+								getItemAsync: async (k) => storage.get(k) || null,
+								setItemAsync: async (k, v) => {
+									storage.set(k, v);
+								},
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		await client.getSession();
+		expect(client.$store.atoms.session!.get().data).toBeNull();
+	});
+
+	it("does not hydrate when disableCache is set", async () => {
+		const storage = new Map<string, string>();
+		const getItemAsync = vi.fn(async (key: string) => storage.get(key) || null);
+		storage.set(
+			"better-auth_session_data",
+			JSON.stringify({
+				user: { id: "u1" },
+				session: {
+					id: "s1",
+					expiresAt: new Date(Date.now() + 60_000).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							disableCache: true,
+							storage: {
+								getItem: (k) => storage.get(k) || null,
+								setItem: (k, v) => storage.set(k, v),
+								getItemAsync,
+								setItemAsync: async (k, v) => {
+									storage.set(k, v);
+								},
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		await client.getSession();
+		expect(getItemAsync).not.toHaveBeenCalledWith("better-auth_session_data");
+		expect(client.$store.atoms.session!.get().data).toBeNull();
+	});
+});
+
+describe("ExpoFocusManager duplicate notification prevention", () => {
+	it("should not notify listeners when setFocused is called with the same value", async () => {
+		const { setupExpoFocusManager } = await import("../src/focus-manager");
+		const focusManager = setupExpoFocusManager();
+
+		const listener = vi.fn();
+		focusManager.subscribe(listener);
+
+		focusManager.setFocused(true);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		focusManager.setFocused(true);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		focusManager.setFocused(false);
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		focusManager.setFocused(false);
+		expect(listener).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("ExpoOnlineManager duplicate notification prevention", () => {
+	it("should not notify listeners when setOnline is called with the same value", async () => {
+		const { setupExpoOnlineManager } = await import("../src/online-manager");
+		const onlineManager = setupExpoOnlineManager();
+
+		const listener = vi.fn();
+		onlineManager.subscribe(listener);
+
+		onlineManager.setOnline(false);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		onlineManager.setOnline(false);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		onlineManager.setOnline(true);
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		onlineManager.setOnline(true);
+		expect(listener).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("expo authorization proxy", async () => {
+	const { auth } = await getTestInstance({
+		baseURL: "https://app.example",
+		socialProviders: {
+			google: { clientId: "test", clientSecret: "test" },
+		},
+		plugins: [expo()],
+	});
+
+	const proxy = (authorizationURL: string) =>
+		auth.handler(
+			new Request(
+				`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+					authorizationURL,
+				)}`,
+			),
+		);
+
+	it("rejects a same-origin authorizationURL (login-CSRF bounce)", async () => {
+		const res = await proxy(
+			"https://app.example/api/auth/callback/google?state=x",
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects a non-https authorizationURL", async () => {
+		const res = await proxy(
+			"http://accounts.google.com/o/oauth2/v2/auth?state=x",
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects a malformed authorizationURL", async () => {
+		const res = await proxy("not-a-url");
+		expect(res.status).toBe(400);
+	});
+
+	it("rejects an authorizationURL with a fragment", async () => {
+		const withFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#fragment",
+		);
+		expect(withFragment.status).toBe(400);
+		const bareFragment = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=x#",
+		);
+		expect(bareFragment.status).toBe(400);
+	});
+
+	it("redirects to an external https provider authorization endpoint", async () => {
+		const target =
+			"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc";
+		const res = await proxy(target);
+		expect(res.headers.get("location")).toBe(target);
 	});
 });

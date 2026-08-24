@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "better-auth-harmony": "^1.2.5"
+    "better-auth-harmony": "^1.3.0"
   }
 }

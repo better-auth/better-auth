@@ -3,7 +3,39 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { terminate } from "@better-auth-test/test-utils/playwright";
 import type { Page } from "@playwright/test";
+import type { BetterAuthOptions } from "better-auth";
 import { createAuthServer } from "./app";
+
+type ServerExtras = Parameters<typeof createAuthServer>[2];
+
+/**
+ * Spins up the auth server (no Vite client) on an ephemeral port.
+ * Use for API-only E2E assertions that don't need a browser.
+ */
+export async function setupServer(
+	overrides?: Partial<BetterAuthOptions>,
+	extras?: ServerExtras,
+) {
+	const server = await createAuthServer(undefined, overrides, extras);
+	const port = await new Promise<number>((resolve, reject) => {
+		server.once("error", reject);
+		server.listen(0, "127.0.0.1", () => {
+			const address = server.address();
+			if (address && typeof address === "object") {
+				resolve(address.port);
+			} else {
+				reject(new Error("Failed to get server port"));
+			}
+		});
+	});
+	return {
+		port,
+		stop: () =>
+			new Promise<void>((resolve, reject) => {
+				server.close((err) => (err ? reject(err) : resolve()));
+			}),
+	};
+}
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -15,7 +47,7 @@ export async function runClient<R>(
 	return page.evaluate(fn, { client });
 }
 
-export function setup() {
+export function setup(overrides?: Partial<BetterAuthOptions>) {
 	let server: Awaited<ReturnType<typeof createAuthServer>>;
 	let clientChild: ChildProcessWithoutNullStreams;
 	const ref: {
@@ -28,7 +60,7 @@ export function setup() {
 	return {
 		ref,
 		start: async () => {
-			server = await createAuthServer();
+			server = await createAuthServer(undefined, overrides);
 			clientChild = spawn("pnpm", ["run", "start:client"], {
 				cwd: root,
 				stdio: "pipe",

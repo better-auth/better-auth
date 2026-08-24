@@ -7,8 +7,19 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
 import type { ClientSession, Db, MongoClient } from "mongodb";
-import { ObjectId } from "mongodb";
+import { ObjectId, UUID } from "mongodb";
+import {
+	escapeForMongoRegex,
+	insensitiveContains,
+	insensitiveEndsWith,
+	insensitiveEq,
+	insensitiveIn,
+	insensitiveNe,
+	insensitiveNotIn,
+	insensitiveStartsWith,
+} from "./query-builders";
 
 class MongoAdapterError extends Error {
 	constructor(
@@ -55,6 +66,7 @@ export const mongodbAdapter = (
 	config?: MongoDBAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null;
+	const indexSetupByDefinition = new Map<string, Promise<string>>();
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -77,6 +89,77 @@ export const mongodbAdapter = (
 			options,
 		}) => {
 			const customIdGen = getCustomIdGenerator(options);
+			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+			const resolvedIndexesByModel = new Map<
+				string,
+				ReturnType<typeof resolveDatabaseTableIndexes>
+			>();
+
+			const getResolvedModelIndexes = (model: string) => {
+				const cachedIndexes = resolvedIndexesByModel.get(model);
+				if (cachedIndexes) return cachedIndexes;
+
+				const defaultModelName = getDefaultModelName(model);
+				const table = schema[defaultModelName];
+				const indexes =
+					!table || table.disableMigrations
+						? []
+						: resolveDatabaseTableIndexes({
+								fields: table.fields,
+								indexes: table.indexes,
+								tableName: model,
+							});
+				resolvedIndexesByModel.set(model, indexes);
+				return indexes;
+			};
+
+			const ensureModelIndexes = async (model: string) => {
+				const indexes = getResolvedModelIndexes(model);
+
+				await Promise.all(
+					indexes.map((index) => {
+						const physicalFieldNames = index.columns.map((fieldName) =>
+							fieldName === "id" ? "_id" : fieldName,
+						);
+						const indexDefinition = JSON.stringify([
+							model,
+							index.name,
+							physicalFieldNames,
+							index.unique ?? false,
+						]);
+						const existingIndexSetup =
+							indexSetupByDefinition.get(indexDefinition);
+						if (existingIndexSetup) return existingIndexSetup;
+
+						const indexFields = Object.fromEntries(
+							physicalFieldNames.map((field) => [field, 1] as const),
+						);
+						const indexSetup = Promise.resolve().then(() =>
+							db.collection(model).createIndex(indexFields, {
+								name: index.name,
+								unique: index.unique ?? false,
+							}),
+						);
+						indexSetupByDefinition.set(indexDefinition, indexSetup);
+						void indexSetup.catch(() => {
+							if (indexSetupByDefinition.get(indexDefinition) === indexSetup) {
+								indexSetupByDefinition.delete(indexDefinition);
+							}
+						});
+						return indexSetup;
+					}),
+				);
+			};
+
+			function coerceToIdType(value: string): ObjectId | UUID {
+				if (useUUIDs) return new UUID(value);
+				return new ObjectId(value);
+			}
+
+			function isIdInstance(value: unknown): value is ObjectId | UUID {
+				if (useUUIDs) return value instanceof UUID;
+				return value instanceof ObjectId;
+			}
 
 			function serializeID({
 				field,
@@ -100,7 +183,7 @@ export const mongodbAdapter = (
 						return value;
 					}
 					if (typeof value !== "string") {
-						if (value instanceof ObjectId) {
+						if (isIdInstance(value)) {
 							return value;
 						}
 						if (Array.isArray(value)) {
@@ -110,12 +193,12 @@ export const mongodbAdapter = (
 								}
 								if (typeof v === "string") {
 									try {
-										return new ObjectId(v);
+										return coerceToIdType(v);
 									} catch {
 										return v;
 									}
 								}
-								if (v instanceof ObjectId) {
+								if (isIdInstance(v)) {
 									return v;
 								}
 								throw new MongoAdapterError("INVALID_ID", "Invalid id value");
@@ -124,7 +207,7 @@ export const mongodbAdapter = (
 						throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 					}
 					try {
-						return new ObjectId(value);
+						return coerceToIdType(value);
 					} catch {
 						return value;
 					}
@@ -146,37 +229,64 @@ export const mongodbAdapter = (
 						value,
 						operator = "eq",
 						connector = "AND",
+						mode = "sensitive",
 					} = w;
 					let condition: any;
 					let field = getFieldName({ model, field: field_ });
 					if (field === "id") field = "_id";
+					const fieldAttributes = getFieldAttributes({ model, field: field_ });
+					const isIdOrIdReference =
+						field === "_id" || fieldAttributes?.references?.field === "id";
+					const isInsensitive =
+						!isIdOrIdReference &&
+						mode === "insensitive" &&
+						(typeof value === "string" ||
+							(Array.isArray(value) &&
+								value.every((v) => typeof v === "string")));
+
 					switch (operator.toLowerCase()) {
 						case "eq":
-							condition = {
-								[field]: serializeID({
-									field,
-									value,
-									model,
-								}),
-							};
+							if (isInsensitive && typeof value === "string") {
+								condition = insensitiveEq(field, value);
+							} else {
+								condition = {
+									[field]: serializeID({
+										field,
+										value,
+										model,
+									}),
+								};
+							}
 							break;
 						case "in":
-							condition = {
-								[field]: {
-									$in: Array.isArray(value)
-										? value.map((v) => serializeID({ field, value: v, model }))
-										: [serializeID({ field, value, model })],
-								},
-							};
+							if (isInsensitive && Array.isArray(value)) {
+								condition = insensitiveIn(field, value as string[]);
+							} else {
+								condition = {
+									[field]: {
+										$in: Array.isArray(value)
+											? value.map((v) =>
+													serializeID({ field, value: v, model }),
+												)
+											: [serializeID({ field, value, model })],
+									},
+								};
+							}
 							break;
 						case "not_in":
-							condition = {
-								[field]: {
-									$nin: Array.isArray(value)
-										? value.map((v) => serializeID({ field, value: v, model }))
-										: [serializeID({ field, value, model })],
-								},
-							};
+							if (isInsensitive && Array.isArray(value)) {
+								condition = insensitiveNotIn(field, value as string[]);
+							} else {
+								condition = {
+									[field]: {
+										$nin: Array.isArray(value)
+											? value.map((v) =>
+													serializeID({ field, value: v, model }),
+												)
+											: [serializeID({ field, value, model })],
+									},
+								};
+							}
 							break;
 						case "gt":
 							condition = {
@@ -223,32 +333,46 @@ export const mongodbAdapter = (
 							};
 							break;
 						case "ne":
-							condition = {
-								[field]: {
-									$ne: serializeID({
-										field,
-										value,
-										model,
-									}),
-								},
-							};
+							if (isInsensitive && typeof value === "string") {
+								condition = insensitiveNe(field, value);
+							} else {
+								condition = {
+									[field]: {
+										$ne: serializeID({
+											field,
+											value,
+											model,
+										}),
+									},
+								};
+							}
 							break;
 						case "contains":
-							condition = {
-								[field]: {
-									$regex: `.*${escapeForMongoRegex(value as string)}.*`,
-								},
-							};
+							condition = isInsensitive
+								? insensitiveContains(field, value as string)
+								: {
+										[field]: {
+											$regex: `.*${escapeForMongoRegex(value as string)}.*`,
+										},
+									};
 							break;
 						case "starts_with":
-							condition = {
-								[field]: { $regex: `^${escapeForMongoRegex(value as string)}` },
-							};
+							condition = isInsensitive
+								? insensitiveStartsWith(field, value as string)
+								: {
+										[field]: {
+											$regex: `^${escapeForMongoRegex(value as string)}`,
+										},
+									};
 							break;
 						case "ends_with":
-							condition = {
-								[field]: { $regex: `${escapeForMongoRegex(value as string)}$` },
-							};
+							condition = isInsensitive
+								? insensitiveEndsWith(field, value as string)
+								: {
+										[field]: {
+											$regex: `${escapeForMongoRegex(value as string)}$`,
+										},
+									};
 							break;
 						default:
 							throw new MongoAdapterError(
@@ -280,6 +404,7 @@ export const mongodbAdapter = (
 
 			return {
 				async create({ model, data: values }) {
+					await ensureModelIndexes(model);
 					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
@@ -391,7 +516,7 @@ export const mongodbAdapter = (
 					if (!res || res.length === 0) return null;
 					return res[0] as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy, join }) {
+				async findMany({ model, where, limit, select, offset, sortBy, join }) {
 					const matchStage = where
 						? { $match: convertWhereClause({ where, model }) }
 						: { $match: {} };
@@ -475,6 +600,22 @@ export const mongodbAdapter = (
 						}
 					}
 
+					if (select?.length && select.length > 0) {
+						const projection: any = {};
+						select.forEach((field) => {
+							projection[getFieldName({ field, model })] = 1;
+						});
+
+						// Include joined collections in projection
+						if (join) {
+							for (const joinedModel of Object.keys(join)) {
+								projection[joinedModel] = 1;
+							}
+						}
+
+						pipeline.push({ $project: projection });
+					}
+
 					if (sortBy) {
 						pipeline.push({
 							$sort: {
@@ -514,6 +655,7 @@ export const mongodbAdapter = (
 					return res[0]?.total ?? 0;
 				},
 				async update({ model, where, update: values }) {
+					await ensureModelIndexes(model);
 					const clause = convertWhereClause({ where, model });
 
 					const res = await db.collection(model).findOneAndUpdate(
@@ -530,6 +672,7 @@ export const mongodbAdapter = (
 					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
+					await ensureModelIndexes(model);
 					const clause = convertWhereClause({ where, model });
 
 					const res = await db.collection(model).updateMany(
@@ -551,6 +694,42 @@ export const mongodbAdapter = (
 						.collection(model)
 						.deleteMany(clause, { session });
 					return res.deletedCount;
+				},
+				async consumeOne({ model, where }) {
+					const clause = convertWhereClause({ where, model });
+					const doc = await db.collection(model).findOneAndDelete(clause, {
+						session,
+						includeResultMetadata: true,
+					});
+					return ((doc as any)?.value as any) ?? null;
+				},
+				async incrementOne({ model, where, increment, set }) {
+					await ensureModelIndexes(model);
+					const clause = convertWhereClause({ where, model });
+					// Only include operators that carry fields. An empty `$inc: {}`
+					// errors on MongoDB server < 5.0, and a set-only guarded
+					// transition passes an empty `increment`.
+					const update: {
+						$inc?: Record<string, number>;
+						$set?: Record<string, unknown>;
+					} = {};
+					if (Object.keys(increment).length > 0) {
+						update.$inc = increment;
+					}
+					if (set && Object.keys(set).length > 0) {
+						update.$set = set;
+					}
+					if (!update.$inc && !update.$set) {
+						return db.collection(model).findOne(clause, { session });
+					}
+					const res = await db
+						.collection(model)
+						.findOneAndUpdate(clause, update, {
+							session,
+							returnDocument: "after",
+							includeResultMetadata: true,
+						});
+					return ((res as any)?.value as any) ?? null;
 				},
 			};
 		};
@@ -586,7 +765,10 @@ export const mongodbAdapter = (
 								session.startTransaction();
 
 								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
+									config: {
+										...adapterOptions!.config,
+										transaction: false,
+									},
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
 
@@ -616,15 +798,19 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action !== "create") {
+					if (action !== "create" && action !== "update") {
+						return data;
+					}
+					const IdClass =
+						options.advanced?.database?.generateId === "uuid" ? UUID : ObjectId;
+					if (data instanceof IdClass) {
 						return data;
 					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
 							if (typeof v === "string") {
 								try {
-									const oid = new ObjectId(v);
-									return oid;
+									return new IdClass(v);
 								} catch {
 									return v;
 								}
@@ -634,8 +820,7 @@ export const mongodbAdapter = (
 					}
 					if (typeof data === "string") {
 						try {
-							const oid = new ObjectId(data);
-							return oid;
+							return new IdClass(data);
 						} catch {
 							return data;
 						}
@@ -647,18 +832,26 @@ export const mongodbAdapter = (
 					) {
 						return null;
 					}
-					const oid = new ObjectId();
-					return oid;
+					if (action === "update") {
+						return data;
+					}
+					return new IdClass();
 				}
 				return data;
 			},
 			customTransformOutput({ data, field, fieldAttributes }) {
 				if (field === "id" || fieldAttributes.references?.field === "id") {
+					if (data instanceof UUID) {
+						return data.toString();
+					}
 					if (data instanceof ObjectId) {
 						return data.toHexString();
 					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
+							if (v instanceof UUID) {
+								return v.toString();
+							}
 							if (v instanceof ObjectId) {
 								return v.toHexString();
 							}
@@ -682,20 +875,3 @@ export const mongodbAdapter = (
 		return lazyAdapter(options);
 	};
 };
-
-/**
- * Safely escape user input for use in a MongoDB regex.
- * This ensures the resulting pattern is treated as literal text,
- * and not as a regex with special syntax.
- *
- * @param input - The input string to escape. Any type that isn't a string will be converted to an empty string.
- * @param maxLength - The maximum length of the input string to escape. Defaults to 256. This is to prevent DOS attacks.
- * @returns The escaped string.
- */
-function escapeForMongoRegex(input: string, maxLength = 256): string {
-	if (typeof input !== "string") return "";
-
-	// Escape all PCRE special characters
-	// Source: PCRE docs — https://www.pcre.org/original/doc/html/pcrepattern.html
-	return input.slice(0, maxLength).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}

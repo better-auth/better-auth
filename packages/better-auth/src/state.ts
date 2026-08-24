@@ -14,6 +14,11 @@ const stateDataSchema = z.looseObject({
 	errorURL: z.string().optional(),
 	newUserURL: z.string().optional(),
 	expiresAt: z.number(),
+	/**
+	 * CSRF nonce returned to the OAuth provider. When using cookie state storage,
+	 * this must match the callback `state` query parameter.
+	 */
+	oauthState: z.string().optional(),
 	link: z
 		.object({
 			email: z.string(),
@@ -21,12 +26,28 @@ const stateDataSchema = z.looseObject({
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
+	/**
+	 * OIDC nonce sent as the authorization request `nonce` parameter when the
+	 * provider requires an ID token to be bound to this redirect flow.
+	 */
+	idTokenNonce: z.string().optional(),
+	/**
+	 * Server-controlled values that ride the state across the provider redirect.
+	 * Populated only by `generateState` from `addOAuthServerContext`, never from
+	 * the request body, so it is safe to trust on the callback.
+	 */
+	serverContext: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
+export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
+	Object.keys(stateDataSchema.shape),
+);
+
 export type StateErrorCode =
 	| "state_generation_error"
+	| "state_not_found"
 	| "state_invalid"
 	| "state_mismatch"
 	| "state_security_mismatch";
@@ -34,17 +55,27 @@ export type StateErrorCode =
 export class StateError extends BetterAuthError {
 	code: string;
 	details?: Record<string, any>;
+	/**
+	 * The per-flow `errorCallbackURL` recovered from the parsed state, when the
+	 * failure happened after the state was successfully parsed (for example a
+	 * nonce or state-cookie mismatch). It was origin-validated at sign-in, so
+	 * the callback can safely redirect there instead of the default error page.
+	 * Absent when the state could not be parsed at all.
+	 */
+	errorURL?: string;
 
 	constructor(
 		message: string,
 		options: ErrorOptions & {
 			code: StateErrorCode;
 			details?: Record<string, any>;
+			errorURL?: string;
 		},
 	) {
 		super(message, options);
 		this.code = options.code;
 		this.details = options.details;
+		this.errorURL = options.errorURL;
 	}
 }
 
@@ -56,18 +87,21 @@ export async function generateGenericState(
 	const state = generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
+	// Cookie strategy:
+	//
+	// State data is encrypted into the cookie
+	// no verification record created
 	if (storeStateStrategy === "cookie") {
-		// Store state data in an encrypted cookie
-
+		const payload: StateData = { ...stateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
-			key: c.context.secret,
-			data: JSON.stringify(stateData),
+			key: c.context.secretConfig,
+			data: JSON.stringify(payload),
 		});
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "oauth_state",
 			{
-				maxAge: 10 * 60 * 1000, // 10 minutes
+				maxAge: 10 * 60, // 10 minutes
 			},
 		);
 
@@ -79,12 +113,14 @@ export async function generateGenericState(
 		};
 	}
 
-	// Default: database strategy
-
+	// Database strategy:
+	//
+	// state is stored in a signed cookie and sent via OAuth URL
+	// the adapter hashes it at rest when storeIdentifier is set
 	const stateCookie = c.context.createAuthCookie(
 		settings?.cookieName ?? "state",
 		{
-			maxAge: 5 * 60 * 1000, // 5 minutes
+			maxAge: 5 * 60, // 5 minutes
 		},
 	);
 
@@ -99,7 +135,10 @@ export async function generateGenericState(
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify(stateData),
+		value: JSON.stringify({
+			...stateData,
+			oauthState: state,
+		} satisfies StateData),
 		identifier: state,
 		expiresAt,
 	});
@@ -113,17 +152,26 @@ export async function generateGenericState(
 		);
 	}
 
+	// Return the plain state, not verification.identifier.
+	// The adapter hashes it for DB storage when storeIdentifier is "hashed",
+	// so returning verification.identifier would cause double-hashing on lookup.
 	return {
-		state: verification.identifier,
+		state,
 		codeVerifier: stateData.codeVerifier,
 	};
 }
 
 export async function parseGenericState(
 	c: GenericEndpointContext,
-	state: string,
-	settings?: { cookieName: string },
+	state: string | undefined,
+	settings?: { cookieName?: string; skipStateCookieCheck?: boolean },
 ) {
+	if (!state) {
+		throw new StateError("State not found in OAuth callback", {
+			code: "state_not_found",
+		});
+	}
+
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
 
@@ -143,7 +191,7 @@ export async function parseGenericState(
 
 		try {
 			const decryptedData = await symmetricDecrypt({
-				key: c.context.secret,
+				key: c.context.secretConfig,
 				data: encryptedData,
 			});
 
@@ -155,6 +203,17 @@ export async function parseGenericState(
 					code: "state_invalid",
 					details: { state },
 					cause: error,
+				},
+			);
+		}
+
+		if (!parsedData.oauthState || parsedData.oauthState !== state) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+					errorURL: parsedData.errorURL,
 				},
 			);
 		}
@@ -173,6 +232,20 @@ export async function parseGenericState(
 
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
 
+		if (
+			parsedData.oauthState !== undefined &&
+			parsedData.oauthState !== state
+		) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+					errorURL: parsedData.errorURL,
+				},
+			);
+		}
+
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "state",
 		);
@@ -186,8 +259,14 @@ export async function parseGenericState(
 		 * This is generally cause security issue and should only be used in
 		 * dev or staging environments. It's currently used by the oauth-proxy
 		 * plugin
+		 *
+		 * Also used by SAML relay state parsing via settings.skipStateCookieCheck,
+		 * where the IdP POST is typically cross-origin and SameSite=Lax cookies
+		 * are not sent.
 		 */
-		const skipStateCookieCheck = c.context.oauthConfig.skipStateCookieCheck;
+		const skipStateCookieCheck =
+			settings?.skipStateCookieCheck ??
+			c.context.oauthConfig.skipStateCookieCheck;
 		if (
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
@@ -195,13 +274,14 @@ export async function parseGenericState(
 			throw new StateError("State mismatch: State not persisted correctly", {
 				code: "state_security_mismatch",
 				details: { state },
+				errorURL: parsedData.errorURL,
 			});
 		}
 
 		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		await c.context.internalAdapter.deleteVerificationByIdentifier(state);
 	}
 
 	// Check expiration
@@ -211,6 +291,7 @@ export async function parseGenericState(
 			details: {
 				expiresAt: parsedData.expiresAt,
 			},
+			errorURL: parsedData.errorURL,
 		});
 	}
 

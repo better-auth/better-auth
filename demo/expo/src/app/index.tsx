@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/AntDesign";
 import { useStore } from "@nanostores/react";
 import { router, useNavigationContainerRef } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, View } from "react-native";
+import { Alert, Image, View } from "react-native";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -93,10 +93,10 @@ export default function Index() {
 						variant="link"
 						className="w-full"
 						onPress={() => {
-							router.push("/forget-password");
+							router.push("/forgot-password");
 						}}
 					>
-						<Text className="underline text-center">Forget Password?</Text>
+						<Text className="underline text-center">Forgot Password?</Text>
 					</Button>
 					<Button
 						onPress={() => {
@@ -107,7 +107,7 @@ export default function Index() {
 								},
 								{
 									onError: (ctx) => {
-										alert(ctx.error.message);
+										Alert.alert(ctx.error.message);
 									},
 								},
 							);

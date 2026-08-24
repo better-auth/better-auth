@@ -104,9 +104,11 @@ export interface TwitterOption extends ProviderOptions<TwitterProfile> {
 }
 
 export const twitter = (options: TwitterOption) => {
+	const tokenEndpoint = "https://api.x.com/2/oauth2/token";
 	return {
 		id: "twitter",
 		name: "Twitter",
+		accountSubject: ({ profile }) => profile.data.id,
 		createAuthorizationURL(data) {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -121,6 +123,7 @@ export const twitter = (options: TwitterOption) => {
 				state: data.state,
 				codeVerifier: data.codeVerifier,
 				redirectURI: data.redirectURI,
+				additionalParams: data.additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -130,7 +133,7 @@ export const twitter = (options: TwitterOption) => {
 				authentication: "basic",
 				redirectURI,
 				options,
-				tokenEndpoint: "https://api.x.com/2/oauth2/token",
+				tokenEndpoint,
 			});
 		},
 
@@ -145,7 +148,7 @@ export const twitter = (options: TwitterOption) => {
 							clientSecret: options.clientSecret,
 						},
 						authentication: "basic",
-						tokenEndpoint: "https://api.x.com/2/oauth2/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -183,7 +186,6 @@ export const twitter = (options: TwitterOption) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.data.id,
 					name: profile.data.name,
 					email: profile.data.email || profile.data.username || null,
 					image: profile.data.profile_image_url,

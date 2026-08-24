@@ -1,4 +1,5 @@
 import type { Awaitable, BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../version";
 
 export interface LastLoginMethodClientConfig {
 	storage: {
@@ -19,12 +20,7 @@ export interface LastLoginMethodClientConfig {
 		| undefined;
 }
 
-const paths = [
-	"/callback/",
-	"/oauth2/callback/",
-	"/sign-in/email",
-	"/sign-up/email",
-];
+const paths = ["/callback/", "/sign-in/email", "/sign-up/email"];
 const defaultResolveMethod = (url: string | URL) => {
 	const { pathname } = new URL(url.toString(), "http://localhost");
 
@@ -47,6 +43,7 @@ export const lastLoginMethodClient = (config: LastLoginMethodClientConfig) => {
 
 	return {
 		id: "last-login-method-expo",
+		version: PACKAGE_VERSION,
 		fetchPlugins: [
 			{
 				id: "last-login-method-expo",

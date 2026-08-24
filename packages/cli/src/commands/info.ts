@@ -83,7 +83,7 @@ function getFrameworkInfo(projectRoot: string) {
 			express: deps["express"],
 			fastify: deps["fastify"],
 			hono: deps["hono"],
-			remix: deps["@remix-run/react"],
+			"react-router": deps["react-router"],
 			astro: deps["astro"],
 			solid: deps["solid-js"],
 			qwik: deps["@builder.io/qwik"],
@@ -147,6 +147,8 @@ function sanitizeBetterAuthConfig(config: any): any {
 	// List of sensitive keys to redact
 	const sensitiveKeys = [
 		"secret",
+		"secrets",
+		"secretKey",
 		"clientSecret",
 		"clientId",
 		"authToken",
@@ -239,6 +241,8 @@ function sanitizeBetterAuthConfig(config: any): any {
 				})
 			) {
 				if (typeof value === "string" && value.length > 0) {
+					result[key] = "[REDACTED]";
+				} else if (Array.isArray(value)) {
 					result[key] = "[REDACTED]";
 				} else if (typeof value === "object" && value !== null) {
 					// Still recurse into objects but mark them as potentially sensitive

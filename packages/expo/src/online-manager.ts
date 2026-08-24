@@ -14,6 +14,7 @@ class ExpoOnlineManager implements OnlineManager {
 	}
 
 	setOnline(online: boolean) {
+		if (this.isOnline === online) return;
 		this.isOnline = online;
 		this.listeners.forEach((listener) => listener(online));
 	}

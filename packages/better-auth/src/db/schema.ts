@@ -1,49 +1,28 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	BaseModelNames,
 	BetterAuthPluginDBSchema,
 	DBFieldAttribute,
 } from "@better-auth/core/db";
 import { getAuthTables } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { Account, Session, User } from "../types";
+
+type Mode = "input" | "output";
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
 	BetterAuthOptions,
-	Map<string, Record<string, DBFieldAttribute>>
+	Map<`${BaseModelNames}:${Mode}`, Record<string, DBFieldAttribute>>
 >();
-
-function parseOutputData<T extends Record<string, any>>(
-	data: T,
-	schema: {
-		fields: Record<string, DBFieldAttribute>;
-	},
-) {
-	const fields = schema.fields;
-	const parsedData: Record<string, any> = {};
-	for (const key in data) {
-		const field = fields[key];
-		if (!field) {
-			parsedData[key] = data[key];
-			continue;
-		}
-		if (
-			field.returned === false &&
-			key !== "id" // id is always returned
-		) {
-			continue;
-		}
-		parsedData[key] = data[key];
-	}
-	return parsedData as T;
-}
 
 function getFields(
 	options: BetterAuthOptions,
-	table: string,
-	mode: "input" | "output",
+	modelName: BaseModelNames,
+	mode: Mode,
 ) {
-	const cacheKey = `${table}:${mode}`;
+	const cacheKey = `${modelName}:${mode}` as const;
 	if (!cache.has(options)) {
 		cache.set(options, new Map());
 	}
@@ -52,20 +31,25 @@ function getFields(
 		return tableCache.get(cacheKey)!;
 	}
 	const coreSchema =
-		mode === "output" ? (getAuthTables(options)[table]?.fields ?? {}) : {};
+		mode === "output" ? (getAuthTables(options)[modelName]?.fields ?? {}) : {};
 	const additionalFields =
-		table === "user" || table === "session" || table === "account"
-			? options[table]?.additionalFields
+		modelName === "user" || modelName === "session" || modelName === "account"
+			? options[modelName]?.additionalFields
 			: undefined;
 	let schema: Record<string, DBFieldAttribute> = {
 		...coreSchema,
 		...(additionalFields ?? {}),
 	};
+	// FIXME: Plugin-contributed fields are input-by-default, so a plugin-owned
+	// authority field is writable through generic input routes (e.g.
+	// /update-session) unless it sets `input: false`. A future breaking change
+	// should make plugin fields non-input by default and require an explicit
+	// opt-in for client-writable ones.
 	for (const plugin of options.plugins || []) {
-		if (plugin.schema && plugin.schema[table]) {
+		if (plugin.schema && plugin.schema[modelName]) {
 			schema = {
 				...schema,
-				...plugin.schema[table].fields,
+				...plugin.schema[modelName].fields,
 			};
 		}
 	}
@@ -78,7 +62,54 @@ export function parseUserOutput<T extends User>(
 	user: T,
 ) {
 	const schema = getFields(options, "user", "output");
-	return parseOutputData(user, { fields: schema });
+	return filterOutputFields(user, schema);
+}
+
+/**
+ * Builds a synthetic user object that matches the shape of a real user
+ * returned from the database. This ensures enumeration protection works
+ * correctly by making synthetic and real user responses indistinguishable.
+ *
+ * The function iterates over the user output schema and:
+ * - Includes all fields that should be returned (returned !== false)
+ * - Uses provided values when available
+ * - Sets optional fields to null when no value is provided
+ * - Applies default values where defined
+ * - Always includes the 'id' field (not part of schema but always present)
+ */
+export function buildSyntheticUserOutput(
+	options: BetterAuthOptions,
+	data: Record<string, unknown>,
+): Record<string, unknown> {
+	const schema = getFields(options, "user", "output");
+	const result: Record<string, unknown> = {};
+
+	for (const key in schema) {
+		const fieldAttr = schema[key]!;
+
+		if (fieldAttr.returned === false) {
+			continue;
+		}
+
+		if (key in data && data[key] !== undefined) {
+			result[key] = data[key];
+		} else if (fieldAttr.defaultValue !== undefined) {
+			result[key] =
+				typeof fieldAttr.defaultValue === "function"
+					? fieldAttr.defaultValue()
+					: fieldAttr.defaultValue;
+		} else if (!fieldAttr.required) {
+			result[key] = null;
+		}
+	}
+
+	// The 'id' field is not part of the schema fields but is always present
+	// in user output, so we need to include it explicitly
+	if ("id" in data) {
+		result.id = data.id;
+	}
+
+	return result;
 }
 
 export function parseSessionOutput<T extends Session>(
@@ -86,7 +117,7 @@ export function parseSessionOutput<T extends Session>(
 	session: T,
 ) {
 	const schema = getFields(options, "session", "output");
-	return parseOutputData(session, { fields: schema });
+	return filterOutputFields(session, schema);
 }
 
 export function parseAccountOutput<T extends Account>(
@@ -94,9 +125,9 @@ export function parseAccountOutput<T extends Account>(
 	account: T,
 ) {
 	const schema = getFields(options, "account", "output");
-	const parsed = parseOutputData(account, { fields: schema });
+	const parsed = filterOutputFields(account, schema);
 	// destructuring for type inference
-	// runtime filtering is already done by `parseOutputData`
+	// runtime filtering is already done by `filterOutputFields`
 	const {
 		accessToken: _accessToken,
 		refreshToken: _refreshToken,
@@ -118,10 +149,7 @@ export function parseInputData<T extends Record<string, any>>(
 ) {
 	const action = schema.action || "create";
 	const fields = schema.fields;
-	const parsedData: Record<string, any> = Object.assign(
-		Object.create(null),
-		null,
-	);
+	const parsedData = Object.create(null);
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key]!.input === false) {
@@ -194,6 +222,22 @@ export function parseUserInput(
 	return parseInputData(user, { fields: schema, action });
 }
 
+export function parseAdditionalUserInputFromProviderProfile(
+	options: BetterAuthOptions,
+	profile: Record<string, unknown> = {},
+	action: "create" | "update",
+) {
+	const schema = getFields(options, "user", "input");
+	const allowedProfileFields: Record<string, unknown> = Object.create(null);
+	for (const key of Object.keys(profile)) {
+		if (schema[key]?.input === false) {
+			continue;
+		}
+		allowedProfileFields[key] = profile[key];
+	}
+	return parseInputData(allowedProfileFields, { fields: schema, action });
+}
+
 export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
 	user?: Record<string, any> | undefined,
@@ -213,9 +257,24 @@ export function parseAccountInput(
 export function parseSessionInput(
 	options: BetterAuthOptions,
 	session: Partial<Session>,
+	action?: "create" | "update",
 ) {
 	const schema = getFields(options, "session", "input");
-	return parseInputData(session, { fields: schema });
+	return parseInputData(session, { fields: schema, action });
+}
+
+export function getSessionDefaultFields(options: BetterAuthOptions) {
+	const fields = getFields(options, "session", "input");
+	const defaults: Record<string, any> = {};
+	for (const key in fields) {
+		if (fields[key]!.defaultValue !== undefined) {
+			defaults[key] =
+				typeof fields[key]!.defaultValue === "function"
+					? fields[key]!.defaultValue()
+					: fields[key]!.defaultValue;
+		}
+	}
+	return defaults;
 }
 
 export function mergeSchema<S extends BetterAuthPluginDBSchema>(

@@ -34,6 +34,27 @@ export const schema = {
 				},
 				index: true,
 			},
+			verified: {
+				type: "boolean",
+				required: false,
+				// defaults to true so existing rows are treated as verified during migration.
+				// new rows from enableTwoFactor explicitly set this to false.
+				defaultValue: true,
+				input: false,
+			},
+			failedVerificationCount: {
+				type: "number",
+				required: false,
+				defaultValue: 0,
+				input: false,
+				returned: false,
+			},
+			lockedUntil: {
+				type: "date",
+				required: false,
+				input: false,
+				returned: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;

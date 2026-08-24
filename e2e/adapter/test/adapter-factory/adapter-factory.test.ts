@@ -4,6 +4,7 @@ import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
 	CleanedWhere,
+	DBAdapter,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
@@ -21,10 +22,10 @@ The rest are just edge cases.
 
 */
 
-async function createTestAdapter(
+async function createTestAdapter<Options extends BetterAuthOptions>(
 	props: {
 		config?: Partial<AdapterFactoryConfig>;
-		options?: BetterAuthOptions;
+		options?: Options;
 		adapter?: (
 			...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
 		) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>;
@@ -38,7 +39,7 @@ async function createTestAdapter(
 			supportsDates: true,
 			supportsBooleans: true,
 		},
-		options: {},
+		options: {} as never,
 		adapter: () => ({}),
 	},
 ) {
@@ -109,6 +110,18 @@ async function createTestAdapter(
 					}
 					return 0;
 				},
+				async consumeOne(data) {
+					if (x.consumeOne) {
+						return await x.consumeOne(data);
+					}
+					return null;
+				},
+				async incrementOne(data) {
+					if (x.incrementOne) {
+						return await x.incrementOne(data);
+					}
+					return null;
+				},
 				async findMany(data) {
 					if (x.findMany) {
 						return await x.findMany(data);
@@ -130,7 +143,7 @@ async function createTestAdapter(
 		database: testAdapter,
 	});
 
-	return (await auth.$context).adapter;
+	return (await auth.$context).adapter as DBAdapter<Options>;
 }
 
 describe("Create Adapter Helper", async () => {
@@ -173,7 +186,7 @@ describe("Create Adapter Helper", async () => {
 			config: {},
 			options: {
 				advanced: {
-					database: { generateId: false, useNumberId: false },
+					database: { generateId: false },
 				},
 			},
 			adapter(args_0) {
@@ -231,25 +244,39 @@ describe("Create Adapter Helper", async () => {
 		expect(ids.size).toBe(10);
 	});
 
-	test("Should throw an error if the database doesn't support numeric ids and the user has enabled `useNumberId`", async () => {
-		let error: any | null = null;
-		try {
-			await createTestAdapter({
-				config: {
-					supportsNumericIds: false,
-				},
-				options: {
-					advanced: {
-						database: {
-							useNumberId: true,
-						},
+	test("Should preserve a forced UUID when the adapter supports native UUIDs", async () => {
+		const existingId = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+		const adapter = await createTestAdapter({
+			config: {
+				supportsUUIDs: true,
+			},
+			options: {
+				advanced: {
+					database: {
+						generateId: "uuid",
 					},
 				},
-			});
-		} catch (err) {
-			error = err;
-		}
-		expect(error).not.toBeNull();
+			},
+			adapter() {
+				return {
+					async create(data) {
+						expect(data.data.id).toBe(existingId);
+						return data.data;
+					},
+				};
+			},
+		});
+
+		const result = await adapter.create({
+			model: "user",
+			data: {
+				id: existingId,
+				name: "test-name",
+			},
+			forceAllowId: true,
+		});
+
+		expect(result.id).toBe(existingId);
 	});
 
 	describe("Checking for the results of an adapter call, as well as the parameters passed into the adapter call", () => {
@@ -328,7 +355,7 @@ describe("Create Adapter Helper", async () => {
 						],
 						advanced: {
 							database: {
-								useNumberId: true,
+								generateId: "serial",
 							},
 						},
 					},
@@ -1654,14 +1681,14 @@ describe("Create Adapter Helper", async () => {
 				expect(parameters.where?.[0]!.field).toEqual("email_address");
 			});
 
-			test("findOne: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
+			test("findOne: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
 				const parameters: { where: Where[]; model: string; select?: string[] } =
 					await new Promise(async (r) => {
 						const adapter = await createTestAdapter({
 							options: {
 								advanced: {
 									database: {
-										useNumberId: true,
+										generateId: "serial",
 									},
 								},
 							},
@@ -1690,17 +1717,17 @@ describe("Create Adapter Helper", async () => {
 						expect(res).toHaveProperty("id");
 						expect(res?.id).toEqual("1");
 					});
-				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
+				// The where clause should convert the string id value of `"1"` to an int since `generateId` is serial.
 				expect(parameters.where[0]!.value).toEqual(1);
 			});
-			test("findMany: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
+			test("findMany: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
 				const parameters: { where: Where[] | undefined; model: string } =
 					await new Promise(async (r) => {
 						const adapter = await createTestAdapter({
 							options: {
 								advanced: {
 									database: {
-										useNumberId: true,
+										generateId: "serial",
 									},
 								},
 							},
@@ -1731,7 +1758,7 @@ describe("Create Adapter Helper", async () => {
 						expect(res[0]).toHaveProperty("id");
 						expect(res[0]!.id).toEqual("1");
 					});
-				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
+				// The where clause should convert the string id value of `"1"` to an int since `serial` is enabled.
 				expect(parameters.where?.[0]!.value).toEqual(1);
 			});
 		});
@@ -1739,7 +1766,7 @@ describe("Create Adapter Helper", async () => {
 });
 
 describe("Fallback JoinOption System", async () => {
-	describe("supportsJoin: false (Fallback mode)", () => {
+	describe("fallback when adapter returns flat rows (no join keys)", () => {
 		test("findOne: Should handle forward joins (joined model has FK to base model) by making separate queries", async () => {
 			let adapterCalls: Array<{ method: string; model: string }> = [];
 
@@ -1748,9 +1775,10 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					experimental: {
-						// explicitally defining since in the future `join` will likely be default which would break this test
-						joins: false,
+					advanced: {
+						database: {
+							joins: true,
+						},
 					},
 				},
 				adapter: () =>
@@ -1813,9 +1841,10 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					experimental: {
-						// explicitally defining since in the future `join` will likely be default which would break this test
-						joins: false,
+					advanced: {
+						database: {
+							joins: true,
+						},
 					},
 				},
 				adapter: () =>
@@ -1885,8 +1914,10 @@ describe("Fallback JoinOption System", async () => {
 				expect(item).toHaveProperty("session");
 			});
 		});
+	});
 
-		test("findOne: Should not pass join to adapter when supportsJoin is false", async () => {
+	describe("native join support (advanced.database.joins: true)", () => {
+		test("findOne: Should pass join to adapter and use nested data when present", async () => {
 			let joinPassedToAdapter = null;
 
 			const adapter = await createTestAdapter({
@@ -1894,9 +1925,10 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					experimental: {
-						// explicitally defining since in the future `join` will likely be default which would break this test
-						joins: false,
+					advanced: {
+						database: {
+							joins: true,
+						},
 					},
 				},
 				adapter: () =>
@@ -1910,22 +1942,31 @@ describe("Fallback JoinOption System", async () => {
 								createdAt: new Date(),
 								updatedAt: new Date(),
 								name: "Test User",
+								session: [
+									{
+										id: "session-1",
+										userId: "user-123",
+										expiresAt: new Date(),
+										createdAt: new Date(),
+									},
+								],
 							};
 						},
 					}) as any,
 			});
 
-			await adapter.findOne({
+			const res = await adapter.findOne({
 				model: "user",
 				where: [{ field: "id", value: "user-123" }],
 				join: { session: true },
 			});
 
-			// JoinOption should NOT be passed to adapter when supportsJoin is false
-			expect(joinPassedToAdapter).toBeUndefined();
+			expect(joinPassedToAdapter).not.toBeUndefined();
+			expect(joinPassedToAdapter).toHaveProperty("session");
+			expect(res).toHaveProperty("session");
 		});
 
-		test("findMany: Should not pass join to adapter when supportsJoin is false", async () => {
+		test("findMany: Should pass join to adapter and use nested data when present", async () => {
 			let joinPassedToAdapter = null;
 
 			const adapter = await createTestAdapter({
@@ -1933,9 +1974,10 @@ describe("Fallback JoinOption System", async () => {
 					debugLogs: {},
 				},
 				options: {
-					experimental: {
-						// explicitally defining since in the future `join` will likely be default which would break this test
-						joins: false,
+					advanced: {
+						database: {
+							joins: true,
+						},
 					},
 				},
 				adapter: () =>
@@ -1950,116 +1992,39 @@ describe("Fallback JoinOption System", async () => {
 									createdAt: new Date(),
 									updatedAt: new Date(),
 									name: "Test User",
+									session: [
+										{
+											id: "session-1",
+											userId: "user-123",
+											expiresAt: new Date(),
+											createdAt: new Date(),
+										},
+									],
 								},
 							];
 						},
 					}) as any,
 			});
 
-			await adapter.findMany({
+			const res = await adapter.findMany({
 				model: "user",
 				where: [],
 				join: { session: true },
 			});
 
-			// JoinOption should NOT be passed to adapter when supportsJoin is false
-			expect(joinPassedToAdapter).toBeUndefined();
+			expect(joinPassedToAdapter).not.toBeUndefined();
+			expect(joinPassedToAdapter).toHaveProperty("session");
+			expect(res).toBeInstanceOf(Array);
+			expect(res[0]).toHaveProperty("session");
 		});
 	});
 
-	describe("supportsJoin: true (Native join support)", () => {
-		test("findOne: Should pass join to adapter when supportsJoin is true", async () => {
+	describe("default behavior (joins disabled)", () => {
+		test("Should not pass join to adapter by default", async () => {
 			let joinPassedToAdapter = null;
 
 			const adapter = await createTestAdapter({
 				config: {
-					debugLogs: {},
-				},
-				options: {
-					experimental: {
-						joins: true,
-					},
-				},
-				adapter: () =>
-					({
-						async findOne({ model, join }: any) {
-							joinPassedToAdapter = join;
-							// When adapter supports joins, it returns data with joined structure
-							return {
-								id: "user-123",
-								email: "test@test.com",
-								emailVerified: false,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-								name: "Test User",
-							};
-						},
-					}) as any,
-			});
-
-			await adapter.findOne({
-				model: "user",
-				where: [{ field: "id", value: "user-123" }],
-				join: { session: true },
-			});
-
-			// JoinOption SHOULD be passed to adapter when supportsJoin is true
-			// It's then the adapter's responsibility to handle the join
-			expect(joinPassedToAdapter).not.toBeUndefined();
-			expect(joinPassedToAdapter).toHaveProperty("session");
-		});
-
-		test("findMany: Should pass join to adapter when supportsJoin is true", async () => {
-			let joinPassedToAdapter = null;
-
-			const adapter = await createTestAdapter({
-				config: {
-					debugLogs: {},
-				},
-				options: {
-					experimental: {
-						joins: true,
-					},
-				},
-				adapter: () =>
-					({
-						async findMany({ model, join }: any) {
-							joinPassedToAdapter = join;
-							// When adapter supports joins, it returns data with joined structure
-							return [
-								{
-									id: "user-123",
-									email: "test@test.com",
-									emailVerified: false,
-									createdAt: new Date(),
-									updatedAt: new Date(),
-									name: "Test User",
-								},
-							];
-						},
-					}) as any,
-			});
-
-			await adapter.findMany({
-				model: "user",
-				where: [],
-				join: { session: true },
-			});
-
-			// JoinOption SHOULD be passed to adapter when supportsJoin is true
-			// It's then the adapter's responsibility to handle the join
-			expect(joinPassedToAdapter).not.toBeUndefined();
-			expect(joinPassedToAdapter).toHaveProperty("session");
-		});
-	});
-
-	describe("Default behavior (supportsJoin not specified)", () => {
-		test("Should default to supportsJoin: false and use fallback join system", async () => {
-			let joinPassedToAdapter = null;
-
-			const adapter = await createTestAdapter({
-				config: {
-					// supportsJoin not specified, should default to false
 					debugLogs: {},
 				},
 				adapter: () =>
@@ -2075,6 +2040,12 @@ describe("Fallback JoinOption System", async () => {
 								name: "Test User",
 							};
 						},
+						async findMany({ model }: any) {
+							if (model === "session") {
+								return [];
+							}
+							return [];
+						},
 					}) as any,
 			});
 
@@ -2084,7 +2055,6 @@ describe("Fallback JoinOption System", async () => {
 				join: { session: true },
 			});
 
-			// Since supportsJoin defaults to false, join should NOT be passed
 			expect(joinPassedToAdapter).toBeUndefined();
 		});
 	});

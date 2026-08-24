@@ -1,56 +1,74 @@
 {
   "name": "@better-auth/mcp",
-  "version": "1.5.0-beta.9",
+  "version": "1.7.1",
+  "description": "Model Context Protocol (MCP) plugin for Better Auth",
   "type": "module",
-  "description": "Better Auth MCP server for AI-powered auth setup and diagnostics",
-  "module": "dist/index.mjs",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/mcp",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/mcp"
   },
-  "homepage": "https://www.better-auth.com/docs/concepts/cli#mcp",
-  "main": "./dist/index.mjs",
+  "keywords": [
+    "mcp",
+    "model context protocol",
+    "auth",
+    "oauth",
+    "oidc",
+    "rfc9728",
+    "rfc8707",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
-  "publishConfig": {
-    "access": "public",
-    "executableFiles": [
-      "./dist/index.mjs"
-    ]
-  },
-  "license": "MIT",
-  "keywords": [
-    "auth",
-    "mcp",
-    "ai",
-    "model-context-protocol",
-    "better-auth"
+  "files": [
+    "dist"
   ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
+      "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
     }
   },
-  "bin": {
-    "better-auth-mcp": "./dist/index.mjs"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "devDependencies": {
-    "tsdown": "catalog:",
-    "typescript": "catalog:"
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ]
+    }
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.8.0",
-    "zod": "^4.3.5"
+    "@better-auth/oauth-provider": "workspace:^",
+    "jose": "^6.1.3"
   },
-  "files": [
-    "dist"
-  ]
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
+    "better-call": "catalog:"
+  }
 }

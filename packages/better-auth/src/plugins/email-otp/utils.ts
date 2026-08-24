@@ -1,5 +1,13 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+
+export function toOTPIdentifier(
+	type: "email-verification" | "sign-in" | "forget-password" | "change-email",
+	email: string,
+) {
+	return `${type}-otp-${email}`;
+}
+
 export const defaultKeyHasher = async (otp: string) => {
 	const hash = await createHash("SHA-256").digest(
 		new TextEncoder().encode(otp),

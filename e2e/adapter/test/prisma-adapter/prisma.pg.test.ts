@@ -1,15 +1,16 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { testAdapter } from "@better-auth/test-utils/adapter";
-import { Pool } from "pg";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import {
@@ -26,15 +27,11 @@ const { execute } = await testAdapter({
 		return prismaAdapter(db, {
 			provider: dialect,
 			debugLogs: { isRunningAdapterTests: true },
+			transaction: true,
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
 		const db = await getPrismaClient(dialect);
-		const pgDB = new Pool({
-			connectionString: "postgres://user:password@localhost:5434/better_auth",
-		});
-		await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
-		await pgDB.end();
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);
 		await generatePrismaSchema(options, db, migrationCount, dialect);
@@ -48,6 +45,12 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite({}),
+		caseInsensitiveTestSuite(),
+		scimHttpTestSuite({
+			connectionId: "prisma-postgres-workforce",
+			token: "prisma-postgres-scim-token",
+			testId: "prisma-postgres",
+		}),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",

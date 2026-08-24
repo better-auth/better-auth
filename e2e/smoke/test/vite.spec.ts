@@ -74,5 +74,15 @@ describe("(vite) client build", () => {
 			!clientContent.includes("AsyncLocalStorage"),
 			"Built output should not contain 'AsyncLocalStorage' imports",
 		);
+
+		assert.ok(
+			!clientContent.includes("ZodString"),
+			"Built output should not contain 'zod' imports",
+		);
+
+		assert.ok(
+			!clientContent.includes("ZodObject"),
+			"Built output should not contain 'zod' imports",
+		);
 	});
 });

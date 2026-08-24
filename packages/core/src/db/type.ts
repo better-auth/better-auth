@@ -1,5 +1,10 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Awaitable, LiteralString } from "../types";
+import type {
+	Awaitable,
+	BetterAuthOptions,
+	LiteralString,
+	UnionToIntersection,
+} from "../types";
 
 export type BaseModelNames = "user" | "account" | "session" | "verification";
 
@@ -7,6 +12,154 @@ export type ModelNames<T extends string = LiteralString> =
 	| BaseModelNames
 	| T
 	| "rate-limit";
+
+export type InferDBValueType<T extends DBFieldType> = T extends "string"
+	? string
+	: T extends "number"
+		? number
+		: T extends "boolean"
+			? boolean
+			: T extends "date"
+				? Date
+				: T extends "json"
+					? Record<string, any>
+					: T extends `${infer U}[]`
+						? U extends "string"
+							? string[]
+							: number[]
+						: T extends Array<any>
+							? T[number]
+							: never;
+
+export type InferDBFieldOutput<T extends DBFieldAttribute> =
+	T["returned"] extends false
+		? never
+		: T["required"] extends false
+			? InferDBValueType<T["type"]> | undefined | null
+			: InferDBValueType<T["type"]>;
+
+export type InferDBFieldInput<T extends DBFieldAttribute> = InferDBValueType<
+	T["type"]
+>;
+
+export type InferDBFieldsInput<Field> =
+	Field extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Field[key]["required"] extends false
+					? never
+					: Field[key]["defaultValue"] extends string | number | boolean | Date
+						? never
+						: Field[key]["input"] extends false
+							? never
+							: key]: InferDBFieldInput<Field[key]>;
+			} & {
+				[key in Key as Field[key]["input"] extends false ? never : key]?:
+					| InferDBFieldInput<Field[key]>
+					| undefined
+					| null;
+			}
+		: {};
+
+export type InferDBFieldsOutput<
+	Fields extends Record<string, DBFieldAttribute>,
+> =
+	Fields extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Fields[key]["returned"] extends false
+					? never
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? key
+							: never
+						: key]: InferDBFieldOutput<Fields[key]>;
+			} & {
+				[key in Key as Fields[key]["returned"] extends false
+					? never
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? never
+							: key
+						: never]?: InferDBFieldOutput<Fields[key]> | null;
+			}
+		: never;
+
+export type InferDBFieldsFromOptionsInput<
+	DBOptions extends
+		| BetterAuthOptions["session"]
+		| BetterAuthOptions["user"]
+		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["account"]
+		| BetterAuthOptions["rateLimit"],
+> = DBOptions extends {
+	additionalFields: Record<string, DBFieldAttribute>;
+}
+	? InferDBFieldsInput<DBOptions["additionalFields"]>
+	: {};
+
+export type InferDBFieldsFromOptions<
+	DBOptions extends
+		| BetterAuthOptions["session"]
+		| BetterAuthOptions["user"]
+		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["account"]
+		| BetterAuthOptions["rateLimit"],
+> = DBOptions extends {
+	additionalFields: Record<string, DBFieldAttribute>;
+}
+	? InferDBFieldsOutput<DBOptions["additionalFields"]>
+	: {};
+
+export type InferDBFieldsFromPluginsInput<
+	ModelName extends string,
+	Plugins extends unknown[] | undefined,
+> = Plugins extends []
+	? {}
+	: Plugins extends [infer P, ...infer Rest]
+		? P extends {
+				schema: {
+					[key in ModelName]: {
+						fields: infer Fields;
+					};
+				};
+			}
+			? Fields extends Record<string, DBFieldAttribute>
+				? UnionToIntersection<
+						InferDBFieldsInput<Fields> &
+							InferDBFieldsFromPluginsInput<ModelName, Rest>
+					>
+				: InferDBFieldsFromPluginsInput<ModelName, Rest>
+			: InferDBFieldsFromPluginsInput<ModelName, Rest>
+		: {};
+
+export type InferDBFieldsFromPlugins<
+	ModelName extends string,
+	Plugins extends unknown[] | undefined,
+> = Plugins extends []
+	? {}
+	: Plugins extends [infer P, ...infer Rest]
+		? P extends {
+				schema: {
+					[key in ModelName]: {
+						fields: infer Fields;
+					};
+				};
+			}
+			? Fields extends Record<string, DBFieldAttribute>
+				? UnionToIntersection<
+						InferDBFieldsOutput<Fields> &
+							InferDBFieldsFromPlugins<ModelName, Rest>
+					>
+				: InferDBFieldsFromPlugins<ModelName, Rest>
+			: InferDBFieldsFromPlugins<ModelName, Rest>
+		: {};
 
 export type DBFieldType =
 	| "string"
@@ -98,7 +251,8 @@ export type DBFieldAttributeConfig = {
 	 */
 	bigint?: boolean | undefined;
 	/**
-	 * A zod schema to validate the value.
+	 * A Standard Schema to validate the value. Works with any Standard Schema
+	 * library, such as Zod, Valibot or ArkType.
 	 */
 	validator?:
 		| {
@@ -128,6 +282,16 @@ export type DBFieldAttribute<T extends DBFieldType = DBFieldType> = {
 	type: T;
 } & DBFieldAttributeConfig;
 
+/** A database index spanning one or more logical schema fields. */
+export interface DBTableIndex {
+	/** One to sixteen logical field names included in the index, in index order. */
+	fields: readonly [string, ...string[]];
+	/** Portable database index name of at most 63 UTF-8 bytes. */
+	name?: string | undefined;
+	/** Whether the indexed field tuple must be unique. */
+	unique?: boolean | undefined;
+}
+
 export type BetterAuthDBSchema = Record<
 	string,
 	{
@@ -139,6 +303,8 @@ export type BetterAuthDBSchema = Record<
 		 * The fields of the table
 		 */
 		fields: Record<string, DBFieldAttribute>;
+		/** Table-level indexes, including compound indexes. */
+		indexes?: readonly DBTableIndex[] | undefined;
 		/**
 		 * Whether to disable migrations for this table
 		 * @default false
@@ -158,6 +324,23 @@ export interface SecondaryStorage {
 	 * @returns - Value of the key
 	 */
 	get: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically get a value and delete it from storage.
+	 */
+	getAndDelete: (key: string) => Awaitable<unknown>;
+	/**
+	 * Atomically increment the counter at `key` by one, returning the
+	 * post-increment value.
+	 *
+	 * When the key is absent, it is created with a value of `1` and the given
+	 * `ttl` (in SECONDS). The TTL is applied only on creation; later increments
+	 * never extend it, so the counter expires a fixed window after it was first
+	 * created.
+	 *
+	 * Required so secondary-storage-backed rate limiting can enforce the limit
+	 * in one distributed-safe operation.
+	 */
+	increment: (key: string, ttl: number) => Awaitable<number>;
 	set: (
 		/**
 		 * Key to store
