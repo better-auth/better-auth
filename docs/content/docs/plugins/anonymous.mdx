@@ -181,6 +181,32 @@ export const auth = betterAuth({
   * You are responsible for ensuring the email is unique to avoid conflicts. The returned email must be in a valid format.
 </Callout>
 
+### `onLink`
+
+Controls what happens to the anonymous user when they sign in or sign up with another method.
+
+- `"create"` (default): the credential creates its own user and the anonymous user is deleted afterwards. Use `onLinkAccount` to migrate data from the anonymous user to the new one.
+- `"promote"`: when the incoming credential would create a brand-new user, the anonymous user is upgraded in place instead — their user id never changes. The anonymous row is updated with the credential's identity (email, verified status, name, image), `isAnonymous` is cleared, and the newly created account and session are re-pointed at the anonymous user, so existing sessions keep working and no data migration is needed.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        anonymous({
+            onLink: "promote" // [!code highlight]
+        })
+    ]
+```
+
+<Callout type="info">
+  When the credential resolves to a user that already exists (the email is
+  already taken, or it's a returning social identity), in-place promotion is
+  not possible. That case falls back to the classic flow: `onLinkAccount`
+  fires and the anonymous user is deleted as usual.
+</Callout>
+
 ### `onLinkAccount`
 
 A callback function that is called when an anonymous user links their account to a new authentication method. The callback receives an object with the `anonymousUser` and the `newUser`.
