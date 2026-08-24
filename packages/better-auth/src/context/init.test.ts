@@ -1,9 +1,9 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { init } from "./init";
 
 describe("init (with Kysely)", () => {
-	const database = new Database(":memory:");
+	const database = new DatabaseSync(":memory:");
 
 	it("should initialize with Kysely adapter", async () => {
 		const res = await init({
@@ -54,6 +54,17 @@ describe("init (with Kysely)", () => {
 			init({ database, baseURL: "ws://localhost:6969" }),
 		).rejects.toThrowError(
 			`Invalid base URL: ws://localhost:6969. URL must include 'http://' or 'https://'`,
+		);
+	});
+
+	it("should support native adapter transactions when given a raw database instance", async () => {
+		const res = await init({
+			baseURL: "http://localhost:3000",
+			database,
+		});
+
+		expect(typeof res.adapter.options?.adapterConfig?.transaction).toBe(
+			"function",
 		);
 	});
 });

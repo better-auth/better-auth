@@ -10,43 +10,45 @@ This plugins allows you to track leads when a user signs up using a Dub link. It
 ## Installation
 
 <Steps>
-    <Step>
-        ### Install the plugin
-        First, install the plugin:
+  <Step>
+    ### Install the plugin
 
-        ```package-install
-        @dub/better-auth
-        ```
-    </Step>
-    <Step>
-        ### Install the Dub SDK
+    First, install the plugin:
 
-        Next, install the Dub SDK on your server:
+    ```package-install
+    @dub/better-auth
+    ```
+  </Step>
 
-        ```package-install
-        dub
-        ```
-    </Step>
-    <Step>
-        ### Configure the plugin
+  <Step>
+    ### Install the Dub SDK
 
-        Add the plugin to your auth config:
+    Next, install the Dub SDK on your server:
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { dubAnalytics } from "@dub/better-auth"
-        import { dub } from "dub"
+    ```package-install
+    dub
+    ```
+  </Step>
 
-        export const auth = betterAuth({
-            plugins: [
-                dubAnalytics({
-                    dubClient: new Dub()
-                })
-            ]
-        })
-        ```
-    </Step>
+  <Step>
+    ### Configure the plugin
 
+    Add the plugin to your auth config:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { dubAnalytics } from "@dub/better-auth"
+    import { dub } from "dub"
+
+    export const auth = betterAuth({
+        plugins: [
+            dubAnalytics({
+                dubClient: new Dub()
+            })
+        ]
+    })
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -104,15 +106,15 @@ const authClient = createAuthClient({
 To link account with Dub, you need to use the `dub.link`.
 
 <APIMethod path="/dub/link" method="POST" requireSession>
-```ts
-type dubLink = {
-  /**
-   * URL to redirect to after linking
-   * @clientOnly
-  */
-  callbackURL: string = "/dashboard"
-}
-```
+  ```ts
+  type dubLink = {
+    /**
+     * URL to redirect to after linking
+     * @clientOnly
+    */
+    callbackURL: string = "/dashboard"
+  }
+  ```
 </APIMethod>
 
 ## Options

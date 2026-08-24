@@ -5,6 +5,7 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import {
 	admin,
+	anonymous,
 	bearer,
 	customSession,
 	deviceAuthorization,
@@ -21,6 +22,7 @@ import { Stripe } from "stripe";
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	plugins: [
+		anonymous({}),
 		organization({}),
 		twoFactor({}),
 		passkey(),
@@ -46,7 +48,6 @@ export const auth = betterAuth({
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
-				allowReTrialsForDifferentPlans: true,
 				plans: () => {
 					const PRO_PRICE_ID = {
 						default:

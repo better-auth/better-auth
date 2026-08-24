@@ -56,7 +56,7 @@ function parseISODate(value: string): Date | null {
 		offsetMinute,
 	] = match;
 
-	let date = new Date(
+	const date = new Date(
 		Date.UTC(
 			parseInt(year!, 10),
 			parseInt(month!, 10) - 1,
@@ -94,15 +94,6 @@ function betterJSONParse<T = unknown>(
 	}
 
 	const trimmed = value.trim();
-
-	if (
-		trimmed.length > 0 &&
-		trimmed[0] === '"' &&
-		trimmed.endsWith('"') &&
-		!trimmed.slice(1, -1).includes('"')
-	) {
-		return trimmed.slice(1, -1) as T;
-	}
 
 	const lowerValue = trimmed.toLowerCase();
 	if (lowerValue.length <= 9 && lowerValue in SPECIAL_VALUES) {

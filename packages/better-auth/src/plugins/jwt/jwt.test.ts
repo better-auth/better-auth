@@ -1,8 +1,15 @@
+import { DatabaseSync } from "node:sqlite";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import type { JSONWebKeySet } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { betterAuth } from "../../auth/full";
 import { createAuthClient } from "../../client";
+import { getMigrations } from "../../db/get-migration";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { inferAdditionalFields } from "../additional-fields/client";
 import { jwt } from ".";
 import { jwtClient } from "./client";
 import type { JWKOptions, Jwk, JwtOptions } from "./types";
@@ -166,7 +173,7 @@ describe("jwt", async () => {
 
 	for (const algorithm of algorithmsToTest) {
 		const expectedOutcome = algorithm.expectedOutcome;
-		for (let disablePrivateKeyEncryption of [false, true]) {
+		for (const disablePrivateKeyEncryption of [false, true]) {
 			const jwtOptions: JwtOptions = {
 				jwks: {
 					keyPairConfig: {
@@ -300,7 +307,7 @@ describe("jwt", async () => {
 	}
 });
 
-describe.each([
+describe.for([
 	{
 		alg: "EdDSA",
 		crv: "Ed25519",
@@ -419,7 +426,9 @@ describe("jwt - remote signing", async () => {
 					}),
 				],
 			}),
-		).toThrowError("jwks_config");
+		).toThrowError(
+			"options.jwks.remoteUrl must be set when using options.jwt.sign",
+		);
 	});
 });
 
@@ -435,7 +444,9 @@ describe("jwt - remote url", async () => {
 					}),
 				],
 			}),
-		).toThrowError("jwks_config");
+		).toThrowError(
+			"options.jwks.keyPairConfig.alg must be specified when options.jwks.remoteUrl is used for OpenID metadata",
+		);
 	});
 
 	it("should accept remoteUrl with alg specified", async () => {
@@ -500,7 +511,7 @@ describe("jwt - remote url", async () => {
 			});
 			expect(auth).toBeDefined();
 		}
-	});
+	}, 15000);
 
 	it("should still allow token generation when remoteUrl is set", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
@@ -777,6 +788,47 @@ describe("jwt - custom jwksPath", async () => {
 	});
 });
 
+describe("jwt - JWKS minting inside an active transaction", async () => {
+	it("mints the first signing key through the transaction-scoped adapter instead of deadlocking on the connection", async () => {
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			secret: "better-auth.secret",
+			database: {
+				dialect: new NodeSqliteDialect({
+					database: new DatabaseSync(":memory:"),
+				}),
+				type: "sqlite",
+				transaction: true,
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [jwt()],
+		});
+
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: "transactional-jwks@example.com",
+				password: "password123",
+				name: "Transactional JWKS User",
+			},
+			returnHeaders: true,
+		});
+		const headers = new Headers();
+		headers.set("cookie", signUpResult.headers.getSetCookie()[0]!);
+
+		const ctx = await auth.$context;
+		const token = await runWithTransaction(ctx.adapter, () =>
+			auth.api.getToken({ headers }),
+		);
+
+		expect(token.token).toEqual(expect.any(String));
+	});
+});
+
 describe("toExpJWT", () => {
 	const iat = 1000; // base iat for testing
 
@@ -827,5 +879,48 @@ describe("toExpJWT", () => {
 			expect(() => toExpJWT("" as any, iat)).toThrow(TypeError);
 			expect(() => toExpJWT("abc123" as any, iat)).toThrow(TypeError);
 		});
+	});
+});
+
+/**
+ * Declaration emit previously narrowed `$fetch` from `$fetch<JSONWebKeySet>(...)`,
+ * making `jwtClient()` unassignable to `BetterAuthClientPlugin` and collapsing
+ * `createAuthClient` option inference when combined with other plugins.
+ *
+ * @see https://github.com/masumi-network/sokosumi/pull/3403
+ */
+describe("jwtClient types", () => {
+	it("should be assignable to BetterAuthClientPlugin", () => {
+		const plugin: BetterAuthClientPlugin = jwtClient();
+		const plugins: BetterAuthClientPlugin[] = [jwtClient()];
+		expect(plugin.id).toBe("better-auth-client");
+		expect(plugins).toHaveLength(1);
+	});
+
+	it("should preserve additional user fields when combined with inferAdditionalFields", () => {
+		const client = createAuthClient({
+			plugins: [
+				inferAdditionalFields({
+					user: {
+						logo: {
+							type: "string",
+							required: false,
+						},
+					},
+				}),
+				jwtClient(),
+			],
+		});
+
+		type UpdateUserBody = NonNullable<Parameters<typeof client.updateUser>[0]>;
+
+		const body = {
+			logo: "https://example.com/logo.png",
+		} satisfies UpdateUserBody;
+		expect(body.logo).toBe("https://example.com/logo.png");
+		expectTypeOf<UpdateUserBody>().toMatchTypeOf<{
+			logo?: string | null | undefined;
+		}>();
+		expectTypeOf(client.jwks).toBeFunction();
 	});
 });

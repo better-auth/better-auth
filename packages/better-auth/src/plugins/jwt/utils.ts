@@ -60,21 +60,33 @@ export async function createJwk(
 	const { publicWebKey, privateWebKey, alg, cfg } =
 		await generateExportedKeyPair(options);
 
+	// Resolve the curve for persistence. Two sources, in priority order:
+	//   1. Explicit `keyPairConfig.crv` (e.g., Ed25519 for EdDSA).
+	//   2. The curve jose derived from the algorithm at generation
+	//      (e.g., P-256 for ES256, P-521 for ES512). Reading it off the
+	//      exported JWK keeps `jwks.crv` populated for EC keys whose
+	//      curve is implicit in the alg — without this, `crv` was null
+	//      for everything except EdDSA, defeating the audience-pinning
+	//      tripwire that depends on the column.
+	const explicitCrv =
+		cfg && "crv" in cfg ? (cfg as { crv: string }).crv : undefined;
+	const derivedCrv =
+		typeof (publicWebKey as { crv?: unknown }).crv === "string"
+			? (publicWebKey as { crv: string }).crv
+			: undefined;
+	const crv = explicitCrv ?? derivedCrv;
+
 	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
-	let jwk: Omit<Jwk, "id"> = {
+	const jwk: Omit<Jwk, "id"> = {
 		alg,
-		...(cfg && "crv" in cfg
-			? {
-					crv: (cfg as { crv: (typeof jwk)["crv"] }).crv,
-				}
-			: {}),
+		...(crv ? { crv: crv as (typeof jwk)["crv"] } : {}),
 		publicKey: JSON.stringify(publicWebKey),
 		privateKey: privateKeyEncryptionEnabled
 			? JSON.stringify(
 					await symmetricEncrypt({
-						key: ctx.context.secret,
+						key: ctx.context.secretConfig,
 						data: stringifiedPrivateWebKey,
 					}),
 				)

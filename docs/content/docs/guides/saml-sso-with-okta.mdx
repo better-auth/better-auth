@@ -11,22 +11,30 @@ SAML (Security Assertion Markup Language) is an XML-based standard for exchangin
 
 In this setup:
 
-- **IdP (Okta)**: Authenticates users and sends assertions about their identity.
-- **SP (Better Auth)**: Validates assertions and logs the user in.up.
+* **IdP (Okta)**: Authenticates users and sends assertions about their identity.
+* **SP (Better Auth)**: Validates assertions and logs the user in.up.
 
 ### Step 1: Create a SAML Application in Okta
 
 1. Log in to your Okta Admin Console
+
 2. Navigate to Applications > Applications
+
 3. Click "Create App Integration"
+
 4. Select "SAML 2.0" as the Sign-in method
+
 5. Configure the following settings:
 
-   - **Single Sign-on URL**: Your Better Auth ACS endpoint (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/acs/sso`). while `sso` being your providerId
-   - **Audience URI (SP Entity ID)**: Your Better Auth metadata URL (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/metadata`)
-   - **Name ID format**: Email Address or any of your choice.
+   * **Single Sign-on URL**: Your Better Auth callback endpoint (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/acs/sso`). Note: `sso` is your `providerId`
+   * **Audience URI (SP Entity ID)**: Your Better Auth metadata URL (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/metadata`)
+   * **Name ID format**: Email Address or any of your choice.
 
 6. Download the IdP metadata XML file and certificate
+
+<Callout type="info">
+  **IdP-Initiated SSO**: If you want users to access your app from the Okta dashboard, make sure the **Single Sign-on URL** points to the callback endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`). Better Auth automatically handles both SP-initiated and IdP-initiated flows.
+</Callout>
 
 ### Step 2: Configure Better Auth
 
@@ -41,8 +49,6 @@ const ssoConfig = {
       // SP Configuration
       issuer: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
       entryPoint: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml",
-      callbackUrl: "/dashboard", // Redirect after successful authentication
-      
       // IdP Configuration
       idpMetadata: {
         entityID: "https://trial-1076874.okta.com/app/exktofb0a62hqLAUL697/sso/saml/metadata",
@@ -105,10 +111,9 @@ const ssoConfig = {
 ```
 
 <Callout type="info">
-**Explicit**: Pass providerId directly when signing in.
-**Domain fallback:** Matches based on the user’s email domain. e.g. user@company.com → matches `company-okta` provider.
+  **Explicit**: Pass providerId directly when signing in.
+  **Domain fallback:** Matches based on the user’s email domain. e.g. [user@company.com](mailto:user@company.com) → matches `company-okta` provider.
 </Callout>
-
 
 ### Step 4: Initiating Sign-In
 
@@ -145,10 +150,12 @@ await authClient.signIn.sso({
 ```
 
 **Important Notes**:
- - DummyIDP should ONLY be used for development and testing
- - Never use these certificates in production
- - The example uses `localhost:3000` - adjust URLs for your environment
- - For production, always use proper IdP providers like Okta, Azure AD, or OneLogin
+
+* DummyIDP should ONLY be used for development and testing
+* Never use these certificates in production
+* The example uses `localhost:3000` - adjust URLs for your environment
+* For production, always use proper IdP providers like Okta, Azure AD, or OneLogin
+* The ACS URL is derived automatically from `{baseURL}/sso/saml2/sp/acs/{providerId}`. The post-login destination is controlled by `callbackURL` in `signIn.sso()`
 
 ### Step 5: Dynamically Registering SAML Providers
 
@@ -169,6 +176,6 @@ await authClient.sso.register({
 
 ## Additional Resources
 
-- [SSO Plugin Documentation](/docs/plugins/sso)
-- [Okta SAML Documentation](https://developer.okta.com/docs/concepts/saml/)
-- [SAML 2.0 Specification](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)
+* [SSO Plugin Documentation](/docs/plugins/sso)
+* [Okta SAML Documentation](https://developer.okta.com/docs/concepts/saml/)
+* [SAML 2.0 Specification](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)

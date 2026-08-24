@@ -7,10 +7,6 @@ const config = withMonorepoPaths(
 	withNativeWind(getDefaultConfig(__dirname), { input: "./src/global.css" }),
 );
 
-// XXX: Resolve our exports in workspace packages
-// https://github.com/expo/expo/issues/26926
-config.resolver.unstable_enablePackageExports = true;
-
 module.exports = config;
 
 /**
@@ -26,7 +22,7 @@ function withMonorepoPaths(config) {
 	const workspaceRoot = path.resolve(projectRoot, "../..");
 
 	// #1 - Watch all files in the monorepo
-	config.watchFolders = [workspaceRoot];
+	config.watchFolders = [...(config.watchFolders ?? []), workspaceRoot];
 
 	// #2 - Resolve modules within the project's `node_modules` first, then all monorepo modules
 	config.resolver.nodeModulesPaths = [

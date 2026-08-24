@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 
+import { BetterAuthError } from "@better-auth/core/error";
 import { Command } from "commander";
+import { ai } from "./commands/ai";
+import { createAdmin } from "./commands/create-admin";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
-import { login } from "./commands/login";
+import { login, logout } from "./commands/login";
 import { mcp } from "./commands/mcp";
 import { migrate } from "./commands/migrate";
 import { generateSecret } from "./commands/secret";
-import { getPackageInfo } from "./utils/get-package-info";
+import { upgrade } from "./commands/upgrade";
+import { cliVersion } from "./version";
 
 import "dotenv/config";
 
@@ -18,29 +22,30 @@ process.on("SIGTERM", () => process.exit(0));
 
 async function main() {
 	const program = new Command("better-auth");
-
-	let packageInfo: Record<string, any> = {};
-	try {
-		packageInfo = await getPackageInfo();
-	} catch {
-		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
-	}
 	program
+		.addCommand(ai)
+		.addCommand(createAdmin)
 		.addCommand(init)
 		.addCommand(migrate)
 		.addCommand(generate)
 		.addCommand(generateSecret)
 		.addCommand(info)
 		.addCommand(login)
+		.addCommand(logout)
 		.addCommand(mcp)
-		.version(packageInfo.version || "1.1.2")
+		.addCommand(upgrade)
+		.version(cliVersion)
 		.description("Better Auth CLI")
 		.action(() => program.help());
 
-	program.parse();
+	await program.parseAsync();
 }
 
 main().catch((error) => {
-	console.error("Error running Better Auth CLI:", error);
+	if (error instanceof BetterAuthError) {
+		console.error(error.message);
+	} else {
+		console.error("Error running Better Auth CLI:", error);
+	}
 	process.exit(1);
 });

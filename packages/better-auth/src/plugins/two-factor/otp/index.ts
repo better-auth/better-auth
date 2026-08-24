@@ -9,10 +9,21 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../../crypto";
+import { parseUserOutput } from "../../../db/schema";
+import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import type {
+	TwoFactorProvider,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "../types";
 import { defaultKeyHasher } from "../utils";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export interface OTPOptions {
 	/**
@@ -125,30 +136,40 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		}
 		if (opts.storeOTP === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: otp,
 			});
 		}
 		return otp;
 	}
 
-	async function decryptOTP(ctx: GenericEndpointContext, otp: string) {
+	async function decryptOrHashForComparison(
+		ctx: GenericEndpointContext,
+		storedOtp: string,
+		userInput: string,
+	): Promise<[string, string]> {
 		if (opts.storeOTP === "hashed") {
-			return await defaultKeyHasher(otp);
+			// For hashed storage: hash the user input and compare with stored hash
+			return [storedOtp, await defaultKeyHasher(userInput)];
 		}
 		if (opts.storeOTP === "encrypted") {
-			return await symmetricDecrypt({
-				key: ctx.context.secret,
-				data: otp,
+			// For encrypted storage: decrypt stored value and compare with plain input
+			const decrypted = await symmetricDecrypt({
+				key: ctx.context.secretConfig,
+				data: storedOtp,
 			});
+			return [decrypted, userInput];
 		}
 		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
-			return await opts.storeOTP.decrypt(otp);
+			const decrypted = await opts.storeOTP.decrypt(storedOtp);
+			return [decrypted, userInput];
 		}
 		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
-			return await opts.storeOTP.hash(otp);
+			// For custom hash: hash the user input and compare with stored hash
+			return [storedOtp, await opts.storeOTP.hash(userInput)];
 		}
-		return otp;
+		// Plain storage: compare directly
+		return [storedOtp, userInput];
 	}
 
 	/**
@@ -294,38 +315,63 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		},
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
-			const toCheckOtp =
-				await ctx.context.internalAdapter.findVerificationValue(
+			const isSignIn = !session.session;
+			const twoFactorTable = "twoFactor";
+			// Account-level lockout shares one counter across all factors, so OTP
+			// failures count toward and are blocked by the same lock as TOTP and
+			// backup codes whenever the account has a twoFactor row. OTP-only
+			// accounts can be enabled without a TOTP/backup-code row; those accounts
+			// still use the per-challenge OTP attempt cap below.
+			let twoFactor: TwoFactorTable | null = null;
+			if (isSignIn) {
+				twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+					model: twoFactorTable,
+					where: [{ field: "userId", value: session.user.id }],
+				});
+				if (twoFactor) {
+					await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+				}
+			}
+			// Consume the OTP row atomically as the race gate. The first concurrent
+			// submission wins the row; every other racer receives null and is
+			// rejected, so a burst of guesses cannot all read the same attempt
+			// counter before any write lands. Expiry is gated inside the consume,
+			// so a stale row returns null without minting a session.
+			const consumed =
+				await ctx.context.internalAdapter.consumeVerificationValue(
 					`2fa-otp-${key}`,
 				);
-			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
-			const decryptedOtp = await decryptOTP(ctx, otp!);
-			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
-				if (toCheckOtp) {
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						toCheckOtp.id,
-					);
-				}
+			if (!consumed) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				);
 			}
+			const [otp, counter] = consumed.value?.split(":") ?? [];
 			const allowedAttempts = options?.allowedAttempts || 5;
-			if (parseInt(counter!) >= allowedAttempts) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					toCheckOtp.id,
-				);
+			const attempts = parseInt(counter!, 10) || 0;
+			if (attempts >= allowedAttempts) {
+				// The budget is spent. The row stays consumed, so the next
+				// submission is rejected as expired/already-consumed.
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				);
 			}
+			const [storedValue, inputValue] = await decryptOrHashForComparison(
+				ctx,
+				otp!,
+				ctx.body.code,
+			);
 			const isCodeValid = constantTimeEqual(
-				new TextEncoder().encode(decryptedOtp),
-				new TextEncoder().encode(ctx.body.code),
+				new TextEncoder().encode(storedValue),
+				new TextEncoder().encode(inputValue),
 			);
 			if (isCodeValid) {
+				if (twoFactor) {
+					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+				}
+				// Leave the row consumed: a valid OTP is single-use.
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
 						throw APIError.from(
@@ -344,41 +390,39 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						false,
 						session.session,
 					);
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
-					);
 					await setSessionCookie(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});
+					await ctx.context.internalAdapter.deleteSession(
+						session.session.token,
+					);
 					return ctx.json({
 						token: newSession.token,
-						user: {
-							id: updatedUser.id,
-							email: updatedUser.email,
-							emailVerified: updatedUser.emailVerified,
-							name: updatedUser.name,
-							image: updatedUser.image,
-							createdAt: updatedUser.createdAt,
-							updatedAt: updatedUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, updatedUser),
 					});
 				}
 				return valid(ctx);
-			} else {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					toCheckOtp.id,
-					{
-						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
-					},
-				);
-				return invalid("INVALID_CODE");
 			}
+			// Wrong code within budget: re-arm the row with the incremented counter
+			// and the original expiry. The recreated counter is the durable record
+			// of the attempt, so the next submission either keeps guessing or hits
+			// the lock-out guard above. The original expiry caps the whole burst.
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: `${otp}:${attempts + 1}`,
+				identifier: `2fa-otp-${key}`,
+				expiresAt: consumed.expiresAt,
+			});
+			if (twoFactor) {
+				await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+			}
+			return invalid("INVALID_CODE");
 		},
 	);
 
 	return {
 		id: "otp",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -388,7 +432,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.send2FaOTP`
+			 * `auth.api.sendTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.sendOtp`
@@ -404,7 +448,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.verifyOTP`
+			 * `auth.api.verifyTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.verifyOtp`

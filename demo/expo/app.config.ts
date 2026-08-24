@@ -18,10 +18,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		bundler: "metro",
 		output: "server",
 	},
-	updates: {
-		fallbackToCacheTimeout: 0,
-	},
-	assetBundlePatterns: ["**/*"],
 	ios: {
 		bundleIdentifier: "your.bundle.identifier",
 		supportsTablet: true,
@@ -49,6 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 				origin: "http://localhost:8081",
 			},
 		],
+		"expo-web-browser",
 		"expo-secure-store",
 		"expo-font",
 	],

@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
 import type { Jwk } from "./types";
 
 describe("jwt rotation", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should rotate keys when expired", async () => {
 		vi.useFakeTimers();
 		const storage: Jwk[] = [];

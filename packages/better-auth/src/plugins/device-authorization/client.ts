@@ -1,10 +1,14 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { deviceAuthorization } from ".";
+import { PACKAGE_VERSION } from "../../version";
+import type { DeviceAuthorizationGrant, deviceAuthorization } from ".";
 
-export const deviceAuthorizationClient = () => {
+export const deviceAuthorizationClient = <
+	Grant extends DeviceAuthorizationGrant | undefined = undefined,
+>() => {
 	return {
 		id: "device-authorization",
-		$InferServerPlugin: {} as ReturnType<typeof deviceAuthorization>,
+		version: PACKAGE_VERSION,
+		$InferServerPlugin: {} as ReturnType<typeof deviceAuthorization<Grant>>,
 		pathMethods: {
 			"/device/code": "POST",
 			"/device/token": "POST",

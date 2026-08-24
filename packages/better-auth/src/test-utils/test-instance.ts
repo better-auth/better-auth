@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash, randomUUID } from "node:crypto";
 import type {
 	Awaitable,
 	BetterAuthClientOptions,
@@ -7,13 +8,14 @@ import type {
 import type { SuccessContext } from "@better-fetch/fetch";
 import { sql } from "kysely";
 import { afterAll } from "vitest";
-import { betterAuth } from "../auth";
+import { betterAuth } from "../auth/full";
 import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import { getAdapter, getMigrations } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
+import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -29,6 +31,23 @@ afterAll(async () => {
 	}
 });
 
+const TEST_PASSWORD_HASH_PREFIX = "$test$sha256$";
+
+/**
+ * Intentionally fast for tests
+ */
+function createTestPasswordHash(password: string) {
+	return `${TEST_PASSWORD_HASH_PREFIX}${createHash("sha256")
+		.update(password.normalize("NFKC"))
+		.digest("hex")}`;
+}
+
+const testPassword = {
+	hash: async (password: string) => createTestPasswordHash(password),
+	verify: async ({ hash, password }: { hash: string; password: string }) =>
+		hash === createTestPasswordHash(password),
+};
+
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
@@ -41,43 +60,66 @@ export async function getTestInstance<
 				disableTestUser?: boolean;
 				testUser?: Partial<User>;
 				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+				transaction?: boolean;
 		  }
 		| undefined,
 ) {
 	const testWith = config?.testWith || "sqlite";
+	const postgresSchema =
+		testWith === "postgres"
+			? `ba_test_${randomUUID().replaceAll("-", "_")}`
+			: undefined;
+
+	const quotePostgresIdentifier = (identifier: string) =>
+		`"${identifier.replaceAll('"', '""')}"`;
 
 	async function getPostgres() {
 		const { Kysely, PostgresDialect } = await import("kysely");
 		const { Pool } = await import("pg");
+		const pool = new Pool({
+			connectionString: "postgres://user:password@localhost:5432/better_auth",
+			options: postgresSchema
+				? `-c search_path=${postgresSchema},public`
+				: undefined,
+		});
+		if (postgresSchema) {
+			await pool.query(
+				`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(
+					postgresSchema,
+				)}`,
+			);
+		}
 		return new Kysely({
 			dialect: new PostgresDialect({
-				pool: new Pool({
-					connectionString:
-						"postgres://user:password@localhost:5432/better_auth",
-				}),
+				pool,
 			}),
 		});
 	}
 
 	async function getSqlite() {
-		const { default: Database } = await import("better-sqlite3");
-		return new Database(":memory:");
+		const { DatabaseSync } = await import("node:sqlite");
+		return new DatabaseSync(":memory:");
 	}
 
 	async function getMysql() {
 		const { Kysely, MysqlDialect } = await import("kysely");
 		const { createPool } = await import("mysql2/promise");
 		return new Kysely({
-			dialect: new MysqlDialect(
-				createPool("mysql://user:password@localhost:3306/better_auth"),
-			),
+			dialect: new MysqlDialect({
+				pool: createPool("mysql://user:password@localhost:3306/better_auth"),
+			}),
 		});
 	}
 
 	async function mongodbClient() {
 		const { MongoClient } = await import("mongodb");
 		const dbClient = async (connectionString: string, dbName: string) => {
-			const client = new MongoClient(connectionString);
+			// Fail fast in CI/local when Mongo is unreachable instead of hanging
+			// until Vitest's default 10s testTimeout (driver default is 30s).
+			const client = new MongoClient(connectionString, {
+				serverSelectionTimeoutMS: 2000,
+				connectTimeoutMS: 2000,
+			});
 			await client.connect();
 			const db = client.db(dbName);
 			return db;
@@ -100,14 +142,22 @@ export async function getTestInstance<
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
-				? { db: await getPostgres(), type: "postgres" }
+				? {
+						db: await getPostgres(),
+						type: "postgres",
+						transaction: config?.transaction,
+					}
 				: testWith === "mongodb"
 					? await Promise.all([
 							mongodbClient(),
 							await import("../adapters/mongodb-adapter"),
 						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
-						? { db: await getMysql(), type: "mysql" }
+						? {
+								db: await getMysql(),
+								type: "mysql",
+								transaction: config?.transaction,
+							}
 						: await getSqlite(),
 		emailAndPassword: {
 			enabled: true,
@@ -127,6 +177,11 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
+		emailAndPassword: {
+			...opts.emailAndPassword,
+			...options?.emailAndPassword,
+			password: options?.emailAndPassword?.password ?? testPassword,
+		},
 		plugins: [bearer(), ...(options?.plugins || [])],
 	} as unknown as O);
 
@@ -140,9 +195,26 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
+		// Synthesize a host header from allowedHosts so setup resolves under
+		// dynamic baseURL. `?` is a wildcard, not a query-string delimiter,
+		// so it's replaced, not split on.
+		const dynamicBaseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? auth.options.baseURL
+			: undefined;
+		const pattern =
+			dynamicBaseURL?.allowedHosts.find(
+				(h) => !h.includes("*") && !h.includes("?"),
+			) ?? dynamicBaseURL?.allowedHosts[0];
+		const host = pattern
+			?.replace(/^https?:\/\//, "")
+			.split(/[/#]/)[0]
+			?.replace(/\*/g, "test")
+			.replace(/\?/g, "x");
+		const headers = host ? new Headers({ host }) : undefined;
 		//@ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
+			headers,
 		});
 	}
 
@@ -164,9 +236,19 @@ export async function getTestInstance<
 		}
 		if (testWith === "postgres") {
 			const postgres = await getPostgres();
-			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
-				postgres,
-			);
+			if (postgresSchema) {
+				await sql
+					.raw(
+						`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
+							postgresSchema,
+						)} CASCADE`,
+					)
+					.execute(postgres);
+			} else {
+				await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+					postgres,
+				);
+			}
 			await postgres.destroy();
 			return;
 		}
@@ -220,12 +302,21 @@ export async function getTestInstance<
 		);
 	};
 
+	const clientBaseURL = isDynamicBaseURLConfig(options?.baseURL)
+		? getBaseURL(
+				"http://localhost:" + (config?.port || 3000),
+				options?.basePath || "/api/auth",
+			)
+		: getBaseURL(
+				typeof options?.baseURL === "string"
+					? options.baseURL
+					: "http://localhost:" + (config?.port || 3000),
+				options?.basePath || "/api/auth",
+			);
+
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL: getBaseURL(
-			options?.baseURL || "http://localhost:" + (config?.port || 3000),
-			options?.basePath || "/api/auth",
-		),
+		baseURL: clientBaseURL,
 		fetchOptions: {
 			customFetchImpl,
 		},
@@ -235,7 +326,7 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
 		}
-		let headers = new Headers();
+		const headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);

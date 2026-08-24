@@ -38,6 +38,8 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 		"You are not the recipient of the invitation",
 	EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION:
 		"Email verification required before accepting or rejecting invitation",
+	EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION:
+		"Email verification required to view or list invitations for the session email",
 	YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION:
 		"You are not allowed to cancel this invitation",
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:
@@ -88,4 +90,7 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+	ROLE_IS_ASSIGNED_TO_MEMBERS:
+		"Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
+	INVALID_TEAM_ID: "Team id contains a reserved character",
 });

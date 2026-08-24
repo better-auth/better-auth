@@ -20,10 +20,18 @@ export interface FigmaOptions extends ProviderOptions<FigmaProfile> {
 }
 
 export const figma = (options: FigmaOptions) => {
+	const tokenEndpoint = "https://api.figma.com/v1/oauth/token";
 	return {
 		id: "figma",
 		name: "Figma",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		accountSubject: ({ profile }) => profile.id,
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret are required for Figma. Make sure to provide them in the options.",
@@ -34,7 +42,7 @@ export const figma = (options: FigmaOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Figma");
 			}
 
-			const _scopes = options.disableDefaultScope ? [] : ["file_read"];
+			const _scopes = options.disableDefaultScope ? [] : ["current_user:read"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 
@@ -46,6 +54,7 @@ export const figma = (options: FigmaOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 
 			return url;
@@ -56,7 +65,8 @@ export const figma = (options: FigmaOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://www.figma.com/api/oauth/token",
+				tokenEndpoint,
+				authentication: "basic",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -69,7 +79,8 @@ export const figma = (options: FigmaOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://www.figma.com/api/oauth/token",
+						tokenEndpoint,
+						authentication: "basic",
 					});
 				},
 		async getUserInfo(token) {
@@ -96,7 +107,6 @@ export const figma = (options: FigmaOptions) => {
 
 				return {
 					user: {
-						id: profile.id,
 						name: profile.handle,
 						email: profile.email,
 						image: profile.img_url,

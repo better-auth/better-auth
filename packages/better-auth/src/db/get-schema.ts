@@ -1,20 +1,23 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { getAuthTables } from ".";
+import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
+import { getAuthTablesWithResolvedIndexes } from "@better-auth/core/db/internal";
 
 export function getSchema(config: BetterAuthOptions) {
-	const tables = getAuthTables(config);
-	let schema: Record<
+	const { indexesByTable, tables } = getAuthTablesWithResolvedIndexes(config);
+	const schema: Record<
 		string,
 		{
 			fields: Record<string, DBFieldAttribute>;
+			indexes?: readonly ResolvedDBTableIndex[] | undefined;
 			order: number;
+			disableMigrations?: boolean | undefined;
 		}
 	> = {};
 	for (const key in tables) {
 		const table = tables[key]!;
 		const fields = table.fields;
-		let actualFields: Record<string, DBFieldAttribute> = {};
+		const actualFields: Record<string, DBFieldAttribute> = {};
 		Object.entries(fields).forEach(([key, field]) => {
 			actualFields[field.fieldName || key] = field;
 			if (field.references) {
@@ -33,12 +36,21 @@ export function getSchema(config: BetterAuthOptions) {
 				...schema[table.modelName]!.fields,
 				...actualFields,
 			};
+			if (table.disableMigrations) {
+				schema[table.modelName]!.disableMigrations = true;
+			}
 			continue;
 		}
 		schema[table.modelName] = {
 			fields: actualFields,
 			order: table.order || Infinity,
+			disableMigrations: table.disableMigrations,
 		};
+	}
+	for (const [tableName, indexes] of indexesByTable) {
+		if (schema[tableName]) {
+			schema[tableName].indexes = indexes;
+		}
 	}
 	return schema;
 }

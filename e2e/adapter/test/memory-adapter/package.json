@@ -1,0 +1,14 @@
+{
+  "name": "@better-auth-test/memory-adapter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:integration": "vitest run"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/memory-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
+    "better-auth": "workspace:*"
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { betterAuth } from "../../auth";
+import { betterAuth } from "../../auth/full";
 import { createAuthClient } from "../../client";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { organization } from "./organization";

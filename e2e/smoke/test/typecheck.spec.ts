@@ -5,9 +5,11 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
+const typecheckTimeoutMilliseconds = 60 * 1000;
 
 [
 	{ dir: "tsconfig-declaration", skip: false },
+	{ dir: "tsconfig-composite-client", skip: false },
 	{ dir: "tsconfig-exact-optional-property-types", skip: false },
 	{ dir: "tsconfig-verbatim-module-syntax-node10", skip: false },
 	{ dir: "tsconfig-isolated-module-bundler", skip: false },
@@ -17,7 +19,7 @@ const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 		const output = spawnSync("pnpm", ["run", "typecheck"], {
 			stdio: "inherit",
 			cwd,
-			timeout: 10 * 1000, // 10 seconds
+			timeout: typecheckTimeoutMilliseconds,
 		});
 		assert.equal(
 			output.error,

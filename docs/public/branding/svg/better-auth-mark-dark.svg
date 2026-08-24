@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+    <path fill="#000" fill-rule="evenodd"
+        d="M0 150v150h100V200h100v100h200V0H200v100H100V0H0zm300 0v50H200V100h100z" />
+</svg>

@@ -4,7 +4,7 @@ export function convertToDB<T extends Record<string, any>>(
 	fields: Record<string, DBFieldAttribute>,
 	values: T,
 ) {
-	let result: Record<string, any> = values.id
+	const result: Record<string, any> = values.id
 		? {
 				id: values.id,
 			}
@@ -27,7 +27,7 @@ export function convertFromDB<T extends Record<string, any>>(
 	if (!values) {
 		return null;
 	}
-	let result: Record<string, any> = {
+	const result: Record<string, any> = {
 		id: values.id,
 	};
 	for (const [key, value] of Object.entries(fields)) {

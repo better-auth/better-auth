@@ -1,0 +1,37 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["node", "bun"]
+  },
+  "include": [
+    "test/**/*.ts",
+    "test/prisma-adapter/.tmp/prisma-client-base/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/better-auth/tsconfig.json"
+    },
+    {
+      "path": "../../packages/core/tsconfig.json"
+    },
+    {
+      "path": "../../packages/drizzle-adapter/tsconfig.json"
+    },
+    {
+      "path": "../../packages/kysely-adapter/tsconfig.json"
+    },
+    {
+      "path": "../../packages/memory-adapter/tsconfig.json"
+    },
+    {
+      "path": "../../packages/mongo-adapter/tsconfig.json"
+    },
+    {
+      "path": "../../packages/prisma-adapter/tsconfig.json"
+    },
+    {
+      "path": "../../packages/scim/tsconfig.json"
+    }
+  ]
+}

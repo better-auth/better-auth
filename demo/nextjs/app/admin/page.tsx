@@ -11,7 +11,7 @@ import {
 	UserCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,32 @@ import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 export default function Page() {
+	const { data: session, isPending: isSessionLoading } =
+		authClient.useSession();
+	const router = useRouter();
+
+	useEffect(() => {
+		if (!isSessionLoading && session?.user?.role !== "admin") {
+			router.push("/dashboard");
+		}
+	}, [session, isSessionLoading, router]);
+
+	if (isSessionLoading) {
+		return (
+			<div className="flex justify-center items-center h-screen">
+				<Loader2 className="h-8 w-8 animate-spin" />
+			</div>
+		);
+	}
+
+	if (session?.user?.role !== "admin") {
+		return null;
+	}
+
+	return <AdminDashboard />;
+}
+
+function AdminDashboard() {
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const [isDialogOpen, setIsDialogOpen] = useState(false);

@@ -1,7 +1,5 @@
 # Contributor Covenant 3.0
 
-{/* lint disable no-file-name-irregular-characters */}
-
 ## Our Pledge
 
 We pledge to make our community welcoming, safe, and equitable for all.

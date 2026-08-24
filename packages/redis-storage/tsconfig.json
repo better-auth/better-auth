@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": true
+  },
+  "include": ["./src"],
+  "references": [
+    {
+      "path": "../core/tsconfig.json"
+    }
+  ]
+}

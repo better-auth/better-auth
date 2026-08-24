@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
-import type { MemoryDB } from "../adapters/memory-adapter";
+import type { MemoryDB } from "@better-auth/memory-adapter";
 
 export async function getBaseAdapter(
 	options: BetterAuthOptions,
@@ -18,7 +18,7 @@ export async function getBaseAdapter(
 			acc[key] = [];
 			return acc;
 		}, {});
-		const { memoryAdapter } = await import("../adapters/memory-adapter");
+		const { memoryAdapter } = await import("@better-auth/memory-adapter");
 		adapter = memoryAdapter(memoryDB)(options);
 	} else if (typeof options.database === "function") {
 		adapter = options.database(options);

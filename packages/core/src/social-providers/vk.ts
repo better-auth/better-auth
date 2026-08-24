@@ -20,16 +20,24 @@ export interface VkProfile {
 	};
 }
 
-export interface VkOption extends ProviderOptions {
+export interface VkOption extends ProviderOptions<VkProfile> {
 	clientId: string;
 	scheme?: ("light" | "dark") | undefined;
 }
 
 export const vk = (options: VkOption) => {
+	const tokenEndpoint = "https://id.vk.com/oauth2/auth";
 	return {
 		id: "vk",
 		name: "VK",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		accountSubject: ({ profile }) => profile.user.user_id,
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -43,6 +51,7 @@ export const vk = (options: VkOption) => {
 				state,
 				redirectURI,
 				codeVerifier,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({
@@ -57,7 +66,7 @@ export const vk = (options: VkOption) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				deviceId,
-				tokenEndpoint: "https://id.vk.com/oauth2/auth",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -70,7 +79,7 @@ export const vk = (options: VkOption) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://id.vk.com/oauth2/auth",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(data) {
@@ -105,7 +114,6 @@ export const vk = (options: VkOption) => {
 
 			return {
 				user: {
-					id: profile.user.user_id,
 					first_name: profile.user.first_name,
 					last_name: profile.user.last_name,
 					email: profile.user.email,

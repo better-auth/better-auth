@@ -9,13 +9,17 @@
 export {
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
+	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
+	fetchOIDCEndpoint,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
 	normalizeUrl,
 	selectTokenEndpointAuthMethod,
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
+	validateOIDCEndpointUrls,
+	validateOIDCIdToken,
 } from "./discovery";
 
 export { mapDiscoveryErrorToAPIError } from "./errors";
