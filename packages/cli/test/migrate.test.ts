@@ -317,6 +317,15 @@ describe("migration plan status", () => {
 	 */
 	it("reports pending release work when the schema is already current", () => {
 		const plan = createMigrationPlan({
+			accountIdentity: {
+				selectedStrategy: "provider-id",
+				detectedStrategy: "provider-id",
+				migrationRequired: false,
+				totalAccounts: 1,
+				externalAccounts: 0,
+				projectedCollisions: 0,
+				manualReviewProviders: [],
+			},
 			hasChanges: false,
 			migrationBlockers: [],
 			migrationTarget: { adapter: "kysely", dialect: "sqlite" },
@@ -334,6 +343,15 @@ describe("migration plan status", () => {
 
 	it("prints blocker details and remediation in the human plan", () => {
 		const plan = createMigrationPlan({
+			accountIdentity: {
+				selectedStrategy: "issuer",
+				detectedStrategy: "provider-id",
+				migrationRequired: true,
+				totalAccounts: 1,
+				externalAccounts: 0,
+				projectedCollisions: 0,
+				manualReviewProviders: [],
+			},
 			hasChanges: true,
 			migrationBlockers: [
 				{
@@ -383,6 +401,7 @@ describe("migrate published 1.6.30 account data", () => {
 		});
 
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			plugins: [
@@ -471,6 +490,7 @@ describe("migrate published 1.6.30 account data", () => {
 		expect(sourceAccounts).toHaveLength(2);
 
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {
@@ -601,6 +621,7 @@ describe("migrate published 1.6.30 account data", () => {
 			},
 		});
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {
@@ -659,9 +680,11 @@ describe("migrate published 1.6.30 account data", () => {
 async function createReleaseDecisionFixture(
 	db: Database.Database,
 	{
+		identityStrategy = "issuer",
 		sourceClientSecretStorage = "plain",
 		targetClientSecretStorage = "hashed",
 	}: {
+		identityStrategy?: "issuer" | "provider-id" | "unset";
 		sourceClientSecretStorage?: "encrypted" | "hashed" | "plain";
 		targetClientSecretStorage?: "encrypted" | "hashed";
 	} = {},
@@ -740,6 +763,7 @@ async function createReleaseDecisionFixture(
 	});
 
 	const options17: BetterAuthOptions = {
+		...(identityStrategy !== "unset" && { account: { identityStrategy } }),
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -1027,9 +1051,11 @@ describe("migrate command modes", () => {
 });
 
 describe("plan every unresolved 1.6.30 release decision", () => {
-	it("reports the missing issuer, consent strategy, and SCIM inventory in one run", async () => {
+	it("reports the consent strategy and SCIM inventory in one run", async () => {
 		const db = new Database(":memory:");
-		const { scimAccountId } = await createReleaseDecisionFixture(db);
+		const { scimAccountId } = await createReleaseDecisionFixture(db, {
+			identityStrategy: "unset",
+		});
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
@@ -1052,22 +1078,14 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 			expect(process.exitCode).toBe(1);
 			const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
 				blockers: Array<Record<string, unknown>>;
+				releaseMigration?: { actions: string[] };
 				status: string;
 			};
 			expect(jsonPlan.status).toBe("blocked");
+			expect(jsonPlan.releaseMigration?.actions).not.toContain(
+				"write the 1.7 account identity onto every existing account row",
+			);
 			expect(jsonPlan.blockers).toEqual([
-				{
-					accountCount: 1,
-					code: "issuer-required",
-					providerId: "workforce-fixture",
-					reason: "unconfigured-provider",
-					remediation: {
-						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer",
-						summary:
-							'Record the issuer for "workforce-fixture" under issuers in better-auth-migration.json, or run `auth migrate apply` in a terminal to answer it there.',
-					},
-					table: "account",
-				},
 				{
 					code: "scim-inventory-mismatch",
 					missingAccountIds: [scimAccountId],
@@ -1327,7 +1345,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 			'   Fix: Remove "credential" from the issuers in better-auth-migration.json to migrate these accounts as "local:credential", or configure the provider to establish "https://credential.example".',
 		);
 		expect(consoleError).toHaveBeenCalledWith(
-			"   Docs: https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer",
+			"   Docs: https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy",
 		);
 		expect(consoleError).toHaveBeenCalledWith(
 			`Resolve every blocker above in your 1.6 data, then run \`auth migrate apply ${plan}\` again. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide`,
@@ -1388,6 +1406,7 @@ async function createResolvableAccountFixture(db: Database.Database) {
 	};
 	await auth1630.api.signUpEmail({ body: credentials });
 	const options17: BetterAuthOptions = {
+		account: { identityStrategy: "issuer" },
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -1687,6 +1706,7 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			issuer: "local:credential",
 		});
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: { enabled: true },
@@ -1953,6 +1973,7 @@ async function createRenamedLegacyClientFixture(db: Database.Database) {
 		},
 	});
 	const options17: BetterAuthOptions = {
+		account: { identityStrategy: "issuer" },
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -2299,6 +2320,7 @@ describe("migrate published 1.6.30 organization team data", () => {
 			},
 		};
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {

@@ -142,6 +142,7 @@ async function inventoryScimAccountsToRetire(
 export function describeIrreversibleReleaseActions(
 	state: LegacyReleaseDataState,
 	decisions: MigrationDecisions | undefined,
+	accountIdentity: MigrationPlan["accountIdentity"],
 ): string[] {
 	const actions: string[] = [];
 	if (state.oauthApplication?.rowCount) {
@@ -179,9 +180,15 @@ export function describeIrreversibleReleaseActions(
 	if (renamed.length > 0) {
 		actions.push(`rename ${renamed.join(", ")}`);
 	}
-	actions.push(
-		"write the 1.7 account identity onto every existing account row",
-	);
+	if (
+		accountIdentity.selectedStrategy === "issuer" &&
+		accountIdentity.migrationRequired &&
+		accountIdentity.totalAccounts > 0
+	) {
+		actions.push(
+			"write the 1.7 account identity onto every existing account row",
+		);
+	}
 	return actions;
 }
 

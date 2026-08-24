@@ -196,6 +196,23 @@ export function printHumanMigrationPlan(
 	);
 	console.log(`Status: ${migrationPlan.status}`);
 	console.log(
+		`Account identity: ${migrationPlan.accountIdentity.selectedStrategy} (database: ${migrationPlan.accountIdentity.detectedStrategy})`,
+	);
+	console.log(
+		`Accounts: ${migrationPlan.accountIdentity.totalAccounts} total, ${migrationPlan.accountIdentity.externalAccounts} external`,
+	);
+	if (migrationPlan.accountIdentity.automaticIssuerResolution) {
+		console.log(
+			`Automatic issuer resolution: ${migrationPlan.accountIdentity.automaticIssuerResolution.resolved}/${migrationPlan.accountIdentity.automaticIssuerResolution.total}`,
+		);
+	}
+	console.log(
+		`Projected collisions: ${migrationPlan.accountIdentity.projectedCollisions}`,
+	);
+	console.log(
+		`Providers requiring manual issuer review: ${migrationPlan.accountIdentity.manualReviewProviders.join(", ") || "none"}`,
+	);
+	console.log(
 		`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
 	);
 	for (const blocker of migrationPlan.blockers) {
@@ -285,7 +302,7 @@ export async function migrateAction(opts: unknown) {
 			: yoctoSpinner({ text: "preparing migration..." }).start();
 
 	const {
-		accountIdentitySchema,
+		accountIdentity,
 		toBeAdded,
 		toBeAddedIndexes,
 		toBeCreated,
@@ -303,7 +320,7 @@ export async function migrateAction(opts: unknown) {
 		toBeAddedIndexes.length > 0 ||
 		toBeCreated.length > 0;
 	const isReleaseMigrationBlocker = (blocker: MigrationBlocker) =>
-		isHandledByMigrationFrom16(config, blocker, accountIdentitySchema);
+		isHandledByMigrationFrom16(config, blocker, accountIdentity);
 	let releaseMigrationBlockers = await collectReleaseMigrationBlockers(
 		config,
 		releaseMigrationOptions,
@@ -327,6 +344,7 @@ export async function migrateAction(opts: unknown) {
 	}
 	const buildMigrationPlan = () =>
 		createMigrationPlan({
+			accountIdentity,
 			hasChanges,
 			migrationBlockers: effectiveMigrationBlockers,
 			migrationTarget,
@@ -335,6 +353,7 @@ export async function migrateAction(opts: unknown) {
 						actions: describeIrreversibleReleaseActions(
 							legacyReleaseState,
 							decisions,
+							accountIdentity,
 						),
 						id: RELEASE_MIGRATION_ID,
 					}
@@ -475,6 +494,7 @@ export async function migrateAction(opts: unknown) {
 			for (const action of describeIrreversibleReleaseActions(
 				legacyReleaseState,
 				decisions,
+				accountIdentity,
 			)) {
 				console.log("->", action);
 			}

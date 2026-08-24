@@ -32,12 +32,14 @@ import { getSchemaFromAuthTables } from "./get-schema";
 import type { MigrationDatabase } from "./migration-database";
 import { getMigrationDatabase } from "./migration-database";
 import type {
+	AccountIdentityMigrationAssessment,
 	MigrateFrom16Options,
 	ReleaseMigrationBlocker,
 } from "./release-migration";
 import {
 	describeMigrationDecisionBlocker,
 	findReleaseMigrationBlockers,
+	inspectAccountIdentityMigration,
 	inspectLegacyReleaseDataFrom16,
 	inspectScimAccountsFrom16,
 	migrateAccountIdentityFrom16,
@@ -206,13 +208,15 @@ export interface RequiredColumnConstraintBlocker {
 	table: string;
 }
 
-export interface AccountIdentityMigrationSchema {
-	accountIdColumn: string;
-	issuerColumn: string;
+export interface AccountIdentityStrategyMismatchBlocker {
+	code: "account-identity-strategy-mismatch";
+	configuredStrategy: "provider-id";
+	detectedStrategy: "issuer" | "mixed";
 	table: string;
 }
 
 export type MigrationBlocker =
+	| AccountIdentityStrategyMismatchBlocker
 	| IndexColumnBoundsBlocker
 	| RequiredColumnBackfillBlocker
 	| RequiredColumnConstraintBlocker
@@ -233,6 +237,9 @@ function isAccountIdentitySchemaBlocker(
 			blocker.index.columns[1] === accountIdColumn
 		);
 	}
+	if (blocker.code === "account-identity-strategy-mismatch") {
+		return false;
+	}
 	return (
 		(blocker.code === "required-column-backfill" ||
 			blocker.code === "required-column-constraint") &&
@@ -246,7 +253,7 @@ function isAccountIdentitySchemaBlocker(
 export function isHandledByMigrationFrom16(
 	config: BetterAuthOptions,
 	blocker: MigrationBlocker,
-	physicalSchema?: AccountIdentityMigrationSchema | undefined,
+	accountIdentity?: AccountIdentityMigrationAssessment | undefined,
 ) {
 	if (
 		blocker.code === "reprovision-data" ||
@@ -259,11 +266,13 @@ export function isHandledByMigrationFrom16(
 	const accountSchema = getAuthTables(config).account;
 	return isAccountIdentitySchemaBlocker(
 		blocker,
-		physicalSchema?.table || accountSchema?.modelName || "account",
-		physicalSchema?.issuerColumn ||
+		accountIdentity?.physicalSchema?.table ||
+			accountSchema?.modelName ||
+			"account",
+		accountIdentity?.physicalSchema?.issuerColumn ||
 			accountSchema?.fields.issuer?.fieldName ||
 			"issuer",
-		physicalSchema?.accountIdColumn ||
+		accountIdentity?.physicalSchema?.accountIdColumn ||
 			accountSchema?.fields.accountId?.fieldName ||
 			"accountId",
 	);
@@ -272,6 +281,11 @@ export function isHandledByMigrationFrom16(
 function createMigrationBlockerError(blocker: MigrationBlocker) {
 	if (blocker.code === "index-column-bounds") {
 		return new BetterAuthError(blocker.message);
+	}
+	if (blocker.code === "account-identity-strategy-mismatch") {
+		return new BetterAuthError(
+			`Migration blocked: table "${blocker.table}" already uses ${blocker.detectedStrategy} account identity. Set account.identityStrategy to "issuer" to match the database.`,
+		);
 	}
 	if (blocker.code === "table-data-move") {
 		return new BetterAuthError(
@@ -725,7 +739,7 @@ function describeExistingTableIndexMisfit({
 }
 
 const columnBackfillGuideUrl =
-	"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer";
+	"https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy";
 
 /**
  * Thrown when a migration plan refuses to run or compile because it would
@@ -875,18 +889,14 @@ async function getMigrationsWithDatabase(
 	const throwOnUnsafe = inspectionOptions.throwOnUnsafe !== false;
 	const authTables = migrationDatabase.authTables;
 	const betterAuthSchema = getSchemaFromAuthTables(authTables);
-	const accountIssuer = authTables.account && {
-		table: authTables.account.modelName,
-		column: authTables.account.fields.issuer?.fieldName || "issuer",
-	};
-	const accountIdentitySchema = authTables.account
-		? {
-				accountIdColumn:
-					authTables.account.fields.accountId?.fieldName || "accountId",
-				issuerColumn: authTables.account.fields.issuer?.fieldName || "issuer",
-				table: authTables.account.modelName,
-			}
-		: undefined;
+	const accountIssuerField = authTables.account?.fields.issuer;
+	const accountIssuer =
+		authTables.account && accountIssuerField
+			? {
+					table: authTables.account.modelName,
+					column: accountIssuerField.fieldName || "issuer",
+				}
+			: undefined;
 	const isAccountIssuerColumn = (table: string, column: string) =>
 		table === accountIssuer?.table && column === accountIssuer.column;
 	const logger = createLogger(config.logger);
@@ -1002,6 +1012,11 @@ async function getMigrationsWithDatabase(
 			(table) => table.schema === currentSchema,
 		);
 	}
+	const accountIdentity = await inspectAccountIdentityMigration(
+		config,
+		migrationDatabase,
+		tableMetadata,
+	);
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
@@ -1018,6 +1033,19 @@ async function getMigrationsWithDatabase(
 		name: string;
 	}[] = [];
 	const migrationBlockers: MigrationBlocker[] = [];
+	if (
+		accountIdentity.selectedStrategy === "provider-id" &&
+		(accountIdentity.detectedStrategy === "issuer" ||
+			accountIdentity.detectedStrategy === "mixed")
+	) {
+		migrationBlockers.push({
+			code: "account-identity-strategy-mismatch",
+			configuredStrategy: "provider-id",
+			detectedStrategy: accountIdentity.detectedStrategy,
+			table:
+				migrationDatabase.inspectionAuthTables.account?.modelName || "account",
+		});
+	}
 	const plannedIndexes = new Map<string, ResolvedDBTableIndex>();
 	migrationBlockers.push(
 		...(await findReleaseMigrationBlockers({
@@ -1620,7 +1648,7 @@ async function getMigrationsWithDatabase(
 		return compiled.join(";\n\n") + ";";
 	}
 	return {
-		accountIdentitySchema,
+		accountIdentity,
 		migrationTarget: {
 			adapter: adapterId,
 			dialect: dbType,
@@ -1680,7 +1708,7 @@ export async function migrateFrom16(
 			!isHandledByMigrationFrom16(
 				config,
 				blocker,
-				initialMigration.accountIdentitySchema,
+				initialMigration.accountIdentity,
 			),
 	);
 	if (unhandledBlocker) throw createMigrationBlockerError(unhandledBlocker);

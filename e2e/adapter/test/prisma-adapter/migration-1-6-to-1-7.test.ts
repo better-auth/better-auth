@@ -49,6 +49,7 @@ it("migrates published 1.6.30 accounts and OAuth records through the Prisma adap
 			adapter: new PrismaBetterSqlite3({ url: `file:${databasePath}` }),
 		});
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: prismaAdapter(prisma, {
 				provider: "sqlite",

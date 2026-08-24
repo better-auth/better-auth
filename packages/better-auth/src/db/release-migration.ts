@@ -291,9 +291,14 @@ function getMigrationDecisionBlockerKey(blocker: MigrationDecisionBlocker) {
 /** Why a provider's issuer cannot be derived from configuration alone. */
 export type UnresolvedIssuerReason = "discovery-issuer" | "dynamic-issuer";
 
+type ProviderIdentityKind = "external" | "local";
+
 type ProviderIssuerResolution =
-	| { issuer: string }
-	| { unresolved: UnresolvedIssuerReason };
+	| { identityKind: ProviderIdentityKind; issuer: string }
+	| {
+			identityKind: "external";
+			unresolved: UnresolvedIssuerReason;
+	  };
 
 type ProviderIssuerEntry = readonly [string, ProviderIssuerResolution];
 
@@ -308,7 +313,9 @@ function resolveSocialProviderIssuer(
 	provider: OAuthProvider,
 ): ProviderIssuerResolution {
 	const issuer = resolveStaticOAuthAccountIssuer(provider);
-	return issuer ? { issuer } : { unresolved: "dynamic-issuer" };
+	return issuer
+		? { identityKind: "external", issuer }
+		: { identityKind: "external", unresolved: "dynamic-issuer" };
 }
 
 function resolveGenericOAuthIssuers(
@@ -323,16 +330,26 @@ function resolveGenericOAuthIssuers(
 			entry as Partial<GenericOAuthConfig>;
 		if (!providerId) return [];
 		if (typeof accountIssuer === "function") {
-			return [[providerId, { unresolved: "dynamic-issuer" }]];
+			return [
+				[
+					providerId,
+					{ identityKind: "external", unresolved: "dynamic-issuer" },
+				],
+			];
 		}
 		if (accountIssuer === undefined && discoveryUrl) {
-			return [[providerId, { unresolved: "discovery-issuer" }]];
+			return [
+				[
+					providerId,
+					{ identityKind: "external", unresolved: "discovery-issuer" },
+				],
+			];
 		}
 		const issuer = resolveStaticOAuthAccountIssuer({
 			accountIssuer,
 			id: providerId,
 		});
-		return issuer ? [[providerId, { issuer }]] : [];
+		return issuer ? [[providerId, { identityKind: "external", issuer }]] : [];
 	});
 }
 
@@ -345,24 +362,28 @@ function resolvePluginIssuers(
 			case "generic-oauth":
 				return resolveGenericOAuthIssuers(pluginOptions);
 			case "siwe":
-				return [["siwe", { issuer: createLocalAccountIssuer("siwe") }]];
+				return [
+					[
+						"siwe",
+						{
+							identityKind: "local",
+							issuer: createLocalAccountIssuer("siwe"),
+						},
+					],
+				];
 			default:
 				return [];
 		}
 	});
 }
 
-/**
- * Resolves the issuer every configured provider establishes at runtime, so a
- * 1.6 migration only asks for the issuers the configuration cannot produce.
- *
- * Resolution reads configuration only: no plugin is initialized and no
- * discovery document is fetched, so a provider whose issuer arrives with a
- * discovery response or a provider response stays unresolved.
- */
-export async function resolveConfiguredIssuers(
+interface ConfiguredIssuerState extends ConfiguredAccountIssuers {
+	providerKinds: Record<string, ProviderIdentityKind>;
+}
+
+async function resolveConfiguredIssuerState(
 	config: BetterAuthOptions,
-): Promise<ConfiguredAccountIssuers> {
+): Promise<ConfiguredIssuerState> {
 	const resolutions = new Map<string, ProviderIssuerResolution>();
 	for (const [providerId, providerConfig] of Object.entries(
 		config.socialProviders || {},
@@ -386,14 +407,34 @@ export async function resolveConfiguredIssuers(
 	const issuers: Record<string, string> = {
 		credential: createLocalAccountIssuer("credential"),
 	};
+	const providerKinds: Record<string, ProviderIdentityKind> = {
+		credential: "local",
+	};
 	const unresolvedProviders: Record<string, UnresolvedIssuerReason> = {};
 	for (const [providerId, resolution] of resolutions) {
+		providerKinds[providerId] = resolution.identityKind;
 		if ("issuer" in resolution) {
 			issuers[providerId] = resolution.issuer;
 			continue;
 		}
 		unresolvedProviders[providerId] = resolution.unresolved;
 	}
+	return { issuers, providerKinds, unresolvedProviders };
+}
+
+/**
+ * Resolves the issuer every configured provider establishes at runtime, so a
+ * 1.6 migration only asks for the issuers the configuration cannot produce.
+ *
+ * Resolution reads configuration only: no plugin is initialized and no
+ * discovery document is fetched, so a provider whose issuer arrives with a
+ * discovery response or a provider response stays unresolved.
+ */
+export async function resolveConfiguredIssuers(
+	config: BetterAuthOptions,
+): Promise<ConfiguredAccountIssuers> {
+	const { issuers, unresolvedProviders } =
+		await resolveConfiguredIssuerState(config);
 	return { issuers, unresolvedProviders };
 }
 
@@ -402,8 +443,8 @@ async function resolveMigrationAccountIssuers(
 	options: MigrateFrom16Options,
 	accountTable: string,
 	blockers: MigrationDecisionBlocker[] | undefined,
+	configured: ConfiguredIssuerState,
 ) {
-	const configured = await resolveConfiguredIssuers(config);
 	const accountIssuers = { ...configured.issuers };
 	for (const [providerId, requested] of Object.entries(
 		options.accountIssuers || {},
@@ -529,6 +570,153 @@ interface LegacyAccountIdentityRow {
 	issuer?: string | null | undefined;
 	providerAccountId: string;
 	providerId: string;
+}
+
+export interface AccountIdentityMigrationAssessment {
+	selectedStrategy: "provider-id" | "issuer";
+	detectedStrategy: "empty" | "provider-id" | "issuer" | "mixed";
+	physicalSchema?:
+		| {
+				accountIdColumn: string;
+				issuerColumn: string;
+				table: string;
+		  }
+		| undefined;
+	migrationRequired: boolean;
+	totalAccounts: number;
+	externalAccounts: number;
+	automaticIssuerResolution?: { resolved: number; total: number } | undefined;
+	projectedCollisions: number;
+	manualReviewProviders: string[];
+}
+
+/** Inspects the configured account-identity path without changing the database. */
+export async function inspectAccountIdentityMigration(
+	config: BetterAuthOptions,
+	database: MigrationDatabase,
+	existingTables: readonly TableMetadata[],
+): Promise<AccountIdentityMigrationAssessment> {
+	const accountSchema = database.inspectionAuthTables.account;
+	const selectedStrategy: AccountIdentityMigrationAssessment["selectedStrategy"] =
+		config.account?.identityStrategy === "issuer" ? "issuer" : "provider-id";
+	const createEmptyAssessment = (
+		physicalSchema?: AccountIdentityMigrationAssessment["physicalSchema"],
+	): AccountIdentityMigrationAssessment => ({
+		selectedStrategy,
+		detectedStrategy: "empty",
+		physicalSchema,
+		migrationRequired: false,
+		totalAccounts: 0,
+		externalAccounts: 0,
+		projectedCollisions: 0,
+		manualReviewProviders: [],
+	});
+	if (!accountSchema) return createEmptyAssessment();
+	const physicalSchema = {
+		accountIdColumn: accountSchema.fields.accountId?.fieldName || "accountId",
+		issuerColumn: accountSchema.fields.issuer?.fieldName || "issuer",
+		table: accountSchema.modelName || "account",
+	};
+	const emptyAssessment = createEmptyAssessment(physicalSchema);
+	const accountTable = physicalSchema.table;
+	const tableMetadata = existingTables.find(
+		(table) => table.name === accountTable,
+	);
+	if (!tableMetadata) return emptyAssessment;
+	const columns = new Set(tableMetadata.columns.map((column) => column.name));
+	const accountIdColumn = physicalSchema.accountIdColumn;
+	const providerIdColumn =
+		accountSchema.fields.providerId?.fieldName || "providerId";
+	const issuerColumn = physicalSchema.issuerColumn;
+	if (!columns.has(accountIdColumn) || !columns.has(providerIdColumn)) {
+		throw new BetterAuthError(
+			`Account identity inspection could not resolve the physical provider columns on table "${accountTable}".`,
+		);
+	}
+	const rows = await sql<
+		Pick<
+			LegacyAccountIdentityRow,
+			"issuer" | "providerAccountId" | "providerId"
+		>
+	>`
+		SELECT
+			${sql.ref(accountIdColumn)} AS "providerAccountId",
+			${sql.ref(providerIdColumn)} AS "providerId",
+			${columns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer"
+		FROM ${sql.table(accountTable)}
+	`.execute(database.kysely);
+	const accounts = rows.rows;
+	if (accounts.length === 0) return emptyAssessment;
+	const accountsWithIssuer = accounts.filter((account) =>
+		Boolean(readStoredIssuer(account.issuer)),
+	).length;
+	const detectedStrategy =
+		!columns.has(issuerColumn) || accountsWithIssuer === 0
+			? "provider-id"
+			: accountsWithIssuer === accounts.length
+				? "issuer"
+				: "mixed";
+	const configuredIssuers = await resolveConfiguredIssuerState(config);
+	const isExternal = (providerId: string) =>
+		(configuredIssuers.providerKinds[providerId] ??
+			(providerId === "credential" || providerId === "siwe"
+				? "local"
+				: "external")) === "external";
+	const externalAccounts = accounts.filter((account) =>
+		isExternal(account.providerId),
+	);
+	const manualReviewProviders =
+		selectedStrategy === "issuer"
+			? [
+					...new Set(
+						externalAccounts
+							.filter(
+								(account) =>
+									!readStoredIssuer(account.issuer) &&
+									!configuredIssuers.issuers[account.providerId],
+							)
+							.map((account) => account.providerId),
+					),
+				].sort()
+			: [];
+	const projectedIdentities = new Set<string>();
+	let projectedCollisions = 0;
+	for (const account of accounts) {
+		const namespace =
+			selectedStrategy === "provider-id"
+				? account.providerId
+				: readStoredIssuer(account.issuer) ||
+					configuredIssuers.issuers[account.providerId];
+		if (!namespace) continue;
+		const identity = JSON.stringify([namespace, account.providerAccountId]);
+		if (projectedIdentities.has(identity)) projectedCollisions += 1;
+		else projectedIdentities.add(identity);
+	}
+	return {
+		selectedStrategy,
+		detectedStrategy,
+		physicalSchema,
+		migrationRequired:
+			selectedStrategy === "issuer"
+				? detectedStrategy !== "issuer"
+				: detectedStrategy === "issuer" || detectedStrategy === "mixed",
+		totalAccounts: accounts.length,
+		externalAccounts: externalAccounts.length,
+		...(selectedStrategy === "issuer"
+			? {
+					automaticIssuerResolution: {
+						resolved: externalAccounts.filter(
+							(account) =>
+								Boolean(readStoredIssuer(account.issuer)) ||
+								Boolean(configuredIssuers.issuers[account.providerId]),
+						).length,
+						total: externalAccounts.length,
+					},
+				}
+			: {}),
+		projectedCollisions,
+		manualReviewProviders,
+	};
 }
 
 function resolveDynamicAccountIssuers({
@@ -1681,6 +1869,7 @@ async function inspectAccountIdentityFrom16(
 	migrationDatabase?: MigrationDatabase,
 	blockers?: MigrationDecisionBlocker[],
 ) {
+	if (config.account?.identityStrategy !== "issuer") return undefined;
 	const database = migrationDatabase ?? (await getMigrationDatabase(config));
 	const { authTables, kysely } = database;
 	const accountSchema = authTables.account;
@@ -1707,13 +1896,22 @@ async function inspectAccountIdentityFrom16(
 		accountTableMetadata.columns.map((column) => column.name),
 	);
 	if (!existingColumns.has(accountIdColumn)) return undefined;
-
+	const accountIdentities = await sql<LegacyAccountIdentityRow>`
+		SELECT
+			${sql.ref(idColumn)} AS "id",
+			${sql.ref(accountIdColumn)} AS "providerAccountId",
+			${existingColumns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer",
+			${sql.ref(providerIdColumn)} AS "providerId"
+		FROM ${sql.table(accountTable)}
+	`.execute(kysely);
+	const configuredIssuers = await resolveConfiguredIssuerState(config);
 	const { accountIssuers, unresolvedProviders } =
 		await resolveMigrationAccountIssuers(
 			config,
 			options,
 			accountTable,
 			blockers,
+			configuredIssuers,
 		);
 
 	const providerInventory = await sql<AccountProviderCount>`
@@ -1744,14 +1942,6 @@ async function inspectAccountIdentityFrom16(
 		});
 	}
 
-	const accountIdentities = await sql<LegacyAccountIdentityRow>`
-		SELECT
-			${sql.ref(idColumn)} AS "id",
-			${sql.ref(accountIdColumn)} AS "providerAccountId",
-			${existingColumns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer",
-			${sql.ref(providerIdColumn)} AS "providerId"
-		FROM ${sql.table(accountTable)}
-	`.execute(kysely);
 	const accountIssuerByAccountId = resolveDynamicAccountIssuers({
 		accounts: accountIdentities.rows,
 		blockers,
@@ -1762,11 +1952,15 @@ async function inspectAccountIdentityFrom16(
 	const projectedIdentities = new Set<string>();
 	const reportedCollisions = new Set<string>();
 	for (const account of accountIdentities.rows) {
-		const issuer =
-			readStoredIssuer(account.issuer) ??
-			(unresolvedProviders[account.providerId] === "dynamic-issuer"
-				? accountIssuerByAccountId[account.id]
-				: accountIssuers[account.providerId]);
+		const storedIssuer = readStoredIssuer(account.issuer);
+		const configuredIssuer = accountIssuers[account.providerId];
+		let issuer = storedIssuer;
+		if (!issuer) {
+			issuer =
+				unresolvedProviders[account.providerId] === "dynamic-issuer"
+					? accountIssuerByAccountId[account.id]
+					: configuredIssuer;
+		}
 		if (issuer === null || issuer === undefined) continue;
 		const identityKey = JSON.stringify([issuer, account.providerAccountId]);
 		if (projectedIdentities.has(identityKey)) {
@@ -1875,6 +2069,9 @@ export async function migrateAccountIdentityFrom16(
 	options: MigrateFrom16Options,
 	migrationDatabase?: MigrationDatabase,
 ): Promise<MigratedAccountSummary> {
+	if (config.account?.identityStrategy !== "issuer") {
+		return { migrated: 0, providers: {} };
+	}
 	const { databaseType, inTransaction, kysely } =
 		migrationDatabase ?? (await getMigrationDatabase(config));
 	if (
