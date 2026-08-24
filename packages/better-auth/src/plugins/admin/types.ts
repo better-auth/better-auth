@@ -84,6 +84,27 @@ export interface AdminOptions {
 	 * @default false
 	 */
 	allowImpersonatingAdmins?: boolean | undefined;
+	/**
+	 * Lifecycle hooks for admin user operations.
+	 */
+	hooks?:
+		| {
+				/**
+				 * Called before a user is deleted via the admin `removeUser` endpoint.
+				 * Throw an `APIError` (or any error) to abort the deletion.
+				 *
+				 * @param user - The user record about to be deleted.
+				 */
+				beforeRemoveUser?: (user: User) => Promise<void> | void;
+				/**
+				 * Called after a user has been successfully deleted via the admin
+				 * `removeUser` endpoint.
+				 *
+				 * @param user - The user record that was deleted.
+				 */
+				afterRemoveUser?: (user: User) => Promise<void> | void;
+		  }
+		| undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

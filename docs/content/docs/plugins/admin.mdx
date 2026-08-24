@@ -418,7 +418,7 @@ To stop impersonating a user and continue with the admin account, you can use `s
 
 ### Remove User
 
-Hard deletes a user from the database.
+Hard deletes a user from the database. Before the deletion occurs, the `beforeRemoveUser` hook is called if one is configured — throw from it to abort the operation. See [Hooks](#hooks) for details.
 
 <APIMethod path="/admin/remove-user" method="POST" requireSession resultVariable="deletedUser">
   ```ts
@@ -843,5 +843,64 @@ The message to show when a banned user tries to sign in. Defaults to "You have b
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: "Custom banned user message",
+});
+```
+
+### Hooks
+
+Lifecycle callbacks that let you inject custom logic around admin user operations.
+
+#### `beforeRemoveUser`
+
+Called before a user is deleted via the [`/admin/remove-user`](#remove-user) endpoint. Throw any error (e.g. `APIError`) to abort the deletion — the user record will not be touched.
+
+```ts title="auth.ts"
+import { APIError } from "better-auth/api";
+import { admin } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    admin({
+      hooks: {
+        async beforeRemoveUser(user) {
+          // Example: block deletion if the user is the sole owner of an org
+          const soloOrgs = await db.query.member.findMany({
+            where: and(
+              eq(member.userId, user.id),
+              eq(member.role, "owner"),
+            ),
+          });
+          for (const membership of soloOrgs) {
+            const owners = await db.query.member.findMany({
+              where: and(
+                eq(member.organizationId, membership.organizationId),
+                eq(member.role, "owner"),
+              ),
+            });
+            if (owners.length <= 1) {
+              throw new APIError("BAD_REQUEST", {
+                message:
+                  "Cannot delete the sole owner of an organization.",
+              });
+            }
+          }
+        },
+      },
+    }),
+  ],
+});
+```
+
+#### `afterRemoveUser`
+
+Called after a user has been successfully deleted. Use this for post-deletion side effects such as cleaning up external records or sending notifications.
+
+```ts title="auth.ts"
+admin({
+  hooks: {
+    async afterRemoveUser(user) {
+      await externalService.deleteAccount(user.id);
+    },
+  },
 });
 ```
