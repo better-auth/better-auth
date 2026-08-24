@@ -91,6 +91,56 @@ describe("captcha", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	it("should apply rate limits before verifying captcha tokens", async () => {
+		mockBetterFetch.mockClear();
+		mockBetterFetch.mockResolvedValue({
+			data: {
+				success: false,
+				"error-codes": ["invalid-input-response"],
+			},
+		});
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				customRules: {
+					"/sign-in/email": {
+						window: 10,
+						max: 1,
+					},
+				},
+			},
+			plugins: [
+				captcha({
+					provider: "cloudflare-turnstile",
+					secretKey: "xx-secret-key",
+				}),
+			],
+		});
+
+		const first = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: {
+					"x-captcha-response": "invalid-captcha-token",
+				},
+			},
+		});
+		const second = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: {
+					"x-captcha-response": "invalid-captcha-token",
+				},
+			},
+		});
+
+		expect(first.error?.status).toBe(403);
+		expect(second.error?.status).toBe(429);
+		expect(mockBetterFetch).toHaveBeenCalledTimes(1);
+	});
+
 	it("Should return 500 if an unexpected error occurs", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
@@ -581,6 +631,178 @@ describe("captcha", async () => {
 			// Captcha middleware must short-circuit before the OTP is consulted.
 			expect(res.error).toMatchObject({
 				status: 400,
+				code: "MISSING_RESPONSE",
+			});
+		});
+
+		it("should still apply captcha when a protected pathname contains duplicate slashes", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in//email", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
+				code: "MISSING_RESPONSE",
+			});
+		});
+
+		it("should still apply captcha when a protected pathname has a trailing slash", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email/", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
+				code: "MISSING_RESPONSE",
+			});
+		});
+
+		it("should not treat partial endpoint paths as matches", async () => {
+			const { client } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in"],
+					}),
+				],
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(res.error).toBeNull();
+			expect(res.data?.user?.email).toBe("test@test.com");
+		});
+
+		it("should not apply captcha to sub-routes of default protected endpoints", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sign-in/email/extra-segment",
+					{
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({}),
+					},
+				),
+			);
+
+			expect(res.status).not.toBe(400);
+		});
+	});
+
+	describe("wildcard endpoints", () => {
+		it("should apply captcha to single-segment wildcard matches", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/*"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email-otp", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
+				code: "MISSING_RESPONSE",
+			});
+		});
+
+		it("should not match nested routes with a single-segment wildcard", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/*"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/social/google", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).not.toBe(400);
+		});
+
+		it("should apply captcha to nested routes with a multi-segment wildcard", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/**"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/social/google", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
 				code: "MISSING_RESPONSE",
 			});
 		});

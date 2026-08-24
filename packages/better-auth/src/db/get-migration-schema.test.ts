@@ -502,6 +502,54 @@ describe("index generation for columns added to existing tables", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10356
+	 */
+	it("should enforce unique indexed fields on new tables without a duplicate index", async () => {
+		const db = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database: db,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				{
+					id: "test-unique-index",
+					schema: {
+						uniqueTable: {
+							fields: {
+								slug: {
+									type: "string",
+									index: true,
+									unique: true,
+									required: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const { compileMigrations, runMigrations } = await getMigrations(config);
+		const sql = (await compileMigrations()).toLowerCase();
+
+		expect(sql).toMatch(
+			/create table "uniquetable"[^;]*"slug" text not null unique/s,
+		);
+		expect(sql).not.toContain("uniquetable_slug_uidx");
+
+		await runMigrations();
+		db.exec(
+			`INSERT INTO "uniqueTable" ("id", "slug") VALUES ('first', 'shared')`,
+		);
+		expect(() =>
+			db.exec(
+				`INSERT INTO "uniqueTable" ("id", "slug") VALUES ('second', 'shared')`,
+			),
+		).toThrow();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9689
 	 */
 	it("should execute runMigrations without error when adding indexed columns to existing tables", async () => {
@@ -685,5 +733,100 @@ describe("index generation for columns added to existing tables", () => {
 		expect(apikeyAdded!.fields).toHaveProperty("referenceId");
 
 		await expect(runMigrations()).resolves.not.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10306
+	 */
+	it("should not detect migration changes for SQLite bigint fields on subsequent runs", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			rateLimit: {
+				storage: "database",
+			},
+		};
+
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		const second = await getMigrations(config);
+		const { toBeCreated, toBeAdded } = second;
+
+		expect(toBeCreated.length).toBe(0);
+		expect(toBeAdded.length).toBe(0);
+
+		const sql = await second.compileMigrations();
+		expect(sql).toBe(";");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it("should add table indexes to existing device authorization columns", async () => {
+		const db = new DatabaseSync(":memory:");
+		const baseConfig: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				{
+					id: "old-device-code",
+					schema: {
+						deviceCode: {
+							fields: {
+								deviceCode: {
+									type: "string",
+									required: true,
+								},
+								userCode: {
+									type: "string",
+									required: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const initial = await getMigrations(baseConfig);
+		await initial.runMigrations();
+
+		const upgradedConfig: BetterAuthOptions = {
+			...baseConfig,
+			plugins: [
+				{
+					id: "new-device-code",
+					schema: {
+						deviceCode: {
+							fields: {
+								deviceCode: {
+									type: "string",
+									required: true,
+								},
+								userCode: {
+									type: "string",
+									required: true,
+								},
+							},
+							indexes: [
+								{ fields: ["deviceCode"], unique: true },
+								{ fields: ["userCode"], unique: true },
+							],
+						},
+					},
+				},
+			],
+		};
+
+		const migration = await getMigrations(upgradedConfig);
+		const sql = await migration.compileMigrations();
+
+		expect(migration.toBeAdded).toEqual([]);
+		expect(sql).toContain('create unique index "deviceCode_deviceCode_uidx"');
+		expect(sql).toContain('create unique index "deviceCode_userCode_uidx"');
+
+		await migration.runMigrations();
+
+		const repeated = await getMigrations(upgradedConfig);
+		await expect(repeated.compileMigrations()).resolves.toBe(";");
 	});
 });

@@ -7,11 +7,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "git clean -xdf .next && next typegen && tsc --noEmit --incremental false"
   },
   "dependencies": {
     "better-auth": "link:../../packages/better-auth",
-    "next": "^16.2.6",
+    "next": "^16.3.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -19,8 +19,8 @@
     "@tailwindcss/postcss": "^4.2.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "postcss": "^8.5.14",
+    "postcss": "^8.5.25",
     "tailwindcss": "^4.2.1",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

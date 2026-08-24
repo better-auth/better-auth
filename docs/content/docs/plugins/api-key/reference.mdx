@@ -193,11 +193,11 @@ export const auth = betterAuth({
 });
 ```
 
-`customStorage` <span className="opacity-70">`{ get: (key: string) => Promise<unknown> | unknown; set: (key: string, value: string, ttl?: number) => Promise<void | null | unknown> | void; delete: (key: string) => Promise<void | null | string> | void; }`</span>
+`customStorage` <span className="opacity-70">`SecondaryStorage`</span>
 
-Custom storage methods for API keys. If provided, these methods will be used instead of `ctx.context.secondaryStorage`. Custom methods take precedence over global secondary storage.
+Custom secondary storage for API keys. If provided, it is used instead of `ctx.context.secondaryStorage`. Custom storage takes precedence over global secondary storage.
 
-Useful when you want to use a different storage backend specifically for API keys, or when you need custom logic for storage operations.
+Useful when you want to use a different storage backend specifically for API keys, or when you need custom logic for storage operations. It must implement the full secondary-storage contract, including `getAndDelete` and `increment`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -209,6 +209,8 @@ export const auth = betterAuth({
       storage: "secondary-storage",
       customStorage: {
         get: async (key) => await customStorage.get(key),
+        getAndDelete: async (key) => await customStorage.getAndDelete(key),
+        increment: async (key, ttl) => await customStorage.increment(key, ttl),
         set: async (key, value, ttl) => await customStorage.set(key, value, ttl),
         delete: async (key) => await customStorage.delete(key), 
       },

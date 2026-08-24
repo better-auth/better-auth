@@ -1,24 +1,46 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import { decodeJwt } from "jose";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
 	/**
-	 * Microsoft Entra ID tenant ID.
-	 * Can be a GUID, "common", "organizations", or "consumers"
+	 * Concrete Microsoft Entra ID tenant GUID.
+	 *
+	 * Use Better Auth's built-in Microsoft provider for the multi-tenant
+	 * `common`, `organizations`, or `consumers` authorities. Those authorities
+	 * require ID-token claim validation to derive the account's actual issuer.
 	 */
 	tenantId: string;
 }
 
 interface MicrosoftEntraIdProfile {
-	sub: string;
+	sub?: string;
+	oid?: string;
+	tid?: string;
 	name?: string;
 	email?: string;
 	preferred_username?: string;
 	picture?: string;
 	given_name?: string;
 	family_name?: string;
+	givenname?: string;
+	familyname?: string;
 	email_verified?: boolean;
+}
+
+function getMicrosoftProfileName(profile: MicrosoftEntraIdProfile) {
+	return (
+		profile.name ??
+		(`${profile.given_name ?? profile.givenname ?? ""} ${
+			profile.family_name ?? profile.familyname ?? ""
+		}`.trim() ||
+			undefined)
+	);
 }
 
 /**
@@ -45,17 +67,57 @@ interface MicrosoftEntraIdProfile {
  */
 export function microsoftEntraId(
 	options: MicrosoftEntraIdOptions,
-): GenericOAuthConfig {
+): GenericOAuthConfig<"microsoft-entra-id"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
-	const tenantId = options.tenantId;
+	const tenantId =
+		typeof options.tenantId === "string" ? options.tenantId.toLowerCase() : "";
+	if (
+		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+			tenantId,
+		)
+	) {
+		throw new Error(
+			"The generic microsoftEntraId helper requires a concrete Microsoft Entra tenant GUID. Use the built-in Microsoft provider for common, organizations, or consumers.",
+		);
+	}
 	const authorizationUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`;
 	const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+	const discoveryUrl = `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`;
 	const userInfoUrl = "https://graph.microsoft.com/oidc/userinfo";
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
+		if (!tokens.idToken) {
+			return null;
+		}
+
+		let tokenProfile: MicrosoftEntraIdProfile;
+		try {
+			tokenProfile = decodeJwt(tokens.idToken) as MicrosoftEntraIdProfile;
+		} catch {
+			return null;
+		}
+
+		const oid =
+			typeof tokenProfile.oid === "string" && tokenProfile.oid.trim().length > 0
+				? tokenProfile.oid
+				: undefined;
+		if (!oid) {
+			return null;
+		}
+		const tokenUserInfo = {
+			...tokenProfile,
+			name: getMicrosoftProfileName(tokenProfile),
+			email: tokenProfile.email ?? tokenProfile.preferred_username ?? undefined,
+			image: tokenProfile.picture,
+			emailVerified: tokenProfile.email_verified ?? false,
+		};
+		if (!tokens.accessToken) {
+			return tokenUserInfo;
+		}
+
 		const { data: profile, error } = await betterFetch<MicrosoftEntraIdProfile>(
 			userInfoUrl,
 			{
@@ -66,34 +128,54 @@ export function microsoftEntraId(
 		);
 
 		if (error || !profile) {
-			return null;
+			return tokenUserInfo;
+		}
+		if (
+			typeof tokenProfile.sub !== "string" ||
+			profile.sub !== tokenProfile.sub
+		) {
+			return tokenUserInfo;
 		}
 
-		return {
-			id: profile.sub,
+		const profileWithClaims = {
+			...profile,
+			...tokenProfile,
 			name:
-				profile.name ??
-				(`${profile.given_name ?? ""} ${profile.family_name ?? ""}`.trim() ||
-					undefined),
-			email: profile.email ?? profile.preferred_username ?? undefined,
-			image: profile.picture,
+				getMicrosoftProfileName(tokenProfile) ??
+				getMicrosoftProfileName(profile),
+			email:
+				tokenProfile.email ??
+				profile.email ??
+				tokenProfile.preferred_username ??
+				profile.preferred_username ??
+				undefined,
+			image: tokenProfile.picture ?? profile.picture,
 			// Note: Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.
-			// We default to false when not provided
-			// The built-in provider hardcodes this to true, assuming Microsoft accounts are verified.
-			emailVerified: profile.email_verified ?? false,
+			// We default to false when not provided.
+			emailVerified:
+				tokenProfile.email_verified ?? profile.email_verified ?? false,
 		};
+		return profileWithClaims;
 	};
 
 	return {
 		providerId: "microsoft-entra-id",
+		accountSubject: ({ profile }) =>
+			typeof profile.oid === "string" ? profile.oid : "",
+		discoveryUrl,
+		requireIdTokenVerification: true,
 		authorizationUrl,
 		tokenUrl,
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
+		endSessionEndpoint: options.endSessionEndpoint,
+		postLogoutRedirectURI: options.postLogoutRedirectURI,
+		disableProviderLogout: options.disableProviderLogout,
 		pkce: options.pkce,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,

@@ -108,7 +108,9 @@ function getOpenApiTypeFromZodType(zodType: z.ZodType<unknown>) {
 }
 
 export type FieldSchema = {
-	type: DBFieldType;
+	type: DBFieldType | "array";
+	/** Element schema for `type: "array"` (JSON Schema / OpenAPI array shape). */
+	items?: { type: string };
 	default?: DBFieldAttributeConfig["defaultValue"] | undefined;
 	readOnly?: boolean | undefined;
 	format?: string;
@@ -121,10 +123,20 @@ export type OpenAPIModelSchema = {
 };
 
 function getFieldSchema(field: DBFieldAttribute) {
-	const schema: FieldSchema = {
-		type: field.type === "date" ? "string" : field.type,
-		...(field.type === "date" && { format: "date-time" }),
-	};
+	// Array DB field types ("string[]"/"number[]") map to a JSON Schema array,
+	// not the literal type string (which is not a valid OpenAPI type keyword).
+	// TODO: the enum form (Array<LiteralString>) is not yet translated to an
+	// OpenAPI `enum`; no core field uses it today.
+	const arrayMatch =
+		typeof field.type === "string"
+			? /^(string|number)\[\]$/.exec(field.type)
+			: null;
+	const schema: FieldSchema = arrayMatch
+		? { type: "array", items: { type: arrayMatch[1]! } }
+		: {
+				type: field.type === "date" ? "string" : field.type,
+				...(field.type === "date" && { format: "date-time" }),
+			};
 
 	if (field.defaultValue !== undefined) {
 		if (typeof field.defaultValue !== "function") {
@@ -268,6 +280,8 @@ function schemaAcceptsUndefined(zodType: z.ZodType<unknown>): boolean {
 		zodType instanceof z.ZodDefault ||
 		zodType instanceof z.ZodPrefault ||
 		zodType instanceof z.ZodCatch ||
+		zodType instanceof z.ZodAny ||
+		zodType instanceof z.ZodUnknown ||
 		zodType instanceof z.ZodUndefined ||
 		zodType instanceof z.ZodVoid
 	) {
@@ -415,6 +429,124 @@ function getRequestBody(
 	};
 }
 
+/**
+ * Paths that accept `user.additionalFields` and plugin user schema fields via
+ * `parseUserInput`. Their static OpenAPI request bodies need those fields merged in.
+ */
+const USER_INPUT_BODY_PATHS = new Set(["/sign-up/email", "/update-user"]);
+
+function dbFieldToRequestBodyProperty(field: DBFieldAttribute): OpenAPISchema {
+	if (field.type === "date") {
+		return { type: "string", format: "date-time" };
+	}
+	if (field.type === "json") {
+		return {};
+	}
+	if (field.type === "string[]") {
+		return { type: "array", items: { type: "string" } };
+	}
+	if (field.type === "number[]") {
+		return { type: "array", items: { type: "number" } };
+	}
+	if (Array.isArray(field.type)) {
+		return {
+			type: "string",
+			enum: field.type,
+		};
+	}
+	const schema: OpenAPISchema = {
+		type: field.type,
+	};
+	if (
+		field.defaultValue !== undefined &&
+		typeof field.defaultValue !== "function"
+	) {
+		schema.default = field.defaultValue;
+	}
+	return schema;
+}
+
+/**
+ * Collect client-writable user fields from `user.additionalFields` and plugin
+ * schemas. Mirrors `getFields(..., "input")` used by `parseUserInput`.
+ */
+function getUserInputRequestBodyFields(options: BetterAuthOptions) {
+	let fields: Record<string, DBFieldAttribute> = {
+		...(options.user?.additionalFields ?? {}),
+	};
+	for (const plugin of options.plugins || []) {
+		const pluginUserFields = plugin.schema?.user?.fields;
+		if (pluginUserFields) {
+			fields = {
+				...fields,
+				...pluginUserFields,
+			};
+		}
+	}
+
+	const properties: Record<string, OpenAPISchema> = {};
+	const required: string[] = [];
+	for (const [key, field] of Object.entries(fields)) {
+		if (!field || field.input === false) continue;
+		properties[key] = dbFieldToRequestBodyProperty(field);
+		// Match parseUserInput create behavior: only enforce required when the
+		// field explicitly opts in, and not when a static default fills the value.
+		if (field.required === true && field.defaultValue === undefined) {
+			required.push(key);
+		}
+	}
+	return { properties, required };
+}
+
+function applyUserInputFieldsToRequestBody(
+	path: string,
+	requestBody: OpenAPIRequestBody | undefined,
+	options: BetterAuthOptions,
+): OpenAPIRequestBody | undefined {
+	if (!USER_INPUT_BODY_PATHS.has(path)) {
+		return requestBody;
+	}
+
+	const { properties: inputProperties, required: inputRequired } =
+		getUserInputRequestBodyFields(options);
+	if (Object.keys(inputProperties).length === 0) {
+		return requestBody;
+	}
+
+	const existingSchema = requestBody?.content?.["application/json"]?.schema;
+	const properties: Record<string, OpenAPISchema> = {
+		...(existingSchema?.properties ?? {}),
+	};
+	for (const [key, value] of Object.entries(inputProperties)) {
+		if (properties[key] === undefined) {
+			properties[key] = value;
+		}
+	}
+
+	const required = new Set(existingSchema?.required ?? []);
+	if (path === "/sign-up/email") {
+		for (const key of inputRequired) {
+			if (properties[key] !== undefined) {
+				required.add(key);
+			}
+		}
+	}
+
+	return {
+		...requestBody,
+		content: {
+			"application/json": {
+				schema: {
+					...(existingSchema ?? {}),
+					type: existingSchema?.type ?? "object",
+					properties,
+					...(required.size > 0 ? { required: Array.from(required) } : {}),
+				},
+			},
+		},
+	};
+}
+
 function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 	if (zodType instanceof z.ZodOptional) {
 		return toOpenApiSchema(unwrapZodSchema(zodType));
@@ -429,7 +561,7 @@ function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 	) {
 		return toOpenApiSchema(unwrapZodSchema(zodType));
 	}
-	if (zodType instanceof z.ZodAny) {
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
 		return withDescription({}, zodType);
 	}
 	if (zodType instanceof z.ZodObject) {
@@ -820,7 +952,11 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		for (const method of methods.filter(
 			(m) => m === "POST" || m === "PATCH" || m === "PUT",
 		)) {
-			const body = getRequestBody(options);
+			const body = applyUserInputFieldsToRequestBody(
+				value.path,
+				getRequestBody(options),
+				ctx.options,
+			);
 			paths[path] = {
 				...paths[path],
 				[method.toLowerCase()]: {

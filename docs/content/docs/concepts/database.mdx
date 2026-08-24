@@ -31,7 +31,7 @@ npx auth@latest migrate
 
 ### Generating Schema
 
-Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
+Better Auth also provides a `generate` command to generate the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
 ```package-install
 npx auth@latest generate
@@ -133,6 +133,8 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 ```typescript
 interface SecondaryStorage {
   get: (key: string) => Promise<unknown>;
+  getAndDelete: (key: string) => Promise<unknown>;
+  increment: (key: string, ttl: number) => Promise<number>;
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -153,25 +155,21 @@ betterAuth({
 
 ### Redis Storage
 
-Better Auth provides an official Redis storage package that uses [ioredis](https://github.com/redis/ioredis):
+For most applications, we recommend using the official Redis storage package,
+which uses [ioredis](https://github.com/redis/ioredis).
 
-```bash
-npm install @better-auth/redis-storage ioredis
-# or
-pnpm add @better-auth/redis-storage ioredis
+#### Official Redis Storage
+
+```package-install
+@better-auth/redis-storage ioredis
 ```
 
-**Usage:**
-
-```typescript
+```typescript title="auth.ts"
 import { betterAuth } from "better-auth";
 import { Redis } from "ioredis";
 import { redisStorage } from "@better-auth/redis-storage";
 
-const redis = new Redis({
-	host: "localhost",
-	port: 6379,
-});
+const redis = new Redis(process.env.REDIS_URL!);
 
 export const auth = betterAuth({
 	// ... other options
@@ -182,135 +180,127 @@ export const auth = betterAuth({
 });
 ```
 
-The Redis storage supports all ioredis connection modes including standalone, cluster, and sentinel configurations.
+#### Custom Implementations
 
-**Manual Implementation:**
+<Tabs items={["node-redis", "Upstash Redis"]}>
+  <Tab value="node-redis">
+    If you're using Redis 7 or later, you can implement secondary storage with
+    [node-redis](https://github.com/redis/node-redis):
 
-If you prefer to implement your own Redis secondary storage, here's a basic example:
+    ```package-install
+    redis
+    ```
 
-```typescript title="auth.ts"
-import { createClient } from "redis";
-import { betterAuth } from "better-auth";
+    ```typescript title="auth.ts"
+    import { betterAuth, type SecondaryStorage } from "better-auth";
+    import { createClient } from "redis";
 
-const redis = createClient();
-await redis.connect();
+    const redis = createClient();
+    await redis.connect();
 
-export const auth = betterAuth({
-	// ... other options
-	secondaryStorage: {
-		get: async (key) => {
-			return await redis.get(key);
-		},
-		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, value, { EX: ttl });
-			else await redis.set(key, value);
-		},
-		delete: async (key) => {
-			await redis.del(key);
-		}
-	}
-});
-```
+    const redisSecondaryStorage: SecondaryStorage = {
+      get(key) {
+        return redis.get(key);
+      },
 
-This implementation allows Better Auth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
+      getAndDelete(key) {
+        return redis.getDel(key);
+      },
 
-**Example: Upstash Redis Implementation**
+      async increment(key, ttl) {
+        if (!Number.isInteger(ttl) || ttl <= 0) {
+          throw new TypeError("Redis increment TTL must be a positive integer");
+        }
 
-Here's an example using Upstash Redis. First, install the Upstash Redis client:
+        const [value] = await redis
+          .multi()
+          .incr(key)
+          .expire(key, ttl, "NX")
+          .execTyped();
 
-```bash
-npm install @upstash/redis
-```
-
-Then, create a new Redis client:
-
-```typescript
-// src/lib/redis/index.ts
-
-import { Redis } from "@upstash/redis";
-
-export const redis = Redis.fromEnv();
-```
-
-Don't forget to set the `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` environment variables. Also, [see the Upstash documentation](https://upstash.com/docs/redis/howto/connectwithupstashredis) for more information on how to use Upstash Redis with Node.js.
-
-After that, we can create a secondary storage implementation:
-
-```typescript
-// src/lib/auth/adapters/redis-secondary-storage.ts
-
-import { SecondaryStorage } from "better-auth";
-import { redis } from "~/lib/redis";
-
-export const redisSecondaryStorage: SecondaryStorage = {
-  async get(key: string) {
-    try {
-      const value = await redis.get(key);
-
-      // Handle different return types from Redis
-      if (value === null || value === undefined) {
-        return null;
-      }
-
-      // If it's already a string, return it
-      if (typeof value === "string") {
         return value;
-      }
+      },
 
-      // If it's an object, stringify it
-      if (typeof value === "object") {
-        return JSON.stringify(value);
-      }
+      async set(key, value, ttl) {
+        if (ttl) await redis.set(key, value, { EX: ttl });
+        else await redis.set(key, value);
+      },
 
-      // Convert to string for any other type
-      return String(value);
-    } catch (error) {
-      console.error("Redis get error:", error);
-      return null;
-    }
-  },
+      async delete(key) {
+        await redis.del(key);
+      },
+    };
 
-  async set(key: string, value: string, ttl?: number) {
-    try {
-      // Ensure value is a string
-      const stringValue =
-        typeof value === "string" ? value : JSON.stringify(value);
+    export const auth = betterAuth({
+      // ... other options
+      secondaryStorage: redisSecondaryStorage,
+    });
+    ```
+  </Tab>
 
-      if (ttl) {
-        // Set with TTL in seconds
-        await redis.set(key, stringValue, { ex: ttl });
-      } else {
-        // Set without TTL
-        await redis.set(key, stringValue);
-      }
-    } catch (error) {
-      console.error("Redis set error:", error);
-      throw error;
-    }
-  },
+  <Tab value="Upstash Redis">
+    Install the Upstash Redis client:
 
-  async delete(key: string) {
-    try {
-      await redis.del(key);
-    } catch (error) {
-      console.error("Redis delete error:", error);
-      throw error;
-    }
-  },
-};
-```
+    ```package-install
+    @upstash/redis
+    ```
 
-Finally, we can pass the implementation to the `betterAuth` function.
+    Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in your environment.
+    See the [Upstash Redis TypeScript SDK guide](https://upstash.com/docs/redis/sdks/ts/getstarted)
+    for additional configuration options.
 
-```typescript
-import { betterAuth } from "better-auth";
-import { redisSecondaryStorage } from "~/lib/auth/adapters/redis-secondary-storage";
+    ```typescript title="auth.ts"
+    import { Redis } from "@upstash/redis";
+    import { betterAuth, type SecondaryStorage } from "better-auth";
 
-export const auth = betterAuth({
-  // ... other options
-  secondaryStorage: redisSecondaryStorage,
-});
-```
+    const redis = Redis.fromEnv();
+
+    const redisSecondaryStorage: SecondaryStorage = {
+      get(key) {
+        return redis.get(key);
+      },
+
+      getAndDelete(key) {
+        return redis.getdel(key);
+      },
+
+      async increment(key, ttl) {
+        if (!Number.isInteger(ttl) || ttl <= 0) {
+          throw new TypeError("Redis increment TTL must be a positive integer");
+        }
+
+        const [value] = await redis
+          .multi()
+          .incr(key)
+          .expire(key, ttl, "NX")
+          .exec();
+
+        return value;
+      },
+
+      async set(key, value, ttl) {
+        if (ttl) {
+          await redis.set(key, value, { ex: ttl });
+        } else {
+          await redis.set(key, value);
+        }
+      },
+
+      async delete(key) {
+        await redis.del(key);
+      },
+    };
+
+    export const auth = betterAuth({
+      // ... other options
+      secondaryStorage: redisSecondaryStorage,
+    });
+    ```
+  </Tab>
+</Tabs>
+
+When implementing secondary storage directly, prefix its keys to avoid
+collisions with other applications sharing the same Redis database.
 
 ## Core Schema
 
@@ -422,11 +412,13 @@ export const sessionTableFields = [
 
 Table Name: `account`
 
+An account represents one authentication method linked to a user. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
+
 export const accountTableFields = [
 	{
 		name: "id",
 		type: "string",
-		description: "Unique identifier for each account",
+		description: "Unique identifier for the local account record",
 		isPrimaryKey: true,
 	},
 	{
@@ -437,15 +429,20 @@ export const accountTableFields = [
 		references: { model: "user", field: "id", onDelete: "cascade" },
 	},
 	{
-		name: "accountId",
+		name: "issuer",
 		type: "string",
 		description:
-			"The ID of the account as provided by the SSO or equal to userId for credential accounts",
+			"The trusted authority that issued the provider account identifier",
+	},
+	{
+		name: "accountId",
+		type: "string",
+		description: "The stable account identifier within the issuer namespace",
 	},
 	{
 		name: "providerId",
 		type: "string",
-		description: "The ID of the provider",
+		description: "The provider configuration used to authenticate the account",
 	},
 	{
 		name: "accessToken",
@@ -503,6 +500,8 @@ export const accountTableFields = [
 ];
 
 <DatabaseTable name="account" fields={accountTableFields} />
+
+The database enforces a unique compound index on `issuer` and `accountId`. Providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. OAuth providers without an issuer use the synthetic `local:oauth:<encoded providerId>` namespace, with the provider ID segment percent-encoded. Credential accounts use `local:credential` and the linked user's stable `id`.
 
 ### Verification
 
@@ -606,7 +605,8 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 * `type`: The data type of the field (e.g., "string", "number", "boolean").
 * `required`: A boolean indicating if the field is mandatory.
 * `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
-* `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
+* `input`: Whether Better Auth accepts the field when creating or updating a record (default: `true`). For user fields, this includes values from API input and `mapProfileToUser`. Set this to `false` for server-owned fields such as `role`.
+* `returned`: Whether Better Auth includes the stored field in response bodies (default: `true`). This does not affect whether input can write the field.
 
 Here's an example of how to extend the user schema with additional fields:
 
@@ -646,7 +646,7 @@ const res = await auth.api.signUpEmail({
 });
 
 //user object
-res.user.role; // > "admin"
+res.user.role; // > "user"
 res.user.lang; // > "fr"
 ```
 
@@ -657,7 +657,16 @@ res.user.lang; // > "fr"
   client side.
 </Callout>
 
-If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+For `user.additionalFields`, `input` and `returned` are independent:
+
+| Configuration                       | Input behavior                                                                                                                                                    | Response behavior             |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `{ input: true, returned: true }`   | API input and provider profile mapping can supply the field.                                                                                                      | The stored field is included. |
+| `{ input: true, returned: false }`  | API input and provider profile mapping can supply the field.                                                                                                      | The stored field is omitted.  |
+| `{ input: false, returned: true }`  | API input and provider profile mapping cannot supply the field. A configured `defaultValue` can initialize it; otherwise use an application-owned database write. | The stored field is included. |
+| `{ input: false, returned: false }` | API input and provider profile mapping cannot supply the field. A configured `defaultValue` can initialize it; otherwise use an application-owned database write. | The stored field is omitted.  |
+
+If you're using a social or OAuth provider, `mapProfileToUser` can populate additional fields from the provider profile when those fields allow input. The mapper runs on your server, but Better Auth still treats its return value as provider input. Fields marked `input: false` stay server-owned, provider values for those fields are ignored, and configured `defaultValue` values still apply when OAuth creates a user. See [server-owned fields and authorization claims](/docs/concepts/oauth#server-owned-fields-and-authorization-claims) for secure handling patterns.
 
 **Example: Mapping Profile to User For `firstName` and `lastName`**
 
@@ -991,14 +1000,14 @@ To add new tables and columns to your database, you have two options:
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
 
-## Experimental Joins
+## Joins
 
-Since Better-Auth version `1.4` we've introduced experimental database joins support.
+Since Better-Auth version `1.4` we've introduced database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
 Over 50 endpoints support joins, and we're constantly adding more.
 
-Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
-it will still fallback to making multiple database queries and combining the results.
+Under the hood, our adapter system supports joins natively. When joins are disabled (the default),
+Better-Auth falls back to making multiple database queries and combining the results.
 
 To enable joins, update your auth config with the following:
 
@@ -1006,19 +1015,22 @@ To enable joins, update your auth config with the following:
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  experimental: { joins: true }
+  advanced: {
+    database: {
+      joins: true,
+    },
+  },
 });
 ```
 
-The Better-Auth `1.4` CLI will generate DrizzleORM and PrismaORM relationships for you so if you do not have those already
-be sure to update your schema by running our migrate or generate CLI commands to be up-to-date with the latest required schema.
+Make sure your DrizzleORM or PrismaORM schema includes the necessary relationships — run our migrate or generate CLI commands to stay up-to-date.
 
-It's very important to read the documentation regarding experimental joins for your given adapter:
+Read the documentation regarding joins for your given adapter:
 
-* [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
-* [PrismaORM](/docs/adapters/prisma#joins-experimental)
-* [SQLite](/docs/adapters/sqlite#joins-experimental)
-* [MySQL](/docs/adapters/mysql#joins-experimental)
-* [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
-* [MSSQL](/docs/adapters/mssql#joins-experimental)
-* [MongoDB](/docs/adapters/mongo#joins-experimental)
+* [DrizzleORM](/docs/adapters/drizzle#joins)
+* [PrismaORM](/docs/adapters/prisma#joins)
+* [SQLite](/docs/adapters/sqlite#joins)
+* [MySQL](/docs/adapters/mysql#joins)
+* [PostgreSQL](/docs/adapters/postgresql#joins)
+* [MSSQL](/docs/adapters/mssql#joins)
+* [MongoDB](/docs/adapters/mongo#joins)

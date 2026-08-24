@@ -1,6 +1,11 @@
 import { X509Certificate } from "node:crypto";
 import { getHostname } from "tldts";
 
+const unsafeSAMLRedirectPathPrefix = /^\/(?:\/|\\|%2f|%5c)/i;
+
+export const isSafeSAMLRedirectPath = (url: string): boolean =>
+	url.startsWith("/") && !unsafeSAMLRedirectPathPrefix.test(url);
+
 /**
  * Safely parses a value that might be a JSON string or already a parsed object.
  * This handles cases where ORMs like Drizzle might return already parsed objects
@@ -36,12 +41,14 @@ export function safeJsonParse<T>(
  * Checks if a domain matches any domain in a comma-separated list.
  */
 export const domainMatches = (searchDomain: string, domainList: string) => {
-	const search = searchDomain.toLowerCase();
-	const domains = domainList
-		.split(",")
-		.map((d) => d.trim().toLowerCase())
-		.filter(Boolean);
-	return domains.some((d) => search === d || search.endsWith(`.${d}`));
+	const search = searchDomain.trim().toLowerCase();
+	const domains = parseProviderDomains(domainList);
+	if (!search || !domains) {
+		return false;
+	}
+	return domains.some(
+		(domain) => search === domain || search.endsWith(`.${domain}`),
+	);
 };
 
 /**
@@ -103,8 +110,34 @@ export function normalizePem(key: string | undefined): string | undefined {
 		.trim()}\n`;
 }
 
-export function getHostnameFromDomain(domain: string): string | null {
+function getHostnameFromDomain(domain: string): string | null {
 	return getHostname(domain) || null;
+}
+
+/**
+ * Normalize a provider `domain` value to the email domains it authorizes.
+ *
+ * TODO(next): replace the serialized provider.domain string with a canonical
+ * domains array and reject URL/path-shaped values at register/update once main
+ * and next provider schemas are reconciled.
+ */
+export function parseProviderDomains(domain: string): string[] | null {
+	const entries = domain
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+	if (entries.length === 0) {
+		return null;
+	}
+	const domains = new Set<string>();
+	for (const entry of entries) {
+		const parsedDomain = getHostnameFromDomain(entry)?.toLowerCase();
+		if (!parsedDomain) {
+			return null;
+		}
+		domains.add(parsedDomain);
+	}
+	return [...domains];
 }
 
 export function maskClientId(clientId: string): string {

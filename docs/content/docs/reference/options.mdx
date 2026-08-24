@@ -42,7 +42,7 @@ If not explicitly set, the system will check for the environment variable `BETTE
 
 ### Dynamic Base URL
 
-Use the object form when your app can be reached through multiple domains, such as preview deployments, branch environments, or multiple production hosts. Better Auth derives the host from the incoming request, validates it against `allowedHosts`, and constructs the request-specific base URL from that match.
+Use the object form when your app can be reached through multiple domains, such as preview deployments, branch environments, or multiple production hosts. Better Auth derives the host from the `Host` header and then the request URL, validates it against `allowedHosts`, and constructs the request-specific base URL from that match. Forwarded host and protocol headers are ignored unless you explicitly set `advanced.trustedProxyHeaders: true`.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -61,8 +61,8 @@ export const auth = betterAuth({
 ```
 
 * `allowedHosts`: List of accepted host patterns. Supports exact matches (`myapp.com`), wildcards (`*.vercel.app`, `preview-*.myapp.com`), and port wildcards (`localhost:*`). Automatically added to [`trustedOrigins`](#trustedorigins) (localhost entries get both `http` and `https`)
-* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` derives from `x-forwarded-proto`, then request URL, then defaults to HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
-* `fallback`: URL to use when the incoming host does not match. Without it, unknown hosts throw. Its origin is also added to `trustedOrigins`
+* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` uses `x-forwarded-proto` only when `advanced.trustedProxyHeaders` is `true`, then the request URL, then HTTP for local loopback hosts, and otherwise HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
+* `fallback`: URL to use when no request host is available or the incoming host does not match. Without it, unresolved or unknown hosts throw. Its origin is also added to `trustedOrigins`
 
 <Callout type="warn">
   Use `fallback` carefully. It can hide deployment or proxy misconfiguration that would otherwise fail loudly.
@@ -156,7 +156,7 @@ export const auth = betterAuth({
   **Notes**
 
   * For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
-  * For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+  * For custom schemes (like `exp://` or `myapp://`), wildcard patterns match against the full URL including paths. A non-wildcard pattern matches by scheme and authority: a host-less entry such as `myapp://` or `exp://` trusts every host of that scheme, while a host-bearing entry such as `myapp://callback` must match that host exactly (so it is not satisfied by `myapp://callback.attacker.tld`).
   * The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
 </Callout>
 
@@ -347,11 +347,12 @@ export const auth = betterAuth({
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
 * `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+* `requireEmailVerification`: Require this provider's email to be verified before a session is created. Opt-in per provider and independent of `emailAndPassword.requireEmailVerification`. Only enable it for providers that report a trustworthy `email_verified` signal (optional)
 * `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)
 * `refreshAccessToken`: Custom function to refresh a token. Receives the stored refresh token and returns new OAuth tokens. (optional)
-* `verifyIdToken`: Custom function to verify the ID token (optional)
+* `verifyIdToken`: Custom function to verify the ID token. Receives `(token, nonce?, ctx?)` where `ctx` is the request endpoint context (optional). Replaces the provider's built-in verification when set.
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
 * `authorizationEndpoint`: Custom authorization endpoint URL (optional)
@@ -446,7 +447,8 @@ export const auth = betterAuth({
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
 			enabled: true, // Enable caching session in cookie (default: `false`)	
-			maxAge: 300 // 5 minutes
+			maxAge: 300, // 5 minutes
+			strategy: "jwt"
 		}
 	},
 })
@@ -515,6 +517,8 @@ Store provider account data after an OAuth flow in an encrypted cookie. This is 
 
 The account cookie has a five-minute max age and is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
 
+Pass `useAccountCookie: true` to `getAccessToken`, `refreshToken`, or `accountInfo` when the signed cookie should select the account. These APIs require an explicit `accountId` or `useAccountCookie: true`; omitting both selectors is invalid.
+
 Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Prefer database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 
 When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
@@ -533,9 +537,11 @@ const hook = createAuthMiddleware(async (ctx) => {
 Configuration for account linking.
 
 * `enabled`: Enable account linking (default: `true`)
+* `disableImplicitLinking`: Disable automatic account linking on OAuth sign-in. When `true`, a same-email OAuth sign-in for an existing user is rejected with `account_not_linked` instead of being implicitly linked (even for verified emails or `trustedProviders`). New users can still sign up via OAuth, and authenticated users can still link providers explicitly via `linkSocial()`. (default: `false`)
 * `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
 * `allowDifferentEmails`: Allow users to link accounts with different email addresses
 * `allowUnlinkingAll`: Allow users to unlink all accounts
+* `updateUserInfoOnLink`: When linking, copy the provider's profile (`name`, `image`, and any `mapProfileToUser` fields) onto the local user. The local `email` and `emailVerified` are never changed. (default: `false`)
 
 ## `verification`
 
@@ -602,7 +608,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
-			ipAddressHeaders: ["x-client-ip", "x-forwarded-for"],
+			ipAddressHeaders: ["x-client-ip", "x-real-ip"],
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
@@ -640,7 +646,7 @@ export const auth = betterAuth({
 				return "my-super-unique-id";
 			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
-			experimentalJoins: false,
+			joins: false,
 		},
 		backgroundTasks: {
 			handler: (promise) => { /* e.g. waitUntil(promise) */ }
@@ -651,6 +657,9 @@ export const auth = betterAuth({
 ```
 
 * `ipAddress`: IP address configuration for rate limiting and session tracking
+  * `disableIpTracking`: Disable IP address tracking.
+  * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
+  * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
@@ -665,10 +674,11 @@ export const auth = betterAuth({
 
 <h3 id="advanced-database"><code>database</code></h3>
 
-Set custom strategies for ID generation and findMany queries.
+Set custom strategies for ID generation, findMany queries, and database joins.
 
 * `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
 * `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+* `joins`: Enable database joins for adapters that support them. When disabled (default), related data is fetched via separate queries. See the [Database documentation](/docs/concepts/database#joins) for more info. (default: `false`)
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -678,6 +688,7 @@ export const auth = betterAuth({
 		database: {
 			generateId: "uuid",
 			defaultFindManyLimit: 50,
+			joins: true,
 		},
 	},
 });
@@ -687,7 +698,7 @@ export const auth = betterAuth({
 
 Configure background task handling for deferred operations. Background tasks allow non-critical operations (like cleanup, analytics, timing-attack mitigation, or rate limit counter updates) to run after the response is sent. This can significantly improve response times on serverless platforms.
 
-Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitUntil` on Cloudflare Workers. See the examples below for more details.
+Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `waitUntil` from `cloudflare:workers` on Cloudflare Workers. See the examples below for more details.
 
 <Callout type="warn">
   Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
@@ -712,19 +723,15 @@ Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitU
   <Tab value="Cloudflare Workers">
     ```ts
     import { betterAuth } from "better-auth";
-    import { AsyncLocalStorage } from "node:async_hooks";
-
-    const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
+    import { waitUntil } from "cloudflare:workers";
 
     export const auth = betterAuth({
       advanced: {
         backgroundTasks: {
-          handler: (p) => execCtxStorage.getStore()?.waitUntil(p),
+          handler: waitUntil,
         },
       },
     });
-
-    // In your request handler, wrap with execCtxStorage.run(ctx, ...)
     ```
   </Tab>
 </Tabs>

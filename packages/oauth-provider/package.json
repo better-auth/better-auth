@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/oauth-provider",
-  "version": "1.6.19",
+  "version": "1.7.1",
   "description": "An oauth provider plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -50,6 +50,11 @@
       "dev-source": "./src/client-resource.ts",
       "types": "./dist/client-resource.d.mts",
       "default": "./dist/client-resource.mjs"
+    },
+    "./internal": {
+      "dev-source": "./src/internal.ts",
+      "types": "./dist/internal.d.mts",
+      "default": "./dist/internal.mjs"
     }
   },
   "typesVersions": {
@@ -62,16 +67,19 @@
       ],
       "resource-client": [
         "./dist/client-resource.d.mts"
+      ],
+      "internal": [
+        "./dist/internal.d.mts"
       ]
     }
   },
   "dependencies": {
-    "jose": "^6.1.3",
+    "jose": "^6.2.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@better-auth/memory-adapter": "workspace:*",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { SafeUrlSchema } from "./redirect-uri";
+import {
+	isReverseDomainPrivateUseRedirectUri,
+	SafeUrlSchema,
+} from "./redirect-uri";
 import { isSafeUrlScheme, normalizePathname } from "./url";
 
 describe("isSafeUrlScheme", () => {
@@ -96,5 +99,23 @@ describe("SafeUrlSchema", () => {
 		expect(SafeUrlSchema.safeParse("https://example.com/cb").success).toBe(
 			true,
 		);
+	});
+});
+
+describe("isReverseDomainPrivateUseRedirectUri", () => {
+	it("accepts only the RFC 8252 single-slash private-use form", () => {
+		expect(
+			isReverseDomainPrivateUseRedirectUri(
+				new URL("com.example.app:/callback"),
+			),
+		).toBe(true);
+		expect(
+			isReverseDomainPrivateUseRedirectUri(new URL("com.example.app:callback")),
+		).toBe(false);
+		expect(
+			isReverseDomainPrivateUseRedirectUri(
+				new URL("com.example.app:///callback"),
+			),
+		).toBe(false);
 	});
 });
