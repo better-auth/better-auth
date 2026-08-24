@@ -43,7 +43,7 @@ If you're using another runtime, keep your existing entry point and add the same
 <Callout type="info">
   The resulting Hono route must match your Better Auth `basePath`, which
   defaults to `/api/auth`. If your app already uses `new
-            Hono().basePath("/api")`, mount Better Auth at `/auth/*`:
+      Hono().basePath("/api")`, mount Better Auth at `/auth/*`:
 
   ```ts
   const app = new Hono().basePath("/api");
