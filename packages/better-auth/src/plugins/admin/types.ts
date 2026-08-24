@@ -95,14 +95,18 @@ export interface AdminOptions {
 				 *
 				 * @param user - The user record about to be deleted.
 				 */
-				beforeRemoveUser?: (user: User) => Promise<void> | void;
+				beforeRemoveUser?: (
+					user: User & Record<string, unknown>,
+				) => Promise<void> | void;
 				/**
 				 * Called after a user has been successfully deleted via the admin
 				 * `removeUser` endpoint.
 				 *
 				 * @param user - The user record that was deleted.
 				 */
-				afterRemoveUser?: (user: User) => Promise<void> | void;
+				afterRemoveUser?: (
+					user: User & Record<string, unknown>,
+				) => Promise<void> | void;
 		  }
 		| undefined;
 }
