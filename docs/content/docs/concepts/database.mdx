@@ -217,7 +217,7 @@ export const auth = betterAuth({
           .multi()
           .incr(key)
           .expire(key, ttl, "NX")
-          .exec();
+          .execTyped();
 
         return value;
       },
