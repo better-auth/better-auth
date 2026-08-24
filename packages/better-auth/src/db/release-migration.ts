@@ -583,11 +583,6 @@ export interface AccountIdentityMigrationAssessment {
 		  }
 		| undefined;
 	migrationRequired: boolean;
-	totalAccounts: number;
-	externalAccounts: number;
-	automaticIssuerResolution?: { resolved: number; total: number } | undefined;
-	projectedCollisions: number;
-	manualReviewProviders: string[];
 }
 
 /** Inspects the configured account-identity path without changing the database. */
@@ -606,10 +601,6 @@ export async function inspectAccountIdentityMigration(
 		detectedStrategy: "empty",
 		physicalSchema,
 		migrationRequired: false,
-		totalAccounts: 0,
-		externalAccounts: 0,
-		projectedCollisions: 0,
-		manualReviewProviders: [],
 	});
 	if (!accountSchema) return createEmptyAssessment();
 	const physicalSchema = {
@@ -656,42 +647,6 @@ export async function inspectAccountIdentityMigration(
 			: accountsWithIssuer === accounts.length
 				? "issuer"
 				: "mixed";
-	const configuredIssuers = await resolveConfiguredIssuerState(config);
-	const isExternal = (providerId: string) =>
-		(configuredIssuers.providerKinds[providerId] ??
-			(providerId === "credential" || providerId === "siwe"
-				? "local"
-				: "external")) === "external";
-	const externalAccounts = accounts.filter((account) =>
-		isExternal(account.providerId),
-	);
-	const manualReviewProviders =
-		selectedStrategy === "issuer"
-			? [
-					...new Set(
-						externalAccounts
-							.filter(
-								(account) =>
-									!readStoredIssuer(account.issuer) &&
-									!configuredIssuers.issuers[account.providerId],
-							)
-							.map((account) => account.providerId),
-					),
-				].sort()
-			: [];
-	const projectedIdentities = new Set<string>();
-	let projectedCollisions = 0;
-	for (const account of accounts) {
-		const namespace =
-			selectedStrategy === "provider-id"
-				? account.providerId
-				: readStoredIssuer(account.issuer) ||
-					configuredIssuers.issuers[account.providerId];
-		if (!namespace) continue;
-		const identity = JSON.stringify([namespace, account.providerAccountId]);
-		if (projectedIdentities.has(identity)) projectedCollisions += 1;
-		else projectedIdentities.add(identity);
-	}
 	return {
 		selectedStrategy,
 		detectedStrategy,
@@ -700,22 +655,6 @@ export async function inspectAccountIdentityMigration(
 			selectedStrategy === "issuer"
 				? detectedStrategy !== "issuer"
 				: detectedStrategy === "issuer" || detectedStrategy === "mixed",
-		totalAccounts: accounts.length,
-		externalAccounts: externalAccounts.length,
-		...(selectedStrategy === "issuer"
-			? {
-					automaticIssuerResolution: {
-						resolved: externalAccounts.filter(
-							(account) =>
-								Boolean(readStoredIssuer(account.issuer)) ||
-								Boolean(configuredIssuers.issuers[account.providerId]),
-						).length,
-						total: externalAccounts.length,
-					},
-				}
-			: {}),
-		projectedCollisions,
-		manualReviewProviders,
 	};
 }
 
