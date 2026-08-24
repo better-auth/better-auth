@@ -27,7 +27,7 @@ import type {
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
-import { withApplyDefault } from "./utils";
+import { parseDateValue, withApplyDefault } from "./utils";
 
 export * from "./types";
 export {
@@ -364,10 +364,17 @@ export const createAdapterFactory =
 							newValue = safeJSONParse(newValue);
 						} else if (
 							config.supportsDates === false &&
-							typeof newValue === "string" &&
+							(typeof newValue === "string" || typeof newValue === "number") &&
 							field.type === "date"
 						) {
-							newValue = new Date(newValue);
+							// `supportsDates: false` means the adapter/driver doesn't
+							// guarantee a `Date` instance back for a `date` field — it may
+							// return an ISO string, epoch milliseconds as a number, or a
+							// numeric-millisecond string. `parseDateValue` handles all
+							// three; a bare `new Date(...)` mis-parses the numeric-string
+							// case into `Invalid Date`.
+							// @see https://github.com/better-auth/better-auth/issues/9963
+							newValue = parseDateValue(newValue);
 						} else if (
 							config.supportsBooleans === false &&
 							typeof newValue === "number" &&
