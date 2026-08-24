@@ -252,9 +252,10 @@ export const genericOAuth = <const ID extends string>(
 							};
 						}
 					} else if (!c.accountIssuer) {
-						throw new Error(
-							`Provider "${c.providerId}": discovery returned no valid data. Provider initialization stopped to keep its account issuer stable.`,
+						ctx.logger.error(
+							`Provider "${c.providerId}": discovery returned no valid data. Provider skipped to keep its account issuer stable.`,
 						);
+						continue;
 					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
 							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,

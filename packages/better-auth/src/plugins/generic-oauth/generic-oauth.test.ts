@@ -2983,7 +2983,7 @@ describe("oauth2", async () => {
 			expect(msConfig.disableImplicitSignUp).toBe(true);
 		});
 
-		it("fails initialization when Microsoft discovery is unavailable", async () => {
+		it("skips the Microsoft provider when discovery is unavailable", async () => {
 			mswServer.use(
 				http.get(
 					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
@@ -3007,8 +3007,9 @@ describe("oauth2", async () => {
 				{ disableTestUser: true },
 			);
 
-			await expect(auth.$context).rejects.toThrow(
-				"discovery returned no valid data",
+			const ctx = await auth.$context;
+			expect(ctx.socialProviders.map((provider) => provider.id)).not.toContain(
+				"microsoft-entra-id",
 			);
 		});
 
@@ -5174,6 +5175,56 @@ describe("oauth2", async () => {
 				);
 			}
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 */
+	it("does not take down the auth API when one provider's discovery is unreachable", async () => {
+		mswServer.use(
+			http.get(
+				"https://broken-idp.test/.well-known/openid-configuration",
+				() => new HttpResponse(null, { status: 503 }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "broken-idp",
+								clientId: "client",
+								clientSecret: "secret",
+								discoveryUrl:
+									"https://broken-idp.test/.well-known/openid-configuration",
+							},
+							{
+								providerId: "healthy-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const ctx = await auth.$context;
+		const providerIds = ctx.socialProviders.map((provider) => provider.id);
+		expect(providerIds).toContain("healthy-idp");
+		expect(providerIds).not.toContain("broken-idp");
+
+		const signUp = await auth.api.signUpEmail({
+			body: {
+				email: "isolated@example.test",
+				password: "correct-horse-battery-staple",
+				name: "Repro",
+			},
+		});
+		expect(signUp.token).toBeDefined();
 	});
 });
 
