@@ -262,14 +262,6 @@ After that, we can create a secondary storage implementation:
 import type { SecondaryStorage } from "better-auth";
 import { redis } from "~/lib/redis";
 
-const incrementScript = `
-local value = redis.call("INCR", KEYS[1])
-if value == 1 then
-  redis.call("EXPIRE", KEYS[1], ARGV[1])
-end
-return value
-`;
-
 export const redisSecondaryStorage: SecondaryStorage = {
   async get(key) {
     return await redis.get(key);
@@ -280,7 +272,17 @@ export const redisSecondaryStorage: SecondaryStorage = {
   },
 
   async increment(key: string, ttl: number) {
-    return redis.eval(incrementScript, [key], [ttl]);
+    if (!Number.isInteger(ttl) || ttl <= 0) {
+      throw new TypeError("Redis increment ttl must be a positive integer");
+    }
+
+    const [value] = await redis
+      .multi()
+      .incr(key)
+      .expire(key, ttl, "NX")
+      .exec();
+
+    return value;
   },
 
   async set(key, value, ttl) {
