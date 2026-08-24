@@ -31,6 +31,14 @@ const getOrCreateEndpointContextStorage = async () => {
 };
 
 /**
+ * @deprecated Use `getCurrentAuthEndpointContext`,
+ * `tryGetCurrentAuthEndpointContext`, or `runWithEndpointContext` instead.
+ */
+export async function getCurrentAuthContextAsyncLocalStorage() {
+	return getOrCreateEndpointContextStorage();
+}
+
+/**
  * Returns the current auth endpoint context, or `undefined` when called outside
  * of `runWithEndpointContext`.
  */

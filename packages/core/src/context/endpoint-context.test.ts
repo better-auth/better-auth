@@ -69,4 +69,16 @@ describe("getCurrentAuthEndpointContext", () => {
 		);
 		expect(globalContext.endpointContextAsyncStorage).toBeUndefined();
 	});
+
+	it("keeps the deprecated async storage accessor compatible", async () => {
+		vi.resetModules();
+		removeEndpointContextStorage();
+		const mod = await import("./endpoint-context");
+		const storage = await mod.getCurrentAuthContextAsyncLocalStorage();
+		const context = {} as AuthEndpointContext;
+
+		await mod.runWithEndpointContext(context, () => {
+			expect(storage.getStore()).toBe(context);
+		});
+	});
 });

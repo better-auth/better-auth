@@ -1,6 +1,7 @@
 export {
 	type AuthEndpointContext,
 	getCurrentAuthContext,
+	getCurrentAuthContextAsyncLocalStorage,
 	getCurrentAuthEndpointContext,
 	runWithEndpointContext,
 	tryGetCurrentAuthEndpointContext,
