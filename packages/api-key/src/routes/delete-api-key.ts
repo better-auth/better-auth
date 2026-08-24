@@ -163,7 +163,9 @@ export function deleteApiKey({
 					message: error?.message,
 				});
 			}
-			deleteAllExpiredApiKeys(ctx.context);
+			if (opts.keyExpiration.autoCleanup) {
+				deleteAllExpiredApiKeys(ctx.context);
+			}
 			return ctx.json({
 				success: true,
 			});
