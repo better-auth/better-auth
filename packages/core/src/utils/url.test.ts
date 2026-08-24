@@ -151,6 +151,12 @@ describe("isHostBearingPrivateUseRedirectUri", () => {
 			isHostBearingPrivateUseRedirectUri(new URL("file://host/callback")),
 		).toBe(false);
 		expect(
+			isHostBearingPrivateUseRedirectUri(new URL("ws://host/callback")),
+		).toBe(false);
+		expect(
+			isHostBearingPrivateUseRedirectUri(new URL("wss://host/callback")),
+		).toBe(false);
+		expect(
 			isHostBearingPrivateUseRedirectUri(new URL("com.example.app:/callback")),
 		).toBe(false);
 		expect(isHostBearingPrivateUseRedirectUri(new URL("myapp:/callback"))).toBe(

@@ -1723,6 +1723,8 @@ describe("oauth register - application_type", async () => {
 		"file:///callback",
 		"ftp://example.com/callback",
 		"mailto:oauth@example.com",
+		"ws://host/callback",
+		"wss://host/callback",
 		"myapp:/callback",
 		"com.example.app:callback",
 		"com.example.app:///callback",

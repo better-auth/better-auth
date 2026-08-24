@@ -8,6 +8,8 @@ const REVERSE_DOMAIN_PRIVATE_USE_SCHEME =
 const NON_PRIVATE_USE_SCHEMES = new Set([
 	"http:",
 	"https:",
+	"ws:",
+	"wss:",
 	"file:",
 	"ftp:",
 	"mailto:",

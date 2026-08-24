@@ -104,6 +104,8 @@ const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
 	"javascript:",
 	"data:",
 	"vbscript:",
+	"ws:",
+	"wss:",
 ]);
 
 function invalidRedirectUri(description: string): never {
