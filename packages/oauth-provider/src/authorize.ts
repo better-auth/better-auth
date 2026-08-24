@@ -264,8 +264,12 @@ function findRegisteredRedirectUri(
 		if (!req) return false;
 		try {
 			const reg = new URL(url);
+			// RFC 8252 requires variable ports for loopback IP literals. Exact
+			// `localhost` is a narrow compatibility extension for native clients.
+			const allowsVariablePort =
+				isLoopbackIP(reg.hostname) || reg.hostname === "localhost";
 			return (
-				isLoopbackIP(reg.hostname) &&
+				allowsVariablePort &&
 				reg.hostname === req.hostname &&
 				reg.pathname === req.pathname &&
 				reg.protocol === req.protocol &&
