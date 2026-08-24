@@ -38,6 +38,19 @@ export const auth = betterAuth({
 })
 ```
 
+To count only failed responses, set `includeSuccessfulRequests` to `false`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    rateLimit: {
+        enabled: true,
+        includeSuccessfulRequests: false, // only status >= 400 increments counters
+    },
+})
+```
+
 In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
 
 * `/sign-in/email`: Is limited to 3 requests within 10 seconds.

@@ -216,7 +216,7 @@ async function fetchAllUserAuditLogEvents(session: unknown) {
       limit,
       offset,
     });
-    
+
     const events = result.data?.events ?? [];
     allEvents.push(...events);
 
