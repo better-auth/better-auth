@@ -63,6 +63,57 @@ const parseCustomSchemeOrigin = (value: string) => {
 	return { scheme, authority: authority.toLowerCase(), path };
 };
 
+const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
+const ENCODED_PATH_SEPARATORS = ["%2f", "%2F", "%5c", "%5C"] as const;
+
+function hasControlCharacter(value: string): boolean {
+	for (let index = 0; index < value.length; index++) {
+		const characterCode = value.charCodeAt(index);
+		if (
+			characterCode <= 0x1f ||
+			(characterCode >= 0x7f && characterCode <= 0x9f)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function hasEncodedPathSeparator(path: string): boolean {
+	for (const separator of ENCODED_PATH_SEPARATORS) {
+		if (path.includes(separator)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+const isSafeRelativeURL = (value: string): boolean => {
+	if (
+		!value.startsWith("/") ||
+		value.startsWith("//") ||
+		value.includes("\\") ||
+		hasControlCharacter(value)
+	) {
+		return false;
+	}
+
+	const pathEnd = value.search(/[?#]/);
+	const path = pathEnd === -1 ? value : value.slice(0, pathEnd);
+	if (hasEncodedPathSeparator(path)) {
+		return false;
+	}
+
+	try {
+		return (
+			new URL(value, RELATIVE_URL_PARSER_ORIGIN).origin ===
+			RELATIVE_URL_PARSER_ORIGIN
+		);
+	} catch {
+		return false;
+	}
+};
+
 /**
  * Matches the given url against an origin or origin pattern
  * See "options.trustedOrigins" for details of supported patterns
@@ -78,16 +129,7 @@ export const matchesOriginPattern = (
 	settings?: { allowRelativePaths: boolean },
 ): boolean => {
 	if (url.startsWith("/")) {
-		if (settings?.allowRelativePaths) {
-			return (
-				url.startsWith("/") &&
-				/^\/(?!\/|\\|%2[fF]|%5[cC])[\w\-.\+/@~]*(?:\?[\w\-.\+/=&%@~]*)?$/.test(
-					url,
-				)
-			);
-		}
-
-		return false;
+		return settings?.allowRelativePaths === true && isSafeRelativeURL(url);
 	}
 
 	// Check if pattern contains wildcard characters (*, **, or ?)

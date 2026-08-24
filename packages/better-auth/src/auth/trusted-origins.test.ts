@@ -47,7 +47,10 @@ async function createAuthTestInstance(overrides?: Partial<BetterAuthOptions>) {
 		settings?: { allowRelativePaths: boolean },
 	) => {
 		const result = await client.testTrustedOrigin({
-			query: { url, ...settings },
+			query: {
+				url,
+				allowRelativePaths: settings?.allowRelativePaths.toString(),
+			},
 		});
 
 		if (result.error) {
@@ -225,12 +228,31 @@ describe("trusted origins", () => {
 			).resolves.toBe(true);
 		});
 
-		it("should reject urls with double dash", async () => {
+		it("should allow standards-compliant relative URLs", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
+			const relativeURLs = [
+				"/docs/!$&'()*+,;=:@~",
+				"/café#profile",
+				"/search?next=/settings?tab=security",
+				"/callback?next=%2Fdashboard",
+			];
 
-			await expect(
-				isTrustedOrigin("//evil.com", { allowRelativePaths: true }),
-			).resolves.toBe(false);
+			for (const url of relativeURLs) {
+				await expect(
+					isTrustedOrigin(url, { allowRelativePaths: true }),
+				).resolves.toBe(true);
+			}
+		});
+
+		it("should reject URLs with ambiguous path prefixes", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance();
+			const ambiguousURLs = ["//evil.com", "///evil.com", `/\\evil.com`];
+
+			for (const url of ambiguousURLs) {
+				await expect(
+					isTrustedOrigin(url, { allowRelativePaths: true }),
+				).resolves.toBe(false);
+			}
 		});
 
 		it("should reject urls with encoded malicious content", async () => {
@@ -241,8 +263,15 @@ describe("trusted origins", () => {
 				"/%2F/evil.com",
 				"/%5c/evil.com",
 				"/%5C/evil.com",
+				"/safe/%2f/evil.com",
+				"/safe/%2F/evil.com",
+				"/safe/%5c/evil.com",
+				"/safe/%5C/evil.com",
 				`/\\/\\/evil.com`,
 				"/..%2F..%2Fevil.com",
+				`/\u0000evil.com`,
+				`/\u007fevil.com`,
+				`/\u0085evil.com`,
 				"javascript:alert('xss')",
 				"data:text/html,<script>alert('xss')</script>",
 			];
