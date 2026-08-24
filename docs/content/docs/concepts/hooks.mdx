@@ -134,35 +134,6 @@ When you call `createAuthMiddleware` a `ctx` object is passed that provides a lo
 
 and more.
 
-### Accessing the Current Endpoint Context
-
-Prefer the `ctx` argument provided to hooks and endpoint handlers. When a helper
-called during an auth request cannot receive `ctx` directly, use
-`getCurrentAuthEndpointContext`:
-
-```ts
-import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
-
-export function getRequestPath() {
-    return getCurrentAuthEndpointContext().path;
-}
-```
-
-The function throws when it is called outside `runWithEndpointContext`. Use
-`tryGetCurrentAuthEndpointContext` when the helper can also run outside an auth
-request:
-
-```ts
-import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
-
-export function getRequestPath() {
-    return tryGetCurrentAuthEndpointContext()?.path;
-}
-```
-
-`getCurrentAuthContext` is deprecated. Replace
-`await getCurrentAuthContext()` with `getCurrentAuthEndpointContext()`.
-
 ### Request Response
 
 This utilities allows you to get request information and to send response from a hook.
