@@ -155,25 +155,22 @@ betterAuth({
 
 ### Redis Storage
 
-Better Auth provides an official Redis storage package that uses [ioredis](https://github.com/redis/ioredis):
+For most applications, we recommend using the official Redis storage package.
+It uses [ioredis](https://github.com/redis/ioredis) and supports standalone,
+cluster, and sentinel connections.
 
-```bash
-npm install @better-auth/redis-storage ioredis
-# or
-pnpm add @better-auth/redis-storage ioredis
+#### Official Redis Storage
+
+```package-install
+@better-auth/redis-storage ioredis
 ```
 
-**Usage:**
-
-```typescript
+```typescript title="auth.ts"
 import { betterAuth } from "better-auth";
 import { Redis } from "ioredis";
 import { redisStorage } from "@better-auth/redis-storage";
 
-const redis = new Redis({
-	host: "localhost",
-	port: 6379,
-});
+const redis = new Redis(process.env.REDIS_URL!);
 
 export const auth = betterAuth({
 	// ... other options
@@ -184,130 +181,127 @@ export const auth = betterAuth({
 });
 ```
 
-The Redis storage supports all ioredis connection modes including standalone, cluster, and sentinel configurations.
+#### Custom Implementations
 
-**Manual Implementation:**
+<Tabs items={["node-redis", "Upstash Redis"]}>
+  <Tab value="node-redis">
+    If you're using Redis 7 or later, you can implement secondary storage with
+    [node-redis](https://github.com/redis/node-redis):
 
-If you're using Redis 7 or later, you can use the following implementation:
+    ```package-install
+    redis
+    ```
 
-```typescript title="auth.ts"
-import { createClient } from "redis";
-import { betterAuth } from "better-auth";
+    ```typescript title="auth.ts"
+    import { betterAuth, type SecondaryStorage } from "better-auth";
+    import { createClient } from "redis";
 
-const redis = createClient();
-await redis.connect();
+    const redis = createClient();
+    await redis.connect();
 
-export const auth = betterAuth({
-	// ... other options
-	secondaryStorage: {
-		get: async (key) => {
-			return await redis.get(key);
-		},
-		getAndDelete: async (key) => {
-			return await redis.getDel(key);
-		},
-		increment: async (key, ttl) => {
-			if (!Number.isInteger(ttl) || ttl <= 0) {
-				throw new TypeError("Redis increment TTL must be a positive integer");
-			}
+    const redisSecondaryStorage: SecondaryStorage = {
+      get(key) {
+        return redis.get(key);
+      },
 
-			const [value] = await redis
-				.multi()
-				.incr(key)
-				.expire(key, ttl, "NX")
-				.exec();
+      getAndDelete(key) {
+        return redis.getDel(key);
+      },
 
-			return value;
-		},
-		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, value, { EX: ttl });
-			else await redis.set(key, value);
-		},
-		delete: async (key) => {
-			await redis.del(key);
-		}
-	}
-});
-```
+      async increment(key, ttl) {
+        if (!Number.isInteger(ttl) || ttl <= 0) {
+          throw new TypeError("Redis increment TTL must be a positive integer");
+        }
 
-This implementation allows Better Auth to use Redis for storing session data and rate limiting counters. You can also add prefixes to the keys names.
+        const [value] = await redis
+          .multi()
+          .incr(key)
+          .expire(key, ttl, "NX")
+          .exec();
 
-**Example: Upstash Redis Implementation**
+        return value;
+      },
 
-Here's an example using Upstash Redis. First, install the Upstash Redis client:
+      async set(key, value, ttl) {
+        if (ttl) await redis.set(key, value, { EX: ttl });
+        else await redis.set(key, value);
+      },
 
-```bash
-npm install @upstash/redis
-```
+      async delete(key) {
+        await redis.del(key);
+      },
+    };
 
-Then, create a new Redis client:
+    export const auth = betterAuth({
+      // ... other options
+      secondaryStorage: redisSecondaryStorage,
+    });
+    ```
+  </Tab>
 
-```typescript
-// src/lib/redis/index.ts
+  <Tab value="Upstash Redis">
+    Install the Upstash Redis client:
 
-import { Redis } from "@upstash/redis";
+    ```package-install
+    @upstash/redis
+    ```
 
-export const redis = Redis.fromEnv();
-```
+    Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in your environment.
+    See the [Upstash Redis TypeScript SDK guide](https://upstash.com/docs/redis/sdks/ts/getstarted)
+    for additional configuration options.
 
-Don't forget to set the `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` environment variables. Also, [see the Upstash documentation](https://upstash.com/docs/redis/howto/connectwithupstashredis) for more information on how to use Upstash Redis with Node.js.
+    ```typescript title="auth.ts"
+    import { Redis } from "@upstash/redis";
+    import { betterAuth, type SecondaryStorage } from "better-auth";
 
-After that, we can create a secondary storage implementation:
+    const redis = Redis.fromEnv();
 
-```typescript
-// src/lib/auth/adapters/redis-secondary-storage.ts
+    const redisSecondaryStorage: SecondaryStorage = {
+      get(key) {
+        return redis.get(key);
+      },
 
-import type { SecondaryStorage } from "better-auth";
-import { redis } from "~/lib/redis";
+      getAndDelete(key) {
+        return redis.getdel(key);
+      },
 
-export const redisSecondaryStorage: SecondaryStorage = {
-  async get(key) {
-    return await redis.get(key);
-  },
+      async increment(key, ttl) {
+        if (!Number.isInteger(ttl) || ttl <= 0) {
+          throw new TypeError("Redis increment TTL must be a positive integer");
+        }
 
-  async getAndDelete(key) {
-    return await redis.getdel(key);
-  },
+        const [value] = await redis
+          .multi()
+          .incr(key)
+          .expire(key, ttl, "NX")
+          .exec();
 
-  async increment(key: string, ttl: number) {
-    if (!Number.isInteger(ttl) || ttl <= 0) {
-      throw new TypeError("Redis increment TTL must be a positive integer");
-    }
+        return value;
+      },
 
-    const [value] = await redis
-      .multi()
-      .incr(key)
-      .expire(key, ttl, "NX")
-      .exec();
+      async set(key, value, ttl) {
+        if (ttl) {
+          await redis.set(key, value, { ex: ttl });
+        } else {
+          await redis.set(key, value);
+        }
+      },
 
-    return value;
-  },
+      async delete(key) {
+        await redis.del(key);
+      },
+    };
 
-  async set(key, value, ttl) {
-    if (ttl) {
-      await redis.set(key, value, { ex: ttl });
-    } else {
-      await redis.set(key, value);
-    }
-  },
+    export const auth = betterAuth({
+      // ... other options
+      secondaryStorage: redisSecondaryStorage,
+    });
+    ```
+  </Tab>
+</Tabs>
 
-  async delete(key: string) {
-    await redis.del(key);
-  },
-};
-```
-
-Finally, we can pass the implementation to the `betterAuth` function.
-
-```typescript
-import { betterAuth } from "better-auth";
-import { redisSecondaryStorage } from "~/lib/auth/adapters/redis-secondary-storage";
-
-export const auth = betterAuth({
-  // ... other options
-  secondaryStorage: redisSecondaryStorage,
-});
-```
+When implementing secondary storage directly, prefix its keys to avoid
+collisions with other applications sharing the same Redis database.
 
 ## Core Schema
 
