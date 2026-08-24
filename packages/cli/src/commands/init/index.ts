@@ -1169,6 +1169,7 @@ export const auth = betterAuth({
 					adapter,
 					options: config,
 					file: outputPath,
+					cwd,
 				});
 			} else if (isPrisma) {
 				// For Prisma, output to prisma/schema.prisma

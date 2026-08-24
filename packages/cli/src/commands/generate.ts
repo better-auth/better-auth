@@ -197,6 +197,7 @@ async function generateAction(opts: any) {
 		adapter,
 		file: resolvedOutputPath ?? options.output,
 		options: config,
+		cwd,
 	});
 
 	spinner.stop();

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import * as semver from "semver";
 import { tryCatch } from "./helper";
 
 export function getPackageInfo(cwd?: string) {
@@ -27,6 +28,31 @@ export function getPrismaVersion(cwd?: string): number | null {
 		// Handles versions like "^5.0.0", "~7.1.0", "7.0.0", etc.
 		const match = prismaVersion.match(/(\d+)/);
 		return match ? parseInt(match[1], 10) : null;
+	} catch {
+		// If package.json doesn't exist or can't be read, return null
+		return null;
+	}
+}
+
+/**
+ * Reads the declared `drizzle-orm` dependency range from package.json and
+ * returns its major version, so callers can tell drizzle-orm 1.0 (which
+ * removed the `relations()` API in favor of `defineRelations`/
+ * `defineRelationsPart`) apart from the 0.x releases.
+ */
+export function getDrizzleVersion(cwd?: string): number | null {
+	try {
+		const packageInfo = getPackageInfo(cwd);
+		const drizzleVersionRange =
+			packageInfo.dependencies?.["drizzle-orm"] ||
+			packageInfo.devDependencies?.["drizzle-orm"];
+
+		if (!drizzleVersionRange) {
+			return null;
+		}
+
+		const version = semver.minVersion(drizzleVersionRange);
+		return version ? version.major : null;
 	} catch {
 		// If package.json doesn't exist or can't be read, return null
 		return null;

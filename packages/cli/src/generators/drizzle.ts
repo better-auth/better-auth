@@ -10,6 +10,7 @@ import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import prettier from "prettier";
+import { getDrizzleVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
@@ -37,6 +38,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
 	adapter,
+	cwd,
 }) => {
 	const tables = getAuthTables(options);
 	const filePath = file || "./auth-schema.ts";
@@ -52,11 +54,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 	const fileExist = existsSync(filePath);
 
+	// Drizzle 1.0 removed the `relations()` API in favor of `defineRelations`/
+	// `defineRelationsPart`. Detect the installed major version so the emitted
+	// code compiles against whichever drizzle-orm the project has installed.
+	// See https://github.com/better-auth/better-auth/issues/10924
+	const drizzleMajorVersion = cwd ? getDrizzleVersion(cwd) : null;
+	const useRelationsV2 =
+		drizzleMajorVersion !== null && drizzleMajorVersion >= 1;
+
 	let code: string = generateImport({
 		databaseType,
 		tables,
 		options,
 		schemaName,
+		useRelationsV2,
 	});
 
 	// Add schema declaration for PostgreSQL when schemaName is provided
@@ -392,6 +403,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 
 	let relationsString: string = "";
+	const relationsV2ByModel = new Map<string, string[]>();
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
 		if (isMigrationDisabled(tableKey)) {
@@ -518,6 +530,18 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					relationKey = `${relationKey}By${fieldName.charAt(0).toUpperCase()}${fieldName.slice(1)}`;
 				}
 
+				// Only needed for the v2 (`defineRelationsPart`) form: unlike the old
+				// `relations()` API, drizzle 1.0 requires every side of a relation to
+				// declare its own `from`/`to`, so the reverse side needs a reference too.
+				const fromField = `${getModelName(tableKey)}.${getFieldName({
+					model: tableKey,
+					field: field.references!.field || "id",
+				})}`;
+				const toField = `${getModelName(modelName)}.${getFieldName({
+					model: modelName,
+					field: fieldName,
+				})}`;
+
 				manyRelations.push({
 					key: relationKey,
 					model: getModelName(modelName),
@@ -525,56 +549,90 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					relationName: hasMultipleRelations
 						? `${getModelName(modelName)}_${fieldName}`
 						: undefined,
+					reference: { field: fromField, references: toField },
 				});
 			}
 		}
 
-		const hasForwardOne = oneRelations.length > 0;
-		const hasReverseOne = manyRelations.some(
-			(relation) => relation.type === "one",
-		);
-		const hasReverseMany = manyRelations.some(
-			(relation) => relation.type === "many",
-		);
-		const hasOne = hasForwardOne || hasReverseOne;
-		const hasMany = hasReverseMany;
+		if (useRelationsV2) {
+			// Drizzle 1.0's `defineRelations`/`defineRelationsPart` require every
+			// side of a relation to declare its own `from`/`to`, so both the
+			// forward ("one") and reverse ("one"/"many") relations render the
+			// same way here (disambiguation comes purely from the entry `key`,
+			// there's no `relationName`/alias equivalent to emit).
+			const renderV2Relation = (relation: Relation) =>
+				relation.reference
+					? `  ${relation.key}: r.${relation.type}.${relation.model}({\n    from: r.${relation.reference.field},\n    to: r.${relation.reference.references},\n  })`
+					: null;
 
-		const renderOneRelation = (relation: Relation) =>
-			relation.reference
-				? ` ${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
-					${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
-				})`
-				: "";
-
-		const renderReverseRelation = ({
-			key,
-			model,
-			type,
-			relationName,
-		}: Relation) => {
-			const relationFn = type === "one" ? "one" : "many";
-			return ` ${key}: ${relationFn}(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`;
-		};
-
-		if (hasOne || hasMany) {
-			const helpers = [hasOne ? "one" : null, hasMany ? "many" : null]
-				.filter(Boolean)
-				.join(", ");
 			const relationEntries = [
-				...oneRelations.map(renderOneRelation).filter((x) => x !== ""),
-				...manyRelations.map(renderReverseRelation),
-			].join(",\n ");
+				...oneRelations.map(renderV2Relation),
+				...manyRelations.map(renderV2Relation),
+			].filter((entry): entry is string => entry !== null);
 
-			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
-				table.modelName,
-			)}, ({ ${helpers} }) => ({
-				${relationEntries}
-			}))`;
+			if (relationEntries.length > 0) {
+				relationsV2ByModel.set(modelName, relationEntries);
+			}
+		} else {
+			const hasForwardOne = oneRelations.length > 0;
+			const hasReverseOne = manyRelations.some(
+				(relation) => relation.type === "one",
+			);
+			const hasReverseMany = manyRelations.some(
+				(relation) => relation.type === "many",
+			);
+			const hasOne = hasForwardOne || hasReverseOne;
+			const hasMany = hasReverseMany;
 
-			relationsString += `\n${tableRelation}\n`;
+			const renderOneRelation = (relation: Relation) =>
+				relation.reference
+					? ` ${relation.key}: one(${relation.model}, {
+						fields: [${relation.reference.field}],
+						references: [${relation.reference.references}],
+						${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
+					})`
+					: "";
+
+			const renderReverseRelation = ({
+				key,
+				model,
+				type,
+				relationName,
+			}: Relation) => {
+				const relationFn = type === "one" ? "one" : "many";
+				return ` ${key}: ${relationFn}(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`;
+			};
+
+			if (hasOne || hasMany) {
+				const helpers = [hasOne ? "one" : null, hasMany ? "many" : null]
+					.filter(Boolean)
+					.join(", ");
+				const relationEntries = [
+					...oneRelations.map(renderOneRelation).filter((x) => x !== ""),
+					...manyRelations.map(renderReverseRelation),
+				].join(",\n ");
+
+				const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
+					table.modelName,
+				)}, ({ ${helpers} }) => ({
+					${relationEntries}
+				}))`;
+
+				relationsString += `\n${tableRelation}\n`;
+			}
 		}
+	}
+
+	if (useRelationsV2 && relationsV2ByModel.size > 0) {
+		const schemaObjectKeys = Object.keys(tables)
+			.filter((tableKey) => !isMigrationDisabled(tableKey))
+			.map((tableKey) => getModelName(tableKey));
+		const schemaObject = `{ ${schemaObjectKeys.join(", ")} }`;
+		const relationsEntries = [...relationsV2ByModel.entries()].map(
+			([relationsModelName, entries]) =>
+				`  ${relationsModelName}: {\n${entries.join(",\n")}\n  }`,
+		);
+		relationsString = `\nexport const authRelations = defineRelationsPart(${schemaObject}, (r) => ({\n${relationsEntries.join(",\n")}\n}));\n`;
 	}
 	code += `\n${relationsString}`;
 
@@ -593,13 +651,17 @@ function generateImport({
 	tables,
 	options,
 	schemaName,
+	useRelationsV2,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 	schemaName?: string;
+	useRelationsV2: boolean;
 }) {
-	const rootImports: string[] = ["relations"];
+	const rootImports: string[] = [
+		useRelationsV2 ? "defineRelationsPart" : "relations",
+	];
 	const coreImports: string[] = [];
 
 	let hasBigint = false;

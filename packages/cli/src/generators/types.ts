@@ -18,5 +18,6 @@ export interface SchemaGenerator {
 		file?: string;
 		adapter: DBAdapter;
 		options: Options;
+		cwd?: string;
 	}): Promise<SchemaGeneratorResult>;
 }
