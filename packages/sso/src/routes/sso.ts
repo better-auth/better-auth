@@ -1624,6 +1624,14 @@ async function handleOIDCCallback(
 		const fallbackEmail = verifiedIdToken
 			? readStringClaim(verifiedIdToken.payload, mapping.email || "email")
 			: undefined;
+		const fallbackEmailVerified = verifiedIdToken
+			? parseProviderEmailVerified(
+					verifiedIdToken.payload[mapping.emailVerified || "email_verified"],
+				)
+			: undefined;
+		const email = readStringClaim(rawUserInfo, mapping.email || "email");
+		// If we fallback to the ID token's email, we should use its verification status as well.
+		const useFallbackEmailVerified = !email && fallbackEmail;
 		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
@@ -1633,12 +1641,13 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: readStringClaim(rawUserInfo, "sub"),
-			email:
-				readStringClaim(rawUserInfo, mapping.email || "email") || fallbackEmail,
+			email: email || fallbackEmail,
 			emailVerified: options?.trustEmailVerified
-				? parseProviderEmailVerified(
-						rawUserInfo[mapping.emailVerified || "email_verified"],
-					)
+				? useFallbackEmailVerified
+					? fallbackEmailVerified
+					: parseProviderEmailVerified(
+							rawUserInfo[mapping.emailVerified || "email_verified"],
+						)
 				: false,
 			name: readStringClaim(rawUserInfo, mapping.name || "name"),
 			image: readStringClaim(rawUserInfo, mapping.image || "picture"),

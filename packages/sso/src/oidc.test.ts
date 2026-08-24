@@ -637,7 +637,7 @@ describe("SSO", async () => {
 
 		const idTokenEmail = "id-token-authoritative@test.com";
 
-		server.service.on("beforeUserinfo", (userInfoResponse: any) => {
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
 			// Note that no email is included here.
 			userInfoResponse.body = {
 				sub: "id-token-email-user",
@@ -647,7 +647,7 @@ describe("SSO", async () => {
 			};
 			userInfoResponse.statusCode = 200;
 		});
-		server.service.on("beforeTokenSigning", (token: any) => {
+		server.service.on("beforeTokenSigning", (token) => {
 			token.payload.sub = "id-token-email-user";
 			token.payload.email = idTokenEmail;
 			token.payload.email_verified = true;
@@ -680,10 +680,10 @@ describe("SSO", async () => {
 			server.service.removeAllListeners("beforeUserinfo");
 			server.service.removeAllListeners("beforeTokenSigning");
 			for (const listener of originalUserinfoListeners) {
-				server.service.on("beforeUserinfo", listener as any);
+				server.service.on("beforeUserinfo", listener);
 			}
 			for (const listener of originalTokenListeners) {
-				server.service.on("beforeTokenSigning", listener as any);
+				server.service.on("beforeTokenSigning", listener);
 			}
 		}
 	});
