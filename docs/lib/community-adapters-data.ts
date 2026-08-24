@@ -231,4 +231,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/9hsein5.png",
 		},
 	},
+	{
+		name: "better-auth-mongoose",
+		url: "https://github.com/AshwinSathian/better-auth-mongoose",
+		database: "Mongoose",
+		databaseUrl: "https://mongoosejs.com",
+		author: {
+			name: "Ashwin Sathian",
+			url: "https://github.com/AshwinSathian",
+			avatar: "https://github.com/AshwinSathian.png",
+		},
+	},
 ];
