@@ -144,7 +144,6 @@ it("plans a default provider-scoped upgrade against Drizzle snake_case columns",
 		expect(inspection.accountIdentity).toMatchObject({
 			selectedStrategy: "provider-id",
 			detectedStrategy: "provider-id",
-			totalAccounts: 1,
 		});
 		expect(inspection.migrationBlockers).not.toContainEqual(
 			expect.objectContaining({
