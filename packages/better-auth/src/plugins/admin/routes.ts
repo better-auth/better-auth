@@ -1147,11 +1147,13 @@ export const banUser = (opts: AdminOptions) =>
 					banned: true,
 					banReason:
 						ctx.body.banReason || opts?.defaultBanReason || "No reason",
+					// null (not undefined) so a permanent ban clears any expiration
+					// left over from a previous temporary ban.
 					banExpires: ctx.body.banExpiresIn
 						? getDate(ctx.body.banExpiresIn, "sec")
 						: opts?.defaultBanExpiresIn
 							? getDate(opts.defaultBanExpiresIn, "sec")
-							: undefined,
+							: null,
 					updatedAt: new Date(),
 				},
 			);
