@@ -182,8 +182,13 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							ERROR_CODES.INVALID_SESSION_TOKEN,
 						);
 					}
+					// The signed cookie value is the authoritative token; act on it, not
+					// on the request body. The signature covers the cookie value, not its
+					// name, so a request must not be able to pair a validly-signed cookie
+					// with a different token to activate a session it does not hold a
+					// cookie for.
 					const session =
-						await ctx.context.internalAdapter.findSession(sessionToken);
+						await ctx.context.internalAdapter.findSession(sessionCookie);
 					if (!session || session.session.expiresAt < new Date()) {
 						expireCookie(ctx, {
 							name: multiSessionCookieName,
@@ -262,12 +267,15 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						);
 					}
 
-					await ctx.context.internalAdapter.deleteSession(sessionToken);
+					// Revoke the session proven by the signed cookie value, not the
+					// request-named token, so possession of one valid multi-session
+					// cookie cannot revoke a different session.
+					await ctx.context.internalAdapter.deleteSession(sessionCookie);
 					expireCookie(ctx, {
 						name: multiSessionCookieName,
 						attributes: ctx.context.authCookies.sessionToken.attributes,
 					});
-					const isActive = ctx.context.session?.session.token === sessionToken;
+					const isActive = ctx.context.session?.session.token === sessionCookie;
 					if (!isActive) return ctx.json({ status: true });
 
 					const cookieHeader = ctx.headers?.get("cookie");

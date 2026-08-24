@@ -166,11 +166,13 @@ describe("organization", async () => {
 			activeOrganizationId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		} & {
 			activeTeamId: {
 				type: "string";
 				required: false;
+				input: false;
 			};
 		};
 
@@ -2383,14 +2385,15 @@ describe("owner can update roles", async () => {
 	});
 
 	it("allows an org owner to remove their own creator role if not sole owner", async () => {
-		await auth.api.updateMemberRole({
+		const updated = await auth.api.updateMemberRole({
 			headers: { cookie: adminCookie },
 			body: {
 				organizationId: org.id,
 				memberId: ownerId,
-				role: [],
+				role: ["custom"],
 			},
 		});
+		expect(updated.role).toBe("custom");
 	});
 
 	it("should throw error if sole org owner tries to remove creator role"),
@@ -3631,6 +3634,66 @@ describe("organization hooks", async () => {
 
 		expect(hooksCalled).toContain("beforeCreateInvitation");
 		expect(hooksCalled).toContain("afterCreateInvitation");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8494
+ */
+describe("organization delete hooks receive endpoint context", async () => {
+	const seen: Record<string, { hasCtx: boolean; hasRequest: boolean }> = {};
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				organizationHooks: {
+					beforeDeleteOrganization: async (_data, ctx) => {
+						seen.beforeDeleteOrganization = {
+							hasCtx: !!ctx,
+							hasRequest: !!ctx?.request,
+						};
+					},
+					afterDeleteOrganization: async (_data, ctx) => {
+						seen.afterDeleteOrganization = {
+							hasCtx: !!ctx,
+							hasRequest: !!ctx?.request,
+						};
+					},
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("passes endpoint context to beforeDeleteOrganization and afterDeleteOrganization", async () => {
+		const created = await client.organization.create({
+			name: "Org For Delete Ctx",
+			slug: "org-for-delete-ctx",
+			fetchOptions: { headers },
+		});
+		expect(created.data?.id).toBeTruthy();
+
+		await client.organization.delete({
+			organizationId: created.data!.id,
+			fetchOptions: { headers },
+		});
+
+		expect(seen.beforeDeleteOrganization?.hasCtx).toBe(true);
+		expect(seen.beforeDeleteOrganization?.hasRequest).toBe(true);
+		expect(seen.afterDeleteOrganization?.hasCtx).toBe(true);
+		expect(seen.afterDeleteOrganization?.hasRequest).toBe(true);
 	});
 });
 

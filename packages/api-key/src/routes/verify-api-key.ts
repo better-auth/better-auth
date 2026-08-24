@@ -12,7 +12,7 @@ import {
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
 } from "../adapter";
-import { isRateLimited } from "../rate-limit";
+import { evaluateRateLimit } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import { isAPIError } from "../utils";
@@ -130,9 +130,7 @@ export async function validateApiKey({
 		}
 	}
 
-	let remaining = apiKey.remaining;
-	let lastRefillAt = apiKey.lastRefillAt;
-
+	// A non-refillable key that is already exhausted is removed and rejected.
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		const deleteExhaustedKey = async () => {
 			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
@@ -162,77 +160,275 @@ export async function validateApiKey({
 		}
 
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
-	} else if (remaining !== null) {
-		const now = Date.now();
-		const refillInterval = apiKey.refillInterval;
-		const refillAmount = apiKey.refillAmount;
-		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
+	}
 
-		if (refillInterval && refillAmount) {
-			// if they provide refill info, then we should refill once the interval is reached.
+	const usesDatabase =
+		opts.storage === "database" ||
+		(opts.storage === "secondary-storage" && opts.fallbackToDatabase);
 
-			const timeSinceLastRequest = now - lastTime;
-			if (timeSinceLastRequest > refillInterval) {
-				remaining = refillAmount;
-				lastRefillAt = new Date();
+	const newApiKey = usesDatabase
+		? await claimUsageInDatabase({ ctx, apiKey, opts, hashedKey })
+		: await claimUsageInSecondaryStorage({ ctx, apiKey, opts, hashedKey });
+
+	return { apiKey: newApiKey, opts };
+}
+
+/**
+ * Atomically consume quota and a rate-limit slot against the database row, the
+ * source of truth for `database` and `secondary-storage` + `fallbackToDatabase`
+ * modes. Each guarded `incrementOne` only mutates the row while the guard still
+ * holds, so concurrent verifications cannot drive `remaining` below zero or push
+ * `requestCount` past the configured max. The cache (when present) is refreshed
+ * from the resulting row.
+ */
+async function claimUsageInDatabase({
+	ctx,
+	apiKey,
+	opts,
+	hashedKey,
+}: {
+	ctx: GenericEndpointContext;
+	apiKey: ApiKey;
+	opts: PredefinedApiKeyOptions;
+	hashedKey: string;
+}): Promise<ApiKey> {
+	let row: ApiKey = apiKey;
+
+	if (apiKey.remaining !== null) {
+		row = await consumeRemaining(ctx, apiKey);
+	}
+
+	row = await consumeRateLimit(ctx, row, opts);
+
+	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
+	// every guarded counter write applied above.
+	const finalRow = await ctx.context.adapter.update<ApiKey>({
+		model: API_KEY_TABLE_NAME,
+		where: [{ field: "id", value: row.id }],
+		update: { updatedAt: new Date() },
+	});
+
+	// A null result means the row was deleted concurrently (for example the key
+	// was revoked). Do not fall back to the in-memory row and re-cache a key
+	// whose authoritative record is gone.
+	if (!finalRow) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
+
+	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+		await setApiKey(ctx, finalRow, opts);
+	}
+
+	return finalRow;
+}
+
+/**
+ * Guarded quota consumption. When a refill is due, exactly one verification wins
+ * the refill (compare-and-swap on the observed `lastRefillAt`); any concurrent
+ * verification falls through to the plain guarded decrement against the refilled
+ * value. The decrement only applies while `remaining > 0`, so it can never go
+ * negative. Returns the updated row; throws when the quota is exhausted.
+ */
+async function consumeRemaining(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+): Promise<ApiKey> {
+	const now = new Date();
+	const { refillInterval, refillAmount } = apiKey;
+
+	if (refillInterval && refillAmount) {
+		const lastTime = new Date(
+			apiKey.lastRefillAt ?? apiKey.createdAt,
+		).getTime();
+		if (now.getTime() - lastTime > refillInterval) {
+			const refilled = await ctx.context.adapter.incrementOne<ApiKey>({
+				model: API_KEY_TABLE_NAME,
+				where: [
+					{ field: "id", value: apiKey.id },
+					{ field: "lastRefillAt", value: apiKey.lastRefillAt },
+				],
+				increment: {},
+				set: { remaining: refillAmount - 1, lastRefillAt: now },
+			});
+			if (refilled) {
+				return refilled;
 			}
-		}
-
-		if (remaining === 0) {
-			// if there are no more remaining requests, than the key is invalid
-			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
-		} else {
-			remaining--;
+			// Lost the refill CAS: another verification already refilled. Fall
+			// through and decrement against the refreshed value.
 		}
 	}
 
-	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
+	const decremented = await ctx.context.adapter.incrementOne<ApiKey>({
+		model: API_KEY_TABLE_NAME,
+		where: [
+			{ field: "id", value: apiKey.id },
+			{ field: "remaining", operator: "gt", value: 0 },
+		],
+		increment: { remaining: -1 },
+	});
 
-	if (success === false) {
+	if (!decremented) {
+		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
+	}
+
+	return decremented;
+}
+
+/**
+ * Guarded rate-limit consumption. The common in-window path increments
+ * `requestCount` only while it is below the max (compare-and-swap), so a burst
+ * of concurrent verifications can never exceed the limit. Window resets and the
+ * first request in a window are guarded conditional sets; a request that loses
+ * every guard within an active window is rejected. Returns the updated row, or
+ * the unchanged row when rate limiting does not apply.
+ */
+async function consumeRateLimit(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+	opts: PredefinedApiKeyOptions,
+): Promise<ApiKey> {
+	const decision = evaluateRateLimit(apiKey, opts);
+
+	if (decision.type === "deny") {
 		throw new APIError("TOO_MANY_REQUESTS", {
-			message: message ?? undefined,
+			message: decision.message,
 			code: "RATE_LIMITED" as const,
-			details: {
-				tryAgainIn,
-			},
+			details: { tryAgainIn: decision.tryAgainIn },
 		});
 	}
 
-	const updated: ApiKey = {
-		...apiKey,
-		...update,
+	if (decision.type === "skip") {
+		if (decision.lastRequest === null) {
+			return apiKey;
+		}
+		const updated = await ctx.context.adapter.update<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [{ field: "id", value: apiKey.id }],
+			update: { lastRequest: decision.lastRequest },
+		});
+		return updated ?? apiKey;
+	}
+
+	if (decision.type === "increment") {
+		const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{ field: "id", value: apiKey.id },
+				{
+					field: "lastRequest",
+					operator: "gt",
+					value: decision.windowStart,
+				},
+				{
+					field: "requestCount",
+					operator: "lt",
+					value: decision.max,
+				},
+			],
+			increment: { requestCount: 1 },
+			set: { lastRequest: decision.now },
+		});
+		if (incremented) {
+			return incremented;
+		}
+		// The window rolled or the max was reached between the read and the
+		// write. Re-evaluate against the freshest row to apply the right guard.
+		const fresh = await ctx.context.adapter.findOne<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [{ field: "id", value: apiKey.id }],
+		});
+		if (!fresh) {
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+		}
+		return consumeRateLimit(ctx, fresh, opts);
+	}
+
+	// "start" and "reset": set the count to 1 for a fresh window, guarded so a
+	// concurrent increment in the same window cannot be silently overwritten.
+	const windowGuard =
+		decision.type === "reset"
+			? {
+					field: "lastRequest",
+					operator: "lte" as const,
+					value: decision.windowStart,
+				}
+			: { field: "lastRequest", operator: "eq" as const, value: null };
+
+	const started = await ctx.context.adapter.incrementOne<ApiKey>({
+		model: API_KEY_TABLE_NAME,
+		where: [{ field: "id", value: apiKey.id }, windowGuard],
+		increment: {},
+		set: { requestCount: 1, lastRequest: decision.now },
+	});
+	if (started) {
+		return started;
+	}
+	// Another verification already opened the window. Re-evaluate so this
+	// request consumes an increment slot instead of resetting the count.
+	const fresh = await ctx.context.adapter.findOne<ApiKey>({
+		model: API_KEY_TABLE_NAME,
+		where: [{ field: "id", value: apiKey.id }],
+	});
+	if (!fresh) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
+	return consumeRateLimit(ctx, fresh, opts);
+}
+
+/**
+ * Secondary-storage-only mode has no database row to guard, so quota and
+ * rate-limit consumption stays a read-modify-write merge over the serialized
+ * key. This is the residual non-atomic path; strict enforcement requires the
+ * database (use `fallbackToDatabase`) or an atomic secondary-storage primitive.
+ * FIXME(api-key-secondary-atomic): back this with SecondaryStorage.increment on
+ * `next` so secondary-storage-only mode enforces quota and rate limits atomically.
+ */
+async function claimUsageInSecondaryStorage({
+	ctx,
+	apiKey,
+	opts,
+	hashedKey,
+}: {
+	ctx: GenericEndpointContext;
+	apiKey: ApiKey;
+	opts: PredefinedApiKeyOptions;
+	hashedKey: string;
+}): Promise<ApiKey> {
+	let remaining = apiKey.remaining;
+	let lastRefillAt = apiKey.lastRefillAt;
+
+	if (remaining !== null) {
+		const now = Date.now();
+		const { refillInterval, refillAmount } = apiKey;
+		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
+		if (refillInterval && refillAmount && now - lastTime > refillInterval) {
+			remaining = refillAmount;
+			lastRefillAt = new Date();
+		}
+		if (remaining === 0) {
+			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
+		}
+		remaining--;
+	}
+
+	const rateLimitUpdate = applyRateLimitToSnapshot(apiKey, opts);
+
+	const mutations: Partial<ApiKey> = {
+		...rateLimitUpdate,
 		remaining,
 		lastRefillAt,
 		updatedAt: new Date(),
 	};
 
 	const performUpdate = async (): Promise<ApiKey | null> => {
-		if (opts.storage === "database") {
-			return ctx.context.adapter.update<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined },
-			});
-		} else if (
-			opts.storage === "secondary-storage" &&
-			opts.fallbackToDatabase
-		) {
-			const dbUpdated = await ctx.context.adapter.update<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined },
-			});
-			if (dbUpdated) {
-				await setApiKey(ctx, dbUpdated, opts);
-			}
-			return dbUpdated;
-		} else {
-			await setApiKey(ctx, updated, opts);
-			return updated;
+		const fresh = await getApiKey(ctx, hashedKey, opts);
+		if (!fresh) {
+			return null;
 		}
+		const merged: ApiKey = { ...fresh, ...mutations };
+		await setApiKey(ctx, merged, opts);
+		return merged;
 	};
-
-	let newApiKey: ApiKey | null = null;
 
 	if (opts.deferUpdates) {
 		ctx.context.runInBackground(
@@ -240,18 +436,48 @@ export async function validateApiKey({
 				ctx.context.logger.error("Failed to update API key:", error);
 			}),
 		);
-		newApiKey = updated;
-	} else {
-		newApiKey = await performUpdate();
-		if (!newApiKey) {
-			throw APIError.from(
-				"INTERNAL_SERVER_ERROR",
-				ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-			);
-		}
+		return { ...apiKey, ...mutations };
 	}
 
-	return { apiKey: newApiKey, opts };
+	const updated = await performUpdate();
+	if (!updated) {
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+		);
+	}
+	return updated;
+}
+
+/**
+ * Translate a rate-limit decision into a counter snapshot for the
+ * secondary-storage merge write. Denials throw before any write.
+ */
+function applyRateLimitToSnapshot(
+	apiKey: ApiKey,
+	opts: PredefinedApiKeyOptions,
+): Partial<ApiKey> {
+	const decision = evaluateRateLimit(apiKey, opts);
+	switch (decision.type) {
+		case "deny":
+			throw new APIError("TOO_MANY_REQUESTS", {
+				message: decision.message,
+				code: "RATE_LIMITED" as const,
+				details: { tryAgainIn: decision.tryAgainIn },
+			});
+		case "skip":
+			return decision.lastRequest === null
+				? {}
+				: { lastRequest: decision.lastRequest };
+		case "start":
+		case "reset":
+			return { lastRequest: decision.now, requestCount: 1 };
+		case "increment":
+			return {
+				lastRequest: decision.now,
+				requestCount: apiKey.requestCount + 1,
+			};
+	}
 }
 
 const verifyApiKeyBodySchema = z.object({
@@ -285,7 +511,7 @@ export function verifyApiKey({
 		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
-	return createAuthEndpoint(
+	return createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 			body: verifyApiKeyBodySchema,

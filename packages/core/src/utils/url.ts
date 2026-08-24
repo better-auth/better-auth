@@ -25,18 +25,24 @@ export function normalizePathname(
 		return "/";
 	}
 
-	if (basePath === "/" || basePath === "") {
+	// Canonicalize the basePath the same way as the request pathname. A baseURL
+	// with a trailing slash yields a basePath like "/api/auth/"; without this it
+	// would never match the slash-stripped pathname and the prefix would leak
+	// through to disabledPaths and rate-limit special-rule matching.
+	const normalizedBasePath = basePath.replace(/\/+$/, "");
+
+	if (normalizedBasePath === "") {
 		return pathname;
 	}
 
 	// Check for exact match or proper path boundary (basePath followed by "/" or end)
 	// This prevents "/api/auth" from matching "/api/authevil/..."
-	if (pathname === basePath) {
+	if (pathname === normalizedBasePath) {
 		return "/";
 	}
 
-	if (pathname.startsWith(basePath + "/")) {
-		return pathname.slice(basePath.length).replace(/\/+$/, "") || "/";
+	if (pathname.startsWith(normalizedBasePath + "/")) {
+		return pathname.slice(normalizedBasePath.length).replace(/\/+$/, "") || "/";
 	}
 
 	return pathname;

@@ -2,10 +2,10 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../cookies";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { parseSessionInput, parseSessionOutput } from "../../db/schema";
 import type { AdditionalSessionFieldsInput } from "../../types";
-import { sessionMiddleware } from "./session";
+import { isStateful, sessionMiddleware } from "./session";
 
 const updateSessionBodySchema = z.record(
 	z.string().meta({
@@ -80,6 +80,18 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 					updatedAt: new Date(),
 				},
 			);
+
+			// A cookie-cached session with no backing row in a durable store was
+			// revoked or expired server-side; fail closed instead of re-minting from
+			// stale data, which would extend a revoked session. DB-less deployments
+			// keep the session in the cookie and legitimately have no row to update.
+			if (!updatedSession && isStateful(ctx)) {
+				deleteSessionCookie(ctx);
+				throw APIError.from(
+					"UNAUTHORIZED",
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+				);
+			}
 
 			const newSession = updatedSession ?? {
 				...session.session,

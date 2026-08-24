@@ -1029,6 +1029,27 @@ describe("dynamic baseURL resolution", () => {
 		expect(sharedCtx.baseURL).toBe("");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9134
+	 */
+	it("should ignore x-forwarded headers when trustedProxyHeaders is not configured", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com", "proxy.example.com"],
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "proxy.example.com",
+				"x-forwarded-proto": "http",
+			}),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
 	it("should ignore x-forwarded-host when trustedProxyHeaders is explicitly disabled", async () => {
 		const authContext = init({
 			baseURL: {
@@ -1329,5 +1350,128 @@ describe("response headers on APIError", async () => {
 		expect(setCookies).toHaveLength(2);
 		expect(setCookies.some((c) => c.startsWith("session="))).toBe(true);
 		expect(setCookies.some((c) => c.startsWith("session_data="))).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9887
+ *
+ * Configured hooks run once per dispatch boundary (the HTTP router or an
+ * `auth.api.*` call), not once per endpoint invocation. Internal
+ * endpoint-to-endpoint calls, such as `sessionMiddleware` resolving the
+ * session through the `getSession` endpoint, must not re-run them.
+ */
+describe("hook dispatch boundary", async () => {
+	it("does not re-run configured hooks for internal getSession calls", async () => {
+		const beforePaths: string[] = [];
+		const afterPaths: string[] = [];
+		const { auth, signInWithTestUser } = await getTestInstance({
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					beforePaths.push(ctx.path);
+				}),
+				after: createAuthMiddleware(async (ctx) => {
+					afterPaths.push(ctx.path);
+				}),
+			},
+		});
+		const { headers } = await signInWithTestUser();
+
+		// `/list-sessions` resolves the session via `sessionMiddleware`, which
+		// calls the `getSession` endpoint internally.
+		beforePaths.length = 0;
+		afterPaths.length = 0;
+		await auth.api.listSessions({ headers });
+
+		expect(beforePaths).toContain("/list-sessions");
+		expect(afterPaths).toContain("/list-sessions");
+		expect(beforePaths).not.toContain("/get-session");
+		expect(afterPaths).not.toContain("/get-session");
+
+		// Sanity: hooks do run when `getSession` is the dispatched endpoint, so
+		// the assertions above reflect the boundary, not a disabled hook.
+		beforePaths.length = 0;
+		await auth.api.getSession({ headers });
+		expect(beforePaths).toContain("/get-session");
+	});
+});
+
+describe("before hook response headers", async () => {
+	const endpoints = {
+		guarded: createAuthEndpoint("/guarded", { method: "GET" }, async () => ({
+			handler: true,
+		})),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				c.setHeader("x-before", "yes");
+				c.setCookie("from_before", "1");
+				return { shortCircuited: true };
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("serializes the response headers a short-circuiting before hook set", async () => {
+		const response = await api.guarded({ asResponse: true });
+		expect(await response.json()).toMatchObject({ shortCircuited: true });
+		expect(response.headers.get("x-before")).toBe("yes");
+		expect(response.headers.get("set-cookie")).toContain("from_before=1");
+	});
+});
+
+describe("after hook error headers", async () => {
+	const endpoints = {
+		ok: createAuthEndpoint("/ok", { method: "GET" }, async () => ({
+			ok: true,
+		})),
+	};
+	const authContext = init({
+		hooks: {
+			after: createAuthMiddleware(async (c) => {
+				c.setCookie("from_after", "1");
+				throw c.error(
+					"BAD_REQUEST",
+					{ message: "after rejected" },
+					new Headers({ location: "/login" }),
+				);
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("merges accumulated cookies with explicit APIError headers from an after hook", async () => {
+		const response = await api.ok({ asResponse: true });
+		expect(response.status).toBe(400);
+		expect(response.headers.get("location")).toBe("/login");
+		expect(response.headers.get("set-cookie")).toContain("from_after=1");
+	});
+});
+
+describe("before hook request headers", async () => {
+	const endpoints = {
+		echoHeaders: createAuthEndpoint(
+			"/echo-headers",
+			{ method: "GET" },
+			async (c) => Object.fromEntries(c.headers?.entries() ?? []),
+		),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				if (c.path === "/echo-headers") {
+					return { context: { headers: new Headers({ injected: "yes" }) } };
+				}
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("merges hook-provided request headers when the call has none", async () => {
+		// No request headers, so the dispatch context starts with `headers`
+		// undefined; the merge must not throw.
+		const res = await api.echoHeaders();
+		expect(res).toMatchObject({ injected: "yes" });
 	});
 });

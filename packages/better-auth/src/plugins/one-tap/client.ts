@@ -1,9 +1,12 @@
 /// <reference types="@types/google.accounts" />
 import type {
+	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 	ClientFetchOption,
+	ClientStore,
 } from "@better-auth/core";
 import { isSafeUrlScheme } from "@better-auth/core/utils/url";
+import type { BetterFetch } from "@better-fetch/fetch";
 import { PACKAGE_VERSION } from "../../version";
 
 declare global {
@@ -212,7 +215,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 				},
 			},
 		],
-		getActions: ($fetch, _) => {
+		getActions: (
+			$fetch: BetterFetch,
+			_$store: ClientStore,
+			_options: BetterAuthClientOptions | undefined,
+		) => {
 			return {
 				oneTap: async (
 					opts?: GoogleOneTapActionOptions | undefined,
@@ -250,12 +257,18 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						}
 
 						async function callback(idToken: string) {
-							await $fetch("/one-tap/callback", {
+							const res = await $fetch("/one-tap/callback", {
 								method: "POST",
-								body: { idToken },
+								body: { idToken, callbackURL: opts?.callbackURL },
 								...opts?.fetchOptions,
 								...fetchOptions,
 							});
+
+							// The server validates callbackURL against trustedOrigins; do
+							// not navigate if it rejected the request.
+							if (res?.error) {
+								return;
+							}
 
 							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
 								const target = opts?.callbackURL ?? "/";
@@ -299,12 +312,18 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					}
 
 					async function callback(idToken: string) {
-						await $fetch("/one-tap/callback", {
+						const res = await $fetch("/one-tap/callback", {
 							method: "POST",
-							body: { idToken },
+							body: { idToken, callbackURL: opts?.callbackURL },
 							...opts?.fetchOptions,
 							...fetchOptions,
 						});
+
+						// The server validates callbackURL against trustedOrigins; do
+						// not navigate if it rejected the request.
+						if (res?.error) {
+							return;
+						}
 
 						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
 							const target = opts?.callbackURL ?? "/";

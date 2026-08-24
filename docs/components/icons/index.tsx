@@ -95,6 +95,20 @@ export const Icons = {
 			></path>
 		</svg>
 	),
+	waku: (props?: SVGProps<SVGSVGElement>) => (
+		<svg
+			className={props?.className}
+			xmlns="http://www.w3.org/2000/svg"
+			width="1.2em"
+			height="1.2em"
+			viewBox="0 0 128 128"
+		>
+			<path
+				fill="currentColor"
+				d="M3.563 1.777C-.364 1.777.386 8.552.386 12.48c0 3.171 1.696 5.38 4.535 6.471a7.05 7.05 0 0 0-1.367 4.16c0 3.926 2.61 6.166 7.111 7.112 0 0 2.003.607 7.111 1.316V48H7.111A7.114 7.114 0 0 0 0 55.111a7.114 7.114 0 0 0 7.111 7.112h10.666V112a7.114 7.114 0 0 0-7.111 7.111 7.114 7.114 0 0 0 7.111 7.112H32a7.114 7.114 0 0 0 7.111-7.112A7.114 7.114 0 0 0 32 112V62.223h64V112a7.114 7.114 0 0 0-7.111 7.111A7.114 7.114 0 0 0 96 126.223h14.223a7.114 7.114 0 0 0 7.111-7.112 7.114 7.114 0 0 0-7.111-7.111V62.223h10.666A7.114 7.114 0 0 0 128 55.11a7.114 7.114 0 0 0-7.111-7.11h-10.666V31.54c5.108-.71 7.111-1.317 7.111-1.317 4.334-1 7.111-3.186 7.111-7.112a7.05 7.05 0 0 0-1.357-4.148c2.99-1.104 4.578-3.313 4.578-6.518 0-3.929.696-10.668-3.232-10.668 0 0-14.223 7.112-60.438 7.112S3.562 1.777 3.562 1.777zM32 32.902c6.411.412 14.564.735 24.889.838V48H32zm64 0V48H71.111V33.74c10.325-.103 18.478-.426 24.889-.838"
+			/>
+		</svg>
+	),
 	hono: (props?: SVGProps<any>) => (
 		<svg
 			className={cn(props?.className)}
@@ -316,131 +330,12 @@ export const Icons = {
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
 			height="1.2em"
-			viewBox="0 0 100 100"
+			viewBox="0 0 64.04 83.84"
 		>
-			<mask
-				id="a"
-				style={{ maskType: "alpha" }}
-				maskUnits="userSpaceOnUse"
-				x="0"
-				y="0"
-				width="100"
-				height="100"
-			>
-				<circle cx="50" cy="50" r="50" className="fill-foreground" />
-			</mask>
-			<g mask="url(#a)">
-				<circle
-					cx="11"
-					cy="119"
-					r="52"
-					className="fill-muted-foreground stroke-foreground"
-					strokeWidth="4"
-				/>
-				<circle
-					cx="10"
-					cy="125"
-					r="52"
-					className="fill-muted-foreground stroke-foreground"
-					strokeWidth="4"
-				/>
-				<circle
-					cx="9"
-					cy="131"
-					r="52"
-					className="fill-muted-foreground stroke-muted-foreground"
-					strokeWidth="4"
-				/>
-				<circle
-					cx="88"
-					cy="119"
-					r="52"
-					className="fill-muted-foreground stroke-foreground"
-					strokeWidth="4"
-				/>
-				<path
-					className="fill-foreground"
-					d="M89 35h2v5h-2zM83 34l2 1-1 4h-2zM77 31l2 1-3 4-2-1zM73 27l1 1-3 4-1-2zM70 23l1 1-4 3-1-2zM68 18v2l-4 1-1-2zM68 11l1 2-5 1-1-2zM69 6v2h-5V6z"
-				/>
-				<circle
-					cx="89"
-					cy="125"
-					r="52"
-					className="fill-muted-foreground stroke-foreground"
-					strokeWidth="4"
-				/>
-				<circle
-					cx="90"
-					cy="131"
-					r="52"
-					className="fill-muted-foreground stroke-muted-foreground"
-					strokeWidth="4"
-				/>
-				<ellipse
-					cx="49.5"
-					cy="119"
-					rx="41.5"
-					ry="51"
-					className="fill-muted-foreground"
-				/>
-				<path
-					d="M34 38v-9c1 1 2 4 5 6l7 30-8 2c-1-23-2-23-4-29Z"
-					className="fill-foreground stroke-muted-foreground"
-				/>
-				<path
-					fillRule="evenodd"
-					clipRule="evenodd"
-					d="M95 123c0 31-20 57-45 57S5 154 5 123c0-27 14-50 33-56l12-2c25 0 45 26 45 58Zm-45 47c22 0 39-22 39-50S72 70 50 70s-39 22-39 50 17 50 39 50Z"
-					className="fill-foreground"
-				/>
-				<path
-					d="M34 29c-4-8-11-5-14-4 2 3 5 4 9 4h5Z"
-					className="fill-foreground stroke-muted-foreground"
-				/>
-				<path
-					d="M25 38c-1 6 0 14 2 18 5-7 7-13 7-18v-9c-5 1-7 5-9 9Z"
-					className="fill-muted-foreground"
-				/>
-				<path
-					d="M34 29c-1 3-5 11-5 16m5-16c-5 1-7 5-9 9-1 6 0 14 2 18 5-7 7-13 7-18v-9Z"
-					className="stroke-muted-foreground"
-				/>
-				<path
-					d="M44 18c-10 1-11 7-10 11l4-3c5-4 6-7 6-8Z"
-					className="fill-foreground stroke-muted-foreground"
-				/>
-				<path
-					d="M34 29h7l18 4c-3-6-9-14-21-7l-4 3Z"
-					className="fill-foreground"
-				/>
-				<path
-					d="M34 29c4-2 12-5 18-1m-18 1h7l18 4c-3-6-9-14-21-7l-4 3Z"
-					className="stroke-muted-foreground"
-				/>
-				<path
-					d="M32 29a1189 1189 0 0 1-16 19c0-17 7-18 13-19h5a14 14 0 0 1-2 0Z"
-					className="fill-foreground"
-				/>
-				<path
-					d="M34 29c-5 1-7 5-9 9l-9 10c0-17 7-18 13-19h5Zm0 0c-5 2-11 3-14 10"
-					className="stroke-muted-foreground"
-				/>
-				<path
-					d="M41 29c9 2 13 10 15 14a25 25 0 0 1-22-14h7Z"
-					className="fill-foreground"
-				/>
-				<path
-					d="M34 29c3 1 11 5 15 9m-15-9h7c9 2 13 10 15 14a25 25 0 0 1-22-14Z"
-					className="stroke-muted-foreground"
-				/>
-				<circle
-					cx="91.5"
-					cy="12.5"
-					r="18.5"
-					className="fill-foreground stroke-muted-foreground"
-					strokeWidth="2"
-				/>
-			</g>
+			<path
+				fill="currentColor"
+				d="M32.02,0c23.15,0,32.02,14.33,32.02,41.92s-8.87,41.92-32.02,41.92S0,69.53,0,41.92C0,14.33,8.87,0,32.02,0ZM42.61,61.08c-3.01,0-4.65.82-5.97,1.48-1.14.57-2.03,1.02-4.01,1.02s-2.87-.45-4.01-1.02c-1.32-.66-2.96-1.48-5.97-1.48s-4.65.82-5.97,1.48c-1.14.57-2.03,1.02-4.01,1.02v4.37c3.01,0,4.65-.82,5.97-1.48,1.14-.57,2.03-1.02,4.01-1.02s2.87.45,4.01,1.02c1.32.66,2.96,1.48,5.97,1.48s4.65-.82,5.97-1.48c1.14-.57,2.03-1.02,4.01-1.02s2.87.45,4.01,1.02c1.32.66,2.96,1.48,5.97,1.48v-4.37c-1.97,0-2.87-.45-4.01-1.02-1.32-.66-2.96-1.48-5.97-1.48ZM44.04,17.29c2.27-2.05,0-5.76-2.84-4.64-1.57.63-3.05,1.53-4.37,2.72-2.06,1.87-3.45,4.22-4.2,6.78-.75-2.56-2.14-4.91-4.2-6.78-1.32-1.18-2.8-2.09-4.37-2.72-2.84-1.12-5.11,2.59-2.84,4.64l8.33,7.52c-2.72-1.84-6-2.93-9.54-2.93-1.93,0-3.78.31-5.52.91-2.92.99-2.11,5.35.96,5.35h11.62c-2.56.49-4.99,1.63-7.03,3.45-1.32,1.18-2.36,2.56-3.14,4.07-1.41,2.71,2.05,5.34,4.32,3.31l9.38-8.45-.7,23.25c0,.28-.16.55-.37.78-.3-.13-.58-.27-.9-.43-1.32-.66-2.96-1.48-5.97-1.48s-4.65.82-5.97,1.48c-1.14.57-2.03,1.02-4.01,1.02v4.37c3.01,0,4.65-.82,5.97-1.48,1.14-.57,2.03-1.02,4.01-1.02s2.87.45,4.01,1.02c1.32.66,2.96,1.48,5.97,1.48s4.65-.82,5.97-1.48c1.14-.57,2.03-1.02,4.01-1.02s2.87.45,4.01,1.02c1.32.66,2.96,1.48,5.97,1.48v-4.37c-1.97,0-2.87-.45-4.01-1.02v-.02c-1.32-.66-2.96-1.48-5.97-1.48s-4.65.82-5.97,1.48c-.34.16-.66.33-.99.46-.25-.22-.4-.51-.42-.81l-.7-23.37,9.51,8.58c2.27,2.05,5.73-.58,4.32-3.31-.78-1.5-1.82-2.89-3.14-4.07-2.03-1.84-4.46-2.96-7.03-3.45h11.62c3.08,0,3.87-4.35.96-5.35-1.73-.58-3.59-.91-5.52-.91-3.53,0-6.8,1.09-9.54,2.93l8.33-7.52Z"
+			/>
 		</svg>
 	),
 	expo: (props?: SVGProps<any>) => (

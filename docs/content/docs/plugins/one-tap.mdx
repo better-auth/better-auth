@@ -20,7 +20,9 @@ provides a simple way to integrate One Tap into your application, handling the c
 
     export const auth = betterAuth({
         plugins: [
-            oneTap(), // Add the One Tap server plugin  // [!code highlight]
+            oneTap({
+              clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
+            }),
         ]
     });
     ```
@@ -203,7 +205,23 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 ### Server Options
 
 * `disableSignUp`: Disable the sign-up option, allowing only existing users to sign in. Default is false.
-* `clientId`: Optionally, pass a client ID here if it is not provided in your social provider configuration.
+* `clientId`: Google client ID for ID token audience verification. Required unless `socialProviders.google.clientId` is configured.
+
+<Callout type="info">
+  **Restricting to a Google Workspace domain (`hd`)**
+
+  The One Tap callback applies the hosted-domain restriction from
+  `socialProviders.google.hd`, matching the standard Google sign-in flow:
+  when `hd` is set to a domain, a token whose `hd` claim is missing or does
+  not match is rejected. Set `hd: "*"` to allow any Google Workspace hosted
+  domain while still rejecting tokens with no `hd` claim.
+
+  This value is read from `socialProviders.google`, so the restriction only
+  applies when you configure the Google provider. If you set up One Tap with
+  only `oneTap({ clientId })` and no `socialProviders.google`, no
+  hosted-domain restriction is applied. To restrict One Tap sign-in to a
+  Workspace domain, configure `socialProviders.google` with `hd`.
+</Callout>
 
 ### Authorized JavaScript origins
 

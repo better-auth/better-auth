@@ -40,6 +40,11 @@ function getFields(
 		...coreSchema,
 		...(additionalFields ?? {}),
 	};
+	// FIXME: Plugin-contributed fields are input-by-default, so a plugin-owned
+	// authority field is writable through generic input routes (e.g.
+	// /update-session) unless it sets `input: false`. A future breaking change
+	// should make plugin fields non-input by default and require an explicit
+	// opt-in for client-writable ones.
 	for (const plugin of options.plugins || []) {
 		if (plugin.schema && plugin.schema[modelName]) {
 			schema = {
@@ -215,6 +220,22 @@ export function parseUserInput(
 ) {
 	const schema = getFields(options, "user", "input");
 	return parseInputData(user, { fields: schema, action });
+}
+
+export function parseAdditionalUserInputFromProviderProfile(
+	options: BetterAuthOptions,
+	profile: Record<string, unknown> = {},
+	action: "create" | "update",
+) {
+	const schema = getFields(options, "user", "input");
+	const allowedProfileFields: Record<string, unknown> = Object.create(null);
+	for (const key of Object.keys(profile)) {
+		if (schema[key]?.input === false) {
+			continue;
+		}
+		allowedProfileFields[key] = profile[key];
+	}
+	return parseInputData(allowedProfileFields, { fields: schema, action });
 }
 
 export function parseAdditionalUserInput(
