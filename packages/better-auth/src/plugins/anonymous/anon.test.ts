@@ -343,6 +343,177 @@ describe("anonymous", async () => {
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
 
+	describe("onLink: promote", () => {
+		it("promotes the anonymous user in place on email-password sign-up", async () => {
+			const { client, sessionSetter, auth } = await getTestInstance(
+				{
+					plugins: [anonymous({ onLink: "promote" })],
+				},
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+					disableTestUser: true,
+				},
+			);
+			const headers = new Headers();
+			const anon = await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			const anonId = anon.data?.user.id;
+			expect(anonId).toBeTruthy();
+
+			await client.signUp.email(
+				{
+					email: "promoted@example.com",
+					password: "password123",
+					name: "Promoted User",
+				},
+				{ headers },
+			);
+
+			// The pre-sign-up anonymous session must resolve to the promoted
+			// user: same id, real identity, no longer anonymous.
+			const session = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(session.data?.user.id).toBe(anonId);
+			expect(session.data?.user.email).toBe("promoted@example.com");
+			expect(session.data?.user.name).toBe("Promoted User");
+			expect(session.data?.user.isAnonymous).toBe(false);
+
+			const ctx = await auth.$context;
+			const stored = await ctx.internalAdapter.findUserByEmail(
+				"promoted@example.com",
+			);
+			expect(stored?.user.id).toBe(anonId);
+			const accounts = await ctx.internalAdapter.findAccounts(anonId!);
+			expect(accounts).toHaveLength(1);
+			expect(accounts[0].providerId).toBe("credential");
+		});
+
+		it("promotes the anonymous user in place on social sign-in", async () => {
+			const { client, sessionSetter, cookieSetter, auth } =
+				await getTestInstance(
+					{
+						plugins: [anonymous({ onLink: "promote" })],
+						socialProviders: {
+							google: {
+								clientId: "test",
+								clientSecret: "test",
+							},
+						},
+					},
+					{
+						clientOptions: {
+							plugins: [anonymousClient()],
+						},
+						disableTestUser: true,
+					},
+				);
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			const anonSession = await client.getSession({
+				fetchOptions: { headers },
+			});
+			const anonId = anonSession.data?.user.id;
+			expect(anonId).toBeTruthy();
+
+			// Keep a pristine copy of the anonymous session cookies so the
+			// final assertions prove the original session survived promotion.
+			const anonHeaders = new Headers(headers);
+
+			const res = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			const state = new URL(res.data?.url || "")
+				.searchParams.get("state");
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				headers,
+			});
+
+			const session = await client.getSession({
+				fetchOptions: { headers: anonHeaders },
+			});
+			expect(session.data?.user.id).toBe(anonId);
+			expect(session.data?.user.email).toBe("user@email.com");
+			expect(session.data?.user.name).toBe("First Last");
+			expect(session.data?.user.isAnonymous).toBe(false);
+
+			const ctx = await auth.$context;
+			const stored = await ctx.internalAdapter.findUserByEmail(
+				"user@email.com",
+			);
+			expect(stored?.user.id).toBe(anonId);
+			const accounts = await ctx.internalAdapter.findAccounts(anonId!);
+			expect(
+				accounts.some(
+					(account) =>
+						account.providerId === "google" &&
+						account.accountId === "1234567890",
+				),
+			).toBe(true);
+		});
+
+		it("falls back to onLinkAccount when the credential resolves to an existing user", async () => {
+			const linkAccountFn = vi.fn();
+			const { client, sessionSetter, testUser, auth } = await getTestInstance(
+				{
+					plugins: [
+						anonymous({
+							onLink: "promote",
+							async onLinkAccount(data) {
+								linkAccountFn(data);
+							},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+				},
+			);
+			const headers = new Headers();
+			const anon = await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			const anonId = anon.data?.user.id;
+			expect(anonId).toBeTruthy();
+
+			// Signing in with an account that already exists is a real merge,
+			// so the classic create-and-migrate flow must run instead.
+			await client.signIn.email(testUser, {
+				headers,
+			});
+
+			expect(linkAccountFn).toHaveBeenCalledTimes(1);
+			const session = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(session.data?.user.email).toBe(testUser.email);
+			const ctx = await auth.$context;
+			const gone = await ctx.internalAdapter.findUserById(anonId!);
+			expect(gone).toBeNull();
+		});
+	});
+
 	it("should work with generateName", async () => {
 		const { client, sessionSetter } = await getTestInstance(
 			{

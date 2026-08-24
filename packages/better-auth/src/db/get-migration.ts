@@ -13,7 +13,12 @@ import {
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
+import type {
+	DatabaseIndexColumnMetadata,
+	DatabaseIndexIntrospector,
+	DatabaseIndexMetadata,
+	KyselyDatabaseType,
+} from "@better-auth/kysely-adapter";
 import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
 	AlterTableColumnAlteringBuilder,
@@ -25,8 +30,6 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import { getSchema } from "./get-schema";
-
-// cspell:ignore attnum attrelid indisunique indisvalid indexrelid indnkeyatts ordinality seqno
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -168,11 +171,46 @@ function databaseValueIsTrue(value: boolean | number | string | undefined) {
 	return value === "1" || value?.toLowerCase() === "true" || value === "t";
 }
 
-async function getDatabaseIndexes(
+function toDatabaseIndexMap(indexes: readonly DatabaseIndexMetadata[]) {
+	return new Map<string, DatabaseIndexDefinition>(
+		indexes.map((index) => {
+			const columns = [...index.columns].sort(
+				(left, right) => left.position - right.position,
+			);
+			return [
+				createDatabaseIndexKey(index.table, index.name),
+				{
+					columns: columns.flatMap((column) =>
+						column.name === null ? [] : [column.name],
+					),
+					name: index.name,
+					table: index.table,
+					unique: index.unique,
+					validFullColumns:
+						index.valid &&
+						!index.partial &&
+						columns.length > 0 &&
+						columns.every(
+							(column) => column.name !== null && column.fullLength,
+						),
+				},
+			] as const;
+		}),
+	);
+}
+
+async function getDatabaseIndexMap(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType,
 	schemaName: string,
+	tableNames: readonly string[],
+	introspectIndexes: DatabaseIndexIntrospector | undefined,
 ) {
+	if (introspectIndexes) {
+		const indexes = await introspectIndexes(tableNames);
+		return toDatabaseIndexMap(indexes);
+	}
+
 	let rows: readonly DatabaseIndexRow[];
 	if (dbType === "sqlite") {
 		rows = (
@@ -228,7 +266,8 @@ async function getDatabaseIndexes(
 					column_name AS columnName,
 					non_unique AS nonUnique,
 					seq_in_index AS columnPosition,
-					sub_part AS prefixLength
+					sub_part AS prefixLength,
+					COALESCE(LOWER(comment) = 'disabled', FALSE) AS isDisabled
 				FROM information_schema.statistics
 				WHERE table_schema = DATABASE()
 			`.execute(db)
@@ -263,16 +302,7 @@ async function getDatabaseIndexes(
 		).rows;
 	}
 
-	const indexRows = new Map<
-		string,
-		{
-			columns: { name: string; position: number }[];
-			name: string;
-			table: string;
-			unique: boolean;
-			validFullColumns: boolean;
-		}
-	>();
+	const indexMetadata = new Map<string, DatabaseIndexMetadata>();
 	for (const row of rows) {
 		const table =
 			row.tableName ??
@@ -301,44 +331,41 @@ async function getDatabaseIndexes(
 				row.seqno ??
 				0,
 		);
-		const index = indexRows.get(key) ?? {
-			columns: [],
-			name,
-			table,
-			unique,
-			validFullColumns: true,
-		};
-		if (column) {
-			index.columns.push({ name: column, position });
-		} else {
-			index.validFullColumns = false;
-		}
-		if (
-			databaseValueIsTrue(row.isPartial) ||
-			databaseValueIsTrue(row.isDisabled) ||
-			databaseValueIsTrue(row.isHypothetical) ||
-			(row.isValid !== undefined && !databaseValueIsTrue(row.isValid)) ||
-			(row.prefixLength !== undefined && row.prefixLength !== null)
-		) {
-			index.validFullColumns = false;
-		}
-		indexRows.set(key, index);
+		const indexColumn = {
+			fullLength:
+				column !== undefined &&
+				column !== null &&
+				(row.prefixLength === undefined || row.prefixLength === null),
+			name: column ?? null,
+			position,
+		} satisfies DatabaseIndexColumnMetadata;
+		const partial = databaseValueIsTrue(row.isPartial);
+		const valid =
+			!databaseValueIsTrue(row.isDisabled) &&
+			!databaseValueIsTrue(row.isHypothetical) &&
+			(row.isValid === undefined || databaseValueIsTrue(row.isValid));
+		const existing = indexMetadata.get(key);
+		indexMetadata.set(
+			key,
+			existing
+				? {
+						...existing,
+						columns: [...existing.columns, indexColumn],
+						partial: existing.partial || partial,
+						valid: existing.valid && valid,
+					}
+				: {
+						columns: [indexColumn],
+						name,
+						partial,
+						table,
+						unique,
+						valid,
+					},
+		);
 	}
 
-	return new Map<string, DatabaseIndexDefinition>(
-		[...indexRows].map(([key, index]) => [
-			key,
-			{
-				columns: index.columns
-					.sort((left, right) => left.position - right.position)
-					.map((column) => column.name),
-				name: index.name,
-				table: index.table,
-				unique: index.unique,
-				validFullColumns: index.validFullColumns,
-			},
-		]),
-	);
+	return toDatabaseIndexMap([...indexMetadata.values()]);
 }
 
 async function getDatabaseColumnBounds(
@@ -464,6 +491,58 @@ function assertExistingTableIndexFits({
 	}
 }
 
+const columnBackfillGuideUrl =
+	"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer";
+
+/**
+ * Thrown when {@link getMigrations} refuses to add a required column with no
+ * default value to a populated table. Distinct from the plain
+ * {@link BetterAuthError} thrown for index-definition conflicts, so callers
+ * can tell the two apart without matching on message text.
+ */
+export class UnsafeMigrationError extends BetterAuthError {}
+
+function hasTimestampColumnDefault(
+	field: DBFieldAttribute,
+	dbType: KyselyDatabaseType,
+) {
+	return (
+		field.type === "date" &&
+		typeof field.defaultValue === "function" &&
+		(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+	);
+}
+
+// A required column added to a populated table needs a SQL default, or the NOT
+// NULL add fails. Nullable unique columns are excluded: NULL is their only
+// unique-safe backfill. A required unique column keeps its default; on a table
+// with more than one row the unique index then rejects the shared backfill,
+// which no generated migration can avoid.
+function hasStaticColumnDefault(field: DBFieldAttribute) {
+	return (
+		!(field.unique && field.required === false) &&
+		(field.type === "string" ||
+			field.type === "number" ||
+			field.type === "boolean") &&
+		field.defaultValue !== undefined &&
+		field.defaultValue !== null &&
+		typeof field.defaultValue !== "function"
+	);
+}
+
+async function tableHasRows(
+	db: Kysely<Record<string, Record<string, unknown>>>,
+	dbType: KyselyDatabaseType,
+	table: string,
+) {
+	const probe = db.selectFrom(table).select(sql`1`.as("present"));
+	const rows = await (dbType === "mssql"
+		? probe.top(1)
+		: probe.limit(1)
+	).execute();
+	return rows.length > 0;
+}
+
 export function matchType(
 	columnDataType: string,
 	fieldType: DBFieldType,
@@ -524,11 +603,44 @@ async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
 	}
 }
 
-export async function getMigrations(config: BetterAuthOptions) {
+/**
+ * Build the migration plan that `auth migrate` executes and `auth generate`
+ * prints for the Kysely adapter.
+ *
+ * Adding a required column without a default to a populated table is refused:
+ * existing rows have no value to backfill. `throwOnUnsafe` picks how that
+ * refusal is delivered: executing callers get an {@link UnsafeMigrationError},
+ * read-only callers get the plan plus the same message in `unsafeChanges`.
+ *
+ * @throws {UnsafeMigrationError} when a required column cannot be migrated
+ * safely and `throwOnUnsafe` is left on.
+ * @throws {BetterAuthError} when an index definition conflicts with an
+ * existing or already-planned index.
+ */
+export async function getMigrations(
+	config: BetterAuthOptions,
+	{ throwOnUnsafe = true }: { throwOnUnsafe?: boolean } = {},
+) {
 	const betterAuthSchema = getSchema(config);
+	const authTables = getAuthTables(config);
+	const accountIssuer = authTables.account && {
+		table: authTables.account.modelName,
+		column: authTables.account.fields.issuer?.fieldName || "issuer",
+	};
+	const isAccountIssuerColumn = (table: string, column: string) =>
+		table === accountIssuer?.table && column === accountIssuer.column;
 	const logger = createLogger(config.logger);
+	const unsafeChanges: string[] = [];
+	const reportUnsafeChange = (message: string) => {
+		if (throwOnUnsafe) throw new UnsafeMigrationError(message);
+		unsafeChanges.push(message);
+	};
 
-	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
+	let {
+		kysely: db,
+		databaseType: dbType,
+		introspectIndexes,
+	} = await createKyselyAdapter(config);
 
 	if (!dbType) {
 		logger.warn(
@@ -581,7 +693,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 
 	const allTableMetadata = await db.introspection.getTables();
-	const databaseIndexes = await getDatabaseIndexes(db, dbType, currentSchema);
+	const databaseIndexMap = await getDatabaseIndexMap(
+		db,
+		dbType,
+		currentSchema,
+		allTableMetadata.map((table) => table.name),
+		introspectIndexes,
+	);
 	const databaseColumnBounds = await getDatabaseColumnBounds(
 		db,
 		dbType,
@@ -652,7 +770,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const index of value.indexes ?? []) {
 			const name = index.name;
 			const indexKey = createDatabaseIndexKey(key, name);
-			const existingIndex = databaseIndexes.get(indexKey);
+			const existingIndex = databaseIndexMap.get(indexKey);
 			if (existingIndex) {
 				if (!databaseIndexMatches(existingIndex, index)) {
 					throw new BetterAuthError(
@@ -662,7 +780,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				continue;
 			}
 			if (dbType === "sqlite" || dbType === "postgres") {
-				const indexOnAnotherTable = [...databaseIndexes.values()].find(
+				const indexOnAnotherTable = [...databaseIndexMap.values()].find(
 					(databaseIndex) =>
 						getPortableDatabaseIdentifierKey(databaseIndex.name) ===
 							getPortableDatabaseIdentifierKey(name) &&
@@ -737,6 +855,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 			if (!column) {
 				toBeAddedFields[fieldName] = field;
 				continue;
+			}
+
+			if (field.required !== false && column.isNullable) {
+				logger.warn(
+					`Column "${fieldName}" on table "${key}" stays nullable while the schema declares the field required, so existing rows can still hold null. Backfill every row for this column and enforce NOT NULL to remove the drift.`,
+				);
 			}
 
 			if (matchType(column.dataType, field.type, dbType)) {
@@ -888,11 +1012,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 		return typeMap[type][provider];
 	}
 	const getModelName = initGetModelName({
-		schema: getAuthTables(config),
+		schema: authTables,
 		usePlural: false,
 	});
 	const getFieldName = initGetFieldName({
-		schema: getAuthTables(config),
+		schema: authTables,
 		usePlural: false,
 	});
 
@@ -925,8 +1049,30 @@ export async function getMigrations(config: BetterAuthOptions) {
 	};
 
 	if (toBeAdded.length) {
+		const populatedTables = new Map<string, boolean>();
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
+				const timestampDefault = hasTimestampColumnDefault(field, dbType);
+				const staticDefault = hasStaticColumnDefault(field);
+				if (field.required !== false && !timestampDefault && !staticDefault) {
+					let populated = populatedTables.get(table.table);
+					if (populated === undefined) {
+						populated = await tableHasRows(db, dbType, table.table);
+						populatedTables.set(table.table, populated);
+					}
+					if (populated) {
+						const textDetail =
+							field.type === "string"
+								? " For a text column, every existing row ends up with the same empty string."
+								: "";
+						const guideLink = isAccountIssuerColumn(table.table, fieldName)
+							? ` See ${columnBackfillGuideUrl}`
+							: "";
+						reportUnsafeChange(
+							`Cannot add required column "${fieldName}" to populated table "${table.table}": the schema declares no default value, so existing rows have no value to backfill. MySQL accepts this statement instead of rejecting it and fills every existing row with an implicit default for the column type, reporting a successful migration over corrupted data.${textDetail} Add the column as nullable, backfill a correct value for every row, then make it NOT NULL.${guideLink}`,
+						);
+					}
+				}
 				const type = getType(
 					field,
 					fieldName,
@@ -980,31 +1126,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
-					if (
-						field.type === "date" &&
-						typeof field.defaultValue === "function" &&
-						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
-					) {
+					if (timestampDefault) {
 						if (dbType === "mysql") {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
 						} else {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
-					} else if (
-						!(field.unique && field.required === false) &&
-						(field.type === "string" ||
-							field.type === "number" ||
-							field.type === "boolean") &&
-						field.defaultValue !== undefined &&
-						field.defaultValue !== null &&
-						typeof field.defaultValue !== "function"
-					) {
-						// A required column added to a populated table needs a SQL
-						// default, or the NOT NULL add fails. Nullable unique columns
-						// are excluded: NULL is their only unique-safe backfill. A
-						// required unique column keeps its default; on a table with
-						// more than one row the unique index then rejects the shared
-						// backfill, which no generated migration can avoid.
+					} else if (staticDefault) {
 						// Booleans map to 1/0 on engines without a native boolean type.
 						col = col.defaultTo(
 							typeof field.defaultValue === "boolean" &&
@@ -1129,6 +1257,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		toBeCreated,
 		toBeAdded,
 		toBeAddedIndexes,
+		unsafeChanges,
 		runMigrations,
 		compileMigrations,
 	};

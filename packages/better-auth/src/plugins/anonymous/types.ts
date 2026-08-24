@@ -23,6 +23,32 @@ export interface AnonymousOptions {
 	 */
 	emailDomainName?: string | undefined;
 	/**
+	 * Controls what happens to the anonymous user when they sign in or sign up
+	 * with a real credential while an anonymous session is active.
+	 *
+	 * - `"create"` (default): the credential creates or resolves its own user,
+	 *   and the anonymous user is deleted afterwards (unless
+	 *   `disableDeleteAnonymousUser` is set). Use `onLinkAccount` to migrate the
+	 *   anonymous user's data to the new user.
+	 *
+	 * - `"promote"`: when the incoming credential would create a brand-new user,
+	 *   the anonymous user is upgraded in place instead: their row is updated
+	 *   with the credential's email, verified status, name and image, and
+	 *   `isAnonymous` is cleared. The freshly created account rows are re-pointed
+	 *   at the anonymous user's id and the new session is re-pointed so the
+	 *   session cookie that was already written stays valid. The user id never
+	 *   changes, existing sessions remain valid, and no second user row is
+	 *   created, so no data migration is needed.
+	 *
+	 *   When the credential resolves to a user that already exists (the email is
+	 *   taken, or a returning social identity), in-place promotion is not
+	 *   possible. That case falls back to the classic flow: `onLinkAccount`
+	 *   fires and the anonymous user is deleted as usual.
+	 *
+	 * @default "create"
+	 */
+	onLink?: "create" | "promote" | undefined;
+	/**
 	 * A useful hook to run after an anonymous user
 	 * is about to link their account.
 	 */
