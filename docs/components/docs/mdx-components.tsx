@@ -427,11 +427,14 @@ export function DatabaseTable({
 			{view === "table" ? (
 				<div className="overflow-x-auto">
 					{/* Column headers */}
-					<div className="grid grid-cols-[minmax(160px,1.2fr)_minmax(100px,0.8fr)_minmax(112px,0.6fr)_minmax(150px,2fr)] min-w-[600px] border-b bg-foreground/2">
+					<div className="grid grid-cols-[minmax(160px,1.2fr)_minmax(100px,0.8fr)_minmax(128px,0.6fr)_minmax(150px,2fr)] min-w-[600px] border-b bg-foreground/2">
 						{["Field", "Type", "Attributes", "Description"].map((label) => (
 							<div
 								key={label}
-								className="px-4 py-1 text-[11px] font-mono font-medium uppercase tracking-wider text-foreground/60"
+								className={cn(
+									"py-1 text-[11px] font-mono font-medium uppercase tracking-wider text-foreground/60",
+									label === "Attributes" ? "px-2" : "px-4",
+								)}
 							>
 								{label}
 							</div>
@@ -442,7 +445,7 @@ export function DatabaseTable({
 					{fields.map((field) => (
 						<div
 							key={field.name}
-							className="grid grid-cols-[minmax(160px,1.2fr)_minmax(100px,0.8fr)_minmax(112px,0.6fr)_minmax(150px,2fr)] min-w-[600px] items-center border-b border-dashed border-foreground/10 last:border-b-0 hover:bg-foreground/[0.02] transition-colors"
+							className="grid grid-cols-[minmax(160px,1.2fr)_minmax(100px,0.8fr)_minmax(128px,0.6fr)_minmax(150px,2fr)] min-w-[600px] items-center border-b border-dashed border-foreground/10 last:border-b-0 hover:bg-foreground/[0.02] transition-colors"
 						>
 							<div className="px-4 py-2 font-mono text-[13px] text-foreground/80 break-all">
 								{field.name}
@@ -462,7 +465,7 @@ export function DatabaseTable({
 									{field.type}
 								</span>
 							</div>
-							<div className="px-4 py-2 flex flex-nowrap items-center gap-2">
+							<div className="px-2 py-2 flex flex-nowrap items-center gap-2">
 								{field.isPrimaryKey && (
 									<span className="inline-flex items-center gap-1 font-mono text-[13px] text-amber-600 dark:text-amber-500 uppercase">
 										<Key className="size-2.5" />
