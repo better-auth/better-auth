@@ -137,12 +137,12 @@ You can view the [API Key plugin options](/docs/plugins/api-key/reference#api-ke
        */
       refillInterval?: number = 1000
       /**
-       * The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
+       * Length of each fixed rate-limit window in milliseconds. server-only.
        * @serverOnly
        */
       rateLimitTimeWindow?: number = 1000
       /**
-       * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
+       * Maximum successful validations per fixed window (`rateLimitWindowStart` … `rateLimitWindowStart + rateLimitTimeWindow`). server-only.
        * @serverOnly
        */
       rateLimitMax?: number = 100
@@ -292,12 +292,12 @@ type Result = Omit<ApiKey, "key">;
        */
       rateLimitEnabled?: boolean = true
       /**
-       * The duration in milliseconds where each request is counted. server-only.
+       * Length of each fixed rate-limit window in milliseconds. server-only.
        * @serverOnly
        */
       rateLimitTimeWindow?: number = 1000
       /**
-       * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
+       * Maximum successful validations per fixed window. server-only.
        * @serverOnly
        */
       rateLimitMax?: number = 100
