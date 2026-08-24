@@ -178,7 +178,7 @@ export interface VerifyAccessTokenOptions {
 	 * Required to verify access token locally. Accepts the JWKS URL, or a
 	 * function resolving the key set in-process for resource servers co-located
 	 * with their authorization server — an HTTP self-fetch can be impossible
-	 * there (for example Cloudflare Workers cannot request their own origin).
+	 * there (Cloudflare Workers cannot request their own origin by default).
 	 */
 	jwksUrl?: string | (() => Promise<JSONWebKeySet | undefined>);
 	/**

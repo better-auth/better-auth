@@ -25,8 +25,8 @@ export interface McpProtectedRequestHandlerOptions {
 	 * Source of the authorization server's JSON Web Key Set: its URL, or a
 	 * function resolving the key set in-process. Prefer the function form when
 	 * the resource server is co-located with the authorization server — an HTTP
-	 * self-fetch can be impossible there (for example Cloudflare Workers cannot
-	 * request their own origin).
+	 * self-fetch can be impossible there (Cloudflare Workers cannot request
+	 * their own origin by default).
 	 */
 	jwksUrl?: string | (() => Promise<JSONWebKeySet | undefined>);
 	/**

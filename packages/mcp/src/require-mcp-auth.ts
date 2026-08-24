@@ -116,9 +116,10 @@ export const requireMcpAuth = <
 		const resource = opts?.resource ?? baseURL;
 		// Resolve the key set in-process by default, mirroring introspect/revoke:
 		// the authorization server is this same auth instance, and an HTTP
-		// self-fetch of `${baseURL}/jwks` is impossible on runtimes that cannot
-		// request their own origin (for example Cloudflare Workers), where it
-		// surfaced as a 500 on every request carrying a valid token.
+		// self-fetch of `${baseURL}/jwks` fails on runtimes that cannot request
+		// their own origin (Cloudflare Workers by default, where it surfaced as
+		// a 500 on every request carrying a valid token) and is a wasted round
+		// trip everywhere else.
 		let jwksUrl: string | (() => Promise<JSONWebKeySet | undefined>);
 		let jwksCacheKey: object | undefined;
 		const jwtPlugin = (context.getPlugin?.("jwt") ?? null) as ReturnType<
