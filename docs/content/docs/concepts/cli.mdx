@@ -18,12 +18,12 @@ npx auth@latest generate
 * `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it's an SQL file saved as schema.sql in your project root.
 * `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
 * `--yes` - Skip the confirmation prompt and generate the schema directly.
-* `--adapter` - The schema generator to use instead of the adapter from your Better Auth config. Supported built-in values are `prisma`, `drizzle`, and `kysely`.
-* `--dialect` - The database dialect/provider to use with `--adapter`. Prisma supports `postgresql`, `mysql`, `sqlite`, and `mongodb`. Drizzle supports `postgresql`, `mysql`, and `sqlite`; `postgresql` maps to `pg` internally.
+* `--adapter` - The schema generator to use: `prisma`, `drizzle`, or `kysely`.
+* `--dialect` - The target database provider. It is required with `--adapter drizzle`. Prisma defaults to `postgresql`.
 
 ### Generate Without a Database Connection
 
-For Prisma and Drizzle, you can pass `--adapter` and `--dialect` to generate a schema without initializing the database adapter from your Better Auth config. The config file is still loaded so the generated schema includes your plugins and other schema customizations.
+Prisma and Drizzle can generate a schema without using the configured database adapter. The CLI still loads your config to include plugins and schema customizations.
 
 ```package-install title="Terminal"
 npx auth@latest generate --adapter prisma --dialect postgresql
@@ -31,12 +31,12 @@ npx auth@latest generate --adapter prisma --dialect postgresql
 
 export const schemaGeneratorOptions = {
   adapter: {
-    description: "The built-in schema generator. Database-free generation is available for Prisma and Drizzle; Kysely uses the database configured in your Better Auth config.",
+    description: "The schema generator. Kysely still requires the configured database.",
     type: '"prisma" | "drizzle" | "kysely"',
     required: false,
   },
   dialect: {
-    description: 'The database dialect for Prisma or Drizzle. "mongodb" is Prisma-only, and Drizzle maps "postgresql" to "pg".',
+    description: 'The Prisma or Drizzle provider. "mongodb" is only supported by Prisma. Drizzle maps "postgresql" to "pg".',
     type: '"postgresql" | "mysql" | "sqlite" | "mongodb"',
     required: false,
   },
@@ -45,10 +45,10 @@ export const schemaGeneratorOptions = {
 <TypeTable type={schemaGeneratorOptions} />
 
 <Callout type="info">
-  Kysely generates migration SQL by introspecting the configured database, so it still requires a working database connection.
+  Kysely introspects the configured database, so `--dialect` has no effect with `--adapter kysely`.
 </Callout>
 
-If `--adapter` is omitted, the CLI uses the adapter configured in your Better Auth config file.
+If `--adapter` is omitted, the CLI uses the adapter configured in your Better Auth config file. Passing `--dialect` by itself has no effect.
 
 ## Migrate
 
