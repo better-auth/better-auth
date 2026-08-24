@@ -188,7 +188,7 @@ The Redis storage supports all ioredis connection modes including standalone, cl
 
 **Manual Implementation:**
 
-If you prefer to implement your own Redis secondary storage, here's a basic example:
+If you're using Redis 7 or later, you can use the following implementation:
 
 ```typescript title="auth.ts"
 import { createClient } from "redis";
@@ -196,14 +196,6 @@ import { betterAuth } from "better-auth";
 
 const redis = createClient();
 await redis.connect();
-
-const incrementScript = `
-local value = redis.call("INCR", KEYS[1])
-if value == 1 then
-  redis.call("EXPIRE", KEYS[1], ARGV[1])
-end
-return value
-`;
 
 export const auth = betterAuth({
 	// ... other options
@@ -215,11 +207,17 @@ export const auth = betterAuth({
 			return await redis.getDel(key);
 		},
 		increment: async (key, ttl) => {
-			const value = await redis.eval(incrementScript, {
-				keys: [key],
-				arguments: [String(ttl)],
-			});
-			return Number(value);
+			if (!Number.isInteger(ttl) || ttl <= 0) {
+				throw new TypeError("Redis increment TTL must be a positive integer");
+			}
+
+			const [value] = await redis
+				.multi()
+				.incr(key)
+				.expire(key, ttl, "NX")
+				.exec();
+
+			return value;
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
@@ -259,63 +257,42 @@ After that, we can create a secondary storage implementation:
 ```typescript
 // src/lib/auth/adapters/redis-secondary-storage.ts
 
-import { SecondaryStorage } from "better-auth";
+import type { SecondaryStorage } from "better-auth";
 import { redis } from "~/lib/redis";
 
 export const redisSecondaryStorage: SecondaryStorage = {
-  async get(key: string) {
-    try {
-      const value = await redis.get(key);
-
-      // Handle different return types from Redis
-      if (value === null || value === undefined) {
-        return null;
-      }
-
-      // If it's already a string, return it
-      if (typeof value === "string") {
-        return value;
-      }
-
-      // If it's an object, stringify it
-      if (typeof value === "object") {
-        return JSON.stringify(value);
-      }
-
-      // Convert to string for any other type
-      return String(value);
-    } catch (error) {
-      console.error("Redis get error:", error);
-      return null;
-    }
+  async get(key) {
+    return await redis.get(key);
   },
 
-  async set(key: string, value: string, ttl?: number) {
-    try {
-      // Ensure value is a string
-      const stringValue =
-        typeof value === "string" ? value : JSON.stringify(value);
+  async getAndDelete(key) {
+    return await redis.getdel(key);
+  },
 
-      if (ttl) {
-        // Set with TTL in seconds
-        await redis.set(key, stringValue, { ex: ttl });
-      } else {
-        // Set without TTL
-        await redis.set(key, stringValue);
-      }
-    } catch (error) {
-      console.error("Redis set error:", error);
-      throw error;
+  async increment(key: string, ttl: number) {
+    if (!Number.isInteger(ttl) || ttl <= 0) {
+      throw new TypeError("Redis increment TTL must be a positive integer");
+    }
+
+    const [value] = await redis
+      .multi()
+      .incr(key)
+      .expire(key, ttl, "NX")
+      .exec();
+
+    return value;
+  },
+
+  async set(key, value, ttl) {
+    if (ttl) {
+      await redis.set(key, value, { ex: ttl });
+    } else {
+      await redis.set(key, value);
     }
   },
 
   async delete(key: string) {
-    try {
-      await redis.del(key);
-    } catch (error) {
-      console.error("Redis delete error:", error);
-      throw error;
-    }
+    await redis.del(key);
   },
 };
 ```
