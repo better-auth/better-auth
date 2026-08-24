@@ -17,6 +17,7 @@ interface CreateMigrationPlanInput
 		MigrationInspection,
 		| "migrationBlockers"
 		| "migrationTarget"
+		| "accountIdentity"
 		| "toBeAdded"
 		| "toBeAddedIndexes"
 		| "toBeCreated"
@@ -49,6 +50,7 @@ export type MigrationPlanBlocker = MigrationBlockerDetail & {
 };
 
 export interface MigrationPlan {
+	accountIdentity: MigrationInspection["accountIdentity"];
 	blockers: MigrationPlanBlocker[];
 	changes: {
 		addColumns: Array<{ columns: string[]; table: string }>;
@@ -77,6 +79,8 @@ export interface ReleaseMigrationPlan {
 /** One actionable sentence naming the blocked table and the work it needs. */
 export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
+		case "account-identity-strategy-mismatch":
+			return `${blocker.table}: the database uses ${blocker.detectedStrategy} account identity, but the configured strategy is ${blocker.configuredStrategy}.`;
 		case "index-column-bounds":
 		case "release-migration-error":
 			return blocker.message;
@@ -99,6 +103,8 @@ export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 
 function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
+		case "account-identity-strategy-mismatch":
+			return 'Set account.identityStrategy to "issuer" so runtime behavior matches the migrated database, then run the plan again.';
 		case "account-identity-collision":
 			return `Merge or remove the duplicate rows in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
 		case "account-issuer-conflict":
@@ -153,12 +159,14 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 
 function resolveMigrationGuideAnchor(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
+		case "account-identity-strategy-mismatch":
+			return "choose-account-identity-strategy";
 		case "account-identity-collision":
 		case "account-issuer-conflict":
 		case "account-issuer-decision-required":
 		case "issuer-conflict":
 		case "issuer-required":
-			return "account-identity-is-scoped-by-issuer";
+			return "choose-account-identity-strategy";
 		case "reprovision-data":
 		case "scim-decision-required":
 		case "scim-inventory-mismatch":
@@ -192,6 +200,7 @@ function getBlockerKey(blocker: MigrationBlockerDetail) {
 }
 
 export function createMigrationPlan({
+	accountIdentity,
 	hasChanges,
 	migrationBlockers,
 	migrationTarget,
@@ -207,6 +216,7 @@ export function createMigrationPlan({
 	];
 	return {
 		formatVersion: 1,
+		accountIdentity,
 		target: migrationTarget,
 		status:
 			blockers.length > 0

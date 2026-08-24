@@ -44,6 +44,7 @@ import { getAdapter } from "./adapter-kysely";
 export interface MigrationDatabase {
 	adapterId: string;
 	authTables: BetterAuthDBSchema;
+	inspectionAuthTables: BetterAuthDBSchema;
 	databaseType: KyselyDatabaseType;
 	inTransaction: boolean;
 	introspectIndexes?: DatabaseIndexIntrospector | undefined;
@@ -54,6 +55,51 @@ export interface MigrationDatabase {
 				callback: (database: MigrationDatabase) => Promise<Result>,
 		  ) => Promise<Result>)
 		| undefined;
+}
+
+function getInspectionAuthTables(config: BetterAuthOptions) {
+	return getAuthTables({
+		...config,
+		account: {
+			...config.account,
+			identityStrategy: "issuer",
+		},
+	});
+}
+
+function selectConfiguredPhysicalTables(
+	configuredTables: BetterAuthDBSchema,
+	physicalTables: BetterAuthDBSchema,
+): BetterAuthDBSchema {
+	return Object.fromEntries(
+		Object.entries(configuredTables).map(([schemaKey, configuredTable]) => {
+			const physicalTable = physicalTables[schemaKey];
+			if (!physicalTable) {
+				throw new BetterAuthError(
+					`Migration schema could not resolve model "${configuredTable.modelName}".`,
+				);
+			}
+			const fields = Object.fromEntries(
+				Object.entries(configuredTable.fields).map(([fieldKey, field]) => {
+					const physicalField = physicalTable.fields[fieldKey];
+					if (!physicalField) {
+						throw new BetterAuthError(
+							`Migration schema could not resolve field "${configuredTable.modelName}.${field.fieldName || fieldKey}".`,
+						);
+					}
+					return [fieldKey, physicalField];
+				}),
+			);
+			return [
+				schemaKey,
+				{
+					...configuredTable,
+					modelName: physicalTable.modelName,
+					fields,
+				},
+			];
+		}),
+	);
 }
 
 function createMigrationRecordWriter(
@@ -178,11 +224,13 @@ function createMigrationDialect(
 
 export async function getMigrationDatabase(config: BetterAuthOptions) {
 	const configuredAuthTables = getAuthTables(config);
+	const inspectionAuthTables = getInspectionAuthTables(config);
 	const directDatabase = await createKyselyAdapter(config);
 	if (directDatabase.kysely && directDatabase.databaseType) {
 		const database: MigrationDatabase = {
 			adapterId: "kysely",
 			authTables: configuredAuthTables,
+			inspectionAuthTables,
 			databaseType: directDatabase.databaseType,
 			inTransaction: false,
 			introspectIndexes: directDatabase.introspectIndexes,
@@ -199,6 +247,7 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 					callback({
 						adapterId: database.adapterId,
 						authTables: database.authTables,
+						inspectionAuthTables: database.inspectionAuthTables,
 						databaseType: database.databaseType,
 						inTransaction: true,
 						introspectIndexes: database.introspectIndexes,
@@ -228,9 +277,13 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 			`The ${adapter.id} adapter does not expose a SQL migration connection. Use \`auth generate\` and your database tooling instead.`,
 		);
 	}
-	const authTables = migrationConnection.resolvePhysicalSchema
-		? await migrationConnection.resolvePhysicalSchema(configuredAuthTables)
-		: configuredAuthTables;
+	const physicalInspectionAuthTables = migrationConnection.resolvePhysicalSchema
+		? await migrationConnection.resolvePhysicalSchema(inspectionAuthTables)
+		: inspectionAuthTables;
+	const authTables = selectConfiguredPhysicalTables(
+		configuredAuthTables,
+		physicalInspectionAuthTables,
+	);
 	const createDatabase = (
 		connection: MigrationDatabaseConnection,
 		inTransaction: boolean,
@@ -241,6 +294,7 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 		const database: MigrationDatabase = {
 			adapterId: adapter.id,
 			authTables,
+			inspectionAuthTables: physicalInspectionAuthTables,
 			databaseType: connection.dialect,
 			inTransaction,
 			kysely,

@@ -37,8 +37,8 @@ async function runCli(args: string[], cwd: string) {
 
 const projects: string[] = [];
 
-// A pre-1.7 SQLite database: the account table predates the `issuer` column
-// and already holds a row, so the guardrail must refuse to add it.
+// A pre-1.7 SQLite database whose populated account table must remain
+// provider-scoped when the 1.7 strategy is omitted.
 function createProject() {
 	const cacheDir = path.join(
 		process.cwd(),
@@ -85,7 +85,7 @@ export const auth = betterAuth({
 		`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt") VALUES ('a1', 'g-1', 'google', 'u1', '2020-01-01', '2020-01-01')`,
 	);
 	database.close();
-	return { cwd };
+	return { cwd, databasePath };
 }
 
 async function createPublished16Project() {
@@ -148,22 +148,30 @@ afterEach(() => {
 	}
 });
 
-describe("auth migrate: refusing a destructive column add", () => {
-	it("exits 1 with a clean refusal and no stack trace", async () => {
-		const { cwd } = createProject();
+describe("auth migrate: preserving the default account identity", () => {
+	it("plans a populated 1.6 account table without adding issuer", async () => {
+		const { cwd, databasePath } = createProject();
 		const { exitCode, output } = await runCli(
-			["migrate", "--config", "auth.ts", "--yes"],
+			["migrate", "plan", "--config", "auth.ts", "--json"],
 			cwd,
 		);
 
-		expect(exitCode).toBe(1);
-		expect(output).toContain(
-			"Migration blocked. No database changes were applied.",
-		);
-		expect(output).toContain("[issuer-required]");
-		expect(output).toContain(
-			"https://better-auth.com/docs/guides/1-7-upgrade-guide",
-		);
+		expect(exitCode).toBe(0);
+		expect(JSON.parse(output)).toMatchObject({
+			accountIdentity: {
+				selectedStrategy: "provider-id",
+				detectedStrategy: "provider-id",
+			},
+			blockers: [],
+		});
+		const database = new Database(databasePath);
+		expect(
+			database
+				.prepare("PRAGMA table_info(account)")
+				.all()
+				.map((column) => (column as { name: string }).name),
+		).not.toContain("issuer");
+		database.close();
 		expect(output).not.toContain("triggerUncaughtException");
 		expect(output).not.toContain("node:internal");
 		expect(output).not.toMatch(/at .*:\d+:\d+/);
@@ -171,7 +179,7 @@ describe("auth migrate: refusing a destructive column add", () => {
 });
 
 describe("auth migrate: upgrading a published 1.6.30 database", () => {
-	it("plans and applies the adjacent release migration through the built CLI", async () => {
+	it("keeps the published account schema and sign-in behavior unchanged", async () => {
 		const { baseURL, credentials, cwd, databasePath, secret } =
 			await createPublished16Project();
 		const sourceDatabase = new Database(databasePath);
@@ -189,14 +197,12 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 		);
 		expect(planned.exitCode).toBe(0);
 		expect(JSON.parse(planned.output)).toMatchObject({
-			blockers: [],
-			releaseMigration: {
-				actions: [
-					"write the 1.7 account identity onto every existing account row",
-				],
-				id: "1.6-to-1.7",
+			accountIdentity: {
+				selectedStrategy: "provider-id",
+				detectedStrategy: "provider-id",
 			},
-			status: "ready",
+			blockers: [],
+			status: "up-to-date",
 		});
 
 		const plannedDatabase = new Database(databasePath);
@@ -216,16 +222,18 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 		expect(JSON.parse(applied.output)).toMatchObject({
 			mode: "apply",
 			plan: {
-				releaseMigration: { id: "1.6-to-1.7" },
-				status: "ready",
+				status: "up-to-date",
 			},
-			status: "applied",
+			status: "up-to-date",
 		});
 
 		const migratedDatabase = new Database(databasePath);
 		expect(
-			migratedDatabase.prepare("SELECT issuer, providerId FROM account").get(),
-		).toEqual({ issuer: "local:credential", providerId: "credential" });
+			migratedDatabase
+				.prepare("PRAGMA table_info(account)")
+				.all()
+				.map((column) => (column as { name: string }).name),
+		).not.toContain("issuer");
 		const auth17 = betterAuth({
 			baseURL,
 			database: migratedDatabase,
@@ -243,8 +251,8 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 	});
 });
 
-describe("auth generate: emitting the refused migration with a warning", () => {
-	it("exits 0 and writes the warning banner alongside the computed statements", async () => {
+describe("auth generate: preserving the default account identity", () => {
+	it("emits no issuer column or destructive warning", async () => {
 		const { cwd } = createProject();
 		const { exitCode, output } = await runCli(
 			["generate", "--config", "auth.ts", "--output", "migration.sql", "--yes"],
@@ -252,12 +260,10 @@ describe("auth generate: emitting the refused migration with a warning", () => {
 		);
 
 		expect(exitCode).toBe(0);
-		expect(output).toContain("corrupts a populated database");
+		expect(output).not.toContain("corrupts a populated database");
 
 		const sql = fs.readFileSync(path.join(cwd, "migration.sql"), "utf-8");
-		expect(sql).toContain("DO NOT RUN THIS SCRIPT AS IT IS.");
-		expect(sql.toLowerCase()).toContain(
-			'alter table "account" add column "issuer" text not null',
-		);
+		expect(sql).not.toContain("DO NOT RUN THIS SCRIPT AS IT IS.");
+		expect(sql.toLowerCase()).not.toContain('column "issuer"');
 	});
 });
