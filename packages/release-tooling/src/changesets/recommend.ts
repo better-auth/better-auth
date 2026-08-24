@@ -5,70 +5,20 @@
  * never execute code from the PR branch. This script runs from the base
  * branch checkout and fetches all PR data via the GitHub API.
  *
- * Usage: GITHUB_TOKEN=... PR_NUMBER=... npx tsx .github/scripts/auto-changeset.ts
+ * Usage: GITHUB_TOKEN=... PR_NUMBER=... pnpm auto-changeset
  */
 
-import { gh, ghJSON, REPO, setOutput } from "./lib/github.ts";
-import { mapTypeToBump, parseConventionalCommit } from "./lib/pr-analyzer.ts";
-
-// ── Types ──────────────────────────────────────────────────────────────
-
-interface PRData {
-	number: number;
-	title: string;
-	body: string;
-	headRef: string;
-	baseRef: string;
-	labels: string[];
-	isFork: boolean;
-	changedFiles: string[];
-}
-
-// ── Constants ──────────────────────────────────────────────────────────
+import { setOutput } from "../actions-output.ts";
+import { mapTypeToBump } from "../change-classifier.ts";
+import { parseConventionalHeader } from "../conventional-header.ts";
+import type { GitHubReader } from "../github-reader.ts";
+import {
+	createChangesetFallback,
+	rewriteChangesetDescription,
+} from "./rewrite.ts";
 
 const CUBIC_OPEN = "<!-- This is an auto-generated description by cubic. -->";
 const CUBIC_CLOSE = "<!-- End of auto-generated description by cubic. -->";
-
-// ── PR data fetching ───────────────────────────────────────────────────
-
-function fetchPR(prNumber: number): PRData {
-	const pr = ghJSON<{
-		title: string;
-		body: string;
-		headRefName: string;
-		baseRefName: string;
-		labels: { name: string }[];
-		isCrossRepository: boolean;
-	}>([
-		"pr",
-		"view",
-		String(prNumber),
-		"--repo",
-		REPO,
-		"--json",
-		"title,body,headRefName,baseRefName,labels,isCrossRepository",
-	]);
-
-	const filesRaw = gh([
-		"api",
-		`repos/${REPO}/pulls/${prNumber}/files`,
-		"--paginate",
-		"-q",
-		".[] | .filename",
-	]);
-	const files = filesRaw ? filesRaw.split("\n").filter(Boolean) : [];
-
-	return {
-		number: prNumber,
-		title: pr.title,
-		body: pr.body ?? "",
-		headRef: pr.headRefName,
-		baseRef: pr.baseRefName,
-		labels: pr.labels.map((l) => l.name),
-		isFork: pr.isCrossRepository,
-		changedFiles: files,
-	};
-}
 
 function extractCubicSummary(body: string): string {
 	const start = body.indexOf(CUBIC_OPEN);
@@ -88,18 +38,15 @@ function hasPackageChanges(files: string[]): boolean {
 	return files.some((f) => f.startsWith("packages/"));
 }
 
-// ── Main ───────────────────────────────────────────────────────────────
-
-function main() {
+export async function recommendChangeset(github: GitHubReader): Promise<void> {
 	const prNumber = Number(process.env.PR_NUMBER);
 	if (!prNumber) {
-		console.error("PR_NUMBER environment variable required");
-		process.exit(1);
+		throw new Error("PR_NUMBER environment variable required");
 	}
 
 	console.log(`Analyzing PR #${prNumber}`);
 
-	const pr = fetchPR(prNumber);
+	const pr = await github.getPullRequest(prNumber);
 
 	// Promote PRs (next → main) already carry versioned changesets — skip entirely
 	if (pr.headRef === "next" && pr.baseRef === "main" && !pr.isFork) {
@@ -112,7 +59,7 @@ function main() {
 		return;
 	}
 
-	const commit = parseConventionalCommit(pr.title);
+	const commit = parseConventionalHeader(pr.title);
 	const bump = mapTypeToBump(commit.type, commit.breaking);
 	const touchesPackages = hasPackageChanges(pr.changedFiles);
 
@@ -185,7 +132,23 @@ function main() {
 	}
 
 	const cubicSummary = extractCubicSummary(pr.body);
-	const fallback = cubicSummary || commit.subject || pr.title;
+	const fallback = createChangesetFallback(
+		cubicSummary || commit.subject || pr.title,
+	);
+	let description = fallback;
+	try {
+		description = await rewriteChangesetDescription({
+			title: pr.title,
+			bump: resolvedBump,
+			changedFiles: pr.changedFiles.slice(0, 50),
+			cubicSummary,
+			diff: pr.diff,
+		});
+	} catch (error) {
+		console.warn(
+			`AI changeset rewrite failed; using deterministic fallback: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 
 	// All packages are in one changesets fixed group — listing any one
 	// bumps them all together. "better-auth" is the representative.
@@ -198,7 +161,6 @@ function main() {
 	setOutput("pr_title", pr.title);
 	setOutput("cubic_summary", cubicSummary);
 	setOutput("fallback_description", fallback);
+	setOutput("description", description);
 	setOutput("changed_files", pr.changedFiles.slice(0, 50).join("\n"));
 }
-
-main();

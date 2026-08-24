@@ -106,7 +106,8 @@ jobs:
             exit 0
           fi
 
-          PKG_CHANGES=$(git diff --name-only "origin/$BASE_REF"...HEAD -- 'packages/' | grep -c '.' || true)
+          PKG_CHANGES=$(git diff --name-only "origin/$BASE_REF"...HEAD -- \
+            'packages/' ':(exclude)packages/release-tooling/**' | grep -c '.' || true)
           if [ "$PKG_CHANGES" -eq 0 ]; then
             echo "Changeset not required (no package changes)"
             exit 0

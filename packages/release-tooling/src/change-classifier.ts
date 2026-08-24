@@ -1,8 +1,8 @@
 /**
- * PR Analyzer — shared classification module
+ * Change Classifier — shared release classification module
  *
- * Pure functions for mapping conventional commit scopes and file paths
- * to domain labels. No side effects, no network calls.
+ * Pure functions for mapping change types, scopes, and file paths to release
+ * metadata. No side effects, no network calls.
  *
  * Used by: auto-changeset.ts, release-notes.ts
  */
@@ -157,23 +157,6 @@ const PATH_TO_DOMAIN: [string, string][] = [
 	["e2e/", "devops"],
 ];
 
-export interface ConventionalCommit {
-	type: string;
-	scope: string;
-	subject: string;
-	breaking: boolean;
-}
-
-export function parseConventionalCommit(title: string): ConventionalCommit {
-	const typeMatch = title.match(/^([a-z]+)/);
-	const type = typeMatch?.[1] ?? "";
-	const scopeMatch = title.match(/^[a-z]+\(([^)]+)\)/);
-	const scope = scopeMatch?.[1] ?? "";
-	const breaking = /^[a-z]+(\([^)]+\))?!:/.test(title);
-	const subject = title.replace(/^[a-z]+(\([^)]+\))?!?:\s*/, "");
-	return { type, scope, subject, breaking };
-}
-
 function classifyDomain(filePath: string): string | undefined {
 	for (const [prefix, domain] of PATH_TO_DOMAIN) {
 		if (filePath.startsWith(prefix)) return domain;
@@ -246,8 +229,6 @@ export const DOMAIN_ORDER = [
 
 /** Domains excluded from release notes */
 export const FILTERED_DOMAINS = new Set(["docs", "devops"]);
-
-// ── Package resolution (for release notes output) ─────────────────────
 
 /**
  * Maps commit scopes to npm package names.
