@@ -1352,6 +1352,38 @@ export interface OAuthOptions<
 	 */
 	pairwiseSecret?: string;
 	/**
+	 * Resolve the *base* subject identifier, defaulting to the `user.id`. Lets a
+	 * multi-tenant issuer return a per-(user, workspace) `sub` (pairwise hashing
+	 * still applies on top).
+	 *
+	 * Must be deterministic for a given `(userId, client, referenceId)` and must
+	 * return a stable, non-empty subject. It is invoked only for user-bound flows
+	 * (skipped for `client_credentials`). An empty or blank return is rejected,
+	 * and a thrown error propagates — either one fails the token, `/userinfo`,
+	 * and `/introspect` request rather than falling back to a different identity.
+	 *
+	 * Applies to the presentation layer only — the id token, the back-channel
+	 * Logout Token, `/userinfo`, and
+	 * `/introspect`. A JWT access token's own `sub` stays the raw `user.id`
+	 * because `/userinfo` uses it as the lookup key, so a relying party that
+	 * validates JWT access tokens statelessly reads the raw id. Issue **opaque**
+	 * access tokens to relying parties that must not see it.
+	 *
+	 * @example
+	 * getSubject: ({ userId, referenceId }) => referenceId ?? userId
+	 */
+	getSubject?: (context: {
+		/** The Better Auth `user.id`. Also the access token's internal subject. */
+		userId: string;
+		/** The client the token is being issued for / introspected by. */
+		client: SchemaClient<Scopes>;
+		/**
+		 * The consent reference persisted with the grant/token, when present.
+		 * Produced by `postLogin.consentReferenceId`.
+		 */
+		referenceId?: string;
+	}) => Awaitable<string>;
+	/**
 	 * Resolves a `request_uri` at the authorize endpoint (PAR support).
 	 *
 	 * When the authorize endpoint receives a `request_uri` parameter, this callback

@@ -37,6 +37,7 @@ interface TokenRow {
 	clientId: string;
 	scopes: string[];
 	revoked?: Date | null;
+	referenceId?: string | null;
 }
 
 /**
@@ -180,24 +181,58 @@ async function prepareBackchannelLogoutPlan(
 			? []
 			: clients.filter((c) => Boolean(c.backchannelLogoutUri) && !c.disabled);
 
-		const targets = (
+		// A tenant-aware `getSubject` keys on the grant's `referenceId`, so the
+		// Logout Token has to be built from the same reference the token was
+		// issued under — resolving without it would send a subject the relying
+		// party never saw and leave its session alive. One login session can hold
+		// grants under several references for the same client, and each is a
+		// separate RP session, so every distinct subject gets its own token.
+		const referencesByClient = new Map<string, Set<string | undefined>>();
+		for (const token of [...accessTokens, ...refreshTokens]) {
+			const references =
+				referencesByClient.get(token.clientId) ?? new Set<string | undefined>();
+			references.add(token.referenceId ?? undefined);
+			referencesByClient.set(token.clientId, references);
+		}
+
+		const resolvedTargets = (
 			await Promise.all(
-				eligibleClients.map(async (client) => {
-					try {
-						return {
-							client,
-							sub: await resolveSubjectIdentifier(userId, client, opts),
-						} satisfies BackchannelLogoutTarget;
-					} catch (error) {
-						logger.warn(
-							`back-channel logout: unable to resolve subject for client ${client.clientId}`,
-							error,
-						);
-						return null;
-					}
+				eligibleClients.flatMap((client) => {
+					const references = referencesByClient.get(client.clientId) ?? [
+						undefined,
+					];
+					return Array.from(references).map(async (referenceId) => {
+						try {
+							return {
+								client,
+								sub: await resolveSubjectIdentifier(
+									userId,
+									client,
+									opts,
+									referenceId,
+								),
+							} satisfies BackchannelLogoutTarget;
+						} catch (error) {
+							logger.warn(
+								`back-channel logout: unable to resolve subject for client ${client.clientId}`,
+								error,
+							);
+							return null;
+						}
+					});
 				}),
 			)
 		).filter((target): target is BackchannelLogoutTarget => target !== null);
+
+		// Without a reference-dependent hook every reference resolves to the same
+		// subject, so dedupe rather than POSTing the same Logout Token twice.
+		const seen = new Set<string>();
+		const targets = resolvedTargets.filter((target) => {
+			const key = `${target.client.clientId}\u0000${target.sub}`;
+			if (seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
 
 		return {
 			accessTokenIds: accessToRevokeIds,
