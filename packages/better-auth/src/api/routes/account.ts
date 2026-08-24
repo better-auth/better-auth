@@ -96,7 +96,6 @@ export const listUserAccounts = createAuthEndpoint(
 											"providerId",
 											"createdAt",
 											"updatedAt",
-											"issuer",
 											"accountId",
 											"userId",
 											"scopes",
@@ -327,6 +326,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					refreshToken: c.body.idToken.refreshToken,
 				},
 				linkingUserInfo.data,
+				c.context.options.account?.identityStrategy,
 			);
 
 			const linkedAccount =
@@ -998,7 +998,7 @@ export const accountInfo = createAuthEndpoint(
 												issuer: { type: "string" },
 												accountId: { type: "string" },
 											},
-											required: ["id", "providerId", "issuer", "accountId"],
+											required: ["id", "providerId", "accountId"],
 											additionalProperties: false,
 										},
 										data: {

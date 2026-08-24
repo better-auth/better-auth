@@ -10,3 +10,7 @@ export {
 	resolveDatabaseTableIndexes,
 } from "./database-index";
 export { getAuthTablesWithResolvedIndexes } from "./get-tables";
+export {
+	type AccountIdentityStrategy,
+	resolveAccountIdentity,
+} from "./schema/account";

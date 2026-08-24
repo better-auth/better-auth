@@ -2,6 +2,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
@@ -1657,12 +1658,17 @@ async function handleOIDCCallback(
 			? userInfo.emailVerified === true
 			: false,
 	};
-	const accountKey = {
-		issuer:
-			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
-			provider.issuer,
-		accountId: userInfoId,
-	};
+	const accountIdentity = resolveAccountIdentity(
+		ctx.context.options.account?.identityStrategy,
+		{
+			providerId: provider.providerId,
+			issuer:
+				(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
+				provider.issuer,
+			accountId: userInfoId,
+		},
+	);
+	const accountKey = accountIdentity.key;
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
@@ -1735,9 +1741,7 @@ async function handleOIDCCallback(
 						idToken: tokenResponse.idToken,
 						accessToken: tokenResponse.accessToken,
 						refreshToken: tokenResponse.refreshToken,
-						issuer: accountKey.issuer,
-						accountId: userInfoId,
-						providerId: provider.providerId,
+						...accountIdentity.fields,
 						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
 						scope: tokenResponse.scopes?.join(","),

@@ -91,7 +91,7 @@ A redirect URL will be automatically generated using the provider ID. For instan
   When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
 </Callout>
 
-Better Auth identifies an OIDC account by the configured `issuer` and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject. Provider aliases that return the same issuer and subject resolve to one external identity; this identity deduplication does not create independent grant or provider lifecycle records for each alias.
+Better Auth identifies an OIDC account by the provider configuration and verified `sub` claim by default. With `account.identityStrategy: "issuer"`, it uses the configured `issuer` and verified `sub` instead. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject. Under issuer-scoped identity, provider aliases that return the same issuer and subject resolve to one external identity; this deduplication does not create independent grant or provider lifecycle records for each alias.
 
 #### Example
 
@@ -373,10 +373,17 @@ const auth = betterAuth({
                     await validateSAMLAttributes(input.providerAttributes);
                 }
 
+                const accountIdentity = "issuer" in input.accountKey
+                    ? {
+                        issuer: input.accountKey.issuer,
+                        subject: input.accountKey.accountId,
+                    }
+                    : {
+                        providerId: input.accountKey.providerId,
+                        subject: input.accountKey.accountId,
+                    };
                 const provisionedUser = await findProvisionedUserByAccountKey({
-                    providerId: input.providerId,
-                    issuer: input.accountKey.issuer,
-                    subject: input.accountKey.accountId,
+                    ...accountIdentity,
                     database: context.database,
                 });
 
@@ -398,11 +405,11 @@ const auth = betterAuth({
 });
 ```
 
-For OIDC, `accountKey.issuer` and `accountKey.accountId` come from the validated ID Token's exact `iss` and `sub` claims. `verifiedIdTokenClaims` contains the complete verified ID Token payload, while `providerClaims` contains the protocol-accepted raw claims used for the profile. For SAML, the account key is the verified IdP entity ID and signed `NameID`; `providerAttributes` contains the verified assertion attributes without coercing multi-valued attributes into scalars. Subject and `NameID` matching is case-sensitive.
+`accountKey` follows the configured account identity strategy. The default form contains `providerId` and `accountId`; the issuer-scoped form contains `issuer` and `accountId`. For OIDC, the issuer-scoped values come from the validated ID Token's exact `iss` and `sub` claims. For SAML, they come from the verified identity provider entity ID and signed `NameID`. `verifiedIdTokenClaims` contains the complete verified ID Token payload, while `providerClaims` and `providerAttributes` contain the protocol-accepted claims used for the profile. Subject and `NameID` matching is case-sensitive.
 
 `providerUser` contains normalized profile fields for either protocol. Profile fields, OIDC UserInfo claims, and SAML attributes may still require application-specific validation before they are used for authorization. `providerReference` is an opaque reference to the provider configuration accepted for this authentication flow. It detects provider replacement or authentication-configuration changes during the flow; do not persist it as a tenant or user binding.
 
-`findProvisionedUserByAccountKey` is application-owned in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
+`findProvisionedUserByAccountKey` is application-owned in this example. It should resolve the exact provider-and-subject or issuer-and-subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
 
 The resolver returns one of three decisions:
 

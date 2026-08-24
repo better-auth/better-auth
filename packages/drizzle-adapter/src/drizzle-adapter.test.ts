@@ -222,7 +222,10 @@ describe("drizzle-adapter", () => {
 			const adapter = drizzleAdapter(
 				{ _: { fullSchema: { account } }, select },
 				{ provider: "pg", schema: { account } },
-			)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+			)({
+				secret: "test-secret-that-is-at-least-32-chars-long!!",
+				account: { identityStrategy: "issuer" },
+			});
 
 			await expect(
 				adapter.findOne({
@@ -248,7 +251,10 @@ describe("drizzle-adapter", () => {
 				{ provider: "pg", schema: { account } },
 			)({
 				secret: "test-secret-that-is-at-least-32-chars-long!!",
-				account: { fields: { issuer: "constructor" } },
+				account: {
+					identityStrategy: "issuer",
+					fields: { issuer: "constructor" },
+				},
 			});
 
 			await expect(

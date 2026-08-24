@@ -1159,6 +1159,16 @@ export type BetterAuthOptions = {
 	account?:
 		| (BetterAuthDBOptions<"account", keyof BaseAccount> & {
 				/**
+				 * Determines the stable key Better Auth uses to recognize an account.
+				 *
+				 * `"provider-id"` preserves the v1.6 `(providerId, accountId)` identity
+				 * model and does not add an issuer column. `"issuer"` opts into the
+				 * issuer-scoped identity model and its schema migration.
+				 *
+				 * @default "provider-id"
+				 */
+				identityStrategy?: "provider-id" | "issuer";
+				/**
 				 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 				 * will be updated on sign in with the latest data from the provider.
 				 *

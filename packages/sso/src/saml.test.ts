@@ -6565,9 +6565,7 @@ describe("SAML E2E: SP-initiated flow", () => {
 			| Record<string, any>
 			| undefined;
 		expect(ssoAccount).toBeDefined();
-		expect(ssoAccount!.issuer).toBe(
-			"http://localhost:8081/api/sso/saml2/idp/metadata",
-		);
+		expect(ssoAccount).not.toHaveProperty("issuer");
 		expect(ssoAccount!.accountId).toBe("test@email.com");
 
 		// 7. Verify the user exists and is linked
@@ -7347,7 +7345,7 @@ describe("SAML user resolution HTTP", () => {
 			protocol: "saml",
 			providerId: "workforce-saml",
 			accountKey: {
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+				providerId: "workforce-saml",
 				accountId: "test@email.com",
 			},
 			providerUser: {
@@ -7390,7 +7388,6 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 				userId: selectedUser.id,
@@ -7540,9 +7537,9 @@ describe("SAML user resolution HTTP", () => {
 			model: "account",
 			where: [],
 		});
+		expect(accounts[0]).not.toHaveProperty("issuer");
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 			}),

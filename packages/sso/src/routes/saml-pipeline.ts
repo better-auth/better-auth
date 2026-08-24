@@ -2,6 +2,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -669,10 +670,15 @@ export async function processSAMLResponse(
 				: undefined,
 		emailVerified: userInfo.emailVerified,
 	};
-	const accountKey = {
-		issuer,
-		accountId: userInfo.id as string,
-	};
+	const accountIdentity = resolveAccountIdentity(
+		ctx.context.options.account?.identityStrategy,
+		{
+			providerId: provider.providerId,
+			issuer,
+			accountId: userInfo.id as string,
+		},
+	);
+	const accountKey = accountIdentity.key;
 
 	// 16. Session creation
 	// SSO provider ids are user-controlled and share the social-provider account
@@ -747,9 +753,7 @@ export async function processSAMLResponse(
 						id: userInfo.id as string,
 					},
 					account: {
-						providerId,
-						issuer: accountKey.issuer,
-						accountId: accountKey.accountId,
+						...accountIdentity.fields,
 						accessToken: "",
 						refreshToken: "",
 					},
