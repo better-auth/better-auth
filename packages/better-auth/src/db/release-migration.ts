@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { getDatabaseIndexStringLength } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
@@ -13,7 +14,7 @@ import type { Entries } from "type-fest";
 import { resolveStaticOAuthAccountIssuer } from "../oauth2/account-key";
 import type { GenericOAuthConfig } from "../plugins/generic-oauth/types";
 import { getAdapter } from "./adapter-kysely";
-import { getSchema } from "./get-schema";
+import { getSchemaFromAuthTables } from "./get-schema";
 import type { MigrationDatabase } from "./migration-database";
 import { getMigrationDatabase } from "./migration-database";
 
@@ -504,7 +505,7 @@ export interface MigratedScimSummary {
 }
 
 interface ReleaseMigrationInspection {
-	authTables: ReturnType<typeof getAuthTables>;
+	authTables: BetterAuthDBSchema;
 	existingTables: readonly {
 		columns: readonly { name: string }[];
 		name: string;
@@ -869,10 +870,11 @@ export async function inspectLegacyReleaseDataFrom16(
 	options: MigrateFrom16Options,
 	blockers?: MigrationDecisionBlocker[],
 ): Promise<LegacyReleaseDataState> {
-	const { kysely } = await getMigrationDatabase(config);
-	const authTables = getAuthTables(config);
+	const { authTables, kysely } = await getMigrationDatabase(config);
 	const tables = await kysely.introspection.getTables();
-	const configuredTables = new Set(Object.keys(getSchema(config)));
+	const configuredTables = new Set(
+		Object.keys(getSchemaFromAuthTables(authTables)),
+	);
 	const configuredSchemas = new Set(
 		tables
 			.filter((table) => configuredTables.has(table.name))
@@ -1135,9 +1137,8 @@ export async function prepareOAuthProviderDataFrom16(
 	) {
 		return undefined;
 	}
-	const { kysely } = await getMigrationDatabase(config);
+	const { authTables, kysely } = await getMigrationDatabase(config);
 	const adapter = await getAdapter(config);
-	const authTables = getAuthTables(config);
 	const existingTables = new Set(
 		(await kysely.introspection.getTables()).map((table) => table.name),
 	);
@@ -1360,7 +1361,8 @@ async function readScimAccountsFrom16(
 	accountTable: string;
 }> {
 	if (!state.scimProvider) return { accounts: [], accountTable: "account" };
-	const { kysely } = migrationDatabase ?? (await getMigrationDatabase(config));
+	const database = migrationDatabase ?? (await getMigrationDatabase(config));
+	const { authTables, kysely } = database;
 	const providerTable = state.scimProvider.sourceTableNeedsRename
 		? state.scimProvider.sourceTable
 		: state.scimProvider.backupTable;
@@ -1369,7 +1371,7 @@ async function readScimAccountsFrom16(
 		FROM ${sql.table(providerTable)}
 	`.execute(kysely);
 	const providerIds = new Set(providers.rows.map((row) => row.providerId));
-	const accountSchema = getAuthTables(config).account;
+	const accountSchema = authTables.account;
 	if (!accountSchema) return { accounts: [], accountTable: "account" };
 	const accountTable = accountSchema.modelName || "account";
 	const idColumn = accountSchema.fields.id?.fieldName || "id";
@@ -1393,8 +1395,7 @@ async function readScimAccountsFrom16(
 		WHERE ${sql.ref(providerIdColumn)} IN (${sql.join([...providerIds])})
 	`;
 	const lockedAccountQuery =
-		migrationDatabase?.databaseType === "mysql" &&
-		migrationDatabase.inTransaction
+		database.databaseType === "mysql" && database.inTransaction
 			? sql<LegacyScimAccountRecord>`${accountQuery} FOR UPDATE`
 			: accountQuery;
 	const accounts = (await lockedAccountQuery.execute(kysely)).rows;
@@ -1499,7 +1500,7 @@ export async function retireScimAccountsFrom16(
 		);
 	}
 	const { kysely } = database;
-	const accountSchema = getAuthTables(config).account;
+	const accountSchema = database.authTables.account;
 	if (!accountSchema) return [];
 	const accountTable = accountSchema.modelName || "account";
 	const idColumn = accountSchema.fields.id?.fieldName || "id";
@@ -1680,11 +1681,13 @@ async function inspectAccountIdentityFrom16(
 	migrationDatabase?: MigrationDatabase,
 	blockers?: MigrationDecisionBlocker[],
 ) {
-	const { kysely } = migrationDatabase ?? (await getMigrationDatabase(config));
-	const accountSchema = getAuthTables(config).account;
+	const database = migrationDatabase ?? (await getMigrationDatabase(config));
+	const { authTables, kysely } = database;
+	const accountSchema = authTables.account;
 	if (!accountSchema) return undefined;
 	const accountTable = accountSchema.modelName || "account";
-	const resolvedAccountSchema = getSchema(config)[accountTable];
+	const resolvedAccountSchema =
+		getSchemaFromAuthTables(authTables)[accountTable];
 	if (!resolvedAccountSchema) {
 		throw new BetterAuthError(
 			`The configured account schema "${accountTable}" could not be resolved.`,

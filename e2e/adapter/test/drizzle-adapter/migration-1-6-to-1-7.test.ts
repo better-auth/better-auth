@@ -93,3 +93,82 @@ it("migrates published 1.6.30 accounts and OAuth records through the Drizzle ada
 		sqlite.close();
 	}
 });
+
+it("migrates Drizzle snake_case account columns without duplicating logical fields", async () => {
+	const sqlite = new Database(":memory:");
+	try {
+		sqlite.exec(`
+			CREATE TABLE account (
+				id TEXT PRIMARY KEY NOT NULL,
+				account_id TEXT NOT NULL,
+				provider_id TEXT NOT NULL,
+				user_id TEXT NOT NULL,
+				access_token TEXT,
+				refresh_token TEXT,
+				id_token TEXT,
+				access_token_expires_at INTEGER,
+				refresh_token_expires_at INTEGER,
+				scope TEXT,
+				password TEXT,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
+			CREATE UNIQUE INDEX account_provider_id_account_id_unique
+				ON account (provider_id, account_id);
+			INSERT INTO account (
+				id, account_id, provider_id, user_id, created_at, updated_at
+			) VALUES (
+				'account-1', 'credential-user-1', 'credential', 'user-1', 0, 0
+			);
+		`);
+
+		const currentOptions = {
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+		};
+		const { schema } = await generateDrizzleSchema(
+			sqlite,
+			currentOptions,
+			"sqlite",
+		);
+		const database = drizzleAdapter(drizzle(sqlite, { schema }), {
+			provider: "sqlite",
+			schema,
+			transaction: true,
+		});
+		const auth17 = betterAuth({ ...currentOptions, database });
+		const inspection = await getMigrations(auth17.options);
+
+		expect(inspection.accountIdentitySchema).toEqual({
+			accountIdColumn: "account_id",
+			issuerColumn: "issuer",
+			table: "account",
+		});
+		expect(inspection.migrationBlockers).toContainEqual({
+			code: "required-column-backfill",
+			columns: ["issuer"],
+			table: "account",
+		});
+		const accountFields = Object.keys(
+			inspection.toBeAdded.find(({ table }) => table === "account")?.fields ??
+				{},
+		);
+		expect(accountFields).toContain("issuer");
+		expect(accountFields).not.toContain("account_id");
+		expect(accountFields).not.toContain("provider_id");
+
+		await expect(migrateFrom16(auth17.options, {})).resolves.toMatchObject({
+			accounts: {
+				migrated: 1,
+				providers: { credential: 1 },
+			},
+		});
+		expect(
+			sqlite
+				.prepare("SELECT issuer FROM account WHERE id = ?")
+				.get("account-1"),
+		).toEqual({ issuer: "local:credential" });
+	} finally {
+		sqlite.close();
+	}
+});

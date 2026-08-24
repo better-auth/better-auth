@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "e2e:integration": "vitest run",
-    "prepare": "prisma generate"
+    "prepare": "prisma generate && prisma generate --schema migration-mapped.prisma"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",

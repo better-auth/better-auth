@@ -5,7 +5,10 @@ import {
 	createTelemetry,
 	getTelemetryAuthConfig,
 } from "@better-auth/telemetry";
-import type { MigrationBlocker } from "better-auth/db/migration";
+import type {
+	LegacyReleaseDataState,
+	MigrationBlocker,
+} from "better-auth/db/migration";
 import {
 	getMigrations,
 	inspectLegacyReleaseDataFrom16,
@@ -87,6 +90,18 @@ async function inspectReleaseMigrationState(
 	}
 }
 
+function hasLegacyReleaseState(state: LegacyReleaseDataState | undefined) {
+	return Boolean(
+		state &&
+			[
+				state.oauthAccessToken,
+				state.oauthApplication,
+				state.oauthConsent,
+				state.scimProvider,
+			].some(Boolean),
+	);
+}
+
 /** The single next step after a blocked run, told from the blockers that survived. */
 function describeBlockedMigrationExit(
 	releaseMigrationBlockers: ReleaseMigrationPlanBlocker[],
@@ -166,7 +181,8 @@ function printMigrationChanges(
 	}
 }
 
-function printHumanMigrationPlan(
+/** @internal */
+export function printHumanMigrationPlan(
 	migrationPlan: MigrationPlan,
 	toBeAdded: MigrationInspection["toBeAdded"],
 	toBeAddedIndexes: MigrationInspection["toBeAddedIndexes"],
@@ -182,13 +198,17 @@ function printHumanMigrationPlan(
 	console.log(
 		`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
 	);
+	for (const blocker of migrationPlan.blockers) {
+		console.log("->", describeMigrationBlocker(blocker));
+		console.log("   Remediation:", blocker.remediation.summary);
+	}
 	if (migrationPlan.releaseMigration) {
 		console.log(`Release migration: ${migrationPlan.releaseMigration.id}`);
 		for (const action of migrationPlan.releaseMigration.actions) {
 			console.log("->", action);
 		}
 	}
-	console.log("Plan complete. No database changes were applied.");
+	console.log("No database changes were applied.");
 }
 
 function printJson(value: MigrationApplicationResult | MigrationPlan) {
@@ -265,6 +285,7 @@ export async function migrateAction(opts: unknown) {
 			: yoctoSpinner({ text: "preparing migration..." }).start();
 
 	const {
+		accountIdentitySchema,
 		toBeAdded,
 		toBeAddedIndexes,
 		toBeCreated,
@@ -282,23 +303,28 @@ export async function migrateAction(opts: unknown) {
 		toBeAddedIndexes.length > 0 ||
 		toBeCreated.length > 0;
 	const isReleaseMigrationBlocker = (blocker: MigrationBlocker) =>
-		isHandledByMigrationFrom16(config, blocker);
+		isHandledByMigrationFrom16(config, blocker, accountIdentitySchema);
+	let releaseMigrationBlockers = await collectReleaseMigrationBlockers(
+		config,
+		releaseMigrationOptions,
+	);
+	let legacyReleaseState = await inspectReleaseMigrationState(
+		config,
+		releaseMigrationOptions,
+		releaseMigrationBlockers,
+	);
 	const releaseMigration =
 		decisions !== undefined ||
+		hasLegacyReleaseState(legacyReleaseState) ||
+		releaseMigrationBlockers.length > 0 ||
 		migrationBlockers.some(isReleaseMigrationBlocker);
 	const effectiveMigrationBlockers = releaseMigration
 		? migrationBlockers.filter((blocker) => !isReleaseMigrationBlocker(blocker))
 		: migrationBlockers;
-	let releaseMigrationBlockers: ReleaseMigrationPlanBlocker[] = releaseMigration
-		? await collectReleaseMigrationBlockers(config, releaseMigrationOptions)
-		: [];
-	let legacyReleaseState = releaseMigration
-		? await inspectReleaseMigrationState(
-				config,
-				releaseMigrationOptions,
-				releaseMigrationBlockers,
-			)
-		: undefined;
+	if (!releaseMigration) {
+		releaseMigrationBlockers = [];
+		legacyReleaseState = undefined;
+	}
 	const buildMigrationPlan = () =>
 		createMigrationPlan({
 			hasChanges,

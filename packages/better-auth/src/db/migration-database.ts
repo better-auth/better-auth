@@ -1,4 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
 import type {
 	DBTransactionAdapter,
 	MigrationDatabaseConnection,
@@ -41,6 +43,7 @@ import { getAdapter } from "./adapter-kysely";
 
 export interface MigrationDatabase {
 	adapterId: string;
+	authTables: BetterAuthDBSchema;
 	databaseType: KyselyDatabaseType;
 	inTransaction: boolean;
 	introspectIndexes?: DatabaseIndexIntrospector | undefined;
@@ -174,10 +177,12 @@ function createMigrationDialect(
 }
 
 export async function getMigrationDatabase(config: BetterAuthOptions) {
+	const configuredAuthTables = getAuthTables(config);
 	const directDatabase = await createKyselyAdapter(config);
 	if (directDatabase.kysely && directDatabase.databaseType) {
 		const database: MigrationDatabase = {
 			adapterId: "kysely",
+			authTables: configuredAuthTables,
 			databaseType: directDatabase.databaseType,
 			inTransaction: false,
 			introspectIndexes: directDatabase.introspectIndexes,
@@ -193,6 +198,7 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 				directDatabase.kysely!.transaction().execute((transaction) =>
 					callback({
 						adapterId: database.adapterId,
+						authTables: database.authTables,
 						databaseType: database.databaseType,
 						inTransaction: true,
 						introspectIndexes: database.introspectIndexes,
@@ -222,6 +228,9 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 			`The ${adapter.id} adapter does not expose a SQL migration connection. Use \`auth generate\` and your database tooling instead.`,
 		);
 	}
+	const authTables = migrationConnection.resolvePhysicalSchema
+		? await migrationConnection.resolvePhysicalSchema(configuredAuthTables)
+		: configuredAuthTables;
 	const createDatabase = (
 		connection: MigrationDatabaseConnection,
 		inTransaction: boolean,
@@ -231,6 +240,7 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 		});
 		const database: MigrationDatabase = {
 			adapterId: adapter.id,
+			authTables,
 			databaseType: connection.dialect,
 			inTransaction,
 			kysely,
