@@ -383,7 +383,7 @@ description: Learn how to configure Better Auth in your project.
 
         app.all("/api/auth/*", toNodeHandler(auth));
 
-        // Mount JSON middleware after Better Auth to preserve raw request bodies.
+        // Mount body-parsing middleware after the Better Auth handler.
         app.use(express.json());
 
         app.listen(port, () => {
