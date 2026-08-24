@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import * as z from "zod";
 import {
 	classifyChangeType,
 	DOMAIN_ORDER,
@@ -22,6 +23,8 @@ interface ChangesetSnapshot {
 	ids: string[];
 	ref: string;
 }
+
+const packageVersionSchema = z.object({ version: z.string() });
 
 function gitShow(ref: string, path: string): string {
 	return execFileSync("git", ["show", `${ref}:${path}`], {
@@ -243,28 +246,18 @@ function changesetIdsFromPaths(paths: string): string[] {
 		);
 }
 
-function findConsumedChangesets(
-	ref: string,
-	previousTag: string,
-): ChangesetSnapshot | null {
-	const releaseCommit = execFileSync(
-		"git",
-		[
-			"log",
-			"--first-parent",
-			"--diff-filter=D",
-			"--format=%H",
-			"-n",
-			"1",
-			`${previousTag}..${ref}`,
-			"--",
-			".changeset/",
-		],
-		{ encoding: "utf-8" },
-	).trim();
-	if (!releaseCommit) return null;
+function readPackageVersion(ref: string): string | null {
+	if (!refHasPath(ref, "packages/better-auth/package.json")) return null;
+	const result = packageVersionSchema.safeParse(
+		JSON.parse(gitShow(ref, "packages/better-auth/package.json")),
+	);
+	return result.success ? result.data.version : null;
+}
 
-	const parentRef = `${releaseCommit}^`;
+function findDeletedChangesets(
+	parentRef: string,
+	commitRef: string,
+): ChangesetSnapshot | null {
 	const deletedFiles = execFileSync(
 		"git",
 		[
@@ -272,7 +265,7 @@ function findConsumedChangesets(
 			"--diff-filter=D",
 			"--name-only",
 			parentRef,
-			releaseCommit,
+			commitRef,
 			"--",
 			".changeset/",
 		],
@@ -280,6 +273,66 @@ function findConsumedChangesets(
 	);
 	const ids = changesetIdsFromPaths(deletedFiles);
 	return ids.length > 0 ? { ids, ref: parentRef } : null;
+}
+
+function listCommits(range: string, path: string): string[] {
+	return execFileSync("git", ["rev-list", range, "--", path], {
+		encoding: "utf-8",
+	})
+		.trim()
+		.split("\n")
+		.filter(Boolean);
+}
+
+function commitParents(commit: string): string[] {
+	const [, ...parents] = execFileSync(
+		"git",
+		["rev-list", "--parents", "-n", "1", commit],
+		{ encoding: "utf-8" },
+	)
+		.trim()
+		.split(" ");
+	return parents;
+}
+
+function findVersionCommit(
+	ref: string,
+	previousTag: string,
+	version: string,
+): string | null {
+	for (const commit of listCommits(
+		`${previousTag}..${ref}`,
+		"packages/better-auth/package.json",
+	)) {
+		if (readPackageVersion(commit) !== version) continue;
+		const parents = commitParents(commit);
+		if (!parents.some((parent) => readPackageVersion(parent) !== version)) {
+			continue;
+		}
+		return commit;
+	}
+	return null;
+}
+
+function findConsumedChangesets(
+	ref: string,
+	previousTag: string,
+	version: string,
+): ChangesetSnapshot | null {
+	const versionCommit = findVersionCommit(ref, previousTag, version);
+	if (!versionCommit) return null;
+
+	for (const commit of listCommits(
+		`${previousTag}..${versionCommit}`,
+		".changeset/",
+	)) {
+		for (const parent of commitParents(commit)) {
+			const snapshot = findDeletedChangesets(parent, commit);
+			if (snapshot) return snapshot;
+		}
+	}
+
+	return null;
 }
 
 function findCurrentChangesets(ref: string): ChangesetSnapshot | null {
@@ -296,6 +349,7 @@ function findCurrentChangesets(ref: string): ChangesetSnapshot | null {
 function buildChangesetIndex(
 	ref: string,
 	previousTag: string,
+	version: string,
 ): {
 	byPR: Map<number, ChangesetEntry>;
 	orphans: ChangesetEntry[];
@@ -322,7 +376,7 @@ function buildChangesetIndex(
 
 	if (!hasPreJSON) {
 		const snapshot =
-			findConsumedChangesets(baseRef, previousTag) ??
+			findConsumedChangesets(baseRef, previousTag, version) ??
 			findCurrentChangesets(baseRef);
 		if (snapshot) {
 			effectiveRef = snapshot.ref;
@@ -587,7 +641,7 @@ export async function collectEntries(
 		byPR: changesetByPR,
 		orphans: changesetOrphans,
 		byDescription: changesetByDesc,
-	} = buildChangesetIndex(changesetRef, previousTag);
+	} = buildChangesetIndex(changesetRef, previousTag, version);
 	if (changesetByPR.size > 0 || changesetOrphans.length > 0) {
 		console.log(
 			`  Loaded ${changesetByPR.size} changeset descriptions, ${changesetOrphans.length} orphans`,

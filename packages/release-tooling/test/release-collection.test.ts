@@ -93,7 +93,13 @@ function writeFixtureFile(
 	writeFileSync(file, content);
 }
 
-function createReleaseWithFollowUpCommit(): {
+interface ReleaseFixtureOptions {
+	mergeVersionPR?: boolean;
+	consumeLaterChangeset?: boolean;
+	splitVersionCommit?: boolean;
+}
+
+function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 	commitRef: string;
 	workspace: string;
 } {
@@ -116,6 +122,7 @@ function createReleaseWithFollowUpCommit(): {
 	git(workspace, ["add", "."]);
 	git(workspace, ["commit", "-m", "chore: initialize release fixture"]);
 	git(workspace, ["tag", "v1.0.0"]);
+	git(workspace, ["switch", "-c", "version-pr"]);
 
 	writeFixtureFile(
 		workspace,
@@ -141,6 +148,10 @@ function createReleaseWithFollowUpCommit(): {
 	]);
 
 	rmSync(resolve(workspace, ".changeset/pr-42.md"));
+	if (options.splitVersionCommit) {
+		git(workspace, ["add", "."]);
+		git(workspace, ["commit", "-m", "chore: consume release changeset"]);
+	}
 	writeFixtureFile(
 		workspace,
 		"packages/better-auth/package.json",
@@ -148,6 +159,36 @@ function createReleaseWithFollowUpCommit(): {
 	);
 	git(workspace, ["add", "."]);
 	git(workspace, ["commit", "-m", "chore: release v2.0.0"]);
+
+	if (options.consumeLaterChangeset) {
+		writeFixtureFile(
+			workspace,
+			".changeset/pr-99.md",
+			[
+				"---",
+				'"better-auth": patch',
+				"---",
+				"",
+				"Unrelated follow-up changeset.",
+			].join("\n"),
+		);
+		git(workspace, ["add", "."]);
+		git(workspace, ["commit", "-m", "chore: add follow-up changeset"]);
+		rmSync(resolve(workspace, ".changeset/pr-99.md"));
+		git(workspace, ["add", "."]);
+		git(workspace, ["commit", "-m", "chore: consume follow-up changeset"]);
+	}
+
+	if (options.mergeVersionPR) {
+		git(workspace, ["switch", "main"]);
+		git(workspace, [
+			"merge",
+			"--no-ff",
+			"version-pr",
+			"-m",
+			"chore: merge version PR",
+		]);
+	}
 
 	writeFixtureFile(workspace, "release-follow-up.md", "Reviewed release copy.");
 	git(workspace, ["add", "."]);
@@ -243,6 +284,67 @@ describe("release changeset collection", () => {
 
 			expect(result.status, result.stderr).toBe(0);
 			expect(result.stdout).toContain("### ❗ Breaking Changes");
+			expect(result.stdout).toContain(
+				"Require an explicit migration after the release.",
+			);
+			expect(result.stdout).toContain('"changeType": "breaking"');
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("ignores later changeset deletions that did not create the version", () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			consumeLaterChangeset: true,
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain(
+				"Require an explicit migration after the release.",
+			);
+			expect(result.stdout).toContain('"changeType": "breaking"');
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("finds changesets consumed inside a merged version PR", () => {
+		const fixture = createReleaseWithFollowUpCommit({ mergeVersionPR: true });
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain(
+				"Require an explicit migration after the release.",
+			);
+			expect(result.stdout).toContain('"changeType": "breaking"');
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("finds changesets deleted before the version transition", () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			splitVersionCommit: true,
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
 			expect(result.stdout).toContain(
 				"Require an explicit migration after the release.",
 			);
