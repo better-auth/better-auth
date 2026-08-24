@@ -731,6 +731,28 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
   </Tab>
 </Tabs>
 
+### Get Organization
+
+To get organization metadata without members or invitations, use `getOrganization`.
+By default, if you don't pass any properties, it will use the active organization.
+
+Prefer this over `getFullOrganization` when you only need fields like `id`, `name`, `slug`, `logo`, and `metadata`.
+
+<APIMethod path="/organization/get-organization" method="GET" requireSession>
+  ```ts
+  type getOrganization = {
+      /**
+       * The organization ID to get. By default, it will use the active organization.  
+       */
+      organizationId?: string = "org-id"
+      /**
+       * The organization slug to get.  
+       */
+      organizationSlug?: string = "org-slug"
+  }
+  ```
+</APIMethod>
+
 ### Get Full Organization
 
 To get the full details of an organization, you can use the `getFullOrganization` function.
@@ -1887,11 +1909,22 @@ Sets the given team as the current active team for the current active organizati
 
 #### List User Teams
 
-List all teams that the current user is a part of.
+List all teams that a user is a part of. Defaults to the current user and returns teams across every organization the user belongs to.
+
+* Pass `userId` to list teams for another member. This is gated behind the `member:update` permission in the target organization.
+* Pass `organizationId` to scope the result to a single organization without having to switch the session's active organization. When omitted, queries for another user use the session's active organization.
 
 <APIMethod path="/organization/list-user-teams" method="GET" requireSession>
   ```ts
   type listUserTeams = {
+    /**
+     * The user ID to list teams for. Defaults to the current session user.
+     */
+    userId?: string
+    /**
+     * The organization ID to scope the team list to. When omitted on a self-query, teams are returned across every organization the user belongs to. When querying another user, falls back to the session's active organization.
+     */
+    organizationId?: string
   }
   ```
 </APIMethod>
@@ -1988,6 +2021,8 @@ The teams feature supports several configuration options:
   }
   ```
 
+  `maximumMembersPerTeam` is enforced when accepting team invitations, when adding an existing organization member to a team, and when adding a new organization member with a `teamId`.
+
 * `allowRemovingAllTeams`: Control whether the last team can be removed
   ```ts
   teams: {
@@ -2027,6 +2062,11 @@ export const teamsFeatureTeamTableFields = [
 		name: "name",
 		type: "string",
 		description: "The name of the team",
+	},
+	{
+		name: "memberCount",
+		type: "number",
+		description: "Durable member count used to enforce team capacity",
 	},
 	{
 		name: "organizationId",
@@ -2072,6 +2112,12 @@ export const teamsFeatureTeamMemberTableFields = [
 		description: "The ID of the user",
 		isForeignKey: true,
 		references: { model: "user", field: "id" },
+	},
+	{
+		name: "membershipKey",
+		type: "string",
+		description: "Internal unique key for the team and user membership pair",
+		isOptional: true,
 	},
 	{
 		name: "createdAt",
@@ -2319,6 +2365,11 @@ export const optionalTeamTableFields = [
 		description: "The name of the team",
 	},
 	{
+		name: "memberCount",
+		type: "number",
+		description: "Durable member count used to enforce team capacity",
+	},
+	{
 		name: "organizationId",
 		type: "string",
 		description: "The ID of the organization",
@@ -2362,6 +2413,12 @@ export const teamsFeatureTeamTableFields0 = [
 		description: "The ID of the user",
 		isForeignKey: true,
 		references: { model: "user", field: "id" },
+	},
+	{
+		name: "membershipKey",
+		type: "string",
+		description: "Internal unique key for the team and user membership pair",
+		isOptional: true,
 	},
 	{
 		name: "createdAt",

@@ -12,8 +12,9 @@ import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
 import type { TelemetryContext, TelemetryEvent } from "./types";
 import { hashToBase64 } from "./utils/hash";
 import { generateId } from "./utils/id";
-export { getTelemetryAuthConfig };
+
 export type { TelemetryEvent } from "./types";
+export { getTelemetryAuthConfig };
 
 // --- Node-specific: package.json reading ---
 

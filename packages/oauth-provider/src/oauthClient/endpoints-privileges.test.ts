@@ -7,10 +7,20 @@ import { oauthProviderClient } from "../client";
 import { oauthProvider } from "../oauth";
 import type { OAuthClient } from "../types/oauth";
 
+type TestOAuthClientUiMetadata = Pick<
+	OAuthClient,
+	| "client_name"
+	| "client_uri"
+	| "contacts"
+	| "logo_uri"
+	| "policy_uri"
+	| "tos_uri"
+>;
+
 describe("oauthClient", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	const allowedUser = {
 		email: "allowed@test.com",
@@ -34,10 +44,7 @@ describe("oauthClient", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
+				scopes: ["openid", "profile", "email", "offline_access", "m2m:read"],
 				clientReference() {
 					return "oauth-client-test";
 				},
@@ -85,7 +92,7 @@ describe("oauthClient", async () => {
 		},
 	});
 
-	const testClientInput: Omit<OAuthClient, "client_id"> = {
+	const testClientInput: TestOAuthClientUiMetadata = {
 		client_name: "accept name",
 		client_uri: "https://example.com/ok",
 		logo_uri: "https://example.com/logo.png",
@@ -189,6 +196,90 @@ describe("oauthClient", async () => {
 		oauthClient.client_secret = adminClient.client_secret;
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(2);
+	});
+
+	it("requires a distinct privilege action to configure client_credentials scopes", async () => {
+		const adminClient = await auth.api.adminCreateOAuthClient({
+			headers: allowedUserHeaders,
+			body: {
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["m2m:read", "m2m:read"],
+			},
+		});
+
+		expect(adminClient.client_credentials_scopes).toEqual(["m2m:read"]);
+		expect(clientPrivileges).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({ action: "create" }),
+		);
+		expect(clientPrivileges).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				action: "configure-client-credentials-scopes",
+			}),
+		);
+		expect(clientPrivileges).toHaveBeenCalledTimes(2);
+		await allowedAuthClient.oauth2.deleteClient({
+			client_id: adminClient.client_id,
+		});
+	});
+
+	it("clears client_credentials authority when the grant is removed and does not restore it", async () => {
+		const adminClient = await auth.api.adminCreateOAuthClient({
+			headers: allowedUserHeaders,
+			body: {
+				grant_types: ["authorization_code", "client_credentials"],
+				redirect_uris: [redirectUri],
+				client_credentials_scopes: ["m2m:read"],
+			},
+		});
+		clientPrivileges.mockClear();
+
+		const removed = await auth.api.adminUpdateOAuthClient({
+			headers: allowedUserHeaders,
+			body: {
+				client_id: adminClient.client_id,
+				update: {
+					grant_types: ["authorization_code"],
+				},
+			},
+		});
+		expect(removed.client_credentials_scopes).toEqual([]);
+		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "update" }),
+		);
+
+		clientPrivileges.mockClear();
+		const restoredGrant = await auth.api.adminUpdateOAuthClient({
+			headers: allowedUserHeaders,
+			body: {
+				client_id: adminClient.client_id,
+				update: {
+					grant_types: ["authorization_code", "client_credentials"],
+				},
+			},
+		});
+		expect(restoredGrant.client_credentials_scopes).toEqual([]);
+		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+
+		clientPrivileges.mockClear();
+		const cleared = await auth.api.adminUpdateOAuthClient({
+			headers: allowedUserHeaders,
+			body: {
+				client_id: adminClient.client_id,
+				update: { client_credentials_scopes: [] },
+			},
+		});
+		expect(cleared.client_credentials_scopes).toEqual([]);
+		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "update" }),
+		);
+
+		await allowedAuthClient.oauth2.deleteClient({
+			client_id: adminClient.client_id,
+		});
 	});
 
 	it("should not get a client with forbidden user", async () => {
@@ -377,13 +468,13 @@ describe("oauthClient", async () => {
  * gate as the create-client endpoints. The gate lives in the shared creation
  * chokepoint, so every creation route inherits it; a forbidden authenticated
  * user cannot mint a client through registration, while the unauthenticated
- * public-client path stays open and never consults the hook.
+ * open-registration path stays open and never consults the hook.
  *
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-jmcv-4jfc-6qqj
  */
 describe("oauthClient dynamic registration privileges", async () => {
 	const baseUrl = "http://localhost:3000";
-	const redirectUri = "http://localhost:5000/callback";
+	const redirectUri = "https://rp.example.com/callback";
 	const allowedUser = {
 		email: "dcr-allowed@test.com",
 		password: "test123456",
@@ -409,10 +500,6 @@ describe("oauthClient dynamic registration privileges", async () => {
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
 				clientPrivileges,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -480,7 +567,19 @@ describe("oauthClient dynamic registration privileges", async () => {
 		});
 		expect(client.data?.client_id).toBeDefined();
 		expect(client.data?.client_secret).toBeUndefined();
-		expect(client.data?.public).toBe(true);
+		expect(client.data?.token_endpoint_auth_method).toBe("none");
+		expect(client.data).not.toHaveProperty("public");
+		expect(clientPrivileges).not.toHaveBeenCalled();
+	});
+
+	it("should allow unauthenticated confidential registration without invoking the gate", async () => {
+		const client = await unauthedAuthClient.oauth2.register({
+			redirect_uris: [redirectUri],
+		});
+		expect(client.data?.client_id).toBeDefined();
+		expect(client.data?.client_secret).toBeDefined();
+		expect(client.data?.token_endpoint_auth_method).toBe("client_secret_basic");
+		expect(client.data).not.toHaveProperty("public");
 		expect(clientPrivileges).not.toHaveBeenCalled();
 	});
 });

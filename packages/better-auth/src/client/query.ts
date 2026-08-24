@@ -57,7 +57,7 @@ export const useAuthQuery = <T>(
 		isRefetching: false,
 		refetch: (queryParams) => fn(queryParams),
 	});
-	withEquality(value, isAuthQueryStateEqual);
+	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
 
 	const fn = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,

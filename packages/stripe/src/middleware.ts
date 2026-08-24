@@ -40,6 +40,13 @@ export const referenceMiddleware = (
 
 		// Resolve once and expose on the context so the handler reads this exact id instead of re-deriving it.
 		if (customerType === "organization") {
+			if (!options.organization?.enabled) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
+				);
+			}
+
 			// Organization subscriptions always require authorizeReference
 			if (!subscriptionOptions.authorizeReference) {
 				ctx.context.logger.error(

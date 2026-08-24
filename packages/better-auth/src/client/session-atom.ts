@@ -1,6 +1,6 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { atom, onMount } from "nanostores";
+import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
@@ -10,15 +10,36 @@ import type { SessionQueryParams } from "./types";
 // SSR detection
 const isServer = () => typeof window === "undefined";
 
-export type SessionAtom = AuthQueryAtom<{
-	user: User;
-	session: Session;
-}>;
+// Align session request reuse with the nanostores's remount lifecycle.
+const SESSION_MOUNT_DEDUPE_INTERVAL = STORE_UNMOUNT_DELAY;
 
-type SessionData = {
+export type SessionData = {
 	user: User;
 	session: Session;
 } & Record<string, any>;
+
+export type SessionAtom = AuthQueryAtom<SessionData>;
+
+export function hydrateSessionAtom(
+	sessionAtom: SessionAtom,
+	session: SessionData | null,
+) {
+	// The client is a module-level singleton, so writing during SSR would leak
+	// one request's session into concurrent requests sharing the same process.
+	if (typeof window === "undefined") {
+		return;
+	}
+	const currentSession = sessionAtom.get();
+	if (currentSession.data !== null || session === null) {
+		return;
+	}
+	sessionAtom.set({
+		...currentSession,
+		data: session,
+		error: null,
+		isPending: false,
+	});
+}
 
 type SessionResponse = (
 	| { session: null; user: null; needsRefresh?: boolean }
@@ -26,9 +47,12 @@ type SessionResponse = (
 ) &
 	Record<string, any>;
 
-type SessionRequest = {
+type SessionFetchOutcome = "aborted" | "failed" | "stale" | "fresh";
+
+type SessionFlight = {
 	cancel: () => void;
-	promise: Promise<void>;
+	promise: Promise<SessionFetchOutcome>;
+	revision: number;
 };
 
 /**
@@ -77,7 +101,13 @@ export function getSessionAtom(
 ) {
 	const $signal = atom<boolean>(false);
 
-	let activeRequest: SessionRequest | undefined;
+	let flight: SessionFlight | undefined;
+	let freshUntil = 0;
+	let sessionRevision = 0;
+	$signal.listen(() => {
+		sessionRevision++;
+		freshUntil = 0;
+	});
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -95,7 +125,7 @@ export function getSessionAtom(
 	const executeSessionFetch = async (
 		signal: AbortSignal,
 		queryParams?: { query?: SessionQueryParams } | undefined,
-	): Promise<void> => {
+	): Promise<SessionFetchOutcome> => {
 		const current = session.value;
 		session.set({
 			...current,
@@ -104,7 +134,7 @@ export function getSessionAtom(
 			error: null,
 			refetch,
 		});
-		if (signal.aborted) return;
+		if (signal.aborted) return "aborted";
 
 		try {
 			const res = await $fetch<SessionResponse>("/get-session", {
@@ -113,10 +143,11 @@ export function getSessionAtom(
 				signal,
 			});
 			if (signal.aborted) {
-				return;
+				return "aborted";
 			}
 
 			let { data, error } = normalizeSessionResponse(res);
+			let outcome: SessionFetchOutcome = "fresh";
 
 			if (data?.needsRefresh) {
 				try {
@@ -125,13 +156,14 @@ export function getSessionAtom(
 						signal,
 					});
 					if (signal.aborted) {
-						return;
+						return "aborted";
 					}
 					({ data, error } = normalizeSessionResponse(refreshRes));
 				} catch {
 					if (signal.aborted) {
-						return;
+						return "aborted";
 					}
+					outcome = "stale";
 				}
 			}
 
@@ -145,7 +177,7 @@ export function getSessionAtom(
 					isRefetching: false,
 					refetch,
 				});
-				return;
+				return "failed";
 			}
 
 			const sessionData = normalizeSessionData(data);
@@ -163,9 +195,10 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			return outcome;
 		} catch (fetchError) {
 			if (signal.aborted) {
-				return;
+				return "aborted";
 			}
 			const latest = session.value;
 			session.set({
@@ -175,32 +208,57 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			return "failed";
 		}
+	};
+
+	const getFreshUntil = (): number => {
+		const expiresAt = session.value.data?.session?.expiresAt;
+		// Treat missing expiry as unbounded so Math.min picks the dedupe deadline.
+		const sessionExpiresAt =
+			expiresAt instanceof Date
+				? expiresAt.getTime()
+				: Number.POSITIVE_INFINITY;
+		return Math.min(
+			Date.now() + SESSION_MOUNT_DEDUPE_INTERVAL,
+			sessionExpiresAt,
+		);
 	};
 
 	const fetchSession = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => {
-		activeRequest?.cancel();
+		freshUntil = 0;
+		flight?.cancel();
 		const controller = new AbortController();
 		const promise = Promise.resolve().then(() => {
-			if (controller.signal.aborted) return;
+			if (controller.signal.aborted) return "aborted" as const;
 			return executeSessionFetch(controller.signal, queryParams);
 		});
-		const request: SessionRequest = {
+		const request: SessionFlight = {
 			cancel: () => controller.abort(),
 			promise,
+			revision: sessionRevision,
 		};
-		activeRequest = request;
-		const clearActiveRequest = () => {
-			if (activeRequest === request) activeRequest = undefined;
+		flight = request;
+		const settleFlight = (outcome: SessionFetchOutcome) => {
+			if (flight !== request) return;
+			flight = undefined;
+			if (outcome === "fresh" && request.revision === sessionRevision) {
+				freshUntil = getFreshUntil();
+			}
 		};
-		void request.promise.then(clearActiveRequest, clearActiveRequest);
-		return request.promise;
+		void request.promise.then(settleFlight, () => settleFlight("failed"));
+		return request.promise.then(() => undefined);
 	};
 
-	const fetchSessionOnMount = (): Promise<void> =>
-		activeRequest?.promise ?? fetchSession();
+	const fetchSessionOnMount = (): Promise<void> => {
+		if (flight?.revision === sessionRevision) {
+			return flight.promise.then(() => undefined);
+		}
+		if (Date.now() < freshUntil) return Promise.resolve();
+		return fetchSession();
+	};
 
 	let broadcastSessionUpdate: (
 		trigger: "signout" | "getSession" | "updateUser",
