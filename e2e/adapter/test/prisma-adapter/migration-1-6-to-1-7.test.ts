@@ -10,7 +10,7 @@ import { jwt } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { expect, it } from "vitest";
 import { seedPublishedOAuthProviderData } from "../kysely-adapter/published-1-6-30-fixture";
-import { PrismaClient } from "./.tmp/prisma-client-base/client";
+import { PrismaClient } from "./.tmp/prisma-client-migration-mapped/client";
 
 it("migrates published 1.6.30 accounts and OAuth records through the Prisma adapter", async () => {
 	const temporaryDirectory = await fs.mkdtemp(
@@ -31,7 +31,17 @@ it("migrates published 1.6.30 accounts and OAuth records through the Prisma adap
 			.all()
 			.map((column) => (column as { name: string }).name);
 		expect(sourceAccountColumns).toContain("accountId");
-		expect(sourceAccountColumns).not.toContain("issuer");
+		sqlite.exec(`
+			ALTER TABLE account RENAME COLUMN accountId TO account_id;
+			ALTER TABLE account RENAME COLUMN providerId TO provider_id;
+			ALTER TABLE account RENAME COLUMN userId TO user_id;
+		`);
+		const mappedSourceAccountColumns = sqlite
+			.prepare("PRAGMA table_info(account)")
+			.all()
+			.map((column) => (column as { name: string }).name);
+		expect(mappedSourceAccountColumns).toContain("account_id");
+		expect(mappedSourceAccountColumns).not.toContain("identity_issuer");
 		sqlite.close();
 		sqlite = undefined;
 
@@ -71,14 +81,14 @@ it("migrates published 1.6.30 accounts and OAuth records through the Prisma adap
 				inspection.toBeAdded.find(({ table }) => table === "account")?.fields ??
 					{},
 			),
-		).toEqual(expect.arrayContaining(["issuer"]));
+		).toEqual(expect.arrayContaining(["identity_issuer"]));
 		expect(inspection.migrationTarget).toEqual({
 			adapter: "prisma",
 			dialect: "sqlite",
 		});
 		expect(inspection.migrationBlockers).toContainEqual({
 			code: "required-column-backfill",
-			columns: ["issuer"],
+			columns: ["identity_issuer"],
 			table: "account",
 		});
 

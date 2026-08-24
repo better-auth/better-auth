@@ -28,7 +28,7 @@ import type {
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { getSchema } from "./get-schema";
+import { getSchemaFromAuthTables } from "./get-schema";
 import type { MigrationDatabase } from "./migration-database";
 import { getMigrationDatabase } from "./migration-database";
 import type {
@@ -206,6 +206,12 @@ export interface RequiredColumnConstraintBlocker {
 	table: string;
 }
 
+export interface AccountIdentityMigrationSchema {
+	accountIdColumn: string;
+	issuerColumn: string;
+	table: string;
+}
+
 export type MigrationBlocker =
 	| IndexColumnBoundsBlocker
 	| RequiredColumnBackfillBlocker
@@ -240,6 +246,7 @@ function isAccountIdentitySchemaBlocker(
 export function isHandledByMigrationFrom16(
 	config: BetterAuthOptions,
 	blocker: MigrationBlocker,
+	physicalSchema?: AccountIdentityMigrationSchema | undefined,
 ) {
 	if (
 		blocker.code === "reprovision-data" ||
@@ -252,9 +259,13 @@ export function isHandledByMigrationFrom16(
 	const accountSchema = getAuthTables(config).account;
 	return isAccountIdentitySchemaBlocker(
 		blocker,
-		accountSchema?.modelName || "account",
-		accountSchema?.fields.issuer?.fieldName || "issuer",
-		accountSchema?.fields.accountId?.fieldName || "accountId",
+		physicalSchema?.table || accountSchema?.modelName || "account",
+		physicalSchema?.issuerColumn ||
+			accountSchema?.fields.issuer?.fieldName ||
+			"issuer",
+		physicalSchema?.accountIdColumn ||
+			accountSchema?.fields.accountId?.fieldName ||
+			"accountId",
 	);
 }
 
@@ -862,12 +873,20 @@ async function getMigrationsWithDatabase(
 	migrationDatabase: MigrationDatabase,
 ) {
 	const throwOnUnsafe = inspectionOptions.throwOnUnsafe !== false;
-	const authTables = getAuthTables(config);
-	const betterAuthSchema = getSchema(config);
+	const authTables = migrationDatabase.authTables;
+	const betterAuthSchema = getSchemaFromAuthTables(authTables);
 	const accountIssuer = authTables.account && {
 		table: authTables.account.modelName,
 		column: authTables.account.fields.issuer?.fieldName || "issuer",
 	};
+	const accountIdentitySchema = authTables.account
+		? {
+				accountIdColumn:
+					authTables.account.fields.accountId?.fieldName || "accountId",
+				issuerColumn: authTables.account.fields.issuer?.fieldName || "issuer",
+				table: authTables.account.modelName,
+			}
+		: undefined;
 	const isAccountIssuerColumn = (table: string, column: string) =>
 		table === accountIssuer?.table && column === accountIssuer.column;
 	const logger = createLogger(config.logger);
@@ -1601,6 +1620,7 @@ async function getMigrationsWithDatabase(
 		return compiled.join(";\n\n") + ";";
 	}
 	return {
+		accountIdentitySchema,
 		migrationTarget: {
 			adapter: adapterId,
 			dialect: dbType,
@@ -1656,7 +1676,12 @@ export async function migrateFrom16(
 		migrationDatabase,
 	);
 	const unhandledBlocker = initialMigration.migrationBlockers.find(
-		(blocker) => !isHandledByMigrationFrom16(config, blocker),
+		(blocker) =>
+			!isHandledByMigrationFrom16(
+				config,
+				blocker,
+				initialMigration.accountIdentitySchema,
+			),
 	);
 	if (unhandledBlocker) throw createMigrationBlockerError(unhandledBlocker);
 	const applyReleaseMigration = async (database: MigrationDatabase) => {

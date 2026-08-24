@@ -21,7 +21,11 @@ import { scim as scim1630 } from "better-auth-scim-1-6-30";
 import Database from "better-sqlite3";
 import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createMigrateCommand, migrateAction } from "../src/commands/migrate";
+import {
+	createMigrateCommand,
+	migrateAction,
+	printHumanMigrationPlan,
+} from "../src/commands/migrate";
 import { createMigrationPlan } from "../src/commands/migration-plan";
 import * as config from "../src/utils/get-config";
 
@@ -254,7 +258,7 @@ describe("inspect a migration without applying it", () => {
 		expect(consoleLog).toHaveBeenCalledWith("Target: kysely/sqlite");
 		expect(consoleLog).toHaveBeenCalledWith("Blockers: none");
 		expect(consoleLog).toHaveBeenCalledWith(
-			"Plan complete. No database changes were applied.",
+			"No database changes were applied.",
 		);
 		expect(
 			db
@@ -326,6 +330,35 @@ describe("migration plan status", () => {
 		});
 
 		expect(plan.status).toBe("ready");
+	});
+
+	it("prints blocker details and remediation in the human plan", () => {
+		const plan = createMigrationPlan({
+			hasChanges: true,
+			migrationBlockers: [
+				{
+					code: "required-column-backfill",
+					columns: ["issuer"],
+					table: "account",
+				},
+			],
+			migrationTarget: { adapter: "drizzle", dialect: "postgres" },
+			toBeAdded: [],
+			toBeAddedIndexes: [],
+			toBeCreated: [],
+		});
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		printHumanMigrationPlan(plan, [], [], []);
+
+		expect(consoleLog).toHaveBeenCalledWith(
+			"->",
+			"account: existing rows need values for issuer.",
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"   Remediation:",
+			'Backfill issuer for every row in "account", then run `auth migrate apply` again.',
+		);
 	});
 });
 
@@ -480,7 +513,7 @@ describe("migrate published 1.6.30 account data", () => {
 			"write the 1.7 account identity onto every existing account row",
 		);
 		expect(consoleLog).toHaveBeenCalledWith(
-			"Plan complete. No database changes were applied.",
+			"No database changes were applied.",
 		);
 		expect(
 			db
