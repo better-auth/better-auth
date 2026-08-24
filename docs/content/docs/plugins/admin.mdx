@@ -895,6 +895,10 @@ export const auth = betterAuth({
 
 Called after a user has been successfully deleted. Use this for post-deletion side effects such as cleaning up external records or sending notifications.
 
+<Callout type="warning">
+  Deletion and the `afterRemoveUser` hook are **not atomic**. If the hook throws, the user has already been removed from the database but the endpoint will return an error to the caller. Do not treat external cleanup and user deletion as a single transaction — make your hook idempotent or handle failures independently (e.g. a background retry queue).
+</Callout>
+
 ```ts title="auth.ts"
 admin({
   hooks: {

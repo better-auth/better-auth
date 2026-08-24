@@ -2681,12 +2681,13 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 });
 
 describe("removeUser hooks", async () => {
-	// Instance A: beforeRemoveUser that throws
-	const afterSpyA = vi.fn().mockResolvedValue(undefined);
+	// Instance with a beforeRemoveUser that always throws — used to verify
+	// that deletion is aborted and afterRemoveUser is never reached.
+	const afterBlockingSpy = vi.fn().mockResolvedValue(undefined);
 	const {
-		auth: authA,
-		signInWithTestUser: signInA,
-		customFetchImpl: fetchA,
+		auth: blockingAuth,
+		signInWithTestUser: signInBlocking,
+		customFetchImpl: blockingFetchImpl,
 	} = await getTestInstance(
 		{
 			plugins: [
@@ -2697,7 +2698,7 @@ describe("removeUser hooks", async () => {
 								message: "blocked by hook",
 							});
 						},
-						afterRemoveUser: afterSpyA,
+						afterRemoveUser: afterBlockingSpy,
 					},
 				}),
 			],
@@ -2717,104 +2718,107 @@ describe("removeUser hooks", async () => {
 		{ testUser: { name: "Admin" } },
 	);
 
-	const clientA = createAuthClient({
+	const blockingClient = createAuthClient({
 		fetchOptions: {
-			customFetchImpl: fetchA,
+			customFetchImpl: blockingFetchImpl,
 		},
 		plugins: [adminClient()],
 		baseURL: "http://localhost:3000",
 	});
-	const { headers: adminHeadersA } = await signInA();
+	const { headers: blockingAdminHeaders } = await signInBlocking();
 
-	// Instance B: spies on both hooks (both resolve)
-	const beforeSpy = vi.fn().mockResolvedValue(undefined);
-	const afterSpy = vi.fn().mockResolvedValue(undefined);
-	const { signInWithTestUser: signInB, customFetchImpl: fetchB } =
-		await getTestInstance(
-			{
-				plugins: [
-					admin({
-						hooks: {
-							beforeRemoveUser: beforeSpy,
-							afterRemoveUser: afterSpy,
-						},
-					}),
-				],
-				databaseHooks: {
-					user: {
-						create: {
-							before: async (user) => ({
-								data: {
-									...user,
-									...(user.name === "Admin" ? { role: "admin" } : {}),
-								},
-							}),
-						},
+	// Instance with spied hooks that both resolve — used to verify
+	// that hooks are called with the correct arguments on a successful deletion.
+	const beforeResolvingSpy = vi.fn().mockResolvedValue(undefined);
+	const afterResolvingSpy = vi.fn().mockResolvedValue(undefined);
+	const {
+		signInWithTestUser: signInResolving,
+		customFetchImpl: resolvingFetchImpl,
+	} = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					hooks: {
+						beforeRemoveUser: beforeResolvingSpy,
+						afterRemoveUser: afterResolvingSpy,
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
 					},
 				},
 			},
-			{ testUser: { name: "Admin" } },
-		);
+		},
+		{ testUser: { name: "Admin" } },
+	);
 
-	const clientB = createAuthClient({
+	const resolvingClient = createAuthClient({
 		fetchOptions: {
-			customFetchImpl: fetchB,
+			customFetchImpl: resolvingFetchImpl,
 		},
 		plugins: [adminClient()],
 		baseURL: "http://localhost:3000",
 	});
-	const { headers: adminHeadersB } = await signInB();
+	const { headers: resolvingAdminHeaders } = await signInResolving();
 
 	describe("beforeRemoveUser", () => {
 		it("aborts deletion when hook throws — user still exists in DB", async () => {
-			const created = await clientA.admin.createUser(
+			const created = await blockingClient.admin.createUser(
 				{
 					name: "Target User",
 					email: "target-before@example.com",
 					password: "password1234",
 					role: "user",
 				},
-				{ headers: adminHeadersA },
+				{ headers: blockingAdminHeaders },
 			);
 			const userId = created.data?.user.id || "";
 
-			const res = await clientA.admin.removeUser(
+			const res = await blockingClient.admin.removeUser(
 				{ userId },
-				{ headers: adminHeadersA },
+				{ headers: blockingAdminHeaders },
 			);
 
 			expect(res.error?.status).toBe(400);
 			expect(res.error?.message).toBe("blocked by hook");
 
-			const still = await (await authA.$context).internalAdapter.findUserById(
-				userId,
-			);
+			const still = await (
+				await blockingAuth.$context
+			).internalAdapter.findUserById(userId);
 			expect(still).not.toBeNull();
 			expect(still?.id).toBe(userId);
 		});
 
 		it("allows deletion when hook resolves", async () => {
-			beforeSpy.mockClear();
+			beforeResolvingSpy.mockClear();
 
-			const created = await clientB.admin.createUser(
+			const created = await resolvingClient.admin.createUser(
 				{
 					name: "Target User",
 					email: "target-resolves@example.com",
 					password: "password1234",
 					role: "user",
 				},
-				{ headers: adminHeadersB },
+				{ headers: resolvingAdminHeaders },
 			);
 			const userId = created.data?.user.id || "";
 
-			const res = await clientB.admin.removeUser(
+			const res = await resolvingClient.admin.removeUser(
 				{ userId },
-				{ headers: adminHeadersB },
+				{ headers: resolvingAdminHeaders },
 			);
 
 			expect(res.data?.success).toBe(true);
-			expect(beforeSpy).toHaveBeenCalledOnce();
-			expect(beforeSpy).toHaveBeenCalledWith(
+			expect(beforeResolvingSpy).toHaveBeenCalledOnce();
+			expect(beforeResolvingSpy).toHaveBeenCalledWith(
 				expect.objectContaining({ id: userId }),
 			);
 		});
@@ -2822,48 +2826,51 @@ describe("removeUser hooks", async () => {
 
 	describe("afterRemoveUser", () => {
 		it("is called with the deleted user after successful deletion", async () => {
-			afterSpy.mockClear();
+			afterResolvingSpy.mockClear();
 
-			const created = await clientB.admin.createUser(
+			const created = await resolvingClient.admin.createUser(
 				{
 					name: "Target User",
 					email: "target-after@example.com",
 					password: "password1234",
 					role: "user",
 				},
-				{ headers: adminHeadersB },
+				{ headers: resolvingAdminHeaders },
 			);
 			const userId = created.data?.user.id || "";
 
-			const res = await clientB.admin.removeUser(
+			const res = await resolvingClient.admin.removeUser(
 				{ userId },
-				{ headers: adminHeadersB },
+				{ headers: resolvingAdminHeaders },
 			);
 
 			expect(res.data?.success).toBe(true);
-			expect(afterSpy).toHaveBeenCalledOnce();
-			expect(afterSpy).toHaveBeenCalledWith(
+			expect(afterResolvingSpy).toHaveBeenCalledOnce();
+			expect(afterResolvingSpy).toHaveBeenCalledWith(
 				expect.objectContaining({ id: userId }),
 			);
 		});
 
 		it("is NOT called when beforeRemoveUser throws", async () => {
-			afterSpyA.mockClear();
+			afterBlockingSpy.mockClear();
 
-			const created = await clientA.admin.createUser(
+			const created = await blockingClient.admin.createUser(
 				{
 					name: "Target User",
 					email: "target-after-blocked@example.com",
 					password: "password1234",
 					role: "user",
 				},
-				{ headers: adminHeadersA },
+				{ headers: blockingAdminHeaders },
 			);
 			const userId = created.data?.user.id || "";
 
-			await clientA.admin.removeUser({ userId }, { headers: adminHeadersA });
+			await blockingClient.admin.removeUser(
+				{ userId },
+				{ headers: blockingAdminHeaders },
+			);
 
-			expect(afterSpyA).not.toHaveBeenCalled();
+			expect(afterBlockingSpy).not.toHaveBeenCalled();
 		});
 	});
 });

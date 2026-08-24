@@ -1,5 +1,5 @@
 ---
-"better-auth": minor
+"better-auth": patch
 ---
 
 add beforeRemoveUser and afterRemoveUser hooks to admin plugin
