@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 
 interface CommandResult {
@@ -113,22 +112,6 @@ function readSentinelResult<Result>(stdout: string, sentinel: string): Result {
 	return JSON.parse(line.slice(sentinel.length + 1)) as Result;
 }
 
-async function getAvailablePort(): Promise<number> {
-	const server = createServer();
-	await new Promise<void>((resolveListen, rejectListen) => {
-		server.once("error", rejectListen);
-		server.listen(0, "127.0.0.1", resolveListen);
-	});
-	const address = server.address();
-	await new Promise<void>((resolveClose, rejectClose) => {
-		server.close((error) => (error ? rejectClose(error) : resolveClose()));
-	});
-	if (!address || typeof address === "string") {
-		throw new Error("Could not reserve a local identity-provider port");
-	}
-	return address.port;
-}
-
 async function requireFixtureFiles(): Promise<void> {
 	for (const requiredFile of [
 		cliEntry,
@@ -165,7 +148,7 @@ export async function prepareMigratedPublished16Database(
 	};
 	const seed = await runNode(
 		published16Directory,
-		[published16Seed, databasePath, String(await getAvailablePort())],
+		[published16Seed, databasePath, "0"],
 		environment,
 	);
 	requireSuccessfulCommand(seed, "Published Better Auth 1.6 seed");
@@ -264,7 +247,7 @@ export async function prepareMigratedPublished16Database(
 	}
 	const verification = await runNode(
 		migrationFixtureDirectory,
-		[guidedVerifier, databasePath, String(await getAvailablePort())],
+		[guidedVerifier, databasePath, "0"],
 		{
 			...environment,
 			BETTER_AUTH_MIGRATION_CLIENT_ID: source.clientId,

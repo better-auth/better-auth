@@ -66,15 +66,18 @@ async function startNextDemoRuntime(
 	const port = await getAvailablePort();
 	const baseURL = `http://127.0.0.1:${port}`;
 	const databasePath = join(temporaryDirectory, "demo.sqlite");
-	await options.prepareDatabase?.(databasePath);
+	try {
+		await options.prepareDatabase?.(databasePath);
+	} catch (error) {
+		await rm(temporaryDirectory, { force: true, recursive: true });
+		throw error;
+	}
 	const environment: NodeJS.ProcessEnv = {
 		...process.env,
 		BETTER_AUTH_SECRET: demoAuthSecret,
 		BETTER_AUTH_URL: baseURL,
+		DEMO_ACCOUNT_IDENTITY_STRATEGY: options.accountIdentityStrategy,
 		DEMO_SQLITE_PATH: databasePath,
-		...(options.accountIdentityStrategy && {
-			DEMO_ACCOUNT_IDENTITY_STRATEGY: options.accountIdentityStrategy,
-		}),
 		NO_COLOR: "1",
 		SCIM_DEMO_CREDENTIAL_PEPPER:
 			"e2e-scim-managed-catalog-secret-at-least-thirty-two-characters",
