@@ -134,4 +134,20 @@ describe("parseState error mapping", () => {
 			"/oauth-error?source=expo&error=state_mismatch",
 		);
 	});
+
+	it("falls back to the default error URL when the recovered URL is empty", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("State mismatch", {
+			code: "state_security_mismatch",
+			errorURL: "",
+		});
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext();
+		await parseState(ctx as unknown as GenericEndpointContext).catch(() => {});
+
+		expect(redirectCalls[0]).toBe(
+			"http://localhost:3000/api/auth/error?error=state_mismatch",
+		);
+	});
 });
