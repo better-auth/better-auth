@@ -65,13 +65,21 @@ type SessionWithUser = {
  * @see https://github.com/better-auth/better-auth/issues/10616
  */
 test.for([
-	["findOne", "generated singular", generatedAuthRelations],
-	["findMany", "generated singular", generatedAuthRelations],
-	["findOne", "legacy plural", legacyAuthRelations],
-	["findMany", "legacy plural", legacyAuthRelations],
-] as const)("%s resolves a one-to-one relation with %s keys and usePlural", async ([
+	["findOne", "generated singular", "adapter schema", generatedAuthRelations],
+	["findMany", "generated singular", "adapter schema", generatedAuthRelations],
+	["findOne", "legacy plural", "adapter schema", legacyAuthRelations],
+	["findMany", "legacy plural", "adapter schema", legacyAuthRelations],
+	["findOne", "generated singular", "Drizzle metadata", generatedAuthRelations],
+	[
+		"findMany",
+		"generated singular",
+		"Drizzle metadata",
+		generatedAuthRelations,
+	],
+] as const)("%s resolves a one-to-one relation with %s keys from %s", async ([
 	method,
 	,
+	schemaSource,
 	relations,
 ]) => {
 	const sqliteDb = new Database(":memory:");
@@ -112,7 +120,9 @@ test.for([
 
 	const db = drizzle({ client: sqliteDb, relations });
 	const adapter = drizzleAdapter(db, {
-		schema: { ...dbSchema, authRelations: relations },
+		...(schemaSource === "adapter schema"
+			? { schema: { ...dbSchema, authRelations: relations } }
+			: {}),
 		provider: "sqlite",
 		usePlural: true,
 	})({

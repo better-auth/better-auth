@@ -44,19 +44,16 @@ export interface DB {
 }
 
 function buildV2RelationKeysByModel(
-	schema: Record<string, unknown> | undefined,
+	...schemas: (TablesRelationalConfig | undefined)[]
 ): RelationKeysByModel {
-	const relationKeysByModel = new Map<string, Set<string>>();
-	for (const relations of Object.values(schema ?? {})) {
-		for (const [model, tableRelations] of Object.entries(
-			relations as TablesRelationalConfig,
-		)) {
+	const relationKeysByModel = new Map<string, ReadonlySet<string>>();
+	for (const schema of schemas) {
+		for (const [model, tableRelations] of Object.entries(schema ?? {})) {
 			if (!tableRelations?.relations) continue;
-			const relationKeys = relationKeysByModel.get(model) ?? new Set<string>();
-			for (const relationKey of Object.keys(tableRelations.relations)) {
-				relationKeys.add(relationKey);
-			}
-			relationKeysByModel.set(model, relationKeys);
+			relationKeysByModel.set(
+				model,
+				new Set(Object.keys(tableRelations.relations)),
+			);
 		}
 	}
 	return relationKeysByModel;
@@ -286,7 +283,13 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
-	const relationKeysByModel = buildV2RelationKeysByModel(config.schema);
+	const configuredRelations = Object.values(config.schema ?? {}).map(
+		(value) => value as TablesRelationalConfig,
+	);
+	const relationKeysByModel = buildV2RelationKeysByModel(
+		...configuredRelations,
+		db._?.relations,
+	);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
@@ -305,13 +308,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			}
 
 			function getSchema(model: string) {
-				const schema = config.schema || db._.fullSchema;
-				if (!schema) {
+				const schemaModel =
+					config.schema?.[model] ??
+					db._?.relations?.[model]?.table ??
+					db._?.fullSchema?.[model];
+				if (!config.schema && !db._?.relations && !db._?.fullSchema) {
 					throw new BetterAuthError(
 						"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
 					);
 				}
-				const schemaModel = schema[model];
 				if (!schemaModel) {
 					throw new BetterAuthError(
 						`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the schema directly to the adapter options.`,

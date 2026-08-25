@@ -9,7 +9,7 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { SQL } from "drizzle-orm";
+import type { SQL, TablesRelationalConfig } from "drizzle-orm";
 import {
 	and,
 	asc,
@@ -48,19 +48,15 @@ export interface DB {
 }
 
 function buildV1RelationKeysByModel(
-	schema: Record<string, unknown> | undefined,
+	...schemas: (TablesRelationalConfig | undefined)[]
 ): RelationKeysByModel {
-	if (!schema) return new Map();
-	const { tables } = extractTablesRelationalConfig(
-		schema,
-		createTableRelationsHelpers,
-	);
-	return new Map(
-		Object.entries(tables).map(([model, table]) => [
-			model,
-			new Set(Object.keys(table.relations)),
-		]),
-	);
+	const relationKeysByModel = new Map<string, ReadonlySet<string>>();
+	for (const schema of schemas) {
+		for (const [model, table] of Object.entries(schema ?? {})) {
+			relationKeysByModel.set(model, new Set(Object.keys(table.relations)));
+		}
+	}
+	return relationKeysByModel;
 }
 
 /**
@@ -194,7 +190,14 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
-	const relationKeysByModel = buildV1RelationKeysByModel(config.schema);
+	const configuredRelations = config.schema
+		? extractTablesRelationalConfig(config.schema, createTableRelationsHelpers)
+				.tables
+		: undefined;
+	const relationKeysByModel = buildV1RelationKeysByModel(
+		configuredRelations,
+		db._?.schema,
+	);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({
