@@ -3,6 +3,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
@@ -1316,7 +1317,10 @@ async function handleOIDCCallback(
 		const errorURL =
 			ctx.context.options.onAPIError?.errorURL ||
 			`${ctx.context.baseURL}/error`;
-		throw ctx.redirect(`${errorURL}?error=invalid_state`);
+		const params = new URLSearchParams({ error: "invalid_state" });
+		const redirectURL = appendQueryParams(errorURL, params);
+
+		throw ctx.redirect(redirectURL);
 	}
 	const providerReference =
 		parsedProviderReference ??
@@ -1324,28 +1328,23 @@ async function handleOIDCCallback(
 			stateData.serverContext?.[SSO_PROVIDER_STATE_KEY],
 		);
 	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
-	const redirectOIDCError = (error: string, description: string): never => {
+	const redirectOIDCError = (error: string, description?: string): never => {
 		const baseURL = errorURL || callbackURL;
-		const params = new URLSearchParams({
-			error,
-			error_description: description,
-		});
-		const separator = baseURL.includes("?") ? "&" : "?";
-		throw ctx.redirect(`${baseURL}${separator}${params.toString()}`);
+		const params = new URLSearchParams({ error });
+		if (description) params.set("error_description", description);
+		const redirectURL = appendQueryParams(baseURL, params);
+
+		throw ctx.redirect(redirectURL);
 	};
 	if (!code || error) {
-		redirectOIDCError(
+		return redirectOIDCError(
 			error || "invalid_request",
 			error_description || (error ? error : "authorization_code_not_found"),
 		);
 	}
 	const provider = await resolveOIDCProvider(ctx, options, providerId);
 	if (!provider) {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=invalid_provider&error_description=provider not found`,
-		);
+		return redirectOIDCError("invalid_provider", "provider not found");
 	}
 	const acceptedProviderReference =
 		providerReference ??
@@ -1353,7 +1352,7 @@ async function handleOIDCCallback(
 	if (
 		!(await isCurrentSSOProviderReference(provider, acceptedProviderReference))
 	) {
-		redirectOIDCError(
+		return redirectOIDCError(
 			"invalid_state",
 			"sso_provider_changed_during_authentication",
 		);
@@ -1371,11 +1370,7 @@ async function handleOIDCCallback(
 	let config = provider.oidcConfig;
 
 	if (!config) {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=invalid_provider&error_description=provider not found`,
-		);
+		return redirectOIDCError("invalid_provider", "provider not found");
 	}
 
 	try {
@@ -1384,17 +1379,9 @@ async function handleOIDCCallback(
 		);
 	} catch (error) {
 		if (error instanceof DiscoveryError) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=discovery_failed&error_description=${encodeURIComponent(error.message)}`,
-			);
+			return redirectOIDCError("discovery_failed", error.message);
 		}
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=discovery_failed&error_description=unexpected_discovery_error`,
-		);
+		return redirectOIDCError("discovery_failed", "unexpected_discovery_error");
 	}
 	if (!config.scopes) {
 		config = {
@@ -1404,11 +1391,7 @@ async function handleOIDCCallback(
 	}
 
 	if (!config.tokenEndpoint) {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=invalid_provider&error_description=token_endpoint_not_found`,
-		);
+		return redirectOIDCError("invalid_provider", "token_endpoint_not_found");
 	}
 
 	const tokenEndpoint = config.tokenEndpoint;
@@ -1445,11 +1428,7 @@ async function handleOIDCCallback(
 		}
 
 		if (!resolved || (!resolved.privateKeyJwk && !resolved.privateKeyPem)) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=no_private_key_available`,
-			);
+			return redirectOIDCError("invalid_provider", "no_private_key_available");
 		}
 
 		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm;
@@ -1504,7 +1483,7 @@ async function handleOIDCCallback(
 			(url) => ctx.context.isTrustedOrigin(url),
 		);
 		if (error) {
-			redirectOIDCError(
+			return redirectOIDCError(
 				"invalid_provider",
 				getOIDCErrorDescription(error, "token_response_error"),
 			);
@@ -1519,19 +1498,15 @@ async function handleOIDCCallback(
 		}
 		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof DiscoveryError) {
-			redirectOIDCError("invalid_provider", e.message);
+			return redirectOIDCError("invalid_provider", e.message);
 		}
-		redirectOIDCError(
+		return redirectOIDCError(
 			"invalid_provider",
 			getOIDCErrorDescription(e, "token_response_error"),
 		);
 	});
 	if (!tokenResponse) {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=invalid_provider&error_description=token_response_not_found`,
-		);
+		return redirectOIDCError("invalid_provider", "token_response_not_found");
 	}
 	type OIDCUserInfo = {
 		id?: string;
@@ -1558,7 +1533,7 @@ async function handleOIDCCallback(
 	if (tokenResponse.idToken) {
 		const jwksEndpoint = config.jwksEndpoint;
 		if (!jwksEndpoint) {
-			redirectOIDCError("invalid_provider", "jwks_endpoint_not_found");
+			return redirectOIDCError("invalid_provider", "jwks_endpoint_not_found");
 		}
 		const verified = await validateOIDCIdToken(
 			tokenResponse.idToken,
@@ -1567,21 +1542,21 @@ async function handleOIDCCallback(
 			(url) => ctx.context.isTrustedOrigin(url),
 		).catch((error) => {
 			if (error instanceof DiscoveryError) {
-				redirectOIDCError("invalid_provider", error.message);
+				return redirectOIDCError("invalid_provider", error.message);
 			}
 			ctx.context.logger.error(error);
 			return null;
 		});
 		if (!verified) {
-			redirectOIDCError("invalid_provider", "token_not_verified");
+			return redirectOIDCError("invalid_provider", "token_not_verified");
 		}
 		if (!readStringClaim(verified!.payload, "sub")) {
-			redirectOIDCError("invalid_provider", "id_token_subject_missing");
+			return redirectOIDCError("invalid_provider", "id_token_subject_missing");
 		}
 		verifiedIdToken = verified!;
 	}
 	if (options?.resolveUser && !verifiedIdToken) {
-		redirectOIDCError(
+		return redirectOIDCError(
 			"invalid_provider",
 			"id_token_required_for_user_resolution",
 		);
@@ -1599,12 +1574,12 @@ async function handleOIDCCallback(
 			(url) => ctx.context.isTrustedOrigin(url),
 		).catch((e) => {
 			if (e instanceof DiscoveryError) {
-				redirectOIDCError("invalid_provider", e.message);
+				return redirectOIDCError("invalid_provider", e.message);
 			}
 			throw e;
 		});
 		if (userInfoResponse.error) {
-			redirectOIDCError(
+			return redirectOIDCError(
 				"invalid_provider",
 				userInfoResponse.error.message ||
 					userInfoResponse.error.statusText ||
@@ -1615,7 +1590,7 @@ async function handleOIDCCallback(
 			userInfoResponse.data ??
 			redirectOIDCError("invalid_provider", "userinfo_response_not_found");
 		if (verifiedIdToken && rawUserInfo.sub !== verifiedIdToken.payload.sub) {
-			redirectOIDCError(
+			return redirectOIDCError(
 				"invalid_provider",
 				"id_token_userinfo_subject_mismatch",
 			);
@@ -1659,19 +1634,14 @@ async function handleOIDCCallback(
 			image: readStringClaim(idToken, mapping.image || "picture"),
 		};
 	} else {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
+		return redirectOIDCError(
+			"invalid_provider",
+			"user_info_endpoint_not_found",
 		);
 	}
 
 	if (!userInfo.email || !userInfo.id) {
-		throw ctx.redirect(
-			`${
-				errorURL || callbackURL
-			}?error=invalid_provider&error_description=missing_user_info`,
-		);
+		return redirectOIDCError("invalid_provider", "missing_user_info");
 	}
 	const userInfoEmail = userInfo.email;
 	const userInfoId = userInfo.id;
@@ -1813,20 +1783,13 @@ async function handleOIDCCallback(
 		if (failedAuthentication) {
 			linked = failedAuthentication;
 		} else if (isAPIError(e) && e.body?.code) {
-			const baseURL = errorURL || callbackURL;
-			const params = new URLSearchParams({ error: e.body.code });
-			if (e.body.message) params.set("error_description", e.body.message);
-			const sep = baseURL.includes("?") ? "&" : "?";
-			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+			return redirectOIDCError(e.body.code, e.body.message);
 		} else {
 			throw e;
 		}
 	}
 	if (linked.error) {
-		const baseURL = errorURL || callbackURL;
-		const params = new URLSearchParams({ error: linked.error });
-		const sep = baseURL.includes("?") ? "&" : "?";
-		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		return redirectOIDCError(linked.error);
 	}
 	const { session, user } = linked.data!;
 
@@ -2031,7 +1994,10 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				const errorURL =
 					ctx.context.options.onAPIError?.errorURL ||
 					`${ctx.context.baseURL}/error`;
-				throw ctx.redirect(`${errorURL}?error=invalid_state`);
+				const params = new URLSearchParams({ error: "invalid_state" });
+				const redirectURL = appendQueryParams(errorURL, params);
+
+				throw ctx.redirect(redirectURL);
 			}
 
 			const providerReference = parseSSOProviderReference(
@@ -2039,9 +2005,13 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 			);
 			if (!providerReference) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
-				throw ctx.redirect(
-					`${errorURL}?error=invalid_state&error_description=missing_sso_provider_reference`,
-				);
+				const params = new URLSearchParams({
+					error: "invalid_state",
+					error_description: "missing_sso_provider_reference",
+				});
+				const redirectURL = appendQueryParams(errorURL, params);
+
+				throw ctx.redirect(redirectURL);
 			}
 
 			return handleOIDCCallback(
@@ -2110,7 +2080,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				if (!session?.session) {
 					const errorURL =
 						ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
-					throw ctx.redirect(`${errorURL}?error=invalid_request`);
+					const params = new URLSearchParams({ error: "invalid_request" });
+					const redirectURL = appendQueryParams(errorURL, params);
+
+					throw ctx.redirect(redirectURL);
 				}
 				const relayState = ctx.query?.RelayState as string | undefined;
 				throw ctx.redirect(
@@ -2242,9 +2215,13 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			);
 
 			if (!samlRequest && !samlResponse) {
-				throw ctx.redirect(
-					`${safeErrorURL}?error=invalid_request&error_description=missing_logout_data`,
-				);
+				const params = new URLSearchParams({
+					error: "invalid_request",
+					error_description: "missing_logout_data",
+				});
+				const redirectURL = appendQueryParams(safeErrorURL, params);
+
+				throw ctx.redirect(redirectURL);
 			}
 
 			const provider = await findSAMLProvider(
