@@ -9,4 +9,10 @@ next-env.d.ts
 content/docs-beta/*
 !content/docs-beta/.gitkeep
 .beta-sync-tmp/
+
+# Build-time sync targets populated on main
+content/_generated/**
+!content/_generated/**/
+!content/_generated/**/.gitkeep
+.docs-sync-tmp/
 .vercel
