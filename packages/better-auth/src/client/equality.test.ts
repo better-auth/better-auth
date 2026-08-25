@@ -110,6 +110,19 @@ describe("isJsonEqual", () => {
 		expect(isJsonEqual(date, "2026-01-01T00:00:00.000Z")).toBe(false);
 		expect(isJsonEqual(date, {})).toBe(false);
 	});
+
+	it("returns true for two invalid dates", () => {
+		expect(isJsonEqual(new Date("nope"), new Date("also nope"))).toBe(true);
+	});
+
+	it("compares dates nested in arrays", () => {
+		expect(
+			isJsonEqual(
+				[new Date("2026-01-01T00:00:00.000Z")],
+				[new Date("2026-01-01T00:00:00.000Z")],
+			),
+		).toBe(true);
+	});
 });
 
 describe("withEquality", () => {
