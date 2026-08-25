@@ -36,6 +36,17 @@ describe("appendQueryParams", () => {
 		);
 	});
 
+	it("should preserve empty fragment markers", () => {
+		const params = new URLSearchParams({ error: "access_denied" });
+
+		expect(appendQueryParams("/login#", params)).toBe(
+			"/login?error=access_denied#",
+		);
+		expect(appendQueryParams("https://example.com/login#", params)).toBe(
+			"https://example.com/login?error=access_denied#",
+		);
+	});
+
 	it("should preserve the input when no parameters are provided", () => {
 		expect(appendQueryParams("/login?#step2", new URLSearchParams())).toBe(
 			"/login?#step2",
@@ -45,10 +56,16 @@ describe("appendQueryParams", () => {
 	it.each([
 		new URLSearchParams({ error: "access_denied" }),
 		new URLSearchParams(),
-	])("should reject protocol-relative URLs", (params) => {
-		expect(() => appendQueryParams("//evil.example.com", params)).toThrow(
-			"Expected an absolute or root-relative URL",
-		);
+	])("should reject ambiguous relative URLs", (params) => {
+		for (const input of [
+			"//evil.example.com",
+			"//better-auth.invalid/path",
+			`/\\better-auth.invalid/path`,
+		]) {
+			expect(() => appendQueryParams(input, params)).toThrow(
+				"Expected an absolute or root-relative URL",
+			);
+		}
 	});
 });
 

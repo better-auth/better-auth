@@ -239,6 +239,7 @@ describe("trusted origins", () => {
 				"/search?next=/settings?tab=security",
 				"/callback?next=%2Fdashboard",
 				"/profile#section?tab=security",
+				"/#%2f%2fevil.com",
 			];
 
 			for (const url of relativeURLs) {
@@ -271,6 +272,7 @@ describe("trusted origins", () => {
 				"/safe/%2F/evil.com",
 				"/safe/%5c/evil.com",
 				"/safe/%5C/evil.com",
+				"/%2f/evil.com#section",
 				`/\\/\\/evil.com`,
 				"/..%2F..%2Fevil.com",
 				`/\u0000evil.com`,

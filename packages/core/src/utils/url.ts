@@ -63,6 +63,10 @@ export function appendQueryParams(
 	params: URLSearchParams,
 ): string {
 	const relative = input.startsWith("/");
+	if (relative && (input.startsWith("//") || input.includes("\\"))) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+
 	const parsedURL = relative
 		? new URL(input, URL_REFERENCE_ORIGIN)
 		: new URL(input);
@@ -81,11 +85,9 @@ export function appendQueryParams(
 		? `${parsedURL.search}${separator}${query}`
 		: query;
 
-	if (!relative) {
-		return parsedURL.toString();
-	}
-
-	return `${parsedURL.pathname}${parsedURL.search}${parsedURL.hash}`;
+	return relative
+		? parsedURL.href.slice(parsedURL.origin.length)
+		: parsedURL.href;
 }
 
 /**
