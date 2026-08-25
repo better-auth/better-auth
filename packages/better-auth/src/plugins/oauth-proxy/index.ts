@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { AccountKey } from "@better-auth/core/db";
+import { accountSchema, userSchema } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { defu } from "defu";
@@ -27,7 +28,6 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
-import type { Account, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
@@ -105,18 +105,28 @@ type OAuthProxyStatePackage = {
  * without creating user/session on production.
  * @internal
  */
-type PassthroughPayload = {
-	userInfo: Omit<User, "createdAt" | "updatedAt">;
-	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
-	/** Raw provider profile, relayed so `validateUserInfo` sees the same `source.oauth.profile` as a direct callback. */
-	profile?: Record<string, unknown> | undefined;
-	state: string;
-	callbackURL: string;
-	newUserURL?: string;
-	errorURL?: string;
-	disableSignUp?: boolean;
-	timestamp: number;
-};
+const passthroughPayloadSchema = z.looseObject({
+	userInfo: z.looseObject(
+		userSchema.omit({ createdAt: true, updatedAt: true }).shape,
+	),
+	account: z.looseObject(
+		accountSchema.omit({
+			id: true,
+			userId: true,
+			createdAt: true,
+			updatedAt: true,
+		}).shape,
+	),
+	profile: z.record(z.string(), z.unknown()).optional(),
+	state: z.string(),
+	callbackURL: z.string(),
+	newUserURL: z.string().optional(),
+	errorURL: z.string().optional(),
+	disableSignUp: z.boolean().optional(),
+	timestamp: z.number(),
+});
+
+type PassthroughPayload = z.infer<typeof passthroughPayloadSchema>;
 
 const restoreOAuthProxyState = async (
 	ctx: GenericEndpointContext,
@@ -195,21 +205,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 			let payload: PassthroughPayload;
 			try {
-				payload = parseJSON<PassthroughPayload>(decryptedPayload);
+				payload = passthroughPayloadSchema.parse(parseJSON(decryptedPayload));
 			} catch (e) {
 				ctx.context.logger.error("Failed to parse OAuth proxy payload", e);
-				throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
-			}
-
-			// Validate required payload fields
-			if (
-				typeof payload.timestamp !== "number" ||
-				!payload.userInfo ||
-				!payload.account ||
-				!payload.state ||
-				!payload.callbackURL
-			) {
-				ctx.context.logger.error("Failed to parse OAuth proxy payload");
 				throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
 			}
 

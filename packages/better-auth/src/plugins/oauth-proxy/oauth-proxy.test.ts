@@ -1189,6 +1189,21 @@ describe("oauth-proxy", async () => {
 			});
 			const { secret } = await auth.$context;
 
+			const encryptedNull = await symmetricEncrypt({
+				key: secret,
+				data: "null",
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encryptedNull}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error=invalid_payload");
+					},
+				},
+			);
+
 			// Test missing timestamp
 			const payloadMissingTimestamp = {
 				userInfo: {
