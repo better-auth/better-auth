@@ -1,6 +1,9 @@
 import type { BetterAuthDBSchema } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
+/** `jwks` is already plural, so appending another `s` would double it. */
+const pluralize = (name: string) => (name.endsWith("s") ? name : `${name}s`);
+
 export const initGetModelName = ({
 	usePlural,
 	schema,
@@ -26,11 +29,11 @@ export const initGetModelName = ({
 
 		if (useCustomModelName) {
 			return usePlural
-				? `${schema[defaultModelKey]!.modelName}s`
+				? pluralize(schema[defaultModelKey]!.modelName)
 				: schema[defaultModelKey]!.modelName;
 		}
 
-		return usePlural ? `${model}s` : model;
+		return usePlural ? pluralize(model) : model;
 	};
 	return getModelName;
 };
