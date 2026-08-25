@@ -74,11 +74,6 @@ const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
  * @see https://url.spec.whatwg.org/#concept-basic-url-parser
  */
 const isSafeRelativeURL = (value: string): boolean => {
-	// Fragments would swallow query parameters appended by downstream redirects.
-	if (value.includes("#")) {
-		return false;
-	}
-
 	if (
 		!value.startsWith("/") ||
 		value.startsWith("//") ||
@@ -88,8 +83,8 @@ const isSafeRelativeURL = (value: string): boolean => {
 		return false;
 	}
 
-	const queryStart = value.indexOf("?");
-	const path = queryStart === -1 ? value : value.slice(0, queryStart);
+	const pathEnd = value.search(/[?#]/);
+	const path = pathEnd === -1 ? value : value.slice(0, pathEnd);
 	if (ENCODED_PATH_SEPARATOR_PATTERN.test(path)) {
 		return false;
 	}

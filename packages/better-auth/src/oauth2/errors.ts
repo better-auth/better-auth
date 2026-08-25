@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 
 /**
  * Error codes used in OAuth callback redirects (`?error=<code>`). These are
@@ -43,8 +44,9 @@ export function redirectOnError(
 ): never {
 	const params = new URLSearchParams({ error });
 	if (description) params.set("error_description", description);
-	const sep = errorURL.includes("?") ? "&" : "?";
-	throw ctx.redirect(`${errorURL}${sep}${params.toString()}`);
+	const redirectURL = appendQueryParams(errorURL, params);
+
+	throw ctx.redirect(redirectURL);
 }
 
 /**

@@ -95,6 +95,24 @@ describe("parseState error mapping", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10022
+	 */
+	it("appends error parameters before the URL fragment", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("state_invalid", { code: "state_invalid" });
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext(
+			"https://example.com/error?source=oauth#retry",
+		);
+		await parseState(ctx as unknown as GenericEndpointContext).catch(() => {});
+
+		expect(redirectCalls[0]).toBe(
+			"https://example.com/error?source=oauth&error=state_invalid#retry",
+		);
+	});
+
+	/**
 	 * The per-flow `errorCallbackURL` recovered from the state takes precedence
 	 * over the default error page, and the error parameter is appended with the
 	 * correct separator when that URL already carries a query string.
