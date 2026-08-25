@@ -179,20 +179,8 @@ jobs:
       - name: Reject release commits with pending changesets
         if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
         run: |
-          CHANGESET_IDS=$(git ls-tree -r --name-only HEAD -- '.changeset/' \
-            | sed -n 's#^\.changeset/\(.*\)\.md$#\1#p' \
-            | grep -v '^README$' \
-            | sort || true)
-          PENDING_CHANGESETS="$CHANGESET_IDS"
-          if git cat-file -e 'HEAD:.changeset/pre.json' 2>/dev/null; then
-            CONSUMED_CHANGESETS=$(git show 'HEAD:.changeset/pre.json' \
-              | jq -r '.changesets[]' \
-              | sort)
-            PENDING_CHANGESETS=$(comm -23 \
-              <(printf '%s\n' "$CHANGESET_IDS") \
-              <(printf '%s\n' "$CONSUMED_CHANGESETS"))
-          fi
-          if [ -z "$PENDING_CHANGESETS" ]; then
+          if pnpm --filter @better-auth/release-tooling release-notes \
+            check-changesets --branch "$GITHUB_SHA"; then
             exit 0
           fi
 
@@ -204,7 +192,6 @@ jobs:
             echo "Revert this release merge, let Changesets regenerate the Version PR, then run `/release-notes` again."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error::Release commit contains unconsumed changesets"
-          echo "$PENDING_CHANGESETS"
           exit 1
 
       - name: Create Release Pull Request or Publish

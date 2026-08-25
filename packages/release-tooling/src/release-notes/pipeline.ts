@@ -5,6 +5,7 @@ import type { GitHubReader, GitHubRepository } from "../github.ts";
 import {
 	buildPackageMetadata,
 	collectEntries,
+	findPendingChangesets,
 	findPreviousTag,
 	findUnreleasedVersionCommit,
 } from "./collect.ts";
@@ -19,6 +20,7 @@ import { parseSchema, releaseManifestSchema } from "./schema.ts";
 
 export type ReleaseNotesOperation =
 	| { type: "validate" }
+	| { type: "check-changesets"; branch: string }
 	| { type: "candidate"; version: string; branch: string }
 	| {
 			type: "render";
@@ -145,6 +147,15 @@ export async function runReleaseNotes(
 	switch (operation.type) {
 		case "validate":
 			return;
+		case "check-changesets": {
+			const pending = findPendingChangesets(operation.branch);
+			if (pending.length > 0) {
+				throw new Error(
+					`Release contains unconsumed changesets:\n${pending.join("\n")}`,
+				);
+			}
+			return;
+		}
 		case "candidate": {
 			const versionCommit = findUnreleasedVersionCommit(
 				operation.version,

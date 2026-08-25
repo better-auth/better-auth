@@ -219,6 +219,20 @@ function changesetIdsFromPaths(paths: string): string[] {
 		.filter(isChangesetId);
 }
 
+export function findPendingChangesets(ref: string): string[] {
+	const files = runGit(["ls-tree", "-r", "--name-only", ref, ".changeset/"]);
+	const changesets = changesetIdsFromPaths(files).sort();
+	if (!refHasPath(ref, ".changeset/pre.json")) return changesets;
+
+	const prerelease = parseSchema(
+		prereleaseStateSchema,
+		JSON.parse(gitShow(ref, ".changeset/pre.json")),
+		`Invalid changeset pre-release state at ${ref}`,
+	);
+	const consumed = new Set(prerelease.changesets);
+	return changesets.filter((changeset) => !consumed.has(changeset));
+}
+
 function readPackageVersion(ref: string): string | null {
 	if (!refHasPath(ref, "packages/better-auth/package.json")) return null;
 	const result = packageVersionSchema.safeParse(

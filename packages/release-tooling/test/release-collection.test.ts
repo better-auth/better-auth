@@ -125,6 +125,23 @@ function git(workspace: string, args: string[]): string {
 	}).trim();
 }
 
+function checkReleaseChangesets(workspace: string): CommandResult {
+	const result = spawnSync(
+		process.execPath,
+		[releaseNotesScript, "check-changesets", "--branch", "HEAD"],
+		{
+			cwd: workspace,
+			encoding: "utf-8",
+			env: { ...process.env, GITHUB_WORKSPACE: workspace },
+		},
+	);
+	return {
+		status: result.status,
+		stderr: result.stderr,
+		stdout: result.stdout,
+	};
+}
+
 function writeFixtureFile(
 	workspace: string,
 	path: string,
@@ -133,6 +150,35 @@ function writeFixtureFile(
 	const file = resolve(workspace, path);
 	mkdirSync(dirname(file), { recursive: true });
 	writeFileSync(file, content);
+}
+
+function createChangesetStateFixture(
+	changesets: string[],
+	consumed?: string[],
+): string {
+	const workspace = mkdtempSync(resolve(tmpdir(), "release-changesets-"));
+	git(workspace, ["init", "--initial-branch=main"]);
+	git(workspace, ["config", "user.email", "release-test@example.com"]);
+	git(workspace, ["config", "user.name", "Release Test"]);
+	git(workspace, ["config", "commit.gpgsign", "false"]);
+	writeFixtureFile(workspace, ".changeset/README.md", "# Changesets");
+	for (const changeset of changesets) {
+		writeFixtureFile(
+			workspace,
+			`.changeset/${changeset}.md`,
+			["---", '"better-auth": patch', "---", "", changeset].join("\n"),
+		);
+	}
+	if (consumed) {
+		writeFixtureFile(
+			workspace,
+			".changeset/pre.json",
+			JSON.stringify({ changesets: consumed }),
+		);
+	}
+	git(workspace, ["add", "."]);
+	git(workspace, ["commit", "-m", "chore: create changeset fixture"]);
+	return workspace;
 }
 
 interface ReleaseFixtureOptions {
@@ -287,6 +333,47 @@ describe("release manifest validation", () => {
 				"Invalid release manifest",
 			),
 		).toThrow("expected array to have >=1 items");
+	});
+});
+
+describe("release changeset readiness", () => {
+	it("rejects pending stable changesets", () => {
+		const workspace = createChangesetStateFixture(["pending-change"]);
+		try {
+			const result = checkReleaseChangesets(workspace);
+			expect(result.status).toBe(1);
+			expect(result.stderr).toContain("pending-change");
+		} finally {
+			rmSync(workspace, { recursive: true });
+		}
+	});
+
+	it("accepts changesets already consumed by a prerelease", () => {
+		const workspace = createChangesetStateFixture(
+			["included-change"],
+			["included-change"],
+		);
+		try {
+			const result = checkReleaseChangesets(workspace);
+			expect(result.status, result.stderr).toBe(0);
+		} finally {
+			rmSync(workspace, { recursive: true });
+		}
+	});
+
+	it("rejects new changesets added after a prerelease", () => {
+		const workspace = createChangesetStateFixture(
+			["included-change", "pending-change"],
+			["included-change"],
+		);
+		try {
+			const result = checkReleaseChangesets(workspace);
+			expect(result.status).toBe(1);
+			expect(result.stderr).toContain("pending-change");
+			expect(result.stderr).not.toContain("included-change");
+		} finally {
+			rmSync(workspace, { recursive: true });
+		}
 	});
 });
 

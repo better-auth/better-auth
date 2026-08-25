@@ -32,36 +32,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Reject stale release merge groups
-        if: github.event_name == 'merge_group'
-        env:
-          BASE_SHA: ${{ github.event.merge_group.base_sha }}
-        run: |
-          BASE_VERSION=$(git show "${BASE_SHA}:packages/better-auth/package.json" | jq -r '.version')
-          HEAD_VERSION=$(jq -r '.version' packages/better-auth/package.json)
-          if [ "$BASE_VERSION" = "$HEAD_VERSION" ]; then
-            exit 0
-          fi
-
-          CHANGESET_IDS=$(git ls-tree -r --name-only HEAD -- '.changeset/' \
-            | sed -n 's#^\.changeset/\(.*\)\.md$#\1#p' \
-            | grep -v '^README$' \
-            | sort || true)
-          PENDING_CHANGESETS="$CHANGESET_IDS"
-          if git cat-file -e 'HEAD:.changeset/pre.json' 2>/dev/null; then
-            CONSUMED_CHANGESETS=$(git show 'HEAD:.changeset/pre.json' \
-              | jq -r '.changesets[]' \
-              | sort)
-            PENDING_CHANGESETS=$(comm -23 \
-              <(printf '%s\n' "$CHANGESET_IDS") \
-              <(printf '%s\n' "$CONSUMED_CHANGESETS"))
-          fi
-          if [ -n "$PENDING_CHANGESETS" ]; then
-            echo "::error::The release merge still contains unconsumed changesets"
-            echo "$PENDING_CHANGESETS"
-            exit 1
-          fi
-
       - name: Cache turbo build setup
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
@@ -80,6 +50,18 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Reject stale release merge groups
+        if: github.event_name == 'merge_group'
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          BASE_VERSION=$(git show "${BASE_SHA}:packages/better-auth/package.json" | jq -r '.version')
+          HEAD_VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          if [ "$BASE_VERSION" != "$HEAD_VERSION" ]; then
+            pnpm --filter @better-auth/release-tooling release-notes \
+              check-changesets --branch "$GITHUB_SHA"
+          fi
 
       - name: Build
         env:

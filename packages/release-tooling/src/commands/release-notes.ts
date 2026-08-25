@@ -25,13 +25,14 @@ function parseOperation(): ReleaseNotesOperation {
 	const [command, ...extraPositionals] = positionals;
 	if (
 		command !== "validate" &&
+		command !== "check-changesets" &&
 		command !== "candidate" &&
 		command !== "collect" &&
 		command !== "rewrite" &&
 		command !== "render"
 	) {
 		throw new Error(
-			"Usage: release-notes <validate|candidate|collect|rewrite|render> [options]",
+			"Usage: release-notes <validate|check-changesets|candidate|collect|rewrite|render> [options]",
 		);
 	}
 	if (extraPositionals.length > 0) {
@@ -81,6 +82,22 @@ function parseOperation(): ReleaseNotesOperation {
 		}
 		parseSchema(releaseVersionSchema, version, "Invalid version");
 		return { type: "candidate", version, branch };
+	}
+
+	if (command === "check-changesets") {
+		if (
+			!branch ||
+			version ||
+			dryRun ||
+			manifestPath ||
+			rewritesPath ||
+			contextPath ||
+			outputPath ||
+			commitRef
+		) {
+			throw new Error("Usage: release-notes check-changesets --branch <ref>");
+		}
+		return { type: "check-changesets", branch };
 	}
 
 	if (command === "rewrite") {
