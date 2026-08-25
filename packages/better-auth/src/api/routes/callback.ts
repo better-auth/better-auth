@@ -3,6 +3,7 @@ import type { AccountKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { mergeScopes } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
@@ -86,7 +87,12 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
-			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
+			const params = new URLSearchParams({
+				error: "invalid_callback_request",
+			});
+			const redirectURL = appendQueryParams(defaultErrorURL, params);
+
+			throw c.redirect(redirectURL);
 		}
 
 		const {
@@ -120,9 +126,10 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			const sep = defaultErrorURL.includes("?") ? "&" : "?";
-			const url = `${defaultErrorURL}${sep}error=state_not_found`;
-			throw c.redirect(url);
+			const params = new URLSearchParams({ error: "state_not_found" });
+			const redirectURL = appendQueryParams(defaultErrorURL, params);
+
+			throw c.redirect(redirectURL);
 		}
 
 		const {
@@ -141,10 +148,9 @@ export const callbackOAuth = createAuthEndpoint(
 			const params = new URLSearchParams({ error });
 			if (description) params.set("error_description", description);
 
-			const sep = baseURL.includes("?") ? "&" : "?";
-			const url = `${baseURL}${sep}${params.toString()}`;
+			const redirectURL = appendQueryParams(baseURL, params);
 
-			throw c.redirect(url);
+			throw c.redirect(redirectURL);
 		}
 
 		if (error) {

@@ -235,9 +235,11 @@ describe("trusted origins", () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
 			const relativeURLs = [
 				"/docs/!$&'()*+,;=:@~",
-				"/café/profile",
+				"/café#profile",
 				"/search?next=/settings?tab=security",
 				"/callback?next=%2Fdashboard",
+				"/profile#section?tab=security",
+				"/#%2f%2fevil.com",
 			];
 
 			for (const url of relativeURLs) {
@@ -270,6 +272,7 @@ describe("trusted origins", () => {
 				"/safe/%2F/evil.com",
 				"/safe/%5c/evil.com",
 				"/safe/%5C/evil.com",
+				"/%2f/evil.com#section",
 				`/\\/\\/evil.com`,
 				"/..%2F..%2Fevil.com",
 				`/\u0000evil.com`,
@@ -278,8 +281,6 @@ describe("trusted origins", () => {
 				`/\t/evil.com`,
 				`/\n/evil.com`,
 				`/\r/evil.com`,
-				"/profile#section",
-				"/profile#section?tab=security",
 				"javascript:alert('xss')",
 				"data:text/html,<script>alert('xss')</script>",
 			];

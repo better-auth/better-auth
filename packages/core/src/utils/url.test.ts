@@ -3,7 +3,79 @@ import {
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
-import { isSafeUrlScheme, normalizePathname } from "./url";
+import { appendQueryParams, isSafeUrlScheme, normalizePathname } from "./url";
+
+describe("appendQueryParams", () => {
+	it("should append query parameters before the fragment", () => {
+		const params = new URLSearchParams({ error: "access denied" });
+
+		expect(appendQueryParams("/login#step2", params)).toBe(
+			"/login?error=access+denied#step2",
+		);
+		expect(
+			appendQueryParams("https://example.com/login?lang=ko#step2", params),
+		).toBe("https://example.com/login?lang=ko&error=access+denied#step2");
+		expect(appendQueryParams("myapp://callback#step2", params)).toBe(
+			"myapp://callback?error=access+denied#step2",
+		);
+	});
+
+	it("should preserve existing query encoding", () => {
+		const params = new URLSearchParams({ error: "access_denied" });
+
+		expect(
+			appendQueryParams("/search?q=hello%20world&next=~#results", params),
+		).toBe("/search?q=hello%20world&next=~&error=access_denied#results");
+	});
+
+	it("should reuse a trailing query separator", () => {
+		const params = new URLSearchParams({ error: "access_denied" });
+
+		expect(appendQueryParams("/login?source=oauth&#retry", params)).toBe(
+			"/login?source=oauth&error=access_denied#retry",
+		);
+	});
+
+	it("should preserve empty fragment markers", () => {
+		const params = new URLSearchParams({ error: "access_denied" });
+
+		expect(appendQueryParams("/login#", params)).toBe(
+			"/login?error=access_denied#",
+		);
+		expect(appendQueryParams("https://example.com/login#", params)).toBe(
+			"https://example.com/login?error=access_denied#",
+		);
+	});
+
+	it("should preserve backslashes in the query and fragment", () => {
+		const params = new URLSearchParams({ error: "access_denied" });
+
+		expect(appendQueryParams(`/callback?next=\\foo#\\bar`, params)).toBe(
+			`/callback?next=\\foo&error=access_denied#\\bar`,
+		);
+	});
+
+	it("should preserve the input when no parameters are provided", () => {
+		expect(appendQueryParams("/login?#step2", new URLSearchParams())).toBe(
+			"/login?#step2",
+		);
+	});
+
+	it.each([
+		new URLSearchParams({ error: "access_denied" }),
+		new URLSearchParams(),
+	])("should reject ambiguous relative URLs", (params) => {
+		for (const input of [
+			"//evil.example.com",
+			"//better-auth.invalid/path",
+			`/\\better-auth.invalid/path`,
+		]) {
+			expect(() => appendQueryParams(input, params)).toThrow(
+				"Expected an absolute or root-relative URL",
+			);
+		}
+	});
+});
 
 describe("isSafeUrlScheme", () => {
 	it("rejects code-execution schemes", () => {

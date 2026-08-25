@@ -32,6 +32,17 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - JSDoc comments for public APIs
 - Plugins should be as independent as possible. When working on a plugin, prefer modifying the plugin over changing core.
 
+### URL Composition
+
+- When appending query parameters to callback or redirect URLs, use `appendQueryParams` from `@better-auth/core/utils/url`. Keep origin and trust validation separate.
+
+```ts
+const params = new URLSearchParams({ error });
+const redirectURL = appendQueryParams(errorURL, params);
+
+throw ctx.redirect(redirectURL);
+```
+
 ### Placeholder Emails
 
 `User.email` is currently required and unique, which is a limitation of the current architecture.

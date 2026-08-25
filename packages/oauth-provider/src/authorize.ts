@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
@@ -89,7 +90,7 @@ export function formatErrorURL(
 	if (mode === "fragment") {
 		return `${url}#${searchParams.toString()}`;
 	}
-	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
+	return appendQueryParams(url, searchParams);
 }
 
 /**
