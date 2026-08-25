@@ -417,9 +417,9 @@ The table below summarises, for each affected provider, when `email` may be abse
 | GitHub             | User has set email to private; GitHub App lacks the "Email addresses" permission                                                                                         | `profile.id` (numeric)                      | Reliable                                                                                                                                                            |
 | LinkedIn           | No confirmed email on the member; `email` scope not granted                                                                                                              | `profile.sub` (pairwise per app)            | Reliable when present                                                                                                                                               |
 | Microsoft Entra ID | Managed users without a `mail` attribute, unless `email` is configured as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) | `profile.oid` (stable within `profile.tid`) | **Untrustworthy**: Microsoft [explicitly warns](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference) never to use for authorization |
-| Roblox             | The default Roblox profile flow does not return an email; Better Auth currently falls back to `preferred_username`                                                       | `profile.sub` (Roblox user ID)              | Unknown for the default profile flow                                                                                                                                |
+| Roblox             | The default Roblox profile flow does not return an email; Better Auth creates a non-routable placeholder from `profile.sub`                                              | `profile.sub` (Roblox user ID)              | Unknown for the default profile flow                                                                                                                                |
 
-### Synthesize a placeholder email with `mapProfileToUser`
+### Create a placeholder email with `mapProfileToUser`
 
 Fall back to the provider's stable ID when the `email` field is null or absent:
 
@@ -432,21 +432,21 @@ export const auth = betterAuth({
       clientId: process.env.DISCORD_CLIENT_ID!,
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
       mapProfileToUser: (profile) => ({
-        email: profile.email ?? `${profile.id}@discord.placeholder.local`,
+        email: profile.email ?? `${profile.id}@discord.placeholder.invalid`,
       }),
     },
     apple: {
       clientId: process.env.APPLE_CLIENT_ID!,
       clientSecret: process.env.APPLE_CLIENT_SECRET!,
       mapProfileToUser: (profile) => ({
-        email: profile.email ?? `${profile.sub}@apple.placeholder.local`,
+        email: profile.email ?? `${profile.sub}@apple.placeholder.invalid`,
       }),
     },
     microsoft: {
       clientId: process.env.MICROSOFT_CLIENT_ID!,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
       mapProfileToUser: (profile) => ({
-        email: profile.email ?? `${profile.oid}@entra.placeholder.local`,
+        email: profile.email ?? `${profile.oid}@entra.placeholder.invalid`,
       }),
     },
   },
@@ -454,7 +454,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-  Synthesized emails are placeholders, not contact addresses. Plugins that send mail (password reset, magic link, email verification, organization invites) cannot deliver to them. Use a domain you control, or a reserved suffix like `.invalid` or `.local`, so no real inbox is ever addressed by mistake.
+  Placeholder emails are not contact addresses. Plugins that send mail (password reset, magic link, email verification, organization invites) cannot deliver to them. Use a domain you control or the reserved `.invalid` domain so no real inbox is ever addressed by mistake.
 </Callout>
 
 ### Provider-specific notes
