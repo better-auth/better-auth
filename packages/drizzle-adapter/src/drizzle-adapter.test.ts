@@ -42,6 +42,67 @@ describe("drizzle-adapter", () => {
 		expect(resolved?.account?.fields.issuer?.fieldName).toBe("identity_issuer");
 	});
 
+	it("resolves a customized model through its schema key", async () => {
+		const account = pgTable("auth_account", {
+			accountId: text("account_id").notNull(),
+		});
+		const adapter = drizzleAdapter(
+			{ _: { fullSchema: { account } } } as never,
+			{ provider: "pg" },
+		)({});
+
+		const resolved =
+			await adapter.options?.adapterConfig.migrationConnection?.resolvePhysicalSchema?.(
+				{
+					account: {
+						modelName: "accounts",
+						fields: {
+							accountId: { type: "string", fieldName: "accountId" },
+						},
+					},
+				},
+			);
+
+		expect(resolved?.account?.modelName).toBe("auth_account");
+		expect(resolved?.account?.fields.accountId?.fieldName).toBe("account_id");
+	});
+
+	it("fails when the configured Drizzle schema is missing migration metadata", async () => {
+		const account = pgTable("auth_account", {
+			accountId: text("account_id").notNull(),
+		});
+		const adapter = drizzleAdapter(
+			{ _: { fullSchema: { account } } } as never,
+			{ provider: "pg" },
+		)({});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		await expect(
+			migrationConnection?.resolvePhysicalSchema?.({
+				account: {
+					modelName: "account",
+					fields: {
+						accountId: { type: "string", fieldName: "accountId" },
+						issuer: { type: "string", fieldName: "issuer" },
+					},
+				},
+			}),
+		).rejects.toThrow(
+			'Drizzle migration schema could not resolve field "issuer" on model "account".',
+		);
+		await expect(
+			migrationConnection?.resolvePhysicalSchema?.({
+				jwks: {
+					modelName: "jwks",
+					fields: { id: { type: "string", fieldName: "id" } },
+				},
+			}),
+		).rejects.toThrow(
+			'Drizzle migration schema could not resolve model "jwks".',
+		);
+	});
+
 	it("should create drizzle adapter", () => {
 		const db = {
 			_: {
@@ -103,9 +164,76 @@ describe("drizzle-adapter", () => {
 		expect(run).toHaveBeenCalledTimes(1);
 	});
 
+	it.each([
+		{
+			name: "mysql2 tuple",
+			provider: "mysql" as const,
+			result: [{ affectedRows: 2 }, []],
+		},
+		{
+			name: "node-postgres result",
+			provider: "pg" as const,
+			result: { rowCount: 2, rows: [] },
+		},
+		{
+			name: "postgres-js result",
+			provider: "pg" as const,
+			result: Object.assign([], { count: 2 }),
+		},
+	])("normalizes $name for migration writes", async ({ provider, result }) => {
+		const adapter = drizzleAdapter(
+			{
+				_: { fullSchema: {} },
+				execute: vi.fn().mockResolvedValue(result),
+			} as never,
+			{ provider },
+		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+
+		await expect(
+			adapter.options?.adapterConfig.migrationConnection?.execute({
+				parameters: ["local:credential"],
+				sql:
+					provider === "pg"
+						? "UPDATE account SET issuer = $1"
+						: "UPDATE account SET issuer = ?",
+			}),
+		).resolves.toEqual({ numAffectedRows: 2n, rows: [] });
+	});
+
+	it.each([
+		{
+			provider: "sqlite" as const,
+			sql: "SELECT '?' AS literal, providerId FROM account WHERE providerId = ? -- ?",
+		},
+		{
+			provider: "pg" as const,
+			sql: "SELECT '$2' AS literal, $$ $3 $$ AS body FROM account WHERE providerId = $1 -- $4",
+		},
+	])("ignores parameter-like text in $provider SQL literals and comments", async ({
+		provider,
+		sql: query,
+	}) => {
+		const rows = [{ providerId: "credential" }];
+		const adapter = drizzleAdapter(
+			{
+				_: { fullSchema: {} },
+				all: vi.fn().mockResolvedValue(rows),
+				execute: vi.fn().mockResolvedValue(rows),
+			} as never,
+			{ provider },
+		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+
+		await expect(
+			adapter.options?.adapterConfig.migrationConnection?.execute({
+				parameters: ["credential"],
+				sql: query,
+			}),
+		).resolves.toEqual({ rows });
+	});
+
 	it("scopes SQLite migration queries to one transaction", async () => {
 		const statements: string[] = [];
-		const run = vi.fn().mockImplementation(async (statement: SQL) => {
+		const run = vi.fn().mockImplementation((statement: SQL) => {
 			statements.push(
 				statement.queryChunks
 					.flatMap((chunk) =>
@@ -139,10 +267,45 @@ describe("drizzle-adapter", () => {
 		});
 
 		expect(statements).toEqual([
+			"SELECT 1",
 			"BEGIN IMMEDIATE",
 			"UPDATE account SET issuer = 'local:credential'",
 			"COMMIT",
 		]);
+	});
+
+	it("uses a transaction-scoped database for asynchronous SQLite migrations", async () => {
+		const rootRun = vi.fn().mockResolvedValue({ changes: 0 });
+		const transactionRun = vi.fn().mockResolvedValue({ changes: 1 });
+		const transaction = vi.fn().mockImplementation(async (callback) =>
+			callback({
+				_: { fullSchema: {} },
+				all: vi.fn(),
+				run: transactionRun,
+			}),
+		);
+		const adapter = drizzleAdapter(
+			{
+				_: { fullSchema: {} },
+				all: vi.fn(),
+				run: rootRun,
+				transaction,
+			} as never,
+			{ provider: "sqlite", transaction: true },
+		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+
+		await adapter.options?.adapterConfig.migrationConnection?.transaction?.(
+			async (connection) => {
+				await connection.execute({
+					parameters: [],
+					sql: "UPDATE account SET issuer = 'local:credential'",
+				});
+			},
+		);
+
+		expect(transaction).toHaveBeenCalledOnce();
+		expect(transactionRun).toHaveBeenCalledOnce();
+		expect(rootRun).toHaveBeenCalledOnce();
 	});
 
 	/**

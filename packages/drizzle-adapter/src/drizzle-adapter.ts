@@ -13,7 +13,6 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { toSnakeCase } from "@better-auth/core/utils/string";
 import type { SQL } from "drizzle-orm";
 import {
 	and,
@@ -107,6 +106,8 @@ function getAffectedRowCount(
 function readDriverRowCount(result: unknown): unknown {
 	if (!result || typeof result !== "object") return undefined;
 	const driverResult = result as Record<string, unknown>;
+	if ("rowCount" in driverResult) return driverResult.rowCount;
+	if ("count" in driverResult) return driverResult.count;
 	if ("affectedRows" in driverResult) return driverResult.affectedRows;
 	if ("rowsAffected" in driverResult) return driverResult.rowsAffected;
 	if ("changes" in driverResult) return driverResult.changes;
@@ -127,8 +128,23 @@ function hasDriverRowCount(result: unknown): boolean {
 	return readDriverRowCount(result) !== undefined;
 }
 
+function isDriverResultHeader(result: unknown): boolean {
+	if (!result || typeof result !== "object") return false;
+	const driverResult = result as Record<string, unknown>;
+	return (
+		"affectedRows" in driverResult ||
+		"rowsAffected" in driverResult ||
+		"changes" in driverResult ||
+		("meta" in driverResult &&
+			driverResult.meta !== null &&
+			typeof driverResult.meta === "object" &&
+			"changes" in driverResult.meta)
+	);
+}
+
 function getMigrationRows(result: unknown): readonly Record<string, unknown>[] {
 	if (Array.isArray(result)) {
+		if (result.length > 0 && isDriverResultHeader(result[0])) return [];
 		if (Array.isArray(result[0])) {
 			return result[0].filter(
 				(row): row is Record<string, unknown> =>
@@ -156,23 +172,134 @@ function getMigrationRows(result: unknown): readonly Record<string, unknown>[] {
 	return [];
 }
 
+interface MigrationParameterMarker {
+	length: number;
+	offset: number;
+	parameterIndex: number;
+}
+
+function findMigrationParameterMarkers(
+	query: string,
+	dialect: MigrationDatabaseDialect,
+): MigrationParameterMarker[] {
+	const markers: MigrationParameterMarker[] = [];
+	let offset = 0;
+	let positionalParameter = 0;
+	while (offset < query.length) {
+		const character = query[offset];
+		const nextCharacter = query[offset + 1];
+
+		if (character === "-" && nextCharacter === "-") {
+			offset = query.indexOf("\n", offset + 2);
+			if (offset === -1) break;
+			continue;
+		}
+		if (dialect === "mysql" && character === "#") {
+			offset = query.indexOf("\n", offset + 1);
+			if (offset === -1) break;
+			continue;
+		}
+		if (character === "/" && nextCharacter === "*") {
+			let depth = 1;
+			offset += 2;
+			while (offset < query.length && depth > 0) {
+				if (query[offset] === "/" && query[offset + 1] === "*") {
+					depth += 1;
+					offset += 2;
+					continue;
+				}
+				if (query[offset] === "*" && query[offset + 1] === "/") {
+					depth -= 1;
+					offset += 2;
+					continue;
+				}
+				offset += 1;
+			}
+			continue;
+		}
+		if (character === "'" || character === '"' || character === "`") {
+			const quote = character;
+			offset += 1;
+			while (offset < query.length) {
+				if (dialect === "mysql" && query[offset] === "\\") {
+					offset += 2;
+					continue;
+				}
+				if (query[offset] !== quote) {
+					offset += 1;
+					continue;
+				}
+				if (query[offset + 1] === quote) {
+					offset += 2;
+					continue;
+				}
+				offset += 1;
+				break;
+			}
+			continue;
+		}
+		if (character === "[") {
+			offset += 1;
+			while (offset < query.length) {
+				if (query[offset] !== "]") {
+					offset += 1;
+					continue;
+				}
+				if (query[offset + 1] === "]") {
+					offset += 2;
+					continue;
+				}
+				offset += 1;
+				break;
+			}
+			continue;
+		}
+		if (dialect === "postgres" && character === "$") {
+			const dollarQuote = query
+				.slice(offset)
+				.match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0];
+			if (dollarQuote) {
+				const closingOffset = query.indexOf(
+					dollarQuote,
+					offset + dollarQuote.length,
+				);
+				offset =
+					closingOffset === -1
+						? query.length
+						: closingOffset + dollarQuote.length;
+				continue;
+			}
+			const parameterMarker = query.slice(offset).match(/^\$(\d+)/);
+			if (parameterMarker) {
+				markers.push({
+					length: parameterMarker[0].length,
+					offset,
+					parameterIndex: Number.parseInt(parameterMarker[1] ?? "", 10) - 1,
+				});
+				offset += parameterMarker[0].length;
+				continue;
+			}
+		}
+		if (dialect !== "postgres" && character === "?") {
+			markers.push({ length: 1, offset, parameterIndex: positionalParameter });
+			positionalParameter += 1;
+		}
+		offset += 1;
+	}
+	return markers;
+}
+
 function buildMigrationStatement(
 	query: MigrationDatabaseQuery,
 	dialect: MigrationDatabaseDialect,
 ): SQL {
 	if (query.parameters.length === 0) return sql.raw(query.sql);
-	const marker = dialect === "postgres" ? /\$(\d+)/g : /\?/g;
+	const markers = findMigrationParameterMarkers(query.sql, dialect);
 	const chunks: SQL[] = [];
 	let sqlOffset = 0;
-	let positionalParameter = 0;
-	for (const match of query.sql.matchAll(marker)) {
-		const matchOffset = match.index;
-		if (matchOffset === undefined) continue;
-		chunks.push(sql.raw(query.sql.slice(sqlOffset, matchOffset)));
-		const parameterIndex =
-			dialect === "postgres"
-				? Number.parseInt(match[1] ?? "", 10) - 1
-				: positionalParameter++;
+	for (const marker of markers) {
+		chunks.push(sql.raw(query.sql.slice(sqlOffset, marker.offset)));
+		const parameterIndex = marker.parameterIndex;
 		if (
 			!Number.isInteger(parameterIndex) ||
 			parameterIndex < 0 ||
@@ -183,15 +310,13 @@ function buildMigrationStatement(
 			);
 		}
 		chunks.push(sql`${query.parameters[parameterIndex]}`);
-		sqlOffset = matchOffset + match[0].length;
+		sqlOffset = marker.offset + marker.length;
 	}
 	chunks.push(sql.raw(query.sql.slice(sqlOffset)));
 	if (
 		(dialect === "postgres"
-			? new Set(
-					[...query.sql.matchAll(marker)].map((match) => Number(match[1])),
-				).size
-			: positionalParameter) !== query.parameters.length
+			? new Set(markers.map(({ parameterIndex }) => parameterIndex)).size
+			: markers.length) !== query.parameters.length
 	) {
 		throw new BetterAuthError(
 			"Drizzle migration query parameter count does not match its SQL markers.",
@@ -202,8 +327,14 @@ function buildMigrationStatement(
 
 function getMigrationQueryResult(
 	driverResult: unknown,
+	isRead: boolean,
 ): MigrationDatabaseQueryResult {
-	const affectedRows = readDriverRowCount(driverResult);
+	if (isRead) return { rows: getMigrationRows(driverResult) };
+	const affectedRows =
+		Array.isArray(driverResult) && driverResult.length > 0
+			? (readDriverRowCount(driverResult[0]) ??
+				readDriverRowCount(driverResult))
+			: readDriverRowCount(driverResult);
 	return {
 		rows: getMigrationRows(driverResult),
 		...(typeof affectedRows === "number" && Number.isFinite(affectedRows)
@@ -218,11 +349,19 @@ function isDrizzleMigrationRead(query: MigrationDatabaseQuery): boolean {
 	return /^pragma\b/i.test(sql) && !/^pragma\b[^;]*=/i.test(sql);
 }
 
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+	return (
+		value !== null &&
+		(typeof value === "object" || typeof value === "function") &&
+		"then" in value &&
+		typeof value.then === "function"
+	);
+}
+
 function createDrizzleMigrationConnection(
 	db: DB,
 	dialect: MigrationDatabaseDialect,
 	drizzleSchema: Record<string, unknown> | undefined,
-	camelCase: boolean,
 	inTransaction = false,
 	supportsTransactions = true,
 ): MigrationDatabaseConnection {
@@ -236,24 +375,33 @@ function createDrizzleMigrationConnection(
 			}
 			return Object.fromEntries(
 				Object.entries(schema).map(([schemaKey, table]) => {
-					const drizzleTable = drizzleSchema[table.modelName];
-					const hasDrizzleTable =
-						drizzleTable !== undefined && typeof drizzleTable === "object";
+					const drizzleTable =
+						drizzleSchema[schemaKey] ?? drizzleSchema[table.modelName];
+					if (!drizzleTable || typeof drizzleTable !== "object") {
+						throw new BetterAuthError(
+							`Drizzle migration schema could not resolve model "${table.modelName}".`,
+						);
+					}
 					const fields = Object.fromEntries(
 						Object.entries(table.fields).map(([fieldKey, field]) => {
 							const drizzleFieldName = field.fieldName || fieldKey;
-							const column = hasDrizzleTable
-								? (drizzleTable as Record<string, unknown>)[drizzleFieldName]
-								: undefined;
+							const drizzleTableFields = drizzleTable as Record<
+								string,
+								unknown
+							>;
+							const column =
+								drizzleTableFields[fieldKey] ??
+								drizzleTableFields[drizzleFieldName];
+							if (!is(column, Column)) {
+								throw new BetterAuthError(
+									`Drizzle migration schema could not resolve field "${drizzleFieldName}" on model "${table.modelName}".`,
+								);
+							}
 							return [
 								fieldKey,
 								{
 									...field,
-									fieldName: is(column, Column)
-										? column.name
-										: camelCase
-											? drizzleFieldName
-											: toSnakeCase(drizzleFieldName),
+									fieldName: column.name,
 								},
 							];
 						}),
@@ -262,11 +410,7 @@ function createDrizzleMigrationConnection(
 						schemaKey,
 						{
 							...table,
-							modelName: hasDrizzleTable
-								? getTableName(drizzleTable as never)
-								: camelCase
-									? table.modelName
-									: toSnakeCase(table.modelName),
+							modelName: getTableName(drizzleTable as never),
 							fields,
 						},
 					];
@@ -275,18 +419,39 @@ function createDrizzleMigrationConnection(
 		},
 		async execute(query) {
 			const statement = buildMigrationStatement(query, dialect);
+			const isRead = isDrizzleMigrationRead(query);
 			const driverResult =
 				dialect === "sqlite"
-					? isDrizzleMigrationRead(query)
+					? isRead
 						? await db.all(statement)
 						: await db.run(statement)
 					: await db.execute(statement);
-			return getMigrationQueryResult(driverResult);
+			return getMigrationQueryResult(driverResult, isRead);
 		},
 	};
 	if (inTransaction || !supportsTransactions) return connection;
 	connection.transaction = async (callback) => {
 		if (dialect === "sqlite") {
+			const probe = db.run(sql.raw("SELECT 1"));
+			if (isPromiseLike(probe)) {
+				await probe;
+				if (typeof db.transaction !== "function") {
+					throw new BetterAuthError(
+						"Drizzle migration transactions for asynchronous SQLite drivers require a native transaction-scoped database.",
+					);
+				}
+				return db.transaction((transactionDatabase: DB) =>
+					callback(
+						createDrizzleMigrationConnection(
+							transactionDatabase,
+							dialect,
+							drizzleSchema,
+							true,
+							true,
+						),
+					),
+				);
+			}
 			await connection.execute({
 				parameters: [],
 				sql: "BEGIN IMMEDIATE",
@@ -297,7 +462,6 @@ function createDrizzleMigrationConnection(
 						db,
 						dialect,
 						drizzleSchema,
-						camelCase,
 						true,
 						true,
 					),
@@ -320,7 +484,6 @@ function createDrizzleMigrationConnection(
 					transactionDatabase,
 					dialect,
 					drizzleSchema,
-					camelCase,
 					true,
 					true,
 				),
@@ -1380,7 +1543,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				db,
 				config.provider === "pg" ? "postgres" : config.provider,
 				config.schema || db._?.fullSchema,
-				config.camelCase === true,
 				false,
 				config.transaction === true,
 			),
