@@ -1,5 +1,12 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -16,6 +23,7 @@ const releaseNotesScript = resolve(
 );
 
 interface CommandResult {
+	actionsOutput?: string;
 	status: number | null;
 	stderr: string;
 	stdout: string;
@@ -44,7 +52,6 @@ function collectReleaseNotes(
 	const result = spawnSync(
 		process.execPath,
 		[
-			"--experimental-strip-types",
 			releaseNotesScript,
 			"collect",
 			"--version",
@@ -65,7 +72,6 @@ function collectReleaseNotes(
 				GITHUB_REPOSITORY: "better-auth/better-auth",
 				GITHUB_SHA: commitRef,
 				GITHUB_WORKSPACE: workspace,
-				GITHUB_ACTIONS: "",
 			},
 		},
 	);
@@ -81,28 +87,34 @@ function detectReleaseCandidate(
 	branch: string,
 	workspace: string,
 ): CommandResult {
+	const outputDirectory = mkdtempSync(resolve(tmpdir(), "release-output-"));
+	const outputPath = resolve(outputDirectory, "output");
+	writeFileSync(outputPath, "");
 	const result = spawnSync(
 		process.execPath,
-		[
-			"--experimental-strip-types",
-			releaseNotesScript,
-			"candidate",
-			"--version",
-			version,
-			"--branch",
-			branch,
-		],
+		[releaseNotesScript, "candidate", "--version", version, "--branch", branch],
 		{
 			cwd: workspace,
 			encoding: "utf-8",
-			env: { ...process.env, GITHUB_WORKSPACE: workspace },
+			env: {
+				...process.env,
+				GITHUB_OUTPUT: outputPath,
+				GITHUB_WORKSPACE: workspace,
+			},
 		},
 	);
-	return {
-		status: result.status,
-		stderr: result.stderr,
-		stdout: result.stdout,
-	};
+	try {
+		return {
+			actionsOutput: existsSync(outputPath)
+				? readFileSync(outputPath, "utf-8")
+				: "",
+			status: result.status,
+			stderr: result.stderr,
+			stdout: result.stdout,
+		};
+	} finally {
+		rmSync(outputDirectory, { recursive: true });
+	}
 }
 
 function git(workspace: string, args: string[]): string {
@@ -241,13 +253,7 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 function validateReleaseVersion(version: string): CommandResult {
 	const result = spawnSync(
 		process.execPath,
-		[
-			"--experimental-strip-types",
-			releaseNotesScript,
-			"validate",
-			"--version",
-			version,
-		],
+		[releaseNotesScript, "validate", "--version", version],
 		{ cwd: repositoryRoot, encoding: "utf-8" },
 	);
 	return {
@@ -462,8 +468,10 @@ describe("release changeset collection", () => {
 			);
 
 			expect(candidate.status, candidate.stderr).toBe(0);
-			expect(candidate.stdout).toContain("release: true");
-			expect(candidate.stdout).toMatch(/version_commit: [a-f0-9]{40}/);
+			expect(candidate.actionsOutput).toMatch(/release<<[^\n]+\ntrue\n/);
+			expect(candidate.actionsOutput).toMatch(
+				/version_commit<<[^\n]+\n[a-f0-9]{40}\n/,
+			);
 
 			git(fixture.workspace, ["tag", "v2.0.0", fixture.commitRef]);
 			const published = detectReleaseCandidate(
@@ -472,7 +480,7 @@ describe("release changeset collection", () => {
 				fixture.workspace,
 			);
 			expect(published.status, published.stderr).toBe(0);
-			expect(published.stdout).toContain("release: false");
+			expect(published.actionsOutput).toMatch(/release<<[^\n]+\nfalse\n/);
 		} finally {
 			rmSync(fixture.workspace, { recursive: true });
 		}

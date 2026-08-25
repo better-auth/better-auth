@@ -32,6 +32,26 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Reject stale release merge groups
+        if: github.event_name == 'merge_group'
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          BASE_VERSION=$(git show "${BASE_SHA}:packages/better-auth/package.json" | jq -r '.version')
+          HEAD_VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          if [ "$BASE_VERSION" = "$HEAD_VERSION" ]; then
+            exit 0
+          fi
+
+          PENDING_CHANGESETS=$(git ls-tree -r --name-only HEAD -- '.changeset/' \
+            | grep -E '^\.changeset/.*\.md$' \
+            | grep -v '^\.changeset/README\.md$' || true)
+          if [ -n "$PENDING_CHANGESETS" ]; then
+            echo "::error::The release merge still contains unconsumed changesets"
+            echo "$PENDING_CHANGESETS"
+            exit 1
+          fi
+
       - name: Cache turbo build setup
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:

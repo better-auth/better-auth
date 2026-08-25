@@ -1,4 +1,4 @@
-import type { LanguageModel } from "ai";
+import type { JSONValue, LanguageModel } from "ai";
 import { asSchema } from "ai";
 import { describe, expect, it } from "vitest";
 import type { StructuredGenerator } from "../src/ai/generate-structured.ts";
@@ -13,7 +13,7 @@ function modelId(model: LanguageModel): string {
 }
 
 function generatorFor(
-	value: unknown,
+	value: JSONValue,
 	onRequest?: (request: Parameters<StructuredGenerator>[0]) => void,
 ): StructuredGenerator {
 	return async (request) => {
@@ -129,7 +129,7 @@ describe("changeset rewriting", () => {
 		"See [the instructions](https://malicious.example)",
 		"<img src=x onerror=alert(1)>",
 		"Notify @maintainers before merging",
-	])("rejects unsafe generated description: %s", async (description) => {
+	])("rejects unsupported generated Markdown: %s", async (description) => {
 		await expect(
 			rewriteChangesetDescription(
 				{
@@ -141,6 +141,6 @@ describe("changeset rewriting", () => {
 				},
 				generatorFor({ description }),
 			),
-		).rejects.toThrow("must not contain links, HTML, or mentions");
+		).rejects.toThrow("contains unsupported Markdown");
 	});
 });

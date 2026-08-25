@@ -1,102 +1,95 @@
-/**
- * Change Classifier — shared release classification module
- *
- * Pure functions for mapping change types, scopes, and file paths to release
- * metadata. No side effects, no network calls.
- *
- * Used by the auto-changeset and release-note commands.
- */
+const SCOPE_TO_DOMAIN = new Map(
+	Object.entries({
+		// core
+		core: "core",
+		api: "core",
+		client: "core",
+		cookies: "core",
+		crypto: "core",
+		account: "core",
+		session: "core",
+		instrumentation: "core",
+		"last-login-method": "core",
+		"redis-storage": "core",
 
-const SCOPE_TO_DOMAIN: Record<string, string> = {
-	// core
-	core: "core",
-	api: "core",
-	client: "core",
-	cookies: "core",
-	crypto: "core",
-	account: "core",
-	session: "core",
-	instrumentation: "core",
-	"last-login-method": "core",
-	"redis-storage": "core",
+		// database
+		db: "database",
+		adapters: "database",
+		"drizzle-adapter": "database",
+		"prisma-adapter": "database",
+		"kysely-adapter": "database",
+		"mongo-adapter": "database",
+		"memory-adapter": "database",
 
-	// database
-	db: "database",
-	adapters: "database",
-	"drizzle-adapter": "database",
-	"prisma-adapter": "database",
-	"kysely-adapter": "database",
-	"mongo-adapter": "database",
-	"memory-adapter": "database",
+		// oauth
+		"oauth-proxy": "oauth",
+		"one-tap": "oauth",
+		"generic-oauth": "oauth",
+		"social-provider": "oauth",
 
-	// oauth
-	"oauth-proxy": "oauth",
-	"one-tap": "oauth",
-	"generic-oauth": "oauth",
-	"social-provider": "oauth",
+		// credentials
+		"magic-link": "credentials",
+		"email-otp": "credentials",
+		"phone-number": "credentials",
+		phone: "credentials",
+		username: "credentials",
+		anonymous: "credentials",
+		siwe: "credentials",
+		passkey: "credentials",
 
-	// credentials
-	"magic-link": "credentials",
-	"email-otp": "credentials",
-	"phone-number": "credentials",
-	phone: "credentials",
-	username: "credentials",
-	anonymous: "credentials",
-	siwe: "credentials",
-	passkey: "credentials",
+		// identity
+		"oauth-provider": "identity",
+		"oidc-provider": "identity",
+		mcp: "identity",
+		"device-authorization": "identity",
+		cimd: "identity",
 
-	// identity
-	"oauth-provider": "identity",
-	"oidc-provider": "identity",
-	mcp: "identity",
-	"device-authorization": "identity",
-	cimd: "identity",
+		// organization
+		organization: "organization",
+		admin: "organization",
+		access: "organization",
 
-	// organization
-	organization: "organization",
-	admin: "organization",
-	access: "organization",
+		// security
+		"two-factor": "security",
+		"2fa": "security",
+		captcha: "security",
+		haveibeenpwned: "security",
+		"rate-limiter": "security",
 
-	// security
-	"two-factor": "security",
-	"2fa": "security",
-	captcha: "security",
-	haveibeenpwned: "security",
-	"rate-limiter": "security",
+		// enterprise
+		sso: "enterprise",
+		scim: "enterprise",
 
-	// enterprise
-	sso: "enterprise",
-	scim: "enterprise",
+		// payments
+		stripe: "payments",
+		"api-key": "payments",
 
-	// payments
-	stripe: "payments",
-	"api-key": "payments",
+		// platform
+		expo: "platform",
+		electron: "platform",
 
-	// platform
-	expo: "platform",
-	electron: "platform",
+		// devtools
+		cli: "devtools",
+		telemetry: "devtools",
+		i18n: "devtools",
+		"test-utils": "devtools",
+		"open-api": "devtools",
 
-	// devtools
-	cli: "devtools",
-	telemetry: "devtools",
-	i18n: "devtools",
-	"test-utils": "devtools",
-	"open-api": "devtools",
+		// devops (filtered from release notes)
+		build: "devops",
+		ci: "devops",
+		deps: "devops",
+		"deps-dev": "devops",
+		knip: "devops",
 
-	// devops (filtered from release notes)
-	build: "devops",
-	ci: "devops",
-	deps: "devops",
-	"deps-dev": "devops",
-	knip: "devops",
+		// docs (filtered from release notes)
+		docs: "docs",
+		blog: "docs",
+		landing: "docs",
+	} as const),
+);
 
-	// docs (filtered from release notes)
-	docs: "docs",
-	blog: "docs",
-	landing: "docs",
-};
-
-const PATH_TO_DOMAIN: [string, string][] = [
+const PATH_TO_DOMAIN = [
 	["packages/oauth-provider/", "identity"],
 	["packages/better-auth/src/plugins/oidc-provider/", "identity"],
 	["packages/better-auth/src/plugins/mcp/", "identity"],
@@ -155,7 +148,7 @@ const PATH_TO_DOMAIN: [string, string][] = [
 	["demo/", "docs"],
 	[".github/", "devops"],
 	["e2e/", "devops"],
-];
+] as const;
 
 function classifyDomain(filePath: string): string | undefined {
 	for (const [prefix, domain] of PATH_TO_DOMAIN) {
@@ -169,7 +162,7 @@ export function resolveDomain(
 	changedFiles: string[],
 ): string {
 	if (scope) {
-		const domain = SCOPE_TO_DOMAIN[scope];
+		const domain = SCOPE_TO_DOMAIN.get(scope);
 		if (domain) return domain;
 	}
 
@@ -212,7 +205,6 @@ export function mapTypeToBump(
 	}
 }
 
-/** Domains in display order for release notes */
 export const DOMAIN_ORDER = [
 	"core",
 	"database",
@@ -227,39 +219,36 @@ export const DOMAIN_ORDER = [
 	"devtools",
 ] as const;
 
-/** Domains excluded from release notes */
 export const FILTERED_DOMAINS = new Set(["docs", "devops"]);
 
-/**
- * Maps commit scopes to npm package names.
- * Used by release-notes.ts to group entries by the package users install.
- */
-const SCOPE_TO_PACKAGE: Record<string, string> = {
-	cimd: "@better-auth/cimd",
-	sso: "@better-auth/sso",
-	scim: "@better-auth/scim",
-	passkey: "@better-auth/passkey",
-	"oauth-provider": "@better-auth/oauth-provider",
-	stripe: "@better-auth/stripe",
-	"api-key": "@better-auth/api-key",
-	expo: "@better-auth/expo",
-	electron: "@better-auth/electron",
-	i18n: "@better-auth/i18n",
-	"test-utils": "@better-auth/test-utils",
-	"drizzle-adapter": "@better-auth/drizzle-adapter",
-	"prisma-adapter": "@better-auth/prisma-adapter",
-	"kysely-adapter": "@better-auth/kysely-adapter",
-	"mongo-adapter": "@better-auth/mongo-adapter",
-	"memory-adapter": "@better-auth/memory-adapter",
-	"redis-storage": "@better-auth/redis-storage",
-	cli: "auth",
-};
+const SCOPE_TO_PACKAGE = new Map(
+	Object.entries({
+		cimd: "@better-auth/cimd",
+		sso: "@better-auth/sso",
+		scim: "@better-auth/scim",
+		passkey: "@better-auth/passkey",
+		"oauth-provider": "@better-auth/oauth-provider",
+		stripe: "@better-auth/stripe",
+		"api-key": "@better-auth/api-key",
+		expo: "@better-auth/expo",
+		electron: "@better-auth/electron",
+		i18n: "@better-auth/i18n",
+		"test-utils": "@better-auth/test-utils",
+		"drizzle-adapter": "@better-auth/drizzle-adapter",
+		"prisma-adapter": "@better-auth/prisma-adapter",
+		"kysely-adapter": "@better-auth/kysely-adapter",
+		"mongo-adapter": "@better-auth/mongo-adapter",
+		"memory-adapter": "@better-auth/memory-adapter",
+		"redis-storage": "@better-auth/redis-storage",
+		cli: "auth",
+	} as const),
+);
 
 /**
  * Maps file path prefixes to npm package names.
  * Order matters: more specific paths must come before catch-alls.
  */
-const PATH_TO_PACKAGE: [string, string][] = [
+const PATH_TO_PACKAGE = [
 	["packages/cimd/", "@better-auth/cimd"],
 	["packages/sso/", "@better-auth/sso"],
 	["packages/scim/", "@better-auth/scim"],
@@ -282,18 +271,14 @@ const PATH_TO_PACKAGE: [string, string][] = [
 	["packages/better-auth/", "better-auth"],
 	["packages/core/", "better-auth"],
 	["packages/cli/", "auth"],
-];
+] as const;
 
-/**
- * Resolves the npm package name for release notes grouping.
- * Priority: scope match > file path match > "better-auth" fallback.
- */
 export function resolvePackage(
 	scope: string | undefined,
 	changedFiles: string[],
 ): string {
 	if (scope) {
-		const pkg = SCOPE_TO_PACKAGE[scope];
+		const pkg = SCOPE_TO_PACKAGE.get(scope);
 		if (pkg) return pkg;
 	}
 
@@ -321,7 +306,6 @@ export function resolvePackage(
 	})[0]!;
 }
 
-/** Classifies a conventional commit type into a release notes category. */
 export function classifyChangeType(
 	type: string,
 	breaking: boolean,

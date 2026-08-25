@@ -24,6 +24,7 @@ jobs:
       (github.event.action != 'ready_for_review' ||
        !contains(fromJSON('["better-release[bot]", "github-actions[bot]"]'), github.event.sender.login))
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: write
     steps:

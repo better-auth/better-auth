@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { parseArgs as parseNodeArgs } from "node:util";
 import { runCommand } from "../command.ts";
-import { createGitHubReader, parseGitHubRepository } from "../github-reader.ts";
+import { createGitHubReader, parseGitHubRepository } from "../github.ts";
 import type { ReleaseNotesOperation } from "../release-notes/pipeline.ts";
 import { runReleaseNotes } from "../release-notes/pipeline.ts";
 import { parseSchema, releaseVersionSchema } from "../release-notes/schema.ts";
@@ -137,10 +137,14 @@ await runCommand(() => {
 
 	const repository = process.env.GITHUB_REPOSITORY;
 	if (!repository) throw new Error("GITHUB_REPOSITORY is required");
-	const github = createGitHubReader({
-		repository: parseGitHubRepository(repository),
-		token: process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN,
-		baseUrl: process.env.GITHUB_API_URL,
-	});
-	return runReleaseNotes(operation, github);
+	const parsedRepository = parseGitHubRepository(repository);
+	const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+	const github = token
+		? createGitHubReader({
+				repository: parsedRepository,
+				token,
+				baseUrl: process.env.GITHUB_API_URL,
+			})
+		: undefined;
+	return runReleaseNotes(operation, { repository: parsedRepository, github });
 });

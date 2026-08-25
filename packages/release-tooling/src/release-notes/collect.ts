@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import * as semver from "semver";
 import * as z from "zod";
 import {
 	classifyChangeType,
@@ -8,8 +8,8 @@ import {
 	resolvePackage,
 } from "../change-classifier.ts";
 import { parseConventionalHeader } from "../conventional-header.ts";
-import type { GitHubReader } from "../github-reader.ts";
-import { isGitHubNotFound } from "../github-reader.ts";
+import { gitSucceeds, runGit } from "../git.ts";
+import type { GitHubReader } from "../github.ts";
 import type { PackageReleaseMetadata, ReleaseEntry } from "./schema.ts";
 import { parseSchema, prereleaseStateSchema } from "./schema.ts";
 
@@ -28,9 +28,7 @@ interface ChangesetSnapshot {
 const packageVersionSchema = z.object({ version: z.string() });
 
 function gitShow(ref: string, path: string): string {
-	return execFileSync("git", ["show", `${ref}:${path}`], {
-		encoding: "utf-8",
-	});
+	return runGit(["show", `${ref}:${path}`]);
 }
 
 function readFileFromRef(path: string, branch: string): string {
@@ -41,43 +39,12 @@ function readFileFromRef(path: string, branch: string): string {
 }
 
 function refHasPath(ref: string, path: string): boolean {
-	try {
-		execFileSync("git", ["cat-file", "-e", `${ref}:${path}`], {
-			stdio: "ignore",
-		});
-		return true;
-	} catch {
-		return false;
-	}
+	return gitSucceeds(["cat-file", "-e", `${ref}:${path}`]);
 }
 
 function listTags(): string[] {
-	const output = execFileSync(
-		"git",
-		["tag", "--sort=-version:refname", "--list", "v*"],
-		{ encoding: "utf-8" },
-	);
+	const output = runGit(["tag", "--sort=-version:refname", "--list", "v*"]);
 	return output.trim().split("\n").filter(Boolean);
-}
-
-/** Parse "1.2.3" into [1, 2, 3]. Returns null on invalid input. */
-function parseVersionTuple(ver: string): [number, number, number] | null {
-	const base = ver.replace(/-.*$/, "");
-	const m = base.match(/^(\d+)\.(\d+)\.(\d+)$/);
-	if (!m) return null;
-	return [Number(m[1]), Number(m[2]), Number(m[3])];
-}
-
-/** True if a < b by major.minor.patch comparison. */
-function isOlderVersion(a: string, b: string): boolean {
-	const ta = parseVersionTuple(a);
-	const tb = parseVersionTuple(b);
-	if (!ta || !tb) return false;
-	for (let i = 0; i < 3; i++) {
-		if (ta[i]! < tb[i]!) return true;
-		if (ta[i]! > tb[i]!) return false;
-	}
-	return false;
 }
 
 export function findPreviousTag(
@@ -85,6 +52,8 @@ export function findPreviousTag(
 	isBeta: boolean,
 ): string {
 	const tags = listTags();
+	const current = semver.parse(currentVersion);
+	if (!current) throw new Error(`Invalid release version: ${currentVersion}`);
 
 	if (isBeta) {
 		const preMatch = currentVersion.match(/^(.+)-(beta|alpha|rc)\.(\d+)$/);
@@ -98,16 +67,23 @@ export function findPreviousTag(
 	}
 
 	const currentTag = `v${currentVersion}`;
-	const majorMinorMatch = currentVersion.match(/^(\d+\.\d+)\./);
-	const majorMinor = majorMinorMatch?.[1];
-
-	// First prefer the same major.minor line, then fall back to any stable tag
 	let fallback: string | undefined;
 	for (const tag of tags) {
 		if (tag === currentTag) continue;
-		const ver = tag.replace(/^v/, "");
-		if (ver.includes("-") || !isOlderVersion(ver, currentVersion)) continue;
-		if (majorMinor && ver.startsWith(`${majorMinor}.`)) return tag;
+		const candidate = semver.parse(tag.slice(1));
+		if (
+			!candidate ||
+			candidate.prerelease.length > 0 ||
+			!semver.lt(candidate, current)
+		) {
+			continue;
+		}
+		if (
+			candidate.major === current.major &&
+			candidate.minor === current.minor
+		) {
+			return tag;
+		}
 		fallback ??= tag;
 	}
 	if (fallback) return fallback;
@@ -142,15 +118,12 @@ const prCache = new Map<number, PRInfo | null>();
 const releaseBodyCache = new Map<string, string | null>();
 
 async function fetchPR(
-	github: GitHubReader,
+	github: GitHubReader | undefined,
 	prNumber: number,
 ): Promise<PRInfo | null> {
 	if (prCache.has(prNumber)) return prCache.get(prNumber) ?? null;
 
-	const data = await github.getPullRequest(prNumber).catch((error: unknown) => {
-		if (!isGitHubNotFound(error)) throw error;
-		return null;
-	});
+	const data = github ? await github.getPullRequest(prNumber) : null;
 	if (!data) {
 		prCache.set(prNumber, null);
 		return null;
@@ -168,26 +141,20 @@ async function fetchPR(
 }
 
 async function fetchReleaseBody(
-	github: GitHubReader,
+	github: GitHubReader | undefined,
 	tag: string,
 ): Promise<string | null> {
 	const cached = releaseBodyCache.get(tag);
 	if (cached !== undefined) return cached;
 
-	try {
-		const body = await github.getReleaseBody(tag);
-		if (body === null) {
-			releaseBodyCache.set(tag, null);
-			return null;
-		}
-
-		releaseBodyCache.set(tag, body);
-		return body;
-	} catch (error) {
-		if (process.env.GITHUB_ACTIONS === "true") throw error;
+	const body = github ? await github.getReleaseBody(tag) : null;
+	if (body === null) {
 		releaseBodyCache.set(tag, null);
 		return null;
 	}
+
+	releaseBodyCache.set(tag, body);
+	return body;
 }
 
 function extractReleasePRNumbers(body: string): Set<string> {
@@ -205,7 +172,7 @@ function classifyEntry(
 ): string {
 	if (prInfo) {
 		for (const label of prInfo.labels) {
-			if (DOMAIN_ORDER.includes(label as (typeof DOMAIN_ORDER)[number])) {
+			if (DOMAIN_ORDER.some((domain) => domain === label)) {
 				return label;
 			}
 		}
@@ -222,20 +189,16 @@ interface ChangesetEntry {
 }
 
 function findChangesetSourcePR(id: string, ref: string): number | null {
-	const subject = execFileSync(
-		"git",
-		[
-			"log",
-			"--diff-filter=A",
-			"--format=%s",
-			"-n",
-			"1",
-			ref,
-			"--",
-			`.changeset/${id}.md`,
-		],
-		{ encoding: "utf-8" },
-	).trim();
+	const subject = runGit([
+		"log",
+		"--diff-filter=A",
+		"--format=%s",
+		"-n",
+		"1",
+		ref,
+		"--",
+		`.changeset/${id}.md`,
+	]).trim();
 	const prMatch = subject.match(/\(#(\d+)\)$/);
 	return prMatch ? Number(prMatch[1]) : null;
 }
@@ -268,38 +231,28 @@ function findDeletedChangesets(
 	parentRef: string,
 	commitRef: string,
 ): ChangesetSnapshot | null {
-	const deletedFiles = execFileSync(
-		"git",
-		[
-			"diff",
-			"--diff-filter=D",
-			"--name-only",
-			parentRef,
-			commitRef,
-			"--",
-			".changeset/",
-		],
-		{ encoding: "utf-8" },
-	);
+	const deletedFiles = runGit([
+		"diff",
+		"--diff-filter=D",
+		"--name-only",
+		parentRef,
+		commitRef,
+		"--",
+		".changeset/",
+	]);
 	const ids = changesetIdsFromPaths(deletedFiles);
 	return ids.length > 0 ? { ids, ref: parentRef } : null;
 }
 
 function listCommits(range: string, path: string): string[] {
-	return execFileSync("git", ["rev-list", range, "--", path], {
-		encoding: "utf-8",
-	})
+	return runGit(["rev-list", range, "--", path])
 		.trim()
 		.split("\n")
 		.filter(Boolean);
 }
 
 function commitParents(commit: string): string[] {
-	const [, ...parents] = execFileSync(
-		"git",
-		["rev-list", "--parents", "-n", "1", commit],
-		{ encoding: "utf-8" },
-	)
+	const [, ...parents] = runGit(["rev-list", "--parents", "-n", "1", commit])
 		.trim()
 		.split(" ");
 	return parents;
@@ -328,15 +281,11 @@ export function findUnreleasedVersionCommit(
 	version: string,
 	ref: string,
 ): string | null {
-	try {
-		execFileSync("git", ["rev-parse", "--verify", `v${version}^{commit}`], {
-			stdio: "ignore",
-		});
+	if (gitSucceeds(["rev-parse", "--verify", `v${version}^{commit}`])) {
 		return null;
-	} catch {
-		const previousTag = findPreviousTag(version, version.includes("-"));
-		return findVersionCommit(ref, previousTag, version);
 	}
+	const previousTag = findPreviousTag(version, version.includes("-"));
+	return findVersionCommit(ref, previousTag, version);
 }
 
 function findConsumedChangesets(
@@ -361,11 +310,7 @@ function findConsumedChangesets(
 }
 
 function findCurrentChangesets(ref: string): ChangesetSnapshot | null {
-	const files = execFileSync(
-		"git",
-		["ls-tree", "-r", "--name-only", ref, ".changeset/"],
-		{ encoding: "utf-8" },
-	);
+	const files = runGit(["ls-tree", "-r", "--name-only", ref, ".changeset/"]);
 	const ids = changesetIdsFromPaths(files);
 	return ids.length > 0 ? { ids, ref } : null;
 }
@@ -531,7 +476,7 @@ function loadPreviousPrereleaseChangesets(version: string): Set<string> {
  * a direct ancestor) using PR-number deduplication.
  */
 export async function collectEntries(
-	github: GitHubReader,
+	github: GitHubReader | undefined,
 	version: string,
 	branch: string,
 	releaseRef?: string,
@@ -543,13 +488,9 @@ export async function collectEntries(
 	if (releaseRef) {
 		targetRef = releaseRef;
 	} else {
-		try {
-			execFileSync("git", ["rev-parse", `${currentTag}^{}`], {
-				encoding: "utf-8",
-				stdio: ["pipe", "pipe", "pipe"],
-			});
+		if (gitSucceeds(["rev-parse", `${currentTag}^{}`])) {
 			targetRef = currentTag;
-		} catch {
+		} else {
 			targetRef = branch || "HEAD";
 		}
 	}
@@ -557,44 +498,30 @@ export async function collectEntries(
 	// Handle cherry-pick history gap: if the previous tag is NOT a direct
 	// ancestor, use merge-base + PR deduplication to avoid double-counting
 	// commits already released via cherry-pick.
-	let isDirectAncestor = false;
-	try {
-		execFileSync(
-			"git",
-			["merge-base", "--is-ancestor", previousTag, targetRef],
-			{
-				encoding: "utf-8",
-			},
-		);
-		isDirectAncestor = true;
-	} catch {
-		// Not a direct ancestor
-	}
+	const isDirectAncestor = gitSucceeds([
+		"merge-base",
+		"--is-ancestor",
+		previousTag,
+		targetRef,
+	]);
 
 	let log: string;
 	const alreadyReleasedPRs = new Set<string>();
 	let alreadyPublishedPRs: Set<string> | null = null;
 
 	if (isDirectAncestor) {
-		log = execFileSync(
-			"git",
-			["log", `${previousTag}..${targetRef}`, "--no-merges", "--format=%H %s"],
-			{ encoding: "utf-8" },
-		);
+		log = runGit([
+			"log",
+			`${previousTag}..${targetRef}`,
+			"--no-merges",
+			"--format=%H %s",
+		]);
 	} else {
-		const mergeBase = execFileSync(
-			"git",
-			["merge-base", previousTag, targetRef],
-			{ encoding: "utf-8" },
-		).trim();
+		const mergeBase = runGit(["merge-base", previousTag, targetRef]).trim();
 
 		console.log(`  Cherry-pick mode: common ancestor ${mergeBase.slice(0, 7)}`);
 
-		const tagLog = execFileSync(
-			"git",
-			["log", `${mergeBase}..${previousTag}`, "--oneline"],
-			{ encoding: "utf-8" },
-		);
+		const tagLog = runGit(["log", `${mergeBase}..${previousTag}`, "--oneline"]);
 		for (const match of tagLog.matchAll(/\(#(\d+)\)/g)) {
 			alreadyReleasedPRs.add(match[1]!);
 		}
@@ -606,11 +533,12 @@ export async function collectEntries(
 			);
 		}
 
-		log = execFileSync(
-			"git",
-			["log", `${mergeBase}..${targetRef}`, "--no-merges", "--format=%H %s"],
-			{ encoding: "utf-8" },
-		);
+		log = runGit([
+			"log",
+			`${mergeBase}..${targetRef}`,
+			"--no-merges",
+			"--format=%H %s",
+		]);
 	}
 
 	let lines = log.trim().split("\n").filter(Boolean);
@@ -717,20 +645,16 @@ export async function collectEntries(
 				? changeset.packageNames[0]!
 				: resolvePackage(parsed.scope || undefined, []);
 
-		try {
-			const prInfo = await fetchPR(github, prNumber);
-			if (prInfo) {
-				author = prInfo.author;
-				title = prInfo.title;
-				domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
-				packageName =
-					changeset?.packageNames.length === 1
-						? changeset.packageNames[0]!
-						: resolvePackage(parsed.scope || undefined, prInfo.files);
-				if (prInfo.labels.includes("breaking")) breaking = true;
-			}
-		} catch (error) {
-			if (process.env.GITHUB_ACTIONS === "true") throw error;
+		const prInfo = await fetchPR(github, prNumber);
+		if (prInfo) {
+			author = prInfo.author;
+			title = prInfo.title;
+			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
+			packageName =
+				changeset?.packageNames.length === 1
+					? changeset.packageNames[0]!
+					: resolvePackage(parsed.scope || undefined, prInfo.files);
+			if (prInfo.labels.includes("breaking")) breaking = true;
 		}
 
 		const releasePackages =

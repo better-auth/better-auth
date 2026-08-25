@@ -1585,6 +1585,9 @@ importers:
       '@actions/core':
         specifier: 3.0.1
         version: 3.0.1
+      '@octokit/request-error':
+        specifier: 7.1.1
+        version: 7.1.1
       '@octokit/rest':
         specifier: 22.0.1
         version: 22.0.1
@@ -1597,6 +1600,18 @@ importers:
       conventional-commits-parser:
         specifier: 7.1.2
         version: 7.1.2
+      mdast-util-from-markdown:
+        specifier: ^2.0.3
+        version: 2.0.3
+      mdast-util-gfm:
+        specifier: ^3.1.0
+        version: 3.1.0
+      mdast-util-to-markdown:
+        specifier: ^2.1.2
+        version: 2.1.2
+      micromark-extension-gfm:
+        specifier: ^3.0.0
+        version: 3.0.0
       semver:
         specifier: ^7.8.5
         version: 7.8.5
@@ -1604,6 +1619,9 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
     devDependencies:
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
       '@types/node':
         specifier: ^24.10.15
         version: 24.10.15

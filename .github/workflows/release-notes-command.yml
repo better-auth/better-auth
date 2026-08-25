@@ -18,12 +18,14 @@ jobs:
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       startsWith(github.event.comment.body, '/release-notes')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       issues: read
       pull-requests: read
     outputs:
       head_sha: ${{ steps.command.outputs.head_sha }}
+      merged: ${{ steps.command.outputs.merged }}
       pr_number: ${{ steps.command.outputs.pr_number }}
       version: ${{ steps.candidate.outputs.version }}
     steps:
@@ -56,10 +58,14 @@ jobs:
           BASE_REPO=$(echo "$PR" | jq -r '.base.repo.full_name')
           BASE_REF=$(echo "$PR" | jq -r '.base.ref')
           STATE=$(echo "$PR" | jq -r '.state')
-          if [ "$STATE" != "open" ] \
-             || [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] \
+          MERGED=$(echo "$PR" | jq -r '.merged')
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] \
              || [ "$BASE_REPO" != "$GITHUB_REPOSITORY" ]; then
-            echo "::error::Release notes commands only run on open PRs in this repository"
+            echo "::error::Release notes commands only run on PRs in this repository"
+            exit 1
+          fi
+          if [ "$STATE" != "open" ] && [ "$MERGED" != "true" ]; then
+            echo "::error::Release notes commands only run on open or merged PRs"
             exit 1
           fi
 
@@ -83,6 +89,7 @@ jobs:
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "merged=$MERGED" >> "$GITHUB_OUTPUT"
 
       # issue_comment runs from the default branch. Execute that trusted code
       # and read the release head only as git data.
@@ -103,20 +110,56 @@ jobs:
       - name: Install release tooling
         run: pnpm install --frozen-lockfile --filter @better-auth/release-tooling
 
+      - name: Verify release PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.command.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+        run: |
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || \
+             [[ ! "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release PR identity is invalid"
+            exit 1
+          fi
+          if ! CURRENT_HEAD_SHA=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+            --jq '.head.sha'); then
+            echo "::error::Could not read the current release PR head"
+            exit 1
+          fi
+          if [[ ! "$CURRENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::GitHub returned an invalid release PR head SHA"
+            exit 1
+          fi
+          if [ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]; then
+            echo "::error::The release PR changed before candidate resolution"
+            exit 1
+          fi
+
       - name: Resolve release candidate
         id: candidate
         env:
           HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+          MERGED: ${{ steps.command.outputs.merged }}
         run: |
           if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Release head is not a valid commit SHA"
             exit 1
+          fi
+          # Fetch the immutable commit as data. Never check out or execute the PR tree.
+          if ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --no-write-fetch-head origin "$HEAD_SHA"
           fi
           git cat-file -e "${HEAD_SHA}^{commit}"
           VERSION=$(git show "${HEAD_SHA}:packages/better-auth/package.json" | jq -r '.version')
           if ! pnpm --filter @better-auth/release-tooling release-notes \
             validate --version "$VERSION"; then
             echo "::error::Could not determine a valid release candidate version"
+            exit 1
+          fi
+          if [ "$MERGED" = "true" ] && \
+             git rev-parse --verify "v${VERSION}^{commit}" >/dev/null 2>&1; then
+            echo "::error::Release v${VERSION} is already tagged"
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -156,12 +199,17 @@ jobs:
           REWRITE_OUTCOME: ${{ steps.rewrites.outcome }}
           VERSION: ${{ steps.candidate.outputs.version }}
           HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+          MERGED: ${{ steps.command.outputs.merged }}
         run: |
           ARTIFACT_DIR="$RUNNER_TEMP/release-notes"
           NOTES_PATH="$ARTIFACT_DIR/release-notes.md"
           mkdir -p "$ARTIFACT_DIR"
 
           SOURCE="ai"
+          MERGED_ARGS=()
+          if [ "$MERGED" = "true" ]; then
+            MERGED_ARGS+=(--merged)
+          fi
           if [ "$REWRITE_OUTCOME" = "success" ] && \
              pnpm --filter @better-auth/release-tooling release-notes render \
                --manifest "$MANIFEST_PATH" \
@@ -182,6 +230,7 @@ jobs:
             --version "$VERSION" \
             --head "$HEAD_SHA" \
             --source "$SOURCE" \
+            "${MERGED_ARGS[@]}" \
             --body "$NOTES_PATH" \
             --output "$ARTIFACT_DIR/release-notes-comment.md"
           echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
@@ -209,6 +258,7 @@ jobs:
   publish-comment:
     needs: generate
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       issues: write
@@ -269,6 +319,7 @@ jobs:
           fi
 
       - name: Mark release PR ready
+        if: needs.generate.outputs.merged != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
@@ -289,9 +340,10 @@ jobs:
   mark-failure:
     needs: [generate, publish-comment]
     if: >-
-      always() &&
+      !cancelled() &&
       (needs.generate.result == 'failure' || needs.publish-comment.result == 'failure')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       issues: write
     steps:

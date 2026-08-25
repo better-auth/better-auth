@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { setOutput } from "../actions-output.ts";
-import type { GitHubReader } from "../github-reader.ts";
+import { runGit } from "../git.ts";
+import type { GitHubReader, GitHubRepository } from "../github.ts";
 import {
 	buildPackageMetadata,
 	collectEntries,
@@ -35,6 +35,11 @@ export type ReleaseNotesOperation =
 			commitRef: string;
 	  };
 
+interface ReleaseCollection {
+	github?: GitHubReader;
+	repository: GitHubRepository;
+}
+
 function buildRewriteContext(entries: ReleaseEntry[]): ReleaseRewriteContext {
 	const context: ReleaseRewriteContext = {};
 	for (const entry of entries) {
@@ -58,20 +63,20 @@ function buildRewriteContext(entries: ReleaseEntry[]): ReleaseRewriteContext {
 }
 
 async function collectReleaseNotes(
-	github: GitHubReader,
+	collection: ReleaseCollection,
 	version: string,
 	branch: string,
 	dryRun: boolean,
 	commitRefOverride: string,
 ): Promise<void> {
+	const { github, repository } = collection;
+	const repositoryName = `${repository.owner}/${repository.repo}`;
 	const isBeta = version.includes("-");
 	const previousTag = findPreviousTag(version, isBeta);
 	const commitRef =
 		commitRefOverride ||
 		process.env.GITHUB_SHA ||
-		execFileSync("git", ["rev-parse", "HEAD"], {
-			encoding: "utf-8",
-		}).trim();
+		runGit(["rev-parse", "HEAD"]).trim();
 
 	console.log(`Generating release notes for v${version}`);
 	console.log(`  Previous tag: ${previousTag}`);
@@ -90,13 +95,13 @@ async function collectReleaseNotes(
 	const manifest = parseSchema(
 		releaseManifestSchema,
 		{
-			repository: github.repository.slug,
+			repository: repositoryName,
 			version,
 			commitRef,
 			entries,
 			previousTag,
 			packageMetadata: buildPackageMetadata(
-				github.repository.slug,
+				repositoryName,
 				entries,
 				previousTag,
 				commitRef,
@@ -135,7 +140,7 @@ async function collectReleaseNotes(
 
 export async function runReleaseNotes(
 	operation: ReleaseNotesOperation,
-	github?: GitHubReader,
+	collection?: ReleaseCollection,
 ): Promise<void> {
 	switch (operation.type) {
 		case "validate":
@@ -161,10 +166,10 @@ export async function runReleaseNotes(
 			await rewriteReleaseNotes(operation.contextPath, operation.outputPath);
 			return;
 		case "collect":
-			if (!github)
-				throw new Error("GitHub reader is required to collect release notes");
+			if (!collection)
+				throw new Error("Repository is required to collect release notes");
 			await collectReleaseNotes(
-				github,
+				collection,
 				operation.version,
 				operation.branch,
 				operation.dryRun,

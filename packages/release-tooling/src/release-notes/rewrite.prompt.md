@@ -26,7 +26,7 @@ the final Markdown deterministically.
 - Describe the user-visible impact, not the internal implementation
 - Wrap code identifiers in backticks, but not general concepts
 - Do not include PR numbers or author attribution in titles
-- Do not include links, HTML, images, or `@mentions`
+- Do not include links, HTML, images, bold or italic emphasis, or `@mentions`
 - Use the changeset description as the primary context
 - If a title remains unclear, preserve its factual meaning without inventing
   behavior that is not present in the supplied context
@@ -43,19 +43,23 @@ The object must have exactly this shape:
 
 ```json
 {
-  "rewrites": {
-    "<change-id>": {
-      "title": "<single-line user-focused title>"
-    },
-    "<breaking-change-id>": {
-      "title": "<single-line user-focused title>",
-      "migration": "<single-line migration action>"
-    }
-  }
+	"rewrites": [
+		{
+			"id": "<change-id>",
+			"title": "<single-line user-focused title>",
+			"migration": null
+		},
+		{
+			"id": "<breaking-change-id>",
+			"title": "<single-line user-focused title>",
+			"migration": "<single-line migration action>"
+		}
+	]
 }
 ```
 
 - Include every input change ID exactly once
 - Do not add unknown change IDs
-- Use only `title` and, for breaking changes, `migration`
+- Use `migration: null` for non-breaking changes
+- Use a migration string for breaking changes
 - Return only the structured result without Markdown fences or commentary

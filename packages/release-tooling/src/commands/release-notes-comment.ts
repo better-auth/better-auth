@@ -13,6 +13,7 @@ interface CommandArgs {
 	head: string;
 	source: ReleaseNoteSource;
 	inputPath: string;
+	merged: boolean;
 	outputPath: string;
 }
 
@@ -26,6 +27,7 @@ function parseCommandArgs(): CommandArgs {
 			head: { type: "string" },
 			body: { type: "string" },
 			comment: { type: "string" },
+			merged: { type: "boolean", default: false },
 			source: { type: "string" },
 			output: { type: "string" },
 		},
@@ -41,6 +43,7 @@ function parseCommandArgs(): CommandArgs {
 	const version = values.version ?? "";
 	const head = values.head ?? "";
 	const source = values.source ?? "ai";
+	const merged = values.merged ?? false;
 	const inputPath = mode === "wrap" ? values.body : values.comment;
 	const unexpectedInput =
 		mode === "wrap" ? values.comment !== undefined : values.body !== undefined;
@@ -59,13 +62,16 @@ function parseCommandArgs(): CommandArgs {
 	if (mode === "extract" && values.source !== undefined) {
 		throw new Error("extract does not accept --source");
 	}
+	if (mode === "extract" && merged) {
+		throw new Error("extract does not accept --merged");
+	}
 	if (!version || !head || !inputPath || !outputPath) {
 		throw new Error(
-			"Usage: release-notes:comment <wrap|extract> --version <version> --head <sha> <--body|--comment> <path> --output <path>",
+			"Usage: release-notes:comment <wrap|extract> --version <version> --head <sha> <--body|--comment> <path> --output <path> [--merged]",
 		);
 	}
 
-	return { mode, version, head, source, inputPath, outputPath };
+	return { mode, version, head, source, inputPath, merged, outputPath };
 }
 
 function runReleaseNotesComment(): void {
@@ -73,7 +79,10 @@ function runReleaseNotesComment(): void {
 	const input = readFileSync(args.inputPath, "utf-8");
 	const output =
 		args.mode === "wrap"
-			? wrapReleaseNotesComment(args.version, args.head, input, args.source)
+			? wrapReleaseNotesComment(args.version, args.head, input, {
+					source: args.source,
+					merged: args.merged,
+				})
 			: extractReleaseNotesComment(input, args.version, args.head);
 	writeFileSync(args.outputPath, output);
 }

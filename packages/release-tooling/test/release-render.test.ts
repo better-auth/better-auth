@@ -8,7 +8,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import type { JSONValue } from "ai";
 import { describe, expect, it } from "vitest";
+import { formatReleaseBody } from "../src/release-notes/render.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../..");
 const releaseNotesScript = resolve(
@@ -23,7 +25,7 @@ interface CommandResult {
 }
 
 function renderReleaseRewrites(
-	rewrites: unknown,
+	rewrites: JSONValue,
 	breaking = false,
 ): CommandResult {
 	const directory = mkdtempSync(
@@ -70,7 +72,6 @@ function renderReleaseRewrites(
 		const result = spawnSync(
 			process.execPath,
 			[
-				"--experimental-strip-types",
 				releaseNotesScript,
 				"render",
 				"--manifest",
@@ -94,14 +95,69 @@ function renderReleaseRewrites(
 }
 
 describe("AI release-note rewrites", () => {
-	it("renders validated copy without exposing release structure", () => {
-		const result = renderReleaseRewrites({
-			rewrites: {
-				"pr-10769": {
-					title:
-						"Prevented duplicate session requests during React Suspense retries",
+	it("neutralizes unsupported Markdown in deterministic copy", () => {
+		const output = formatReleaseBody({
+			repository: "better-auth/better-auth",
+			version: "2.0.0",
+			commitRef: "0123456789abcdef0123456789abcdef01234567",
+			previousTag: "v1.9.0",
+			packageMetadata: {
+				"better-auth": {
+					newPackage: false,
+					referenceLabel: "CHANGELOG",
+					referenceUrl:
+						"https://github.com/better-auth/better-auth/blob/0123456789abcdef0123456789abcdef01234567/packages/better-auth/CHANGELOG.md",
 				},
 			},
+			entries: [
+				{
+					id: "pr-42:better-auth",
+					rewriteKey: "pr-42",
+					title:
+						"Read [the migration guide](https://example.com) and notify @maintainers",
+					changesetDescription:
+						"Breaking change\n\nRead https://example.com before upgrading.",
+					prNumber: 42,
+					author: "octocat",
+					domain: "core",
+					packageName: "better-auth",
+					changeType: "breaking",
+					breaking: true,
+				},
+				{
+					id: "pr-43:better-auth",
+					rewriteKey: "pr-43",
+					title: "Changed session refresh behavior",
+					changesetDescription: "Update custom session refresh integrations.",
+					prNumber: 43,
+					author: "octocat",
+					domain: "core",
+					packageName: "better-auth",
+					changeType: "breaking",
+					breaking: true,
+				},
+			],
+		});
+
+		expect(output).toContain(
+			"- `Read [the migration guide](https://example.com) and notify @maintainers`",
+		);
+		expect(output).not.toContain("Read https://example.com before upgrading");
+		expect(output).toContain(
+			"> **Migration:** Update custom session refresh integrations.",
+		);
+	});
+
+	it("renders validated copy without exposing release structure", () => {
+		const result = renderReleaseRewrites({
+			rewrites: [
+				{
+					id: "pr-10769",
+					title:
+						"Prevented duplicate session requests during React Suspense retries",
+					migration: null,
+				},
+			],
 		});
 
 		expect(result.status, result.stderr).toBe(0);
@@ -113,55 +169,89 @@ describe("AI release-note rewrites", () => {
 	});
 
 	it("rejects a missing rewrite", () => {
-		const result = renderReleaseRewrites({ rewrites: {} });
+		const result = renderReleaseRewrites({ rewrites: [] });
 
 		expect(result.status).toBe(1);
 		expect(result.output).toBeNull();
 		expect(result.stderr).toContain(
-			"AI rewrite keys did not match the manifest",
+			"AI rewrite IDs did not match the manifest",
 		);
 	});
 
 	it("rejects an unknown rewrite", () => {
 		const result = renderReleaseRewrites({
-			rewrites: {
-				"pr-10769": { title: "Fixed duplicate requests" },
-				"pr-99999": { title: "Added an unrelated change" },
-			},
+			rewrites: [
+				{
+					id: "pr-10769",
+					title: "Fixed duplicate requests",
+					migration: null,
+				},
+				{
+					id: "pr-99999",
+					title: "Added an unrelated change",
+					migration: null,
+				},
+			],
 		});
 
 		expect(result.status).toBe(1);
 		expect(result.output).toBeNull();
 		expect(result.stderr).toContain(
-			"AI rewrite keys did not match the manifest",
+			"AI rewrite IDs did not match the manifest",
+		);
+	});
+
+	it("rejects duplicate rewrite IDs", () => {
+		const result = renderReleaseRewrites({
+			rewrites: [
+				{
+					id: "pr-10769",
+					title: "Fixed duplicate requests",
+					migration: null,
+				},
+				{
+					id: "pr-10769",
+					title: "Replaced the approved rewrite",
+					migration: null,
+				},
+			],
+		});
+
+		expect(result.status).toBe(1);
+		expect(result.output).toBeNull();
+		expect(result.stderr).toContain(
+			"AI rewrite IDs did not match the manifest",
 		);
 	});
 
 	it("rejects unsupported fields at the schema boundary", () => {
 		const result = renderReleaseRewrites({
-			rewrites: {
-				"pr-10769": {
+			rewrites: [
+				{
+					id: "pr-10769",
 					title: "Fixed duplicate requests",
+					migration: null,
 					body: "Attempt to replace deterministic release structure",
 				},
-			},
+			],
 		});
 
 		expect(result.status).toBe(1);
 		expect(result.output).toBeNull();
 		expect(result.stderr).toContain(
-			"AI rewrite output must contain a valid rewrites object",
+			"AI rewrite output must contain a valid rewrites array",
 		);
 	});
 
 	it("rejects migration copy for a non-breaking change", () => {
 		const result = renderReleaseRewrites({
-			rewrites: {
-				"pr-10769": {
+			rewrites: [
+				{
+					id: "pr-10769",
 					title: "Fixed duplicate requests",
 					migration: "Change an unrelated setting",
 				},
-			},
+			],
 		});
 
 		expect(result.status).toBe(1);
@@ -174,9 +264,13 @@ describe("AI release-note rewrites", () => {
 	it("requires migration copy for a breaking change", () => {
 		const result = renderReleaseRewrites(
 			{
-				rewrites: {
-					"pr-10769": { title: "Changed session refresh behavior" },
-				},
+				rewrites: [
+					{
+						id: "pr-10769",
+						title: "Changed session refresh behavior",
+						migration: null,
+					},
+				],
 			},
 			true,
 		);
@@ -191,12 +285,13 @@ describe("AI release-note rewrites", () => {
 	it("renders migration copy for a breaking change", () => {
 		const result = renderReleaseRewrites(
 			{
-				rewrites: {
-					"pr-10769": {
+				rewrites: [
+					{
+						id: "pr-10769",
 						title: "Changed session refresh behavior",
 						migration: "Update custom session refresh integrations.",
 					},
-				},
+				],
 			},
 			true,
 		);
@@ -211,7 +306,7 @@ describe("AI release-note rewrites", () => {
 		const title =
 			"Fixed `@better-auth/sso` configurations using `Auth<Options>`";
 		const result = renderReleaseRewrites({
-			rewrites: { "pr-10769": { title } },
+			rewrites: [{ id: "pr-10769", title, migration: null }],
 		});
 
 		expect(result.status, result.stderr).toBe(0);
@@ -223,15 +318,15 @@ describe("AI release-note rewrites", () => {
 		"See [the migration guide](https://example.com)",
 		"Notify @maintainers before upgrading",
 		"<img src=x onerror=alert(1)>",
-	])("rejects unsafe AI copy: %s", (title) => {
+	])("rejects unsupported AI Markdown: %s", (title) => {
 		const result = renderReleaseRewrites({
-			rewrites: { "pr-10769": { title } },
+			rewrites: [{ id: "pr-10769", title, migration: null }],
 		});
 
 		expect(result.status).toBe(1);
 		expect(result.output).toBeNull();
 		expect(result.stderr).toContain(
-			"AI rewrite pr-10769 title contains unsafe markup",
+			"AI rewrite pr-10769 title contains unsupported Markdown",
 		);
 	});
 });

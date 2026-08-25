@@ -48,6 +48,7 @@ export const releaseManifestSchema = z.strictObject({
 });
 
 const releaseRewriteSchema = z.strictObject({
+	id: z.string().min(1).describe("The unchanged input change ID"),
 	title: z
 		.string()
 		.trim()
@@ -61,12 +62,12 @@ const releaseRewriteSchema = z.strictObject({
 		.min(1)
 		.max(500)
 		.regex(/^[^\r\n]+$/)
-		.describe("A single-line action users must take for a breaking change")
-		.optional(),
+		.nullable()
+		.describe("A migration action for breaking changes, otherwise null"),
 });
 
 export const releaseRewritesSchema = z.strictObject({
-	rewrites: z.record(z.string().min(1), releaseRewriteSchema),
+	rewrites: z.array(releaseRewriteSchema).max(250),
 });
 
 export const releaseRewriteContextSchema = z
@@ -92,7 +93,13 @@ export type PackageReleaseMetadata = z.infer<
 	typeof packageReleaseMetadataSchema
 >;
 export type ReleaseManifest = z.infer<typeof releaseManifestSchema>;
-export type ReleaseRewrites = z.infer<typeof releaseRewritesSchema>["rewrites"];
+export type GeneratedReleaseRewrites = z.infer<
+	typeof releaseRewritesSchema
+>["rewrites"];
+export type ReleaseRewrites = Record<
+	string,
+	{ title: string; migration?: string }
+>;
 export type ReleaseRewriteContext = z.infer<typeof releaseRewriteContextSchema>;
 
 export function parseSchema<T>(

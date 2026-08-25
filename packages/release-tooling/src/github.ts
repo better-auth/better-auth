@@ -1,3 +1,4 @@
+import { RequestError } from "@octokit/request-error";
 import { Octokit } from "@octokit/rest";
 
 export interface GitHubPullRequest {
@@ -16,20 +17,19 @@ export interface GitHubPullRequest {
 export interface GitHubRepository {
 	owner: string;
 	repo: string;
-	slug: string;
 }
 
 export interface GitHubReader {
-	repository: GitHubRepository;
-	getPullRequest(number: number): Promise<GitHubPullRequest>;
+	getPullRequest(number: number): Promise<GitHubPullRequest | null>;
 	getReleaseBody(tag: string): Promise<string | null>;
 }
 
 interface GitHubReaderOptions {
 	repository: GitHubRepository;
-	token?: string;
+	token: string;
 	baseUrl?: string;
 	fetch?: typeof fetch;
+	requestTimeoutMs?: number;
 }
 
 export function parseGitHubRepository(value: string): GitHubRepository {
@@ -37,56 +37,46 @@ export function parseGitHubRepository(value: string): GitHubRepository {
 	if (!owner || !repo || extra.length > 0) {
 		throw new Error(`Invalid GitHub repository: ${value}`);
 	}
-	return { owner, repo, slug: `${owner}/${repo}` };
-}
-
-export function isGitHubNotFound(error: unknown): boolean {
-	return (
-		typeof error === "object" &&
-		error !== null &&
-		"status" in error &&
-		error.status === 404
-	);
+	return { owner, repo };
 }
 
 export function createGitHubReader(options: GitHubReaderOptions): GitHubReader {
 	const { repository } = options;
 	const { owner, repo } = repository;
-	const octokit = options.token
-		? new Octokit({
-				auth: options.token,
-				userAgent: "better-auth-release-tooling",
-				...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
-				request: {
-					timeout: 30_000,
-					...(options.fetch ? { fetch: options.fetch } : {}),
-				},
-			})
-		: null;
-
-	function getClient(): Octokit {
-		if (!octokit) {
-			throw new Error(
-				"GH_TOKEN or GITHUB_TOKEN is required for GitHub API access",
-			);
-		}
-		return octokit;
-	}
+	const repositorySlug = `${owner}/${repo}`;
+	const fetchImplementation = options.fetch ?? globalThis.fetch;
+	const requestTimeoutMs = options.requestTimeoutMs ?? 30_000;
+	const octokit = new Octokit({
+		auth: options.token,
+		baseUrl: options.baseUrl ?? "https://api.github.com",
+		userAgent: "better-auth-release-tooling",
+		request: {
+			fetch: ((input, init) => {
+				const timeout = AbortSignal.timeout(requestTimeoutMs);
+				const signal = init?.signal
+					? AbortSignal.any([init.signal, timeout])
+					: timeout;
+				return fetchImplementation(input, { ...init, signal });
+			}) satisfies typeof fetch,
+		},
+	});
 
 	return {
-		repository,
-
 		async getPullRequest(number) {
-			const client = getClient();
-			const [pullRequest, files] = await Promise.all([
-				client.rest.pulls.get({ owner, repo, pull_number: number }),
-				client.paginate(client.rest.pulls.listFiles, {
+			const response = await Promise.all([
+				octokit.rest.pulls.get({ owner, repo, pull_number: number }),
+				octokit.paginate(octokit.rest.pulls.listFiles, {
 					owner,
 					repo,
 					pull_number: number,
 					per_page: 100,
 				}),
-			]);
+			]).catch((error) => {
+				if (error instanceof RequestError && error.status === 404) return null;
+				throw error;
+			});
+			if (!response) return null;
+			const [pullRequest, files] = response;
 
 			const diff = files
 				.map((file) =>
@@ -110,7 +100,7 @@ export function createGitHubReader(options: GitHubReaderOptions): GitHubReader {
 				labels: pullRequest.data.labels.map((label) =>
 					typeof label === "string" ? label : label.name,
 				),
-				isFork: pullRequest.data.head.repo?.full_name !== repository.slug,
+				isFork: pullRequest.data.head.repo?.full_name !== repositorySlug,
 				changedFiles: files.map((file) => file.filename),
 				diff,
 			};
@@ -118,16 +108,14 @@ export function createGitHubReader(options: GitHubReaderOptions): GitHubReader {
 
 		async getReleaseBody(tag) {
 			try {
-				const response = await getClient().rest.repos.getReleaseByTag({
+				const response = await octokit.rest.repos.getReleaseByTag({
 					owner,
 					repo,
 					tag,
 				});
 				return response.data.body ?? null;
 			} catch (error) {
-				if (isGitHubNotFound(error)) {
-					return null;
-				}
+				if (error instanceof RequestError && error.status === 404) return null;
 				throw error;
 			}
 		},

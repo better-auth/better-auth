@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	extractReleaseNotesComment,
 	wrapReleaseNotesComment,
-} from "../src/release-notes/comment";
+} from "../src/release-notes/comment.ts";
 
 const version = "1.7.2";
 const head = "5165d1b6d40a305ff36bfbee271063027c9cfd05";
@@ -39,10 +39,22 @@ describe("wrapReleaseNotesComment", () => {
 	});
 
 	it("marks deterministic fallback copy outside the approved body", () => {
-		const comment = wrapReleaseNotesComment(version, head, notes, "raw");
+		const comment = wrapReleaseNotesComment(version, head, notes, {
+			source: "raw",
+		});
 
 		expect(comment).toContain("AI rewrite unavailable");
 		expect(extractReleaseNotesComment(comment, version, head)).toBe(notes);
+	});
+
+	it("instructs merged release PRs to rerun the failed release", () => {
+		const comment = wrapReleaseNotesComment(version, head, notes, {
+			merged: true,
+		});
+
+		expect(comment).toContain("This PR is already merged");
+		expect(comment).toContain("Re-run the original failed Release workflow");
+		expect(comment).not.toContain("marks this PR ready");
 	});
 
 	it("explains the draft approval lifecycle", () => {

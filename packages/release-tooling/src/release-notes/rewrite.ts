@@ -2,7 +2,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import type { StructuredGenerator } from "../ai/generate-structured.ts";
 import { generateStructured } from "../ai/generate-structured.ts";
 import { models } from "../ai/models.ts";
-import type { ReleaseRewriteContext, ReleaseRewrites } from "./schema.ts";
+import type {
+	GeneratedReleaseRewrites,
+	ReleaseRewriteContext,
+} from "./schema.ts";
 import {
 	parseSchema,
 	releaseRewriteContextSchema,
@@ -61,18 +64,25 @@ function buildBatches(context: ReleaseRewriteContext): ReleaseRewriteContext[] {
 }
 
 function mergeBatch(
-	rewrites: ReleaseRewrites,
+	rewrites: GeneratedReleaseRewrites,
 	batch: ReleaseRewriteContext,
-	generated: ReleaseRewrites,
+	generated: GeneratedReleaseRewrites,
 ): void {
-	const expectedKeys = Object.keys(batch).sort();
-	const actualKeys = Object.keys(generated).sort();
-	if (JSON.stringify(expectedKeys) !== JSON.stringify(actualKeys)) {
+	const expectedIds = Object.keys(batch).sort();
+	const actualIds = generated.map((rewrite) => rewrite.id).sort();
+	if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds)) {
 		throw new Error(
-			`AI rewrite batch keys did not match: expected ${expectedKeys.join(", ")}, received ${actualKeys.join(", ")}`,
+			`AI rewrite batch IDs did not match: expected ${expectedIds.join(", ")}, received ${actualIds.join(", ")}`,
 		);
 	}
-	Object.assign(rewrites, generated);
+	const generatedById = new Map(
+		generated.map((rewrite) => [rewrite.id, rewrite]),
+	);
+	for (const id of Object.keys(batch)) {
+		const rewrite = generatedById.get(id);
+		if (!rewrite) throw new Error(`AI rewrite ${id} is missing`);
+		rewrites.push(rewrite);
+	}
 }
 
 export async function rewriteReleaseNotes(
@@ -85,7 +95,7 @@ export async function rewriteReleaseNotes(
 		JSON.parse(readFileSync(contextPath, "utf-8")),
 		`Invalid release rewrite context ${contextPath}`,
 	);
-	const rewrites: ReleaseRewrites = {};
+	const rewrites: GeneratedReleaseRewrites = [];
 	for (const batch of buildBatches(context)) {
 		const generated = await generate({
 			model: models.releaseNotes,

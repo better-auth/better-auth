@@ -52,25 +52,17 @@ describe("generateStructured", () => {
 
 	it("reports structured-output failures without exposing model text", async () => {
 		const generatedText = "untrusted invalid output";
-		let thrown: unknown;
+		const generation = generateStructured({
+			model: createModel(generatedText),
+			name: "test_output",
+			description: "A test output",
+			instructions: "Return the requested value.",
+			prompt: "Generate a value.",
+			schema: z.strictObject({ value: z.string() }),
+			maxOutputTokens: 100,
+		});
 
-		try {
-			await generateStructured({
-				model: createModel(generatedText),
-				name: "test_output",
-				description: "A test output",
-				instructions: "Return the requested value.",
-				prompt: "Generate a value.",
-				schema: z.strictObject({ value: z.string() }),
-				maxOutputTokens: 100,
-			});
-		} catch (error) {
-			thrown = error;
-		}
-
-		expect(thrown).toBeInstanceOf(Error);
-		const message = thrown instanceof Error ? thrown.message : String(thrown);
-		expect(message).toContain("did not match its schema");
-		expect(message).not.toContain(generatedText);
+		await expect(generation).rejects.toThrow("did not match its schema");
+		await expect(generation).rejects.not.toThrow(generatedText);
 	});
 });

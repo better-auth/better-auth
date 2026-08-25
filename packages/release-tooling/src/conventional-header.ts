@@ -9,6 +9,7 @@ export interface ChangeHeader {
 	breaking: boolean;
 }
 
+// SAFETY: The package returns parser options at runtime but declares its preset as {}.
 const preset = createConventionalCommitsPreset() as { parser: ParserOptions };
 const parser = new CommitParser(preset.parser);
 

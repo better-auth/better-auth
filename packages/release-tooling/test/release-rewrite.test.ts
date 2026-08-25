@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import type { LanguageModel } from "ai";
+import type { JSONValue, LanguageModel } from "ai";
 import { asSchema } from "ai";
 import { test as baseTest, describe, expect } from "vitest";
 import type { StructuredGenerator } from "../src/ai/generate-structured.ts";
@@ -10,6 +10,7 @@ import { rewriteReleaseNotes } from "../src/release-notes/rewrite.ts";
 import {
 	parseSchema,
 	releaseRewriteContextSchema,
+	releaseRewritesSchema,
 } from "../src/release-notes/schema.ts";
 
 function modelId(model: LanguageModel): string {
@@ -17,7 +18,7 @@ function modelId(model: LanguageModel): string {
 }
 
 function generatorFor(
-	value: unknown,
+	value: JSONValue,
 	onRequest?: (request: Parameters<StructuredGenerator>[0]) => void,
 ): StructuredGenerator {
 	return async (request) => {
@@ -64,11 +65,13 @@ describe("release-note rewriting", () => {
 			releaseFiles.outputPath,
 			generatorFor(
 				{
-					rewrites: {
-						"pr-42": {
+					rewrites: [
+						{
+							id: "pr-42",
 							title: "Fixed duplicate session refreshes",
+							migration: null,
 						},
-					},
+					],
 				},
 				(request) => {
 					model = modelId(request.model);
@@ -82,12 +85,19 @@ describe("release-note rewriting", () => {
 		expect(prompt).toContain('"pr-42"');
 		expect(prompt).not.toContain("gh pr diff");
 		expect(maxOutputTokens).toBe(32_000);
-		expect(
-			JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8")) as unknown,
-		).toEqual({
-			rewrites: {
-				"pr-42": { title: "Fixed duplicate session refreshes" },
-			},
+		const output = parseSchema(
+			releaseRewritesSchema,
+			JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8")),
+			"Invalid rewrite output",
+		);
+		expect(output).toEqual({
+			rewrites: [
+				{
+					id: "pr-42",
+					title: "Fixed duplicate session refreshes",
+					migration: null,
+				},
+			],
 		});
 	});
 
@@ -173,9 +183,11 @@ describe("release-note rewriting", () => {
 				"Invalid test batch",
 			);
 			const value = {
-				rewrites: Object.fromEntries(
-					Object.keys(batch).map((key) => [key, { title: "Fixed " + key }]),
-				),
+				rewrites: Object.keys(batch).map((id) => ({
+					id,
+					title: "Fixed " + id,
+					migration: null,
+				})),
 			};
 			const validate = asSchema(request.schema).validate;
 			if (!validate) throw new Error("Schema does not provide validation");
@@ -191,11 +203,11 @@ describe("release-note rewriting", () => {
 		);
 
 		expect(calls).toBe(2);
-		const output = JSON.parse(
-			readFileSync(releaseFiles.outputPath, "utf-8"),
-		) as {
-			rewrites: Record<string, { title: string }>;
-		};
-		expect(Object.keys(output.rewrites)).toHaveLength(31);
+		const output = parseSchema(
+			releaseRewritesSchema,
+			JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8")),
+			"Invalid rewrite output",
+		);
+		expect(output.rewrites).toHaveLength(31);
 	});
 });

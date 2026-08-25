@@ -1,12 +1,9 @@
+import type { JSONValue } from "ai";
 import { describe, expect, it, vi } from "vitest";
-import {
-	createGitHubReader,
-	isGitHubNotFound,
-	parseGitHubRepository,
-} from "../src/github-reader.ts";
+import { createGitHubReader, parseGitHubRepository } from "../src/github.ts";
 
 function jsonResponse(
-	body: unknown,
+	body: JSONValue,
 	status = 200,
 	headers: HeadersInit = {},
 ): Response {
@@ -83,10 +80,32 @@ function createFetch(): typeof fetch {
 		}
 		return jsonResponse({ message: `Unexpected URL: ${url}` }, 500);
 	};
-	return Object.assign(request, { preconnect: fetch.preconnect });
+	return request;
 }
 
 describe("GitHubReader", () => {
+	it("aborts GitHub requests after the configured timeout", async () => {
+		const fetch: typeof globalThis.fetch = (_input, init) =>
+			new Promise((_resolve, reject) => {
+				init?.signal?.addEventListener(
+					"abort",
+					() => reject(init.signal?.reason),
+					{ once: true },
+				);
+			});
+		const github = createGitHubReader({
+			repository: parseGitHubRepository("better-auth/better-auth"),
+			token: "test-token",
+			baseUrl: "https://api.github.test",
+			fetch,
+			requestTimeoutMs: 10,
+		});
+
+		await expect(github.getReleaseBody("v1.2.3")).rejects.toMatchObject({
+			status: 500,
+		});
+	});
+
 	it("maps pull requests and paginated files into release data", async () => {
 		const github = createGitHubReader({
 			repository: parseGitHubRepository("better-auth/better-auth"),
@@ -136,7 +155,7 @@ describe("GitHubReader", () => {
 		});
 	});
 
-	it("classifies missing pull requests without hiding server errors", async () => {
+	it("returns null only for missing pull requests", async () => {
 		const github = createGitHubReader({
 			repository: parseGitHubRepository("better-auth/better-auth"),
 			token: "test-token",
@@ -144,14 +163,10 @@ describe("GitHubReader", () => {
 			fetch: createFetch(),
 		});
 
-		await expect(github.getPullRequest(404)).rejects.toMatchObject({
-			status: 404,
-		});
+		await expect(github.getPullRequest(404)).resolves.toBeNull();
 		await expect(github.getPullRequest(500)).rejects.toMatchObject({
 			status: 500,
 		});
-		expect(isGitHubNotFound({ status: 404 })).toBe(true);
-		expect(isGitHubNotFound({ status: 500 })).toBe(false);
 	});
 
 	it("rejects ambiguous repository slugs", () => {

@@ -22,6 +22,7 @@ jobs:
       github.repository_owner == 'better-auth' &&
       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       issues: write
@@ -91,9 +92,9 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number }}
           SKIP_REASON: ${{ steps.analyze.outputs.skip_reason }}
         run: |
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --body "<!-- auto-changeset -->
-          **No changeset generated:** ${SKIP_REASON}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            -f body="<!-- auto-changeset -->
+          **No changeset generated:** ${SKIP_REASON}" >/dev/null
 
       - name: Post changeset comment
         if: steps.analyze.outputs.skip != 'true'
@@ -122,7 +123,8 @@ jobs:
             "---" "" \
             "- [ ] **Commit this changeset** to the PR" > "$TMPFILE"
 
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$TMPFILE"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            -f body="$(cat "$TMPFILE")" >/dev/null
           rm -f "$TMPFILE"
           echo "Posted changeset recommendation on PR #${PR_NUMBER}"
 
@@ -137,6 +139,7 @@ jobs:
       (github.event.comment.user.login == 'better-release[bot]' || github.event.comment.user.login == 'github-actions[bot]') &&
       github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
       issues: write

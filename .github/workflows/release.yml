@@ -30,6 +30,7 @@ jobs:
       github.repository_owner == 'better-auth' &&
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: Release
     permissions:
       contents: write
@@ -127,6 +128,11 @@ jobs:
 
           PR=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
           PR_HEAD_SHA=$(echo "$PR" | jq -r '.head.sha')
+          RELEASE_COMMIT=$(echo "$PR" | jq -r '.merge_commit_sha // empty')
+          if [[ ! "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release PR merge commit is not a valid SHA"
+            exit 1
+          fi
           COMMENTS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | jq -s 'add')
           if [ -n "$RELEASE_APP_ID" ]; then
             COMMENT=$(echo "$COMMENTS" | jq -c --arg app "$RELEASE_APP_ID" \
@@ -136,7 +142,12 @@ jobs:
               '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
           fi
           if [ -z "$COMMENT" ]; then
-            echo "::error::No approved release notes comment found on PR #${PR_NUMBER}. Run /release-notes before merging."
+            {
+              echo "### Approved release notes are missing"
+              echo ""
+              echo "Comment \`/release-notes\` on merged PR #${PR_NUMBER}, review the generated preview, then re-run this failed Release workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::No approved release notes comment found on PR #${PR_NUMBER}"
             exit 1
           fi
 
@@ -148,8 +159,43 @@ jobs:
             --head "$PR_HEAD_SHA" \
             --comment "$COMMENT_FILE" \
             --output "$NOTES_FILE"
+          if [ "$GITHUB_SHA" != "$RELEASE_COMMIT" ]; then
+            {
+              echo "### Release retry requires the original workflow run"
+              echo ""
+              echo "- Version: \`v${VERSION}\`"
+              echo "- Release commit: \`${RELEASE_COMMIT}\`"
+              echo "- Current workflow commit: \`${GITHUB_SHA}\`"
+              echo ""
+              echo "Re-run the original failed Release workflow so npm packages and the GitHub tag are built from the approved release commit."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Current commit does not match the approved release commit"
+            exit 1
+          fi
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
           echo "notes_path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Reject release commits with pending changesets
+        if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
+        run: |
+          PENDING_CHANGESETS=$(git ls-tree -r --name-only HEAD -- '.changeset/' \
+            | grep -E '^\.changeset/.*\.md$' \
+            | grep -v '^\.changeset/README\.md$' || true)
+          if [ -z "$PENDING_CHANGESETS" ]; then
+            exit 0
+          fi
+
+          {
+            echo "### Unsafe release merge"
+            echo ""
+            echo "This release commit still contains changesets that were not included in the approved Version PR. Publishing it would ship unapproved changes under the current version."
+            echo ""
+            echo "Revert this release merge, let Changesets regenerate the Version PR, then run `/release-notes` again."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Release commit contains unconsumed changesets"
+          echo "$PENDING_CHANGESETS"
+          exit 1
 
       - name: Create Release Pull Request or Publish
         id: changesets
@@ -165,24 +211,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
-
-      - name: Warn about blocked release recovery
-        if: steps.release-candidate.outputs.release == 'true' && steps.changesets.outputs.hasChangesets == 'true'
-        env:
-          VERSION: ${{ steps.release-candidate.outputs.version }}
-          APPROVED_PR_NUMBER: ${{ steps.approved-notes.outputs.pr_number }}
-          NEXT_PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
-        run: |
-          echo "::warning::GitHub Release recovery for v${VERSION} is blocked by newer changesets"
-          {
-            echo "### Release recovery blocked"
-            echo ""
-            echo "- Unreleased version: \`v${VERSION}\`"
-            echo "- Approved release PR: #${APPROVED_PR_NUMBER}"
-            echo "- Next Version PR: #${NEXT_PR_NUMBER}"
-            echo ""
-            echo "Recover the missing tag and GitHub Release before merging the next Version PR."
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Rename release PR with version
         if: steps.changesets.outputs.pullRequestNumber
@@ -215,6 +243,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.release-candidate.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.approved-notes.outputs.release_commit }}
           NOTES_FILE: ${{ steps.approved-notes.outputs.notes_path }}
         run: |
           if [ -z "$VERSION" ] || [ ! -s "$NOTES_FILE" ]; then
@@ -222,7 +251,6 @@ jobs:
             exit 1
           fi
           TAG="v${VERSION}"
-          COMMIT_SHA="${GITHUB_SHA}"
 
           PRERELEASE_FLAG=""
           if echo "$VERSION" | grep -q '-'; then
@@ -236,7 +264,7 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" \
               --notes-file "$NOTES_FILE" \
-              --target "$COMMIT_SHA" \
+              --target "$RELEASE_COMMIT" \
               $PRERELEASE_FLAG
             echo "Created release ${TAG}"
           fi
@@ -294,6 +322,7 @@ jobs:
   snapshot:
     if: github.event_name == 'workflow_dispatch' && inputs.snapshot != '' && github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: Release
     permissions:
       contents: read

@@ -14,6 +14,11 @@ const commitShaPattern = /^[a-f0-9]{40}$/;
 
 export type ReleaseNoteSource = "ai" | "raw";
 
+interface ReleaseNotesCommentOptions {
+	merged?: boolean;
+	source?: ReleaseNoteSource;
+}
+
 function validateReleaseIdentity(version: string, head: string): void {
 	parseSchema(releaseVersionSchema, version, "Invalid release version");
 	if (!commitShaPattern.test(head)) {
@@ -36,8 +41,9 @@ export function wrapReleaseNotesComment(
 	version: string,
 	head: string,
 	body: string,
-	source: ReleaseNoteSource = "ai",
+	options: ReleaseNotesCommentOptions = {},
 ): string {
+	const { merged = false, source = "ai" } = options;
 	validateReleaseIdentity(version, head);
 	const notes = body.trim();
 	validateReleaseNotes(notes);
@@ -61,8 +67,14 @@ export function wrapReleaseNotesComment(
 				]
 			: []),
 		"Maintainers may edit the release notes above. Keep the hidden markers intact.",
-		"Any head update returns this PR to Draft. Rerun `/release-notes` after it changes.",
-		"The release bot marks this PR ready. Merging it approves these release notes.",
+		...(merged
+			? [
+					"This PR is already merged. Re-run the original failed Release workflow after reviewing these notes.",
+				]
+			: [
+					"Any head update returns this PR to Draft. Rerun `/release-notes` after it changes.",
+					"The release bot marks this PR ready. Merging it approves these release notes.",
+				]),
 	].join("\n");
 }
 

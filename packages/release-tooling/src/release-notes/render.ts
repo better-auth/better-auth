@@ -1,5 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { containsUnsafeGeneratedMarkup } from "../ai/generated-copy.ts";
+import {
+	containsUnsupportedGeneratedMarkdown,
+	formatUntrustedInlineMarkdown,
+} from "../ai/generated-copy.ts";
 import { FILTERED_DOMAINS } from "../change-classifier.ts";
 import type {
 	ReleaseEntry,
@@ -12,17 +15,13 @@ import {
 	releaseRewritesSchema,
 } from "./schema.ts";
 
-const CHANGE_TYPE_HEADINGS: Record<string, string> = {
+const CHANGE_TYPE_HEADINGS = {
 	breaking: "### ❗ Breaking Changes",
 	feat: "### Features",
 	fix: "### Bug Fixes",
-};
+} satisfies Record<ReleaseEntry["changeType"], string>;
 
-const CHANGE_TYPE_ORDER: ("breaking" | "feat" | "fix")[] = [
-	"breaking",
-	"feat",
-	"fix",
-];
+const CHANGE_TYPE_ORDER = ["breaking", "feat", "fix"] as const;
 
 export function isReleaseEntryVisible(entry: ReleaseEntry): boolean {
 	return !FILTERED_DOMAINS.has(entry.domain) || !!entry.changesetDescription;
@@ -99,17 +98,29 @@ export function formatReleaseBody(
 
 			for (const entry of entriesForType) {
 				const rewrite = rewrites[entry.rewriteKey];
+				const title =
+					rewrite?.title ?? formatUntrustedInlineMarkdown(entry.title);
 				const prLink = entry.prNumber
 					? ` ([#${entry.prNumber}](https://github.com/${repository}/pull/${entry.prNumber}))`
 					: "";
 
-				lines.push(`- ${rewrite?.title ?? entry.title}${prLink}`);
+				lines.push(`- ${title}${prLink}`);
 
 				if (changeType === "breaking" && rewrite?.migration) {
 					lines.push(`> **Migration:** ${rewrite.migration}`);
-				} else if (changeType === "breaking" && entry.changesetDescription) {
-					for (const line of entry.changesetDescription.split("\n").slice(1)) {
-						lines.push(line ? `  ${line}` : "");
+				} else if (
+					changeType === "breaking" &&
+					entry.changesetDescription &&
+					!containsUnsupportedGeneratedMarkdown(
+						entry.changesetDescription,
+						"description",
+					)
+				) {
+					const [migration, ...details] =
+						entry.changesetDescription.split("\n");
+					lines.push(`> **Migration:** ${migration}`);
+					for (const line of details) {
+						lines.push(line ? `> ${line}` : ">");
 					}
 				}
 			}
@@ -160,18 +171,21 @@ function readReleaseRewrites(
 	const parsed = parseSchema(
 		releaseRewritesSchema,
 		JSON.parse(readFileSync(path, "utf-8")),
-		"AI rewrite output must contain a valid rewrites object",
+		"AI rewrite output must contain a valid rewrites array",
 	);
 
-	const expectedKeys = [
+	const expectedIds = [
 		...new Set(manifest.entries.map((entry) => entry.rewriteKey)),
 	].sort();
-	const actualKeys = Object.keys(parsed.rewrites).sort();
-	if (JSON.stringify(expectedKeys) !== JSON.stringify(actualKeys)) {
+	const actualIds = parsed.rewrites.map((rewrite) => rewrite.id).sort();
+	if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds)) {
 		throw new Error(
-			`AI rewrite keys did not match the manifest: expected ${expectedKeys.join(", ")}, received ${actualKeys.join(", ")}`,
+			`AI rewrite IDs did not match the manifest: expected ${expectedIds.join(", ")}, received ${actualIds.join(", ")}`,
 		);
 	}
+	const generatedByKey = new Map(
+		parsed.rewrites.map((rewrite) => [rewrite.id, rewrite]),
+	);
 
 	const breakingKeys = new Set(
 		manifest.entries
@@ -179,13 +193,13 @@ function readReleaseRewrites(
 			.map((entry) => entry.rewriteKey),
 	);
 	const rewrites: ReleaseRewrites = {};
-	for (const key of expectedKeys) {
-		const value = parsed.rewrites[key];
+	for (const key of expectedIds) {
+		const value = generatedByKey.get(key);
 		if (!value) throw new Error(`AI rewrite ${key} is missing`);
 
 		const title = validateGeneratedCopy(value.title, "title", key, 300);
 		const migration =
-			value.migration === undefined
+			value.migration === null
 				? undefined
 				: validateGeneratedCopy(value.migration, "migration", key, 500);
 
@@ -194,7 +208,7 @@ function readReleaseRewrites(
 				`Breaking AI rewrite ${key} must have a single-line migration`,
 			);
 		}
-		if (!breakingKeys.has(key) && value.migration !== undefined) {
+		if (!breakingKeys.has(key) && migration !== undefined) {
 			throw new Error(`Non-breaking AI rewrite ${key} cannot have a migration`);
 		}
 
@@ -220,8 +234,8 @@ function validateGeneratedCopy(
 		);
 	}
 
-	if (containsUnsafeGeneratedMarkup(copy)) {
-		throw new Error(`AI rewrite ${key} ${field} contains unsafe markup`);
+	if (containsUnsupportedGeneratedMarkdown(copy, "inline")) {
+		throw new Error(`AI rewrite ${key} ${field} contains unsupported Markdown`);
 	}
 	return copy;
 }

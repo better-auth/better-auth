@@ -9,18 +9,28 @@ const workflowDirectory = resolve(
 	"../../../.github/workflows",
 );
 
+const workflowValueSchema = z.union([
+	z.string(),
+	z.number(),
+	z.boolean(),
+	z.null(),
+]);
+
 const workflowStepSchema = z.looseObject({
+	if: z.string().optional(),
 	name: z.string().optional(),
 	uses: z.string().optional(),
 	run: z.string().optional(),
-	with: z.record(z.string(), z.unknown()).optional(),
-	env: z.record(z.string(), z.unknown()).optional(),
+	with: z.record(z.string(), workflowValueSchema).optional(),
+	env: z.record(z.string(), workflowValueSchema).optional(),
 	"continue-on-error": z.union([z.boolean(), z.string()]).optional(),
 });
 
 const workflowJobSchema = z.looseObject({
+	if: z.string().optional(),
 	permissions: z.record(z.string(), z.string()).optional(),
 	steps: z.array(workflowStepSchema),
+	"timeout-minutes": z.number().positive().optional(),
 });
 
 const workflowSchema = z.looseObject({
@@ -60,7 +70,16 @@ function actionReferences(job: WorkflowJob): string[] {
 	return job.steps.flatMap((step) => (step.uses ? [step.uses] : []));
 }
 
+function appTokenPermissions(step: WorkflowStep) {
+	return Object.fromEntries(
+		Object.entries(step.with ?? {}).filter(([key]) =>
+			key.startsWith("permission-"),
+		),
+	);
+}
+
 const commandWorkflow = readWorkflow("release-notes-command.yml");
+const ciWorkflow = readWorkflow("ci.yml");
 const draftWorkflow = readWorkflow("release-notes-draft.yml");
 const promoteWorkflow = readWorkflow("promote.yml");
 const releaseWorkflow = readWorkflow("release.yml");
@@ -68,6 +87,20 @@ const autoChangesetWorkflow = readWorkflow("auto-changeset.yml");
 const verifyChangesetsWorkflow = readWorkflow("verify-changesets.yml");
 
 describe("release notes command security", () => {
+	it("bounds every privileged release job", () => {
+		for (const file of [
+			commandWorkflow,
+			draftWorkflow,
+			promoteWorkflow,
+			releaseWorkflow,
+			autoChangesetWorkflow,
+		]) {
+			for (const job of Object.values(file.workflow.jobs)) {
+				expect(job["timeout-minutes"]).toBeGreaterThan(0);
+			}
+		}
+	});
+
 	it("runs AI generation inside the read-only job", () => {
 		const generate = getJob(commandWorkflow, "generate");
 		const rewrite = getStep(generate, "Rewrite release notes with AI");
@@ -97,7 +130,7 @@ describe("release notes command security", () => {
 			issues: "write",
 			"pull-requests": "write",
 		});
-		expect(token.with).toMatchObject({
+		expect(appTokenPermissions(token)).toEqual({
 			"permission-contents": "read",
 			"permission-issues": "write",
 			"permission-pull-requests": "write",
@@ -121,6 +154,32 @@ describe("release notes command security", () => {
 			expect.stringContaining("needs.generate.outputs.pr_number"),
 		);
 		expect(ready.run).toContain('gh pr ready "$PR_NUMBER"');
+		expect(ready.if).toContain("needs.generate.outputs.merged != 'true'");
+	});
+
+	it("allows approved-note recovery on merged untagged release PRs", () => {
+		const authorize = getStep(
+			getJob(commandWorkflow, "generate"),
+			"Authorize command and resolve PR",
+		);
+		const candidate = getStep(
+			getJob(commandWorkflow, "generate"),
+			"Resolve release candidate",
+		);
+		const render = getStep(
+			getJob(commandWorkflow, "generate"),
+			"Render and package final release notes",
+		);
+
+		expect(authorize.run).toContain('[ "$STATE" != "open" ]');
+		expect(authorize.run).toContain('[ "$MERGED" != "true" ]');
+		expect(candidate.run).toContain("v${VERSION}^{commit}");
+		expect(candidate.run).toContain("already tagged");
+		expect(candidate.run).toContain('origin "$HEAD_SHA"');
+		expect(render.env).toHaveProperty(
+			"MERGED",
+			expect.stringContaining("steps.command.outputs.merged"),
+		);
 	});
 
 	it("reacts to failed release-note commands", () => {
@@ -128,9 +187,8 @@ describe("release notes command security", () => {
 		const reaction = getStep(failure, "Mark command as failed");
 
 		expect(failure.permissions).toEqual({ issues: "write" });
-		expect(failure).toHaveProperty(
-			"if",
-			expect.stringContaining("needs.generate.result == 'failure'"),
+		expect(failure.if?.replace(/\s+/g, " ")).toBe(
+			"!cancelled() && (needs.generate.result == 'failure' || needs.publish-comment.result == 'failure')",
 		);
 		expect(actionReferences(failure)).toEqual([]);
 		expect(reaction.run).toContain("content='-1'");
@@ -164,17 +222,31 @@ describe("release notes command security", () => {
 		).toContainEqual(expect.stringContaining("actions/download-artifact@"));
 	});
 
-	it("reads the immutable release head without fetching or checking it out", () => {
-		const resolveCandidate = getStep(
-			getJob(commandWorkflow, "generate"),
-			"Resolve release candidate",
-		);
+	it("fetches a missing immutable PR head without checking it out", () => {
+		const generate = getJob(commandWorkflow, "generate");
+		const verifyHead = getStep(generate, "Verify release PR head");
+		const resolveCandidate = getStep(generate, "Resolve release candidate");
 
+		expect(verifyHead.run).toContain(
+			"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+		);
+		expect(verifyHead.run).toContain(
+			"Could not read the current release PR head",
+		);
+		expect(verifyHead.run).toContain(
+			'[[ ! "$CURRENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]',
+		);
+		expect(verifyHead.run).toContain(
+			'[ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]',
+		);
 		expect(resolveCandidate.run).toContain(
 			'git cat-file -e "${HEAD_SHA}^{commit}"',
 		);
-		expect(resolveCandidate.run).not.toContain("git fetch");
-		expect(resolveCandidate.run).not.toContain("git checkout");
+		expect(resolveCandidate.run).toContain(
+			'git fetch --no-tags --no-write-fetch-head origin "$HEAD_SHA"',
+		);
+		expect(resolveCandidate.run).not.toContain("refs/pull/");
+		expect(resolveCandidate.run).not.toMatch(/git (checkout|reset|switch)/);
 	});
 
 	it("paginates comments before locating the trusted preview", () => {
@@ -237,6 +309,23 @@ describe("release notes command security", () => {
 });
 
 describe("release publication security", () => {
+	it("rejects stale release merge groups before publication", () => {
+		const mergeGuard = getStep(
+			getJob(ciWorkflow, "lint"),
+			"Reject stale release merge groups",
+		);
+
+		expect(mergeGuard.if).toContain("merge_group");
+		expect(mergeGuard.env).toHaveProperty(
+			"BASE_SHA",
+			expect.stringContaining("merge_group.base_sha"),
+		);
+		expect(mergeGuard.run).toContain("BASE_VERSION");
+		expect(mergeGuard.run).toContain("PENDING_CHANGESETS");
+		expect(mergeGuard.run).toContain(".changeset/README");
+		expect(mergeGuard.run).toContain("unconsumed changesets");
+	});
+
 	it("resolves approved notes before invoking the publisher", () => {
 		const release = getJob(releaseWorkflow, "release");
 		const stepNames = release.steps.map((step) => step.name);
@@ -281,6 +370,8 @@ describe("release publication security", () => {
 	it("creates GitHub releases after Changesets completes publish mode", () => {
 		const release = getJob(releaseWorkflow, "release");
 		const createRelease = getStep(release, "Create GitHub Release");
+		const resolveApproved = getStep(release, "Resolve approved release notes");
+		const resolveApprovedScript = resolveApproved.run ?? "";
 
 		expect(createRelease).toHaveProperty(
 			"if",
@@ -290,24 +381,48 @@ describe("release publication security", () => {
 		);
 		expect(createRelease.run).not.toContain("pnpm view");
 		expect(createRelease.run).not.toContain("git/refs");
-		expect(createRelease.run).toContain('gh release create "$TAG"');
-	});
-
-	it("warns when newer changesets block release recovery", () => {
-		const warning = getStep(
-			getJob(releaseWorkflow, "release"),
-			"Warn about blocked release recovery",
+		expect(resolveApprovedScript).toContain(".merge_commit_sha");
+		expect(resolveApprovedScript).toContain(
+			'[ "$GITHUB_SHA" != "$RELEASE_COMMIT" ]',
 		);
-
-		expect(warning).toHaveProperty(
-			"if",
-			expect.stringMatching(
-				/release-candidate\.outputs\.release == 'true'.*changesets\.outputs\.hasChangesets == 'true'/,
+		expect(resolveApprovedScript).toContain("original failed Release workflow");
+		expect(resolveApprovedScript).toContain("/release-notes");
+		expect(resolveApprovedScript).toContain("on merged PR");
+		expect(resolveApprovedScript.indexOf('if [ -z "$COMMENT" ]')).toBeLessThan(
+			resolveApprovedScript.indexOf(
+				'if [ "$GITHUB_SHA" != "$RELEASE_COMMIT" ]',
 			),
 		);
-		expect(warning.run).toContain("::warning::");
-		expect(warning.run).toContain("GITHUB_STEP_SUMMARY");
-		expect(warning.run).toContain("before merging the next Version PR");
+		expect(createRelease.env).toHaveProperty(
+			"RELEASE_COMMIT",
+			expect.stringContaining("approved-notes.outputs.release_commit"),
+		);
+		expect(createRelease.run).toContain('gh release create "$TAG"');
+		expect(createRelease.run).toContain('--target "$RELEASE_COMMIT"');
+		expect(createRelease.run).not.toContain('COMMIT_SHA="${GITHUB_SHA}"');
+	});
+
+	it("fails release commits that contain unapproved changesets", () => {
+		const release = getJob(releaseWorkflow, "release");
+		const guard = getStep(
+			release,
+			"Reject release commits with pending changesets",
+		);
+		const guardIndex = release.steps.indexOf(guard);
+		const publishIndex = release.steps.indexOf(
+			getStep(release, "Create Release Pull Request or Publish"),
+		);
+
+		expect(guardIndex).toBeLessThan(publishIndex);
+		expect(guard).toHaveProperty(
+			"if",
+			expect.stringContaining("release-candidate.outputs.release == 'true'"),
+		);
+		expect(guard.run).toContain("PENDING_CHANGESETS");
+		expect(guard.run).toContain(".changeset/README");
+		expect(guard.run).toContain("GITHUB_STEP_SUMMARY");
+		expect(guard.run).toContain("Revert this release merge");
+		expect(guard.run).toContain("exit 1");
 	});
 
 	it("creates and updates Version PRs as drafts with usage guidance", () => {
@@ -338,7 +453,22 @@ describe("release publication security", () => {
 			"pull-requests": "write",
 			"id-token": "write",
 		});
-		expect(token.with).not.toHaveProperty("permission-issues");
+		expect(appTokenPermissions(token)).toEqual({
+			"permission-contents": "write",
+			"permission-pull-requests": "write",
+		});
+	});
+
+	it("scopes the promotion App token to its required permissions", () => {
+		const token = getStep(
+			getJob(promoteWorkflow, "promote"),
+			"Generate App Token",
+		);
+
+		expect(appTokenPermissions(token)).toEqual({
+			"permission-contents": "write",
+			"permission-pull-requests": "write",
+		});
 	});
 
 	it("keeps AI preview generation out of the privileged release workflow", () => {
@@ -393,16 +523,25 @@ describe("release tooling package boundary", () => {
 			"Generate App Token",
 		);
 
-		expect(generateToken.with).toMatchObject({
+		expect(appTokenPermissions(generateToken)).toEqual({
 			"permission-contents": "read",
 			"permission-issues": "write",
 			"permission-pull-requests": "read",
 		});
-		expect(applyToken.with).toMatchObject({
+		expect(appTokenPermissions(applyToken)).toEqual({
 			"permission-contents": "write",
 			"permission-issues": "write",
 			"permission-pull-requests": "read",
 		});
+	});
+
+	it("posts changeset comments through the issues REST API", () => {
+		const job = getJob(autoChangesetWorkflow, "changeset");
+		for (const name of ["Post skip explanation", "Post changeset comment"]) {
+			const step = getStep(job, name);
+			expect(step.run).toContain("issues/${PR_NUMBER}/comments");
+			expect(step.run).not.toContain("gh pr comment");
+		}
 	});
 
 	it("does not require public changesets for private release tooling", () => {

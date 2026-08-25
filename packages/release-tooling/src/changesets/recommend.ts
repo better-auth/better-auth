@@ -11,7 +11,7 @@
 import { setOutput } from "../actions-output.ts";
 import { mapTypeToBump } from "../change-classifier.ts";
 import { parseConventionalHeader } from "../conventional-header.ts";
-import type { GitHubReader } from "../github-reader.ts";
+import type { GitHubReader } from "../github.ts";
 import {
 	createChangesetFallback,
 	rewriteChangesetDescription,
@@ -34,25 +34,29 @@ function extractCubicSummary(body: string): string {
 	return (summaryEnd === -1 ? cleaned : cleaned.slice(0, summaryEnd)).trim();
 }
 
-function hasPackageChanges(files: string[]): boolean {
-	return files.some((f) => f.startsWith("packages/"));
+interface RecommendationOptions {
+	force: boolean;
+	output?: (name: string, value: string) => void;
+	prNumber: number;
 }
 
-export async function recommendChangeset(github: GitHubReader): Promise<void> {
-	const prNumber = Number(process.env.PR_NUMBER);
-	if (!prNumber) {
-		throw new Error("PR_NUMBER environment variable required");
-	}
+export async function recommendChangeset(
+	github: GitHubReader,
+	options: RecommendationOptions,
+): Promise<void> {
+	const { force, prNumber } = options;
+	const output = options.output ?? setOutput;
 
 	console.log(`Analyzing PR #${prNumber}`);
 
 	const pr = await github.getPullRequest(prNumber);
+	if (!pr) throw new Error(`Pull request #${prNumber} was not found`);
 
 	// Promote PRs (next → main) already carry versioned changesets — skip entirely
 	if (pr.headRef === "next" && pr.baseRef === "main" && !pr.isFork) {
 		console.log("Skipping: promote PR (next → main) — already versioned");
-		setOutput("skip", "true");
-		setOutput(
+		output("skip", "true");
+		output(
 			"skip_reason",
 			"promote PR (next → main) already contains versioned changesets",
 		);
@@ -61,7 +65,11 @@ export async function recommendChangeset(github: GitHubReader): Promise<void> {
 
 	const commit = parseConventionalHeader(pr.title);
 	const bump = mapTypeToBump(commit.type, commit.breaking);
-	const touchesPackages = hasPackageChanges(pr.changedFiles);
+	const touchesPackages = pr.changedFiles.some(
+		(file) =>
+			file.startsWith("packages/") &&
+			!file.startsWith("packages/release-tooling/"),
+	);
 
 	// Auto-generated changesets (pr-{N}.md) can be safely regenerated.
 	// Only manually-created changesets (different filename) block re-generation.
@@ -79,12 +87,10 @@ export async function recommendChangeset(github: GitHubReader): Promise<void> {
 
 	// FORCE mode (set by /changeset command) bypasses most skip gates
 	// but still respects hard constraints (no packages, policy violations)
-	const force = process.env.FORCE === "true";
-
 	function skip(reason: string): void {
 		console.log(`Skipping: ${reason}`);
-		setOutput("skip", "true");
-		setOutput("skip_reason", reason);
+		output("skip", "true");
+		output("skip_reason", reason);
 	}
 
 	if (!force) {
@@ -103,15 +109,15 @@ export async function recommendChangeset(github: GitHubReader): Promise<void> {
 	} else {
 		console.log("FORCE mode: skip gates bypassed");
 		if (hasManualChangeset) {
-			setOutput("has_existing", "true");
+			output("has_existing", "true");
 		}
 		if (!touchesPackages) {
-			return skip("no package files changed — nothing to release");
+			return skip("no publishable package files changed");
 		}
 	}
 
 	if (hasAutoChangeset) {
-		setOutput("has_existing", "true");
+		output("has_existing", "true");
 	}
 
 	let resolvedBump = bump === "skip" ? "patch" : bump;
@@ -155,12 +161,12 @@ export async function recommendChangeset(github: GitHubReader): Promise<void> {
 	const frontmatter = `"better-auth": ${resolvedBump}`;
 
 	console.log("Analysis complete:");
-	setOutput("skip", "false");
-	setOutput("bump", resolvedBump);
-	setOutput("frontmatter", frontmatter);
-	setOutput("pr_title", pr.title);
-	setOutput("cubic_summary", cubicSummary);
-	setOutput("fallback_description", fallback);
-	setOutput("description", description);
-	setOutput("changed_files", pr.changedFiles.slice(0, 50).join("\n"));
+	output("skip", "false");
+	output("bump", resolvedBump);
+	output("frontmatter", frontmatter);
+	output("pr_title", pr.title);
+	output("cubic_summary", cubicSummary);
+	output("fallback_description", fallback);
+	output("description", description);
+	output("changed_files", pr.changedFiles.slice(0, 50).join("\n"));
 }
