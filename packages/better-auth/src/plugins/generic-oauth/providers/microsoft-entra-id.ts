@@ -146,7 +146,7 @@ export function microsoftEntraId(
 			return tokenUserInfo;
 		}
 
-		const profileEmail = tokenProfile.email ?? profile.email;
+		const emailClaim = tokenProfile.email ?? profile.email;
 		const profileWithClaims = {
 			...profile,
 			...tokenProfile,
@@ -154,7 +154,7 @@ export function microsoftEntraId(
 				getMicrosoftProfileName(tokenProfile) ??
 				getMicrosoftProfileName(profile),
 			email:
-				profileEmail ??
+				emailClaim ??
 				createPlaceholderEmail({
 					identifier: oid,
 					namespace: "microsoft-entra-id",
@@ -164,7 +164,7 @@ export function microsoftEntraId(
 			// It must be configured as an optional claim in the app registration.
 			// We default to false when not provided.
 			emailVerified:
-				profileEmail !== undefined
+				emailClaim != null
 					? (tokenProfile.email_verified ?? profile.email_verified ?? false)
 					: false,
 		};

@@ -3125,6 +3125,40 @@ describe("oauth2", async () => {
 			expect(userInfo?.image).toBeUndefined();
 		});
 
+		it("keeps the placeholder unverified for unexpected null email claims", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+						email: null,
+						email_verified: true,
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: null,
+				email_verified: true,
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
+				emailVerified: false,
+			});
+		});
+
 		it("should normalize personal Microsoft account givenname and familyname claims", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
