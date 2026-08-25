@@ -64,47 +64,38 @@ const parseCustomSchemeOrigin = (value: string) => {
 };
 
 const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
-const ENCODED_PATH_SEPARATORS = ["%2f", "%2F", "%5c", "%5C"] as const;
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
+const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
 
-function hasControlCharacter(value: string): boolean {
-	for (let index = 0; index < value.length; index++) {
-		const characterCode = value.charCodeAt(index);
-		if (
-			characterCode <= 0x1f ||
-			(characterCode >= 0x7f && characterCode <= 0x9f)
-		) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function hasEncodedPathSeparator(path: string): boolean {
-	for (const separator of ENCODED_PATH_SEPARATORS) {
-		if (path.includes(separator)) {
-			return true;
-		}
-	}
-	return false;
-}
-
+/**
+ * Validates root-relative redirects against ambiguous browser and router parsing.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-4.2
+ * @see https://url.spec.whatwg.org/#concept-basic-url-parser
+ */
 const isSafeRelativeURL = (value: string): boolean => {
+	// Fragments would swallow query parameters appended by downstream redirects.
+	if (value.includes("#")) {
+		return false;
+	}
+
 	if (
 		!value.startsWith("/") ||
 		value.startsWith("//") ||
 		value.includes("\\") ||
-		hasControlCharacter(value)
+		CONTROL_CHARACTER_PATTERN.test(value)
 	) {
 		return false;
 	}
 
-	const pathEnd = value.search(/[?#]/);
-	const path = pathEnd === -1 ? value : value.slice(0, pathEnd);
-	if (hasEncodedPathSeparator(path)) {
+	const queryStart = value.indexOf("?");
+	const path = queryStart === -1 ? value : value.slice(0, queryStart);
+	if (ENCODED_PATH_SEPARATOR_PATTERN.test(path)) {
 		return false;
 	}
 
 	try {
+		// Recheck authority after web-platform URL normalization.
 		return (
 			new URL(value, RELATIVE_URL_PARSER_ORIGIN).origin ===
 			RELATIVE_URL_PARSER_ORIGIN

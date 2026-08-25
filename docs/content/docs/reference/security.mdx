@@ -219,7 +219,7 @@ If you're serving your app from multiple approved domains, you'll typically want
 
 Trusted origins prevent CSRF attacks and block open redirects. You can set a list of trusted origins in the `trustedOrigins` configuration option. Requests from origins not on this list are automatically blocked.
 
-Relative callback and redirect URLs support standard path, query, and fragment syntax, but must begin with a single `/`. Better Auth rejects protocol-relative URLs (`//...`), backslashes, control characters, and encoded path separators.
+Relative callback and redirect URLs support standard path and query syntax, but must begin with a single `/`. Better Auth rejects fragments, protocol-relative URLs (`//...`), backslashes, control characters, and encoded path separators in the path.
 
 ### Basic Usage
 

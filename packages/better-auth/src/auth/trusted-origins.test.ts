@@ -228,11 +228,14 @@ describe("trusted origins", () => {
 			).resolves.toBe(true);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10022
+		 */
 		it("should allow standards-compliant relative URLs", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
 			const relativeURLs = [
 				"/docs/!$&'()*+,;=:@~",
-				"/café#profile",
+				"/café/profile",
 				"/search?next=/settings?tab=security",
 				"/callback?next=%2Fdashboard",
 			];
@@ -272,6 +275,11 @@ describe("trusted origins", () => {
 				`/\u0000evil.com`,
 				`/\u007fevil.com`,
 				`/\u0085evil.com`,
+				`/\t/evil.com`,
+				`/\n/evil.com`,
+				`/\r/evil.com`,
+				"/profile#section",
+				"/profile#section?tab=security",
 				"javascript:alert('xss')",
 				"data:text/html,<script>alert('xss')</script>",
 			];

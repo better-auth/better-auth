@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Allow relative callback URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+Allow relative callback and redirect URLs to use standard path and query syntax while preserving open-redirect protections.
