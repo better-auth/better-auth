@@ -245,9 +245,6 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 		expect(session?.impersonator).toBeNull();
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10616
-	 */
 	it("resolves generated relation keys with usePlural", async () => {
 		const db = drizzle(sqliteDb, {
 			schema: {
@@ -313,9 +310,6 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 		expect(accountsWithUser[0]?.user?.id).toBe("u1");
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10616
-	 */
 	it("resolves generated relation keys from Drizzle metadata", async () => {
 		const db = drizzle(sqliteDb, {
 			schema: {
@@ -342,9 +336,6 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 		expect(account?.user.id).toBe("u1");
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10616
-	 */
 	it("resolves relation keys when schema and query model names differ", async () => {
 		const db = drizzle(sqliteDb, {
 			schema: {
@@ -377,9 +368,6 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 		expect(account?.user.id).toBe("u1");
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10616
-	 */
 	it("supports legacy plural forward relation keys with usePlural", async () => {
 		const db = drizzle(sqliteDb, {
 			schema: {

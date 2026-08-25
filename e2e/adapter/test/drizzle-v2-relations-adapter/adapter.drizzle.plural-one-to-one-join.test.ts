@@ -61,9 +61,6 @@ type SessionWithUser = {
 	user: { id: string };
 };
 
-/**
- * @see https://github.com/better-auth/better-auth/issues/10616
- */
 test.for([
 	["findOne", "generated singular", "adapter schema", generatedAuthRelations],
 	["findMany", "generated singular", "adapter schema", generatedAuthRelations],
