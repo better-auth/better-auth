@@ -353,4 +353,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/lapluviosilla.png",
 		},
 	},
+	{
+		name: "better-auth-eve-online",
+		url: "https://github.com/localisprimary/better-auth-eve-online",
+		description:
+			"EVE Online provider for Better Auth",
+		author: {
+			name: "Local Is Primary",
+			github: "localisprimary",
+			avatar: "https://github.com/localisprimary.png",
+		},
+	},
 ];
