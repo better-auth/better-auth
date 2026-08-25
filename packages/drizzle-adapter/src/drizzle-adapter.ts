@@ -9,16 +9,14 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { SQL, TablesRelationalConfig } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import {
 	and,
 	asc,
 	Column,
 	count,
-	createTableRelationsHelpers,
 	desc,
 	eq,
-	extractTablesRelationalConfig,
 	gt,
 	gte,
 	inArray,
@@ -33,8 +31,10 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import type { RelationKeysByModel } from "./join-relation-key";
-import { getOneToOneRelationKey } from "./join-relation-key";
+import {
+	buildRelationKeysByModel,
+	getOneToOneRelationKey,
+} from "./join-relation-key";
 import {
 	insensitiveEq,
 	insensitiveIlike,
@@ -45,18 +45,6 @@ import {
 
 export interface DB {
 	[key: string]: any;
-}
-
-function buildV1RelationKeysByModel(
-	...schemas: (TablesRelationalConfig | undefined)[]
-): RelationKeysByModel {
-	const relationKeysByModel = new Map<string, ReadonlySet<string>>();
-	for (const schema of schemas) {
-		for (const [model, table] of Object.entries(schema ?? {})) {
-			relationKeysByModel.set(model, new Set(Object.keys(table.relations)));
-		}
-	}
-	return relationKeysByModel;
 }
 
 /**
@@ -190,14 +178,7 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
-	const configuredRelations = config.schema
-		? extractTablesRelationalConfig(config.schema, createTableRelationsHelpers)
-				.tables
-		: undefined;
-	const relationKeysByModel = buildV1RelationKeysByModel(
-		configuredRelations,
-		db._?.schema,
-	);
+	const relationKeysByModel = buildRelationKeysByModel(db._?.schema);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({
@@ -787,6 +768,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						getDefaultModelName,
 					});
 				}
+				// Preserve the legacy Relations v1 generator rule: append "s" when usePlural is disabled.
 				return config.usePlural ? joinModel : `${joinModel}s`;
 			}
 

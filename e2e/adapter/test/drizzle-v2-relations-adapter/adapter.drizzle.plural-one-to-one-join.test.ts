@@ -62,21 +62,36 @@ type SessionWithUser = {
 };
 
 test.for([
-	["findOne", "generated singular", "adapter schema", generatedAuthRelations],
-	["findMany", "generated singular", "adapter schema", generatedAuthRelations],
-	["findOne", "legacy plural", "adapter schema", legacyAuthRelations],
-	["findMany", "legacy plural", "adapter schema", legacyAuthRelations],
-	["findOne", "generated singular", "Drizzle metadata", generatedAuthRelations],
+	[
+		"findOne",
+		"generated singular",
+		"with adapter schema",
+		generatedAuthRelations,
+	],
 	[
 		"findMany",
 		"generated singular",
-		"Drizzle metadata",
+		"with adapter schema",
 		generatedAuthRelations,
 	],
-] as const)("%s resolves a one-to-one relation with %s keys from %s", async ([
+	["findOne", "legacy plural", "with adapter schema", legacyAuthRelations],
+	["findMany", "legacy plural", "with adapter schema", legacyAuthRelations],
+	[
+		"findOne",
+		"generated singular",
+		"without adapter schema",
+		generatedAuthRelations,
+	],
+	[
+		"findMany",
+		"generated singular",
+		"without adapter schema",
+		generatedAuthRelations,
+	],
+] as const)("%s resolves a one-to-one relation with %s keys %s", async ([
 	method,
 	,
-	schemaSource,
+	schemaSetup,
 	relations,
 ]) => {
 	const sqliteDb = new Database(":memory:");
@@ -117,7 +132,7 @@ test.for([
 
 	const db = drizzle({ client: sqliteDb, relations });
 	const adapter = drizzleAdapter(db, {
-		...(schemaSource === "adapter schema"
+		...(schemaSetup === "with adapter schema"
 			? { schema: { ...dbSchema, authRelations: relations } }
 			: {}),
 		provider: "sqlite",

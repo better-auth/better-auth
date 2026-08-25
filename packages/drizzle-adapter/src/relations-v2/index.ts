@@ -28,9 +28,10 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import type { TablesRelationalConfig } from "drizzle-orm/relations";
-import type { RelationKeysByModel } from "../join-relation-key";
-import { getOneToOneRelationKey } from "../join-relation-key";
+import {
+	buildRelationKeysByModel,
+	getOneToOneRelationKey,
+} from "../join-relation-key";
 import {
 	escapedLike,
 	insensitiveEq,
@@ -41,22 +42,6 @@ import {
 
 export interface DB {
 	[key: string]: any;
-}
-
-function buildV2RelationKeysByModel(
-	...schemas: (TablesRelationalConfig | undefined)[]
-): RelationKeysByModel {
-	const relationKeysByModel = new Map<string, ReadonlySet<string>>();
-	for (const schema of schemas) {
-		for (const [model, tableRelations] of Object.entries(schema ?? {})) {
-			if (!tableRelations?.relations) continue;
-			relationKeysByModel.set(
-				model,
-				new Set(Object.keys(tableRelations.relations)),
-			);
-		}
-	}
-	return relationKeysByModel;
 }
 
 function escapeLikePattern(
@@ -283,13 +268,7 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
-	const configuredRelations = Object.values(config.schema ?? {}).map(
-		(value) => value as TablesRelationalConfig,
-	);
-	const relationKeysByModel = buildV2RelationKeysByModel(
-		...configuredRelations,
-		db._?.relations,
-	);
+	const relationKeysByModel = buildRelationKeysByModel(db._?.relations);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
@@ -312,11 +291,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					config.schema?.[model] ??
 					db._?.relations?.[model]?.table ??
 					db._?.fullSchema?.[model];
-				if (!config.schema && !db._?.relations && !db._?.fullSchema) {
-					throw new BetterAuthError(
-						"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
-					);
-				}
 				if (!schemaModel) {
 					throw new BetterAuthError(
 						`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the schema directly to the adapter options.`,
@@ -378,6 +352,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						getDefaultModelName,
 					});
 				}
+				// Match the Relations v2 generator rule: preserve a trailing "s" when usePlural is disabled.
 				if (config.usePlural || joinModel.endsWith("s")) return joinModel;
 				return `${joinModel}s`;
 			}
