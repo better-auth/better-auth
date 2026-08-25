@@ -183,10 +183,7 @@ export function describeIrreversibleReleaseActions(
 	if (renamed.length > 0) {
 		actions.push(`rename ${renamed.join(", ")}`);
 	}
-	if (
-		accountIdentity.migrationRequired &&
-		accountIdentity.totalAccounts > 0
-	) {
+	if (accountIdentity.migrationRequired && accountIdentity.totalAccounts > 0) {
 		actions.push(
 			"write the 1.7 account identity onto every existing account row",
 		);
