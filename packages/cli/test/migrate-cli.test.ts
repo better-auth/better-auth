@@ -57,7 +57,6 @@ export const auth = betterAuth({
 	secret: "a-secret-long-enough-to-keep-the-cli-quiet",
 	baseURL: "http://localhost:3000",
 	emailAndPassword: { enabled: true },
-	account: { identityStrategy: "issuer" },
 });
 `,
 	);

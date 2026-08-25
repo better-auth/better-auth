@@ -42,19 +42,19 @@ These features change the schema:
 | Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                                                        |
 | Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                                                        |
 | Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                                                        |
-| Account identity           | No schema change by default; an issuer column and compound index when issuer-scoped identity is enabled                 | **Only when opting into issuer-scoped identity**          |
+| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **Yes, backfill**                                         |
 | SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**                                      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                                                        |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data**                                 |
 | Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`       | **Yes, deduplicate; MySQL/SQL Server also bound strings** |
 
 <Callout type="warn">
-  Do not apply an issuer-scoped schema over a populated 1.6 `account` table before backfilling trusted issuers and resolving collisions. OAuth client and SCIM changes also require their manual data steps.
+  Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
 </Callout>
 
 Use this order:
 
-1. Complete the manual preparation in [Account identity](#choose-account-identity-strategy), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
+1. Complete the manual preparation in [Account identity](#account-identity-is-scoped-by-issuer), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
 2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth generate`, review the output, and apply it with your migration tooling.
 3. Deploy the 1.7 packages and configuration changes together.
 4. Complete any post-deployment work, including SCIM reprovisioning.
@@ -65,41 +65,9 @@ Use this order:
 
 This covers email and password, social login, the generic OAuth plugin, One Tap, and consuming SSO.
 
-### Choose account identity strategy
+### Account identity is scoped by issuer
 
-#### Preserve 1.6 provider-scoped account identity
-
-Better Auth 1.7 preserves the 1.6 account identity by default. When `account.identityStrategy` is omitted, an external account remains unique by `providerId` and `accountId`, and the account schema does not add or persist an issuer. You can also make this compatibility policy explicit:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-  account: {
-    identityStrategy: "provider-id",
-  },
-  // ...
-});
-```
-
-Use the same strategy on every application instance that reads or writes the database. Renaming a provider changes its account namespace, and 2 provider aliases for the same OpenID Connect issuer remain separate identities, matching the provider-scoped behavior of 1.6.
-
-#### Adopt issuer-scoped account identity
-
-Set `account.identityStrategy` to `"issuer"` when you deliberately want an external account to be unique by `issuer` and `accountId`:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-  account: {
-    identityStrategy: "issuer",
-  },
-  // ...
-});
-```
-
-The issuer-scoped account schema adds the required `issuer` field and creates a unique compound index across `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider.
+Better Auth now recognizes an external account by the unique pair of `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider. The account schema adds the required `issuer` field and creates a unique compound index across both identity fields without renaming `accountId`.
 
 <Callout type="warn">
   Use a maintenance window and stop authentication writes, including background jobs and admin APIs that insert into `account` directly, before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.

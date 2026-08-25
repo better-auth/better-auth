@@ -1,7 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
-import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import * as z from "zod";
 import { APIError } from "../../api";
@@ -386,14 +385,9 @@ export const siwe = (options: SIWEPluginOptions) => {
 							// Create account record for wallet authentication
 							await ctx.context.internalAdapter.createAccount({
 								userId: user.id,
-								...resolveAccountIdentity(
-									ctx.context.options.account?.identityStrategy,
-									{
-										providerId: "siwe",
-										issuer: createLocalAccountIssuer("siwe"),
-										accountId: `${walletAddress}:${chainId}`,
-									},
-								).fields,
+								providerId: "siwe",
+								issuer: createLocalAccountIssuer("siwe"),
+								accountId: `${walletAddress}:${chainId}`,
 								createdAt: new Date(),
 								updatedAt: new Date(),
 							});
@@ -415,14 +409,9 @@ export const siwe = (options: SIWEPluginOptions) => {
 								// Create account record for this new wallet+chain combination
 								await ctx.context.internalAdapter.createAccount({
 									userId: user.id,
-									...resolveAccountIdentity(
-										ctx.context.options.account?.identityStrategy,
-										{
-											providerId: "siwe",
-											issuer: createLocalAccountIssuer("siwe"),
-											accountId: `${walletAddress}:${chainId}`,
-										},
-									).fields,
+									providerId: "siwe",
+									issuer: createLocalAccountIssuer("siwe"),
+									accountId: `${walletAddress}:${chainId}`,
 									createdAt: new Date(),
 									updatedAt: new Date(),
 								});

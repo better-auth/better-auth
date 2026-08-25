@@ -6565,7 +6565,9 @@ describe("SAML E2E: SP-initiated flow", () => {
 			| Record<string, any>
 			| undefined;
 		expect(ssoAccount).toBeDefined();
-		expect(ssoAccount).not.toHaveProperty("issuer");
+		expect(ssoAccount!.issuer).toBe(
+			"http://localhost:8081/api/sso/saml2/idp/metadata",
+		);
 		expect(ssoAccount!.accountId).toBe("test@email.com");
 
 		// 7. Verify the user exists and is linked
@@ -7345,7 +7347,7 @@ describe("SAML user resolution HTTP", () => {
 			protocol: "saml",
 			providerId: "workforce-saml",
 			accountKey: {
-				providerId: "workforce-saml",
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 			},
 			providerUser: {
@@ -7388,6 +7390,7 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 				userId: selectedUser.id,
@@ -7399,6 +7402,39 @@ describe("SAML user resolution HTTP", () => {
 				where: [{ field: "userId", value: selectedUser.id }],
 			}),
 		).toBe(1);
+	});
+
+	it("keeps the verified SAML issuer in resolution hooks while storing provider-scoped identity", async () => {
+		const inputs: SSOUserResolutionInput[] = [];
+		const instance = await createSAMLUserResolutionInstance(
+			{
+				resolveUser(input) {
+					inputs.push(input);
+					return { action: "continue" };
+				},
+			},
+			{ account: { identityStrategy: "provider-id" } },
+		);
+
+		const signIn = await completeSAMLSignIn(instance.baseURL);
+
+		expect(signIn.callback.status).toBe(302);
+		expect(inputs).toHaveLength(1);
+		expect(inputs[0]).toMatchObject({
+			protocol: "saml",
+			providerId: "workforce-saml",
+			accountKey: {
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+				accountId: "test@email.com",
+			},
+		});
+		await expect(
+			instance.db.findOne<Account>({ model: "account", where: [] }),
+		).resolves.toMatchObject({
+			issuer: "local:oauth:workforce-saml",
+			accountId: "test@email.com",
+			providerId: "workforce-saml",
+		});
 	});
 
 	it.each([
@@ -7537,9 +7573,9 @@ describe("SAML user resolution HTTP", () => {
 			model: "account",
 			where: [],
 		});
-		expect(accounts[0]).not.toHaveProperty("issuer");
 		expect(accounts).toEqual([
 			expect.objectContaining({
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 			}),

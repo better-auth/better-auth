@@ -580,10 +580,7 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 	 */
 	it("refuses to add the account issuer column to a populated account table, pointing at the upgrade guide", async () => {
 		const failure = await captureFailure(
-			getMigrations({
-				account: { identityStrategy: "issuer" },
-				database: createAccountDb({}),
-			}),
+			getMigrations({ database: createAccountDb({}) }),
 		);
 
 		expect(failure).toBeInstanceOf(BetterAuthError);
@@ -597,10 +594,7 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 		const failure = await captureFailure(
 			getMigrations({
 				database: createAccountDb({ issuerColumn: "identity_issuer" }),
-				account: {
-					identityStrategy: "issuer",
-					fields: { issuer: "identity_issuer" },
-				},
+				account: { fields: { issuer: "identity_issuer" } },
 			}),
 		);
 
@@ -612,7 +606,6 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 
 	it("plans a required column without a default when the table is empty", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
-			account: { identityStrategy: "issuer" },
 			database: createAccountDb({ seeded: false }),
 		});
 
@@ -711,7 +704,6 @@ describe("get-migration: nullable columns for required fields", () => {
 
 	it("accepts a required field whose live column is not null", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
-			account: { identityStrategy: "issuer" },
 			database: createAccountDb({ issuer: "notNull" }),
 		});
 
@@ -725,7 +717,6 @@ describe("get-migration: nullable columns for required fields", () => {
 		const warnings: string[] = [];
 
 		await getMigrations({
-			account: { identityStrategy: "issuer" },
 			database: createAccountDb({ issuer: "nullable" }),
 			logger: warnLogger(warnings),
 		});
@@ -781,10 +772,7 @@ describe("get-migration: nullable columns for required fields", () => {
 describe("get-migration: inspecting a migration that cannot be applied", () => {
 	it("reports the unsafe column change and still compiles the statements", async () => {
 		const { compileMigrations, unsafeChanges } = await getMigrations(
-			{
-				account: { identityStrategy: "issuer" },
-				database: createAccountDb({}),
-			},
+			{ database: createAccountDb({}) },
 			{ throwOnUnsafe: false },
 		);
 

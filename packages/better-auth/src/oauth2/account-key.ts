@@ -44,17 +44,15 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 		throw new BetterAuthError("OAUTH_ACCOUNT_SUBJECT_INVALID");
 	}
 
-	if (identityStrategy !== "issuer") {
-		return { providerId: provider.id, accountId };
-	}
-
 	const accountIssuer = provider.accountIssuer;
 	const issuer =
-		accountIssuer === undefined
+		identityStrategy === "provider-id"
 			? createOAuthAccountIssuer(provider.id)
-			: typeof accountIssuer === "function"
-				? await accountIssuer(accountKeyContext)
-				: accountIssuer;
+			: accountIssuer === undefined
+				? createOAuthAccountIssuer(provider.id)
+				: typeof accountIssuer === "function"
+					? await accountIssuer(accountKeyContext)
+					: accountIssuer;
 	if (
 		typeof issuer !== "string" ||
 		issuer.trim().length === 0 ||

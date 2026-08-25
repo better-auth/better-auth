@@ -1738,7 +1738,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 			enabled: true,
 		},
 		account: {
-			identityStrategy: "issuer",
 			accountLinking: {
 				enabled: true,
 				trustedProviders: ["google", "github"],

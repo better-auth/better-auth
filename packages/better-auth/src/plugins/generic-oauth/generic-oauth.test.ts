@@ -2136,7 +2136,6 @@ describe("oauth2", async () => {
 
 	it("recognizes one OIDC account across provider aliases when mutable profile fields change", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
-			account: { identityStrategy: "issuer" },
 			plugins: [
 				genericOAuth({
 					config: [

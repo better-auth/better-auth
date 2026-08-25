@@ -5,7 +5,6 @@ import type {
 	User,
 } from "better-auth";
 import type {
-	AccountKey,
 	DBFieldAttribute,
 	FieldAttributeToObject,
 	InferAdditionalFieldsFromPluginOptions,
@@ -322,7 +321,10 @@ export interface SSOProviderReference {
 
 interface BaseSSOUserResolutionInput {
 	providerId: string;
-	accountKey: AccountKey;
+	accountKey: {
+		issuer: string;
+		accountId: string;
+	};
 	providerUser: SSOProviderUserProfile;
 	providerReference: SSOProviderReference;
 }

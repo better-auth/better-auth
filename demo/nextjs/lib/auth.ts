@@ -129,7 +129,6 @@ const authOptions = {
 		},
 	},
 	account: {
-		identityStrategy: "issuer",
 		accountLinking: {
 			trustedProviders: [
 				"email-password",
