@@ -3125,7 +3125,7 @@ describe("oauth2", async () => {
 			expect(userInfo?.image).toBeUndefined();
 		});
 
-		it("keeps the placeholder unverified for unexpected null email claims", async () => {
+		it("keeps the placeholder unverified for an unexpected null Graph email claim", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
@@ -3135,6 +3135,7 @@ describe("oauth2", async () => {
 				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
 					HttpResponse.json({
 						sub: "token-pairwise-sub",
+						name: "Graph User",
 						email: null,
 						email_verified: true,
 					}),
@@ -3144,8 +3145,6 @@ describe("oauth2", async () => {
 				sub: "token-pairwise-sub",
 				oid: "token-stable-oid",
 				tid: "token-tenant-id",
-				email: null,
-				email_verified: true,
 			});
 
 			const userInfo = await msConfig.getUserInfo!({
@@ -3154,6 +3153,7 @@ describe("oauth2", async () => {
 			});
 
 			expect(userInfo).toMatchObject({
+				name: "Graph User",
 				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
 				emailVerified: false,
 			});
