@@ -319,13 +319,14 @@ describe("Social Providers", async (c) => {
 	 * state-cookie check fails, and it was already origin-validated at sign-in.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/5467
+	 * @see https://github.com/better-auth/better-auth/issues/10022
 	 */
 	it("redirects to the per-flow errorCallbackURL when state validation fails", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/callback",
-			errorCallbackURL: "/oauth-error",
+			errorCallbackURL: "/oauth-error?source=oauth#retry",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
 			},
@@ -343,8 +344,9 @@ describe("Social Providers", async (c) => {
 			onError(context) {
 				expect(context.response.status).toBe(302);
 				const location = context.response.headers.get("location") ?? "";
-				expect(location).toContain("/oauth-error");
-				expect(location).toContain("error=state_mismatch");
+				expect(location).toContain(
+					"/oauth-error?source=oauth&error=state_mismatch#retry",
+				);
 				expect(location).not.toContain("/api/auth/error");
 			},
 		});
@@ -3424,10 +3426,12 @@ describe("Reddit Provider — profile email mapping", async () => {
 		} as any);
 
 		// Without a mapped email the provider derives a unique, per-user
-		// synthetic email from the Reddit user id rather than falling back to
+		// placeholder email from the Reddit user id rather than falling back to
 		// the shared oauth_client_id, so users can never collide on one address.
 		// The non-routable `.invalid` domain keeps it from matching a real mailbox.
-		expect(result?.user.email).toBe("reddit-user-123@reddit.invalid");
+		expect(result?.user.email).toBe(
+			"reddit-user-123@reddit.placeholder.invalid",
+		);
 		expect(result?.user.email).not.toBe(profile.oauth_client_id);
 		expect(result?.user.emailVerified).toBe(false);
 	});

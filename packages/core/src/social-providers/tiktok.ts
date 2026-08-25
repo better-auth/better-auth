@@ -5,6 +5,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 /**
  * [More info](https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info/)
@@ -210,7 +211,12 @@ export const tiktok = (options: TiktokOptions) => {
 
 			return {
 				user: {
-					email: profile.data.user.email || profile.data.user.username,
+					email:
+						profile.data.user.email ||
+						createPlaceholderEmail({
+							identifier: profile.data.user.open_id,
+							namespace: "tiktok",
+						}),
 					name:
 						profile.data.user.display_name || profile.data.user.username || "",
 					image: profile.data.user.avatar_large_url,

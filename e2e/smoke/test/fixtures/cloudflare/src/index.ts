@@ -1,7 +1,7 @@
 import type { AuthEndpointContext } from "@better-auth/core/context";
 import {
 	getCurrentAdapter,
-	getCurrentAuthContext,
+	getCurrentAuthEndpointContext,
 	runWithEndpointContext,
 	runWithTransaction,
 } from "@better-auth/core/context";
@@ -39,7 +39,7 @@ app.get("/_test/async-context/concurrency", async (c) => {
 		contexts.map((context) =>
 			runWithEndpointContext(context, async () => {
 				await Promise.resolve();
-				return getCurrentAuthContext();
+				return getCurrentAuthEndpointContext();
 			}),
 		),
 	);

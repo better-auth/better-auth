@@ -63,6 +63,43 @@ const parseCustomSchemeOrigin = (value: string) => {
 	return { scheme, authority: authority.toLowerCase(), path };
 };
 
+const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
+const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
+
+/**
+ * Validates root-relative redirects against ambiguous browser and router parsing.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-4.2
+ * @see https://url.spec.whatwg.org/#concept-basic-url-parser
+ */
+const isSafeRelativeURL = (value: string): boolean => {
+	if (
+		!value.startsWith("/") ||
+		value.startsWith("//") ||
+		value.includes("\\") ||
+		CONTROL_CHARACTER_PATTERN.test(value)
+	) {
+		return false;
+	}
+
+	const pathEnd = value.search(/[?#]/);
+	const path = pathEnd === -1 ? value : value.slice(0, pathEnd);
+	if (ENCODED_PATH_SEPARATOR_PATTERN.test(path)) {
+		return false;
+	}
+
+	try {
+		// Recheck authority after web-platform URL normalization.
+		return (
+			new URL(value, RELATIVE_URL_PARSER_ORIGIN).origin ===
+			RELATIVE_URL_PARSER_ORIGIN
+		);
+	} catch {
+		return false;
+	}
+};
+
 /**
  * Matches the given url against an origin or origin pattern
  * See "options.trustedOrigins" for details of supported patterns
@@ -78,14 +115,7 @@ export const matchesOriginPattern = (
 	settings?: { allowRelativePaths: boolean },
 ): boolean => {
 	if (url.startsWith("/")) {
-		if (settings?.allowRelativePaths) {
-			return (
-				url.startsWith("/") &&
-				/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)
-			);
-		}
-
-		return false;
+		return settings?.allowRelativePaths === true && isSafeRelativeURL(url);
 	}
 
 	// Check if pattern contains wildcard characters (*, **, or ?)

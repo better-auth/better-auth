@@ -2456,7 +2456,10 @@ describe("SSO OIDC hook rejection redirect", async () => {
 		fetchOptions: { customFetchImpl },
 	});
 
-	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10022
+	 */
+	it("should preserve the errorCallbackURL query and fragment when a session hook throws", async () => {
 		const { headers: adminHeaders } = await signInWithTestUser();
 		await auth.api.registerSSOProvider({
 			body: {
@@ -2484,7 +2487,8 @@ describe("SSO OIDC hook rejection redirect", async () => {
 		const res = await authClient.signIn.sso({
 			providerId: "hook-reject",
 			callbackURL: "https://frontend.example.com/dashboard",
-			errorCallbackURL: "https://frontend.example.com/auth-error",
+			errorCallbackURL:
+				"https://frontend.example.com/auth-error?source=sso#retry",
 			fetchOptions: {
 				throw: true,
 				onSuccess: cookieSetter(signInHeaders),
@@ -2513,10 +2517,12 @@ describe("SSO OIDC hook rejection redirect", async () => {
 		const url = new URL(callbackURL);
 		expect(url.origin).toBe("https://frontend.example.com");
 		expect(url.pathname).toBe("/auth-error");
+		expect(url.searchParams.get("source")).toBe("sso");
 		expect(url.searchParams.get("error")).toBe("HOOK_REJECTED");
 		expect(url.searchParams.get("error_description")).toBe(
 			"SSO hook rejected this user",
 		);
+		expect(url.hash).toBe("#retry");
 	});
 });
 

@@ -1,4 +1,5 @@
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import type {
@@ -107,12 +108,20 @@ export function microsoftEntraId(
 		if (!oid) {
 			return null;
 		}
+		const tokenEmail = tokenProfile.email;
 		const tokenUserInfo = {
 			...tokenProfile,
 			name: getMicrosoftProfileName(tokenProfile),
-			email: tokenProfile.email ?? tokenProfile.preferred_username ?? undefined,
+			email:
+				tokenEmail ??
+				createPlaceholderEmail({
+					identifier: oid,
+					namespace: "microsoft-entra-id",
+				}),
 			image: tokenProfile.picture,
-			emailVerified: tokenProfile.email_verified ?? false,
+			emailVerified: tokenEmail
+				? (tokenProfile.email_verified ?? false)
+				: false,
 		};
 		if (!tokens.accessToken) {
 			return tokenUserInfo;
@@ -137,6 +146,7 @@ export function microsoftEntraId(
 			return tokenUserInfo;
 		}
 
+		const emailClaim = tokenProfile.email ?? profile.email;
 		const profileWithClaims = {
 			...profile,
 			...tokenProfile,
@@ -144,17 +154,19 @@ export function microsoftEntraId(
 				getMicrosoftProfileName(tokenProfile) ??
 				getMicrosoftProfileName(profile),
 			email:
-				tokenProfile.email ??
-				profile.email ??
-				tokenProfile.preferred_username ??
-				profile.preferred_username ??
-				undefined,
+				emailClaim ??
+				createPlaceholderEmail({
+					identifier: oid,
+					namespace: "microsoft-entra-id",
+				}),
 			image: tokenProfile.picture ?? profile.picture,
 			// Note: Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.
 			// We default to false when not provided.
 			emailVerified:
-				tokenProfile.email_verified ?? profile.email_verified ?? false,
+				emailClaim != null
+					? (tokenProfile.email_verified ?? profile.email_verified ?? false)
+					: false,
 		};
 		return profileWithClaims;
 	};

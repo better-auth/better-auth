@@ -32,6 +32,10 @@ import {
 	sql,
 } from "drizzle-orm";
 import {
+	buildRelationKeysByModel,
+	getOneToOneRelationKey,
+} from "./join-relation-key";
+import {
 	insensitiveEq,
 	insensitiveIlike,
 	insensitiveInArray,
@@ -174,6 +178,7 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
+	const relationKeysByModel = buildRelationKeysByModel(db._?.schema);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({
@@ -748,6 +753,25 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return null;
 			}
 
+			function getJoinRelationKey(
+				baseModel: string,
+				joinModel: string,
+				relationKeys: ReadonlySet<string> | undefined,
+				isUnique: boolean,
+			) {
+				if (isUnique) {
+					return getOneToOneRelationKey({
+						baseModel,
+						joinModel,
+						relationKeys,
+						schema: baSchema,
+						getDefaultModelName,
+					});
+				}
+				// Preserve the legacy Relations v1 generator rule: append "s" when usePlural is disabled.
+				return config.usePlural ? joinModel : `${joinModel}s`;
+			}
+
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
@@ -772,21 +796,28 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
 								const isUnique = joinAttr.relation === "one-to-one";
-								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-								includes[`${model}${pluralSuffix}`] = isUnique
-									? true
-									: { limit };
-								if (!isUnique) {
-									pluralJoinResults.push(`${model}${pluralSuffix}`);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
+								includes[relationKey] = isUnique ? true : { limit };
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
 								}
 							}
 							const query = db.query[queryModel].findFirst({
@@ -806,14 +837,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const pluralJoinResult of pluralJoinResults) {
-									const singularKey = !config.usePlural
-										? pluralJoinResult.slice(0, -1)
-										: pluralJoinResult;
-									res[singularKey] = res[pluralJoinResult];
-									if (pluralJoinResult !== singularKey) {
-										delete res[pluralJoinResult];
-									}
+								for (const { key, target } of renamedJoinResults) {
+									res[target] = res[key];
+									delete res[key];
 								}
 							}
 							return res;
@@ -857,21 +883,29 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const isUnique = joinAttr.relation === "one-to-one";
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
-								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-								includes[`${model}${pluralSuffix}`] = isUnique
-									? true
-									: { limit };
-								if (!isUnique)
-									pluralJoinResults.push(`${model}${pluralSuffix}`);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
+								includes[relationKey] = isUnique ? true : { limit };
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
+								}
 							}
 							let orderBy: SQL<unknown>[] | undefined = undefined;
 							if (sortBy?.field) {
@@ -901,13 +935,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const pluralJoinResult of pluralJoinResults) {
-										const singularKey = !config.usePlural
-											? pluralJoinResult.slice(0, -1)
-											: pluralJoinResult;
-										if (singularKey === pluralJoinResult) continue;
-										item[singularKey] = item[pluralJoinResult];
-										delete item[pluralJoinResult];
+									for (const { key, target } of renamedJoinResults) {
+										item[target] = item[key];
+										delete item[key];
 									}
 								}
 							}

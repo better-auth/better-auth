@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@better-fetch/fetch", () => ({
+vi.mock(import("@better-fetch/fetch"), () => ({
 	betterFetch: vi.fn(),
 }));
 
@@ -26,7 +26,7 @@ describe("wechat.getUserInfo (no provider email)", () => {
 		mockedBetterFetch.mockReset();
 	});
 
-	it("synthesizes a non-routable placeholder email keyed to unionid", async () => {
+	it("creates a non-routable placeholder email keyed to unionid", async () => {
 		mockedBetterFetch.mockResolvedValue(
 			profileResponse({
 				openid: "open-123",
@@ -41,7 +41,7 @@ describe("wechat.getUserInfo (no provider email)", () => {
 			openid: "open-123",
 		} as any);
 
-		expect(res?.user.email).toBe("union-abc@wechat.invalid");
+		expect(res?.user.email).toBe("union-abc@wechat.placeholder.invalid");
 		expect(res?.user.emailVerified).toBe(false);
 		expect(res?.user).not.toHaveProperty("id");
 		expect(typeof provider.accountSubject).toBe("function");
@@ -68,7 +68,7 @@ describe("wechat.getUserInfo (no provider email)", () => {
 			openid: "open-456",
 		} as any);
 
-		expect(res?.user.email).toBe("open-456@wechat.invalid");
+		expect(res?.user.email).toBe("open-456@wechat.placeholder.invalid");
 		expect(res?.user.emailVerified).toBe(false);
 	});
 
