@@ -63,7 +63,8 @@ export function appendQueryParams(
 	params: URLSearchParams,
 ): string {
 	const relative = input.startsWith("/");
-	if (relative && (input.startsWith("//") || input.includes("\\"))) {
+	const hasAuthorityPrefix = input.startsWith("//") || input.startsWith("/\\");
+	if (hasAuthorityPrefix) {
 		throw new TypeError("Expected an absolute or root-relative URL");
 	}
 

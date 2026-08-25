@@ -47,6 +47,14 @@ describe("appendQueryParams", () => {
 		);
 	});
 
+	it("should preserve backslashes in the query and fragment", () => {
+		const params = new URLSearchParams({ error: "access_denied" });
+
+		expect(appendQueryParams(`/callback?next=\\foo#\\bar`, params)).toBe(
+			`/callback?next=\\foo&error=access_denied#\\bar`,
+		);
+	});
+
 	it("should preserve the input when no parameters are provided", () => {
 		expect(appendQueryParams("/login?#step2", new URLSearchParams())).toBe(
 			"/login?#step2",
