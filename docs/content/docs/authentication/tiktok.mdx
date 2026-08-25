@@ -26,7 +26,7 @@ description: TikTok provider setup and usage.
     Make sure to set the redirect URL to a valid HTTPS domain for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
     <Callout type="info">
-      * The TikTok API does not provide email addresses. As a workaround, this implementation uses the user's `username` value for the `email` field, which is why it requires the `user.info.profile` scope instead of just `user.info.basic`.
+      * The TikTok API does not provide email addresses. Better Auth uses the user's stable `open_id` to create a non-routable `{open_id}@tiktok.placeholder.invalid` address.
       * For production use, you will need to request approval from TikTok for the scopes you intend to use.
     </Callout>
   </Step>

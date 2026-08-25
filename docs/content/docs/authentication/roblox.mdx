@@ -12,7 +12,7 @@ description: Roblox provider setup and usage.
     Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/roblox` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
     <Callout type="info">
-      The Roblox API does not provide email addresses. As a workaround, the user's `email` field uses the `preferred_username` value instead.
+      The Roblox API does not provide email addresses. Better Auth uses the user's stable `sub` claim to create a non-routable `{sub}@roblox.placeholder.invalid` address.
     </Callout>
   </Step>
 

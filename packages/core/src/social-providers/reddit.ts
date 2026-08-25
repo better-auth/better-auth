@@ -6,6 +6,7 @@ import {
 	getOAuth2Tokens,
 	refreshAccessToken,
 } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 export interface RedditProfile {
 	id: string;
@@ -110,7 +111,12 @@ export const reddit = (options: RedditOptions) => {
 			// non-routable placeholder (RFC 2606 `.invalid`) keyed to the user's
 			// Reddit id rather than the routable `reddit.com`, which could collide
 			// with a real address. Left unverified; `mapProfileToUser` can override.
-			const email = userMap?.email || `${profile.id}@reddit.invalid`;
+			const email =
+				userMap?.email ||
+				createPlaceholderEmail({
+					identifier: profile.id,
+					namespace: "reddit",
+				});
 			return {
 				user: {
 					name: profile.name,

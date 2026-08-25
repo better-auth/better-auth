@@ -139,7 +139,7 @@ To delete an anonymous user, you can call the `/delete-anonymous-user` endpoint.
 
 ### `emailDomainName`
 
-The domain name to use when generating an email address for anonymous users. If not provided, the default format `temp@{id}.com` is used.
+The domain name to use when generating an email address for anonymous users. If not provided, the default format `{id}@anonymous.placeholder.invalid` is used.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"

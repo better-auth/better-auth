@@ -573,7 +573,7 @@ describe("siwe", async () => {
 			const session = await client.getSession({ fetchOptions: { headers } });
 			expect(session.data?.user.email).not.toBe("user@example.com");
 			expect(session.data?.user.email).toBe(
-				`${walletAddress.toLowerCase()}@http://localhost:3000`,
+				`${walletAddress.toLowerCase()}@siwe.placeholder.invalid`,
 			);
 		} finally {
 			context.internalAdapter.reserveVerificationValue =
@@ -763,8 +763,8 @@ describe("siwe", async () => {
 		expect(error?.message).toBe("[body.email] Invalid email address");
 	});
 
-	it("should allow verification without email when anonymous is true", async () => {
-		const { client } = await getTestInstance(
+	it("uses a namespaced placeholder email when no email is provided", async () => {
+		const { client, sessionSetter } = await getTestInstance(
 			{
 				plugins: [
 					siwe({
@@ -787,13 +787,20 @@ describe("siwe", async () => {
 			},
 		);
 
+		const headers = new Headers();
 		await client.siwe.nonce();
 		const { data, error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
+			fetchOptions: { onSuccess: sessionSetter(headers) },
 		});
 		expect(error).toBeNull();
 		expect(data?.success).toBe(true);
+		const session = await client.getSession({ fetchOptions: { headers } });
+
+		expect(session.data?.user.email).toBe(
+			`${walletAddress.toLowerCase()}@siwe.placeholder.invalid`,
+		);
 	});
 
 	// The nonce is single-use. Two requests presenting the same valid nonce at
