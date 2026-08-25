@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@better-fetch/fetch", () => ({
+vi.mock(import("@better-fetch/fetch"), () => ({
 	betterFetch: vi.fn(),
 }));
 
