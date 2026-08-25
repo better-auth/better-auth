@@ -11,6 +11,11 @@ import {
 	it,
 	vi,
 } from "vitest";
+import {
+	addOAuthServerContext,
+	createAuthMiddleware,
+	getOAuthState,
+} from "../../api";
 import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -153,7 +158,7 @@ describe("oauth-proxy", async () => {
 					throw new Error("Location header not found");
 				}
 				expect(location).toContain(
-					"http://preview-localhost:3000/api/auth/oauth-proxy-callback",
+					"http://preview-localhost:3000/api/auth/callback/google/oauth-proxy",
 				);
 				expect(location).toContain("callbackURL");
 				// Should have profile parameter (passthrough mode)
@@ -192,7 +197,7 @@ describe("oauth-proxy", async () => {
 				if (!location) {
 					throw new Error("Location header not found");
 				}
-				expect(location).not.toContain("/api/auth/oauth-proxy-callback");
+				expect(location).not.toContain("/api/auth/callback/google/oauth-proxy");
 				expect(location).toContain("/dashboard");
 			},
 		});
@@ -230,7 +235,7 @@ describe("oauth-proxy", async () => {
 					throw new Error("Location header not found");
 				}
 				expect(location).toContain(
-					"https://myapp.com/api/auth/oauth-proxy-callback?callbackURL=%2Fdashboard",
+					"https://myapp.com/api/auth/callback/google/oauth-proxy?callbackURL=%2Fdashboard",
 				);
 				// Should have profile parameter (passthrough mode)
 				const profile = new URL(location).searchParams.get("profile");
@@ -309,7 +314,7 @@ describe("oauth-proxy", async () => {
 				if (!location) {
 					throw new Error("Location header not found");
 				}
-				expect(location).not.toContain("/api/auth/oauth-proxy-callback");
+				expect(location).not.toContain("/api/auth/callback/google/oauth-proxy");
 				expect(location).toContain("/dashboard");
 			},
 		});
@@ -389,7 +394,7 @@ describe("oauth-proxy", async () => {
 						expect(location).toBeTruthy();
 
 						// Should redirect to proxy callback with profile data
-						expect(location).toContain("/oauth-proxy-callback");
+						expect(location).toContain("/callback/google/oauth-proxy");
 						expect(location).toContain("callbackURL");
 						expect(location).toContain("profile");
 					},
@@ -488,7 +493,7 @@ describe("oauth-proxy", async () => {
 					const location = context.response.headers.get("location");
 
 					// Should NOT redirect to proxy
-					expect(location).not.toContain("/oauth-proxy-callback");
+					expect(location).not.toContain("/callback/google/oauth-proxy");
 					expect(location).toContain("/dashboard");
 				},
 			});
@@ -733,6 +738,186 @@ describe("oauth-proxy", async () => {
 				previewUsersAfter[0]!.id,
 			);
 			expect(previewSessions.length).toBe(1);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10562
+		 */
+		it("runs callback hooks with restored OAuth state", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const onCallback = vi.fn();
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							if (ctx.path !== "/sign-in/social") return;
+							await addOAuthServerContext({ callbackObserver: true });
+						}),
+						after: createAuthMiddleware(async (ctx) => {
+							if (!ctx.path?.startsWith("/callback")) return;
+							const oauthState = await getOAuthState();
+							onCallback({
+								newSession: ctx.context.newSession !== null,
+								path: ctx.path,
+								providerId: ctx.params?.id,
+								serverContext: oauthState?.serverContext,
+							});
+						}),
+					},
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const response = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			const state = new URL(response.url!).searchParams.get("state");
+
+			const proxyCallback: { url: URL | null } = { url: null };
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location?.includes("profile=")) {
+							proxyCallback.url = new URL(location);
+						}
+					},
+				},
+			);
+
+			if (!proxyCallback.url) {
+				throw new Error("OAuth proxy callback URL was not returned");
+			}
+			const proxyCallbackURL = proxyCallback.url;
+			const proxyCallbackPath = `${proxyCallbackURL.pathname.replace(
+				"/api/auth",
+				"",
+			)}${proxyCallbackURL.search}`;
+			await preview.client.$fetch(proxyCallbackPath, {
+				onError(context) {
+					expect(context.response.headers.get("location")).toContain(
+						"/dashboard",
+					);
+				},
+			});
+
+			expect(onCallback).toHaveBeenCalledExactlyOnceWith({
+				newSession: true,
+				path: "/callback/:id/oauth-proxy",
+				providerId: "google",
+				serverContext: { callbackObserver: true },
+			});
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10562
+		 */
+		it("rejects mismatched callback providers", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const response = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			const state = new URL(response.url!).searchParams.get("state");
+
+			const proxyCallback: { url: URL | null } = { url: null };
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location?.includes("profile=")) {
+							proxyCallback.url = new URL(location);
+						}
+					},
+				},
+			);
+
+			if (!proxyCallback.url) {
+				throw new Error("OAuth proxy callback URL was not returned");
+			}
+			const proxyCallbackURL = proxyCallback.url;
+			const mismatchedCallbackPath = `${proxyCallbackURL.pathname
+				.replace("/api/auth", "")
+				.replace("/callback/google/", "/callback/github/")}${
+				proxyCallbackURL.search
+			}`;
+			const errorRedirect: { location: string | null } = { location: null };
+			await preview.client.$fetch(mismatchedCallbackPath, {
+				onError(context) {
+					errorRedirect.location = context.response.headers.get("location");
+				},
+			});
+
+			if (!errorRedirect.location) {
+				throw new Error("OAuth proxy error redirect was not returned");
+			}
+			expect(new URL(errorRedirect.location).searchParams.get("error")).toBe(
+				"provider_mismatch",
+			);
+			const previewContext = await preview.auth.$context;
+			expect(await previewContext.internalAdapter.listUsers()).toHaveLength(0);
 		});
 
 		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {
@@ -1626,7 +1811,7 @@ describe("oauth-proxy", async () => {
 						const location = context.response.headers.get("location");
 						// Should redirect to preview's oauth-proxy-callback
 						expect(location).toContain("preview.example.com");
-						expect(location).toContain("/oauth-proxy-callback");
+						expect(location).toContain("/callback/google/oauth-proxy");
 
 						if (location && location.includes("profile=")) {
 							const url = new URL(location);
@@ -1740,7 +1925,7 @@ describe("oauth-proxy", async () => {
 				{
 					onError(context) {
 						const location = context.response.headers.get("location");
-						expect(location).toContain("/oauth-proxy-callback");
+						expect(location).toContain("/callback/google/oauth-proxy");
 						if (location) {
 							const url = new URL(location);
 							encryptedProfile = url.searchParams.get("profile");
@@ -1832,7 +2017,7 @@ describe("oauth-proxy", async () => {
 				expect(location).not.toContain("error=no_code");
 				expect(location).not.toContain("error=invalid");
 				// Should redirect to proxy callback with profile data
-				expect(location).toContain("/oauth-proxy-callback");
+				expect(location).toContain("/callback/google/oauth-proxy");
 				expect(location).toContain("profile");
 			},
 		});
@@ -1966,7 +2151,7 @@ describe("oauth-proxy current URL trust", () => {
 		// Falls back to the configured base URL, never the untrusted request origin.
 		expect(location).not.toContain("untrusted.example");
 		expect(location).toContain(
-			"https://myapp.com/api/auth/oauth-proxy-callback",
+			"https://myapp.com/api/auth/callback/google/oauth-proxy",
 		);
 	});
 
@@ -1998,7 +2183,7 @@ describe("oauth-proxy current URL trust", () => {
 		);
 		const location = callbackResponse.headers.get("location");
 		expect(location).toContain(
-			"https://preview.myapp.com/api/auth/oauth-proxy-callback",
+			"https://preview.myapp.com/api/auth/callback/google/oauth-proxy",
 		);
 	});
 
@@ -2035,7 +2220,7 @@ describe("oauth-proxy current URL trust", () => {
 			);
 			const location = callbackResponse.headers.get("location");
 			expect(location).toContain(
-				"https://myapp.com/api/auth/oauth-proxy-callback",
+				"https://myapp.com/api/auth/callback/google/oauth-proxy",
 			);
 		} finally {
 			vi.unstubAllEnvs();
