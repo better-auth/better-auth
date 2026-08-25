@@ -43,9 +43,9 @@ interface ReleaseCollection {
 }
 
 function buildRewriteContext(entries: ReleaseEntry[]): ReleaseRewriteContext {
-	const context: ReleaseRewriteContext = {};
+	const context = new Map<string, ReleaseRewriteContext[string]>();
 	for (const entry of entries) {
-		const existing = context[entry.rewriteKey];
+		const existing = context.get(entry.rewriteKey);
 		if (existing) {
 			if (!existing.packageNames.includes(entry.packageName)) {
 				existing.packageNames.push(entry.packageName);
@@ -53,15 +53,15 @@ function buildRewriteContext(entries: ReleaseEntry[]): ReleaseRewriteContext {
 			continue;
 		}
 
-		context[entry.rewriteKey] = {
+		context.set(entry.rewriteKey, {
 			title: entry.title,
 			changesetDescription: entry.changesetDescription,
 			prNumber: entry.prNumber,
 			packageNames: [entry.packageName],
 			changeType: entry.changeType,
-		};
+		});
 	}
-	return context;
+	return Object.fromEntries(context);
 }
 
 async function collectReleaseNotes(

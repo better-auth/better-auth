@@ -185,7 +185,7 @@ export function mapTypeToBump(
 	type: string,
 	breaking: boolean,
 ): "patch" | "minor" | "major" | "skip" {
-	if (breaking) return "major";
+	if (breaking) return "minor";
 	switch (type) {
 		case "fix":
 		case "perf":

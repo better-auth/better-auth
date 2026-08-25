@@ -27,6 +27,11 @@ function generatorFor(
 }
 
 describe("changeset rewriting", () => {
+	it("preserves safe deterministic fallback copy", () => {
+		const description = "Fix duplicate session refreshes.";
+		expect(createChangesetFallback(description)).toBe(description);
+	});
+
 	it("uses a safe deterministic fallback for untrusted PR copy", () => {
 		expect(
 			createChangesetFallback(

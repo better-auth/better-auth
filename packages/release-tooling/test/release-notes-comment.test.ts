@@ -38,6 +38,12 @@ describe("wrapReleaseNotesComment", () => {
 		);
 	});
 
+	it("allows reserved marker text inside inline code", () => {
+		const inline = "- `<!-- release-body:end -->`";
+		const comment = wrapReleaseNotesComment(version, head, inline);
+		expect(extractReleaseNotesComment(comment, version, head)).toBe(inline);
+	});
+
 	it("marks deterministic fallback copy outside the approved body", () => {
 		const comment = wrapReleaseNotesComment(version, head, notes, {
 			source: "raw",

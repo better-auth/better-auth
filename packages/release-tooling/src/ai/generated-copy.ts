@@ -34,6 +34,9 @@ export function containsUnsupportedGeneratedMarkdown(
 	value: string,
 	policy: GeneratedMarkdownPolicy,
 ): boolean {
+	if (policy === "inline" && (value.includes("\r") || value.includes("\n"))) {
+		return true;
+	}
 	const allowedNodes =
 		policy === "description" ? descriptionNodes : inlineNodes;
 	const markdown = fromMarkdown(value, {
@@ -44,6 +47,13 @@ export function containsUnsupportedGeneratedMarkdown(
 }
 
 export function formatUntrustedInlineMarkdown(value: string): string {
-	if (!containsUnsupportedGeneratedMarkdown(value, "inline")) return value;
-	return toMarkdown({ type: "inlineCode", value }).trim();
+	const inline = value
+		.replaceAll("\r\n", "\n")
+		.replaceAll("\r", "\n")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.join(" ");
+	if (!containsUnsupportedGeneratedMarkdown(inline, "inline")) return inline;
+	return toMarkdown({ type: "inlineCode", value: inline }).trim();
 }

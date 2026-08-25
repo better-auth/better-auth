@@ -9,6 +9,7 @@ import type {
 import {
 	parseSchema,
 	releaseRewriteContextSchema,
+	releaseRewriteKeySchema,
 	releaseRewritesSchema,
 } from "./schema.ts";
 
@@ -31,8 +32,7 @@ function buildBatches(context: ReleaseRewriteContext): ReleaseRewriteContext[] {
 	}
 
 	const batches: ReleaseRewriteContext[] = [];
-	let batch: ReleaseRewriteContext = {};
-	let batchEntries = 0;
+	let batch = new Map<string, ReleaseRewriteContext[string]>();
 	let batchCharacters = 2;
 
 	for (const [key, value] of Object.entries(context)) {
@@ -44,22 +44,20 @@ function buildBatches(context: ReleaseRewriteContext): ReleaseRewriteContext[] {
 		}
 
 		if (
-			batchEntries > 0 &&
-			(batchEntries >= maxBatchEntries ||
+			batch.size > 0 &&
+			(batch.size >= maxBatchEntries ||
 				batchCharacters + entryCharacters > maxBatchCharacters)
 		) {
-			batches.push(batch);
-			batch = {};
-			batchEntries = 0;
+			batches.push(Object.fromEntries(batch));
+			batch = new Map();
 			batchCharacters = 2;
 		}
 
-		batch[key] = value;
-		batchEntries += 1;
+		batch.set(key, value);
 		batchCharacters += entryCharacters;
 	}
 
-	if (batchEntries > 0) batches.push(batch);
+	if (batch.size > 0) batches.push(Object.fromEntries(batch));
 	return batches;
 }
 
@@ -90,9 +88,19 @@ export async function rewriteReleaseNotes(
 	outputPath: string,
 	generate: StructuredGenerator = generateStructured,
 ): Promise<void> {
+	const rawContext = JSON.parse(readFileSync(contextPath, "utf-8"));
+	if (rawContext !== null) {
+		for (const key of Object.getOwnPropertyNames(rawContext)) {
+			parseSchema(
+				releaseRewriteKeySchema,
+				key,
+				`Invalid release rewrite key ${key}`,
+			);
+		}
+	}
 	const context = parseSchema(
 		releaseRewriteContextSchema,
-		JSON.parse(readFileSync(contextPath, "utf-8")),
+		rawContext,
 		`Invalid release rewrite context ${contextPath}`,
 	);
 	const rewrites: GeneratedReleaseRewrites = [];

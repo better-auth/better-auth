@@ -148,13 +148,59 @@ describe("release notes command security", () => {
 			getJob(commandWorkflow, "publish-comment"),
 			"Mark release PR ready",
 		);
+		const script = ready.run ?? "";
 
 		expect(ready.env).toHaveProperty(
 			"PR_NUMBER",
 			expect.stringContaining("needs.generate.outputs.pr_number"),
 		);
-		expect(ready.run).toContain('gh pr ready "$PR_NUMBER"');
+		expect(ready.env).toHaveProperty(
+			"EXPECTED_HEAD_SHA",
+			expect.stringContaining("needs.generate.outputs.head_sha"),
+		);
+		expect(ready.env).toHaveProperty(
+			"EXPECTED_HEAD_REF",
+			expect.stringContaining("needs.generate.outputs.head_ref"),
+		);
+		expect(ready.env).toHaveProperty(
+			"EXPECTED_BASE_REF",
+			expect.stringContaining("needs.generate.outputs.base_ref"),
+		);
+		expect(script).toContain('gh pr ready "$PR_NUMBER"');
+		expect(script).toContain('gh pr ready "$PR_NUMBER" --undo');
+		expect(script).toContain("if ! HEAD_BEFORE_READY=$(current_identity)");
+		expect(script).toContain("if ! HEAD_AFTER_READY=$(current_identity)");
+		expect(script).toContain(".head.repo.full_name");
+		expect(script).toContain(".base.repo.full_name");
+		expect(script).toContain("EXPECTED_HEAD_REF");
+		expect(script).toContain("EXPECTED_BASE_REF");
+		expect(script.indexOf("HEAD_BEFORE_READY")).toBeLessThan(
+			script.indexOf('gh pr ready "$PR_NUMBER" --repo'),
+		);
+		expect(script.indexOf("HEAD_AFTER_READY")).toBeGreaterThan(
+			script.indexOf('gh pr ready "$PR_NUMBER" --repo'),
+		);
 		expect(ready.if).toContain("needs.generate.outputs.merged != 'true'");
+	});
+
+	it("revalidates the full release identity before publishing", () => {
+		const verify = getStep(
+			getJob(commandWorkflow, "publish-comment"),
+			"Verify release PR is unchanged",
+		);
+
+		for (const field of [
+			"EXPECTED_HEAD_SHA",
+			"EXPECTED_HEAD_REF",
+			"EXPECTED_BASE_REF",
+			"EXPECTED_MERGED",
+		]) {
+			expect(verify.env).toHaveProperty(field);
+		}
+		expect(verify.run).toContain(".head.repo.full_name");
+		expect(verify.run).toContain(".base.repo.full_name");
+		expect(verify.run).toContain("CURRENT_STATE");
+		expect(verify.run).toContain("CURRENT_MERGED");
 	});
 
 	it("allows approved-note recovery on merged untagged release PRs", () => {
@@ -202,6 +248,8 @@ describe("release notes command security", () => {
 		expect(actionReferences(draft)).toEqual([]);
 		expect(draftWorkflow.content).not.toContain("pull_request_target");
 		expect(draftWorkflow.content).toContain("ready_for_review");
+		expect(draftWorkflow.content).toContain("edited");
+		expect(draftWorkflow.content).toContain("github.event.changes.base");
 		expect(draftWorkflow.content).toContain("better-release[bot]");
 		expect(keepDraft.run).toContain('gh pr ready "$PR_NUMBER" --undo');
 	});

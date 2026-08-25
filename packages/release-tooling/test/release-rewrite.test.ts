@@ -124,6 +124,30 @@ describe("release-note rewriting", () => {
 		expect(calls).toBe(0);
 	});
 
+	test("rejects prototype-like rewrite IDs", async ({ releaseFiles }) => {
+		const context = Object.fromEntries([
+			[
+				"__proto__",
+				{
+					title: "fix: preserve safe object keys",
+					changesetDescription: "Preserve safe object keys.",
+					prNumber: null,
+					packageNames: ["better-auth"],
+					changeType: "fix",
+				},
+			],
+		]);
+		writeFileSync(releaseFiles.contextPath, JSON.stringify(context));
+
+		await expect(
+			rewriteReleaseNotes(
+				releaseFiles.contextPath,
+				releaseFiles.outputPath,
+				generatorFor({ rewrites: [] }),
+			),
+		).rejects.toThrow("must not be a prototype property");
+	});
+
 	test("rejects oversized changeset context before calling the model", async ({
 		releaseFiles,
 	}) => {

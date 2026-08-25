@@ -16,6 +16,7 @@ describe("generated Markdown policy", () => {
 	});
 
 	it.each([
+		"Fixed session handling\n\nInjected paragraph",
 		"Read <https://example.com>",
 		"Read [the guide][guide]\n\n[guide]: /docs",
 		"Notify &#64;maintainers",
@@ -38,6 +39,9 @@ describe("generated Markdown policy", () => {
 				"See [the guide](https://example.com) and notify @maintainers",
 			),
 		).toBe("`See [the guide](https://example.com) and notify @maintainers`");
+		expect(formatUntrustedInlineMarkdown("Fixed sessions\n\nInjected")).toBe(
+			"Fixed sessions Injected",
+		);
 	});
 
 	it("allows paragraphs, emphasis, and lists in changeset descriptions", () => {

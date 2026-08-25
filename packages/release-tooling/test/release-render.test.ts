@@ -127,7 +127,7 @@ describe("AI release-note rewrites", () => {
 				{
 					id: "pr-43:better-auth",
 					rewriteKey: "pr-43",
-					title: "Changed session refresh behavior",
+					title: "Changed session refresh behavior\n\nInjected paragraph",
 					changesetDescription: "Update custom session refresh integrations.",
 					prNumber: 43,
 					author: "octocat",
@@ -145,6 +145,9 @@ describe("AI release-note rewrites", () => {
 		expect(output).not.toContain("Read https://example.com before upgrading");
 		expect(output).toContain(
 			"> **Migration:** Update custom session refresh integrations.",
+		);
+		expect(output).toContain(
+			"- Changed session refresh behavior Injected paragraph",
 		);
 	});
 

@@ -1,3 +1,5 @@
+import type { Html } from "mdast";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { parseSchema, releaseVersionSchema } from "./schema.ts";
 
 const protocolMarker = "<!-- better-auth-release-notes:v1 -->";
@@ -26,13 +28,27 @@ function validateReleaseIdentity(version: string, head: string): void {
 	}
 }
 
-function count(content: string, value: string): number {
-	return content.split(value).length - 1;
+function rootHtmlNodes(content: string): Html[] {
+	return fromMarkdown(content).children.filter(
+		(node): node is Html => node.type === "html",
+	);
+}
+
+function findMarker(nodes: Html[], marker: string): Html {
+	const matches = nodes.filter((node) => node.value === marker);
+	const [match] = matches;
+	if (!match || matches.length !== 1) {
+		throw new Error(`Expected exactly one ${marker} marker`);
+	}
+	return match;
 }
 
 function validateReleaseNotes(notes: string): void {
 	if (!notes) throw new Error("Release notes cannot be empty");
-	if (reservedMarkerPrefixes.some((marker) => notes.includes(marker))) {
+	const containsMarkerLine = rootHtmlNodes(notes).some((node) =>
+		reservedMarkerPrefixes.some((marker) => node.value.startsWith(marker)),
+	);
+	if (containsMarkerLine) {
 		throw new Error("Release notes cannot contain reserved workflow markers");
 	}
 }
@@ -84,24 +100,19 @@ export function extractReleaseNotesComment(
 	expectedHead: string,
 ): string {
 	validateReleaseIdentity(expectedVersion, expectedHead);
+	const nodes = rootHtmlNodes(content);
 	const versionMarker = `<!-- release-version:${expectedVersion} -->`;
 	const headMarker = `<!-- release-head:${expectedHead} -->`;
-	for (const marker of [
-		protocolMarker,
-		versionMarker,
-		headMarker,
-		bodyStartMarker,
-		bodyEndMarker,
-	]) {
-		if (count(content, marker) !== 1) {
-			throw new Error(`Expected exactly one ${marker} marker`);
-		}
+	for (const marker of [protocolMarker, versionMarker, headMarker]) {
+		findMarker(nodes, marker);
 	}
-
-	const start = content.indexOf(bodyStartMarker) + bodyStartMarker.length;
-	const end = content.indexOf(bodyEndMarker);
-	if (end <= start)
+	const bodyStart = findMarker(nodes, bodyStartMarker);
+	const bodyEnd = findMarker(nodes, bodyEndMarker);
+	const start = bodyStart.position?.end.offset;
+	const end = bodyEnd.position?.start.offset;
+	if (start === undefined || end === undefined || end <= start) {
 		throw new Error("Release note body markers are out of order");
+	}
 
 	const notes = content.slice(start, end).trim();
 	validateReleaseNotes(notes);

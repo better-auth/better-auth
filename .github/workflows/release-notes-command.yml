@@ -24,7 +24,9 @@ jobs:
       issues: read
       pull-requests: read
     outputs:
+      base_ref: ${{ steps.command.outputs.base_ref }}
       head_sha: ${{ steps.command.outputs.head_sha }}
+      head_ref: ${{ steps.command.outputs.head_ref }}
       merged: ${{ steps.command.outputs.merged }}
       pr_number: ${{ steps.command.outputs.pr_number }}
       version: ${{ steps.candidate.outputs.version }}
@@ -88,7 +90,9 @@ jobs:
           esac
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
           echo "merged=$MERGED" >> "$GITHUB_OUTPUT"
 
       # issue_comment runs from the default branch. Execute that trusted code
@@ -286,10 +290,31 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
           EXPECTED_HEAD_SHA: ${{ needs.generate.outputs.head_sha }}
+          EXPECTED_HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+          EXPECTED_BASE_REF: ${{ needs.generate.outputs.base_ref }}
+          EXPECTED_MERGED: ${{ needs.generate.outputs.merged }}
         run: |
-          CURRENT_HEAD_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
-          if [ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]; then
-            echo "::error::The release PR changed before release notes were published"
+          if ! PR=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"); then
+            echo "::error::Could not read the current release PR"
+            exit 1
+          fi
+          CURRENT_HEAD_SHA=$(echo "$PR" | jq -r '.head.sha')
+          CURRENT_HEAD_REF=$(echo "$PR" | jq -r '.head.ref')
+          CURRENT_BASE_REF=$(echo "$PR" | jq -r '.base.ref')
+          CURRENT_HEAD_REPO=$(echo "$PR" | jq -r '.head.repo.full_name')
+          CURRENT_BASE_REPO=$(echo "$PR" | jq -r '.base.repo.full_name')
+          CURRENT_STATE=$(echo "$PR" | jq -r '.state')
+          CURRENT_MERGED=$(echo "$PR" | jq -r '.merged')
+
+          if [[ ! "$CURRENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || \
+             [ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ] || \
+             [ "$CURRENT_HEAD_REF" != "$EXPECTED_HEAD_REF" ] || \
+             [ "$CURRENT_BASE_REF" != "$EXPECTED_BASE_REF" ] || \
+             [ "$CURRENT_HEAD_REPO" != "$GITHUB_REPOSITORY" ] || \
+             [ "$CURRENT_BASE_REPO" != "$GITHUB_REPOSITORY" ] || \
+             [ "$CURRENT_MERGED" != "$EXPECTED_MERGED" ] || \
+             { [ "$CURRENT_STATE" != 'open' ] && [ "$CURRENT_MERGED" != 'true' ]; }; then
+            echo "::error::The release PR identity changed before release notes were published"
             exit 1
           fi
 
@@ -323,10 +348,67 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ needs.generate.outputs.head_sha }}
+          EXPECTED_HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+          EXPECTED_BASE_REF: ${{ needs.generate.outputs.base_ref }}
         run: |
+          current_identity() {
+            local pr head head_ref base_ref head_repo base_repo state merged
+            if ! pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"); then
+              echo "::error::Could not read the current release PR" >&2
+              return 1
+            fi
+            head=$(echo "$pr" | jq -r '.head.sha')
+            head_ref=$(echo "$pr" | jq -r '.head.ref')
+            base_ref=$(echo "$pr" | jq -r '.base.ref')
+            head_repo=$(echo "$pr" | jq -r '.head.repo.full_name')
+            base_repo=$(echo "$pr" | jq -r '.base.repo.full_name')
+            state=$(echo "$pr" | jq -r '.state')
+            merged=$(echo "$pr" | jq -r '.merged')
+            if [[ ! "$head" =~ ^[0-9a-f]{40}$ ]] || \
+               [ "$head_ref" != "$EXPECTED_HEAD_REF" ] || \
+               [ "$base_ref" != "$EXPECTED_BASE_REF" ] || \
+               [ "$head_repo" != "$GITHUB_REPOSITORY" ] || \
+               [ "$base_repo" != "$GITHUB_REPOSITORY" ] || \
+               [ "$state" != 'open' ] || \
+               [ "$merged" != 'false' ]; then
+              echo "::error::The release PR identity changed" >&2
+              return 1
+            fi
+            printf '%s' "$head"
+          }
+
+          restore_draft() {
+            local is_draft
+            is_draft=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            if [ "$is_draft" != 'true' ]; then
+              gh pr ready "$PR_NUMBER" --undo --repo "$GITHUB_REPOSITORY"
+            fi
+          }
+
+          if ! HEAD_BEFORE_READY=$(current_identity); then
+            restore_draft
+            exit 1
+          fi
+          if [ "$HEAD_BEFORE_READY" != "$EXPECTED_HEAD_SHA" ]; then
+            restore_draft
+            echo "::error::The release PR changed before it was marked ready"
+            exit 1
+          fi
+
           IS_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
           if [ "$IS_DRAFT" = 'true' ]; then
             gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          fi
+
+          if ! HEAD_AFTER_READY=$(current_identity); then
+            restore_draft
+            exit 1
+          fi
+          if [ "$HEAD_AFTER_READY" != "$EXPECTED_HEAD_SHA" ]; then
+            restore_draft
+            echo "::error::The release PR changed while it was being marked ready"
+            exit 1
           fi
 
       - name: Mark command as complete

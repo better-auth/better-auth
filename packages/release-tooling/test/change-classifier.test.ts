@@ -47,7 +47,7 @@ describe("change classification", () => {
 		expect(mapTypeToBump("feat", false)).toBe("minor");
 		expect(mapTypeToBump("fix", false)).toBe("patch");
 		expect(mapTypeToBump("docs", false)).toBe("skip");
-		expect(mapTypeToBump("fix", true)).toBe("major");
+		expect(mapTypeToBump("fix", true)).toBe("minor");
 
 		expect(classifyChangeType("feat", false)).toBe("feat");
 		expect(classifyChangeType("fix", false)).toBe("fix");

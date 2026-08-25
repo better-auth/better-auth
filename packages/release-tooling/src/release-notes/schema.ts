@@ -13,10 +13,17 @@ export const prereleaseStateSchema = z.object({
 
 const releaseTitleSchema = z.string().min(1).max(500);
 const changesetDescriptionSchema = z.string().max(20_000).nullable();
+const prototypeKeys = new Set(["__proto__", "constructor", "prototype"]);
+export const releaseRewriteKeySchema = z
+	.string()
+	.min(1)
+	.refine((key) => !prototypeKeys.has(key), {
+		error: "must not be a prototype property",
+	});
 
 export const releaseEntrySchema = z.strictObject({
 	id: z.string().min(1),
-	rewriteKey: z.string().min(1),
+	rewriteKey: releaseRewriteKeySchema,
 	title: releaseTitleSchema,
 	changesetDescription: changesetDescriptionSchema,
 	prNumber: z.int().positive().nullable(),
@@ -48,7 +55,7 @@ export const releaseManifestSchema = z.strictObject({
 });
 
 const releaseRewriteSchema = z.strictObject({
-	id: z.string().min(1).describe("The unchanged input change ID"),
+	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
 	title: z
 		.string()
 		.trim()
@@ -72,7 +79,7 @@ export const releaseRewritesSchema = z.strictObject({
 
 export const releaseRewriteContextSchema = z
 	.record(
-		z.string().min(1),
+		releaseRewriteKeySchema,
 		z.strictObject({
 			title: releaseTitleSchema,
 			changesetDescription: changesetDescriptionSchema,
