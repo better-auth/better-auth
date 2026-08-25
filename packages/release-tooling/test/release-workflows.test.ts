@@ -322,7 +322,10 @@ describe("release publication security", () => {
 		);
 		expect(mergeGuard.run).toContain("BASE_VERSION");
 		expect(mergeGuard.run).toContain("PENDING_CHANGESETS");
-		expect(mergeGuard.run).toContain(".changeset/README");
+		expect(mergeGuard.run).toContain("HEAD:.changeset/pre.json");
+		expect(mergeGuard.run).toContain(".changesets[]");
+		expect(mergeGuard.run).toContain("comm -23");
+		expect(mergeGuard.run).toContain("grep -v '^README$'");
 		expect(mergeGuard.run).toContain("unconsumed changesets");
 	});
 
@@ -419,7 +422,10 @@ describe("release publication security", () => {
 			expect.stringContaining("release-candidate.outputs.release == 'true'"),
 		);
 		expect(guard.run).toContain("PENDING_CHANGESETS");
-		expect(guard.run).toContain(".changeset/README");
+		expect(guard.run).toContain("HEAD:.changeset/pre.json");
+		expect(guard.run).toContain(".changesets[]");
+		expect(guard.run).toContain("comm -23");
+		expect(guard.run).toContain("grep -v '^README$'");
 		expect(guard.run).toContain("GITHUB_STEP_SUMMARY");
 		expect(guard.run).toContain("Revert this release merge");
 		expect(guard.run).toContain("exit 1");

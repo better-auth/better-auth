@@ -43,9 +43,19 @@ jobs:
             exit 0
           fi
 
-          PENDING_CHANGESETS=$(git ls-tree -r --name-only HEAD -- '.changeset/' \
-            | grep -E '^\.changeset/.*\.md$' \
-            | grep -v '^\.changeset/README\.md$' || true)
+          CHANGESET_IDS=$(git ls-tree -r --name-only HEAD -- '.changeset/' \
+            | sed -n 's#^\.changeset/\(.*\)\.md$#\1#p' \
+            | grep -v '^README$' \
+            | sort || true)
+          PENDING_CHANGESETS="$CHANGESET_IDS"
+          if git cat-file -e 'HEAD:.changeset/pre.json' 2>/dev/null; then
+            CONSUMED_CHANGESETS=$(git show 'HEAD:.changeset/pre.json' \
+              | jq -r '.changesets[]' \
+              | sort)
+            PENDING_CHANGESETS=$(comm -23 \
+              <(printf '%s\n' "$CHANGESET_IDS") \
+              <(printf '%s\n' "$CONSUMED_CHANGESETS"))
+          fi
           if [ -n "$PENDING_CHANGESETS" ]; then
             echo "::error::The release merge still contains unconsumed changesets"
             echo "$PENDING_CHANGESETS"
