@@ -42,6 +42,7 @@ const redirectURL = appendQueryParams(errorURL, params);
 
 throw ctx.redirect(redirectURL);
 ```
+
 ### Placeholder Emails
 
 `User.email` is currently required and unique, which is a limitation of the current architecture.
