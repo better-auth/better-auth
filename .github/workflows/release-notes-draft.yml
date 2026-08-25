@@ -1,0 +1,39 @@
+name: Release Notes Draft
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+      - next
+      - 'release/**'
+
+permissions: {}
+
+concurrency:
+  group: release-notes-draft-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  draft:
+    if: >-
+      github.repository_owner == 'better-auth' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'changeset-release/') ||
+       (github.event.pull_request.head.ref == 'next' && github.event.pull_request.base.ref == 'main')) &&
+      (github.event.action != 'ready_for_review' ||
+       !contains(fromJSON('["better-release[bot]", "github-actions[bot]"]'), github.event.sender.login))
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Keep release PR in draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          IS_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+          if [ "$IS_DRAFT" = 'true' ]; then
+            exit 0
+          fi
+          gh pr ready "$PR_NUMBER" --undo --repo "$GITHUB_REPOSITORY"

@@ -79,9 +79,8 @@ async function collectReleaseNotes(
 	console.log("");
 
 	console.log("Collecting entries...");
-	const releaseRef = process.env.PUBLISHED_PACKAGES ? commitRef : undefined;
 	const entries = (
-		await collectEntries(github, version, branch, releaseRef)
+		await collectEntries(github, version, branch, commitRef)
 	).filter(isReleaseEntryVisible);
 	console.log(`  Found ${entries.length} entries`);
 	console.log("");

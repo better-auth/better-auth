@@ -207,6 +207,17 @@ describe("AI release-note rewrites", () => {
 		);
 	});
 
+	it("allows safe identifiers inside inline code", () => {
+		const title =
+			"Fixed `@better-auth/sso` configurations using `Auth<Options>`";
+		const result = renderReleaseRewrites({
+			rewrites: { "pr-10769": { title } },
+		});
+
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.output).toContain(title);
+	});
+
 	it.each([
 		"Read https://example.com before upgrading",
 		"See [the migration guide](https://example.com)",

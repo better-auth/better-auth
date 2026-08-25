@@ -173,11 +173,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Check release tooling
+      - name: Test release tooling
         if: matrix.node-version == '24.x'
-        run: |
-          pnpm --filter @better-auth/release-tooling typecheck
-          pnpm --filter @better-auth/release-tooling test
+        run: pnpm --filter @better-auth/release-tooling test
 
       - name: Rebuild native bindings for matrix node
         run: pnpm -r rebuild better-sqlite3

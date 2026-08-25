@@ -79,11 +79,23 @@ jobs:
           if [ -n "$EXISTING" ]; then
             echo "Promote PR #$EXISTING already exists"
           else
+            BODY_FILE=$(mktemp)
+            printf '%s\n' \
+              '> [!IMPORTANT]' \
+              '> Keep this PR in Draft. Run `/release-notes` to generate and review the release notes.' \
+              '> The release bot marks the PR ready when the preview matches the current head. Do not manually mark it ready.' \
+              '' \
+              "Promotes v${VERSION} from beta to stable. Merging this PR publishes all packages to npm with the \`latest\` tag." \
+              '' \
+              "**This PR must be merged by an admin using 'Create a merge commit'** (not squash, not rebase). The admin bypass is required because main enforces linear history for regular PRs, but the promotion needs a merge commit to preserve individual contributor commits and their verified signatures." \
+              > "$BODY_FILE"
             gh pr create \
+              --draft \
               --base main \
               --head next \
               --title "chore: promote v${VERSION} to stable" \
-              --body "Promotes v${VERSION} from beta to stable. Merging this PR publishes all packages to npm with the \`latest\` tag.\n\n**This PR must be merged by an admin using 'Create a merge commit'** (not squash, not rebase). The admin bypass is required because main enforces linear history for regular PRs, but the promotion needs a merge commit to preserve individual contributor commits and their verified signatures."
+              --body-file "$BODY_FILE"
+            rm -f "$BODY_FILE"
           fi
 
       - name: Summary

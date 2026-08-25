@@ -45,6 +45,13 @@ describe("wrapReleaseNotesComment", () => {
 		expect(extractReleaseNotesComment(comment, version, head)).toBe(notes);
 	});
 
+	it("explains the draft approval lifecycle", () => {
+		const comment = wrapReleaseNotesComment(version, head, notes);
+
+		expect(comment).toContain("Any head update returns this PR to Draft");
+		expect(comment).toContain("The release bot marks this PR ready");
+	});
+
 	it("rejects malformed release identity markers", () => {
 		expect(() => wrapReleaseNotesComment("latest", head, notes)).toThrow(
 			"Invalid release version",

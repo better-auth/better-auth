@@ -2,14 +2,8 @@ import { readFileSync } from "node:fs";
 import * as z from "zod";
 import type { StructuredGenerator } from "../ai/generate-structured.ts";
 import { generateStructured } from "../ai/generate-structured.ts";
+import { containsUnsafeGeneratedMarkup } from "../ai/generated-copy.ts";
 import { models } from "../ai/models.ts";
-
-const unsafeDescriptionPatterns = [
-	/https?:\/\//i,
-	/!?\[[^\]]*\]\([^)]*\)/,
-	/<\/?[A-Za-z][^>]*>/,
-	/(^|[^`])@[A-Za-z0-9][A-Za-z0-9-]*/m,
-];
 
 const changesetDescriptionSchema = z.strictObject({
 	description: z
@@ -35,11 +29,9 @@ const changesetDescriptionSchema = z.strictObject({
 				error: "must not contain workflow controls",
 			},
 		)
-		.refine(
-			(value) =>
-				!unsafeDescriptionPatterns.some((pattern) => pattern.test(value)),
-			{ error: "must not contain links, HTML, or mentions" },
-		)
+		.refine((value) => !containsUnsafeGeneratedMarkup(value), {
+			error: "must not contain links, HTML, or mentions",
+		})
 		.describe("A user-focused changeset description of at most 200 words"),
 });
 

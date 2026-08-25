@@ -4,7 +4,7 @@
  * Pure functions for mapping change types, scopes, and file paths to release
  * metadata. No side effects, no network calls.
  *
- * Used by: auto-changeset.ts, release-notes.ts
+ * Used by the auto-changeset and release-note commands.
  */
 
 const SCOPE_TO_DOMAIN: Record<string, string> = {

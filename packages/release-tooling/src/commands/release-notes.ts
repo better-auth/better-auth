@@ -4,11 +4,7 @@ import { runCommand } from "../command.ts";
 import { createGitHubReader, parseGitHubRepository } from "../github-reader.ts";
 import type { ReleaseNotesOperation } from "../release-notes/pipeline.ts";
 import { runReleaseNotes } from "../release-notes/pipeline.ts";
-import {
-	parseSchema,
-	publishedPackagesSchema,
-	releaseVersionSchema,
-} from "../release-notes/schema.ts";
+import { parseSchema, releaseVersionSchema } from "../release-notes/schema.ts";
 
 function parseOperation(): ReleaseNotesOperation {
 	const { values, positionals } = parseNodeArgs({
@@ -41,7 +37,7 @@ function parseOperation(): ReleaseNotesOperation {
 		throw new Error(`Unexpected positional argument: ${extraPositionals[0]}`);
 	}
 
-	let version = values.version ?? "";
+	const version = values.version ?? "";
 	const branch = values.branch ?? "";
 	const dryRun = values["dry-run"] ?? false;
 	const manifestPath = values.manifest ?? "";
@@ -49,18 +45,6 @@ function parseOperation(): ReleaseNotesOperation {
 	const contextPath = values.context ?? "";
 	const outputPath = values.output ?? "";
 	const commitRef = values["commit-ref"] ?? "";
-
-	if (command === "collect" && !version) {
-		const publishedPackages = process.env.PUBLISHED_PACKAGES;
-		if (publishedPackages) {
-			const parsed = parseSchema(
-				publishedPackagesSchema,
-				JSON.parse(publishedPackages),
-				"PUBLISHED_PACKAGES must be a package array",
-			);
-			version = parsed[0]?.version ?? "";
-		}
-	}
 
 	if (command === "validate") {
 		if (

@@ -234,6 +234,11 @@ function findChangesetSourcePR(id: string, ref: string): number | null {
 }
 
 const ignoredChangesetFiles = new Set(["README", "config"]);
+const changesetIdPattern = /^[A-Za-z0-9_-]+$/;
+
+function isChangesetId(value: string): boolean {
+	return !ignoredChangesetFiles.has(value) && changesetIdPattern.test(value);
+}
 
 function changesetIdsFromPaths(paths: string): string[] {
 	return paths
@@ -241,9 +246,7 @@ function changesetIdsFromPaths(paths: string): string[] {
 		.map((file) => file.trim())
 		.filter(Boolean)
 		.map((file) => file.replace(/^\.changeset\//, "").replace(/\.md$/, ""))
-		.filter(
-			(name) => !ignoredChangesetFiles.has(name) && /^[a-z0-9-]+$/.test(name),
-		);
+		.filter(isChangesetId);
 }
 
 function readPackageVersion(ref: string): string | null {
@@ -371,7 +374,7 @@ function buildChangesetIndex(
 			JSON.parse(raw),
 			`Invalid changeset pre-release state at ${baseRef}`,
 		);
-		for (const id of preJSON.changesets) ids.add(id);
+		for (const id of preJSON.changesets.filter(isChangesetId)) ids.add(id);
 	}
 
 	if (!hasPreJSON) {
@@ -503,8 +506,7 @@ function loadPreviousPrereleaseChangesets(version: string): Set<string> {
  * enriched with changeset descriptions where available.
  *
  * Handles the cherry-pick history gap (where the previous tag is not
- * a direct ancestor) using PR-number deduplication, same as
- * release-previews.sh.
+ * a direct ancestor) using PR-number deduplication.
  */
 export async function collectEntries(
 	github: GitHubReader,
@@ -663,7 +665,8 @@ export async function collectEntries(
 		if (seenPRs.has(prNumber)) continue;
 
 		// A PR with a changeset should appear even if its type is docs:/chore:/etc.
-		const descMatch = changesetByDesc.get(parsed.subject.toLowerCase().trim());
+		const subject = parsed.subject.replace(/\s*\(#\d+\)$/, "").trim();
+		const descMatch = changesetByDesc.get(subject.toLowerCase());
 		const changeset = changesetByPR.get(prNumber) ?? descMatch;
 		if (descMatch) consumedOrphans.add(descMatch);
 
@@ -697,7 +700,7 @@ export async function collectEntries(
 			if (prInfo.labels.includes("breaking")) breaking = true;
 		} catch (error) {
 			if (process.env.GITHUB_ACTIONS === "true") throw error;
-			title = parsed.subject.replace(/\s*\(#\d+\)$/, "");
+			title = subject;
 			domain = resolveDomain(parsed.scope || undefined, []);
 			packageName =
 				changeset?.packageNames.length === 1

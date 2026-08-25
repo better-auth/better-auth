@@ -61,7 +61,8 @@ export function wrapReleaseNotesComment(
 				]
 			: []),
 		"Maintainers may edit the release notes above. Keep the hidden markers intact.",
-		"Merging this release PR approves these release notes.",
+		"Any head update returns this PR to Draft. Rerun `/release-notes` after it changes.",
+		"The release bot marks this PR ready. Merging it approves these release notes.",
 	].join("\n");
 }
 

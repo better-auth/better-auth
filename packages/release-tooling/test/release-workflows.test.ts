@@ -61,6 +61,8 @@ function actionReferences(job: WorkflowJob): string[] {
 }
 
 const commandWorkflow = readWorkflow("release-notes-command.yml");
+const draftWorkflow = readWorkflow("release-notes-draft.yml");
+const promoteWorkflow = readWorkflow("promote.yml");
 const releaseWorkflow = readWorkflow("release.yml");
 const autoChangesetWorkflow = readWorkflow("auto-changeset.yml");
 const verifyChangesetsWorkflow = readWorkflow("verify-changesets.yml");
@@ -93,12 +95,12 @@ describe("release notes command security", () => {
 		expect(publishComment.permissions).toEqual({
 			contents: "read",
 			issues: "write",
-			"pull-requests": "read",
+			"pull-requests": "write",
 		});
 		expect(token.with).toMatchObject({
 			"permission-contents": "read",
 			"permission-issues": "write",
-			"permission-pull-requests": "read",
+			"permission-pull-requests": "write",
 		});
 		expect(actionReferences(publishComment)).not.toContainEqual(
 			expect.stringContaining("actions/checkout@"),
@@ -106,6 +108,31 @@ describe("release notes command security", () => {
 		expect(actionReferences(publishComment)).not.toContainEqual(
 			expect.stringContaining("actions/setup-node@"),
 		);
+	});
+
+	it("marks the release PR ready after publishing its preview", () => {
+		const ready = getStep(
+			getJob(commandWorkflow, "publish-comment"),
+			"Mark release PR ready",
+		);
+
+		expect(ready.env).toHaveProperty(
+			"PR_NUMBER",
+			expect.stringContaining("needs.generate.outputs.pr_number"),
+		);
+		expect(ready.run).toContain('gh pr ready "$PR_NUMBER"');
+	});
+
+	it("returns release carriers to draft without pull_request_target", () => {
+		const draft = getJob(draftWorkflow, "draft");
+		const keepDraft = getStep(draft, "Keep release PR in draft");
+
+		expect(draft.permissions).toEqual({ "pull-requests": "write" });
+		expect(actionReferences(draft)).toEqual([]);
+		expect(draftWorkflow.content).not.toContain("pull_request_target");
+		expect(draftWorkflow.content).toContain("ready_for_review");
+		expect(draftWorkflow.content).toContain("better-release[bot]");
+		expect(keepDraft.run).toContain('gh pr ready "$PR_NUMBER" --undo');
 	});
 
 	it("executes trusted default-branch code and uses artifacts between jobs", () => {
@@ -151,6 +178,8 @@ describe("release notes command security", () => {
 	it("pins every third-party action to an immutable commit", () => {
 		for (const file of [
 			commandWorkflow,
+			draftWorkflow,
+			promoteWorkflow,
 			releaseWorkflow,
 			autoChangesetWorkflow,
 			verifyChangesetsWorkflow,
@@ -218,6 +247,76 @@ describe("release publication security", () => {
 
 		expect(resolveApproved.run).toContain("comments?per_page=100");
 		expect(resolveApproved.run).toContain("gh api --paginate");
+		expect(resolveApproved.env).toHaveProperty(
+			"BASE_SHA",
+			expect.stringContaining("release-candidate.outputs.base_sha"),
+		);
+		expect(resolveApproved.run).toContain(
+			'git rev-list --first-parent "${BASE_SHA}..${GITHUB_SHA}"',
+		);
+	});
+
+	it("detects version transitions across the complete push", () => {
+		const detect = getStep(
+			getJob(releaseWorkflow, "release"),
+			"Detect release commit",
+		);
+
+		expect(detect.env).toHaveProperty(
+			"BEFORE_SHA",
+			expect.stringContaining("github.event.before"),
+		);
+		expect(detect.run).toContain(
+			'git show "${BEFORE_SHA}:packages/better-auth/package.json"',
+		);
+		expect(detect.run).not.toContain('"${GITHUB_SHA}^:');
+	});
+
+	it("creates a GitHub release only after Changesets publishes", () => {
+		const release = getJob(releaseWorkflow, "release");
+		const createRelease = getStep(release, "Create GitHub Release");
+
+		expect(createRelease).toHaveProperty(
+			"if",
+			expect.stringContaining("steps.changesets.outputs.published == 'true'"),
+		);
+		expect(createRelease.env).toHaveProperty(
+			"PUBLISHED_PACKAGES",
+			expect.stringContaining("steps.changesets.outputs.publishedPackages"),
+		);
+		expect(createRelease.run).toContain('.name == "better-auth"');
+		expect(createRelease.run).toContain('"$PUBLISHED_VERSION" != "$VERSION"');
+	});
+
+	it("creates and updates Version PRs as drafts with usage guidance", () => {
+		const release = getJob(releaseWorkflow, "release");
+		const changesets = getStep(
+			release,
+			"Create Release Pull Request or Publish",
+		);
+		const rename = getStep(release, "Rename release PR with version");
+		const promote = getStep(
+			getJob(promoteWorkflow, "promote"),
+			"Create promote PR",
+		);
+
+		expect(changesets.with).toHaveProperty("prDraft", "always");
+		expect(rename.run).toContain("<!-- release-notes-draft -->");
+		expect(rename.run).toContain("Do not manually mark it ready");
+		expect(promote.run).toContain("--draft");
+		expect(promote.run).toContain("Do not manually mark it ready");
+	});
+
+	it("does not grant issue write access to the publisher", () => {
+		const release = getJob(releaseWorkflow, "release");
+		const token = getStep(release, "Generate App Token");
+
+		expect(release.permissions).toEqual({
+			contents: "write",
+			"pull-requests": "write",
+			"id-token": "write",
+		});
+		expect(token.with).not.toHaveProperty("permission-issues");
 	});
 
 	it("keeps AI preview generation out of the privileged release workflow", () => {

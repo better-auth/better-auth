@@ -7,15 +7,6 @@ export const releaseVersionSchema = z
 		error: "must be a strict semantic version",
 	});
 
-export const publishedPackagesSchema = z
-	.array(
-		z.strictObject({
-			name: z.string(),
-			version: releaseVersionSchema,
-		}),
-	)
-	.min(1);
-
 export const prereleaseStateSchema = z.object({
 	changesets: z.array(z.string()),
 });

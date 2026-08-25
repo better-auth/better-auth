@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { containsUnsafeGeneratedMarkup } from "../ai/generated-copy.ts";
 import { FILTERED_DOMAINS } from "../change-classifier.ts";
 import type {
 	ReleaseEntry,
@@ -219,13 +220,7 @@ function validateGeneratedCopy(
 		);
 	}
 
-	const unsafePatterns = [
-		/https?:\/\//i,
-		/!?\[[^\]]*\]\([^)]*\)/,
-		/<\/?[A-Za-z][^>]*>/,
-		/@[A-Za-z0-9][A-Za-z0-9-]*/,
-	];
-	if (unsafePatterns.some((pattern) => pattern.test(copy))) {
+	if (containsUnsafeGeneratedMarkup(copy)) {
 		throw new Error(`AI rewrite ${key} ${field} contains unsafe markup`);
 	}
 	return copy;

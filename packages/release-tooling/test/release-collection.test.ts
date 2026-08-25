@@ -51,6 +51,8 @@ function collectReleaseNotes(
 			version,
 			"--branch",
 			options.branch ?? "v" + version,
+			"--commit-ref",
+			commitRef,
 			"--dry-run",
 		],
 		{
@@ -64,7 +66,6 @@ function collectReleaseNotes(
 				GITHUB_SHA: commitRef,
 				GITHUB_WORKSPACE: workspace,
 				GITHUB_ACTIONS: "",
-				PUBLISHED_PACKAGES: JSON.stringify([{ name: "better-auth", version }]),
 			},
 		},
 	);
@@ -97,6 +98,9 @@ interface ReleaseFixtureOptions {
 	mergeVersionPR?: boolean;
 	consumeLaterChangeset?: boolean;
 	splitVersionCommit?: boolean;
+	separateChangesetCommit?: boolean;
+	staleReleaseTag?: boolean;
+	uppercaseChangesetId?: boolean;
 }
 
 function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
@@ -122,19 +126,27 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 	git(workspace, ["add", "."]);
 	git(workspace, ["commit", "-m", "chore: initialize release fixture"]);
 	git(workspace, ["tag", "v1.0.0"]);
+	if (options.staleReleaseTag) git(workspace, ["tag", "v2.0.0"]);
 	git(workspace, ["switch", "-c", "version-pr"]);
+	const changesetId = options.uppercaseChangesetId
+		? "parseSetCookieHeader-value-validation"
+		: options.separateChangesetCommit
+			? "standalone-description"
+			: "pr-42";
+	const changesetPath = `.changeset/${changesetId}.md`;
+	const changesetDescription = options.separateChangesetCommit
+		? "Require explicit migration"
+		: "Require an explicit migration after the release.";
 
 	writeFixtureFile(
 		workspace,
-		".changeset/pr-42.md",
-		[
-			"---",
-			'"better-auth": major',
-			"---",
-			"",
-			"Require an explicit migration after the release.",
-		].join("\n"),
+		changesetPath,
+		["---", '"better-auth": major', "---", "", changesetDescription].join("\n"),
 	);
+	if (options.separateChangesetCommit) {
+		git(workspace, ["add", "."]);
+		git(workspace, ["commit", "-m", "chore: add release changeset"]);
+	}
 	writeFixtureFile(
 		workspace,
 		"packages/better-auth/src/session.ts",
@@ -147,7 +159,7 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 		"fix(session): require explicit migration (#42)",
 	]);
 
-	rmSync(resolve(workspace, ".changeset/pr-42.md"));
+	rmSync(resolve(workspace, changesetPath));
 	if (options.splitVersionCommit) {
 		git(workspace, ["add", "."]);
 		git(workspace, ["commit", "-m", "chore: consume release changeset"]);
@@ -349,6 +361,63 @@ describe("release changeset collection", () => {
 				"Require an explicit migration after the release.",
 			);
 			expect(result.stdout).toContain('"changeType": "breaking"');
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("uses an explicit commit ref even when a stale version tag exists", () => {
+		const fixture = createReleaseWithFollowUpCommit({ staleReleaseTag: true });
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain(
+				"Require an explicit migration after the release.",
+			);
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("matches standalone changesets to PR subjects without their suffix", () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			separateChangesetCommit: true,
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain("Found 1 entries");
+			expect(result.stdout).toContain("Require explicit migration");
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("preserves mixed-case changeset identifiers", () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			uppercaseChangesetId: true,
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain(
+				"Require an explicit migration after the release.",
+			);
 		} finally {
 			rmSync(fixture.workspace, { recursive: true });
 		}

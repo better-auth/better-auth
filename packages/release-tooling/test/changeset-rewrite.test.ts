@@ -106,6 +106,24 @@ describe("changeset rewriting", () => {
 		).rejects.toThrow("must contain at most 200 words");
 	});
 
+	it("allows safe identifiers inside inline code", async () => {
+		const description =
+			"Support `@better-auth/sso` configurations typed as `Auth<Options>`.";
+
+		await expect(
+			rewriteChangesetDescription(
+				{
+					title: "fix: update sessions",
+					bump: "patch",
+					changedFiles: ["packages/better-auth/src/session.ts"],
+					cubicSummary: "",
+					diff: "",
+				},
+				generatorFor({ description }),
+			),
+		).resolves.toBe(description);
+	});
+
 	it.each([
 		"Read https://malicious.example before upgrading",
 		"See [the instructions](https://malicious.example)",
