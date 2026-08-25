@@ -1122,6 +1122,7 @@ it("uses provider-scoped identity through the OAuth redirect callback", async ()
 	const accounts = await client.listAccounts({ fetchOptions: { headers } });
 	expect(accounts.data).toContainEqual(
 		expect.objectContaining({
+			accountId: "1234567890",
 			issuer: "local:oauth:google",
 			providerId: "google",
 		}),
