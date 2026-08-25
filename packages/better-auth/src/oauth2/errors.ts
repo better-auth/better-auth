@@ -63,5 +63,5 @@ export function missingEmailLogMessage(
 			? `Generic OAuth provider "${providerId}"`
 			: `Provider "${providerId}"`;
 	const where = options?.source === "id_token" ? " in the id token" : "";
-	return `${subject} did not return an email${where}. Either request the provider's email scope, or synthesize one via \`mapProfileToUser\`. See ${HANDLING_DOCS_URL}`;
+	return `${subject} did not return an email${where}. Either request the provider's email scope, or create a placeholder via \`mapProfileToUser\`. See ${HANDLING_DOCS_URL}`;
 }

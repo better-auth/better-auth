@@ -42,6 +42,11 @@ const redirectURL = appendQueryParams(errorURL, params);
 
 throw ctx.redirect(redirectURL);
 ```
+### Placeholder Emails
+
+`User.email` is currently required and unique, which is a limitation of the current architecture.
+
+When a flow must synthesize an email, use `createPlaceholderEmail` with a stable identifier and namespace. Keep placeholder emails unverified, and preserve flows that delegate generation to user code.
 
 ## Issue Triage and Architecture
 
