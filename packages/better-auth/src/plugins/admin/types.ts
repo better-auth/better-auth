@@ -96,7 +96,7 @@ export interface AdminOptions {
 				 * @param user - The user record about to be deleted.
 				 */
 				beforeRemoveUser?: (
-					user: User & Record<string, unknown>,
+					user: User & Record<string, any>,
 				) => Promise<void> | void;
 				/**
 				 * Called after a user has been successfully deleted via the admin
