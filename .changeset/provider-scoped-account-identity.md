@@ -4,4 +4,4 @@
 "better-auth": patch
 ---
 
-Add an explicit `"provider-id"` compatibility strategy for populated Better Auth 1.6 migrations. `providerId` remains the configured connection, `accountId` remains the provider subject, and the required `issuer` field stores either the verified authority under the default `"issuer"` strategy or a deterministic provider namespace under `"provider-id"`; both strategies retain the unique `(issuer, accountId)` index.
+Add `account.identityStrategy: "provider-id"` as an explicit Better Auth 1.6 compatibility path. Every 1.7 account schema continues to require `issuer` and `accountId` with a unique compound index across them. The compatibility strategy stores a deterministic `local:oauth:<encoded providerId>` issuer namespace while preserving logical `(providerId, accountId)` account recognition. Better Auth 1.7.x continues to default an omitted strategy to issuer-scoped identity.

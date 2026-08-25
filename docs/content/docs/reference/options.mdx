@@ -472,7 +472,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	account: {
 		modelName: "accounts",
-		identityStrategy: "provider-id", // Preserve Better Auth 1.6 provider-scoped identity
+		identityStrategy: "provider-id", // Explicit Better Auth 1.6 compatibility path
 		fields: {
 			userId: "user_id"
 		},
@@ -493,11 +493,11 @@ export const auth = betterAuth({
 
 ### `identityStrategy`
 
-Controls the namespace Better Auth persists in the required `issuer` field when recognizing an external account. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy.
+Controls the logical namespace Better Auth uses to recognize a provider account. Better Auth 1.7.x defaults an omitted `identityStrategy` to `"issuer"`, which stores the verified authority in `issuer`. Set `"provider-id"` as an explicit Better Auth 1.6 compatibility path; it stores a deterministic `local:oauth:<encoded providerId>` namespace in `issuer` and preserves logical `(providerId, accountId)` recognition.
 
-In v1.7.x, omitting `identityStrategy` defaults to `"issuer"`. Set it to `"provider-id"` when migrating populated 1.6 data and you need to preserve logical `(providerId, accountId)` recognition. Better Auth then persists `local:oauth:<encoded providerId>` as the issuer namespace after the provider response has been verified. This option does not change the Account schema: `issuer` and `accountId` remain required and uniquely indexed together under both strategies.
+Both strategies use the same Account schema: required `issuer`, required `accountId`, and a unique compound index on `(issuer, accountId)`. The option changes the logical identity namespace, not the schema. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy.
 
-Changing this option on populated v1.7 data requires a separate, reviewed account re-key migration. It is not a configuration-only toggle.
+Keep the value consistent across every instance connected to the database. Changing the strategy on populated 1.7 data is a re-key migration, not a configuration-only toggle. Follow the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy) before migrating existing data.
 
 ### `encryptOAuthTokens`
 

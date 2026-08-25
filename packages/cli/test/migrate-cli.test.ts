@@ -37,9 +37,9 @@ async function runCli(args: string[], cwd: string) {
 
 const projects: string[] = [];
 
-// A pre-1.7 SQLite database whose populated account table must remain
-// provider-scoped when the 1.7 strategy is omitted.
-function createProject() {
+// A pre-1.7 SQLite database whose populated account table requires an explicit
+// logical identity strategy before the 1.7 physical schema can be applied.
+function createProject(identityStrategy?: "provider-id" | "issuer") {
 	const cacheDir = path.join(
 		process.cwd(),
 		"node_modules",
@@ -56,6 +56,7 @@ function createProject() {
 import Database from "better-sqlite3";
 
 export const auth = betterAuth({
+	${identityStrategy ? `account: { identityStrategy: ${JSON.stringify(identityStrategy)} },` : ""}
 	database: new Database(${JSON.stringify(databasePath)}),
 	secret: "a-secret-long-enough-to-keep-the-cli-quiet",
 	baseURL: "http://localhost:3000",
@@ -112,6 +113,7 @@ async function createPublished16Project() {
 import Database from "better-sqlite3";
 
 export const auth = betterAuth({
+	account: { identityStrategy: "provider-id" },
 	database: new Database(${JSON.stringify(databasePath)}),
 	secret: ${JSON.stringify(secret)},
 	baseURL: ${JSON.stringify(baseURL)},
@@ -148,21 +150,28 @@ afterEach(() => {
 	}
 });
 
-describe("auth migrate: preserving the default account identity", () => {
-	it("plans a populated 1.6 account table without adding issuer", async () => {
+describe("auth migrate: requiring the 1.6 account identity decision", () => {
+	it("blocks a populated 1.6 account table when the strategy is omitted", async () => {
 		const { cwd, databasePath } = createProject();
 		const { exitCode, output } = await runCli(
 			["migrate", "plan", "--config", "auth.ts", "--json"],
 			cwd,
 		);
 
-		expect(exitCode).toBe(0);
+		expect(exitCode).toBe(1);
 		expect(JSON.parse(output)).toMatchObject({
 			accountIdentity: {
-				selectedStrategy: "provider-id",
 				detectedStrategy: "provider-id",
+				selectedStrategy: "issuer",
 			},
-			blockers: [],
+			blockers: [
+				{
+					accountCount: 1,
+					code: "account-identity-strategy-required",
+					providerIds: ["google"],
+				},
+			],
+			status: "blocked",
 		});
 		const database = new Database(databasePath);
 		expect(
@@ -179,7 +188,7 @@ describe("auth migrate: preserving the default account identity", () => {
 });
 
 describe("auth migrate: upgrading a published 1.6.30 database", () => {
-	it("keeps the published account schema and sign-in behavior unchanged", async () => {
+	it("backfills provider namespaces and preserves sign-in behavior", async () => {
 		const { baseURL, credentials, cwd, databasePath, secret } =
 			await createPublished16Project();
 		const sourceDatabase = new Database(databasePath);
@@ -202,7 +211,17 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 				detectedStrategy: "provider-id",
 			},
 			blockers: [],
-			status: "up-to-date",
+			changes: {
+				addColumns: [
+					expect.objectContaining({
+						columns: expect.arrayContaining(["issuer"]),
+					}),
+				],
+				addIndexes: [
+					expect.objectContaining({ columns: ["issuer", "accountId"] }),
+				],
+			},
+			status: "ready",
 		});
 
 		const plannedDatabase = new Database(databasePath);
@@ -222,9 +241,9 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 		expect(JSON.parse(applied.output)).toMatchObject({
 			mode: "apply",
 			plan: {
-				status: "up-to-date",
+				status: "ready",
 			},
-			status: "up-to-date",
+			status: "applied",
 		});
 
 		const migratedDatabase = new Database(databasePath);
@@ -232,9 +251,22 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 			migratedDatabase
 				.prepare("PRAGMA table_info(account)")
 				.all()
-				.map((column) => (column as { name: string }).name),
-		).not.toContain("issuer");
+				.find((column) => (column as { name: string }).name === "issuer"),
+		).toMatchObject({ name: "issuer", notnull: 1 });
+		expect(
+			migratedDatabase
+				.prepare(
+					`SELECT "issuer", "providerId" FROM "account" ORDER BY "providerId"`,
+				)
+				.all(),
+		).toEqual([
+			expect.objectContaining({
+				issuer: "local:credential",
+				providerId: "credential",
+			}),
+		]);
 		const auth17 = betterAuth({
+			account: { identityStrategy: "provider-id" },
 			baseURL,
 			database: migratedDatabase,
 			emailAndPassword: { enabled: true },
@@ -251,8 +283,8 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 	});
 });
 
-describe("auth generate: preserving the default account identity", () => {
-	it("emits no issuer column or destructive warning", async () => {
+describe("auth generate: emitting the stable 1.7 account schema", () => {
+	it("emits the required issuer column and populated-table warning", async () => {
 		const { cwd } = createProject();
 		const { exitCode, output } = await runCli(
 			["generate", "--config", "auth.ts", "--output", "migration.sql", "--yes"],
@@ -260,10 +292,10 @@ describe("auth generate: preserving the default account identity", () => {
 		);
 
 		expect(exitCode).toBe(0);
-		expect(output).not.toContain("corrupts a populated database");
+		expect(output).toContain("corrupts a populated database");
 
 		const sql = fs.readFileSync(path.join(cwd, "migration.sql"), "utf-8");
-		expect(sql).not.toContain("DO NOT RUN THIS SCRIPT AS IT IS.");
-		expect(sql.toLowerCase()).not.toContain('column "issuer"');
+		expect(sql).toContain("DO NOT RUN THIS SCRIPT AS IT IS.");
+		expect(sql.toLowerCase()).toContain('column "issuer"');
 	});
 });

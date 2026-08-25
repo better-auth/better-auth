@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
-import { migrateFrom16 } from "better-auth/db/migration";
+import { getMigrations, migrateFrom16 } from "better-auth/db/migration";
 import { jwt, organization } from "better-auth/plugins";
 import { betterAuth as betterAuth1630 } from "better-auth-1-6-30";
 import { getMigrations as getMigrations1630 } from "better-auth-1-6-30/db/migration";
@@ -10,6 +10,8 @@ import {
 	oidcProvider as oidcProvider1630,
 	organization as organization1630,
 } from "better-auth-1-6-30/plugins";
+import { betterAuth as betterAuth170 } from "better-auth-1-7-0";
+import { getMigrations as getMigrations170 } from "better-auth-1-7-0/db/migration";
 import { scim as scim1630 } from "better-auth-scim-1-6-30";
 import type { KyselyPlugin } from "kysely";
 import {
@@ -377,6 +379,7 @@ async function exerciseOAuthProviderMigration({
 	});
 	configureCurrentPlugin?.(currentPlugin);
 	const auth17 = betterAuth({
+		account: { identityStrategy: "issuer" },
 		baseURL: "http://localhost:3000",
 		database,
 		emailAndPassword: {
@@ -606,8 +609,8 @@ it("preserves a published 1.6.30 provider-scoped account through the 1.7 cutover
 		});
 		const migration = await migrateFrom16(auth17.options, {});
 		expect(migration.accounts).toEqual({
-			migrated: 0,
-			providers: {},
+			migrated: 2,
+			providers: { credential: 1, google: 1 },
 		});
 
 		const signIn = await auth17.api.signInEmail({
@@ -633,9 +636,145 @@ it("preserves a published 1.6.30 provider-scoped account through the 1.7 cutover
 				}),
 			]),
 		);
-		expect(accounts.every((account) => account.issuer === undefined)).toBe(
-			true,
+		expect(
+			database
+				.prepare(
+					`SELECT "providerId", "issuer" FROM "account" ORDER BY "providerId"`,
+				)
+				.all(),
+		).toEqual([
+			expect.objectContaining({
+				issuer: "local:credential",
+				providerId: "credential",
+			}),
+			expect.objectContaining({
+				issuer: "local:oauth:google",
+				providerId: "google",
+			}),
+		]);
+	} finally {
+		database.close();
+	}
+});
+
+it("keeps a published 1.7.0 issuer database and runtime unchanged when the strategy is omitted", {
+	timeout: 60_000,
+}, async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		const publishedAuth = betterAuth170({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+			socialProviders: {
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+				},
+			},
+		});
+		await (await getMigrations170(publishedAuth.options)).runMigrations();
+		const source = await publishedAuth.api.signUpEmail({
+			body: {
+				email: "issuer-scoped@sqlite.example.com",
+				name: "Issuer Scoped User",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		const publishedContext = await publishedAuth.$context;
+		await publishedContext.internalAdapter.linkAccount({
+			accountId: "published-google-subject",
+			issuer: "https://accounts.google.com",
+			providerId: "google",
+			userId: source.user.id,
+		});
+
+		const identityBefore = database
+			.prepare(
+				`SELECT "id", "issuer", "accountId", "providerId", "userId"
+				 FROM "account" ORDER BY "providerId"`,
+			)
+			.all();
+		const issuerColumnBefore = database
+			.prepare(`PRAGMA table_info("account")`)
+			.all()
+			.find((column) => (column as { name: string }).name === "issuer");
+		const identityIndexBefore = database
+			.prepare(`PRAGMA index_info("account_issuer_accountId_uidx")`)
+			.all();
+		expect(issuerColumnBefore).toMatchObject({ name: "issuer", notnull: 1 });
+		expect(identityIndexBefore).toEqual([
+			expect.objectContaining({ name: "issuer" }),
+			expect.objectContaining({ name: "accountId" }),
+		]);
+
+		const currentAuth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+			socialProviders: {
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+				},
+			},
+		});
+		const plan = await getMigrations(currentAuth.options, {
+			throwOnUnsafe: false,
+		});
+		expect(plan.accountIdentity).toMatchObject({
+			detectedStrategy: "issuer",
+			migrationRequired: false,
+			selectedStrategy: "issuer",
+		});
+		expect(plan.migrationBlockers).not.toContainEqual(
+			expect.objectContaining({ code: "account-identity-strategy-mismatch" }),
 		);
+		expect(
+			Object.keys(
+				plan.toBeAdded.find(({ table }) => table === "account")?.fields ?? {},
+			),
+		).not.toContain("issuer");
+		expect(plan.toBeAddedIndexes).not.toContainEqual(
+			expect.objectContaining({
+				index: expect.objectContaining({ columns: ["issuer", "accountId"] }),
+				table: "account",
+			}),
+		);
+
+		const migration = await migrateFrom16(currentAuth.options, {});
+		expect(migration.accounts).toEqual({ migrated: 0, providers: {} });
+		expect(
+			database
+				.prepare(
+					`SELECT "id", "issuer", "accountId", "providerId", "userId"
+					 FROM "account" ORDER BY "providerId"`,
+				)
+				.all(),
+		).toEqual(identityBefore);
+		expect(
+			database
+				.prepare(`PRAGMA index_info("account_issuer_accountId_uidx")`)
+				.all(),
+		).toEqual(identityIndexBefore);
+
+		const signIn = await currentAuth.api.signInEmail({
+			body: {
+				email: "issuer-scoped@sqlite.example.com",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		expect(signIn.user.id).toBe(source.user.id);
+		const currentContext = await currentAuth.$context;
+		await expect(
+			currentContext.internalAdapter.findAccountByKey({
+				accountId: "published-google-subject",
+				issuer: "https://accounts.google.com",
+			}),
+		).resolves.toMatchObject({
+			providerId: "google",
+			userId: source.user.id,
+		});
 	} finally {
 		database.close();
 	}
@@ -826,6 +965,7 @@ it("rolls back the SQLite release migration when an OAuth record cannot be creat
 		`);
 
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database,
 			emailAndPassword: { enabled: true },

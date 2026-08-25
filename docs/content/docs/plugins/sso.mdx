@@ -374,7 +374,7 @@ const auth = betterAuth({
                 }
 
                 const provisionedUser = await findProvisionedUserByAccountKey({
-					issuer: input.accountKey.issuer,
+                    issuer: input.accountKey.issuer,
                     subject: input.accountKey.accountId,
                     database: context.database,
                 });

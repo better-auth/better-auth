@@ -170,8 +170,11 @@ export function describeIrreversibleReleaseActions(
 		);
 	}
 	if (state.scimProvider?.rowCount) {
+		const provisionedAccountAction = decisions?.scim
+			? `delete ${countOf(decisions.scim.retireAccountIds.length, "provisioned account")}`
+			: "confirm the complete provisioned-account retirement inventory";
 		actions.push(
-			`retire ${countOf(state.scimProvider.rowCount, "SCIM provider")}, delete ${countOf(decisions?.scim?.retireAccountIds.length ?? 0, "provisioned account")}, and require a full reprovision of every SCIM connection`,
+			`retire ${countOf(state.scimProvider.rowCount, "SCIM provider")}, ${provisionedAccountAction}, and require a full reprovision of every SCIM connection`,
 		);
 	}
 	const renamed = legacyTables(state)
@@ -181,7 +184,6 @@ export function describeIrreversibleReleaseActions(
 		actions.push(`rename ${renamed.join(", ")}`);
 	}
 	if (
-		accountIdentity.selectedStrategy === "issuer" &&
 		accountIdentity.migrationRequired &&
 		accountIdentity.detectedStrategy !== "empty"
 	) {
