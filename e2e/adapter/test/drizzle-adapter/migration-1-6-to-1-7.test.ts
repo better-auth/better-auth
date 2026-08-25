@@ -95,7 +95,7 @@ it("migrates published 1.6.30 accounts and OAuth records through the Drizzle ada
 	}
 });
 
-it("plans a default provider-scoped upgrade against Drizzle snake_case columns", async () => {
+it("plans an explicit provider-id upgrade against Drizzle snake_case columns", async () => {
 	const sqlite = new Database(":memory:");
 	try {
 		sqlite.exec(`
@@ -124,6 +124,7 @@ it("plans a default provider-scoped upgrade against Drizzle snake_case columns",
 		`);
 
 		const currentOptions = {
+			account: { identityStrategy: "provider-id" as const },
 			baseURL: "http://localhost:3000",
 			emailAndPassword: { enabled: true },
 		};
@@ -154,7 +155,7 @@ it("plans a default provider-scoped upgrade against Drizzle snake_case columns",
 			inspection.toBeAdded.find(({ table }) => table === "account")?.fields ??
 				{},
 		);
-		expect(accountFields).not.toContain("issuer");
+		expect(accountFields).toContain("issuer");
 		expect(accountFields).not.toContain("account_id");
 		expect(accountFields).not.toContain("provider_id");
 	} finally {
