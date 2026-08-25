@@ -1,6 +1,7 @@
 import { findPath } from "fumadocs-core/page-tree";
 import type { DocumentRecord } from "typesense-fumadocs-adapter";
-import { source } from "@/lib/source";
+import { docsVersions } from "@/lib/docs-versions";
+import { getSourceFor } from "@/lib/source";
 
 export async function exportSearchIndexes() {
 	const results: DocumentRecord[] = [];
@@ -9,36 +10,42 @@ export async function exportSearchIndexes() {
 		return typeof item === "string" && item.length > 0;
 	}
 
-	for (const page of source.getPages()) {
-		let breadcrumbs: string[] | undefined;
-		const pageTree = source.getPageTree(page.locale);
-		const path = findPath(
-			pageTree.children,
-			(node) => node.type === "page" && node.url === page.url,
-		);
+	for (const version of docsVersions) {
+		const source = getSourceFor(version.id);
+		const pageTree = source.getPageTree();
 
-		if (path) {
-			breadcrumbs = [];
-			path.pop();
-			if (isBreadcrumbItem(pageTree.name)) {
-				breadcrumbs.push(pageTree.name);
+		for (const page of source.getPages()) {
+			if (page.slugs[0] === "examples") continue;
+			let breadcrumbs: string[] | undefined;
+			const path = findPath(
+				pageTree.children,
+				(node) => node.type === "page" && node.url === page.url,
+			);
+
+			if (path) {
+				breadcrumbs = [];
+				path.pop();
+				if (isBreadcrumbItem(pageTree.name)) {
+					breadcrumbs.push(pageTree.name);
+				}
+				for (const segment of path) {
+					if (!isBreadcrumbItem(segment.name)) continue;
+					breadcrumbs.push(segment.name);
+				}
 			}
-			for (const segment of path) {
-				if (!isBreadcrumbItem(segment.name)) continue;
-				breadcrumbs.push(segment.name);
-			}
+
+			const loaded = await page.data.load();
+
+			results.push({
+				_id: page.url,
+				structured: loaded.structuredData,
+				url: page.url,
+				title: page.data.title,
+				description: page.data.description,
+				breadcrumbs,
+				tag: version.id,
+			});
 		}
-
-		const loaded = await page.data.load();
-
-		results.push({
-			_id: page.url,
-			structured: loaded.structuredData,
-			url: page.url,
-			title: page.data.title,
-			description: page.data.description,
-			breadcrumbs,
-		});
 	}
 
 	return results;

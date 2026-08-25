@@ -4,17 +4,21 @@ export interface DocsVersion {
 	 */
 	label: string;
 	/**
-	 * Numeric version for badge rendering (e.g. "1.6").
+	 * Release line used for tag matching and fallback rendering (e.g. "1.6").
 	 */
-	version: string;
+	releaseLine: string;
 	/**
-	 * Branch holding this version's source code (for edit-on-github links).
+	 * Branch holding this version's source code (for content sync and edit links).
 	 */
 	branch: string;
 	/**
-	 * URL path segment (e.g. "beta"). null = latest (no prefix).
+	 * Build-time content directory under `docs/content`.
 	 */
-	slug: string | null;
+	contentDirectory: string;
+	/**
+	 * Stable identifier. Non-latest IDs are also used as URL path segments.
+	 */
+	id: string;
 	/**
 	 * Small badge shown next to label (e.g. "beta").
 	 */
@@ -24,40 +28,105 @@ export interface DocsVersion {
 export const docsVersions: DocsVersion[] = [
 	{
 		label: "v1.8 (Beta)",
-		version: "1.8",
+		releaseLine: "1.8",
 		branch: "next",
-		slug: "beta",
+		contentDirectory: "_generated/beta",
+		id: "beta",
 		badge: null,
 	},
 	{
 		label: "v1.7 (Latest)",
-		version: "1.7",
+		releaseLine: "1.7",
 		branch: "main",
-		slug: null,
+		contentDirectory: "docs",
+		id: "latest",
+		badge: null,
+	},
+	{
+		label: "v1.6",
+		releaseLine: "1.6",
+		branch: "v1.6.x",
+		contentDirectory: "_generated/v1-6",
+		id: "1.6",
 		badge: null,
 	},
 ];
 
+export interface ResolvedDocsVersion extends DocsVersion {
+	releaseVersion: string | null;
+}
+
+export type VersionAvailability = Record<string, string[]>;
+
 /**
  * The default (latest) version entry.
  */
-export const latestVersion = docsVersions.find((v) => v.slug === null)!;
+export const latestVersion = docsVersions.find((v) => v.id === "latest")!;
 
 /**
  * Find a version config by its URL slug.
  */
-export function getVersionBySlug(slug: string): DocsVersion | undefined {
-	return docsVersions.find((v) => v.slug === slug);
+export function getVersionById(id: string): DocsVersion | undefined {
+	return docsVersions.find((version) => version.id === id);
 }
 
 /**
  * Build a docs href for the given version.
  */
 export function versionedDocsHref(path: string, version: DocsVersion): string {
-	if (!version.slug) return path;
+	if (version.id === "latest") return path;
 	// /docs/introduction -> /docs/beta/introduction
 	const stripped = path.replace(/^\/docs/, "");
-	return `/docs/${version.slug}${stripped}`;
+	return `/docs/${version.id}${stripped}`;
+}
+
+function matchingPathSegments(left: string, right: string): number {
+	const leftSegments = left.split("/").filter(Boolean).slice(1);
+	const rightSegments = right.split("/").filter(Boolean).slice(1);
+	let matches = 0;
+	while (
+		matches < leftSegments.length &&
+		matches < rightSegments.length &&
+		leftSegments[matches] === rightSegments[matches]
+	) {
+		matches++;
+	}
+	return matches;
+}
+
+/**
+ * Resolve the closest available page when moving between documentation versions.
+ */
+export function getVersionTargetHref(
+	pathname: string,
+	currentVersion: DocsVersion,
+	targetVersion: DocsVersion,
+	availability: VersionAvailability,
+): string {
+	const canonicalPath = stripVersionPrefix(pathname, currentVersion);
+	const targetPaths = availability[targetVersion.id] ?? [];
+	if (targetPaths.includes(canonicalPath)) {
+		return versionedDocsHref(canonicalPath, targetVersion);
+	}
+
+	let closestPath: string | undefined;
+	let closestScore = 0;
+	for (const path of targetPaths) {
+		const score = matchingPathSegments(canonicalPath, path);
+		if (score <= closestScore) continue;
+		closestPath = path;
+		closestScore = score;
+	}
+	if (closestPath) return versionedDocsHref(closestPath, targetVersion);
+
+	const introduction = targetPaths.find(
+		(path) => path === "/docs/introduction",
+	);
+	return (
+		(introduction && versionedDocsHref(introduction, targetVersion)) ??
+		(targetPaths[0] && versionedDocsHref(targetPaths[0], targetVersion)) ??
+		versionedDocsHref("/docs", targetVersion)
+	);
 }
 
 /**
@@ -66,8 +135,8 @@ export function versionedDocsHref(path: string, version: DocsVersion): string {
  */
 export function getVersionFromPathname(pathname: string): DocsVersion {
 	for (const v of docsVersions) {
-		if (!v.slug) continue;
-		const prefix = `/docs/${v.slug}`;
+		if (v.id === "latest") continue;
+		const prefix = `/docs/${v.id}`;
 		if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
 			return v;
 		}
@@ -84,8 +153,8 @@ export function stripVersionPrefix(
 	pathname: string,
 	version: DocsVersion,
 ): string {
-	if (!version.slug) return pathname;
-	const prefix = `/docs/${version.slug}`;
+	if (version.id === "latest") return pathname;
+	const prefix = `/docs/${version.id}`;
 	if (pathname === prefix || pathname === `${prefix}/`) return "/docs";
 	if (pathname.startsWith(`${prefix}/`)) {
 		return `/docs${pathname.slice(prefix.length)}`;
@@ -97,7 +166,7 @@ export function stripVersionPrefix(
  * Rewrite an absolute `/docs/...` link so it stays within the active version.
  *
  * - Non-`/docs` links (anchors, external, /blog, etc.) pass through untouched.
- * - On latest (`slug === null`), this is a no-op.
+ * - On latest, this is a no-op.
  * - Links that already target one of the currently-registered versions are
  *   preserved so authors can link across versions explicitly when needed.
  */
@@ -105,14 +174,21 @@ export function scopeDocsHref(
 	href: string | undefined,
 	version: DocsVersion,
 ): string | undefined {
-	if (!href || !version.slug) return href;
+	if (!href || version.id === "latest") return href;
 	// Match /docs exactly, /docs/..., /docs?query, or /docs#hash.
 	if (!/^\/docs(?:\/|$|[?#])/.test(href)) return href;
 	// Strip query/hash before checking the version segment so
 	// `/docs/beta?foo` isn't treated as an unversioned link.
 	const pathOnly = href.split(/[?#]/, 1)[0];
 	const segment = pathOnly.split("/")[2];
-	if (segment && docsVersions.some((v) => v.slug === segment)) return href;
+	if (
+		segment &&
+		docsVersions.some(
+			(candidate) => candidate.id !== "latest" && candidate.id === segment,
+		)
+	) {
+		return href;
+	}
 	return versionedDocsHref(href, version);
 }
 
@@ -127,7 +203,7 @@ export function resolveVersionFromSlug(slug: string[]): {
 	relSlug: string[];
 } {
 	const [head, ...rest] = slug;
-	const match = head ? getVersionBySlug(head) : undefined;
+	const match = head && head !== "latest" ? getVersionById(head) : undefined;
 	if (match) return { version: match, relSlug: rest };
 
 	return { version: latestVersion, relSlug: slug };

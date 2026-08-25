@@ -43,7 +43,7 @@ export default async function Page({
 }) {
 	const { slug } = await params;
 	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
-	const src = getSourceFor(version.slug);
+	const src = getSourceFor(version.id);
 	const page = src.getPage(relSlug);
 
 	if (!page) {
@@ -53,9 +53,9 @@ export default async function Page({
 	const { body: MDX, toc } = await page.data.load();
 
 	// Upstream content always lives at docs/content/docs on each branch;
-	// `content/docs-beta` is only a local sync target, not in the repo tree.
-	const rawBase = `https://raw.githubusercontent.com/better-auth/better-auth/${version.branch}/docs/content/docs`;
+	// `content/_generated` only contains local sync targets, not repo paths.
 	const githubBase = `https://github.com/better-auth/better-auth/blob/${version.branch}/docs/content/docs`;
+	const markdownUrl = `/llms.txt${page.url}.md`;
 
 	// Keep every absolute /docs link scoped to the version being viewed.
 	const scope = (href: string | undefined) => scopeDocsHref(href, version);
@@ -76,7 +76,7 @@ export default async function Page({
 				path: `docs/content/docs/${page.path}`,
 			}}
 		>
-			{version.slug === "beta" && <BetaBanner version={version} />}
+			{version.id !== "latest" ? <VersionBanner version={version} /> : null}
 			<div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div className="min-w-0">
 					<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
@@ -87,9 +87,9 @@ export default async function Page({
 					)}
 				</div>
 				<div className="flex flex-wrap items-center gap-2 not-prose lg:shrink-0">
-					<LLMCopyButton rawUrl={`${rawBase}/${page.path}`} />
+					<LLMCopyButton markdownUrl={markdownUrl} />
 					<ViewOptions
-						markdownUrl={`/llms.txt${page.url}.md`}
+						markdownUrl={markdownUrl}
 						githubUrl={`${githubBase}/${page.path}`}
 					/>
 				</div>
@@ -182,7 +182,7 @@ export default async function Page({
 	);
 }
 
-function BetaBanner({ version }: { version: DocsVersion }) {
+function VersionBanner({ version }: { version: DocsVersion }) {
 	return (
 		<div className="mb-2 flex items-center gap-3 py-2.5 text-sm text-blue-600 dark:text-blue-400 text-pretty">
 			<MilestoneIcon size={18} className="shrink-0" fill="currentColor" />
@@ -198,9 +198,9 @@ function BetaBanner({ version }: { version: DocsVersion }) {
 
 export async function generateStaticParams() {
 	return docsVersions.flatMap((v) => {
-		const src = getSourceFor(v.slug);
+		const src = getSourceFor(v.id);
 		return src.generateParams().map((p) => ({
-			slug: v.slug ? [v.slug, ...(p.slug ?? [])] : p.slug,
+			slug: v.id !== "latest" ? [v.id, ...(p.slug ?? [])] : p.slug,
 		}));
 	});
 }
@@ -212,13 +212,14 @@ export async function generateMetadata({
 }) {
 	const { slug } = await params;
 	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
-	const src = getSourceFor(version.slug);
+	const src = getSourceFor(version.id);
 	const page = src.getPage(relSlug);
 	if (!page) return notFound();
 
-	const title = version.slug
-		? `${version.label} - ${page.data.title}`
-		: page.data.title;
+	const title =
+		version.id !== "latest"
+			? `${version.label} - ${page.data.title}`
+			: page.data.title;
 
 	const ogSearchParams = new URLSearchParams();
 	ogSearchParams.set("heading", title);

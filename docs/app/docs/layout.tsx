@@ -1,34 +1,44 @@
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { AIChat, AIChatPanel, AIChatTrigger } from "@/components/ai-chat";
 import { DocsSidebar } from "@/components/docs/docs-sidebar";
-import { source } from "@/lib/source";
-import type { PageEntry } from "./provider";
+import { VersionedDocsLayout } from "@/components/docs/versioned-docs-layout";
+import { getDocsReleaseVersions } from "@/lib/docs-release-versions";
+import type { VersionAvailability } from "@/lib/docs-versions";
+import { docsVersions, stripVersionPrefix } from "@/lib/docs-versions";
+import { getSourceFor } from "@/lib/source";
+import type { PageTreesByVersion } from "./provider";
 import { DocsProvider } from "./provider";
 
-const allPages: PageEntry[] = source.getPages().map((page) => ({
-	name: page.data.title,
-	url: page.url,
-}));
+const pageTreesByVersion: PageTreesByVersion = Object.fromEntries(
+	docsVersions.map((version) => [
+		version.id,
+		getSourceFor(version.id).getPageTree(),
+	]),
+);
 
+const versionAvailability: VersionAvailability = Object.fromEntries(
+	docsVersions.map((version) => [
+		version.id,
+		getSourceFor(version.id)
+			.getPages()
+			.filter((page) => page.slugs[0] !== "examples")
+			.map((page) => stripVersionPrefix(page.url, version)),
+	]),
+);
+const releaseVersions = getDocsReleaseVersions();
 export default function Layout({ children }: { children: ReactNode }) {
 	return (
-		<DocsProvider pages={allPages}>
+		<DocsProvider
+			pageTreesByVersion={pageTreesByVersion}
+			releaseVersions={releaseVersions}
+			versionAvailability={versionAvailability}
+		>
 			<AIChat>
 				<Suspense>
 					<DocsSidebar />
 				</Suspense>
-				<DocsLayout
-					tree={source.pageTree}
-					nav={{ enabled: false }}
-					searchToggle={{ enabled: false }}
-					themeSwitch={{ enabled: false }}
-					sidebar={{ enabled: false }}
-					containerProps={{
-						className: "docs-layout",
-					}}
-				>
+				<VersionedDocsLayout>
 					{children}
 					<AIChatPanel />
 					<AIChatTrigger>
@@ -38,7 +48,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 							<span className="text-[11px]">&#8984;</span>I
 						</kbd>
 					</AIChatTrigger>
-				</DocsLayout>
+				</VersionedDocsLayout>
 			</AIChat>
 		</DocsProvider>
 	);

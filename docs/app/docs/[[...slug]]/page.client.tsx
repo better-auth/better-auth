@@ -70,19 +70,20 @@ function CopyMdLinkButton({ markdownUrl }: { markdownUrl: URL }) {
 	);
 }
 
-export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
+export function LLMCopyButton({ markdownUrl }: { markdownUrl: string }) {
 	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
-		const cached = cache.get(rawUrl);
+		const cached = cache.get(markdownUrl);
 
 		if (cached) {
 			await navigator.clipboard.writeText(cached);
 			return;
 		}
 
-		const fetchPromise = fetch(rawUrl).then(async (res) => {
+		const fetchPromise = fetch(markdownUrl).then(async (res) => {
+			if (!res.ok) throw new Error(`Failed to load Markdown: ${res.status}`);
 			const text = await res.text();
-			cache.set(rawUrl, text);
+			cache.set(markdownUrl, text);
 			return text;
 		});
 

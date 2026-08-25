@@ -254,13 +254,14 @@ export async function getLLMText(
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(mdContent);
 
-	const versionNote = version?.slug
-		? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
-		: ""; // no version note for latest stable release
+	const versionNote =
+		version && version.id !== "latest"
+			? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
+			: ""; // no version note for latest stable release
 
-	return `${versionNote}# ${docPage!.data.title}
+	return `${versionNote}# ${docPage.data.title} (${docPage.url})
 
-${docPage!.data.description || ""}
+${docPage.data.description || ""}
 
 ${processedContent}
 `;

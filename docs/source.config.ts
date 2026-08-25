@@ -22,7 +22,17 @@ export const docs = defineDocs({
 });
 
 export const docsBeta = defineDocs({
-	dir: "./content/docs-beta",
+	dir: "./content/_generated/beta",
+	docs: {
+		postprocess: {
+			includeProcessedMarkdown: true,
+		},
+		async: true,
+	},
+});
+
+export const docsV16 = defineDocs({
+	dir: "./content/_generated/v1-6",
 	docs: {
 		postprocess: {
 			includeProcessedMarkdown: true,
