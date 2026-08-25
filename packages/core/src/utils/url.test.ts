@@ -141,6 +141,16 @@ describe("isHostBearingPrivateUseRedirectUri", () => {
 				new URL("com.example.app://host/callback"),
 			),
 		).toBe(true);
+		expect(
+			isHostBearingPrivateUseRedirectUri(
+				new URL("cursor://anysphere.cursor-mcp"),
+			),
+		).toBe(false);
+		expect(
+			isHostBearingPrivateUseRedirectUri(
+				new URL("cursor://anysphere.cursor-mcp?x=1"),
+			),
+		).toBe(false);
 	});
 
 	it("rejects reserved schemes and authority-free URIs", () => {

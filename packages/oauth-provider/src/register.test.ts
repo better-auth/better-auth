@@ -1759,7 +1759,6 @@ describe("oauth register - application_type", async () => {
 		"http://[::1]:61234/callback",
 		"com.example.app:/callback",
 		"com.example.app://host/callback",
-		"cursor://anysphere.cursor-mcp/oauth/callback",
 		"https://app.example.com/callback",
 	])("accepts valid native redirect URI %s", async (redirectUri) => {
 		const response = await register({
@@ -1800,6 +1799,11 @@ describe("oauth register - application_type", async () => {
 			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
 		});
 		expect(native.status).toBe(201);
+		const nativeBody = (await native.json()) as OAuthClient;
+		expect(nativeBody.application_type).toBe("native");
+		expect(nativeBody.redirect_uris).toEqual([
+			"cursor://anysphere.cursor-mcp/oauth/callback",
+		]);
 
 		const web = await register({
 			application_type: "web",

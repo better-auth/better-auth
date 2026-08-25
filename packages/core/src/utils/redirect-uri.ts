@@ -37,11 +37,14 @@ export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
 
 /**
  * Returns whether a parsed redirect URI uses a non-reserved custom scheme with
- * an authority component (for example `cursor://anysphere.cursor-mcp/oauth/callback`).
+ * an authority component and a path (for example
+ * `cursor://anysphere.cursor-mcp/oauth/callback`).
  *
  * RFC 8252 §7.1 *recommends* the authority-free reverse-domain form; it does
  * not forbid host-bearing private-use URIs. Native MCP clients such as Cursor
- * register the latter. Dangerous and network schemes stay rejected.
+ * register the latter. Bare-authority forms (`cursor://host`,
+ * `cursor://host?x=1`) are rejected because non-special schemes parse an empty
+ * pathname. Dangerous and network schemes stay rejected.
  *
  * @see https://github.com/better-auth/better-auth/issues/10946
  */

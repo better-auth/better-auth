@@ -386,7 +386,11 @@ export function validateCimdMetadata(
 					error: `all values for ${key} must use HTTP(S) or a private-use scheme`,
 				};
 			}
-			if (isPrivateUseRedirect) {
+			// Native private-use URIs have no HTTP origin. Skip origin-binding
+			// only for authorization redirect_uris. post_logout_redirect_uris are
+			// browser destinations and stay origin-bound (host-bearing custom
+			// schemes must not skip that check).
+			if (key === "redirect_uris" && isPrivateUseRedirect) {
 				continue;
 			}
 

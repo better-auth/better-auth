@@ -853,6 +853,19 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it("keeps host-bearing private-use post_logout_redirect_uris origin-bound", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Native Logout Client",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+			post_logout_redirect_uris: [
+				"cursor://anysphere.cursor-mcp/oauth/callback",
+			],
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("same origin");
+	});
+
 	it("validates client_uri for SSRF (private address)", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,
