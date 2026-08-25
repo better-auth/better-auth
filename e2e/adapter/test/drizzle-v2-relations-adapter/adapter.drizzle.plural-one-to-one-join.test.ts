@@ -62,38 +62,59 @@ type SessionWithUser = {
 };
 
 test.for([
-	[
-		"findOne",
-		"generated singular",
-		"with adapter schema",
-		generatedAuthRelations,
-	],
-	[
-		"findMany",
-		"generated singular",
-		"with adapter schema",
-		generatedAuthRelations,
-	],
-	["findOne", "legacy plural", "with adapter schema", legacyAuthRelations],
-	["findMany", "legacy plural", "with adapter schema", legacyAuthRelations],
-	[
-		"findOne",
-		"generated singular",
-		"without adapter schema",
-		generatedAuthRelations,
-	],
-	[
-		"findMany",
-		"generated singular",
-		"without adapter schema",
-		generatedAuthRelations,
-	],
-] as const)("%s resolves a one-to-one relation with %s keys %s", async ([
+	{
+		method: "findOne",
+		relationKeys: "generated singular",
+		schemaSetup: "with adapter schema",
+		relations: generatedAuthRelations,
+	},
+	{
+		method: "findMany",
+		relationKeys: "generated singular",
+		schemaSetup: "with adapter schema",
+		relations: generatedAuthRelations,
+	},
+	{
+		method: "findOne",
+		relationKeys: "legacy plural",
+		schemaSetup: "with adapter schema",
+		relations: legacyAuthRelations,
+	},
+	{
+		method: "findMany",
+		relationKeys: "legacy plural",
+		schemaSetup: "with adapter schema",
+		relations: legacyAuthRelations,
+	},
+	{
+		method: "findOne",
+		relationKeys: "generated singular",
+		schemaSetup: "without adapter schema",
+		relations: generatedAuthRelations,
+	},
+	{
+		method: "findMany",
+		relationKeys: "generated singular",
+		schemaSetup: "without adapter schema",
+		relations: generatedAuthRelations,
+	},
+	{
+		method: "findOne",
+		relationKeys: "legacy plural",
+		schemaSetup: "without adapter schema",
+		relations: legacyAuthRelations,
+	},
+	{
+		method: "findMany",
+		relationKeys: "legacy plural",
+		schemaSetup: "without adapter schema",
+		relations: legacyAuthRelations,
+	},
+] as const)("$method resolves a one-to-one relation with $relationKeys keys $schemaSetup", async ({
 	method,
-	,
 	schemaSetup,
 	relations,
-]) => {
+}) => {
 	const sqliteDb = new Database(":memory:");
 	onTestFinished(() => {
 		sqliteDb.close();
