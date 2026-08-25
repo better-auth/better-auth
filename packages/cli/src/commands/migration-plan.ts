@@ -104,9 +104,11 @@ export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
 		case "account-identity-strategy-mismatch":
-			return 'Set account.identityStrategy to "issuer" so runtime behavior matches the migrated database, then run the plan again.';
+			return `Keep account.identityStrategy as "${blocker.detectedStrategy === "provider-id" ? "provider-id" : "issuer"}", or perform a separate reviewed re-key migration before changing strategy.`;
 		case "account-identity-collision":
 			return `Merge or remove the duplicate rows in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
+		case "account-identity-strategy-required":
+			return 'Set account.identityStrategy to "provider-id" to preserve 1.6 account identity (recommended), or explicitly set it to "issuer" after reviewing projected collisions, then run the plan again.';
 		case "account-issuer-conflict":
 			return `Remove account "${blocker.accountId}" from accountIssuers in ${MIGRATION_DECISIONS_FILE} to keep "${blocker.storedIssuer}", or correct the stored issuer before migrating.`;
 		case "account-issuer-decision-required":
@@ -160,6 +162,7 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 function resolveMigrationGuideAnchor(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
 		case "account-identity-strategy-mismatch":
+		case "account-identity-strategy-required":
 			return "choose-account-identity-strategy";
 		case "account-identity-collision":
 		case "account-issuer-conflict":

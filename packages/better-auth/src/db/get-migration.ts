@@ -210,8 +210,8 @@ export interface RequiredColumnConstraintBlocker {
 
 export interface AccountIdentityStrategyMismatchBlocker {
 	code: "account-identity-strategy-mismatch";
-	configuredStrategy: "provider-id";
-	detectedStrategy: "issuer" | "mixed";
+	configuredStrategy: "provider-id" | "issuer";
+	detectedStrategy: "provider-id" | "issuer" | "mixed";
 	table: string;
 }
 
@@ -284,7 +284,7 @@ function createMigrationBlockerError(blocker: MigrationBlocker) {
 	}
 	if (blocker.code === "account-identity-strategy-mismatch") {
 		return new BetterAuthError(
-			`Migration blocked: table "${blocker.table}" already uses ${blocker.detectedStrategy} account identity. Set account.identityStrategy to "issuer" to match the database.`,
+			`Migration blocked: table "${blocker.table}" already uses ${blocker.detectedStrategy} account identity, but account.identityStrategy is "${blocker.configuredStrategy}". Changing strategy for populated v1.7 data requires a separate reviewed re-key migration.`,
 		);
 	}
 	if (blocker.code === "table-data-move") {
@@ -1034,13 +1034,12 @@ async function getMigrationsWithDatabase(
 	}[] = [];
 	const migrationBlockers: MigrationBlocker[] = [];
 	if (
-		accountIdentity.selectedStrategy === "provider-id" &&
-		(accountIdentity.detectedStrategy === "issuer" ||
-			accountIdentity.detectedStrategy === "mixed")
+		accountIdentity.requiresRekey &&
+		accountIdentity.detectedStrategy !== "empty"
 	) {
 		migrationBlockers.push({
 			code: "account-identity-strategy-mismatch",
-			configuredStrategy: "provider-id",
+			configuredStrategy: accountIdentity.selectedStrategy,
 			detectedStrategy: accountIdentity.detectedStrategy,
 			table:
 				migrationDatabase.inspectionAuthTables.account?.modelName || "account",

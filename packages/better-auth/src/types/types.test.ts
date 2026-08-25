@@ -1,5 +1,10 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
-import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
+import type {
+	Account,
+	GoogleProfile,
+	JoinConfig,
+	JoinOption,
+} from "better-auth/types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { betterAuth } from "../auth/minimal";
@@ -61,6 +66,14 @@ describe("general types", async () => {
 		expectTypeOf(
 			options.account.identityStrategy,
 		).toEqualTypeOf<"provider-id">();
+	});
+
+	it("requires issuer for every account identity strategy", () => {
+		type DefaultAccount = Account<{}>;
+		type ProviderIdAccount = Account<{ identityStrategy: "provider-id" }>;
+
+		expectTypeOf<DefaultAccount["issuer"]>().toEqualTypeOf<string>();
+		expectTypeOf<ProviderIdAccount["issuer"]>().toEqualTypeOf<string>();
 	});
 
 	it("should infer base session", async () => {

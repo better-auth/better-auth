@@ -82,7 +82,7 @@ describe("resolveOAuthAccountKey", () => {
 		});
 	});
 
-	it("uses the provider ID without evaluating a dynamic issuer in provider-scoped mode", async () => {
+	it("uses a synthetic provider namespace without evaluating a dynamic issuer", async () => {
 		const accountIssuer = vi.fn(() => {
 			throw new Error("issuer should not be evaluated");
 		});
