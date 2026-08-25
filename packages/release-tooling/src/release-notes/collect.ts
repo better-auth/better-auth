@@ -9,6 +9,7 @@ import {
 } from "../change-classifier.ts";
 import { parseConventionalHeader } from "../conventional-header.ts";
 import type { GitHubReader } from "../github-reader.ts";
+import { isGitHubNotFound } from "../github-reader.ts";
 import type { PackageReleaseMetadata, ReleaseEntry } from "./schema.ts";
 import { parseSchema, prereleaseStateSchema } from "./schema.ts";
 
@@ -137,17 +138,23 @@ function parseChangesetFile(content: string): {
 	return { packages, description };
 }
 
-const prCache = new Map<number, PRInfo>();
+const prCache = new Map<number, PRInfo | null>();
 const releaseBodyCache = new Map<string, string | null>();
 
 async function fetchPR(
 	github: GitHubReader,
 	prNumber: number,
-): Promise<PRInfo> {
-	const cached = prCache.get(prNumber);
-	if (cached) return cached;
+): Promise<PRInfo | null> {
+	if (prCache.has(prNumber)) return prCache.get(prNumber) ?? null;
 
-	const data = await github.getPullRequest(prNumber);
+	const data = await github.getPullRequest(prNumber).catch((error: unknown) => {
+		if (!isGitHubNotFound(error)) throw error;
+		return null;
+	});
+	if (!data) {
+		prCache.set(prNumber, null);
+		return null;
+	}
 
 	const info: PRInfo = {
 		author: data.author,
@@ -315,6 +322,21 @@ function findVersionCommit(
 		return commit;
 	}
 	return null;
+}
+
+export function findUnreleasedVersionCommit(
+	version: string,
+	ref: string,
+): string | null {
+	try {
+		execFileSync("git", ["rev-parse", "--verify", `v${version}^{commit}`], {
+			stdio: "ignore",
+		});
+		return null;
+	} catch {
+		const previousTag = findPreviousTag(version, version.includes("-"));
+		return findVersionCommit(ref, previousTag, version);
+	}
 }
 
 function findConsumedChangesets(
@@ -688,24 +710,27 @@ export async function collectEntries(
 		const changesetDescription = changeset?.description ?? null;
 		if (changeset?.breaking) breaking = true;
 
+		title = subject;
+		domain = resolveDomain(parsed.scope || undefined, []);
+		packageName =
+			changeset?.packageNames.length === 1
+				? changeset.packageNames[0]!
+				: resolvePackage(parsed.scope || undefined, []);
+
 		try {
 			const prInfo = await fetchPR(github, prNumber);
-			author = prInfo.author;
-			title = prInfo.title;
-			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
-			packageName =
-				changeset?.packageNames.length === 1
-					? changeset.packageNames[0]!
-					: resolvePackage(parsed.scope || undefined, prInfo.files);
-			if (prInfo.labels.includes("breaking")) breaking = true;
+			if (prInfo) {
+				author = prInfo.author;
+				title = prInfo.title;
+				domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
+				packageName =
+					changeset?.packageNames.length === 1
+						? changeset.packageNames[0]!
+						: resolvePackage(parsed.scope || undefined, prInfo.files);
+				if (prInfo.labels.includes("breaking")) breaking = true;
+			}
 		} catch (error) {
 			if (process.env.GITHUB_ACTIONS === "true") throw error;
-			title = subject;
-			domain = resolveDomain(parsed.scope || undefined, []);
-			packageName =
-				changeset?.packageNames.length === 1
-					? changeset.packageNames[0]!
-					: resolvePackage(parsed.scope || undefined, []);
 		}
 
 		const releasePackages =

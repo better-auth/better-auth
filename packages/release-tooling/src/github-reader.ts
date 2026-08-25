@@ -40,6 +40,15 @@ export function parseGitHubRepository(value: string): GitHubRepository {
 	return { owner, repo, slug: `${owner}/${repo}` };
 }
 
+export function isGitHubNotFound(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"status" in error &&
+		error.status === 404
+	);
+}
+
 export function createGitHubReader(options: GitHubReaderOptions): GitHubReader {
 	const { repository } = options;
 	const { owner, repo } = repository;
@@ -116,12 +125,7 @@ export function createGitHubReader(options: GitHubReaderOptions): GitHubReader {
 				});
 				return response.data.body ?? null;
 			} catch (error) {
-				if (
-					typeof error === "object" &&
-					error !== null &&
-					"status" in error &&
-					error.status === 404
-				) {
+				if (isGitHubNotFound(error)) {
 					return null;
 				}
 				throw error;

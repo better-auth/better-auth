@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	createGitHubReader,
+	isGitHubNotFound,
 	parseGitHubRepository,
 } from "../src/github-reader.ts";
 
@@ -62,6 +63,18 @@ function createFetch(): typeof fetch {
 				},
 			);
 		}
+		if (url.includes("/repos/better-auth/better-auth/pulls/404/files")) {
+			return jsonResponse([]);
+		}
+		if (url.endsWith("/repos/better-auth/better-auth/pulls/404")) {
+			return jsonResponse({ message: "Not Found" }, 404);
+		}
+		if (url.includes("/repos/better-auth/better-auth/pulls/500/files")) {
+			return jsonResponse([]);
+		}
+		if (url.endsWith("/repos/better-auth/better-auth/pulls/500")) {
+			return jsonResponse({ message: "Server Error" }, 500);
+		}
 		if (url.endsWith("/repos/better-auth/better-auth/releases/tags/v1.2.3")) {
 			return jsonResponse({ body: "Release body" });
 		}
@@ -121,6 +134,24 @@ describe("GitHubReader", () => {
 		await expect(github.getReleaseBody("v9.9.9")).rejects.toMatchObject({
 			status: 500,
 		});
+	});
+
+	it("classifies missing pull requests without hiding server errors", async () => {
+		const github = createGitHubReader({
+			repository: parseGitHubRepository("better-auth/better-auth"),
+			token: "test-token",
+			baseUrl: "https://api.github.test",
+			fetch: createFetch(),
+		});
+
+		await expect(github.getPullRequest(404)).rejects.toMatchObject({
+			status: 404,
+		});
+		await expect(github.getPullRequest(500)).rejects.toMatchObject({
+			status: 500,
+		});
+		expect(isGitHubNotFound({ status: 404 })).toBe(true);
+		expect(isGitHubNotFound({ status: 500 })).toBe(false);
 	});
 
 	it("rejects ambiguous repository slugs", () => {

@@ -123,6 +123,19 @@ describe("release notes command security", () => {
 		expect(ready.run).toContain('gh pr ready "$PR_NUMBER"');
 	});
 
+	it("reacts to failed release-note commands", () => {
+		const failure = getJob(commandWorkflow, "mark-failure");
+		const reaction = getStep(failure, "Mark command as failed");
+
+		expect(failure.permissions).toEqual({ issues: "write" });
+		expect(failure).toHaveProperty(
+			"if",
+			expect.stringContaining("needs.generate.result == 'failure'"),
+		);
+		expect(actionReferences(failure)).toEqual([]);
+		expect(reaction.run).toContain("content='-1'");
+	});
+
 	it("returns release carriers to draft without pull_request_target", () => {
 		const draft = getJob(draftWorkflow, "draft");
 		const keepDraft = getStep(draft, "Keep release PR in draft");
@@ -248,44 +261,53 @@ describe("release publication security", () => {
 		expect(resolveApproved.run).toContain("comments?per_page=100");
 		expect(resolveApproved.run).toContain("gh api --paginate");
 		expect(resolveApproved.env).toHaveProperty(
-			"BASE_SHA",
-			expect.stringContaining("release-candidate.outputs.base_sha"),
+			"VERSION_COMMIT",
+			expect.stringContaining("release-candidate.outputs.version_commit"),
 		);
-		expect(resolveApproved.run).toContain(
-			'git rev-list --first-parent "${BASE_SHA}..${GITHUB_SHA}"',
-		);
+		expect(resolveApproved.run).toContain("commits/${COMMIT_SHA}/pulls");
 	});
 
-	it("detects version transitions across the complete push", () => {
+	it("detects untagged version commits across retry pushes", () => {
 		const detect = getStep(
 			getJob(releaseWorkflow, "release"),
 			"Detect release commit",
 		);
 
-		expect(detect.env).toHaveProperty(
-			"BEFORE_SHA",
-			expect.stringContaining("github.event.before"),
-		);
-		expect(detect.run).toContain(
-			'git show "${BEFORE_SHA}:packages/better-auth/package.json"',
-		);
-		expect(detect.run).not.toContain('"${GITHUB_SHA}^:');
+		expect(detect.run).toContain("release-notes candidate");
+		expect(detect.run).toContain('--branch "$GITHUB_SHA"');
+		expect(detect.run).not.toContain("github.event.before");
 	});
 
-	it("creates a GitHub release only after Changesets publishes", () => {
+	it("creates GitHub releases after Changesets completes publish mode", () => {
 		const release = getJob(releaseWorkflow, "release");
 		const createRelease = getStep(release, "Create GitHub Release");
 
 		expect(createRelease).toHaveProperty(
 			"if",
-			expect.stringContaining("steps.changesets.outputs.published == 'true'"),
+			expect.stringMatching(
+				/release-candidate\.outputs\.release == 'true'.*changesets\.outputs\.hasChangesets == 'false'/,
+			),
 		);
-		expect(createRelease.env).toHaveProperty(
-			"PUBLISHED_PACKAGES",
-			expect.stringContaining("steps.changesets.outputs.publishedPackages"),
+		expect(createRelease.run).not.toContain("pnpm view");
+		expect(createRelease.run).not.toContain("git/refs");
+		expect(createRelease.run).toContain('gh release create "$TAG"');
+	});
+
+	it("warns when newer changesets block release recovery", () => {
+		const warning = getStep(
+			getJob(releaseWorkflow, "release"),
+			"Warn about blocked release recovery",
 		);
-		expect(createRelease.run).toContain('.name == "better-auth"');
-		expect(createRelease.run).toContain('"$PUBLISHED_VERSION" != "$VERSION"');
+
+		expect(warning).toHaveProperty(
+			"if",
+			expect.stringMatching(
+				/release-candidate\.outputs\.release == 'true'.*changesets\.outputs\.hasChangesets == 'true'/,
+			),
+		);
+		expect(warning.run).toContain("::warning::");
+		expect(warning.run).toContain("GITHUB_STEP_SUMMARY");
+		expect(warning.run).toContain("before merging the next Version PR");
 	});
 
 	it("creates and updates Version PRs as drafts with usage guidance", () => {

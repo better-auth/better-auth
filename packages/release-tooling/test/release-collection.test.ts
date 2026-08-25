@@ -76,6 +76,35 @@ function collectReleaseNotes(
 	};
 }
 
+function detectReleaseCandidate(
+	version: string,
+	branch: string,
+	workspace: string,
+): CommandResult {
+	const result = spawnSync(
+		process.execPath,
+		[
+			"--experimental-strip-types",
+			releaseNotesScript,
+			"candidate",
+			"--version",
+			version,
+			"--branch",
+			branch,
+		],
+		{
+			cwd: workspace,
+			encoding: "utf-8",
+			env: { ...process.env, GITHUB_WORKSPACE: workspace },
+		},
+	);
+	return {
+		status: result.status,
+		stderr: result.stderr,
+		stdout: result.stdout,
+	};
+}
+
 function git(workspace: string, args: string[]): string {
 	return execFileSync("git", args, {
 		cwd: workspace,
@@ -418,6 +447,32 @@ describe("release changeset collection", () => {
 			expect(result.stdout).toContain(
 				"Require an explicit migration after the release.",
 			);
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("keeps an untagged version eligible across later retry commits", () => {
+		const fixture = createReleaseWithFollowUpCommit();
+		try {
+			const candidate = detectReleaseCandidate(
+				"2.0.0",
+				fixture.commitRef,
+				fixture.workspace,
+			);
+
+			expect(candidate.status, candidate.stderr).toBe(0);
+			expect(candidate.stdout).toContain("release: true");
+			expect(candidate.stdout).toMatch(/version_commit: [a-f0-9]{40}/);
+
+			git(fixture.workspace, ["tag", "v2.0.0", fixture.commitRef]);
+			const published = detectReleaseCandidate(
+				"2.0.0",
+				fixture.commitRef,
+				fixture.workspace,
+			);
+			expect(published.status, published.stderr).toBe(0);
+			expect(published.stdout).toContain("release: false");
 		} finally {
 			rmSync(fixture.workspace, { recursive: true });
 		}

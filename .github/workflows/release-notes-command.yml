@@ -285,3 +285,24 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
             -f content='+1' >/dev/null
+
+  mark-failure:
+    needs: [generate, publish-comment]
+    if: >-
+      always() &&
+      (needs.generate.result == 'failure' || needs.publish-comment.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Mark command as failed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          if [[ ! "$COMMENT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Comment ID is invalid"
+            exit 1
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content='-1' >/dev/null

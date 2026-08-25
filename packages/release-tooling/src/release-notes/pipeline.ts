@@ -6,6 +6,7 @@ import {
 	buildPackageMetadata,
 	collectEntries,
 	findPreviousTag,
+	findUnreleasedVersionCommit,
 } from "./collect.ts";
 import {
 	applyReleaseRewrites,
@@ -18,6 +19,7 @@ import { parseSchema, releaseManifestSchema } from "./schema.ts";
 
 export type ReleaseNotesOperation =
 	| { type: "validate" }
+	| { type: "candidate"; version: string; branch: string }
 	| {
 			type: "render";
 			manifestPath: string;
@@ -138,6 +140,16 @@ export async function runReleaseNotes(
 	switch (operation.type) {
 		case "validate":
 			return;
+		case "candidate": {
+			const versionCommit = findUnreleasedVersionCommit(
+				operation.version,
+				operation.branch,
+			);
+			setOutput("release", String(versionCommit !== null));
+			setOutput("version", operation.version);
+			if (versionCommit) setOutput("version_commit", versionCommit);
+			return;
+		}
 		case "render":
 			applyReleaseRewrites(
 				operation.manifestPath,

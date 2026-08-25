@@ -93,28 +93,11 @@ jobs:
 
       - name: Detect release commit
         id: release-candidate
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
         run: |
           CURRENT_VERSION=$(jq -r '.version' packages/better-auth/package.json)
-          if [[ ! "$BEFORE_SHA" =~ ^[0-9a-f]{40}$ ]] \
-             || [[ "$BEFORE_SHA" =~ ^0+$ ]] \
-             || ! git cat-file -e "${BEFORE_SHA}^{commit}"; then
-            BEFORE_SHA="${GITHUB_SHA}^"
-          fi
-          echo "base_sha=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
-          PREVIOUS_VERSION=$(git show "${BEFORE_SHA}:packages/better-auth/package.json" | jq -r '.version')
-          if ! pnpm --filter @better-auth/release-tooling release-notes \
-            validate --version "$CURRENT_VERSION"; then
-            echo "::error::Package version is not valid semver"
-            exit 1
-          fi
-          if [ "$CURRENT_VERSION" = "$PREVIOUS_VERSION" ]; then
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "release=true" >> "$GITHUB_OUTPUT"
-          echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          pnpm --filter @better-auth/release-tooling release-notes candidate \
+            --version "$CURRENT_VERSION" \
+            --branch "$GITHUB_SHA"
 
       - name: Resolve approved release notes
         id: approved-notes
@@ -122,17 +105,21 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.release-candidate.outputs.version }}
-          BASE_SHA: ${{ steps.release-candidate.outputs.base_sha }}
+          VERSION_COMMIT: ${{ steps.release-candidate.outputs.version_commit }}
           RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
         run: |
+          if [[ ! "$VERSION_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release version commit is not a valid SHA"
+            exit 1
+          fi
           PR_NUMBER=""
-          while IFS= read -r COMMIT_SHA; do
+          for COMMIT_SHA in "$VERSION_COMMIT" $(git show -s --format='%P' "$VERSION_COMMIT"); do
             PULLS=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${COMMIT_SHA}/pulls" \
               -H 'Accept: application/vnd.github+json')
             PR_NUMBER=$(echo "$PULLS" | jq -r --arg base "$GITHUB_REF_NAME" \
               '[.[] | select(.merged_at != null) | select(.base.ref == $base) | select((.head.ref | startswith("changeset-release/")) or (.head.ref == "next" and .base.ref == "main"))] | last | .number // empty')
             [ -n "$PR_NUMBER" ] && break
-          done < <(git rev-list --first-parent "${BASE_SHA}..${GITHUB_SHA}")
+          done
           if [ -z "$PR_NUMBER" ]; then
             echo "::error::Could not find the merged Version or promotion PR"
             exit 1
@@ -179,6 +166,24 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
 
+      - name: Warn about blocked release recovery
+        if: steps.release-candidate.outputs.release == 'true' && steps.changesets.outputs.hasChangesets == 'true'
+        env:
+          VERSION: ${{ steps.release-candidate.outputs.version }}
+          APPROVED_PR_NUMBER: ${{ steps.approved-notes.outputs.pr_number }}
+          NEXT_PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        run: |
+          echo "::warning::GitHub Release recovery for v${VERSION} is blocked by newer changesets"
+          {
+            echo "### Release recovery blocked"
+            echo ""
+            echo "- Unreleased version: \`v${VERSION}\`"
+            echo "- Approved release PR: #${APPROVED_PR_NUMBER}"
+            echo "- Next Version PR: #${NEXT_PR_NUMBER}"
+            echo ""
+            echo "Recover the missing tag and GitHub Release before merging the next Version PR."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Rename release PR with version
         if: steps.changesets.outputs.pullRequestNumber
         continue-on-error: true
@@ -206,29 +211,18 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        if: steps.guard.outputs.skip != 'true' && steps.changesets.outputs.published == 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true' && steps.changesets.outputs.hasChangesets == 'false'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.release-candidate.outputs.version }}
           NOTES_FILE: ${{ steps.approved-notes.outputs.notes_path }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
-          PUBLISHED_VERSION=$(echo "$PUBLISHED_PACKAGES" | jq -r \
-            '[.[] | select(.name == "better-auth")][0].version // empty')
           if [ -z "$VERSION" ] || [ ! -s "$NOTES_FILE" ]; then
             echo "::error::Approved release notes are missing"
             exit 1
           fi
-          if [ -z "$PUBLISHED_VERSION" ] || [ "$PUBLISHED_VERSION" != "$VERSION" ]; then
-            echo "::error::Published better-auth version does not match approved release notes"
-            exit 1
-          fi
           TAG="v${VERSION}"
           COMMIT_SHA="${GITHUB_SHA}"
-
-          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
-            -f ref="refs/tags/${TAG}" -f sha="$COMMIT_SHA" 2>/dev/null \
-            || echo "Tag $TAG already exists"
 
           PRERELEASE_FLAG=""
           if echo "$VERSION" | grep -q '-'; then
