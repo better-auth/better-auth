@@ -2464,3 +2464,63 @@ describe("internal adapter test", async () => {
 		});
 	});
 });
+
+describe("active-sessions list ttl", () => {
+	it("never writes the list with a zero ttl", async () => {
+		// The list write is gated on a millisecond comparison but the ttl is
+		// whole seconds, so a remaining session under a second from expiry
+		// floors to 0. Secondary storage reads a zero ttl as "no expiry", so
+		// the list would be stored permanently.
+		const data = new Map<string, string>();
+		const ttls: Record<string, number | undefined> = {};
+		const opts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					data.set(key, value);
+					ttls[key] = ttl;
+				},
+				get: (key: string) => data.get(key) ?? null,
+				delete: (key: string) => {
+					data.delete(key);
+					delete ttls[key];
+				},
+				getAndDelete: (key: string) => {
+					const value = data.get(key) ?? null;
+					data.delete(key);
+					return value;
+				},
+				increment: () => 1,
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(opts)).runMigrations();
+		const ctx = await init(opts);
+
+		const now = Date.now();
+		const userId = "user-ttl-floor";
+		const keep = "token-expiring-soon";
+		const drop = "token-to-delete";
+
+		data.set(
+			drop,
+			JSON.stringify({
+				session: { token: drop, userId },
+				user: { id: userId },
+			}),
+		);
+		data.set(
+			`active-sessions-${userId}`,
+			JSON.stringify([
+				{ token: keep, expiresAt: now + 300 },
+				{ token: drop, expiresAt: now + 3_600_000 },
+			]),
+		);
+
+		await ctx.internalAdapter.deleteSession(drop);
+
+		const listKey = `active-sessions-${userId}`;
+		if (data.has(listKey)) {
+			expect(ttls[listKey]).toBeGreaterThan(0);
+		}
+	});
+});
