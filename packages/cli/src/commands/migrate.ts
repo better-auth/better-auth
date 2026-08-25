@@ -196,22 +196,29 @@ export function printHumanMigrationPlan(
 	);
 	console.log(`Status: ${migrationPlan.status}`);
 	console.log(
-		`Account identity: ${migrationPlan.accountIdentity.selectedStrategy} (database: ${migrationPlan.accountIdentity.detectedStrategy})`,
+		`Account identity strategy: ${migrationPlan.accountIdentity.selectedStrategy} (database: ${migrationPlan.accountIdentity.detectedStrategy})`,
 	);
 	console.log(
 		`Accounts: ${migrationPlan.accountIdentity.totalAccounts} total, ${migrationPlan.accountIdentity.externalAccounts} external`,
 	);
-	if (migrationPlan.accountIdentity.automaticIssuerResolution) {
+	if (
+		migrationPlan.accountIdentity.automaticNamespaceResolution &&
+		migrationPlan.accountIdentity.automaticNamespaceResolution.total > 0
+	) {
 		console.log(
-			`Automatic issuer resolution: ${migrationPlan.accountIdentity.automaticIssuerResolution.resolved}/${migrationPlan.accountIdentity.automaticIssuerResolution.total}`,
+			`Automatic namespace resolution: ${migrationPlan.accountIdentity.automaticNamespaceResolution.resolved}/${migrationPlan.accountIdentity.automaticNamespaceResolution.total}`,
 		);
 	}
 	console.log(
 		`Projected collisions: ${migrationPlan.accountIdentity.projectedCollisions}`,
 	);
-	console.log(
-		`Providers requiring manual issuer review: ${migrationPlan.accountIdentity.manualReviewProviders.join(", ") || "none"}`,
-	);
+	if (migrationPlan.accountIdentity.selectedStrategy === "issuer") {
+		console.log(
+			`Providers requiring manual issuer review: ${migrationPlan.accountIdentity.manualReviewProviders.join(", ") || "none"}`,
+		);
+	} else {
+		console.log("Persisted namespace: deterministic provider namespace");
+	}
 	console.log(
 		`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
 	);
