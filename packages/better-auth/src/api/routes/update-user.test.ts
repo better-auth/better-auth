@@ -1093,9 +1093,9 @@ describe("credential identity across email changes", async () => {
 		expect(accountsBefore).toHaveLength(1);
 		expect(accountsBefore[0]).toMatchObject({
 			providerId: "credential",
+			issuer: "local:credential",
 			accountId: userId,
 		});
-		expect(accountsBefore[0]?.issuer).toBeUndefined();
 
 		const changeEmail = await client.changeEmail({
 			newEmail: changedEmail,
@@ -1122,9 +1122,9 @@ describe("credential identity across email changes", async () => {
 		expect(accountsAfter[0]).toMatchObject({
 			id: accountsBefore[0]!.id,
 			providerId: "credential",
+			issuer: "local:credential",
 			accountId: userId,
 		});
-		expect(accountsAfter[0]?.issuer).toBeUndefined();
 	});
 });
 

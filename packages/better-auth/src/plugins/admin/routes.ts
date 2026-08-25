@@ -6,7 +6,6 @@ import type { Session } from "@better-auth/core/db";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
-import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "../../api";
@@ -461,14 +460,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ctx.body.password,
 				);
 				await ctx.context.internalAdapter.linkAccount({
-					...resolveAccountIdentity(
-						ctx.context.options.account?.identityStrategy,
-						{
-							providerId: "credential",
-							issuer: createLocalAccountIssuer("credential"),
-							accountId: user.id,
-						},
-					).fields,
+					providerId: "credential",
+					issuer: createLocalAccountIssuer("credential"),
+					accountId: user.id,
 					password: hashedPassword,
 					userId: user.id,
 				});
@@ -1745,14 +1739,9 @@ export const setUserPassword = (opts: AdminOptions) =>
 			} else {
 				await ctx.context.internalAdapter.createAccount({
 					userId,
-					...resolveAccountIdentity(
-						ctx.context.options.account?.identityStrategy,
-						{
-							providerId: "credential",
-							issuer: createLocalAccountIssuer("credential"),
-							accountId: user.id,
-						},
-					).fields,
+					providerId: "credential",
+					issuer: createLocalAccountIssuer("credential"),
+					accountId: user.id,
 					password: hashedPassword,
 				});
 			}

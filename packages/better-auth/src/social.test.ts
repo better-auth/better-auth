@@ -1090,6 +1090,7 @@ it("uses provider-scoped identity through the OAuth redirect callback", async ()
 	const headers = new Headers();
 	const { client, cookieSetter } = await getTestInstance(
 		{
+			account: { identityStrategy: "provider-id" },
 			socialProviders: {
 				google: {
 					clientId: "test",
@@ -1118,9 +1119,11 @@ it("uses provider-scoped identity through the OAuth redirect callback", async ()
 
 	const accounts = await client.listAccounts({ fetchOptions: { headers } });
 	expect(accounts.data).toContainEqual(
-		expect.objectContaining({ providerId: "google" }),
+		expect.objectContaining({
+			issuer: "local:oauth:google",
+			providerId: "google",
+		}),
 	);
-	expect(accounts.data?.[0]).not.toHaveProperty("issuer");
 });
 
 /**
@@ -1189,7 +1192,7 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(data.user.email).toBe("mobile-user@example.com");
 	});
 
-	it("uses the provider ID as the external account namespace when configured", async () => {
+	it("uses the deterministic provider namespace for ID-token sign-in", async () => {
 		const idToken = await signIdToken(webClientId);
 		const headers = new Headers();
 		const { client, cookieSetter } = await getTestInstance(
@@ -1217,9 +1220,9 @@ describe("Google Provider — multiple client IDs", async () => {
 			expect.objectContaining({
 				providerId: "google",
 				accountId: "google-sub-999",
+				issuer: "local:oauth:google",
 			}),
 		);
-		expect(accounts.data?.[0]).not.toHaveProperty("issuer");
 
 		const returningHeaders = new Headers();
 		const returning = await client.signIn.social({

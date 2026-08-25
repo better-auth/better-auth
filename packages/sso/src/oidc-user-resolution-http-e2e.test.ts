@@ -195,10 +195,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 			},
 			onTestFinished,
 			{
-				account: {
-					identityStrategy: "issuer",
-					storeAccountCookie: true,
-				},
+				account: { storeAccountCookie: true },
 				user: {
 					validateUserInfo({ source }: { source: { action: string } }) {
 						validationActions.push(source.action);
@@ -289,7 +286,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 	});
 
-	it("uses the provider-scoped identity in resolution hooks and stored accounts", async ({
+	it("keeps the verified OIDC issuer in resolution hooks while storing provider-scoped identity", async ({
 		onTestFinished,
 	}) => {
 		subject = "provider-scoped-directory-user";
@@ -315,7 +312,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 			protocol: "oidc",
 			providerId: "workforce",
 			accountKey: {
-				providerId: "workforce",
+				issuer: identityProvider.issuer.url,
 				accountId: subject,
 			},
 		});
@@ -325,11 +322,11 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
+				issuer: "local:oauth:workforce",
 				accountId: subject,
 				providerId: "workforce",
 			}),
 		]);
-		expect(accounts[0]?.issuer).toBeUndefined();
 	});
 
 	it("preserves an unverified selected profile on a same-email first link", async ({
@@ -584,7 +581,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 
-	it("rejects another provider alias for an existing subject under issuer-scoped identity", async ({
+	it("rejects another provider alias for an existing subject even on default resolution", async ({
 		onTestFinished,
 	}) => {
 		subject = "provider-conflict-user";
@@ -592,7 +589,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		const instance = await createInstance(
 			{ resolveUser: () => ({ action: "continue" }) },
 			onTestFinished,
-			{ account: { identityStrategy: "issuer" } },
+			{},
 			[provider("workforce"), provider("another-workforce")],
 		);
 		expect(

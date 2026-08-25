@@ -148,6 +148,47 @@ describe("one-tap implicit linking gate", async () => {
 		expect(accounts.length).toBeGreaterThanOrEqual(1);
 	});
 
+	it("stores the provider namespace under provider-id identity", async () => {
+		verifiedPayload.email = "provider-scoped-one-tap@example.com";
+		verifiedPayload.sub = "provider-scoped-one-tap-subject";
+		const { auth, client } = await getTestInstance(
+			{
+				account: { identityStrategy: "provider-id" },
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						enabled: true,
+					},
+				},
+				plugins: [oneTap()],
+			},
+			{ disableTestUser: true },
+		);
+
+		const response = await client.$fetch("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(response.error).toBeFalsy();
+		const context = await auth.$context;
+		await expect(
+			context.adapter.findOne<{
+				accountId: string;
+				issuer: string;
+				providerId: string;
+			}>({
+				model: "account",
+				where: [{ field: "providerId", value: "google" }],
+			}),
+		).resolves.toMatchObject({
+			accountId: verifiedPayload.sub,
+			issuer: "local:oauth:google",
+			providerId: "google",
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
 	 */
@@ -286,6 +327,7 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
+				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -330,6 +372,7 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
+				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});

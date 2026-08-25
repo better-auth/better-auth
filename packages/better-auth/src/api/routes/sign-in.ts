@@ -2,7 +2,6 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
-import { resolveAccountIdentity } from "@better-auth/core/db/internal";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	additionalAuthorizationParamsSchema,
@@ -531,20 +530,12 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				email.toLowerCase(),
 				{ includeAccounts: true },
 			);
-			const credentialKey = resolveAccountIdentity(
-				ctx.context.options.account?.identityStrategy,
-				{
-					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
-					accountId: userRecord?.user.id ?? "",
-				},
-			).key;
+			const credentialIssuer = createLocalAccountIssuer("credential");
 			const credentialAccount = userRecord?.accounts.find(
 				(account) =>
-					account.accountId === userRecord.user.id &&
-					(credentialKey.issuer !== undefined
-						? account.issuer === credentialKey.issuer
-						: account.providerId === credentialKey.providerId),
+					account.providerId === "credential" &&
+					account.issuer === credentialIssuer &&
+					account.accountId === userRecord.user.id,
 			);
 
 			if (!userRecord || !credentialAccount) {

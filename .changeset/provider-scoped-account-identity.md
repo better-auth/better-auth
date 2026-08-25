@@ -4,4 +4,4 @@
 "better-auth": patch
 ---
 
-Preserve the Better Auth 1.6 `(providerId, accountId)` account identity by default. This compatibility path does not add or persist an issuer. Applications can opt into issuer-scoped identity with `account.identityStrategy: "issuer"`; the schema, runtime account lookup, and public types then use `(issuer, accountId)`.
+Add an explicit `"provider-id"` compatibility strategy for populated Better Auth 1.6 migrations. `providerId` remains the configured connection, `accountId` remains the provider subject, and the required `issuer` field stores either the verified authority under the default `"issuer"` strategy or a deterministic provider namespace under `"provider-id"`; both strategies retain the unique `(issuer, accountId)` index.

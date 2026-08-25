@@ -552,7 +552,7 @@ describe("oauth-proxy", async () => {
 				};
 				account: {
 					providerId: string;
-					issuer?: string;
+					issuer: string;
 					accountId: string;
 					accessToken?: string;
 					refreshToken?: string;
@@ -566,7 +566,7 @@ describe("oauth-proxy", async () => {
 			expect(payload.userInfo.email).toBe("user@email.com");
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
-			expect(payload.account).not.toHaveProperty("issuer");
+			expect(payload.account.issuer).toBe("https://accounts.google.com");
 			expect(payload.account.accountId).toBe("1234567890");
 			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
@@ -624,7 +624,7 @@ describe("oauth-proxy", async () => {
 			expect(encryptedProfile).toBeTruthy();
 		});
 
-		it("should create user/session on preview from profile data", async () => {
+		it("should create a provider-namespaced account on preview from profile data", async () => {
 			// Production instance - handles OAuth callback
 			const production = await getTestInstance(
 				{
@@ -645,6 +645,7 @@ describe("oauth-proxy", async () => {
 			// Preview instance with SEPARATE database
 			const preview = await getTestInstance(
 				{
+					account: { identityStrategy: "provider-id" },
 					baseURL: "http://preview.example.com",
 					plugins: [
 						oAuthProxy({
@@ -727,6 +728,7 @@ describe("oauth-proxy", async () => {
 			);
 			expect(previewAccounts.length).toBe(1);
 			expect(previewAccounts[0]?.providerId).toBe("google");
+			expect(previewAccounts[0]?.issuer).toBe("local:oauth:google");
 
 			// Verify session was created
 			const previewSessions = await previewCtx.internalAdapter.listSessions(
@@ -1213,6 +1215,7 @@ describe("oauth-proxy", async () => {
 			expect(accounts).toContainEqual(
 				expect.objectContaining({
 					providerId: "google",
+					issuer: "https://accounts.google.com",
 					accountId: "1234567890",
 				}),
 			);

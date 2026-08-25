@@ -2,7 +2,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { resolveAccountIdentity } from "@better-auth/core/db/internal";
+import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -1688,17 +1688,16 @@ async function handleOIDCCallback(
 			? userInfo.emailVerified === true
 			: false,
 	};
-	const accountIdentity = resolveAccountIdentity(
-		ctx.context.options.account?.identityStrategy,
-		{
-			providerId: provider.providerId,
-			issuer:
-				(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
-				provider.issuer,
-			accountId: userInfoId,
-		},
-	);
-	const accountKey = accountIdentity.key;
+	const accountKey = {
+		issuer:
+			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
+			provider.issuer,
+		accountId: userInfoId,
+	};
+	const persistedIssuer =
+		ctx.context.options.account?.identityStrategy === "provider-id"
+			? createOAuthAccountIssuer(provider.providerId)
+			: accountKey.issuer;
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
@@ -1771,7 +1770,9 @@ async function handleOIDCCallback(
 						idToken: tokenResponse.idToken,
 						accessToken: tokenResponse.accessToken,
 						refreshToken: tokenResponse.refreshToken,
-						...accountIdentity.fields,
+						issuer: persistedIssuer,
+						accountId: userInfoId,
+						providerId: provider.providerId,
 						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
 						scope: tokenResponse.scopes?.join(","),

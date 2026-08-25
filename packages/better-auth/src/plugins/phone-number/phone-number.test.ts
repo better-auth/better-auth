@@ -504,6 +504,7 @@ describe("phone auth flow", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
+			issuer: "local:credential",
 			accountId: userId,
 		});
 		const emailSignIn = await client.signIn.email({
@@ -845,6 +846,7 @@ describe("reset password flow attempts", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
+			issuer: "local:credential",
 			accountId: userId,
 		});
 	});

@@ -490,11 +490,11 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 			where: [],
 		});
 		expect(account).toMatchObject({
+			issuer: identityProvider.issuer.url,
 			accountId: externalId,
 			providerId: "workforce",
 			userId: provisionedUserId,
 		});
-		expect(account?.issuer).toBeUndefined();
 
 		await setSCIMUserActive(provisioned.id, false);
 		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
@@ -525,15 +525,13 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 		});
 		expect(await instance.db.count({ model: "user", where: [] })).toBe(2);
 		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
-		const restoredAccount = await instance.db.findOne<Account>({
-			model: "account",
-			where: [],
-		});
-		expect(restoredAccount).toMatchObject({
+		expect(
+			await instance.db.findOne<Account>({ model: "account", where: [] }),
+		).toMatchObject({
+			issuer: identityProvider.issuer.url,
 			accountId: externalId,
 			providerId: "workforce",
 			userId: provisionedUserId,
 		});
-		expect(restoredAccount?.issuer).toBeUndefined();
 	});
 });
