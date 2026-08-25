@@ -53,6 +53,8 @@ beforeAll(async () => {
 				access_token: "test",
 				refresh_token: "test",
 				id_token: testIdToken,
+				expires_in: 3600,
+				refresh_token_expires_in: 86400,
 			});
 		}),
 	];
@@ -1188,58 +1190,13 @@ describe("oauth-proxy", async () => {
 				},
 			});
 			const { secret } = await auth.$context;
-
-			const encryptedNull = await symmetricEncrypt({
-				key: secret,
-				data: "null",
-			});
-
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encryptedNull}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("error=invalid_payload");
-					},
-				},
-			);
-
-			// Test missing timestamp
-			const payloadMissingTimestamp = {
+			const validPayload = {
 				userInfo: {
 					id: "123",
 					email: "user@email.com",
 					name: "Test User",
 					emailVerified: true,
 				},
-				account: {
-					providerId: "google",
-					issuer: "https://accounts.google.com",
-					accountId: "123",
-					accessToken: "test",
-				},
-				state: "test-state",
-				callbackURL: "/dashboard",
-				// timestamp intentionally missing
-			};
-
-			const encrypted1 = await symmetricEncrypt({
-				key: secret,
-				data: JSON.stringify(payloadMissingTimestamp),
-			});
-
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted1}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("error=invalid_payload");
-					},
-				},
-			);
-
-			// Test missing userInfo
-			const payloadMissingUserInfo = {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
@@ -1250,55 +1207,31 @@ describe("oauth-proxy", async () => {
 				callbackURL: "/dashboard",
 				timestamp: Date.now(),
 			};
-
-			const encrypted2 = await symmetricEncrypt({
-				key: secret,
-				data: JSON.stringify(payloadMissingUserInfo),
-			});
-
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted2}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("error=invalid_payload");
+			const expectInvalidPayload = async (payload: unknown) => {
+				const encryptedPayload = await symmetricEncrypt({
+					key: secret,
+					data: JSON.stringify(payload),
+				});
+				await client.$fetch(
+					`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encryptedPayload}`,
+					{
+						onError(context) {
+							const location = context.response.headers.get("location");
+							expect(location).toContain("error=invalid_payload");
+						},
 					},
-				},
-			);
-
-			// Test non-numeric timestamp (should not bypass validation)
-			const payloadStringTimestamp = {
-				userInfo: {
-					id: "123",
-					email: "user@email.com",
-					name: "Test User",
-					emailVerified: true,
-				},
-				account: {
-					providerId: "google",
-					issuer: "https://accounts.google.com",
-					accountId: "123",
-					accessToken: "test",
-				},
-				state: "test-state",
-				callbackURL: "/dashboard",
-				timestamp: "not-a-number",
+				);
 			};
 
-			const encrypted3 = await symmetricEncrypt({
-				key: secret,
-				data: JSON.stringify(payloadStringTimestamp),
+			await expectInvalidPayload(null);
+			await expectInvalidPayload({ ...validPayload, callbackURL: "" });
+			await expectInvalidPayload({ ...validPayload, state: "" });
+			await expectInvalidPayload({ ...validPayload, timestamp: undefined });
+			await expectInvalidPayload({ ...validPayload, userInfo: undefined });
+			await expectInvalidPayload({
+				...validPayload,
+				timestamp: "not-a-number",
 			});
-
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted3}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("error=invalid_payload");
-					},
-				},
-			);
 		});
 
 		it("should use dedicated secret instead of global secret", async () => {
