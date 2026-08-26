@@ -1,4 +1,3 @@
-import { llms } from "fumadocs-core/source";
 import { notFound } from "next/navigation";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -7,11 +6,10 @@ import {
 	resolveVersionFromSlug,
 } from "../../../lib/docs-versions";
 import {
-	getLLMsIndexOptions,
+	getLLMsIndex,
 	getLLMText,
 	LLM_TEXT_ERROR,
 	normalizeLLMsSlug,
-	rewriteLLMsIndexLinks,
 } from "../../../lib/llm-text";
 import { getSourceFor } from "../../../lib/source";
 
@@ -27,12 +25,7 @@ export async function GET(
 	);
 	if (versionIndex && slug.length === 1) {
 		return new NextResponse(
-			rewriteLLMsIndexLinks(
-				llms(
-					getSourceFor(versionIndex.id),
-					getLLMsIndexOptions(versionIndex),
-				).index(),
-			),
+			getLLMsIndex(getSourceFor(versionIndex.id), versionIndex),
 			{
 				status: 200,
 				headers: { "Content-Type": "text/markdown; charset=utf-8" },

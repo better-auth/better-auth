@@ -1,6 +1,5 @@
-import { llms } from "fumadocs-core/source";
 import { docsVersions } from "@/lib/docs-versions";
-import { getLLMsIndexOptions, rewriteLLMsIndexLinks } from "@/lib/llm-text";
+import { getLLMsIndex } from "@/lib/llm-text";
 import { source } from "@/lib/source";
 
 export const revalidate = false;
@@ -11,7 +10,7 @@ export function GET() {
 		.map((version) => `- [${version.label}](/llms.txt/${version.id})`)
 		.join("\n");
 	const content = [
-		rewriteLLMsIndexLinks(llms(source, getLLMsIndexOptions()).index()),
+		getLLMsIndex(source),
 		"## Other Versions",
 		archivedVersions,
 	].join("\n\n");

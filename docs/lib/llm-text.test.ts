@@ -1,26 +1,14 @@
-import type { Root } from "fumadocs-core/page-tree";
 import { describe, expect, it } from "vitest";
 import { docsVersions } from "./docs-versions";
 import {
-	getLLMsIndexOptions,
+	getLLMsIndexTitle,
+	getLLMsPageUrl,
 	normalizeLLMsSlug,
-	rewriteLLMsIndexLinks,
 } from "./llm-text";
 
-const root: Root = {
-	type: "root",
-	name: "Get Started",
-	children: [],
-};
-
-describe("getLLMsIndexOptions", () => {
+describe("LLM routes", () => {
 	it("uses the Better Auth product identity for latest docs", () => {
-		const options = getLLMsIndexOptions();
-
-		expect(options.renderName?.(root, {})).toBe("Better Auth");
-		expect(options.renderDescription?.(root, {})).toBe(
-			"The most comprehensive authentication framework for TypeScript",
-		);
+		expect(getLLMsIndexTitle()).toBe("Better Auth");
 	});
 
 	it("identifies archived documentation indexes", () => {
@@ -28,20 +16,20 @@ describe("getLLMsIndexOptions", () => {
 		expect(version).toBeDefined();
 		if (!version) return;
 
-		const options = getLLMsIndexOptions(version);
-		expect(options.renderName?.(root, {})).toBe("Better Auth — v1.6");
+		expect(getLLMsIndexTitle(version)).toBe("Better Auth — v1.6");
 	});
-});
 
-describe("LLM routes", () => {
-	it("rewrites documentation links to Markdown endpoints", () => {
-		expect(
-			rewriteLLMsIndexLinks(
-				"- [Introduction](/docs/introduction)\n- [LLMs.txt](/llms.txt)",
-			),
-		).toBe(
-			"- [Introduction](/llms.txt/docs/introduction.md)\n- [LLMs.txt](/llms.txt)",
+	it("maps documentation pages to Markdown endpoints", () => {
+		expect(getLLMsPageUrl("/docs/introduction")).toBe(
+			"/llms.txt/docs/introduction.md",
 		);
+		expect(getLLMsPageUrl("/docs/plugins/oauth?tab=server#usage")).toBe(
+			"/llms.txt/docs/plugins/oauth.md?tab=server#usage",
+		);
+		expect(getLLMsPageUrl("/docs/foo(bar)/")).toBe(
+			"/llms.txt/docs/foo(bar).md",
+		);
+		expect(getLLMsPageUrl("/llms.txt")).toBe("/llms.txt");
 	});
 
 	it("normalizes Markdown version indexes before routing", () => {

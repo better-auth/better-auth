@@ -1,4 +1,6 @@
-import type { InferPageType, LLMsConfig } from "fumadocs-core/source";
+import type { Item, Node } from "fumadocs-core/page-tree";
+import type { InferPageType } from "fumadocs-core/source";
+import { llms } from "fumadocs-core/source";
 import type { DocsVersion } from "./docs-versions";
 import type { source } from "./source";
 
@@ -11,6 +13,10 @@ type PropertyDefinition = {
 	isServerOnly: boolean;
 	isClientOnly: boolean;
 };
+
+const docsPathPattern = /^\/docs(?:\/|$)/;
+const llmsDescription =
+	"The most comprehensive authentication framework for TypeScript";
 
 function extractAPIMethods(rawContent: string): string {
 	const apiMethodRegex = /<APIMethod\s+([^>]+)>([\s\S]*?)<\/APIMethod>/g;
@@ -267,31 +273,49 @@ ${processedContent}
 `;
 }
 
-export function getLLMsIndexOptions(version?: DocsVersion): LLMsConfig {
-	const title =
-		version && version.id !== "latest"
-			? `Better Auth — ${version.label}`
-			: "Better Auth";
+export function getLLMsIndexTitle(version?: DocsVersion): string {
+	return version && version.id !== "latest"
+		? `Better Auth — ${version.label}`
+		: "Better Auth";
+}
 
+export function getLLMsPageUrl(url: string): string {
+	if (!docsPathPattern.test(url)) return url;
+	const parsed = new URL(url, "https://better-auth.com");
+	const pathname = parsed.pathname.replace(/\/+$/, "");
+	return `/llms.txt${pathname}.md${parsed.search}${parsed.hash}`;
+}
+
+function withLLMsPageUrl(node: Item): Item {
+	return { ...node, url: getLLMsPageUrl(node.url) };
+}
+
+function withLLMsPageUrls(node: Node): Node {
+	if (node.type === "page") return withLLMsPageUrl(node);
+	if (node.type === "separator") return node;
 	return {
-		renderName(node) {
-			if (node.type === "root") return title;
-			return typeof node.name === "string" ? node.name : "";
-		},
-		renderDescription(node) {
-			if (node.type === "root") {
-				return "The most comprehensive authentication framework for TypeScript";
-			}
-			return typeof node.description === "string" ? node.description : "";
-		},
+		...node,
+		index: node.index ? withLLMsPageUrl(node.index) : undefined,
+		children: node.children.map(withLLMsPageUrls),
 	};
 }
 
-export function rewriteLLMsIndexLinks(content: string): string {
-	return content.replace(
-		/\]\((\/docs(?:\/[^)\s]*)?)\)/g,
-		(_match, url: string) => `](/llms.txt${url}.md)`,
-	);
+export function getLLMsIndex(
+	loader: typeof source,
+	version?: DocsVersion,
+): string {
+	const formatter = llms(loader);
+	const pageTree = loader.getPageTree();
+	const body = pageTree.children
+		.map((node) => formatter.indexNode(withLLMsPageUrls(node)))
+		.join("\n");
+	return [
+		`# ${getLLMsIndexTitle(version)}`,
+		"",
+		`> ${llmsDescription}`,
+		"",
+		body,
+	].join("\n");
 }
 
 export function normalizeLLMsSlug(input: readonly string[]): string[] {
