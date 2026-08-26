@@ -54,6 +54,19 @@ const guidedVerifier = join(
 	"verify-guided-migration.mjs",
 );
 const cliEntry = join(workspaceRootDirectory, "packages/cli/dist/index.mjs");
+const commandTimeoutMs = 60_000;
+
+function redactCommandOutput(output: string): string {
+	return output
+		.replace(
+			/^PUBLISHED_FIXTURE_RESULT=.*$/gm,
+			"PUBLISHED_FIXTURE_RESULT=[redacted]",
+		)
+		.replace(
+			/^GUIDED_MIGRATION_RESULT=.*$/gm,
+			"GUIDED_MIGRATION_RESULT=[redacted]",
+		);
+}
 
 function runNode(
 	cwd: string,
@@ -68,6 +81,24 @@ function runNode(
 		});
 		let stdout = "";
 		let stderr = "";
+		let settled = false;
+		let timeout: ReturnType<typeof setTimeout>;
+		const settle = (callback: () => void) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			callback();
+		};
+		timeout = setTimeout(() => {
+			child.kill();
+			settle(() =>
+				rejectCommand(
+					new Error(
+						`Subprocess timed out after ${commandTimeoutMs}ms:\n${redactCommandOutput(stdout)}\n${redactCommandOutput(stderr)}`,
+					),
+				),
+			);
+		}, commandTimeoutMs);
 		child.stdout.setEncoding("utf8");
 		child.stderr.setEncoding("utf8");
 		child.stdout.on("data", (chunk: string) => {
@@ -76,9 +107,11 @@ function runNode(
 		child.stderr.on("data", (chunk: string) => {
 			stderr += chunk;
 		});
-		child.once("error", rejectCommand);
+		child.once("error", (error) => {
+			settle(() => rejectCommand(error));
+		});
 		child.once("close", (exitCode) => {
-			resolveCommand({ exitCode, stderr, stdout });
+			settle(() => resolveCommand({ exitCode, stderr, stdout }));
 		});
 	});
 }
@@ -88,17 +121,8 @@ function requireSuccessfulCommand(
 	context: string,
 ): void {
 	if (result.exitCode === 0) return;
-	const safeStdout = result.stdout
-		.replace(
-			/^PUBLISHED_FIXTURE_RESULT=.*$/gm,
-			"PUBLISHED_FIXTURE_RESULT=[redacted]",
-		)
-		.replace(
-			/^GUIDED_MIGRATION_RESULT=.*$/gm,
-			"GUIDED_MIGRATION_RESULT=[redacted]",
-		);
 	throw new Error(
-		`${context} failed with exit code ${result.exitCode}:\n${safeStdout}\n${result.stderr}`,
+		`${context} failed with exit code ${result.exitCode}:\n${redactCommandOutput(result.stdout)}\n${redactCommandOutput(result.stderr)}`,
 	);
 }
 
@@ -107,7 +131,9 @@ function readSentinelResult<Result>(stdout: string, sentinel: string): Result {
 		.split("\n")
 		.find((candidate) => candidate.startsWith(`${sentinel}=`));
 	if (!line) {
-		throw new Error(`Missing ${sentinel} in subprocess output:\n${stdout}`);
+		throw new Error(
+			`Missing ${sentinel} in subprocess output:\n${redactCommandOutput(stdout)}`,
+		);
 	}
 	return JSON.parse(line.slice(sentinel.length + 1)) as Result;
 }
@@ -148,7 +174,7 @@ export async function prepareMigratedPublished16Database(
 	};
 	const seed = await runNode(
 		published16Directory,
-		[published16Seed, databasePath, "0"],
+		[published16Seed, databasePath],
 		environment,
 	);
 	requireSuccessfulCommand(seed, "Published Better Auth 1.6 seed");
@@ -287,7 +313,7 @@ export async function prepareMigratedPublished16Database(
 	}
 	const verification = await runNode(
 		migrationFixtureDirectory,
-		[guidedVerifier, databasePath, "0"],
+		[guidedVerifier, databasePath],
 		{
 			...environment,
 			BETTER_AUTH_MIGRATION_CLIENT_ID: source.clientId,
