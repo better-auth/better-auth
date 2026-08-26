@@ -68,7 +68,16 @@ export function wrapReleaseNotesComment(
 		`<!-- release-version:${version} -->`,
 		`<!-- release-head:${head} -->`,
 		"",
-		`## Release preview: v${version}`,
+		...(source === "raw"
+			? [
+					"> [!NOTE]",
+					"> **I'm touching grass.**",
+					">",
+					"> Rerun `/release-notes` anytime. If I'm back, I'll take it from there. Otherwise, the raw notes below are yours to review and edit.",
+					"",
+				]
+			: []),
+		`# Release preview: v${version}`,
 		"",
 		bodyStartMarker,
 		"",
@@ -76,12 +85,6 @@ export function wrapReleaseNotesComment(
 		"",
 		bodyEndMarker,
 		"",
-		...(source === "raw"
-			? [
-					"> **AI rewrite unavailable:** This preview uses deterministic release-note copy. Review and edit it before merging.",
-					"",
-				]
-			: []),
 		"Maintainers may edit the release notes above. Keep the hidden markers intact.",
 		...(merged
 			? [

@@ -15,6 +15,8 @@ describe("wrapReleaseNotesComment", () => {
 		expect(comment).toContain("<!-- better-auth-release-notes:v1 -->");
 		expect(comment).toContain(`<!-- release-version:${version} -->`);
 		expect(comment).toContain(`<!-- release-head:${head} -->`);
+		expect(comment).toContain(`# Release preview: v${version}`);
+		expect(comment).not.toContain(`## Release preview: v${version}`);
 		expect(comment).toContain("<!-- release-body:start -->");
 		expect(comment).toContain(notes);
 		expect(comment).toContain("<!-- release-body:end -->");
@@ -49,7 +51,10 @@ describe("wrapReleaseNotesComment", () => {
 			source: "raw",
 		});
 
-		expect(comment).toContain("AI rewrite unavailable");
+		expect(comment).toContain("> [!NOTE]");
+		expect(comment.indexOf("> [!NOTE]")).toBeLessThan(
+			comment.indexOf(`# Release preview: v${version}`),
+		);
 		expect(extractReleaseNotesComment(comment, version, head)).toBe(notes);
 	});
 
