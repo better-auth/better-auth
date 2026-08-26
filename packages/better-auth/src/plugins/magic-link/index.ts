@@ -237,7 +237,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email, metadata } = ctx.body;
+					const { metadata } = ctx.body;
+					const email = ctx.body.email.toLowerCase();
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
