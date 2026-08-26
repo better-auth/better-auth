@@ -11,7 +11,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  acknowledge:
+    if: >-
+      github.repository_owner == 'better-auth' &&
+      github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      startsWith(github.event.comment.body, '/release-notes')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Generate scoped App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-issues: write
+
+      - name: Acknowledge command
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          if [[ ! "$COMMENT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Comment ID is invalid"
+            exit 1
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content='eyes' >/dev/null
+
   generate:
+    needs: acknowledge
     if: >-
       github.repository_owner == 'better-auth' &&
       github.event.issue.pull_request &&
@@ -427,9 +462,20 @@ jobs:
     permissions:
       issues: write
     steps:
+      - name: Generate scoped App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-issues: write
+
       - name: Mark command as failed
+        continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           COMMENT_ID: ${{ github.event.comment.id }}
         run: |
           if [[ ! "$COMMENT_ID" =~ ^[0-9]+$ ]]; then
