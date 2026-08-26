@@ -121,6 +121,23 @@ describe("release notes command security", () => {
 		expect(rewrite.run).not.toContain("--allowedTools");
 	});
 
+	it("acknowledges release-note commands without expanding generator permissions", () => {
+		const acknowledge = getJob(commandWorkflow, "acknowledge");
+		const token = getStep(acknowledge, "Generate scoped App token");
+		const reaction = getStep(acknowledge, "Acknowledge command");
+		const generate = getJob(commandWorkflow, "generate");
+
+		expect(acknowledge.permissions).toEqual({
+			issues: "write",
+		});
+		expect(appTokenPermissions(token)).toEqual({
+			"permission-issues": "write",
+		});
+		expect(reaction["continue-on-error"]).toBe(true);
+		expect(reaction.run).toContain("content='eyes'");
+		expect(generate).not.toHaveProperty("needs");
+	});
+
 	it("creates a minimally scoped write token only in the comment job", () => {
 		const publishComment = getJob(commandWorkflow, "publish-comment");
 		const token = getStep(publishComment, "Generate scoped App token");
@@ -230,13 +247,17 @@ describe("release notes command security", () => {
 
 	it("reacts to failed release-note commands", () => {
 		const failure = getJob(commandWorkflow, "mark-failure");
+		const token = getStep(failure, "Generate scoped App token");
 		const reaction = getStep(failure, "Mark command as failed");
 
 		expect(failure.permissions).toEqual({ issues: "write" });
 		expect(failure.if?.replace(/\s+/g, " ")).toBe(
 			"!cancelled() && (needs.generate.result == 'failure' || needs.publish-comment.result == 'failure')",
 		);
-		expect(actionReferences(failure)).toEqual([]);
+		expect(appTokenPermissions(token)).toEqual({
+			"permission-issues": "write",
+		});
+		expect(reaction["continue-on-error"]).toBe(true);
 		expect(reaction.run).toContain("content='-1'");
 	});
 
