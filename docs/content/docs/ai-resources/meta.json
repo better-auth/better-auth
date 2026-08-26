@@ -1,5 +1,6 @@
 {
   "title": "AI Resources",
   "icon": "aiResources",
-  "pages": ["mcp", "skills", "[llmsTxt][LLMs.txt](/llms.txt)", "...", "!index"]
+  "pagesIndex": "index",
+  "pages": ["mcp", "skills", "[llmsTxt][LLMs.txt](/llms.txt)", "..."]
 }
