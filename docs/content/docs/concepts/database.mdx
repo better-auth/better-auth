@@ -413,7 +413,7 @@ export const sessionTableFields = [
 
 Table Name: `account`
 
-An account represents one authentication method linked to a user. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
+An account represents one authentication method linked to a user. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy. Under issuer strategy, a provider without a trusted authority uses the deterministic `local:oauth:<encoded providerId>` fallback namespace. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
 
 export const accountTableFields = [
 	{

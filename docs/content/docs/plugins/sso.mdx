@@ -374,7 +374,7 @@ const auth = betterAuth({
                 }
 
                 const provisionedUser = await findProvisionedUserByAccountKey({
-					issuer: input.accountKey.issuer,
+                    issuer: input.accountKey.issuer,
                     subject: input.accountKey.accountId,
                     database: context.database,
                 });
@@ -401,7 +401,7 @@ const auth = betterAuth({
 
 `providerUser` contains normalized profile fields for either protocol. Profile fields, OIDC UserInfo claims, and SAML attributes may still require application-specific validation before they are used for authorization. `providerReference` is an opaque reference to the provider configuration accepted for this authentication flow. It detects provider replacement or authentication-configuration changes during the flow; do not persist it as a tenant or user binding.
 
-`findProvisionedUserByAccountKey` is application-owned in this example. It should resolve the exact persisted issuer-and-subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
+`findProvisionedUserByAccountKey` is application-owned in this example. It should query the application's provisioning registry by the verified protocol authority and subject through the transaction-scoped `database` adapter; it does not query Better Auth's persisted `Account.issuer` namespace. Do not fall back to matching an email address when the exact provisioned subject is absent.
 
 The resolver returns one of three decisions:
 

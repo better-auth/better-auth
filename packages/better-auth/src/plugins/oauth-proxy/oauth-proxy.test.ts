@@ -631,6 +631,8 @@ describe("oauth-proxy", async () => {
 			// Production instance - handles OAuth callback
 			const production = await getTestInstance(
 				{
+					// Deliberately differ from the preview strategy: production only
+					// verifies and relays the authority; preview selects storage.
 					account: { identityStrategy: "provider-id" },
 					baseURL: "http://localhost:3000",
 					plugins: [oAuthProxy()],
