@@ -44,27 +44,25 @@ function getHeadingIds(content: string) {
 }
 
 function getMdxFiles(directory: string): string[] {
-	const files: string[] = [];
+	const mdxFiles: string[] = [];
 	for (const item of readdirSync(directory, { withFileTypes: true })) {
 		const itemPath = join(directory, item.name);
-		if (item.isDirectory()) files.push(...getMdxFiles(itemPath));
-		else if (item.name.endsWith(".mdx")) files.push(itemPath);
+		if (item.isDirectory()) mdxFiles.push(...getMdxFiles(itemPath));
+		else if (item.name.endsWith(".mdx")) mdxFiles.push(itemPath);
 	}
-	return files;
+	return mdxFiles;
 }
 
 function normalizeTrailingSlashAnchors(content: string) {
 	return content.replace(/(\/docs\/[^\s"'()<>{}\]]+?)\/#([\w-]+)/g, "$1#$2");
 }
 
-for (const version of docsVersions.filter(
-	(version) => version.id === "latest",
-)) {
+for (const version of docsVersions) {
 	const contentDirectory = join("content", version.contentDirectory);
 	for (const filePath of getMdxFiles(contentDirectory)) {
 		const segments = relative(contentDirectory, filePath)
 			.replace(/\.mdx$/, "")
-			.split("/");
+			.split(/[\\/]/);
 		if (segments[0] === "examples") continue;
 		if (segments.at(-1) === "index") segments.pop();
 

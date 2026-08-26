@@ -287,6 +287,22 @@ export function getLLMsIndexOptions(version?: DocsVersion): LLMsConfig {
 	};
 }
 
+export function rewriteLLMsIndexLinks(content: string): string {
+	return content.replace(
+		/\]\((\/docs(?:\/[^)\s]*)?)\)/g,
+		(_match, url: string) => `](/llms.txt${url}.md)`,
+	);
+}
+
+export function normalizeLLMsSlug(input: readonly string[]): string[] {
+	const slug = [...input];
+	const lastSegment = slug.at(-1);
+	if (lastSegment?.endsWith(".md")) {
+		slug[slug.length - 1] = lastSegment.slice(0, -3);
+	}
+	return slug[0] === "docs" ? slug.slice(1) : slug;
+}
+
 export const LLM_TEXT_ERROR = `# Documentation Not Available
 
 The requested Better Auth documentation page could not be loaded at this time.

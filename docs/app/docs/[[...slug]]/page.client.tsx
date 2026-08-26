@@ -19,6 +19,7 @@ import {
 	useState,
 	useTransition,
 } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 function useCopyButton(
@@ -29,14 +30,20 @@ function useCopyButton(
 
 	const onClick: MouseEventHandler = useEffectEvent(() => {
 		if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-		const res = Promise.resolve(onCopy());
+		const res = Promise.resolve().then(onCopy);
 
-		void res.then(() => {
-			setChecked(true);
-			timeoutRef.current = window.setTimeout(() => {
-				setChecked(false);
-			}, 1500);
-		});
+		void res.then(
+			() => {
+				setChecked(true);
+				timeoutRef.current = window.setTimeout(() => {
+					setChecked(false);
+				}, 1500);
+			},
+			(cause: unknown) => {
+				console.error("Failed to copy to clipboard:", cause);
+				toast.error("Failed to copy to clipboard");
+			},
+		);
 	});
 
 	useEffect(() => {
@@ -88,7 +95,7 @@ export function LLMCopyButton({ markdownUrl }: { markdownUrl: string }) {
 		});
 
 		startTransition(async () => {
-			await fetchPromise;
+			await fetchPromise.catch(() => undefined);
 		});
 
 		const item = new ClipboardItem({

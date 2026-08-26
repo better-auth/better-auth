@@ -10,6 +10,8 @@ import {
 	getLLMsIndexOptions,
 	getLLMText,
 	LLM_TEXT_ERROR,
+	normalizeLLMsSlug,
+	rewriteLLMsIndexLinks,
 } from "../../../lib/llm-text";
 import { getSourceFor } from "../../../lib/source";
 
@@ -19,31 +21,23 @@ export async function GET(
 	_req: NextRequest,
 	{ params }: { params: Promise<{ slug: string[] }> },
 ) {
-	let slug = (await params).slug;
+	const slug = normalizeLLMsSlug((await params).slug);
 	const versionIndex = docsVersions.find(
 		(version) => version.id !== "latest" && version.id === slug[0],
 	);
 	if (versionIndex && slug.length === 1) {
 		return new NextResponse(
-			llms(
-				getSourceFor(versionIndex.id),
-				getLLMsIndexOptions(versionIndex),
-			).index(),
+			rewriteLLMsIndexLinks(
+				llms(
+					getSourceFor(versionIndex.id),
+					getLLMsIndexOptions(versionIndex),
+				).index(),
+			),
 			{
 				status: 200,
 				headers: { "Content-Type": "text/markdown; charset=utf-8" },
 			},
 		);
-	}
-
-	// Remove .md extension if present in the last segment
-	if (slug[slug.length - 1]?.endsWith(".md")) {
-		slug = [...slug.slice(0, -1), slug[slug.length - 1].replace(/\.md$/, "")];
-	}
-
-	// Remove 'docs' prefix if present (since source already includes /docs in baseUrl)
-	if (slug[0] === "docs") {
-		slug = slug.slice(1);
 	}
 
 	const { version, relSlug } = resolveVersionFromSlug(slug);

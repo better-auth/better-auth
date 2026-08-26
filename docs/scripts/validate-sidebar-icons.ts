@@ -90,7 +90,7 @@ const pageIcons = getFiles(contentDirectory, ".mdx")
 		if (!key) return [];
 		const segments = relative(contentDirectory, file)
 			.replace(/\.mdx$/, "")
-			.split("/");
+			.split(/[\\/]/);
 		if (segments.at(-1) === "index") segments.pop();
 		const href = `/docs/${segments.join("/")}`.replace(/\/$/, "");
 		return [[href, renderIcon(key, file)]];

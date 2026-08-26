@@ -1,5 +1,3 @@
-import type { SVGProps } from "react";
-
 export const authenticationIcons = {
 	authenticationEmailPassword: () => (
 		<svg
@@ -191,7 +189,7 @@ export const authenticationIcons = {
 			/>
 		</svg>
 	),
-	authenticationKakao: (props?: SVGProps<SVGSVGElement>) => (
+	authenticationKakao: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
@@ -526,7 +524,7 @@ export const authenticationIcons = {
 			/>
 		</svg>
 	),
-	authenticationZoom: (props?: SVGProps<SVGSVGElement>) => (
+	authenticationZoom: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
 			width="1.2em"
