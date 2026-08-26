@@ -1169,7 +1169,8 @@ export type BetterAuthOptions = {
 				 * Changing strategy on populated 1.7 data requires a reviewed re-key
 				 * migration.
 				 *
-				 * @default "issuer"
+				 * @default "issuer" when omitted in v1.7 compatibility mode.
+				 * Generated configurations explicitly use "provider-id".
 				 */
 				identityStrategy?: "issuer" | "provider-id";
 				/**

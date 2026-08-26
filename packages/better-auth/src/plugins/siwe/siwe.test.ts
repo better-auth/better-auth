@@ -477,9 +477,13 @@ describe("siwe", async () => {
 		);
 	});
 
-	it("should accept verification with email when anonymous is false", async () => {
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("accepts verification with email under explicit %s identity strategy", async (identityStrategy) => {
 		const { auth, client } = await getTestInstance(
 			{
+				account: { identityStrategy },
 				plugins: [
 					siwe({
 						domain,

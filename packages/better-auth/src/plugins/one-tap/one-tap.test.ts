@@ -148,12 +148,15 @@ describe("one-tap implicit linking gate", async () => {
 		expect(accounts.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("stores the provider namespace under provider-id identity", async () => {
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("stores the account identity under explicit %s strategy", async (identityStrategy) => {
 		verifiedPayload.email = "provider-scoped-one-tap@example.com";
 		verifiedPayload.sub = "provider-scoped-one-tap-subject";
 		const { auth, client } = await getTestInstance(
 			{
-				account: { identityStrategy: "provider-id" },
+				account: { identityStrategy },
 				socialProviders: {
 					google: {
 						clientId: "test-client",
@@ -184,7 +187,10 @@ describe("one-tap implicit linking gate", async () => {
 			}),
 		).resolves.toMatchObject({
 			accountId: verifiedPayload.sub,
-			issuer: "local:oauth:google",
+			issuer:
+				identityStrategy === "provider-id"
+					? "local:oauth:google"
+					: "https://accounts.google.com",
 			providerId: "google",
 		});
 	});

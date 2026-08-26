@@ -286,9 +286,10 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 	});
 
-	it("keeps the verified OIDC issuer in resolution hooks while storing provider-scoped identity", async ({
-		onTestFinished,
-	}) => {
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("keeps the verified OIDC issuer in resolution hooks under explicit %s identity", async (identityStrategy) => {
 		subject = "provider-scoped-directory-user";
 		email = "provider-scoped@example.com";
 		const inputs: SSOUserResolutionInput[] = [];
@@ -299,8 +300,8 @@ describe("SSO OIDC user resolution HTTP", () => {
 					return { action: "continue" };
 				},
 			},
-			onTestFinished,
-			{ account: { identityStrategy: "provider-id" } },
+			(cleanup) => deferredCleanups.push(cleanup),
+			{ account: { identityStrategy } },
 		);
 
 		const signIn = await completeSignIn(instance.baseURL);
@@ -322,7 +323,10 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "local:oauth:workforce",
+				issuer:
+					identityStrategy === "provider-id"
+						? "local:oauth:workforce"
+						: identityProvider.issuer.url,
 				accountId: subject,
 				providerId: "workforce",
 			}),

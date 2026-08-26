@@ -7404,7 +7404,10 @@ describe("SAML user resolution HTTP", () => {
 		).toBe(1);
 	});
 
-	it("keeps the verified SAML issuer in resolution hooks while storing provider-scoped identity", async () => {
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("keeps the verified SAML issuer in resolution hooks under explicit %s identity", async (identityStrategy) => {
 		const inputs: SSOUserResolutionInput[] = [];
 		const instance = await createSAMLUserResolutionInstance(
 			{
@@ -7413,7 +7416,7 @@ describe("SAML user resolution HTTP", () => {
 					return { action: "continue" };
 				},
 			},
-			{ account: { identityStrategy: "provider-id" } },
+			{ account: { identityStrategy } },
 		);
 
 		const signIn = await completeSAMLSignIn(instance.baseURL);
@@ -7431,7 +7434,10 @@ describe("SAML user resolution HTTP", () => {
 		await expect(
 			instance.db.findOne<Account>({ model: "account", where: [] }),
 		).resolves.toMatchObject({
-			issuer: "local:oauth:workforce-saml",
+			issuer:
+				identityStrategy === "provider-id"
+					? "local:oauth:workforce-saml"
+					: "http://localhost:8081/api/sso/saml2/idp/metadata",
 			accountId: "test@email.com",
 			providerId: "workforce-saml",
 		});
