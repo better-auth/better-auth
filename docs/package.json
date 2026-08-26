@@ -13,9 +13,9 @@
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "pnpm -w biome check docs/ --fix --unsafe",
-    "sync-versions": "tsx scripts/sync-versions.ts",
-    "sync-typesense": "tsx scripts/sync-typesense.ts",
-    "validate:docs": "tsx scripts/validate-meta.ts content/docs && tsx scripts/validate-sidebar-icons.ts && tsx scripts/validate-links.ts",
+    "sync-versions": "node scripts/sync-versions.ts",
+    "sync-typesense": "node scripts/sync-typesense.ts",
+    "validate:docs": "node scripts/validate-meta.ts content/docs && tsx scripts/validate-sidebar-icons.ts && node scripts/validate-links.ts",
     "format:md": "remark . --ext md,mdx --output --quiet",
     "format:check": "remark . --ext md,mdx --quiet --frail",
     "typecheck:consumer": "git clean -xdf .next .source && next typegen && fumadocs-mdx && tsc --noEmit --incremental false"
