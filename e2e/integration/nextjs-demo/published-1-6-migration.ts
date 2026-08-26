@@ -239,6 +239,46 @@ export async function prepareMigratedPublished16Database(
 		throw new Error(`Guided migration was not applied: ${apply.stdout}`);
 	}
 
+	const repeatedPlan = await runNode(
+		migrationFixtureDirectory,
+		[
+			cliEntry,
+			"migrate",
+			"plan",
+			decisionsFile,
+			"--config",
+			guidedConfig,
+			"--json",
+		],
+		environment,
+	);
+	requireSuccessfulCommand(
+		repeatedPlan,
+		"Repeated Better Auth 1.7 migration plan",
+	);
+	const parsedRepeatedPlan = JSON.parse(repeatedPlan.stdout) as {
+		blockers?: unknown[];
+		changes?: {
+			addColumns?: unknown[];
+			addIndexes?: unknown[];
+			createTables?: unknown[];
+		};
+		releaseMigration?: unknown;
+		status?: string;
+	};
+	if (
+		parsedRepeatedPlan.status !== "up-to-date" ||
+		parsedRepeatedPlan.blockers?.length !== 0 ||
+		parsedRepeatedPlan.changes?.addColumns?.length !== 0 ||
+		parsedRepeatedPlan.changes?.addIndexes?.length !== 0 ||
+		parsedRepeatedPlan.changes?.createTables?.length !== 0 ||
+		parsedRepeatedPlan.releaseMigration !== undefined
+	) {
+		throw new Error(
+			`Guided migration did not become up-to-date after apply: ${repeatedPlan.stdout}`,
+		);
+	}
+
 	const provisionedSourceAccount = source.accounts.find(
 		({ providerId }) => providerId === "workforce-scim",
 	);
