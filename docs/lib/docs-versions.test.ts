@@ -9,7 +9,6 @@ import {
 } from "./docs-versions";
 
 const latestVersion = docsVersions.find((version) => version.id === "latest")!;
-const betaVersion = docsVersions.find((version) => version.id === "beta")!;
 const version16 = docsVersions.find((version) => version.id === "1.6")!;
 
 const availability: VersionAvailability = {
@@ -52,8 +51,8 @@ describe("documentation versions", () => {
 	it("falls back to the closest parent page", () => {
 		expect(
 			getVersionTargetHref(
-				"/docs/beta/plugins/scim/reference",
-				betaVersion,
+				"/docs/plugins/scim/reference",
+				latestVersion,
 				version16,
 				availability,
 			),

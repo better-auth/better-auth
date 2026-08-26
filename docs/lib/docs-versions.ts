@@ -26,14 +26,15 @@ export interface DocsVersion {
 }
 
 export const docsVersions: DocsVersion[] = [
-	{
-		label: "v1.8 (Beta)",
-		releaseLine: "1.8",
-		branch: "next",
-		contentDirectory: "_generated/beta",
-		id: "beta",
-		badge: null,
-	},
+	// Uncomment when v1.8 beta documentation work begins.
+	// {
+	// 	label: "v1.8 (Beta)",
+	// 	releaseLine: "1.8",
+	// 	branch: "next",
+	// 	contentDirectory: "_generated/beta",
+	// 	id: "beta",
+	// 	badge: null,
+	// },
 	{
 		label: "v1.7 (Latest)",
 		releaseLine: "1.7",
