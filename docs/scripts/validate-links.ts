@@ -53,6 +53,10 @@ function getMdxFiles(directory: string): string[] {
 	return files;
 }
 
+function normalizeTrailingSlashAnchors(content: string) {
+	return content.replace(/(\/docs\/[^\s"'()<>{}\]]+?)\/#([\w-]+)/g, "$1#$2");
+}
+
 for (const version of docsVersions.filter(
 	(version) => version.id === "latest",
 )) {
@@ -67,12 +71,13 @@ for (const version of docsVersions.filter(
 		const canonicalUrl = `/docs/${segments.join("/")}`.replace(/\/$/, "");
 		const url = versionedDocsHref(canonicalUrl, version);
 		const rawContent = readFileSync(filePath, "utf8");
-		const content =
+		const versionedContent =
 			version.id !== "latest"
 				? rawContent
 						.replaceAll("](/docs/", `](/docs/${version.id}/`)
 						.replace(/href=(["'])\/docs\//g, `href=$1/docs/${version.id}/`)
 				: rawContent;
+		const content = normalizeTrailingSlashAnchors(versionedContent);
 
 		routeEntries.push({
 			value: {

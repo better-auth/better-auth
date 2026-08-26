@@ -1,4 +1,4 @@
-import type { InferPageType } from "fumadocs-core/source";
+import type { InferPageType, LLMsConfig } from "fumadocs-core/source";
 import type { DocsVersion } from "./docs-versions";
 import type { source } from "./source";
 
@@ -265,6 +265,26 @@ ${docPage.data.description || ""}
 
 ${processedContent}
 `;
+}
+
+export function getLLMsIndexOptions(version?: DocsVersion): LLMsConfig {
+	const title =
+		version && version.id !== "latest"
+			? `Better Auth — ${version.label}`
+			: "Better Auth";
+
+	return {
+		renderName(node) {
+			if (node.type === "root") return title;
+			return typeof node.name === "string" ? node.name : "";
+		},
+		renderDescription(node) {
+			if (node.type === "root") {
+				return "The most comprehensive authentication framework for TypeScript";
+			}
+			return typeof node.description === "string" ? node.description : "";
+		},
+	};
 }
 
 export const LLM_TEXT_ERROR = `# Documentation Not Available

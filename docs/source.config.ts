@@ -1,3 +1,4 @@
+import { pageSchema } from "fumadocs-core/source/schema";
 import {
 	defineCollections,
 	defineConfig,
@@ -11,9 +12,15 @@ import {
 } from "fumadocs-typescript";
 import * as z from "zod";
 
+const docsPageSchema = pageSchema.extend({
+	sidebarBadge: z.string().min(1).optional(),
+	sidebarTitle: z.string().min(1).optional(),
+});
+
 export const docs = defineDocs({
 	dir: "./content/docs",
 	docs: {
+		schema: docsPageSchema,
 		postprocess: {
 			includeProcessedMarkdown: true,
 		},
@@ -24,6 +31,7 @@ export const docs = defineDocs({
 export const docsBeta = defineDocs({
 	dir: "./content/_generated/beta",
 	docs: {
+		schema: docsPageSchema,
 		postprocess: {
 			includeProcessedMarkdown: true,
 		},
@@ -34,6 +42,7 @@ export const docsBeta = defineDocs({
 export const docsV16 = defineDocs({
 	dir: "./content/_generated/v1-6",
 	docs: {
+		schema: docsPageSchema,
 		postprocess: {
 			includeProcessedMarkdown: true,
 		},

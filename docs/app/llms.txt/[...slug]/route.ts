@@ -6,7 +6,11 @@ import {
 	docsVersions,
 	resolveVersionFromSlug,
 } from "../../../lib/docs-versions";
-import { getLLMText, LLM_TEXT_ERROR } from "../../../lib/llm-text";
+import {
+	getLLMsIndexOptions,
+	getLLMText,
+	LLM_TEXT_ERROR,
+} from "../../../lib/llm-text";
 import { getSourceFor } from "../../../lib/source";
 
 export const revalidate = false;
@@ -20,10 +24,16 @@ export async function GET(
 		(version) => version.id !== "latest" && version.id === slug[0],
 	);
 	if (versionIndex && slug.length === 1) {
-		return new NextResponse(llms(getSourceFor(versionIndex.id)).index(), {
-			status: 200,
-			headers: { "Content-Type": "text/markdown; charset=utf-8" },
-		});
+		return new NextResponse(
+			llms(
+				getSourceFor(versionIndex.id),
+				getLLMsIndexOptions(versionIndex),
+			).index(),
+			{
+				status: 200,
+				headers: { "Content-Type": "text/markdown; charset=utf-8" },
+			},
+		);
 	}
 
 	// Remove .md extension if present in the last segment

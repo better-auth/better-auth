@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePageTree } from "@/app/docs/provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Badge } from "@/components/ui/badge";
 import {
 	MobileVersionSwitcher,
 	SidebarVersionSwitcher,
@@ -18,12 +19,15 @@ import {
 	setMobileNavigationView,
 	useMobileNavigationView,
 } from "@/lib/mobile-navigation";
+import type { SidebarPageNode } from "@/lib/page-tree";
+import { isPathWithinFolderIndex } from "@/lib/page-tree";
 import { cn } from "@/lib/utils";
 
 interface NavigationSection {
 	id: string;
 	name: ReactNode;
 	icon?: ReactNode;
+	index?: SidebarPageNode;
 	children: Node[];
 }
 
@@ -50,6 +54,7 @@ function getNavigationSections(tree: Root): NavigationSection[] {
 			id: node.$id ?? `folder-${sections.length}`,
 			name: node.name,
 			icon: node.icon,
+			index: node.index,
 			children: node.children,
 		});
 	}
@@ -60,17 +65,48 @@ function getNavigationSections(tree: Root): NavigationSection[] {
 function nodeContainsPath(node: Node, pathname: string): boolean {
 	if (node.type === "separator") return false;
 	if (node.type === "page") return node.url === pathname;
+	const indexUrl = node.index?.url;
 	return (
-		node.index?.url === pathname ||
+		isPathWithinFolderIndex(indexUrl, pathname) ||
 		node.children.some((child) => nodeContainsPath(child, pathname))
 	);
 }
 
 function getDefaultOpen(sections: NavigationSection[], pathname: string) {
-	const index = sections.findIndex((section) =>
-		section.children.some((node) => nodeContainsPath(node, pathname)),
-	);
+	const index = sections.findIndex((section) => {
+		const indexUrl = section.index?.url;
+		return (
+			isPathWithinFolderIndex(indexUrl, pathname) ||
+			section.children.some((node) => nodeContainsPath(node, pathname))
+		);
+	});
 	return index === -1 ? 0 : index;
+}
+
+function useActiveItemScroll(active: boolean) {
+	const ref = useRef<HTMLAnchorElement>(null);
+
+	useEffect(() => {
+		if (!active) return;
+		const element = ref.current;
+		const viewport = element?.closest<HTMLElement>(
+			"[data-docs-sidebar-viewport]",
+		);
+		if (!element || !viewport || viewport.getClientRects().length === 0) return;
+
+		const elementRect = element.getBoundingClientRect();
+		const viewportRect = viewport.getBoundingClientRect();
+		if (
+			elementRect.top >= viewportRect.top &&
+			elementRect.bottom <= viewportRect.bottom
+		) {
+			return;
+		}
+
+		element.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [active]);
+
+	return ref;
 }
 
 function useMobileDialog(active: boolean) {
@@ -176,7 +212,10 @@ export function DocsSidebar() {
 							<div className="border-b border-foreground/6 py-1">
 								<MobileVersionSwitcher />
 							</div>
-							<div className="flex-1 min-h-0 overflow-y-auto">
+							<div
+								data-docs-sidebar-viewport
+								className="flex-1 min-h-0 overflow-y-auto"
+							>
 								<SidebarNavigation
 									sections={sections}
 									pathname={pathname}
@@ -233,27 +272,15 @@ function SidebarNavigation({
 	const [currentOpen, setCurrentOpen] = useState(() =>
 		getDefaultOpen(sections, pathname),
 	);
-	const navigationRef = useRef<HTMLDivElement>(null);
 	const navigationId = useId();
 
 	useEffect(() => {
 		setCurrentOpen(getDefaultOpen(sections, pathname));
 	}, [pathname, sections]);
 
-	useEffect(() => {
-		if (mobile) return;
-		const timer = setTimeout(() => {
-			const activeElement = navigationRef.current?.querySelector<HTMLElement>(
-				"[data-active='true']",
-			);
-			activeElement?.scrollIntoView({ block: "center", behavior: "smooth" });
-		}, 380);
-		return () => clearTimeout(timer);
-	}, [currentOpen, mobile, pathname]);
-
 	const content = (
 		<MotionConfig transition={{ duration: 0.35, type: "spring", bounce: 0 }}>
-			<div ref={navigationRef} className="flex flex-col">
+			<div className="flex flex-col">
 				{sections.map((section, index) => {
 					const panelId = `${navigationId}-section-${index}`;
 					return (
@@ -313,6 +340,7 @@ function SidebarNavigation({
 	if (mobile) return content;
 	return (
 		<nav
+			data-docs-sidebar-viewport
 			className="flex-1 overflow-y-auto overflow-x-hidden pb-3 sidebar-scroll"
 			style={{
 				maskImage:
@@ -473,15 +501,17 @@ function NavigationLink({
 	onNavigate,
 	nested,
 }: {
-	node: Extract<Node, { type: "page" }>;
+	node: SidebarPageNode;
 	active: boolean;
 	onNavigate?: () => void;
 	nested: boolean;
 }) {
 	const opensNewTab = node.external && node.url.startsWith("http");
+	const linkRef = useActiveItemScroll(active);
 
 	return (
 		<Link
+			ref={linkRef}
 			href={node.url}
 			target={opensNewTab ? "_blank" : undefined}
 			rel={opensNewTab ? "noreferrer noopener" : undefined}
@@ -498,8 +528,35 @@ function NavigationLink({
 			<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
 				{node.icon ?? <FileBoxIcon />}
 			</span>
-			<span className="min-w-0 grow truncate">{node.name}</span>
+			<span className="min-w-0 grow truncate">
+				{node.sidebarTitle ?? node.name}
+			</span>
+			{node.sidebarBadge ? (
+				<SidebarBadge active={active}>{node.sidebarBadge}</SidebarBadge>
+			) : null}
 		</Link>
+	);
+}
+
+function SidebarBadge({
+	active,
+	children,
+}: {
+	active: boolean;
+	children: string;
+}) {
+	return (
+		<Badge
+			variant="outline"
+			className={cn(
+				"pointer-events-none rounded-none border-dashed px-1.5 py-0 text-[9px] uppercase tracking-wider",
+				active
+					? "border-solid bg-foreground/10 text-foreground"
+					: "text-foreground/55 border-foreground/25",
+			)}
+		>
+			{children}
+		</Badge>
 	);
 }
 
