@@ -21,16 +21,20 @@ async function runCli(args: string[], cwd: string) {
 				env: { ...process.env, BETTER_AUTH_TELEMETRY_DISABLED: "true" },
 			},
 		);
-		return { exitCode: 0, output: `${stdout}${stderr}` };
+		return { exitCode: 0, output: `${stdout}${stderr}`, stderr, stdout };
 	} catch (error) {
 		const failure = error as {
 			code?: number;
 			stdout?: string;
 			stderr?: string;
 		};
+		const stdout = failure.stdout ?? "";
+		const stderr = failure.stderr ?? "";
 		return {
 			exitCode: failure.code ?? 1,
-			output: `${failure.stdout ?? ""}${failure.stderr ?? ""}`,
+			output: `${stdout}${stderr}`,
+			stderr,
+			stdout,
 		};
 	}
 }
@@ -153,13 +157,13 @@ afterEach(() => {
 describe("auth migrate: requiring the 1.6 account identity decision", () => {
 	it("blocks a populated 1.6 account table when the strategy is omitted", async () => {
 		const { cwd, databasePath } = createProject();
-		const { exitCode, output } = await runCli(
+		const { exitCode, output, stdout } = await runCli(
 			["migrate", "plan", "--config", "auth.ts", "--json"],
 			cwd,
 		);
 
 		expect(exitCode).toBe(1);
-		expect(JSON.parse(output)).toMatchObject({
+		expect(JSON.parse(stdout)).toMatchObject({
 			accountIdentity: {
 				detectedStrategy: "provider-id",
 				selectedStrategy: "issuer",
@@ -205,7 +209,7 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 			cwd,
 		);
 		expect(planned.exitCode).toBe(0);
-		expect(JSON.parse(planned.output)).toMatchObject({
+		expect(JSON.parse(planned.stdout)).toMatchObject({
 			accountIdentity: {
 				selectedStrategy: "provider-id",
 				detectedStrategy: "provider-id",
@@ -238,7 +242,7 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 			cwd,
 		);
 		expect(applied.exitCode).toBe(0);
-		expect(JSON.parse(applied.output)).toMatchObject({
+		expect(JSON.parse(applied.stdout)).toMatchObject({
 			mode: "apply",
 			plan: {
 				status: "ready",
