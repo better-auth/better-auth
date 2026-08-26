@@ -135,7 +135,7 @@ describe("release notes command security", () => {
 		});
 		expect(reaction["continue-on-error"]).toBe(true);
 		expect(reaction.run).toContain("content='eyes'");
-		expect(generate).toHaveProperty("needs", "acknowledge");
+		expect(generate).not.toHaveProperty("needs");
 	});
 
 	it("creates a minimally scoped write token only in the comment job", () => {

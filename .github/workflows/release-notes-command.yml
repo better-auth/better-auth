@@ -46,7 +46,6 @@ jobs:
             -f content='eyes' >/dev/null
 
   generate:
-    needs: acknowledge
     if: >-
       github.repository_owner == 'better-auth' &&
       github.event.issue.pull_request &&
