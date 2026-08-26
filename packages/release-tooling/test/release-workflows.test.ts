@@ -249,7 +249,12 @@ describe("release notes command security", () => {
 		expect(draftWorkflow.content).not.toContain("pull_request_target");
 		expect(draftWorkflow.content).toContain("ready_for_review");
 		expect(draftWorkflow.content).toContain("edited");
-		expect(draftWorkflow.content).toContain("github.event.changes.base");
+		expect(draftWorkflow.content).toContain(
+			"github.event.changes.base.ref.from == 'main'",
+		);
+		expect(draftWorkflow.content).not.toContain(
+			"github.event.changes.base.from.ref",
+		);
 		expect(draftWorkflow.content).toContain("better-release[bot]");
 		expect(keepDraft.run).toContain('gh pr ready "$PR_NUMBER" --undo');
 	});

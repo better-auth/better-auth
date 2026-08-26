@@ -17,7 +17,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       (startsWith(github.event.pull_request.head.ref, 'changeset-release/') ||
        (github.event.pull_request.head.ref == 'next' &&
-        (github.event.pull_request.base.ref == 'main' || github.event.changes.base.from.ref == 'main'))) &&
+        (github.event.pull_request.base.ref == 'main' || github.event.changes.base.ref.from == 'main'))) &&
       (github.event.action != 'edited' || github.event.changes.base != null) &&
       (github.event.action != 'ready_for_review' ||
        !contains(fromJSON('["better-release[bot]", "github-actions[bot]"]'), github.event.sender.login))
