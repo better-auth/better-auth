@@ -370,7 +370,7 @@ describe("release notes command security", () => {
 			'TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
 		);
 		expect(authorize.run).toContain("^v[0-9]+\\.[0-9]+\\.x$");
-		expect(prDetails.run).toContain("^v[0-9]+\\.[0-9]+\\.x$");
+		expect(prDetails.run).toContain('"$HEAD_REF" == v*.*.x');
 		expect(verifyChangesetsWorkflow.content).toContain("'v*.*.x'");
 		expect(verifyChangesetsWorkflow.content).not.toContain("release/**");
 	});
