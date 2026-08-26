@@ -2488,6 +2488,7 @@ describe("active-sessions list ttl", () => {
 				getAndDelete: (key: string) => {
 					const value = data.get(key) ?? null;
 					data.delete(key);
+					delete ttls[key];
 					return value;
 				},
 				increment: () => 1,
@@ -2518,9 +2519,63 @@ describe("active-sessions list ttl", () => {
 
 		await ctx.internalAdapter.deleteSession(drop);
 
+		// The remaining entry floors to a ttl of 0, so the list must be dropped
+		// rather than written without an expiry. Unpatched, the key survives
+		// with ttl 0 and never expires.
+		expect(data.has(`active-sessions-${userId}`)).toBe(false);
+	});
+
+	it("rewrites the list with a positive ttl when a session outlives a second", async () => {
+		const data = new Map<string, string>();
+		const ttls: Record<string, number | undefined> = {};
+		const opts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					data.set(key, value);
+					ttls[key] = ttl;
+				},
+				get: (key: string) => data.get(key) ?? null,
+				delete: (key: string) => {
+					data.delete(key);
+					delete ttls[key];
+				},
+				getAndDelete: (key: string) => {
+					const value = data.get(key) ?? null;
+					data.delete(key);
+					delete ttls[key];
+					return value;
+				},
+				increment: () => 1,
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(opts)).runMigrations();
+		const ctx = await init(opts);
+
+		const now = Date.now();
+		const userId = "user-ttl-kept";
+		const keep = "token-hour-out";
+		const drop = "token-expiring-soon";
+
+		data.set(
+			drop,
+			JSON.stringify({
+				session: { token: drop, userId },
+				user: { id: userId },
+			}),
+		);
+		data.set(
+			`active-sessions-${userId}`,
+			JSON.stringify([
+				{ token: drop, expiresAt: now + 300 },
+				{ token: keep, expiresAt: now + 3_600_000 },
+			]),
+		);
+
+		await ctx.internalAdapter.deleteSession(drop);
+
 		const listKey = `active-sessions-${userId}`;
-		if (data.has(listKey)) {
-			expect(ttls[listKey]).toBeGreaterThan(0);
-		}
+		expect(data.has(listKey)).toBe(true);
+		expect(ttls[listKey]).toBeGreaterThan(0);
 	});
 });
