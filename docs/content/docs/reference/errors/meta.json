@@ -1,0 +1,27 @@
+{
+  "title": "Errors",
+  "icon": "referenceErrors",
+  "pagesIndex": "index",
+  "pages": [
+    "invalid_callback_request",
+    "invalid_code",
+    "internal_server_error",
+    "state_not_found",
+    "state_invalid",
+    "state_mismatch",
+    "no_code",
+    "no_callback_url",
+    "oauth_provider_not_found",
+    "email_not_found",
+    "email_doesn't_match",
+    "unable_to_get_user_info",
+    "unable_to_link_account",
+    "unable_to_create_user",
+    "unable_to_create_session",
+    "account_not_linked",
+    "account_already_linked_to_different_user",
+    "signup_disabled",
+    "...",
+    "!unknown"
+  ]
+}
