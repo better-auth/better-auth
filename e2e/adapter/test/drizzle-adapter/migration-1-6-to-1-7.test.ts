@@ -19,7 +19,7 @@ it("migrates published 1.6.30 accounts and OAuth records through the Drizzle ada
 		});
 
 		const currentOptions = {
-			account: { identityStrategy: "issuer" as const },
+			account: { identityStrategy: "provider-id" as const },
 			baseURL: "http://localhost:3000",
 			emailAndPassword: { enabled: true },
 			plugins: [

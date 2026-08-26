@@ -258,7 +258,7 @@ async function exerciseAccountAndOrganizationMigration({
 	await beforeMigrate?.();
 
 	const auth17 = betterAuth({
-		account: { identityStrategy: "issuer" },
+		account: { identityStrategy: "provider-id" },
 		baseURL: "http://localhost:3000",
 		database,
 		emailAndPassword: {
@@ -379,7 +379,7 @@ async function exerciseOAuthProviderMigration({
 	});
 	configureCurrentPlugin?.(currentPlugin);
 	const auth17 = betterAuth({
-		account: { identityStrategy: "issuer" },
+		account: { identityStrategy: "provider-id" },
 		baseURL: "http://localhost:3000",
 		database,
 		emailAndPassword: {
@@ -510,14 +510,7 @@ async function exerciseOAuthProviderMigration({
 		migrated: 0,
 		providers: {},
 	});
-	expect(rerun.oauthProvider).toMatchObject({
-		clients: { migrated: 1 },
-		consents:
-			consentStrategy === "migrate"
-				? { migrated: 1, reauthorizationRequired: 0 }
-				: { migrated: 0, reauthorizationRequired: 1 },
-		tokens: { revoked: 1 },
-	});
+	expect(rerun.oauthProvider).toBeUndefined();
 }
 
 it("migrates users created by published 1.6.30 and authenticates them through 1.7 on SQLite", {
@@ -813,7 +806,7 @@ it("rejects invalid OAuth data before changing the 1.6 database", async () => {
 		database.exec(`UPDATE oauthApplication SET redirectUrls = ''`);
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database,
 			emailAndPassword: { enabled: true },
@@ -920,7 +913,7 @@ it("rolls back the SQLite release migration when schema application is blocked",
 		`);
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database,
 			emailAndPassword: { enabled: true },
@@ -965,7 +958,7 @@ it("rolls back the SQLite release migration when an OAuth record cannot be creat
 		`);
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database,
 			emailAndPassword: { enabled: true },
@@ -1120,7 +1113,7 @@ it("repairs a MySQL account table an earlier migration filled with empty issuers
 		const auth17 = betterAuth({
 			baseURL: "http://localhost:3000",
 			database: pool,
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			emailAndPassword: { enabled: true },
 		});
 		await expect(migrateFrom16(auth17.options, {})).resolves.toMatchObject({
@@ -1199,7 +1192,7 @@ it("ignores a matching account index outside the active PostgreSQL schema", {
 		const auth17 = betterAuth({
 			baseURL: "http://localhost:3000",
 			database: pool,
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			emailAndPassword: { enabled: true },
 		});
 		await expect(migrateFrom16(auth17.options, {})).resolves.toMatchObject({
@@ -1530,12 +1523,8 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 				migrated: 0,
 				providers: {},
 			},
-			scim: {
-				identities: [],
-				reprovisionRequired: true,
-				retiredProviders: 1,
-			},
 		});
+		expect(rerun.scim).toBeUndefined();
 		const reprovisioned = await auth17.api.createSCIMUser({
 			body: {
 				name: { formatted: "Ada Provisioned" },
@@ -1635,7 +1624,7 @@ it("checkpoints MySQL legacy tables and rolls back interrupted SCIM retirement",
 			},
 		};
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database: { db: currentDatabase, transaction: true, type: "mysql" },
 			emailAndPassword: { enabled: true },

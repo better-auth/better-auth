@@ -154,7 +154,7 @@ import { jwt } from "better-auth/plugins";
 import { Pool } from "pg";
 
 export const auth = betterAuth({
-	account: { identityStrategy: "issuer" },
+	account: { identityStrategy: "provider-id" },
 	baseURL: "http://localhost:3000",
 	database: new Pool({ connectionString: ${JSON.stringify(connectionString)} }),
 	emailAndPassword: { enabled: true },
@@ -260,7 +260,7 @@ it("guides a populated 1.6.30 PostgreSQL database through the CLI decisions file
 		expect(applyRun.stdout).toContain("migration was completed successfully!");
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database: pool,
 			emailAndPassword: { enabled: true },
