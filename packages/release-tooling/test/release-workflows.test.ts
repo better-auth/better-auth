@@ -27,7 +27,9 @@ const workflowStepSchema = z.looseObject({
 });
 
 const workflowJobSchema = z.looseObject({
+	"continue-on-error": z.union([z.boolean(), z.string()]).optional(),
 	if: z.string().optional(),
+	outputs: z.record(z.string(), workflowValueSchema).optional(),
 	permissions: z.record(z.string(), z.string()).optional(),
 	steps: z.array(workflowStepSchema),
 	"timeout-minutes": z.number().positive().optional(),
@@ -137,6 +139,12 @@ describe("release notes command security", () => {
 			issues: "write",
 			"pull-requests": "write",
 		});
+		expect(acknowledge["continue-on-error"]).toBe(true);
+		expect(acknowledge["timeout-minutes"]).toBe(1);
+		expect(acknowledge.outputs).toEqual({
+			reaction_id: "${{ steps.reaction.outputs.reaction_id }}",
+			token_source: "${{ steps.reaction.outputs.token_source }}",
+		});
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-issues": "write",
 			"permission-pull-requests": "write",
@@ -147,6 +155,9 @@ describe("release notes command security", () => {
 		);
 		expect(reaction["continue-on-error"]).toBe(true);
 		expect(reaction.run).toContain("content='eyes'");
+		expect(reaction.run).toContain("reaction_id=$REACTION_ID");
+		expect(reaction.run).toContain("token_source=app");
+		expect(reaction.run).toContain("token_source=github");
 		expect(generate).not.toHaveProperty("needs");
 	});
 
@@ -267,28 +278,43 @@ describe("release notes command security", () => {
 		);
 	});
 
-	it("reacts to failed release-note commands", () => {
-		const failure = getJob(commandWorkflow, "mark-failure");
-		const token = getStep(failure, "Generate scoped App token");
-		const reaction = getStep(failure, "Mark command as failed");
+	it("replaces command acknowledgement with the final status", () => {
+		const finalize = getJob(commandWorkflow, "finalize-command");
+		const token = getStep(finalize, "Generate scoped App token");
+		const status = getStep(finalize, "Set command status");
 
-		expect(failure.permissions).toEqual({
+		expect(finalize.permissions).toEqual({
 			issues: "write",
 			"pull-requests": "write",
 		});
-		expect(failure.if?.replace(/\s+/g, " ")).toBe(
-			"!cancelled() && (needs.generate.result == 'failure' || needs.publish-comment.result == 'failure')",
+		expect(finalize).toHaveProperty("needs", [
+			"acknowledge",
+			"generate",
+			"publish-comment",
+		]);
+		expect(finalize.if?.replace(/\s+/g, " ")).toBe(
+			'!cancelled() && contains(fromJSON(\'["success", "failure"]\'), needs.generate.result)',
 		);
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-issues": "write",
 			"permission-pull-requests": "write",
 		});
-		expect(reaction.env).toHaveProperty(
+		expect(status.env).toHaveProperty(
 			"GH_TOKEN",
-			expect.stringContaining("steps.app-token.outputs.token"),
+			expect.stringContaining("needs.acknowledge.outputs.token_source"),
 		);
-		expect(reaction["continue-on-error"]).toBe(true);
-		expect(reaction.run).toContain("content='-1'");
+		expect(status.env).toHaveProperty(
+			"REACTION_ID",
+			expect.stringContaining("needs.acknowledge.outputs.reaction_id"),
+		);
+		expect(status["continue-on-error"]).toBe(true);
+		expect(status.run).toContain("--method DELETE");
+		expect(status.run).toContain('content="$CONTENT"');
+		expect(status.run).toContain("CONTENT='+1'");
+		expect(status.run).toContain("CONTENT='-1'");
+		expect(status.run?.indexOf("--method DELETE")).toBeLessThan(
+			status.run?.indexOf('content="$CONTENT"') ?? 0,
+		);
 	});
 
 	it("returns release carriers to draft without pull_request_target", () => {
