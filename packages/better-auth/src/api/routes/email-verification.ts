@@ -317,11 +317,11 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const schema = z.object({
-			email: emailSchema,
+			email: z.string(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
 		});
-		const parsed = await schema.parseAsync(jwt.payload);
+		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);

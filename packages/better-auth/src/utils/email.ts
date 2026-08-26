@@ -5,18 +5,19 @@ import * as z from "zod";
 const defaultEmailSchema = z.email();
 
 /**
- * Check an email address with the configured validator, falling back to the
- * default Zod email validation.
+ * Normalize and check an email address with the configured validator, falling
+ * back to the default Zod email validation.
  */
 export async function isValidEmail(
 	email: string,
 	options?: BetterAuthOptions | undefined,
 ): Promise<boolean> {
+	const normalizedEmail = email.toLowerCase();
 	const validator = options?.user?.emailValidator;
 	if (validator) {
-		return await validator(email);
+		return await validator(normalizedEmail);
 	}
-	return defaultEmailSchema.safeParse(email).success;
+	return defaultEmailSchema.safeParse(normalizedEmail).success;
 }
 
 /**

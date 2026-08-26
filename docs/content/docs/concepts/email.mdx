@@ -7,7 +7,7 @@ Email is a key part of Better Auth, required for all users regardless of their a
 
 ## Custom Email Validation
 
-By default, Better Auth uses Zod's email validation when an email address enters a built-in email flow. You can replace that syntax check with a synchronous or asynchronous `user.emailValidator` function. Return `true` to accept the address and `false` to reject it.
+By default, Better Auth uses Zod's email validation when an email address enters a built-in email flow. You can replace that syntax check with a synchronous or asynchronous `user.emailValidator` function. The function receives the email normalized to lowercase, matching how Better Auth stores and looks up email addresses. Return `true` to accept the address and `false` to reject it.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";

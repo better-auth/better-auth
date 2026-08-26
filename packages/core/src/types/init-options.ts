@@ -920,7 +920,8 @@ export type BetterAuthOptions = {
 				 *
 				 * When provided, this replaces the default email syntax validator across
 				 * built-in email flows. It does not verify that the address exists or is
-				 * owned by the user.
+				 * owned by the user. The validator receives the email normalized to
+				 * lowercase, matching how Better Auth stores and looks up email addresses.
 				 *
 				 * @default Uses Zod's email validation.
 				 */

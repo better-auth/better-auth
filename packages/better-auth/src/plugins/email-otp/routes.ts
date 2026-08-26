@@ -647,6 +647,9 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		async (ctx) => {
 			const { email: rawEmail, otp, name, image, ...rest } = ctx.body;
 			const email = rawEmail.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(ctx, opts, toOTPIdentifier("sign-in", email), otp);
@@ -765,6 +768,9 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -857,6 +863,9 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 		async (ctx) => {
 			warnDeprecation();
 			const email = ctx.body.email.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -944,6 +953,9 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (ctx.body.password.length < minPasswordLength) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);

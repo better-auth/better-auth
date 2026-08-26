@@ -1040,6 +1040,7 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 
 describe("custom email validator", async () => {
 	const customEmail = "χρήστης@example.com";
+	const mixedCaseEmail = "ΧΡΉΣΤΗΣ@Example.com";
 	const emailValidator = vi.fn(async (email: string) => email === customEmail);
 	const { auth } = await getTestInstance(
 		{
@@ -1058,22 +1059,25 @@ describe("custom email validator", async () => {
 	it("uses a custom async validator for sign-up and sign-in", async () => {
 		const signUpResult = await auth.api.signUpEmail({
 			body: {
-				email: customEmail,
+				email: mixedCaseEmail,
 				password: "password123",
 				name: "Unicode User",
 			},
 		});
 
 		expect(signUpResult.user.email).toBe(customEmail);
+		expect(emailValidator).toHaveBeenCalledWith(customEmail);
+		emailValidator.mockClear();
 
 		const signInResult = await auth.api.signInEmail({
 			body: {
-				email: customEmail,
+				email: mixedCaseEmail,
 				password: "password123",
 			},
 		});
 
 		expect(signInResult.user.email).toBe(customEmail);
+		expect(emailValidator).toHaveBeenCalledTimes(1);
 		expect(emailValidator).toHaveBeenCalledWith(customEmail);
 	});
 
