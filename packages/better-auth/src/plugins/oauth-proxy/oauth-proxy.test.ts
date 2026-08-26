@@ -631,6 +631,7 @@ describe("oauth-proxy", async () => {
 			// Production instance - handles OAuth callback
 			const production = await getTestInstance(
 				{
+					account: { identityStrategy: "provider-id" },
 					baseURL: "http://localhost:3000",
 					plugins: [oAuthProxy()],
 					socialProviders: {
