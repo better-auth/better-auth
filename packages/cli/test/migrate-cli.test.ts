@@ -300,6 +300,8 @@ describe("auth generate: emitting the stable 1.7 account schema", () => {
 
 		const sql = fs.readFileSync(path.join(cwd, "migration.sql"), "utf-8");
 		expect(sql).toContain("DO NOT RUN THIS SCRIPT AS IT IS.");
-		expect(sql.toLowerCase()).toContain('column "issuer"');
+		expect(sql.toLowerCase()).toContain(
+			'alter table "account" add column "issuer" text not null',
+		);
 	});
 });

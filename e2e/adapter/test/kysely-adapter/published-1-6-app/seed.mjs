@@ -8,11 +8,8 @@ import { oidcProvider } from "better-auth/plugins";
 import { OAuth2Server } from "oauth2-mock-server";
 
 const databasePath = process.argv[2];
-const identityProviderPort = Number(process.argv[3]);
-if (!databasePath || !Number.isInteger(identityProviderPort)) {
-	throw new Error(
-		"Usage: node seed.mjs <database-path> <identity-provider-port>",
-	);
+if (!databasePath) {
+	throw new Error("Usage: node seed.mjs <database-path>");
 }
 
 const baseURL = "http://localhost:3000";
@@ -65,7 +62,7 @@ identityProvider.service.on("beforeTokenSigning", (token) => {
 	token.payload.name = "Published 1.6 Directory User";
 	token.payload.sub = directorySubject;
 });
-await identityProvider.start(identityProviderPort, "127.0.0.1");
+await identityProvider.start(0, "127.0.0.1");
 
 const database = new DatabaseSync(databasePath);
 try {

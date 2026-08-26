@@ -21,6 +21,8 @@ import { scim as scim1630 } from "better-auth-scim-1-6-30";
 import Database from "better-sqlite3";
 import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Spinner } from "yocto-spinner";
+import yoctoSpinner from "yocto-spinner";
 import {
 	createMigrateCommand,
 	migrateAction,
@@ -31,6 +33,25 @@ import * as config from "../src/utils/get-config";
 
 vi.mock("prompts", () => ({
 	default: vi.fn(),
+}));
+vi.mock(import("yocto-spinner"), () => ({
+	default: vi.fn(() => {
+		const spinner: Spinner = {
+			text: "",
+			color: "cyan",
+			start: vi.fn(() => spinner),
+			stop: vi.fn(() => spinner),
+			success: vi.fn(() => spinner),
+			error: vi.fn(() => spinner),
+			warning: vi.fn(() => spinner),
+			info: vi.fn(() => spinner),
+			clear: vi.fn(() => spinner),
+			get isSpinning() {
+				return false;
+			},
+		};
+		return spinner;
+	}),
 }));
 
 function backfill1630CredentialAccountIdentity(db: Database.Database) {
@@ -882,6 +903,34 @@ describe("migrate command modes", () => {
 				)
 				.get(),
 		).toBeUndefined();
+	});
+
+	it("stops the CLI spinner when a release migration fails", async () => {
+		const db = new Database(":memory:");
+		const { scimAccountId } = await createReleaseDecisionFixture(db);
+		const migrationFile = await writeMigrationDecisions({
+			formatVersion: 1,
+			migration: "1.6-to-1.7",
+			oauth: {
+				clientSecrets: { source: "plain", target: "hashed" },
+				consents: "migrate",
+			},
+			scim: { retireAccountIds: [scimAccountId] },
+		});
+		vi.spyOn(releaseMigration, "migrateFrom16").mockRejectedValueOnce(
+			new Error("forced apply failure"),
+		);
+		await expect(
+			migrateAction({
+				approved: true,
+				cwd: process.cwd(),
+				migrationFile,
+				mode: "apply",
+			}),
+		).rejects.toThrow("forced apply failure");
+
+		const spinner = vi.mocked(yoctoSpinner).mock.results.at(-1)?.value;
+		expect(spinner?.stop).toHaveBeenCalled();
 	});
 
 	/**

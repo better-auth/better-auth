@@ -8,7 +8,6 @@ import {
 	rm,
 	writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { oauthProvider } from "@better-auth/oauth-provider";
@@ -91,23 +90,7 @@ function readSentinelResult<Result>(stdout: string, sentinel: string): Result {
 	return JSON.parse(line.slice(sentinel.length + 1)) as Result;
 }
 
-async function getAvailablePort() {
-	const server = createServer();
-	await new Promise<void>((resolve, reject) => {
-		server.once("error", reject);
-		server.listen(0, "127.0.0.1", resolve);
-	});
-	const address = server.address();
-	await new Promise<void>((resolve, reject) => {
-		server.close((error) => (error ? reject(error) : resolve()));
-	});
-	if (!address || typeof address === "string") {
-		throw new Error("Could not reserve a local identity-provider port");
-	}
-	return address.port;
-}
-
-async function startIdentityProvider(port: number, subject: string) {
+async function startIdentityProvider(subject: string) {
 	const identityProvider = new OAuth2Server();
 	await identityProvider.issuer.keys.generate("RS256");
 	identityProvider.service.on("beforeUserinfo", (response) => {
@@ -125,7 +108,7 @@ async function startIdentityProvider(port: number, subject: string) {
 		token.payload.name = "Published Directory User";
 		token.payload.sub = subject;
 	});
-	await identityProvider.start(port, "127.0.0.1");
+	await identityProvider.start(0, "127.0.0.1");
 	return identityProvider;
 }
 
@@ -389,11 +372,9 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 	const decisionsFile = path.join(testDirectory, "better-auth-migration.json");
 
 	try {
-		const seedPort = await getAvailablePort();
 		const seedRun = await runNode(published16Directory, [
 			published16Seed,
 			sourceDatabase,
-			String(seedPort),
 		]);
 		expect(seedRun.exitCode, `${seedRun.stdout}\n${seedRun.stderr}`).toBe(0);
 		const source = readSentinelResult<{
@@ -580,10 +561,9 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 		if (!provisionedSourceAccount) {
 			throw new Error("Published 1.6 did not create the SCIM account fixture");
 		}
-		const verificationPort = await getAvailablePort();
 		const verificationRun = await runNode(
 			fixtureDirectory,
-			[guidedVerifier, guidedDatabase, String(verificationPort)],
+			[guidedVerifier, guidedDatabase],
 			{
 				BETTER_AUTH_MIGRATION_CLIENT_ID: source.clientId,
 				BETTER_AUTH_MIGRATION_CLIENT_SECRET: source.clientSecret,
@@ -640,7 +620,6 @@ it("keeps a populated published 1.7 issuer database unchanged when the strategy 
 	);
 	const databasePath = path.join(testDirectory, "published-1.7.sqlite");
 	const identityProvider = await startIdentityProvider(
-		await getAvailablePort(),
 		"published-1-7-directory-subject",
 	);
 

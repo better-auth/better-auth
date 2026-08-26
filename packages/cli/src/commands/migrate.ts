@@ -530,12 +530,15 @@ export async function migrateAction(opts: unknown) {
 	}
 
 	spinner?.start("migrating...");
-	if (releaseMigration) {
-		await migrateFrom16(config, releaseMigrationOptions);
-	} else {
-		await runMigrations();
+	try {
+		if (releaseMigration) {
+			await migrateFrom16(config, releaseMigrationOptions);
+		} else {
+			await runMigrations();
+		}
+	} finally {
+		spinner?.stop();
 	}
-	spinner?.stop();
 	if (outputFormat === "json") {
 		printJson({
 			formatVersion: 1,

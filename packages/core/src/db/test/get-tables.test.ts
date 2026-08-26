@@ -26,6 +26,7 @@ describe("getAuthTables", () => {
 		});
 
 		expect(tables.account?.fields.issuer).toMatchObject({ required: true });
+		expect(tables.account?.fields.accountId).toMatchObject({ required: true });
 		expect(tables.account?.indexes).toContainEqual({
 			fields: ["issuer", "accountId"],
 			unique: true,

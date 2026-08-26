@@ -2,20 +2,13 @@ import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { OAuth2Server } from "oauth2-mock-server";
 
-const [databasePath, portArgument] = process.argv.slice(2);
-const identityProviderPort = Number(portArgument);
+const [databasePath] = process.argv.slice(2);
 const clientId = process.env.BETTER_AUTH_MIGRATION_CLIENT_ID;
 const clientSecret = process.env.BETTER_AUTH_MIGRATION_CLIENT_SECRET;
 const scimUserId = process.env.BETTER_AUTH_MIGRATION_SCIM_USER_ID;
-if (
-	!databasePath ||
-	!Number.isInteger(identityProviderPort) ||
-	!clientId ||
-	!clientSecret ||
-	!scimUserId
-) {
+if (!databasePath || !clientId || !clientSecret || !scimUserId) {
 	throw new Error(
-		"Usage: BETTER_AUTH_MIGRATION_CLIENT_ID=... BETTER_AUTH_MIGRATION_CLIENT_SECRET=... BETTER_AUTH_MIGRATION_SCIM_USER_ID=... node verify-guided-migration.mjs <database-path> <identity-provider-port>",
+		"Usage: BETTER_AUTH_MIGRATION_CLIENT_ID=... BETTER_AUTH_MIGRATION_CLIENT_SECRET=... BETTER_AUTH_MIGRATION_SCIM_USER_ID=... node verify-guided-migration.mjs <database-path>",
 	);
 }
 
@@ -70,7 +63,7 @@ identityProvider.service.on("beforeTokenSigning", (token) => {
 	token.payload.name = "Published 1.6 Directory User";
 	token.payload.sub = directorySubject;
 });
-await identityProvider.start(identityProviderPort, "127.0.0.1");
+await identityProvider.start(0, "127.0.0.1");
 process.env.BETTER_AUTH_MIGRATION_IDP_ISSUER = identityProvider.issuer.url;
 
 const database = new DatabaseSync(databasePath);
