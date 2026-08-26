@@ -300,6 +300,7 @@ describe("release notes command security", () => {
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-pull-requests": "write",
 		});
+		expect(token["continue-on-error"]).toBe(true);
 		expect(actionReferences(draft)).not.toContainEqual(
 			expect.stringContaining("actions/checkout@"),
 		);
@@ -308,7 +309,7 @@ describe("release notes command security", () => {
 			expect.stringContaining("steps.app-token.outputs.token"),
 		);
 		expect(draftWorkflow.workflow.concurrency?.["cancel-in-progress"]).toBe(
-			false,
+			true,
 		);
 		expect(draftWorkflow.content).not.toContain("pull_request_target");
 		expect(draftWorkflow.content).toContain("ready_for_review");

@@ -8,7 +8,7 @@ permissions: {}
 
 concurrency:
   group: release-notes-draft-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   draft:
@@ -28,6 +28,7 @@ jobs:
     steps:
       - name: Generate scoped App token
         id: app-token
+        continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         if: vars.RELEASE_APP_ID != ''
         with:
