@@ -3,7 +3,7 @@
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import type { Folder, Node, Root } from "fumadocs-core/page-tree";
 import { useSearchContext } from "fumadocs-ui/contexts/search";
-import { ChevronDownIcon, FileBoxIcon, FolderIcon } from "lucide-react";
+import { ChevronDownIcon, FolderIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -525,9 +525,7 @@ function NavigationLink({
 					: "text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3",
 			)}
 		>
-			<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
-				{node.icon ?? <FileBoxIcon />}
-			</span>
+			<SidebarIcon icon={node.icon} />
 			<span className="min-w-0 grow truncate">
 				{node.sidebarTitle ?? node.name}
 			</span>
@@ -535,6 +533,15 @@ function NavigationLink({
 				<SidebarBadge active={active}>{node.sidebarBadge}</SidebarBadge>
 			) : null}
 		</Link>
+	);
+}
+
+export function SidebarIcon({ icon }: { icon?: ReactNode }) {
+	if (icon == null) return null;
+	return (
+		<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
+			{icon}
+		</span>
 	);
 }
 
