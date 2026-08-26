@@ -10,6 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
+import { emailSchema } from "../../utils/email";
 import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
@@ -84,7 +85,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		operationId: "sendVerificationEmail",
 		cloneRequest: true,
 		body: z.object({
-			email: z.email().meta({
+			email: emailSchema.meta({
 				description: "The email to send the verification email to",
 			}),
 			callbackURL: z
@@ -316,11 +317,11 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const schema = z.object({
-			email: z.email(),
+			email: emailSchema,
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
 		});
-		const parsed = schema.parse(jwt.payload);
+		const parsed = await schema.parseAsync(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);

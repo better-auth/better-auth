@@ -7,6 +7,7 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
 import type { InferOptionSchema, User } from "../../types";
+import { emailSchema } from "../../utils/email";
 import { toChecksumAddress } from "../../utils/hashing";
 import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
@@ -102,7 +103,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 						.object({
 							message: z.string().min(1),
 							signature: z.string().min(1),
-							email: z.email().optional(),
+							email: emailSchema.optional(),
 						})
 						.strict()
 						.refine((data) => options.anonymous !== false || !!data.email, {

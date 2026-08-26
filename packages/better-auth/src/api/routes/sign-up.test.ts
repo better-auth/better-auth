@@ -1037,3 +1037,58 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 		expect(secondUser.banExpires).toBeNull();
 	});
 });
+
+describe("custom email validator", async () => {
+	const customEmail = "χρήστης@example.com";
+	const emailValidator = vi.fn(async (email: string) => email === customEmail);
+	const { auth } = await getTestInstance(
+		{
+			user: {
+				emailValidator,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10920
+	 */
+	it("uses a custom async validator for sign-up and sign-in", async () => {
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: customEmail,
+				password: "password123",
+				name: "Unicode User",
+			},
+		});
+
+		expect(signUpResult.user.email).toBe(customEmail);
+
+		const signInResult = await auth.api.signInEmail({
+			body: {
+				email: customEmail,
+				password: "password123",
+			},
+		});
+
+		expect(signInResult.user.email).toBe(customEmail);
+		expect(emailValidator).toHaveBeenCalledWith(customEmail);
+	});
+
+	it("rejects an address rejected by the custom validator", async () => {
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "user@example.com",
+					password: "password123",
+					name: "Rejected User",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: 400,
+			message: "[body.email] Invalid email address",
+		});
+	});
+});

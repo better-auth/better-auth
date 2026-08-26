@@ -452,6 +452,39 @@ describe("email-otp", async () => {
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
 
+	it("should use the configured custom email validator", async () => {
+		const customEmail = "δοκιμή@example.com";
+		const emailValidator = vi.fn(
+			async (email: string) => email === customEmail,
+		);
+		const { client: scopedClient } = await getTestInstance(
+			{
+				user: {
+					emailValidator,
+				},
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: vi.fn(),
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const res = await scopedClient.emailOtp.sendVerificationOtp({
+			email: customEmail,
+			type: "email-verification",
+		});
+
+		expect(res.data?.success).toBe(true);
+		expect(emailValidator).toHaveBeenCalledWith(customEmail);
+	});
+
 	it("should reject change-email type", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
