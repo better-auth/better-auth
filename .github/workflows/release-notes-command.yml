@@ -471,8 +471,8 @@ jobs:
   finalize-command:
     needs: [acknowledge, generate, publish-comment]
     if: >-
-      !cancelled() &&
-      contains(fromJSON('["success", "failure"]'), needs.generate.result)
+      always() &&
+      contains(fromJSON('["success", "failure", "cancelled"]'), needs.generate.result)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

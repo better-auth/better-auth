@@ -293,7 +293,7 @@ describe("release notes command security", () => {
 			"publish-comment",
 		]);
 		expect(finalize.if?.replace(/\s+/g, " ")).toBe(
-			'!cancelled() && contains(fromJSON(\'["success", "failure"]\'), needs.generate.result)',
+			'always() && contains(fromJSON(\'["success", "failure", "cancelled"]\'), needs.generate.result)',
 		);
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-issues": "write",
