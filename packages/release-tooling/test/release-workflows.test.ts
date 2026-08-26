@@ -34,6 +34,12 @@ const workflowJobSchema = z.looseObject({
 });
 
 const workflowSchema = z.looseObject({
+	concurrency: z
+		.looseObject({
+			group: z.string(),
+			"cancel-in-progress": z.boolean(),
+		})
+		.optional(),
 	jobs: z.record(z.string(), workflowJobSchema),
 });
 
@@ -129,13 +135,29 @@ describe("release notes command security", () => {
 
 		expect(acknowledge.permissions).toEqual({
 			issues: "write",
+			"pull-requests": "write",
 		});
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-issues": "write",
+			"permission-pull-requests": "write",
 		});
+		expect(reaction.env).toHaveProperty(
+			"GH_TOKEN",
+			expect.stringContaining("steps.app-token.outputs.token"),
+		);
 		expect(reaction["continue-on-error"]).toBe(true);
 		expect(reaction.run).toContain("content='eyes'");
 		expect(generate).not.toHaveProperty("needs");
+	});
+
+	it("isolates release-note commands from unrelated comment runs", () => {
+		const concurrency = commandWorkflow.workflow.concurrency;
+
+		expect(concurrency?.["cancel-in-progress"]).toBe(false);
+		expect(concurrency?.group).toContain("github.event.issue.pull_request");
+		expect(concurrency?.group).toContain("author_association");
+		expect(concurrency?.group).toContain("/release-notes");
+		expect(concurrency?.group).toContain("github.run_id");
 	});
 
 	it("creates a minimally scoped write token only in the comment job", () => {
@@ -250,23 +272,44 @@ describe("release notes command security", () => {
 		const token = getStep(failure, "Generate scoped App token");
 		const reaction = getStep(failure, "Mark command as failed");
 
-		expect(failure.permissions).toEqual({ issues: "write" });
+		expect(failure.permissions).toEqual({
+			issues: "write",
+			"pull-requests": "write",
+		});
 		expect(failure.if?.replace(/\s+/g, " ")).toBe(
 			"!cancelled() && (needs.generate.result == 'failure' || needs.publish-comment.result == 'failure')",
 		);
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-issues": "write",
+			"permission-pull-requests": "write",
 		});
+		expect(reaction.env).toHaveProperty(
+			"GH_TOKEN",
+			expect.stringContaining("steps.app-token.outputs.token"),
+		);
 		expect(reaction["continue-on-error"]).toBe(true);
 		expect(reaction.run).toContain("content='-1'");
 	});
 
 	it("returns release carriers to draft without pull_request_target", () => {
 		const draft = getJob(draftWorkflow, "draft");
+		const token = getStep(draft, "Generate scoped App token");
 		const keepDraft = getStep(draft, "Keep release PR in draft");
 
 		expect(draft.permissions).toEqual({ "pull-requests": "write" });
-		expect(actionReferences(draft)).toEqual([]);
+		expect(appTokenPermissions(token)).toEqual({
+			"permission-pull-requests": "write",
+		});
+		expect(actionReferences(draft)).not.toContainEqual(
+			expect.stringContaining("actions/checkout@"),
+		);
+		expect(keepDraft.env).toHaveProperty(
+			"GH_TOKEN",
+			expect.stringContaining("steps.app-token.outputs.token"),
+		);
+		expect(draftWorkflow.workflow.concurrency?.["cancel-in-progress"]).toBe(
+			false,
+		);
 		expect(draftWorkflow.content).not.toContain("pull_request_target");
 		expect(draftWorkflow.content).toContain("ready_for_review");
 		expect(draftWorkflow.content).toContain("edited");

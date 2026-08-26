@@ -7,8 +7,14 @@ on:
 permissions: {}
 
 concurrency:
-  group: release-notes-command-${{ github.event.issue.number }}
-  cancel-in-progress: true
+  group: >-
+    release-notes-command-${{
+      github.event.issue.pull_request != null &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      startsWith(github.event.comment.body, '/release-notes') &&
+      github.event.issue.number || github.run_id
+    }}
+  cancel-in-progress: false
 
 jobs:
   acknowledge:
@@ -21,6 +27,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Generate scoped App token
         id: app-token
@@ -31,6 +38,7 @@ jobs:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-issues: write
+          permission-pull-requests: write
 
       - name: Acknowledge command
         continue-on-error: true
@@ -460,6 +468,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Generate scoped App token
         id: app-token
@@ -470,6 +479,7 @@ jobs:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-issues: write
+          permission-pull-requests: write
 
       - name: Mark command as failed
         continue-on-error: true
