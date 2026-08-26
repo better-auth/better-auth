@@ -221,6 +221,10 @@ export const DOMAIN_ORDER = [
 
 export const FILTERED_DOMAINS = new Set(["docs", "devops"]);
 
+export function isMaintenanceBranch(branch: string): boolean {
+	return /^v[0-9]+\.[0-9]+\.x$/u.test(branch);
+}
+
 const SCOPE_TO_PACKAGE = new Map(
 	Object.entries({
 		cimd: "@better-auth/cimd",

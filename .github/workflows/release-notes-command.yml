@@ -81,13 +81,11 @@ jobs:
             echo "::error::Release notes commands only run on Version PRs or next-to-main promotion PRs"
             exit 1
           fi
-          case "$BASE_REF" in
-            main|next|release/*) ;;
-            *)
-              echo "::error::Unsupported release base branch ${BASE_REF}"
-              exit 1
-              ;;
-          esac
+          if [[ "$BASE_REF" != "main" && "$BASE_REF" != "next" && \
+                ! "$BASE_REF" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
+            echo "::error::Unsupported release base branch ${BASE_REF}"
+            exit 1
+          fi
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"

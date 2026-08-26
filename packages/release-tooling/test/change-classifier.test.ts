@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
 	classifyChangeType,
+	isMaintenanceBranch,
 	mapTypeToBump,
 	resolveDomain,
 	resolvePackage,
 } from "../src/change-classifier.ts";
 
 describe("change classification", () => {
+	it("recognizes versioned maintenance branches", () => {
+		expect(isMaintenanceBranch("v1.6.x")).toBe(true);
+		expect(isMaintenanceBranch("v1.6.30")).toBe(false);
+		expect(isMaintenanceBranch("v1.4.x-staging")).toBe(false);
+		expect(isMaintenanceBranch("release/1.6")).toBe(false);
+	});
+
 	it.each([
 		["sso", "enterprise"],
 		["expo", "platform"],

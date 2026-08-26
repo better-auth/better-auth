@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - next
-      - release/**
+      - 'v*.*.x'
   workflow_dispatch:
     inputs:
       snapshot:
@@ -28,7 +28,7 @@ jobs:
     if: >
       (github.event_name != 'workflow_dispatch' || inputs.snapshot == '') &&
       github.repository_owner == 'better-auth' &&
-      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/release/'))
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || (startsWith(github.ref, 'refs/heads/v') && endsWith(github.ref, '.x')))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: Release
@@ -81,13 +81,14 @@ jobs:
           REF="${GITHUB_REF_NAME}"
           if [[ "$REF" == "main" ]]; then
             echo "tag=latest" >> "$GITHUB_OUTPUT"
-          elif [[ "$REF" =~ ^release/ ]]; then
-            # Maintenance branches publish with a version-specific tag (e.g., release-1.5)
-            TAG="release-${REF#release/}"
+          elif [[ "$REF" =~ ^v([0-9]+)\.([0-9]+)\.x$ ]]; then
+            TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          else
-            # next and other branches: changesets handles the tag via pre.json
+          elif [ "$REF" = "next" ]; then
             echo "tag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unsupported release branch ${REF}"
+            exit 1
           fi
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}

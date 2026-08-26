@@ -349,6 +349,32 @@ describe("release notes command security", () => {
 		);
 	});
 
+	it("uses versioned maintenance branches", () => {
+		const npmTag = getStep(
+			getJob(releaseWorkflow, "release"),
+			"Determine npm dist-tag",
+		);
+		const authorize = getStep(
+			getJob(commandWorkflow, "generate"),
+			"Authorize command and resolve PR",
+		);
+		const prDetails = getStep(
+			getJob(autoChangesetWorkflow, "apply"),
+			"Get PR details",
+		);
+
+		expect(releaseWorkflow.content).toContain("'v*.*.x'");
+		expect(releaseWorkflow.content).not.toContain("release/**");
+		expect(npmTag.run).toContain("^v([0-9]+)\\.([0-9]+)\\.x$");
+		expect(npmTag.run).toContain(
+			'TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
+		);
+		expect(authorize.run).toContain("^v[0-9]+\\.[0-9]+\\.x$");
+		expect(prDetails.run).toContain("^v[0-9]+\\.[0-9]+\\.x$");
+		expect(verifyChangesetsWorkflow.content).toContain("'v*.*.x'");
+		expect(verifyChangesetsWorkflow.content).not.toContain("release/**");
+	});
+
 	it("falls back to deterministic notes when AI rewriting fails", () => {
 		const generate = getJob(commandWorkflow, "generate");
 		const rewrite = getStep(generate, "Rewrite release notes with AI");

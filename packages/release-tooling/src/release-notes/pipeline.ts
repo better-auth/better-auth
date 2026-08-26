@@ -74,11 +74,11 @@ async function collectReleaseNotes(
 	const { github, repository } = collection;
 	const repositoryName = `${repository.owner}/${repository.repo}`;
 	const isBeta = version.includes("-");
-	const previousTag = findPreviousTag(version, isBeta);
 	const commitRef =
 		commitRefOverride ||
 		process.env.GITHUB_SHA ||
 		runGit(["rev-parse", "HEAD"]).trim();
+	const previousTag = findPreviousTag(version, isBeta, commitRef);
 
 	console.log(`Generating release notes for v${version}`);
 	console.log(`  Previous tag: ${previousTag}`);

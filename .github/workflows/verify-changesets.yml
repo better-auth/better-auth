@@ -6,7 +6,7 @@ on:
     branches:
       - main
       - next
-      - 'release/**'
+      - 'v*.*.x'
   merge_group:
 
 permissions: {}
@@ -162,7 +162,7 @@ jobs:
 
           [ "$HAS_ERROR" -ne 0 ] && exit 1
 
-          if [ "$BASE_REF" = "main" ] || echo "$BASE_REF" | grep -q '^release/'; then
+          if [ "$BASE_REF" = "main" ] || [[ "$BASE_REF" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
             for f in $CHANGESET_FILES; do
               BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
               if echo "$BUMPS" | grep -q "major"; then

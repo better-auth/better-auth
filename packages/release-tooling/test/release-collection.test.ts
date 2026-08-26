@@ -379,8 +379,16 @@ describe("release changeset readiness", () => {
 
 describe("release changeset collection", () => {
 	it("selects the previous stable and prerelease tags", () => {
-		expect(findPreviousTag("1.7.1", false)).toBe("v1.7.0");
-		expect(findPreviousTag("1.7.0-rc.6", true)).toBe("v1.7.0-rc.5");
+		expect(findPreviousTag("1.7.1", false, "v1.7.1")).toBe("v1.7.0");
+		expect(findPreviousTag("1.7.0-beta.0", true, "v1.7.0-beta.0")).toBe(
+			"v1.6.2",
+		);
+		expect(findPreviousTag("1.7.0-rc.0", true, "v1.7.0-rc.0")).toBe(
+			"v1.7.0-beta.10",
+		);
+		expect(findPreviousTag("1.7.0-rc.6", true, "v1.7.0-rc.6")).toBe(
+			"v1.7.0-rc.5",
+		);
 	});
 
 	/**

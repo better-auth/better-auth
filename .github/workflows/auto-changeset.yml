@@ -203,7 +203,7 @@ jobs:
           if [[ ! "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
             echo "blocked_reason=Refusing to commit to branch with unsupported characters (${HEAD_REF}) — only letters, digits, '.', '_', '/', and '-' are allowed." >> "$GITHUB_OUTPUT"
-          elif [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "next" || "$HEAD_REF" == release/* ]]; then
+          elif [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "next" || "$HEAD_REF" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
             echo "blocked_reason=Cannot commit to protected branch (${HEAD_REF}) — this would trigger release automation." >> "$GITHUB_OUTPUT"
           elif [[ "$IS_FORK" == "true" ]]; then

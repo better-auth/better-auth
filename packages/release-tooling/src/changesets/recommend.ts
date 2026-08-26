@@ -9,7 +9,7 @@
  */
 
 import { setOutput } from "../actions-output.ts";
-import { mapTypeToBump } from "../change-classifier.ts";
+import { isMaintenanceBranch, mapTypeToBump } from "../change-classifier.ts";
 import { parseConventionalHeader } from "../conventional-header.ts";
 import type { GitHubReader } from "../github.ts";
 import {
@@ -122,8 +122,7 @@ export async function recommendChangeset(
 
 	let resolvedBump = bump === "skip" ? "patch" : bump;
 
-	// main and release/* only accept patch
-	const patchOnly = pr.baseRef === "main" || pr.baseRef.startsWith("release/");
+	const patchOnly = pr.baseRef === "main" || isMaintenanceBranch(pr.baseRef);
 	if (patchOnly && resolvedBump !== "patch") {
 		if (force) {
 			console.log(

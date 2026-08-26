@@ -49,20 +49,39 @@ function listTags(): string[] {
 
 export function findPreviousTag(
 	currentVersion: string,
-	isBeta: boolean,
+	prerelease: boolean,
+	ref = "HEAD",
 ): string {
 	const tags = listTags();
 	const current = semver.parse(currentVersion);
 	if (!current) throw new Error(`Invalid release version: ${currentVersion}`);
 
-	if (isBeta) {
-		const preMatch = currentVersion.match(/^(.+)-(beta|alpha|rc)\.(\d+)$/);
-		if (preMatch && Number(preMatch[3]) > 0) {
-			const prevN = Number(preMatch[3]) - 1;
-			const channel = preMatch[2];
-			const prevVersion = `${preMatch[1]}-${channel}.${prevN}`;
-			const prevTag = `v${prevVersion}`;
-			if (tags.includes(prevTag)) return prevTag;
+	if (prerelease) {
+		for (const tag of tags) {
+			const candidate = semver.parse(tag.slice(1));
+			if (
+				candidate &&
+				candidate.prerelease.length > 0 &&
+				candidate.major === current.major &&
+				candidate.minor === current.minor &&
+				candidate.patch === current.patch &&
+				semver.lt(candidate, current) &&
+				gitSucceeds(["merge-base", "--is-ancestor", tag, ref])
+			) {
+				return tag;
+			}
+		}
+
+		for (const tag of tags) {
+			const candidate = semver.parse(tag.slice(1));
+			if (
+				candidate &&
+				candidate.prerelease.length === 0 &&
+				semver.lt(candidate, current) &&
+				gitSucceeds(["merge-base", "--is-ancestor", tag, ref])
+			) {
+				return tag;
+			}
 		}
 	}
 
@@ -298,7 +317,7 @@ export function findUnreleasedVersionCommit(
 	if (gitSucceeds(["rev-parse", "--verify", `v${version}^{commit}`])) {
 		return null;
 	}
-	const previousTag = findPreviousTag(version, version.includes("-"));
+	const previousTag = findPreviousTag(version, version.includes("-"), ref);
 	return findVersionCommit(ref, previousTag, version);
 }
 
@@ -495,8 +514,6 @@ export async function collectEntries(
 	branch: string,
 	releaseRef?: string,
 ): Promise<ReleaseEntry[]> {
-	const previousTag = findPreviousTag(version, version.includes("-"));
-
 	const currentTag = `v${version}`;
 	let targetRef: string;
 	if (releaseRef) {
@@ -508,6 +525,11 @@ export async function collectEntries(
 			targetRef = branch || "HEAD";
 		}
 	}
+	const previousTag = findPreviousTag(
+		version,
+		version.includes("-"),
+		targetRef,
+	);
 
 	// Handle cherry-pick history gap: if the previous tag is NOT a direct
 	// ancestor, use merge-base + PR deduplication to avoid double-counting
