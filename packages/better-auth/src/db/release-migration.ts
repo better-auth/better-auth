@@ -88,12 +88,14 @@ export interface TableDataConversionBlocker {
 	targetTable: string;
 }
 
+/** Storage policy used by the 1.6 OAuth provider for client secrets. */
 export type OAuthClientSecretStorage =
 	| "custom"
 	| "encrypted"
 	| "hashed"
 	| "plain";
 
+/** Reviewed client-secret policy transition applied during a 1.6 migration. */
 export interface OAuthClientSecretStorageTransition {
 	source: OAuthClientSecretStorage;
 	target: Exclude<OAuthClientSecretStorage, "plain">;
@@ -114,6 +116,7 @@ export type MigrationDecisionBlocker =
 			code: "account-identity-collision";
 			issuer: string;
 			providerAccountId: string;
+			providerIds: string[];
 			table: string;
 	  }
 	| {
@@ -215,7 +218,7 @@ export function describeMigrationDecisionBlocker(
 ): string {
 	switch (blocker.code) {
 		case "account-identity-collision":
-			return `The 1.6 account migration found duplicate issuer and provider-account identities: issuer "${blocker.issuer}" with provider account id "${blocker.providerAccountId}".`;
+			return `The 1.6 account migration found duplicate issuer and provider-account identities for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}: issuer "${blocker.issuer}" with provider account id "${blocker.providerAccountId}".`;
 		case "account-identity-strategy-required":
 			return `The 1.6 account migration found ${blocker.accountCount} populated accounts without an issuer for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}, but account.identityStrategy is not set. Set account: { identityStrategy: "provider-id" } to preserve 1.6 identity semantics.`;
 		case "account-identity-strategy-unsupported":
@@ -421,6 +424,7 @@ async function resolveConfiguredIssuerState(
 	return { issuers, providerKinds, unresolvedProviders };
 }
 
+/** Explicit data decisions required to migrate a populated 1.6 database. */
 export interface MigrateFrom16Options {
 	/**
 	 * Physical names used by customized 1.6 plugin schemas. `null` records that
@@ -686,16 +690,19 @@ export async function inspectAccountIdentityMigration(
 			readStoredIssuer(account.issuer) || configured.issuers[account.providerId]
 		);
 	};
-	const projectedIdentities = new Set<string>();
+	const projectedIdentities = new Map<string, string>();
 	const projectedCollisionIdentities = new Set<string>();
 	for (const account of accounts) {
 		const namespace = resolveProjectedNamespace(account);
 		if (!namespace) continue;
 		const identity = JSON.stringify([namespace, account.providerAccountId]);
-		if (projectedIdentities.has(identity)) {
+		const existingProviderId = projectedIdentities.get(identity);
+		if (existingProviderId) {
 			projectedCollisionIdentities.add(identity);
+			affectedProviders.add(existingProviderId);
+			affectedProviders.add(account.providerId);
 		} else {
-			projectedIdentities.add(identity);
+			projectedIdentities.set(identity, account.providerId);
 		}
 	}
 	const compatibilityWarning =
@@ -982,6 +989,7 @@ async function inspectLegacyModel({
 	return undefined;
 }
 
+/** Legacy 1.6 plugin tables and rename checkpoints found during preflight. */
 export interface LegacyReleaseDataState {
 	oauthAccessToken?: LegacyTableState | undefined;
 	oauthApplication?: LegacyTableState | undefined;
@@ -989,6 +997,10 @@ export interface LegacyReleaseDataState {
 	scimProvider?: LegacyTableState | undefined;
 }
 
+/**
+ * Inspects the configured database for populated 1.6 plugin tables without
+ * applying schema or data changes.
+ */
 export async function inspectLegacyReleaseDataFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
@@ -1094,6 +1106,57 @@ export async function inspectLegacyReleaseDataFrom16(
 			rowCount: state.scimProvider.rowCount,
 			table: state.scimProvider.sourceTable,
 		});
+	}
+	if ((blockers?.length ?? 0) === 0) {
+		const completionBlockers: MigrationDecisionBlocker[] = [];
+		const oauthProvider = await prepareOAuthProviderDataFrom16(
+			config,
+			options,
+			state,
+			completionBlockers,
+		);
+		const scimAccounts = await inspectScimAccountsFrom16(
+			config,
+			options,
+			state,
+			completionBlockers,
+		);
+		if (completionBlockers.length === 0) {
+			if (
+				state.oauthApplication &&
+				!state.oauthApplication.sourceTableNeedsRename &&
+				oauthProvider?.clients.every((client) => client.alreadyMigrated)
+			) {
+				state.oauthApplication = undefined;
+			}
+			if (
+				state.oauthAccessToken &&
+				!state.oauthAccessToken.sourceTableNeedsRename &&
+				options.oauthProvider?.tokens === "revoke"
+			) {
+				state.oauthAccessToken = undefined;
+			}
+			if (
+				state.oauthConsent &&
+				!state.oauthConsent.sourceTableNeedsRename &&
+				(options.oauthProvider?.consents === "reauthorize" ||
+					(options.oauthProvider?.consents === "migrate" &&
+						oauthProvider?.consents.every(
+							(consent) =>
+								consent.action === "reauthorize" || consent.alreadyMigrated,
+						)))
+			) {
+				state.oauthConsent = undefined;
+			}
+			if (
+				state.scimProvider &&
+				!state.scimProvider.sourceTableNeedsRename &&
+				options.scim &&
+				scimAccounts.length === 0
+			) {
+				state.scimProvider = undefined;
+			}
+		}
 	}
 	return state;
 }
@@ -1888,7 +1951,7 @@ async function inspectAccountIdentityFrom16(
 				: "external",
 		);
 	}
-	const projectedIdentities = new Set<string>();
+	const projectedIdentities = new Map<string, string>();
 	const reportedCollisions = new Set<string>();
 	for (const account of accountIdentities.rows) {
 		const storedIssuer = readStoredIssuer(account.issuer);
@@ -1905,19 +1968,26 @@ async function inspectAccountIdentityFrom16(
 		const issuer = requiredIssuer ?? storedIssuer;
 		if (issuer === null || issuer === undefined) continue;
 		const identityKey = JSON.stringify([issuer, account.providerAccountId]);
-		if (projectedIdentities.has(identityKey)) {
+		const existingProviderId = projectedIdentities.get(identityKey);
+		if (existingProviderId) {
 			if (!reportedCollisions.has(identityKey)) {
 				reportedCollisions.add(identityKey);
 				reportMigrationDecisionBlocker(blockers, {
 					code: "account-identity-collision",
 					issuer,
 					providerAccountId: account.providerAccountId,
+					providerIds: [existingProviderId, account.providerId]
+						.filter(
+							(providerId, index, providerIds) =>
+								providerIds.indexOf(providerId) === index,
+						)
+						.sort(),
 					table: accountTable,
 				});
 			}
 			continue;
 		}
-		projectedIdentities.add(identityKey);
+		projectedIdentities.set(identityKey, account.providerId);
 	}
 	return {
 		accountIdColumn,

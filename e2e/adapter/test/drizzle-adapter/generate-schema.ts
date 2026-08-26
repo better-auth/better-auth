@@ -3,13 +3,18 @@ import fs from "node:fs/promises";
 import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import type { DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
+import type { DB, DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 
 let generationCount = 0;
 let generationNamespace = randomUUID();
 
-const schemaCache = new Map<string, { fileName: string; schema: any }>();
+type GeneratedDrizzleSchema = Record<string, unknown>;
+
+const schemaCache = new Map<
+	string,
+	{ fileName: string; schema: GeneratedDrizzleSchema }
+>();
 
 /**
  * generates a drizzle schema based on BetterAuthOptions & a given dialect.
@@ -17,7 +22,7 @@ const schemaCache = new Map<string, { fileName: string; schema: any }>();
  * Useful for testing the Drizzle adapter.
  */
 export const generateDrizzleSchema = async (
-	db: any,
+	db: DB,
 	options: BetterAuthOptions,
 	dialect: "sqlite" | "mysql" | "pg",
 	adapterConfig?: Pick<DrizzleAdapterConfig, "camelCase">,
@@ -87,7 +92,7 @@ export const generateDrizzleSchema = async (
 		"utf-8",
 	);
 
-	const res = await i(fileName);
+	const res = (await i(fileName)) as GeneratedDrizzleSchema;
 	schemaCache.set(cacheKey, {
 		fileName,
 		schema: res,

@@ -110,7 +110,7 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 				? `Repair every malformed namespace in "${blocker.table}" for the configured strategy, then run the plan again.`
 				: `Keep account.identityStrategy as "${blocker.detectedStrategy === "provider-id" ? "provider-id" : "issuer"}", or perform a separate reviewed re-key migration before changing strategy.`;
 		case "account-identity-collision":
-			return `Merge or remove the duplicate rows in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
+			return `Merge or remove the duplicate rows for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")} in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
 		case "account-identity-strategy-required":
 			return 'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, then run the plan again.';
 		case "account-identity-strategy-unsupported":

@@ -341,7 +341,6 @@ export async function migrateAction(opts: unknown) {
 		releaseMigrationBlockers,
 	);
 	const releaseMigration =
-		decisions !== undefined ||
 		hasLegacyReleaseState(legacyReleaseState) ||
 		releaseMigrationBlockers.length > 0 ||
 		migrationBlockers.some(isReleaseMigrationBlocker);

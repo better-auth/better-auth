@@ -1334,6 +1334,33 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		);
 	});
 
+	it("reports every provider involved in a projected identity collision", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyAccountTable(db);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES ('a4', '108451', 'google', 'u4', '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "provider-id" },
+			database: db,
+			socialProviders: socialConfig,
+		};
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toContainEqual({
+			code: "account-identity-collision",
+			issuer: "local:oauth:google",
+			providerAccountId: "108451",
+			providerIds: ["google"],
+			table: "account",
+		});
+		const migration = await getMigrations(config, { throwOnUnsafe: false });
+		expect(migration.accountIdentity).toMatchObject({
+			affectedProviders: ["google"],
+			projectedCollisions: 1,
+		});
+	});
+
 	it("refuses a partially populated account identity table", async () => {
 		const db = new DatabaseSync(":memory:");
 		db.exec(

@@ -521,6 +521,23 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 		);
 		expect(applyRun.exitCode, `${applyRun.stdout}\n${applyRun.stderr}`).toBe(0);
 		expect(JSON.parse(applyRun.stdout)).toMatchObject({ status: "applied" });
+		const repeatedPlanRun = await runMigrateCli(
+			fixtureDirectory,
+			["plan", decisionsFile, "--config", guidedConfig, "--json"],
+			migrationEnvironment,
+		);
+		expect(
+			repeatedPlanRun.exitCode,
+			`${repeatedPlanRun.stdout}\n${repeatedPlanRun.stderr}`,
+		).toBe(0);
+		expect(JSON.parse(repeatedPlanRun.stdout)).toMatchObject({
+			blockers: [],
+			changes: { addColumns: [], addIndexes: [], createTables: [] },
+			status: "up-to-date",
+		});
+		expect(JSON.parse(repeatedPlanRun.stdout)).not.toHaveProperty(
+			"releaseMigration",
+		);
 
 		const migratedDatabase = new DatabaseSync(guidedDatabase);
 		try {

@@ -74,6 +74,40 @@ describe("createMigrationPlan", () => {
 		});
 	});
 
+	it("names providers in collision remediation", () => {
+		const plan = createMigrationPlan({
+			accountIdentity: {
+				selectedStrategy: "provider-id",
+				detectedStrategy: "provider-id",
+				migrationRequired: true,
+				requiresRekey: false,
+			},
+			hasChanges: true,
+			migrationBlockers: [],
+			migrationTarget: { adapter: "drizzle", dialect: "postgres" },
+			releaseMigrationBlockers: [
+				{
+					code: "account-identity-collision",
+					issuer: "local:oauth:google",
+					providerAccountId: "108451",
+					providerIds: ["google"],
+					table: "account",
+				},
+			],
+			toBeAdded: [],
+			toBeAddedIndexes: [],
+			toBeCreated: [],
+		});
+
+		expect(plan.blockers[0]).toMatchObject({
+			code: "account-identity-collision",
+			providerIds: ["google"],
+			remediation: {
+				summary: expect.stringContaining('providers "google"'),
+			},
+		});
+	});
+
 	it("reports account readiness counts and compatibility warnings", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
