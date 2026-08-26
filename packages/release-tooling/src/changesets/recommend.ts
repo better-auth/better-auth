@@ -5,70 +5,20 @@
  * never execute code from the PR branch. This script runs from the base
  * branch checkout and fetches all PR data via the GitHub API.
  *
- * Usage: GITHUB_TOKEN=... PR_NUMBER=... npx tsx .github/scripts/auto-changeset.ts
+ * Usage: GITHUB_TOKEN=... PR_NUMBER=... pnpm auto-changeset
  */
 
-import { gh, ghJSON, REPO, setOutput } from "./lib/github.ts";
-import { mapTypeToBump, parseConventionalCommit } from "./lib/pr-analyzer.ts";
-
-// ── Types ──────────────────────────────────────────────────────────────
-
-interface PRData {
-	number: number;
-	title: string;
-	body: string;
-	headRef: string;
-	baseRef: string;
-	labels: string[];
-	isFork: boolean;
-	changedFiles: string[];
-}
-
-// ── Constants ──────────────────────────────────────────────────────────
+import { setOutput } from "../actions-output.ts";
+import { isMaintenanceBranch, mapTypeToBump } from "../change-classifier.ts";
+import { parseConventionalHeader } from "../conventional-header.ts";
+import type { GitHubReader } from "../github.ts";
+import {
+	createChangesetFallback,
+	rewriteChangesetDescription,
+} from "./rewrite.ts";
 
 const CUBIC_OPEN = "<!-- This is an auto-generated description by cubic. -->";
 const CUBIC_CLOSE = "<!-- End of auto-generated description by cubic. -->";
-
-// ── PR data fetching ───────────────────────────────────────────────────
-
-function fetchPR(prNumber: number): PRData {
-	const pr = ghJSON<{
-		title: string;
-		body: string;
-		headRefName: string;
-		baseRefName: string;
-		labels: { name: string }[];
-		isCrossRepository: boolean;
-	}>([
-		"pr",
-		"view",
-		String(prNumber),
-		"--repo",
-		REPO,
-		"--json",
-		"title,body,headRefName,baseRefName,labels,isCrossRepository",
-	]);
-
-	const filesRaw = gh([
-		"api",
-		`repos/${REPO}/pulls/${prNumber}/files`,
-		"--paginate",
-		"-q",
-		".[] | .filename",
-	]);
-	const files = filesRaw ? filesRaw.split("\n").filter(Boolean) : [];
-
-	return {
-		number: prNumber,
-		title: pr.title,
-		body: pr.body ?? "",
-		headRef: pr.headRefName,
-		baseRef: pr.baseRefName,
-		labels: pr.labels.map((l) => l.name),
-		isFork: pr.isCrossRepository,
-		changedFiles: files,
-	};
-}
 
 function extractCubicSummary(body: string): string {
 	const start = body.indexOf(CUBIC_OPEN);
@@ -84,37 +34,42 @@ function extractCubicSummary(body: string): string {
 	return (summaryEnd === -1 ? cleaned : cleaned.slice(0, summaryEnd)).trim();
 }
 
-function hasPackageChanges(files: string[]): boolean {
-	return files.some((f) => f.startsWith("packages/"));
+interface RecommendationOptions {
+	force: boolean;
+	output?: (name: string, value: string) => void;
+	prNumber: number;
 }
 
-// ── Main ───────────────────────────────────────────────────────────────
-
-function main() {
-	const prNumber = Number(process.env.PR_NUMBER);
-	if (!prNumber) {
-		console.error("PR_NUMBER environment variable required");
-		process.exit(1);
-	}
+export async function recommendChangeset(
+	github: GitHubReader,
+	options: RecommendationOptions,
+): Promise<void> {
+	const { force, prNumber } = options;
+	const output = options.output ?? setOutput;
 
 	console.log(`Analyzing PR #${prNumber}`);
 
-	const pr = fetchPR(prNumber);
+	const pr = await github.getPullRequest(prNumber);
+	if (!pr) throw new Error(`Pull request #${prNumber} was not found`);
 
 	// Promote PRs (next → main) already carry versioned changesets — skip entirely
 	if (pr.headRef === "next" && pr.baseRef === "main" && !pr.isFork) {
 		console.log("Skipping: promote PR (next → main) — already versioned");
-		setOutput("skip", "true");
-		setOutput(
+		output("skip", "true");
+		output(
 			"skip_reason",
 			"promote PR (next → main) already contains versioned changesets",
 		);
 		return;
 	}
 
-	const commit = parseConventionalCommit(pr.title);
+	const commit = parseConventionalHeader(pr.title);
 	const bump = mapTypeToBump(commit.type, commit.breaking);
-	const touchesPackages = hasPackageChanges(pr.changedFiles);
+	const touchesPackages = pr.changedFiles.some(
+		(file) =>
+			file.startsWith("packages/") &&
+			!file.startsWith("packages/release-tooling/"),
+	);
 
 	// Auto-generated changesets (pr-{N}.md) can be safely regenerated.
 	// Only manually-created changesets (different filename) block re-generation.
@@ -132,12 +87,10 @@ function main() {
 
 	// FORCE mode (set by /changeset command) bypasses most skip gates
 	// but still respects hard constraints (no packages, policy violations)
-	const force = process.env.FORCE === "true";
-
 	function skip(reason: string): void {
 		console.log(`Skipping: ${reason}`);
-		setOutput("skip", "true");
-		setOutput("skip_reason", reason);
+		output("skip", "true");
+		output("skip_reason", reason);
 	}
 
 	if (!force) {
@@ -156,21 +109,20 @@ function main() {
 	} else {
 		console.log("FORCE mode: skip gates bypassed");
 		if (hasManualChangeset) {
-			setOutput("has_existing", "true");
+			output("has_existing", "true");
 		}
 		if (!touchesPackages) {
-			return skip("no package files changed — nothing to release");
+			return skip("no publishable package files changed");
 		}
 	}
 
 	if (hasAutoChangeset) {
-		setOutput("has_existing", "true");
+		output("has_existing", "true");
 	}
 
 	let resolvedBump = bump === "skip" ? "patch" : bump;
 
-	// main and release/* only accept patch
-	const patchOnly = pr.baseRef === "main" || pr.baseRef.startsWith("release/");
+	const patchOnly = pr.baseRef === "main" || isMaintenanceBranch(pr.baseRef);
 	if (patchOnly && resolvedBump !== "patch") {
 		if (force) {
 			console.log(
@@ -185,20 +137,35 @@ function main() {
 	}
 
 	const cubicSummary = extractCubicSummary(pr.body);
-	const fallback = cubicSummary || commit.subject || pr.title;
+	const fallback = createChangesetFallback(
+		cubicSummary || commit.subject || pr.title,
+	);
+	let description = fallback;
+	try {
+		description = await rewriteChangesetDescription({
+			title: pr.title,
+			bump: resolvedBump,
+			changedFiles: pr.changedFiles.slice(0, 50),
+			cubicSummary,
+			diff: pr.diff,
+		});
+	} catch (error) {
+		console.warn(
+			`AI changeset rewrite failed; using deterministic fallback: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 
 	// All packages are in one changesets fixed group — listing any one
 	// bumps them all together. "better-auth" is the representative.
 	const frontmatter = `"better-auth": ${resolvedBump}`;
 
 	console.log("Analysis complete:");
-	setOutput("skip", "false");
-	setOutput("bump", resolvedBump);
-	setOutput("frontmatter", frontmatter);
-	setOutput("pr_title", pr.title);
-	setOutput("cubic_summary", cubicSummary);
-	setOutput("fallback_description", fallback);
-	setOutput("changed_files", pr.changedFiles.slice(0, 50).join("\n"));
+	output("skip", "false");
+	output("bump", resolvedBump);
+	output("frontmatter", frontmatter);
+	output("pr_title", pr.title);
+	output("cubic_summary", cubicSummary);
+	output("fallback_description", fallback);
+	output("description", description);
+	output("changed_files", pr.changedFiles.slice(0, 50).join("\n"));
 }
-
-main();

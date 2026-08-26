@@ -1,0 +1,38 @@
+{
+  "name": "@better-auth/release-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "auto-changeset": "node src/commands/auto-changeset.ts",
+    "release-notes": "node src/commands/release-notes.ts",
+    "release-notes:comment": "node src/commands/release-notes-comment.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@actions/core": "3.0.1",
+    "@octokit/request-error": "7.1.1",
+    "@octokit/rest": "22.0.1",
+    "ai": "7.0.77",
+    "conventional-changelog-conventionalcommits": "10.4.0",
+    "conventional-commits-parser": "7.1.2",
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-to-markdown": "^2.1.2",
+    "micromark-extension-gfm": "^3.0.0",
+    "semver": "^7.8.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^24.10.15",
+    "@types/semver": "^7.7.1",
+    "typescript": "catalog:",
+    "vitest": "catalog:vitest",
+    "yaml": "^2.9.0"
+  }
+}

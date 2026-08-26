@@ -51,6 +51,18 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Reject stale release merge groups
+        if: github.event_name == 'merge_group'
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          BASE_VERSION=$(git show "${BASE_SHA}:packages/better-auth/package.json" | jq -r '.version')
+          HEAD_VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          if [ "$BASE_VERSION" != "$HEAD_VERSION" ]; then
+            pnpm --filter @better-auth/release-tooling release-notes \
+              check-changesets --branch "$GITHUB_SHA"
+          fi
+
       - name: Build
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -172,6 +184,10 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Test release tooling
+        if: matrix.node-version == '24.x'
+        run: pnpm --filter @better-auth/release-tooling test
 
       - name: Rebuild native bindings for matrix node
         run: pnpm -r rebuild better-sqlite3
