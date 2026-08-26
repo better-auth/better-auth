@@ -24,10 +24,14 @@ jobs:
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       startsWith(github.event.comment.body, '/release-notes')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 1
+    continue-on-error: true
     permissions:
       issues: write
       pull-requests: write
+    outputs:
+      reaction_id: ${{ steps.reaction.outputs.reaction_id }}
+      token_source: ${{ steps.reaction.outputs.token_source }}
     steps:
       - name: Generate scoped App token
         id: app-token
@@ -41,8 +45,10 @@ jobs:
           permission-pull-requests: write
 
       - name: Acknowledge command
+        id: reaction
         continue-on-error: true
         env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           COMMENT_ID: ${{ github.event.comment.id }}
         run: |
@@ -50,8 +56,19 @@ jobs:
             echo "::error::Comment ID is invalid"
             exit 1
           fi
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
-            -f content='eyes' >/dev/null
+          REACTION_ID=$(gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content='eyes' --jq '.id')
+          if [[ ! "$REACTION_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Reaction ID is invalid"
+            exit 1
+          fi
+          echo "reaction_id=$REACTION_ID" >> "$GITHUB_OUTPUT"
+          if [ -n "$APP_TOKEN" ]; then
+            echo "token_source=app" >> "$GITHUB_OUTPUT"
+          else
+            echo "token_source=github" >> "$GITHUB_OUTPUT"
+          fi
 
   generate:
     if: >-
@@ -451,19 +468,11 @@ jobs:
             exit 1
           fi
 
-      - name: Mark command as complete
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          COMMENT_ID: ${{ github.event.comment.id }}
-        run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
-            -f content='+1' >/dev/null
-
-  mark-failure:
-    needs: [generate, publish-comment]
+  finalize-command:
+    needs: [acknowledge, generate, publish-comment]
     if: >-
       !cancelled() &&
-      (needs.generate.result == 'failure' || needs.publish-comment.result == 'failure')
+      contains(fromJSON('["success", "failure"]'), needs.generate.result)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -481,15 +490,35 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
 
-      - name: Mark command as failed
+      - name: Set command status
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ needs.acknowledge.outputs.token_source == 'github' && secrets.GITHUB_TOKEN || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           COMMENT_ID: ${{ github.event.comment.id }}
+          REACTION_ID: ${{ needs.acknowledge.outputs.reaction_id }}
+          GENERATE_RESULT: ${{ needs.generate.result }}
+          PUBLISH_RESULT: ${{ needs.publish-comment.result }}
         run: |
           if [[ ! "$COMMENT_ID" =~ ^[0-9]+$ ]]; then
             echo "::error::Comment ID is invalid"
             exit 1
           fi
+
+          if [ -n "$REACTION_ID" ]; then
+            if [[ ! "$REACTION_ID" =~ ^[0-9]+$ ]]; then
+              echo "::error::Reaction ID is invalid"
+              exit 1
+            fi
+            if ! gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions/${REACTION_ID}"; then
+              echo "::warning::Could not clear the command acknowledgement"
+            fi
+          fi
+
+          CONTENT='-1'
+          if [ "$GENERATE_RESULT" = 'success' ] && \
+             [ "$PUBLISH_RESULT" = 'success' ]; then
+            CONTENT='+1'
+          fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
-            -f content='-1' >/dev/null
+            -f content="$CONTENT" >/dev/null
