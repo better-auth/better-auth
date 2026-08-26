@@ -29,7 +29,10 @@ function useCopyButton(
 	const timeoutRef = useRef<number | null>(null);
 
 	const onClick: MouseEventHandler = useEffectEvent(() => {
-		if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+		if (timeoutRef.current) {
+			window.clearTimeout(timeoutRef.current);
+			timeoutRef.current = null;
+		}
 		const res = Promise.resolve().then(onCopy);
 
 		void res.then(
@@ -37,9 +40,11 @@ function useCopyButton(
 				setChecked(true);
 				timeoutRef.current = window.setTimeout(() => {
 					setChecked(false);
+					timeoutRef.current = null;
 				}, 1500);
 			},
 			(cause: unknown) => {
+				setChecked(false);
 				console.error("Failed to copy to clipboard:", cause);
 				toast.error("Failed to copy to clipboard");
 			},

@@ -5,6 +5,7 @@ import {
 	getVersionFromPathname,
 	getVersionTargetHref,
 	resolveVersionFromSlug,
+	scopeDocsContent,
 	versionedDocsHref,
 } from "./docs-versions";
 
@@ -34,6 +35,20 @@ describe("documentation versions", () => {
 	it("builds archived documentation URLs", () => {
 		expect(versionedDocsHref("/docs/plugins/scim", version16)).toBe(
 			"/docs/1.6/plugins/scim",
+		);
+		expect(versionedDocsHref("/docs", version16)).toBe(
+			"/docs/1.6/introduction",
+		);
+	});
+
+	it("scopes unversioned content links without duplicating version prefixes", () => {
+		expect(
+			scopeDocsContent(
+				'[SCIM](/docs/plugins/scim) <Link href="/docs/1.6/introduction" />',
+				version16,
+			),
+		).toBe(
+			'[SCIM](/docs/1.6/plugins/scim) <Link href="/docs/1.6/introduction" />',
 		);
 	});
 

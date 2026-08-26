@@ -4,7 +4,11 @@ import type { FileObject, PopulateParams } from "next-validate-link";
 import { printErrors, scanURLs, validateFiles } from "next-validate-link";
 import { remark } from "remark";
 import { visit } from "unist-util-visit";
-import { docsVersions, versionedDocsHref } from "../lib/docs-versions.ts";
+import {
+	docsVersions,
+	scopeDocsContent,
+	versionedDocsHref,
+} from "../lib/docs-versions.ts";
 
 const routeEntries: NonNullable<PopulateParams[string]> = [];
 const files: FileObject[] = [];
@@ -71,9 +75,7 @@ for (const version of docsVersions) {
 		const rawContent = readFileSync(filePath, "utf8");
 		const versionedContent =
 			version.id !== "latest"
-				? rawContent
-						.replaceAll("](/docs/", `](/docs/${version.id}/`)
-						.replace(/href=(["'])\/docs\//g, `href=$1/docs/${version.id}/`)
+				? scopeDocsContent(rawContent, version)
 				: rawContent;
 		const content = normalizeTrailingSlashAnchors(versionedContent);
 

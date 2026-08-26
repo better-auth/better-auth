@@ -59,6 +59,8 @@ export interface ResolvedDocsVersion extends DocsVersion {
 
 export type VersionAvailability = Record<string, string[]>;
 
+const docsRootPathPattern = /^\/docs\/?([?#].*)?$/;
+
 /**
  * The default (latest) version entry.
  */
@@ -76,6 +78,10 @@ export function getVersionById(id: string): DocsVersion | undefined {
  */
 export function versionedDocsHref(path: string, version: DocsVersion): string {
 	if (version.id === "latest") return path;
+	const docsRootMatch = docsRootPathPattern.exec(path);
+	if (docsRootMatch) {
+		return `/docs/${version.id}/introduction${docsRootMatch[1] ?? ""}`;
+	}
 	// /docs/introduction -> /docs/beta/introduction
 	const stripped = path.replace(/^\/docs/, "");
 	return `/docs/${version.id}${stripped}`;
@@ -191,6 +197,22 @@ export function scopeDocsHref(
 		return href;
 	}
 	return versionedDocsHref(href, version);
+}
+
+export function scopeDocsContent(
+	content: string,
+	version: DocsVersion,
+): string {
+	return content
+		.replace(
+			/\]\((\/docs(?:[/?#][^)\s]*)?)\)/g,
+			(_match, href: string) => `](${scopeDocsHref(href, version) ?? href})`,
+		)
+		.replace(
+			/href=(["'])(\/docs(?:[/?#][^"']*)?)\1/g,
+			(_match, quote: string, href: string) =>
+				`href=${quote}${scopeDocsHref(href, version) ?? href}${quote}`,
+		);
 }
 
 /**
