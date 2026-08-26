@@ -48,8 +48,8 @@ it("preserves an existing migration decisions file with different content", asyn
 	const existing = `${JSON.stringify(
 		{
 			formatVersion: 1,
+			legacyTableNames: { oauthConsent: "oauthConsent" },
 			migration: "1.6-to-1.7",
-			issuers: { github: "local:oauth:github" },
 		},
 		null,
 		2,
@@ -60,8 +60,8 @@ it("preserves an existing migration decisions file with different content", asyn
 		await expect(
 			writeMigrationDecisions(filePath, {
 				formatVersion: 1,
+				legacyTableNames: { oauthConsent: "legacyOAuthConsent" },
 				migration: "1.6-to-1.7",
-				issuers: { github: "https://github.com" },
 			} satisfies MigrationDecisions),
 		).rejects.toThrow(
 			"already exists with different decisions and was not changed",
@@ -79,8 +79,8 @@ it("reuses an identical migration decisions file", async () => {
 	const filePath = path.join(directory, "better-auth-migration.json");
 	const decisions = {
 		formatVersion: 1,
+		legacyTableNames: { oauthConsent: "oauthConsent" },
 		migration: "1.6-to-1.7",
-		issuers: { github: "local:oauth:github" },
 	} satisfies MigrationDecisions;
 
 	try {
@@ -102,13 +102,13 @@ it("allows only one of two different concurrent decisions to claim a path", asyn
 	const filePath = path.join(directory, "better-auth-migration.json");
 	const left = {
 		formatVersion: 1,
+		legacyTableNames: { oauthConsent: "oauthConsent" },
 		migration: "1.6-to-1.7",
-		issuers: { github: "local:oauth:github" },
 	} satisfies MigrationDecisions;
 	const right = {
 		formatVersion: 1,
+		legacyTableNames: { oauthConsent: "legacyOAuthConsent" },
 		migration: "1.6-to-1.7",
-		issuers: { github: "https://github.com" },
 	} satisfies MigrationDecisions;
 
 	try {

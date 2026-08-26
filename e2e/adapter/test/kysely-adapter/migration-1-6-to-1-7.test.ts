@@ -1472,7 +1472,7 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 				fields: {
 					accountId: "externalAccountId",
 				},
-				identityStrategy: "issuer",
+				identityStrategy: "provider-id",
 			},
 			baseURL: "http://localhost:3000",
 			database: {
@@ -1485,20 +1485,11 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 			},
 			plugins: [createCurrentScimPlugin(legacyScimAccount.userId)],
 		});
-		await expect(
-			migrateFrom16(auth17.options, {
-				accountIssuers: {
-					workforce: "local:retired-scim:workforce",
-				},
-			}),
-		).rejects.toThrow(
+		await expect(migrateFrom16(auth17.options, {})).rejects.toThrow(
 			'The 1.6 SCIM migration requires providers: "reprovision" and an explicit accountIdsToRetire inventory.',
 		);
 		await expect(
 			migrateFrom16(auth17.options, {
-				accountIssuers: {
-					workforce: "local:retired-scim:workforce",
-				},
 				scim: {
 					accountIdsToRetire: [],
 					providers: "reprovision",
@@ -1508,9 +1499,6 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 			"The SCIM account retirement inventory must exactly match every account owned by the legacy SCIM providers.",
 		);
 		const migration = await migrateFrom16(auth17.options, {
-			accountIssuers: {
-				workforce: "local:retired-scim:workforce",
-			},
 			scim: {
 				accountIdsToRetire: [legacyScimAccount.id],
 				providers: "reprovision",
@@ -1532,9 +1520,6 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 			retiredProviders: 1,
 		});
 		const rerun = await migrateFrom16(auth17.options, {
-			accountIssuers: {
-				workforce: "local:retired-scim:workforce",
-			},
 			scim: {
 				accountIdsToRetire: [legacyScimAccount.id],
 				providers: "reprovision",

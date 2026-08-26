@@ -14,8 +14,6 @@ export type ReleaseMigrationOptions = Parameters<typeof migrateFrom16>[1];
 const migrationDecisionsSchema = z.strictObject({
 	formatVersion: z.literal(1),
 	migration: z.literal(RELEASE_MIGRATION_ID),
-	accountIssuers: z.record(z.string().min(1), z.string().min(1)).optional(),
-	issuers: z.record(z.string().min(1), z.string().min(1)).optional(),
 	legacyTableNames: z
 		.strictObject({
 			oauthAccessToken: z.string().trim().min(1).nullish(),
@@ -150,8 +148,6 @@ export function toReleaseMigrationOptions(
 	decisions: MigrationDecisions | undefined,
 ): ReleaseMigrationOptions {
 	return {
-		accountIssuerByAccountId: decisions?.accountIssuers,
-		accountIssuers: decisions?.issuers,
 		legacyTableNames: decisions?.legacyTableNames,
 		oauthProvider: decisions?.oauth && {
 			clients: "migrate",

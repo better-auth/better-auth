@@ -395,7 +395,7 @@ describe("migrate published 1.6.30 account data", () => {
 		});
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			plugins: [
@@ -484,7 +484,7 @@ describe("migrate published 1.6.30 account data", () => {
 		expect(sourceAccounts).toHaveLength(2);
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {
@@ -615,7 +615,7 @@ describe("migrate published 1.6.30 account data", () => {
 			},
 		});
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {
@@ -674,7 +674,7 @@ describe("migrate published 1.6.30 account data", () => {
 async function createReleaseDecisionFixture(
 	db: Database.Database,
 	{
-		identityStrategy = "issuer",
+		identityStrategy = "provider-id",
 		sourceClientSecretStorage = "plain",
 		targetClientSecretStorage = "hashed",
 	}: {
@@ -1118,7 +1118,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 					remediation: {
 						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy",
 						summary:
-							'Set account.identityStrategy to "provider-id" to preserve 1.6 account identity (recommended), or explicitly set it to "issuer" after reviewing projected collisions, then run the plan again.',
+							'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, then run the plan again.',
 					},
 					table: "account",
 				},
@@ -1209,7 +1209,6 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
-			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
 				consents: "reauthorize",
@@ -1287,7 +1286,6 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
-			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
 			oauth: {
 				clientSecrets: { source: "hashed", target: "hashed" },
 				consents: "reauthorize",
@@ -1325,7 +1323,6 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
-			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
 			oauth: {
 				clientSecrets: { source: "encrypted", target: "encrypted" },
 				consents: "reauthorize",
@@ -1348,50 +1345,6 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 				.prepare("SELECT clientSecret FROM oauthClient WHERE clientId = ?")
 				.get(registeredClientId),
 		).toEqual(sourceClient);
-	});
-
-	it("sends a contradicted decision back to the data instead of the interview", async () => {
-		const db = new Database(":memory:");
-		await createResolvableAccountFixture(db);
-		const plan = await writeMigrationDecisions({
-			formatVersion: 1,
-			migration: "1.6-to-1.7",
-			issuers: { credential: "https://credential.example" },
-		});
-		const processExit = vi
-			.spyOn(process, "exit")
-			.mockImplementation((code) => code as never);
-		const consoleError = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
-		vi.spyOn(console, "log").mockImplementation(() => {});
-
-		await migrateAction({
-			approved: true,
-			cwd: process.cwd(),
-			migrationFile: plan,
-			mode: "apply",
-		});
-
-		expect(processExit).toHaveBeenCalledWith(1);
-		expect(consoleError).toHaveBeenCalledWith(
-			'-> [issuer-conflict] Provider "credential" derives issuer "local:credential" from this Better Auth configuration, so accounts migrated with "https://credential.example" would never match a 1.7 sign-in.',
-		);
-		expect(consoleError).toHaveBeenCalledWith(
-			'   Fix: Remove "credential" from the issuers in better-auth-migration.json to migrate these accounts as "local:credential", or configure the provider to establish "https://credential.example".',
-		);
-		expect(consoleError).toHaveBeenCalledWith(
-			"   Docs: https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy",
-		);
-		expect(consoleError).toHaveBeenCalledWith(
-			`Resolve every blocker above in your 1.6 data, then run \`auth migrate apply ${plan}\` again. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide`,
-		);
-		expect(
-			db
-				.prepare("PRAGMA table_info(account)")
-				.all()
-				.map((column) => (column as { name: string }).name),
-		).not.toContain("issuer");
 	});
 
 	it("rejects a decisions file it does not understand", async () => {
@@ -1442,7 +1395,7 @@ async function createResolvableAccountFixture(db: Database.Database) {
 	};
 	await auth1630.api.signUpEmail({ body: credentials });
 	const options17: BetterAuthOptions = {
-		account: { identityStrategy: "issuer" },
+		account: { identityStrategy: "provider-id" },
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -1492,7 +1445,6 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			.mockImplementation(() => {});
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 		vi.mocked(prompts)
-			.mockResolvedValueOnce({ issuer: "local:retired-scim:workforce-fixture" })
 			.mockResolvedValueOnce({ source: "plain" })
 			.mockResolvedValueOnce({ consents: "reauthorize" })
 			.mockResolvedValueOnce({ retire: true })
@@ -1504,18 +1456,9 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			restoreStdin();
 		}
 
-		expect(prompts).toHaveBeenCalledTimes(5);
+		expect(prompts).toHaveBeenCalledTimes(4);
 		expect(prompts).toHaveBeenNthCalledWith(
 			1,
-			expect.objectContaining({
-				message:
-					'Issuer for "workforce-fixture" (1 account, missing from your configuration)',
-				name: "issuer",
-				type: "text",
-			}),
-		);
-		expect(prompts).toHaveBeenNthCalledWith(
-			2,
 			expect.objectContaining({
 				message:
 					'How did Better Auth 1.6 store OAuth client secrets? The configured 1.7 target is "hashed".',
@@ -1524,7 +1467,7 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			}),
 		);
 		expect(prompts).toHaveBeenNthCalledWith(
-			3,
+			2,
 			expect.objectContaining({
 				message: "Stored OAuth consents",
 				name: "consents",
@@ -1532,7 +1475,7 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			}),
 		);
 		expect(prompts).toHaveBeenNthCalledWith(
-			4,
+			3,
 			expect.objectContaining({
 				message: "Retire these SCIM accounts?",
 				name: "retire",
@@ -1540,16 +1483,12 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			}),
 		);
 		expect(prompts).toHaveBeenNthCalledWith(
-			5,
+			4,
 			expect.objectContaining({
 				message: "Are you sure you want to run these migrations?",
 				name: "migrate",
 				type: "confirm",
 			}),
-		);
-		expect(consoleLog).toHaveBeenCalledWith(
-			"->",
-			"credential: local:credential",
 		);
 		expect(consoleLog).toHaveBeenCalledWith("->", scimAccountId);
 		expect(consoleLog).toHaveBeenCalledWith(
@@ -1559,10 +1498,6 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
-			issuers: {
-				credential: "local:credential",
-				"workforce-fixture": "local:retired-scim:workforce-fixture",
-			},
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
 				consents: "reauthorize",
@@ -1593,7 +1528,6 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 		vi.mocked(prompts)
-			.mockResolvedValueOnce({ issuer: "local:retired-scim:workforce-fixture" })
 			.mockResolvedValueOnce({ source: "plain" })
 			.mockResolvedValueOnce({ consents: "migrate" })
 			.mockResolvedValueOnce({ retire: true })
@@ -1612,10 +1546,6 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
-			issuers: {
-				credential: "local:credential",
-				"workforce-fixture": "local:retired-scim:workforce-fixture",
-			},
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
 				consents: "migrate",
@@ -1643,7 +1573,6 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 		const existingDecisions = {
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
-			issuers: { github: "https://github.com" },
 		};
 		await fs.writeFile(
 			path.join(cwd, "better-auth-migration.json"),
@@ -1659,7 +1588,6 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			.mockImplementation(() => {});
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		vi.mocked(prompts)
-			.mockResolvedValueOnce({ issuer: "local:retired-scim:workforce-fixture" })
 			.mockResolvedValueOnce({ source: "plain" })
 			.mockResolvedValueOnce({ consents: "reauthorize" })
 			.mockResolvedValueOnce({ retire: true });
@@ -1677,7 +1605,7 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			),
 		);
 		expect(await readRecordedDecisions(cwd)).toEqual(existingDecisions);
-		expect(prompts).toHaveBeenCalledTimes(4);
+		expect(prompts).toHaveBeenCalledTimes(3);
 	});
 
 	it("records nothing when a question is cancelled", async () => {
@@ -1742,7 +1670,7 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			issuer: "local:credential",
 		});
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: { enabled: true },
@@ -2009,7 +1937,7 @@ async function createRenamedLegacyClientFixture(db: Database.Database) {
 		},
 	});
 	const options17: BetterAuthOptions = {
-		account: { identityStrategy: "issuer" },
+		account: { identityStrategy: "provider-id" },
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -2149,7 +2077,6 @@ describe("migrate a customized 1.6.30 table name", () => {
 		);
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
-			issuers: { credential: "local:credential" },
 			migration: "1.6-to-1.7",
 			legacyTableNames: { oauthApplication: "legacyOAuthApplication" },
 			oauth: {
@@ -2192,7 +2119,6 @@ describe("migrate a customized 1.6.30 table name", () => {
 		expect(prompts).toHaveBeenCalledTimes(2);
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
-			issuers: { credential: "local:credential" },
 			migration: "1.6-to-1.7",
 			legacyTableNames: { oauthApplication: null },
 		});
@@ -2356,7 +2282,7 @@ describe("migrate published 1.6.30 organization team data", () => {
 			},
 		};
 		const auth17 = betterAuth({
-			account: { identityStrategy: "issuer" },
+			account: { identityStrategy: "provider-id" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {

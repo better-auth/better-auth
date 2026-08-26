@@ -54,7 +54,7 @@ These features change the schema:
 
 ### Migrate from 1.6 to 1.7
 
-`auth migrate` recognizes 1.6 data and switches to a guided migration that changes data and schema together. It covers the built-in PostgreSQL, MySQL, SQLite, and SQL Server configurations, plus SQL-backed Drizzle and Prisma adapters. Every 1.7 account schema requires `issuer` and `accountId` and enforces a unique compound index across them. A populated 1.6 database must therefore set `account.identityStrategy` explicitly before migration: choose `"provider-id"` to preserve the 1.6 logical identity or `"issuer"` to adopt authority-scoped identity. An already-migrated v1.7 database keeps issuer behavior when the option is omitted.
+`auth migrate` recognizes 1.6 data and switches to a guided migration that changes data and schema together. It covers the built-in PostgreSQL, MySQL, SQLite, and SQL Server configurations, plus SQL-backed Drizzle and Prisma adapters. Every 1.7 account schema requires `issuer` and `accountId` and enforces a unique compound index across them. A populated 1.6 database must set `account: { identityStrategy: "provider-id" }` before migration so the guided path preserves its logical `(providerId, accountId)` identities. Selecting `"issuer"` for populated 1.6 data is blocked because adopting authority-scoped identity is a re-key migration that needs separate review. An already-migrated v1.7 issuer database remains unchanged when the option is omitted.
 
 Back up the database, stop authentication writes, and run:
 
@@ -63,7 +63,7 @@ npx auth migrate plan
 npx auth migrate apply
 ```
 
-`migrate plan` only reads the database. It prints the selected and detected account identity strategies, schema changes, irreversible release actions, and blockers. Each blocker has a stable code and links to the section of this guide that resolves it. On a populated 1.6 account table, an omitted strategy produces `account-identity-strategy-required`; set the option and run the plan again. `migrate apply` derives what it can from your configuration, asks about the decisions it cannot make, and saves the reviewed answers to `better-auth-migration.json`. The file identifies the `1.6-to-1.7` transition and records the effective persisted namespaces from your configuration, so applying it under a changed configuration produces a blocker instead of silently changing account identity. A blocked run leaves the database unchanged.
+`migrate plan` only reads the database. It prints the selected and detected account identity strategies, account counts, automatic namespace resolution, projected collisions, schema changes, irreversible release actions, and blockers. Each blocker has a stable code and links to the section of this guide that resolves it. On a populated 1.6 account table, an omitted strategy produces `account-identity-strategy-required`; add the exact provider-id configuration above and run the plan again. Explicit issuer produces `account-identity-strategy-unsupported`. `migrate apply` reruns the same preflight before changing data, asks about other release decisions it cannot make, and saves the reviewed answers to `better-auth-migration.json`. The file identifies the `1.6-to-1.7` transition, so the same choices can be inspected and replayed. A blocked run leaves the database unchanged.
 
 Pass the saved file positionally to review or apply the same decisions in another environment:
 
@@ -91,7 +91,7 @@ This covers email and password, social login, the generic OAuth plugin, One Tap,
 
 providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy.
 
-Every generated 1.7 schema has the same physical identity fields: required `issuer`, required `accountId`, and a unique compound index on `(issuer, accountId)`. `account.identityStrategy` selects what the `issuer` value means. Better Auth 1.7.x defaults an omitted option to `"issuer"`; `"provider-id"` is the explicit compatibility path for a populated 1.6 database.
+Every generated 1.7 schema has the same physical identity fields: required `issuer`, required `accountId`, and a unique compound index on `(issuer, accountId)`. `account.identityStrategy` selects what the `issuer` value means. Newly generated configurations explicitly select `"provider-id"`. Omitting the option is a deprecated v1.7 compatibility mode that continues using issuer identity and warns once per auth instance. Explicit `"issuer"` and explicit `"provider-id"` are both valid and warning-free.
 
 #### Populated 1.6: preserve provider-scoped account identity
 
@@ -114,9 +114,9 @@ The synthetic namespace is storage identity, not protocol trust. OAuth, OpenID C
 
 The plan blocks on duplicate `(providerId, accountId)` rows because they project to the same synthetic issuer identity. Resolve those collisions before applying.
 
-#### Populated 1.6: adopt issuer-scoped account identity
+#### Populated 1.6: issuer identity requires a separate re-key
 
-Set `account.identityStrategy` to `"issuer"` before planning when you deliberately want issuer-scoped identity:
+Do not set `account.identityStrategy` to `"issuer"` and expect the guided 1.6 migration to infer authorities:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -129,11 +129,21 @@ export const auth = betterAuth({
 });
 ```
 
-`auth migrate plan` projects identities using each provider's trusted authority, reports collisions, and lists providers whose issuer requires manual review. `auth migrate apply` backfills those reviewed authorities, makes `issuer` required, and creates the same `(issuer, accountId)` index. This strategy can merge provider aliases that share an issuer and can change the namespace observed by systems that use the 1.6 `providerId` and `accountId` pair. Follow the manual steps below when you use another adapter, or when the plan reports a collision that only you can resolve.
+`auth migrate plan` hard-fails this choice. A 1.6 row records the configured connection but does not reliably record the verified protocol authority needed to adopt issuer identity. The change can also merge provider aliases that share an authority. Use provider-id for the supported 1.6 upgrade, or prepare a separately reviewed re-key migration that establishes every trusted authority and resolves collisions before the 1.7 constraint is enforced.
 
 #### Already migrated v1.7: keep issuer identity
 
-Leave `account.identityStrategy` omitted, or set it explicitly to `"issuer"`. `auth migrate plan` detects the complete issuer data and index, selects issuer behavior, and reports no account identity schema or data actions. `auth migrate apply` is a no-op for account identity, and runtime account recognition remains issuer-scoped.
+Set `account.identityStrategy` explicitly to `"issuer"` to keep the database unchanged without a warning. If the option is omitted, `auth migrate plan` still detects the complete issuer data and index and reports no account identity schema or data actions, while runtime uses v1.7 issuer compatibility mode and warns once per auth instance. In both cases, `auth migrate apply` is a no-op for account identity.
+
+Use this one-line configuration to make the existing behavior explicit:
+
+```ts title="auth.ts"
+account: { identityStrategy: "issuer" }
+```
+
+#### Already migrated provider-id data: keep provider identity
+
+Set `account.identityStrategy` explicitly to `"provider-id"`. The plan detects deterministic namespaces such as `local:oauth:google`, and apply is a no-op. Omitting the strategy or selecting `"issuer"` is blocked and instructs you to restore `account: { identityStrategy: "provider-id" }`.
 
 <Callout type="warn">
   Changing `account.identityStrategy` on populated v1.7 data is a re-key migration, not a configuration-only toggle. Setting `"provider-id"` against an issuer-keyed database is blocked; keep `"issuer"` until a separate reviewed migration rewrites every namespace and resolves collisions. Runtime behavior never selects a strategy by introspecting the database.

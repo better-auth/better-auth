@@ -196,8 +196,32 @@ export function printHumanMigrationPlan(
 	);
 	console.log(`Status: ${migrationPlan.status}`);
 	console.log(
-		`Account identity: ${migrationPlan.accountIdentity.selectedStrategy} (database: ${migrationPlan.accountIdentity.detectedStrategy})`,
+		`Account identity strategy: ${migrationPlan.accountIdentity.selectedStrategy} (database: ${migrationPlan.accountIdentity.detectedStrategy})`,
 	);
+	console.log(
+		`Accounts: ${migrationPlan.accountIdentity.totalAccounts ?? 0} total, ${migrationPlan.accountIdentity.externalAccounts ?? 0} external`,
+	);
+	if (
+		migrationPlan.accountIdentity.automaticNamespaceResolution &&
+		migrationPlan.accountIdentity.automaticNamespaceResolution.total > 0
+	) {
+		console.log(
+			`Automatic namespace resolution: ${migrationPlan.accountIdentity.automaticNamespaceResolution.resolved}/${migrationPlan.accountIdentity.automaticNamespaceResolution.total}`,
+		);
+	}
+	console.log(
+		`Projected collisions: ${migrationPlan.accountIdentity.projectedCollisions ?? 0}`,
+	);
+	if (migrationPlan.accountIdentity.selectedStrategy === "issuer") {
+		console.log("Persisted namespace: verified issuer authority");
+	} else {
+		console.log("Persisted namespace: deterministic provider namespace");
+	}
+	if (migrationPlan.accountIdentity.compatibilityWarning) {
+		console.log(
+			`Warning: ${migrationPlan.accountIdentity.compatibilityWarning}`,
+		);
+	}
 	console.log(
 		`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
 	);

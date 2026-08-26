@@ -80,7 +80,9 @@ export interface ReleaseMigrationPlan {
 export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
 		case "account-identity-strategy-mismatch":
-			return `${blocker.table}: the database uses ${blocker.detectedStrategy} account identity, but the configured strategy is ${blocker.configuredStrategy}.`;
+			return blocker.malformedNamespaces > 0
+				? `${blocker.table}: ${blocker.malformedNamespaces} of ${blocker.accountCount} account namespaces are malformed across providers ${blocker.affectedProviders.join(", ") || "(unknown)"}.`
+				: `${blocker.table}: ${blocker.accountCount} accounts across providers ${blocker.affectedProviders.join(", ") || "(unknown)"} use ${blocker.detectedStrategy} account identity, but the configured strategy is ${blocker.configuredStrategy}.`;
 		case "index-column-bounds":
 		case "release-migration-error":
 			return blocker.message;
@@ -104,25 +106,23 @@ export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
 		case "account-identity-strategy-mismatch":
-			return `Keep account.identityStrategy as "${blocker.detectedStrategy === "provider-id" ? "provider-id" : "issuer"}", or perform a separate reviewed re-key migration before changing strategy.`;
+			return blocker.malformedNamespaces > 0
+				? `Repair every malformed namespace in "${blocker.table}" for the configured strategy, then run the plan again.`
+				: `Keep account.identityStrategy as "${blocker.detectedStrategy === "provider-id" ? "provider-id" : "issuer"}", or perform a separate reviewed re-key migration before changing strategy.`;
 		case "account-identity-collision":
 			return `Merge or remove the duplicate rows in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
 		case "account-identity-strategy-required":
-			return 'Set account.identityStrategy to "provider-id" to preserve 1.6 account identity (recommended), or explicitly set it to "issuer" after reviewing projected collisions, then run the plan again.';
+			return 'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, then run the plan again.';
+		case "account-identity-strategy-unsupported":
+			return 'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, or perform a separately reviewed issuer re-key migration.';
 		case "account-issuer-conflict":
-			return `Remove account "${blocker.accountId}" from accountIssuers in ${MIGRATION_DECISIONS_FILE} to keep "${blocker.storedIssuer}", or correct the stored issuer before migrating.`;
-		case "account-issuer-decision-required":
-			return `Record each missing account under accountIssuers in ${MIGRATION_DECISIONS_FILE} and remove the unknown account IDs, then migrate again.`;
+			return `Repair account "${blocker.accountId}" so its issuer is "${blocker.requestedIssuer}", or use a separately reviewed re-key migration.`;
 		case "backup-table-conflict":
 			return `Drop or rename "${blocker.backupTable}" so the migration can move "${blocker.table}" aside, then migrate again.`;
 		case "identifier-length-limit":
 			return `Rename "${blocker.table}" to a shorter name and record it under legacyTableNames in ${MIGRATION_DECISIONS_FILE}.`;
 		case "index-column-bounds":
 			return `Bound the indexed string columns of "${blocker.table}" to the generated schema lengths, then run \`auth migrate apply\` again.`;
-		case "issuer-conflict":
-			return `Remove "${blocker.providerId}" from the issuers in ${MIGRATION_DECISIONS_FILE} to migrate these accounts as "${blocker.configuredIssuer}", or configure the provider to establish "${blocker.requestedIssuer}".`;
-		case "issuer-required":
-			return `Record the issuer for "${blocker.providerId}" under issuers in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate apply\` in a terminal to answer it there.`;
 		case "legacy-table-candidate":
 			return `Record which table holds the 1.6 "${blocker.model}" data under legacyTableNames in ${MIGRATION_DECISIONS_FILE}, or null when none of them does, or run \`auth migrate apply\` in a terminal to answer it there.`;
 		case "oauth-client-conflict":
@@ -163,12 +163,10 @@ function resolveMigrationGuideAnchor(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
 		case "account-identity-strategy-mismatch":
 		case "account-identity-strategy-required":
+		case "account-identity-strategy-unsupported":
 			return "choose-account-identity-strategy";
 		case "account-identity-collision":
 		case "account-issuer-conflict":
-		case "account-issuer-decision-required":
-		case "issuer-conflict":
-		case "issuer-required":
 			return "choose-account-identity-strategy";
 		case "reprovision-data":
 		case "scim-decision-required":

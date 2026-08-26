@@ -4,13 +4,10 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { MigrationDatabaseQuery } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
-import { genericOAuth } from "../plugins/generic-oauth";
 import { organization } from "../plugins/organization";
-import { siwe } from "../plugins/siwe";
 import {
 	getMigrations,
 	migrateFrom16,
-	resolveConfiguredIssuers,
 	UnsafeMigrationError,
 	validateMigrationFrom16,
 } from "./get-migration";
@@ -1103,10 +1100,9 @@ describe("get-migration: 1.6 release preflight", () => {
 
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
 			{
-				accountCount: 1,
-				code: "issuer-required",
-				providerId: "github",
-				reason: "unconfigured-provider",
+				accountCount: 2,
+				code: "account-identity-strategy-unsupported",
+				providerIds: ["credential", "github"],
 				table: "account",
 			},
 			{
@@ -1290,55 +1286,6 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		google: { clientId: "google-client", clientSecret: "google-secret" },
 	};
 
-	it("derives every configured provider issuer without asking", async () => {
-		const db = new DatabaseSync(":memory:");
-		createLegacyAccountTable(db);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			socialProviders: socialConfig,
-		};
-
-		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
-			issuers: {
-				credential: "local:credential",
-				github: "local:oauth:github",
-				google: "https://accounts.google.com",
-			},
-			unresolvedProviders: {},
-		});
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
-
-		const migration = await migrateFrom16(config, {});
-		expect(migration.accounts).toEqual({
-			migrated: 3,
-			providers: { credential: 1, github: 1, google: 1 },
-		});
-		expect(
-			db
-				.prepare(
-					`SELECT "providerId", "issuer", "accountId" FROM "account" ORDER BY "providerId"`,
-				)
-				.all(),
-		).toEqual([
-			{
-				issuer: "local:credential",
-				accountId: "ada@example.com",
-				providerId: "credential",
-			},
-			{
-				issuer: "local:oauth:github",
-				accountId: "4711",
-				providerId: "github",
-			},
-			{
-				issuer: "https://accounts.google.com",
-				accountId: "108451",
-				providerId: "google",
-			},
-		]);
-	});
-
 	it("requires an explicit strategy for a populated 1.6 account table", async () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
@@ -1356,7 +1303,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			},
 		]);
 		await expect(migrateFrom16(config, {})).rejects.toThrow(
-			'Set account.identityStrategy to "provider-id" to preserve 1.6 identity semantics, or explicitly set it to "issuer" to adopt issuer-scoped identity.',
+			'account: { identityStrategy: "provider-id" }',
 		);
 		expect(
 			db
@@ -1364,6 +1311,64 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				.all()
 				.map((column) => (column as { name: string }).name),
 		).not.toContain("issuer");
+	});
+
+	it("refuses automatic issuer adoption for populated 1.6 data", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyAccountTable(db);
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
+			database: db,
+			socialProviders: socialConfig,
+		};
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			expect.objectContaining({
+				accountCount: 3,
+				code: "account-identity-strategy-unsupported",
+				providerIds: ["credential", "github", "google"],
+			}),
+		]);
+		await expect(migrateFrom16(config, {})).rejects.toThrow(
+			'account: { identityStrategy: "provider-id" }',
+		);
+	});
+
+	it("refuses a partially populated account identity table", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"issuer" text,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES
+				('a1', 'g-1', NULL, 'google', 'u1', '2020-01-01', '2020-01-01'),
+				('a2', 'g-2', 'https://accounts.google.com', 'google', 'u2', '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "provider-id" },
+			database: db,
+			socialProviders: socialConfig,
+		};
+
+		const migration = await getMigrations(config, { throwOnUnsafe: false });
+		expect(migration.migrationBlockers).toContainEqual(
+			expect.objectContaining({
+				code: "account-identity-strategy-mismatch",
+				detectedStrategy: "mixed",
+			}),
+		);
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			expect.objectContaining({ code: "account-issuer-conflict" }),
+		]);
 	});
 
 	it("plans the required issuer schema while the migration choice is omitted", async () => {
@@ -1390,6 +1395,64 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				index: expect.objectContaining({ columns: ["issuer", "accountId"] }),
 			}),
 		);
+	});
+
+	it.each([
+		"provider-id",
+		"issuer",
+	] as const)("keeps an empty account table ready for an explicit %s strategy", async (identityStrategy) => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+					"id" text primary key not null,
+					"accountId" text not null,
+					"providerId" text not null,
+					"userId" text not null,
+					"createdAt" date not null,
+					"updatedAt" date not null
+				)`,
+		);
+		const migration = await getMigrations(
+			{ account: { identityStrategy }, database: db },
+			{ throwOnUnsafe: false },
+		);
+
+		expect(migration.accountIdentity).toMatchObject({
+			selectedStrategy: identityStrategy,
+			detectedStrategy: "empty",
+			migrationRequired: false,
+			totalAccounts: 0,
+		});
+		expect(migration.migrationBlockers).toEqual([]);
+	});
+
+	it("keeps an empty account table on the omitted issuer compatibility path", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+
+		const migration = await getMigrations(
+			{ database: db },
+			{ throwOnUnsafe: false },
+		);
+
+		expect(migration.accountIdentity).toMatchObject({
+			selectedStrategy: "issuer",
+			detectedStrategy: "empty",
+			migrationRequired: false,
+			totalAccounts: 0,
+			compatibilityWarning:
+				'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.',
+		});
+		expect(migration.migrationBlockers).toEqual([]);
 	});
 
 	it("keeps an already-migrated v1.7 issuer database unchanged by default", async () => {
@@ -1420,6 +1483,8 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			selectedStrategy: "issuer",
 			detectedStrategy: "issuer",
 			migrationRequired: false,
+			compatibilityWarning:
+				'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.',
 		});
 		expect(migration.migrationBlockers).not.toContainEqual(
 			expect.objectContaining({ code: "account-identity-strategy-mismatch" }),
@@ -1431,6 +1496,85 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			migration.toBeAddedIndexes.find(({ table }) => table === "account"),
 		).toBeUndefined();
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+	});
+
+	it("refuses omitted strategy when v1.7 data uses provider-id namespaces", async () => {
+		const db = new DatabaseSync(":memory:");
+		const providerConfig: BetterAuthOptions = {
+			account: { identityStrategy: "provider-id" },
+			database: db,
+			socialProviders: { google: socialConfig.google },
+		};
+		const providerMigration = await getMigrations(providerConfig);
+		await providerMigration.runMigrations();
+		db.exec(
+			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES ('a1', '108451', 'local:oauth:google', 'google', 'u1', '2020-01-01', '2020-01-01')`,
+		);
+
+		const migration = await getMigrations(
+			{ database: db, socialProviders: { google: socialConfig.google } },
+			{ throwOnUnsafe: false },
+		);
+
+		expect(migration.migrationBlockers).toContainEqual(
+			expect.objectContaining({
+				code: "account-identity-strategy-mismatch",
+				detectedStrategy: "provider-id",
+			}),
+		);
+		const strictMigration = await getMigrations({
+			database: db,
+			socialProviders: { google: socialConfig.google },
+		});
+		await expect(strictMigration.runMigrations()).rejects.toThrow(
+			'account: { identityStrategy: "provider-id" }',
+		);
+	});
+
+	it("refuses malformed provider namespaces with counts and providers", async () => {
+		const db = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "provider-id" },
+			database: db,
+			socialProviders: { google: socialConfig.google },
+		};
+		const initialMigration = await getMigrations(config);
+		await initialMigration.runMigrations();
+		db.exec(
+			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES ('a1', '108451', 'local:oauth:github', 'google', 'u1', '2020-01-01', '2020-01-01')`,
+		);
+
+		const migration = await getMigrations(config, { throwOnUnsafe: false });
+
+		expect(migration.accountIdentity).toMatchObject({
+			affectedProviders: ["google"],
+			detectedStrategy: "mixed",
+			malformedNamespaces: 1,
+			requiresRekey: true,
+			totalAccounts: 1,
+		});
+		expect(migration.migrationBlockers).toContainEqual(
+			expect.objectContaining({
+				accountCount: 1,
+				affectedProviders: ["google"],
+				code: "account-identity-strategy-mismatch",
+				malformedNamespaces: 1,
+			}),
+		);
+		const strictMigration = await getMigrations(config);
+		await expect(strictMigration.runMigrations()).rejects.toThrow(
+			"contains 1 malformed persisted account namespace",
+		);
 	});
 
 	it("preserves provider-scoped account identities when migrating from 1.6", async () => {
@@ -1496,659 +1640,6 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			{ issuer: "local:oauth:github", providerId: "github" },
 			{ issuer: "local:oauth:google", providerId: "google" },
 		]);
-	});
-
-	it("refuses an issuer that contradicts the configured provider", async () => {
-		const db = new DatabaseSync(":memory:");
-		createLegacyAccountTable(db);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			socialProviders: socialConfig,
-		};
-		const options = { accountIssuers: { github: "https://github.com" } };
-
-		await expect(validateMigrationFrom16(config, options)).resolves.toEqual([
-			{
-				code: "issuer-conflict",
-				configuredIssuer: "local:oauth:github",
-				providerId: "github",
-				requestedIssuer: "https://github.com",
-				table: "account",
-			},
-		]);
-		await expect(migrateFrom16(config, options)).rejects.toThrow(
-			'Provider "github" derives issuer "local:oauth:github" from this Better Auth configuration, so accounts migrated with "https://github.com" would never match a 1.7 sign-in.',
-		);
-	});
-
-	it("asks for dynamic issuers only under issuer-scoped identity", async () => {
-		const db = new DatabaseSync(":memory:");
-		db.exec(
-			`CREATE TABLE "account" (
-				"id" text primary key not null,
-				"accountId" text not null,
-				"providerId" text not null,
-				"userId" text not null,
-				"createdAt" date not null,
-				"updatedAt" date not null
-			)`,
-		);
-		db.exec(
-			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
-			 VALUES ('a1', '8f3c', 'microsoft', 'u1', '2020-01-01', '2020-01-01')`,
-		);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			socialProviders: {
-				microsoft: {
-					clientId: "entra-client",
-					clientSecret: "entra-secret",
-				},
-			},
-		};
-
-		await expect(resolveConfiguredIssuers(config)).resolves.toMatchObject({
-			unresolvedProviders: { microsoft: "dynamic-issuer" },
-		});
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
-			{
-				accounts: [
-					{
-						accountId: "a1",
-						providerAccountId: "8f3c",
-						providerId: "microsoft",
-					},
-				],
-				code: "account-issuer-decision-required",
-				table: "account",
-				unknownAccountIds: [],
-			},
-		]);
-		await expect(
-			validateMigrationFrom16(config, {
-				accountIssuerByAccountId: {
-					a1: "https://login.microsoftonline.com/tenant/v2.0",
-				},
-			}),
-		).resolves.toEqual([]);
-
-		const providerScopedConfig: BetterAuthOptions = {
-			...config,
-			account: { identityStrategy: "provider-id" },
-		};
-		await expect(
-			resolveConfiguredIssuers(providerScopedConfig),
-		).resolves.toEqual({
-			issuers: {
-				credential: "local:credential",
-				microsoft: "local:oauth:microsoft",
-			},
-			unresolvedProviders: {},
-		});
-		await expect(
-			validateMigrationFrom16(providerScopedConfig, {}),
-		).resolves.toEqual([]);
-		await migrateFrom16(providerScopedConfig, {});
-		expect(
-			db.prepare(`SELECT "issuer" FROM "account" WHERE "id" = 'a1'`).get(),
-		).toEqual({ issuer: "local:oauth:microsoft" });
-	});
-
-	it("requires a reviewed issuer for each account of a dynamic provider", async () => {
-		const db = new DatabaseSync(":memory:");
-		db.exec(
-			`CREATE TABLE "account" (
-				"id" text primary key not null,
-				"accountId" text not null,
-				"providerId" text not null,
-				"userId" text not null,
-				"createdAt" date not null,
-				"updatedAt" date not null
-			)`,
-		);
-		db.exec(
-			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
-			 VALUES
-				('a1', 'subject-1', 'microsoft', 'u1', '2020-01-01', '2020-01-01'),
-				('a2', 'subject-2', 'microsoft', 'u2', '2020-01-01', '2020-01-01')`,
-		);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			socialProviders: {
-				microsoft: {
-					clientId: "entra-client",
-					clientSecret: "entra-secret",
-				},
-			},
-		};
-
-		await expect(
-			validateMigrationFrom16(config, {
-				accountIssuers: {
-					microsoft: "https://login.microsoftonline.com/wrong/v2.0",
-				},
-			}),
-		).resolves.toEqual([
-			{
-				accounts: [
-					{
-						accountId: "a1",
-						providerAccountId: "subject-1",
-						providerId: "microsoft",
-					},
-					{
-						accountId: "a2",
-						providerAccountId: "subject-2",
-						providerId: "microsoft",
-					},
-				],
-				code: "account-issuer-decision-required",
-				table: "account",
-				unknownAccountIds: [],
-			},
-		]);
-
-		const options = {
-			accountIssuerByAccountId: {
-				a1: "https://login.microsoftonline.com/tenant-a/v2.0",
-				a2: "https://login.microsoftonline.com/tenant-b/v2.0",
-			},
-		};
-		await expect(validateMigrationFrom16(config, options)).resolves.toEqual([]);
-		await migrateFrom16(config, options);
-
-		expect(
-			db
-				.prepare(
-					`SELECT "id", "issuer", "accountId"
-					 FROM "account"
-					 ORDER BY "id"`,
-				)
-				.all(),
-		).toEqual([
-			{
-				accountId: "subject-1",
-				id: "a1",
-				issuer: "https://login.microsoftonline.com/tenant-a/v2.0",
-			},
-			{
-				accountId: "subject-2",
-				id: "a2",
-				issuer: "https://login.microsoftonline.com/tenant-b/v2.0",
-			},
-		]);
-	});
-
-	/**
-	 * @see https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy
-	 */
-	it("treats an empty stored issuer as unmigrated and backfills it", async () => {
-		const db = new DatabaseSync(":memory:");
-		db.exec(
-			`CREATE TABLE "account" (
-				"id" text primary key not null,
-				"accountId" text not null,
-				"issuer" text not null,
-				"providerId" text not null,
-				"userId" text not null,
-				"createdAt" date not null,
-				"updatedAt" date not null
-			)`,
-		);
-		db.exec(
-			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
-			 VALUES
-				('a1', 'ada@example.com', '', 'credential', 'u1', '2020-01-01', '2020-01-01'),
-				('a2', '108451', '', 'google', 'u2', '2020-01-01', '2020-01-01')`,
-		);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			socialProviders: socialConfig,
-		};
-
-		const migration = await migrateFrom16(config, {});
-
-		expect(migration.accounts).toEqual({
-			migrated: 2,
-			providers: { credential: 1, google: 1 },
-		});
-		expect(
-			db
-				.prepare(`SELECT "issuer", "accountId" FROM "account" ORDER BY "id"`)
-				.all(),
-		).toEqual([
-			{ accountId: "ada@example.com", issuer: "local:credential" },
-			{ accountId: "108451", issuer: "https://accounts.google.com" },
-		]);
-	});
-
-	it("preserves an existing per-account issuer while completing a partial migration", async () => {
-		const db = new DatabaseSync(":memory:");
-		db.exec(
-			`CREATE TABLE "account" (
-				"id" text primary key not null,
-				"accountId" text not null,
-				"issuer" text,
-				"providerId" text not null,
-				"userId" text not null,
-				"createdAt" date not null,
-				"updatedAt" date not null
-			)`,
-		);
-		db.exec(
-			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
-			 VALUES (
-				'a1',
-				'subject-1',
-				'https://login.microsoftonline.com/tenant-a/v2.0',
-				'microsoft',
-				'u1',
-				'2020-01-01',
-				'2020-01-01'
-			)`,
-		);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			socialProviders: {
-				microsoft: {
-					clientId: "entra-client",
-					clientSecret: "entra-secret",
-				},
-			},
-		};
-
-		await expect(
-			validateMigrationFrom16(config, {
-				accountIssuerByAccountId: {
-					a1: "https://login.microsoftonline.com/other-tenant/v2.0",
-				},
-			}),
-		).resolves.toEqual([
-			{
-				accountId: "a1",
-				code: "account-issuer-conflict",
-				requestedIssuer: "https://login.microsoftonline.com/other-tenant/v2.0",
-				storedIssuer: "https://login.microsoftonline.com/tenant-a/v2.0",
-				table: "account",
-			},
-		]);
-
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
-		await migrateFrom16(config, {});
-
-		expect(
-			db
-				.prepare(
-					`SELECT "issuer", "accountId"
-					 FROM "account"
-					 WHERE "id" = 'a1'`,
-				)
-				.get(),
-		).toEqual({
-			accountId: "subject-1",
-			issuer: "https://login.microsoftonline.com/tenant-a/v2.0",
-		});
-	});
-
-	it("blocks provider-scoped mode when the database already stores issuer identity", async () => {
-		const db = new DatabaseSync(":memory:");
-		db.exec(
-			`CREATE TABLE "account" (
-				"id" text primary key not null,
-				"accountId" text not null,
-				"issuer" text,
-				"providerId" text not null,
-				"userId" text not null,
-				"createdAt" date not null,
-				"updatedAt" date not null
-			)`,
-		);
-		db.exec(
-			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
-			 VALUES (
-				'a1',
-				'google-subject',
-				'https://accounts.google.com',
-				'google',
-				'u1',
-				'2020-01-01',
-				'2020-01-01'
-			)`,
-		);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
-			database: db,
-			socialProviders: { google: socialConfig.google },
-		};
-
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
-			{
-				accountId: "a1",
-				code: "account-issuer-conflict",
-				requestedIssuer: "local:oauth:google",
-				storedIssuer: "https://accounts.google.com",
-				table: "account",
-			},
-		]);
-		await expect(migrateFrom16(config, {})).rejects.toThrow(
-			"Changing strategy for populated v1.7 data requires a separate reviewed re-key migration.",
-		);
-	});
-
-	it("ignores a disabled provider", async () => {
-		const db = new DatabaseSync(":memory:");
-		createLegacyAccountTable(db);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			socialProviders: {
-				github: { ...socialConfig.github, enabled: false },
-				google: socialConfig.google,
-			},
-		};
-
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
-			{
-				accountCount: 1,
-				code: "issuer-required",
-				providerId: "github",
-				reason: "unconfigured-provider",
-				table: "account",
-			},
-		]);
-	});
-});
-
-describe("get-migration: 1.6 plugin provider issuer resolution", () => {
-	function createPluginAccountTable(
-		db: DatabaseSync,
-		accounts: Array<{ accountId: string; id: string; providerId: string }>,
-	) {
-		db.exec(
-			`CREATE TABLE "account" (
-				"id" text primary key not null,
-				"accountId" text not null,
-				"providerId" text not null,
-				"userId" text not null,
-				"createdAt" date not null,
-				"updatedAt" date not null
-			)`,
-		);
-		for (const account of accounts) {
-			db.prepare(
-				`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
-				 VALUES (?, ?, ?, ?, '2020-01-01', '2020-01-01')`,
-			).run(account.id, account.accountId, account.providerId, account.id);
-		}
-	}
-
-	it("derives a generic OAuth issuer without asking", async () => {
-		const db = new DatabaseSync(":memory:");
-		createPluginAccountTable(db, [
-			{ accountId: "auth0|4711", id: "a1", providerId: "workforce" },
-			{ accountId: "9c11", id: "a2", providerId: "intranet" },
-		]);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							accountIssuer: "https://tenant.example.com/",
-							clientId: "workforce-client",
-							clientSecret: "workforce-secret",
-							providerId: "workforce",
-						},
-						{
-							authorizationUrl: "https://intranet.example.com/authorize",
-							clientId: "intranet-client",
-							clientSecret: "intranet-secret",
-							providerId: "intranet",
-							tokenUrl: "https://intranet.example.com/token",
-						},
-					],
-				}),
-			],
-		};
-
-		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
-			issuers: {
-				credential: "local:credential",
-				intranet: "local:oauth:intranet",
-				workforce: "https://tenant.example.com/",
-			},
-			unresolvedProviders: {},
-		});
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
-
-		const migration = await migrateFrom16(config, {});
-		expect(migration.accounts).toEqual({
-			migrated: 2,
-			providers: { intranet: 1, workforce: 1 },
-		});
-		expect(
-			db
-				.prepare(
-					`SELECT "providerId", "issuer", "accountId" FROM "account" ORDER BY "providerId"`,
-				)
-				.all(),
-		).toEqual([
-			{
-				issuer: "local:oauth:intranet",
-				accountId: "9c11",
-				providerId: "intranet",
-			},
-			{
-				issuer: "https://tenant.example.com/",
-				accountId: "auth0|4711",
-				providerId: "workforce",
-			},
-		]);
-	});
-
-	it("treats generic OAuth providers with reserved local IDs as external", async () => {
-		const db = new DatabaseSync(":memory:");
-		createPluginAccountTable(db, [
-			{ accountId: "external-1", id: "a1", providerId: "credential" },
-			{ accountId: "external-2", id: "a2", providerId: "siwe" },
-		]);
-		const externalProviders = genericOAuth({
-			config: [
-				{
-					authorizationUrl: "https://credential.example.com/authorize",
-					clientId: "credential-client",
-					clientSecret: "credential-secret",
-					providerId: "credential",
-					tokenUrl: "https://credential.example.com/token",
-				},
-				{
-					authorizationUrl: "https://siwe.example.com/authorize",
-					clientId: "siwe-client",
-					clientSecret: "siwe-secret",
-					providerId: "siwe",
-					tokenUrl: "https://siwe.example.com/token",
-				},
-			],
-		});
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			plugins: [externalProviders],
-		};
-		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
-			issuers: {
-				credential: "local:oauth:credential",
-				siwe: "local:oauth:siwe",
-			},
-			unresolvedProviders: {},
-		});
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
-
-		await migrateFrom16(config, {});
-		expect(
-			db
-				.prepare(
-					`SELECT "providerId", "issuer" FROM "account" ORDER BY "providerId"`,
-				)
-				.all(),
-		).toEqual([
-			{ issuer: "local:oauth:credential", providerId: "credential" },
-			{ issuer: "local:oauth:siwe", providerId: "siwe" },
-		]);
-	});
-
-	it("refuses an issuer that contradicts a generic OAuth provider", async () => {
-		const db = new DatabaseSync(":memory:");
-		createPluginAccountTable(db, [
-			{ accountId: "9c11", id: "a1", providerId: "intranet" },
-		]);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							authorizationUrl: "https://intranet.example.com/authorize",
-							clientId: "intranet-client",
-							clientSecret: "intranet-secret",
-							providerId: "intranet",
-							tokenUrl: "https://intranet.example.com/token",
-						},
-					],
-				}),
-			],
-		};
-		const options = {
-			accountIssuers: { intranet: "https://intranet.example.com" },
-		};
-
-		await expect(validateMigrationFrom16(config, options)).resolves.toEqual([
-			{
-				code: "issuer-conflict",
-				configuredIssuer: "local:oauth:intranet",
-				providerId: "intranet",
-				requestedIssuer: "https://intranet.example.com",
-				table: "account",
-			},
-		]);
-	});
-
-	it("asks for the issuer of a discovery-only generic OAuth provider", async () => {
-		const db = new DatabaseSync(":memory:");
-		createPluginAccountTable(db, [
-			{ accountId: "9c11", id: "a1", providerId: "workforce" },
-		]);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							clientId: "workforce-client",
-							clientSecret: "workforce-secret",
-							discoveryUrl:
-								"https://tenant.example.com/.well-known/openid-configuration",
-							providerId: "workforce",
-						},
-					],
-				}),
-			],
-		};
-
-		await expect(resolveConfiguredIssuers(config)).resolves.toMatchObject({
-			unresolvedProviders: { workforce: "discovery-issuer" },
-		});
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
-			{
-				accountCount: 1,
-				code: "issuer-required",
-				providerId: "workforce",
-				reason: "discovery-issuer",
-				table: "account",
-			},
-		]);
-		await expect(
-			validateMigrationFrom16(config, {
-				accountIssuers: { workforce: "https://tenant.example.com" },
-			}),
-		).resolves.toEqual([]);
-	});
-
-	it("asks for the issuer of a generic OAuth provider that resolves it per sign-in", async () => {
-		const db = new DatabaseSync(":memory:");
-		createPluginAccountTable(db, [
-			{ accountId: "9c11", id: "a1", providerId: "workforce" },
-		]);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							accountIssuer: ({ profile }) => String(profile.iss),
-							clientId: "workforce-client",
-							clientSecret: "workforce-secret",
-							discoveryUrl:
-								"https://tenant.example.com/.well-known/openid-configuration",
-							providerId: "workforce",
-						},
-					],
-				}),
-			],
-		};
-
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
-			{
-				accounts: [
-					{
-						accountId: "a1",
-						providerAccountId: "9c11",
-						providerId: "workforce",
-					},
-				],
-				code: "account-issuer-decision-required",
-				table: "account",
-				unknownAccountIds: [],
-			},
-		]);
-	});
-
-	it("derives the SIWE issuer without asking", async () => {
-		const db = new DatabaseSync(":memory:");
-		createPluginAccountTable(db, [
-			{ accountId: "0xabc:1", id: "a1", providerId: "siwe" },
-		]);
-		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
-			database: db,
-			plugins: [
-				siwe({
-					domain: "example.com",
-					getNonce: async () => "nonce",
-					verifyMessage: async () => true,
-				}),
-			],
-		};
-
-		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
-			issuers: { credential: "local:credential", siwe: "local:siwe" },
-			unresolvedProviders: {},
-		});
-		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
-
-		await migrateFrom16(config, {});
-		expect(
-			db.prepare(`SELECT "issuer", "accountId" FROM "account"`).all(),
-		).toEqual([{ issuer: "local:siwe", accountId: "0xabc:1" }]);
 	});
 });
 

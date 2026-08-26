@@ -1,10 +1,7 @@
 import path from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { LegacyReleaseDataState } from "better-auth/db/migration";
-import {
-	resolveConfiguredIssuers,
-	validateMigrationFrom16,
-} from "better-auth/db/migration";
+import { validateMigrationFrom16 } from "better-auth/db/migration";
 import prompts from "prompts";
 import type {
 	MigrationDecisions,
@@ -37,8 +34,6 @@ const oauthDecisionBlockerCodes = new Set([
 
 const interviewableBlockerCodes = new Set([
 	...oauthDecisionBlockerCodes,
-	"account-issuer-decision-required",
-	"issuer-required",
 	"legacy-table-candidate",
 	"scim-decision-required",
 ]);
@@ -50,22 +45,6 @@ export function isInterviewableBlocker(blocker: ReleaseMigrationPlanBlocker) {
 
 function countOf(count: number, noun: string) {
 	return `${count} ${count === 1 ? noun : `${noun}s`}`;
-}
-
-function describeIssuerReason(
-	reason: Extract<
-		ReleaseMigrationPlanBlocker,
-		{ code: "issuer-required" }
-	>["reason"],
-) {
-	switch (reason) {
-		case "discovery-issuer":
-			return "taken from its discovery document";
-		case "dynamic-issuer":
-			return "resolved per sign-in";
-		case "unconfigured-provider":
-			return "missing from your configuration";
-	}
 }
 
 type LegacyTableNames = NonNullable<MigrationDecisions["legacyTableNames"]>;
@@ -229,55 +208,6 @@ export async function interviewMigrationDecisions({
 		releaseBlockers = await validateMigrationFrom16(config, releaseOptions);
 	}
 
-	const configured = await resolveConfiguredIssuers(config);
-	console.log("Issuers resolved from your configuration:");
-	for (const [providerId, issuer] of Object.entries(configured.issuers).sort(
-		([left], [right]) => left.localeCompare(right),
-	)) {
-		console.log("->", `${providerId}: ${issuer}`);
-	}
-
-	const issuerBlockers = releaseBlockers.flatMap((blocker) =>
-		blocker.code === "issuer-required" ? [blocker] : [],
-	);
-	if (issuerBlockers.length > 0) {
-		console.log(
-			"1.7 matches an account by its issuer, so an issuer that differs from the one a later sign-in establishes never matches that account again.",
-		);
-	}
-	const issuers: Record<string, string> = { ...configured.issuers };
-	for (const blocker of issuerBlockers) {
-		const answers: Record<string, unknown> = await prompts({
-			type: "text",
-			name: "issuer",
-			message: `Issuer for "${blocker.providerId}" (${countOf(blocker.accountCount, "account")}, ${describeIssuerReason(blocker.reason)})`,
-			validate: (value: string) =>
-				value.trim().length > 0 || "Enter the issuer 1.7 establishes.",
-		});
-		const issuer =
-			typeof answers.issuer === "string" ? answers.issuer.trim() : "";
-		if (!issuer) return undefined;
-		issuers[blocker.providerId] = issuer;
-	}
-
-	const accountIssuers: Record<string, string> = {};
-	const dynamicIssuerAccounts = releaseBlockers.flatMap((blocker) =>
-		blocker.code === "account-issuer-decision-required" ? blocker.accounts : [],
-	);
-	for (const account of dynamicIssuerAccounts) {
-		const answers: Record<string, unknown> = await prompts({
-			type: "text",
-			name: "issuer",
-			message: `Issuer for account "${account.accountId}" (provider "${account.providerId}", provider account "${account.providerAccountId}")`,
-			validate: (value: string) =>
-				value.trim().length > 0 || "Enter the issuer 1.7 establishes.",
-		});
-		const issuer =
-			typeof answers.issuer === "string" ? answers.issuer.trim() : "";
-		if (!issuer) return undefined;
-		accountIssuers[account.accountId] = issuer;
-	}
-
 	let clientSecrets: OAuthClientSecrets | undefined;
 	const oauthClientBlocker = releaseBlockers.find(
 		(blocker) => blocker.code === "oauth-client-decision-required",
@@ -356,10 +286,6 @@ export async function interviewMigrationDecisions({
 		formatVersion: 1,
 		migration: RELEASE_MIGRATION_ID,
 	};
-	if (Object.keys(accountIssuers).length > 0) {
-		decisions.accountIssuers = accountIssuers;
-	}
-	if (Object.keys(issuers).length > 0) decisions.issuers = issuers;
 	if (Object.keys(legacyTableNames).length > 0) {
 		decisions.legacyTableNames = legacyTableNames;
 	}

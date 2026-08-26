@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { printHumanMigrationPlan } from "./migrate";
 import { createMigrationPlan } from "./migration-plan";
 
 describe("createMigrationPlan", () => {
@@ -13,9 +14,12 @@ describe("createMigrationPlan", () => {
 			hasChanges: false,
 			migrationBlockers: [
 				{
+					accountCount: 3,
+					affectedProviders: ["google"],
 					code: "account-identity-strategy-mismatch",
 					configuredStrategy: "provider-id",
 					detectedStrategy: "issuer",
+					malformedNamespaces: 0,
 					table: "account",
 				},
 			],
@@ -65,8 +69,45 @@ describe("createMigrationPlan", () => {
 			code: "account-identity-strategy-required",
 			remediation: {
 				summary:
-					'Set account.identityStrategy to "provider-id" to preserve 1.6 account identity (recommended), or explicitly set it to "issuer" after reviewing projected collisions, then run the plan again.',
+					'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, then run the plan again.',
 			},
 		});
+	});
+
+	it("reports account readiness counts and compatibility warnings", () => {
+		const plan = createMigrationPlan({
+			accountIdentity: {
+				selectedStrategy: "issuer",
+				detectedStrategy: "issuer",
+				migrationRequired: false,
+				requiresRekey: false,
+				totalAccounts: 4,
+				externalAccounts: 3,
+				automaticNamespaceResolution: { resolved: 3, total: 3 },
+				projectedCollisions: 0,
+				compatibilityWarning: "compatibility recommendation",
+			},
+			hasChanges: false,
+			migrationBlockers: [],
+			migrationTarget: { adapter: "drizzle", dialect: "sqlite" },
+			toBeAdded: [],
+			toBeAddedIndexes: [],
+			toBeCreated: [],
+		});
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		try {
+			printHumanMigrationPlan(plan, [], [], []);
+			const output = log.mock.calls
+				.map((parts) => parts.map(String).join(" "))
+				.join("\n");
+			expect(output).toContain("Account identity strategy: issuer");
+			expect(output).toContain("Accounts: 4 total, 3 external");
+			expect(output).toContain("Automatic namespace resolution: 3/3");
+			expect(output).toContain("Projected collisions: 0");
+			expect(output).toContain("Warning: compatibility recommendation");
+		} finally {
+			log.mockRestore();
+		}
 	});
 });

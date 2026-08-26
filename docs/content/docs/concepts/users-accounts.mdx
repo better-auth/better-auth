@@ -423,7 +423,7 @@ Under the issuer strategy, this separation allows multiple provider configuratio
 
 The `auth init` command generates `account: { identityStrategy: "provider-id" }` for new projects. The v1.7 runtime remains compatible with configurations that omit `account.identityStrategy`: it uses `"issuer"` and emits a one-time warning asking the application to make the choice explicit. Applications migrating populated Better Auth 1.6 data should choose explicitly. The recommended compatibility path is `"provider-id"`, which persists `local:oauth:<encoded providerId>` for external accounts so provider aliases remain separate identities. Provider token, signature, issuer, audience, and subject verification does not change; the strategy selects the namespace stored after verification succeeds.
 
-Keep the selected strategy consistent across every application instance and migration. Changing strategy on populated v1.7 data is an account re-key migration, not a configuration-only toggle. See the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer) before changing it.
+Keep the selected strategy consistent across every application instance and migration. Changing strategy on populated v1.7 data is an account re-key migration, not a configuration-only toggle. See the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy) before changing it.
 
 ### List User Accounts
 

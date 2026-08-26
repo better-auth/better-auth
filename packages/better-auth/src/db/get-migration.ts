@@ -46,26 +46,22 @@ import {
 	migrateOAuthProviderDataFrom16,
 	prepareOAuthProviderDataFrom16,
 	renameLegacyTables,
-	resolveConfiguredIssuers,
 	retireScimAccountsFrom16,
 	summarizeScimMigration,
 	validateMigrationFrom16,
 } from "./release-migration";
 
 export type {
-	ConfiguredAccountIssuers,
 	LegacyReleaseDataState,
 	LegacyReleaseModel,
 	MigrateFrom16Options,
 	MigrationDecisionBlocker,
 	OAuthClientSecretStorage,
 	OAuthClientSecretStorageTransition,
-	UnresolvedIssuerReason,
 } from "./release-migration";
 export {
 	describeMigrationDecisionBlocker,
 	inspectLegacyReleaseDataFrom16,
-	resolveConfiguredIssuers,
 	validateMigrationFrom16,
 };
 
@@ -209,9 +205,12 @@ export interface RequiredColumnConstraintBlocker {
 }
 
 export interface AccountIdentityStrategyMismatchBlocker {
+	accountCount: number;
+	affectedProviders: string[];
 	code: "account-identity-strategy-mismatch";
 	configuredStrategy: "provider-id" | "issuer";
 	detectedStrategy: "provider-id" | "issuer" | "mixed";
+	malformedNamespaces: number;
 	table: string;
 }
 
@@ -283,8 +282,22 @@ function createMigrationBlockerError(blocker: MigrationBlocker) {
 		return new BetterAuthError(blocker.message);
 	}
 	if (blocker.code === "account-identity-strategy-mismatch") {
+		const scope = `${blocker.accountCount} account${blocker.accountCount === 1 ? "" : "s"} across providers ${blocker.affectedProviders.map((providerId) => `"${providerId}"`).join(", ") || "(unknown)"}`;
+		if (blocker.malformedNamespaces > 0) {
+			return new BetterAuthError(
+				`Migration blocked: table "${blocker.table}" contains ${blocker.malformedNamespaces} malformed persisted account namespace${blocker.malformedNamespaces === 1 ? "" : "s"} in ${scope}. Repair the namespaces for the configured strategy before applying the migration.`,
+			);
+		}
+		if (
+			blocker.configuredStrategy === "issuer" &&
+			blocker.detectedStrategy === "provider-id"
+		) {
+			return new BetterAuthError(
+				`Migration blocked: table "${blocker.table}" already uses provider-id account identity for ${scope}, but account.identityStrategy is "issuer". Set account: { identityStrategy: "provider-id" } to preserve the existing identity, or perform a separate reviewed re-key migration.`,
+			);
+		}
 		return new BetterAuthError(
-			`Migration blocked: table "${blocker.table}" already uses ${blocker.detectedStrategy} account identity, but account.identityStrategy is "${blocker.configuredStrategy}". Changing strategy for populated v1.7 data requires a separate reviewed re-key migration.`,
+			`Migration blocked: table "${blocker.table}" already uses ${blocker.detectedStrategy} account identity for ${scope}, but account.identityStrategy is "${blocker.configuredStrategy}". Changing strategy for populated v1.7 data requires a separate reviewed re-key migration.`,
 		);
 	}
 	if (blocker.code === "table-data-move") {
@@ -1038,9 +1051,12 @@ async function getMigrationsWithDatabase(
 		accountIdentity.detectedStrategy !== "empty"
 	) {
 		migrationBlockers.push({
+			accountCount: accountIdentity.totalAccounts ?? 0,
+			affectedProviders: accountIdentity.affectedProviders ?? [],
 			code: "account-identity-strategy-mismatch",
 			configuredStrategy: accountIdentity.selectedStrategy,
 			detectedStrategy: accountIdentity.detectedStrategy,
+			malformedNamespaces: accountIdentity.malformedNamespaces ?? 0,
 			table:
 				migrationDatabase.inspectionAuthTables.account?.modelName || "account",
 		});
