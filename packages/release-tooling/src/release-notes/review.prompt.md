@@ -18,4 +18,5 @@ Do not reject copy merely because it omits internal implementation details.
 
 Return one review for every input ID. Set `approved` to `true` and `feedback` to
 `null` when the rewrite is ready. Otherwise set `approved` to `false` and give
-one specific correction in `feedback`. Do not rewrite the release note yourself.
+one specific correction of no more than 500 characters in `feedback`. Do not
+rewrite the release note yourself.

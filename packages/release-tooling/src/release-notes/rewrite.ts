@@ -192,7 +192,7 @@ export async function rewriteReleaseNotes(
 			const rewrite = rewritesById.get(review.id);
 			if (!rewrite) throw new Error(`AI rewrite ${review.id} is missing`);
 			const copyFeedback = validationFeedback(batch, rewrite);
-			if (review.approved && !copyFeedback) {
+			if (review.approved && !review.feedback && !copyFeedback) {
 				acceptedRewrites.set(review.id, rewrite);
 			} else {
 				const feedback = review.feedback ?? copyFeedback;

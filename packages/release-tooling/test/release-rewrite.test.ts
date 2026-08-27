@@ -264,7 +264,7 @@ describe("release-note rewriting", () => {
 		expect(output.rewrites).toHaveLength(31);
 	});
 
-	test("repairs rejected copy once and keeps the reviewed result", async ({
+	test("repairs copy when review feedback contradicts approval", async ({
 		releaseFiles,
 	}) => {
 		writeFileSync(
@@ -301,7 +301,7 @@ describe("release-note rewriting", () => {
 							reviews: [
 								{
 									id: "pr-42",
-									approved: false,
+									approved: true,
 									feedback:
 										"State that assignability was restored for clients using additional plugins.",
 								},
