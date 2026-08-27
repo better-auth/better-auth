@@ -96,12 +96,17 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
   <Step>
     it validates the captcha token on the server, by calling the captcha provider's `/siteverify`.
+
+    <Callout type="info">
+      **Vercel BotID** is the exception: it never calls `/siteverify` or reads an `x-captcha-response` header. It runs its own server-side check (`checkBotId` from the `botid` library) before any other captcha logic.
+    </Callout>
   </Step>
 
   <Step>
     * if the token is missing, gets rejected by the captcha provider, or if the `/siteverify` endpoint is
       unavailable, the plugin returns an error and interrupts the request.
     * if the token is accepted by the captcha provider, the middleware returns `undefined`, meaning the request is allowed to proceed.
+    * for **Vercel BotID**, the request is rejected when `checkBotId` (or your custom `validateRequest`) determines it's a bot, and allowed to proceed otherwise.
   </Step>
 </Steps>
 
