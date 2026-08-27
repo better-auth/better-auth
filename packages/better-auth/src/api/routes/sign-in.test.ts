@@ -377,8 +377,28 @@ describe("sign-in with form data", async () => {
 		},
 		advanced: {
 			disableCSRFCheck: false,
+			disableOriginCheck: false,
 		},
 	});
+	const createFormRequest = (
+		url: string,
+		headers: Record<string, string>,
+		credentials: { email: string; password: string } = testUser,
+	) =>
+		new Request(url, {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				cookie: "better-auth.session_token=expired",
+				"Sec-Fetch-Mode": "navigate",
+				"Sec-Fetch-Dest": "document",
+				...headers,
+			},
+			body: new URLSearchParams({
+				email: credentials.email,
+				password: credentials.password,
+			}),
+		});
 
 	it("should accept form-urlencoded content type", async () => {
 		const formRequest = new Request(
@@ -404,6 +424,127 @@ describe("sign-in with form data", async () => {
 		const data = await response.json();
 		expect(data.token).toBeDefined();
 		expect(data.user.email).toBe(testUser.email);
+	});
+
+	it("accepts a null Origin when Fetch Metadata confirms a trusted target", async () => {
+		const response = await auth.handler(
+			createFormRequest("http://localhost:3000/api/auth/sign-in/email", {
+				origin: "null",
+				"Sec-Fetch-Site": "same-origin",
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.token).toBeTypeOf("string");
+		expect(data.user.email).toBe(testUser.email);
+	});
+
+	it("accepts a null Origin through a trusted reverse proxy", async () => {
+		const { auth: proxyAuth, testUser: proxyTestUser } = await getTestInstance({
+			trustedOrigins: ["https://app.example.com"],
+			emailAndPassword: { enabled: true },
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+				trustedProxyHeaders: true,
+			},
+		});
+		const response = await proxyAuth.handler(
+			createFormRequest(
+				"http://internal:3000/api/auth/sign-in/email",
+				{
+					origin: "null",
+					"Sec-Fetch-Site": "same-origin",
+					"x-forwarded-host": "app.example.com",
+					"x-forwarded-proto": "https",
+				},
+				proxyTestUser,
+			),
+		);
+
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.token).toBeTypeOf("string");
+		expect(data.user.email).toBe(proxyTestUser.email);
+	});
+
+	it("ignores forwarded origins when proxy headers are not trusted", async () => {
+		const response = await auth.handler(
+			createFormRequest("https://untrusted.example/api/auth/sign-in/email", {
+				origin: "null",
+				"Sec-Fetch-Site": "same-origin",
+				"x-forwarded-host": "localhost:3000",
+				"x-forwarded-proto": "http",
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({
+			code: BASE_ERROR_CODES.INVALID_ORIGIN.code,
+			message: BASE_ERROR_CODES.INVALID_ORIGIN.message,
+		});
+	});
+
+	it("rejects a null Origin when the same-origin target is not trusted", async () => {
+		const response = await auth.handler(
+			createFormRequest("https://untrusted.example/api/auth/sign-in/email", {
+				origin: "null",
+				"Sec-Fetch-Site": "same-origin",
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({
+			code: BASE_ERROR_CODES.INVALID_ORIGIN.code,
+			message: BASE_ERROR_CODES.INVALID_ORIGIN.message,
+		});
+	});
+
+	it.each([
+		"cross-site",
+		"same-site",
+	])("rejects a null Origin for a %s form submission", async (site) => {
+		const response = await auth.handler(
+			createFormRequest("http://localhost:3000/api/auth/sign-in/email", {
+				origin: "null",
+				"Sec-Fetch-Site": site,
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({
+			code: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.code,
+			message: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.message,
+		});
+	});
+
+	it("rejects a null Origin without Fetch Metadata", async () => {
+		const response = await auth.handler(
+			createFormRequest("http://localhost:3000/api/auth/sign-in/email", {
+				origin: "null",
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({
+			code: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.code,
+			message: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.message,
+		});
+	});
+
+	it("rejects a missing Origin even when Fetch Metadata says same-origin", async () => {
+		const response = await auth.handler(
+			createFormRequest("http://localhost:3000/api/auth/sign-in/email", {
+				"Sec-Fetch-Site": "same-origin",
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({
+			code: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.code,
+			message: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.message,
+		});
 	});
 
 	it("should block cross-site form submissions", async () => {

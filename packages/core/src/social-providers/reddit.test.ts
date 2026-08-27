@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@better-fetch/fetch", () => ({
+vi.mock(import("@better-fetch/fetch"), () => ({
 	betterFetch: vi.fn(),
 }));
 
@@ -26,7 +26,7 @@ describe("reddit.getUserInfo (no provider email)", () => {
 		mockedBetterFetch.mockReset();
 	});
 
-	it("synthesizes a non-routable placeholder email and never trusts oauth_client_id", async () => {
+	it("creates a non-routable placeholder email and never trusts oauth_client_id", async () => {
 		mockedBetterFetch.mockResolvedValue(
 			profileResponse({
 				id: "reddit-user-1",
@@ -42,9 +42,9 @@ describe("reddit.getUserInfo (no provider email)", () => {
 			accessToken: "access-token",
 		} as any);
 
-		expect(res?.user.email).toBe("reddit-user-1@reddit.invalid");
+		expect(res?.user.email).toBe("reddit-user-1@reddit.placeholder.invalid");
 		// `has_verified_email` describes the user's real Reddit email, not the
-		// synthetic placeholder, so the placeholder must never be marked verified.
+		// placeholder, so it must never be marked verified.
 		expect(res?.user.emailVerified).toBe(false);
 		// The OAuth app's client id must never become the user's identity anchor.
 		expect(res?.user.email).not.toContain("shared-app-client-id");
@@ -77,8 +77,8 @@ describe("reddit.getUserInfo (no provider email)", () => {
 		);
 		const b = await provider.getUserInfo({ accessToken: "t-b" } as any);
 
-		expect(a?.user.email).toBe("user-a@reddit.invalid");
-		expect(b?.user.email).toBe("user-b@reddit.invalid");
+		expect(a?.user.email).toBe("user-a@reddit.placeholder.invalid");
+		expect(b?.user.email).toBe("user-b@reddit.placeholder.invalid");
 		expect(a?.user.email).not.toBe(b?.user.email);
 	});
 

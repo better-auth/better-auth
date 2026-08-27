@@ -3,38 +3,28 @@ title: OAuth 2.1 Provider
 description: A Better Auth plugin that enables your auth server to serve as an OAuth 2.1 provider.
 ---
 
-An **OAuth 2.1 Provider Plugin** that allows you to turn your authentication server into an OAuth provider with OIDC compatibility allowing users and other services to authenticate with your API.
+The **OAuth 2.1 Provider** plugin turns your Better Auth server into an OAuth authorization server. Applications can request user access through the authorization code flow, while services can use client credentials. Add the `openid` scope when clients also need OpenID Connect (OIDC) identity claims.
 
-The plugin has a secured configuration by default providing ease to users unfamiliar with the details of OAuth.
+The default configuration chooses the safer protocol behavior, including PKCE for public clients and exact redirect URI matching. Start with [Installation](#installation), then enable only the grants and registration paths your clients use.
 
-**Key Features**:
+**Key features**
 
-* **OAuth 2.1**: Restricted security practices to [OAuth 2.1](https://oauth.net/2.1/)
-* **Issuer Validation**: Authorization responses include `iss` parameter to prevent [mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207)
-* **MCP Enabled**: Support with [MCP authentication](#mcp)
-* **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
-  * **UserInfo**: Endpoint providing current user details
-  * **id\_token**: JWT-signed user information
-  * **OIDC Logout**: [RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
-* **Dynamic Client Registration**: Allow clients to register clients dynamically.
-  * **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
-  * **Confidential Clients**: Supports confidential clients for web clients
-  * **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
-* **JWT Plugin compatibility**: required by default with an option to disable
-  * **JWT Signing**: sign JWT tokens when requesting a `resource`
-  * **JWKS Verifiable**: verify tokens remotely at the [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint
-* **Authorization Prompts**: prompts that initiate specific login flows
-  * **Consent**: Ensure consent is granted for each scope. Forcible with `prompt=consent`.
-  * **Select Account**: Ensure an account is selected prior when specific scopes being granted. Forcible with `prompt=select_account`.
-* **Resource Endpoints**: Read and manage tokens.
-  * **Introspection**: [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
-  * **Revocation**: [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
+* **OAuth security profile:** follows [OAuth 2.1](https://oauth.net/2.1/) practices and includes the RFC 9207 `iss` parameter to prevent [authorization-server mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207).
+* **OpenID Connect:** issues ID tokens, serves UserInfo, and supports [RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) when clients request `openid`.
+* **Client registration:** supports administrator-managed clients, first-party trusted clients, and optional [Dynamic Client Registration](#dynamic-registration-endpoint).
+* **Public and confidential clients:** derives authentication from `token_endpoint_auth_method`; use `"none"` for clients that cannot keep a secret.
+* **Resource-bound access:** issues tokens for protected resources, supports introspection and revocation, and exposes signing keys through the JWT plugin's [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint.
+* **Authorization prompts:** supports consent and account-selection prompts.
+* **MCP composition:** use the [MCP plugin](#mcp) when the protected resource is an MCP server.
 
-**Grants Supported**
+**Supported grants**
 
-* **authorization\_code**: Code for user token exchange with PKCE and S256 requirements.
-* **refresh\_token**: Issue refresh tokens and handle access token renewal using `offline_access` scope.
-* **client\_credentials**: Machine to Machine tokens for API communication.
+* **`authorization_code`:** exchanges a user authorization code with S256 PKCE.
+* **`refresh_token`:** renews access through the `offline_access` scope.
+* **`client_credentials`:** issues machine-to-machine access tokens.
+* **`device_code`:** adds the optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) flow for CLIs and limited-input clients.
+
+`client_credentials` is fail closed. A client's user-delegated `scope` metadata never authorizes machine access. Administrators must assign a non-empty `client_credentials_scopes` value through the administrative create or update endpoint, and `clientPrivileges` must explicitly approve the `configure-client-credentials-scopes` action. The assigned value is both the maximum requestable scope set and the default when the token request omits `scope`. DCR, CIMD, and user-managed registration can declare the grant but cannot assign this server-owned scope ceiling.
 
 ## Installation
 
@@ -42,7 +32,7 @@ The plugin has a secured configuration by default providing ease to users unfami
   <Step>
     ### Mount the Plugin
 
-    Add the OIDC plugin to your auth config. See [Configuration Section](#configuration) on how to configure the plugin.
+    Add the OAuth Provider plugin to your auth config. See [Configuration Section](#configuration) on how to configure the plugin.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -98,9 +88,9 @@ The plugin has a secured configuration by default providing ease to users unfami
   </Step>
 
   <Step>
-    ### Create your first oauth client
+    ### Create your first OAuth client
 
-    Create your first confidential oauth client.
+    Create a confidential client:
 
     ```ts
     const client = await auth.api.createOAuthClient({
@@ -113,18 +103,18 @@ The plugin has a secured configuration by default providing ease to users unfami
     ```
 
     <Callout type="info">
-      To create a public client (ie. without a client secret), set `token_endpoint_auth_method: "none"`.
+      To create a public client without a client secret, set `token_endpoint_auth_method: "none"`.
     </Callout>
   </Step>
 </Steps>
 
 ## Client Plugins
 
-There exists two clients. You may wish to add one or both depending on your setup.
+Two client plugins cover different roles. Add the OAuth client when your app starts authorization flows, and add the resource client when your API verifies access tokens.
 
 ### OAuth Client
 
-The OAuth Client is the connecting `oauthClient` such a mobile or web application.
+The OAuth client connects a web or native application to the authorization server.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -139,7 +129,7 @@ export const authClient = createAuthClient({
 
 ### Resource Client
 
-The Resource Server is a client that operates on your API server to perform actions like token verification and provide metadata.
+The resource client runs in the API that receives access tokens. It verifies those tokens and serves protected-resource metadata.
 
 ```ts title="server-client.ts"
 import { auth } from "@/lib/auth";
@@ -159,10 +149,11 @@ The plugin operates as an OAuth 2.1 server with OIDC compatible endpoints and JW
 
 ### OAuth Clients
 
-In OAuth there are two types of clients:
+OAuth client authentication capability and application topology are separate:
 
-* **Public Clients**: Cannot store a client secret such as native mobile clients and user-agent clients (like AI)
-* **Confidential Clients**: Can store a client secret such as web clients
+* **Public Clients**: Cannot keep a client secret and use `token_endpoint_auth_method: "none"`.
+* **Confidential Clients**: Authenticate at the token endpoint with a registered method such as `client_secret_basic`, `client_secret_post`, or `private_key_jwt`.
+* **Application Type**: `application_type` is either `web` or `native` and controls redirect URI validation only. It does not determine whether the client is public or confidential.
 
 #### Get Client
 
@@ -280,7 +271,7 @@ To update an oauth client tied to a specific user or organization, use the `/oau
 
 Restrictions on this endpoint:
 
-* You are unable to switch between confidential and public clients. The client type must be determined at creation.
+* You cannot change `token_endpoint_auth_method` after creation. The method selected at creation determines whether the client has credential capability.
 * You cannot update the client secret. To rotate the `client_secret` use the rotate client secret endpoint.
 
 In some cases, you may wish to create logic to update oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint. The fields are described in the create section.:
@@ -405,7 +396,7 @@ Revokes a user's consent for a specific client.
 
 Once installed, you can utilize the OAuth Provider to manage authentication flows within your application.
 
-After the client is created, you will receive a `client_id` and `client_secret` that you can display to the user. The `client_secret` can only be provided once, ensure the user saves it.
+After a confidential client is created, you will receive a `client_id` and `client_secret` that you can display to the user. The `client_secret` can only be provided once, ensure the user saves it. Public clients receive only a `client_id`.
 
 #### Setup
 
@@ -418,10 +409,10 @@ oauthProvider({
 })
 ```
 
-To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config.
+To enable open client registration without a Better Auth session, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config. Public clients are registered with `token_endpoint_auth_method: "none"`. Confidential clients receive a one-time `client_secret` in the registration response.
 
-<Callout type="warn">
-  Support for `allowUnauthenticatedClientRegistration` **will be deprecated** when the MCP protocol standardizes unauthenticated dynamic client registration. As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+<Callout type="info">
+  For MCP public-client identity, use [Client ID Metadata Documents](/docs/plugins/cimd). The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration) deprecates Dynamic Client Registration in favor of CIMD; DCR remains supported for backwards compatibility.
 </Callout>
 
 ```ts title="auth.ts"
@@ -447,22 +438,28 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
+`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use a claimed `https` URI, an `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]` with any port, or an authority-free private-use URI with a reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)). Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, and routable-host `http` redirects.
+
+Application type is independent of client authentication. For example, a native client may use `client_secret_post`, while a web client may use `token_endpoint_auth_method: "none"`. Authentication capability is derived only from `token_endpoint_auth_method`; the removed `type` and `public` metadata fields are not accepted or returned.
+
+The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
+
 Note the following parameters are not yet supported:
 
-* `jwks`
-* `jwks_uri`
+* `sector_identifier_uri`
 
 ### Authorize Endpoint
 
 An [OAuth 2.1 authorization endpoint](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-authorization-endpoint). Since many of the details are not yet fully described, parts are adapted from the legacy [OAuth 2.0 Authorization Endpoint Section](https://datatracker.ietf.org/doc/html/rfc6749#section-3.1) but always implements the [differences from OAuth 2.0](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-differences-from-oauth-20).
 
-The Authorization Endpoint is the entry point for initiating an OAuth 2.1 authorization flows.
+The Authorization Endpoint is the entry point for initiating an OAuth 2.1 authorization flow.
 
 Important notes:
 
 * In OAuth 2.1, only `response_type: "code"` is supported.
 * `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
 * All authorization responses (success and error) include the `iss` parameter for issuer validation ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)).
+* Use the `resource` indicators to restrict tokens to a resource ([RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)).
 
 **State**
 
@@ -488,6 +485,110 @@ By default, the token endpoint supports providing tokens for the following grant
 * "client\_credentials"
 * "refresh\_token"
 
+#### Client Authentication Methods
+
+The token endpoint supports the following client authentication methods:
+
+* **`client_secret_basic`** — Client credentials sent via HTTP Basic Auth header (default)
+* **`client_secret_post`** — Client credentials sent in the request body
+* **`private_key_jwt`** — Client authenticates with a signed JWT assertion ([RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523))
+* **`none`** — Public client (PKCE required)
+
+Important Notes:
+
+* With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
+* With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
+
+Token endpoint errors follow the OAuth taxonomy: missing required request fields return `invalid_request`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+
+#### DPoP sender-constrained tokens
+
+Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449). A client can ask for DPoP-bound tokens by registering with `dpop_bound_access_tokens: true`, by sending `dpop_jkt` on the authorization request, or by requesting a resource configured with `dpopBoundAccessTokensRequired: true`.
+
+When a token is DPoP-bound:
+
+* The token endpoint requires a valid `DPoP` proof JWT.
+* The token response returns `token_type: "DPoP"`.
+* JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
+* Refresh token rotation requires a DPoP proof from the same key.
+* Resource requests must use `Authorization: DPoP <access_token>` and a `DPoP` proof containing the access-token hash (`ath`).
+
+```ts title="auth.ts"
+oauthProvider({
+  dpop: {
+    proofMaxAgeSeconds: 300,
+    signingAlgorithms: ["ES256", "EdDSA"],
+  },
+  resources: [
+    {
+      identifier: "https://api.example.com",
+      dpopBoundAccessTokensRequired: true,
+    },
+  ],
+})
+```
+
+The authorization-server metadata advertises `dpop_signing_alg_values_supported`. Resource metadata advertises the same proof algorithms and, when required, `dpop_bound_access_tokens_required`.
+
+#### Private Key JWT Authentication
+
+With `private_key_jwt`, clients authenticate by signing a JWT with their private key instead of using a shared secret. The server verifies the signature using the client's registered public key (JWKS).
+
+To register a `private_key_jwt` client, provide the client's public keys via `jwks` or `jwks_uri`:
+
+```ts
+const response = await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    token_endpoint_auth_method: "private_key_jwt",
+    jwks: {
+      keys: [
+        {
+          kty: "RSA",
+          kid: "my-key-1",
+          alg: "RS256",
+          use: "sig",
+          n: "...",
+          e: "...",
+        },
+      ],
+    },
+  },
+});
+```
+
+<Callout type="info">
+  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must be an RFC 7517 JWK Set object with a non-empty `keys` array containing only public asymmetric signing keys; a bare key array is rejected. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. A key may omit `alg`. When present, `alg` must be a supported `private_key_jwt` algorithm that matches the key type and curve. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host and must return the same JWK Set object shape.
+</Callout>
+
+When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
+
+```
+POST /api/auth/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+&code=AUTH_CODE
+&redirect_uri=https://app.example.com/callback
+&client_id=CLIENT_ID
+&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+&client_assertion=eyJhbGciOiJSUzI1NiIs...
+```
+
+The assertion JWT must contain:
+
+| Claim | Requirement                                                                                                                                                        |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `iss` | Must be the `client_id`                                                                                                                                            |
+| `sub` | Must be the `client_id`                                                                                                                                            |
+| `aud` | Must contain either the URL of the endpoint receiving the assertion or the OpenID Provider issuer. Use a string or an array containing at least one accepted value |
+| `exp` | Required, must not exceed `assertionMaxLifetime` from now                                                                                                          |
+| `jti` | Required, must be unique (single-use)                                                                                                                              |
+| `iat` | Optional, but if present must not be older than `assertionMaxLifetime`                                                                                             |
+
+Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
+
 #### Authorization code grant
 
 The authorization code grant enables clients to obtain access user access tokens and optionally refresh tokens (with the "offline\_access" scope).
@@ -501,6 +602,26 @@ The client credentials grant enables clients to obtain machines to obtain access
 The refresh token grant enables clients to update their access token without needing the user to login again.
 
 This implementation currently issues a new refresh token for every refresh request.
+
+Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This lets clients recover from duplicate refresh requests, lost responses, or retries without minting another token pair.
+
+```ts title="auth.ts"
+oauthProvider({
+  refreshTokenReuseInterval: 30, // seconds
+})
+```
+
+The default is `0`, which keeps strict replay detection. During the interval, Better Auth replays the cached response only when the reused refresh token is from the same client and the request resolves to the same effective scopes, requested resources, and sender constraint (for example the same DPoP key). A mismatch during the interval returns `invalid_grant` without invalidating the whole family; once the interval expires, using the old refresh token is treated as replay and invalidates the refresh-token family.
+
+The cached response is stored encrypted on the consumed refresh-token row and includes the replacement refresh token. `expires_in` is recalculated from the cached `expires_at` each time the response is replayed.
+
+#### Device code grant
+
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+
+At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
+
+An unknown OAuth client ID is not silently handled as a standalone request. Standalone fallback is available only when `oauthDeviceAuthorization({ validateClient })` explicitly accepts that ID. Malformed `resource` input returns `invalid_target` only when `resource` is the failing extension field; if a base request field is also invalid, the response returns `invalid_request`.
 
 ### Consent Endpoint
 
@@ -517,6 +638,10 @@ Accept or deny user consent for a set of scopes. Note that when denying scopes, 
      * Space-separated list of accepted scopes. If not provided, the originally requested scopes are accepted.
      */
     scope?: string,
+    /**
+     * Accepted OIDC claims request object. If not provided, the originally requested claims are accepted.
+     */
+    claims?: string | Record<string, unknown>,
   }
   ```
 </APIMethod>
@@ -552,27 +677,50 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
-To provide resource specific claims via `customAccessTokenClaims`, store the allowed resources that a confidential client can use in its `resources` field.
+Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
+
+#### Who can introspect a token
+
+The caller must authenticate as a registered client ([RFC 7662 §2.1](https://datatracker.ietf.org/doc/html/rfc7662#section-2.1)). It can then introspect a token in two cases:
+
+* it issued the token, or
+* it is a resource server linked to one of the token's resources.
+
+The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic client registration with a `resources` field creates the link for you; otherwise add a row to the `oauthClientResource` table.
+
+Any other authenticated client gets `{ active: false }`, the same response as an unknown or expired token, so introspection can't be used to fish for valid tokens. Refresh tokens are stricter: only the client that requested one can introspect it.
+
+#### Which claims come back
+
+Opaque and JWT access tokens return the same claims for the same grant: your `customAccessTokenClaims` and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
+
+The two formats differ in one way. An opaque token is recomputed on each call, so introspection shows its current state: change a resource's claims, and the next introspection reflects the change. A JWT carries what was signed at issuance and never changes. Request a JWT (by passing a `resource`) when you want claims frozen at issuance; use an opaque token when you want the current state.
 
 ### Revoke Endpoint
 
 [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
 
-This endpoint revokes the provided token.
+What the endpoint does depends on the token type:
 
-* opaque `access_token`: immediately removes that `access_token` from the database. `refresh_token` is still valid.
-* JWT `access_token`: verifies that token is safe to remove from client storage.
-* `refresh_token`: removes all `access_tokens` granted using that `refresh_token` and removes the `refresh_token` to prevent further token issuance.
+* opaque `access_token`: deleted from the database immediately. A `refresh_token` from the same grant stays valid.
+* `refresh_token`: deletes every `access_token` it minted and removes the `refresh_token`, so it can no longer issue tokens.
+* JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries an audience rejected by the OAuth resource model is treated as an invalid token and returns a `200` no-op.
 
-For an `access_token` type,
+Because a JWT `access_token` cannot be revoked individually, plan for it:
+
+* Keep its lifetime short. Use `accessTokenExpiresIn`, and `m2mAccessTokenExpiresIn` for `client_credentials` tokens.
+* To cut a user off mid-session, end the session (sign-out, admin revoke, or back-channel logout). A JWT `access_token` that carries a session id (`sid`) is reported `active: false` by `/oauth2/introspect` and rejected by `/oauth2/userinfo` once that session ends, even before the token expires.
+* A `client_credentials` JWT `access_token` has no session to end, so a short expiry is the only control available.
 
 ### End Session Endpoint
 
-[RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
+[OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) lets a relying party ask the provider to end a user's session.
 
-This endpoint allows specified trusted clients to logout remotely.
+The endpoint is available to clients registered with `enable_end_session: true`. It accepts logout parameters in a `GET` query or an `application/x-www-form-urlencoded` `POST` body. Better Auth's generated client sends the same parameters as JSON. A verified `id_token_hint` can end its referenced session immediately. Without a valid hint, Better Auth asks the user to confirm before ending the current session. The same confirmation is required when the hint refers to a different session than the browser session.
 
-To allow rp-initiated logout, a trusted client must specifically be created to perform session logout.
+Better Auth redirects after logout only when `post_logout_redirect_uri` exactly matches a registered URI. It adds `state` only to that verified redirect. An unregistered or query-modified URI does not cause a redirect. Browser navigation receives confirmation, success, and error pages as HTML. API callers receive the protocol response.
+
+Enable this endpoint only for clients you trust:
 
 ```ts title="admin-create-oauth.ts"
 import { auth } from "@/lib/auth"
@@ -586,13 +734,52 @@ await auth.api.adminCreateOAuthClient({
 });
 ```
 
+Better Auth protects confirmation with origin and CSRF checks plus a short-lived, signed cookie. When a current session exists, the cookie is tied to it. Successful browser logout returns a logged-out page. Session deletion continues through the normal hooks, including Back-Channel Logout delivery to registered relying parties.
+
+### Back-Channel Logout
+
+[Back-Channel Logout](https://openid.net/specs/openid-connect-backchannel-1_0.html) is the server-to-server counterpart to RP-Initiated Logout: when a user's session ends at the OP (sign-out, `/oauth2/end-session`, admin revoke, etc.), the OP POSTs a signed Logout Token to each registered Relying Party so they can terminate their own session state and revoke bound API access.
+
+To opt a client in, register a `backchannel_logout_uri`:
+
+```ts title="admin-create-oauth.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: [redirectUri],
+    enable_end_session: true,
+    backchannel_logout_uri: "https://rp.example.com/logout/backchannel", // [!code highlight]
+    backchannel_logout_session_required: true, // [!code highlight]
+  }
+});
+```
+
+When `backchannel_logout_session_required` is `true`, the RP requires a `sid` claim in every Logout Token. Every Logout Token the OP sends already includes `sid`, so such clients are always served.
+
+The `backchannel_logout_uri` is validated at registration. Every client must use an absolute, credential-free, public `https` URL with no fragment; loopback and private targets are rejected even for local development. Hosts that are reserved, tunneled (NAT64, 6to4, IPv4-mapped IPv6), or cloud-metadata names are also rejected. This host check is syntactic: it does not resolve DNS, so pin or re-check the resolved address if you need protection against DNS rebinding. The same host check guards a client's `jwks_uri`, which separately requires `https` unconditionally and a trusted origin. A URI that fails validation is rejected with `invalid_client_metadata`. CIMD documents cannot register back-channel logout because the discovery transport is a GET-only trust boundary.
+
+The OP enumerates clients with active tokens bound to the ending session and POSTs one `logout_token` to each in parallel (5s per-RP timeout, no retry per spec §2.5). It then revokes the session's tokens:
+
+* **Refresh tokens** without `offline_access` are revoked; those with `offline_access` are preserved so long-lived API access can survive the browser session (spec §2.7).
+* **Access tokens** bound to the session are revoked as additional hardening; §2.7 itself only addresses refresh tokens. Introspection and `/oauth2/userinfo` also treat any token whose session has ended as inactive, so this no longer depends on the stored flag alone.
+
+The Logout Token carries the §2.4 claims (`iss`, `aud`, `iat`, `exp`, `jti`, `events`, plus `sub` and `sid`) with `typ: logout+jwt` in the protected header and no `nonce`. Its lifetime is capped at 120 seconds, following the §4 security guidance to keep replay windows short. It is signed with the same key as ID Tokens, so any RP that validates ID Tokens through your JWKS can validate Logout Tokens without extra configuration.
+
+<Callout type="warn">
+  Back-channel logout requires the `jwt` plugin. Registering a `backchannel_logout_uri` while `disableJwtPlugin: true` is rejected with `invalid_client_metadata`.
+</Callout>
+
 <Callout type="info">
-  If `disableJwtPlugin: true`, public clients will never be able to logout using this endpoint since no `id_token` is sent.
+  Delivery runs through `advanced.backgroundTasks.handler` when one is configured (Vercel `waitUntil`, Cloudflare `ctx.waitUntil`), so a slow RP cannot delay sign-out. Without a handler it completes inline before the sign-out response returns: reliable on persistent servers, but it can add latency when an RP is slow. Configure a handler on serverless runtimes.
+</Callout>
+
+<Callout type="info">
+  The OP advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` on both `.well-known/openid-configuration` and `.well-known/oauth-authorization-server`. RPs use these fields during dynamic client registration to decide whether to register a `backchannel_logout_uri`.
 </Callout>
 
 ### UserInfo Endpoint
 
-The UserInfo Endpoint provides [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant user information. Available at `/oauth2/userinfo`, the endpoint requires a valid access token with at least the scope `openid`.
+The UserInfo Endpoint provides [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant user information. Available at `/oauth2/userinfo`, the endpoint requires a valid access token with at least the scope `openid`. An access token that is expired, revoked, or bound to a session that has ended is rejected with `invalid_token` (401), per [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1).
 
 ```ts
 // Example of how a client would use the UserInfo endpoint
@@ -612,7 +799,11 @@ The UserInfo endpoint returns different claims based on the scopes that were gra
 * `profile`: Returns `name`, `picture`, `given_name`, `family_name`
 * `email`: Returns `email` and `email_verified`
 
-The `customUserInfoClaims` function receives the user object, requested scopes array, and the passed access token, allowing you to add additional information to the response.
+The endpoint also honors the OIDC `claims` request parameter for UserInfo. Claims listed under `claims.userinfo` are added to the scope-requested claims when Better Auth or your custom claim logic can supply them, bounded to the names advertised in `claims_supported`. Missing values are omitted from the JSON response rather than returned as `null` or an empty string.
+
+Per-claim selection through `claims.userinfo` applies to opaque access tokens. A JWT access token resolves UserInfo claims from its granted scopes, so an individually requested claim without its backing scope is omitted (OIDC Core §5.5.1). Request the backing scope, or issue an opaque access token, when a client needs a claim that no granted scope covers.
+
+The `customUserInfoClaims` function receives the user object, requested scopes array, requested UserInfo claim names, and the passed access token, allowing you to add additional information to the response.
 
 ### Well-Known
 
@@ -669,30 +860,29 @@ This section shows how your API should verify tokens received from your clients.
 
 ### Verification
 
-Verification can be performed using `verifyAccessToken` available through the `oauthProviderResourceClient` plugin or `better-auth/oauth2` package.
+Verification can be performed using `verifyAccessTokenRequest` available through the `oauthProviderResourceClient` plugin or `better-auth/oauth2` package. This is the recommended resource-server API because it verifies the access token and, when the token is DPoP-bound, also verifies the request method, URL, `Authorization: DPoP` scheme, proof key, replay `jti`, and `ath` claim.
 
 With `better-auth` package:
 
 ```ts title="api/[endpoint].ts"
-import { verifyAccessToken } from "better-auth/oauth2";
+import {
+  requestToResourceInput,
+  verifyAccessTokenRequest,
+} from "better-auth/oauth2";
 
 export const GET = async (req: Request) => {
-  const authorization = req.headers?.get("authorization") ?? undefined;
-  const accessToken = authorization?.startsWith("Bearer ")
-    ? authorization.replace("Bearer ", "")
-    : authorization;
-  const payload = await verifyAccessToken(
-    accessToken, {
-      verifyOptions: {
-        issuer: "https://auth.example.com",
-        audience: "https://api.example.com",
-      },
-      scopes: ["read:post"], // optional
-    }
-  );
+  const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
+    verifyOptions: {
+      issuer: "https://auth.example.com",
+      audience: "https://api.example.com",
+    },
+    requiredScopes: ["read:post"], // optional
+  });
   // ...continue
 }
 ```
+
+`requestToResourceInput` reads the `Authorization` and `DPoP` headers and the method and URL from a standard `Request`. Pass a plain object with those fields if your framework does not expose a `Request`.
 
 With `oauthProviderResourceClient` plugin:
 
@@ -700,22 +890,28 @@ With `oauthProviderResourceClient` plugin:
 import { serverClient } from "@/lib/server-client";
 
 export const POST = async (req: Request) => {
-  const authorization = req.headers?.get("authorization") ?? undefined;
-  const accessToken = authorization?.startsWith("Bearer ")
-    ? authorization.replace("Bearer ", "")
-    : authorization;
-  const payload = await serverClient.verifyAccessToken(
-    accessToken, {
+  const payload = await serverClient.verifyAccessTokenRequest(
+    req,
+    {
       verifyOptions: {
         issuer: "https://auth.example.com",
         audience: "https://api.example.com",
       },
-      scopes: ["write:post"], // optional
+      requiredScopes: ["write:post"], // optional
     }
   );
   // ...continue
 }
 ```
+
+`verifyBearerToken` is still available when you already extracted a raw bearer token and intentionally do not accept DPoP-bound tokens on that path. It rejects DPoP-bound tokens, so prefer `verifyAccessTokenRequest` for any endpoint that may receive them.
+
+<Callout type="warn">
+  DPoP verification compares the proof's `htu` against the request URL, and rejects replayed proofs through a `jti` store. Two deployment details matter:
+
+  * **Behind a proxy:** the proof is checked against `request.url`, so a TLS-terminating or path-rewriting proxy must forward the externally visible scheme, host, and path, or legitimate proofs are rejected.
+  * **Replay protection:** `verifyAccessTokenRequest` defaults to an in-memory `jti` store that is safe only for a single instance. For multi-instance or serverless resource servers, pass a shared `dpop.replayStore` such as `createDpopReplayStore(ctx.context.internalAdapter)`, which records proofs in the database-backed verification store (the provider's own endpoints and `requireMcpAuth` use it by default). It requires database-backed verification storage; a secondary-storage-only deployment rejects DPoP requests rather than skipping replay protection.
+</Callout>
 
 #### JWT Verification
 
@@ -823,7 +1019,7 @@ You don't need to handle anything from your side; when a new session is created,
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
-**Note**: Trusted clients with `skipConsent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
+**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -831,15 +1027,20 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the specified path with `client_id` and `scope` query parameters. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
+The plugin will redirect the user to the specified path with `client_id`, `scope`, and, when requested, `claims` query parameters. Use `scope` and `claims.userinfo` to display the complete access request on your consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
 
 ```ts title="consent-page.ts"
 import { authClient } from "@/lib/auth-client"
 
+const claims = new URLSearchParams(window.location.search).get("claims");
+const requestedClaims = claims ? JSON.parse(claims) : undefined;
+
 const res = await authClient.oauth2.consent({
 	accept: true,
   // optional scopes accepted (if not sent, accepted scopes matches the original request)
-  scope: "openid profile email"
+  scope: "openid profile email",
+  // optional claims accepted (if not sent, accepted claims match the original request)
+  claims: requestedClaims
 });
 ```
 
@@ -972,18 +1173,43 @@ oauthProvider({
 })
 ```
 
-### Valid Audiences
+### Resources
 
-A list of valid audiences (ie resources) for this oauth server. If not specified, the default audience is the baseUrl. It is recommended to specify an audience other than the baseUrl such as your API.
+A list of protected resources this OAuth server issues access tokens for. Each identifier is the RFC 8707 `resource` parameter value and becomes the JWT `aud` claim when a JWT access token is issued.
 
 ```ts title="auth.ts"
 oauthProvider({
-  validAudiences: [
+  resources: [
     "https://api.example.com",
-    "https://api.example.com/mcp",
+    {
+      identifier: "https://api.example.com/mcp",
+      allowedScopes: ["mcp:read", "mcp:write"],
+      accessTokenTtl: 300,
+    },
   ]
 })
 ```
+
+Use the admin resource endpoints when resource policy needs to change at runtime.
+
+Dynamic registration can attach protected resources to the new client in the same transaction as the client row. `clientRegistrationDefaultResources` adds server-owned defaults to every registration. `clientRegistrationAllowedResources` lists additional resources a client may request; the effective allowlist is the union of the default and allowed lists. Defaults appear first, duplicates are removed, and every configured value must also be present in `resources`.
+
+```ts title="auth.ts"
+oauthProvider({
+  resources: [
+    "https://api.example.com/default",
+    "https://api.example.com/optional",
+  ],
+  clientRegistrationDefaultResources: [
+    "https://api.example.com/default",
+  ],
+  clientRegistrationAllowedResources: [
+    "https://api.example.com/optional",
+  ],
+})
+```
+
+Explicit resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
 
 ### Scopes
 
@@ -991,8 +1217,8 @@ Scopes allow clients specific access to specific resources.
 By default, we support the following scopes are supported:
 
 * `openid`: Returns the user's ID (`sub` claim).
-* `profile`: Returns name, picture, given\_name, family\_name
-* `email`: Returns email and email\_verified
+* `profile`: Returns name, picture, given\_name, family\_name from UserInfo
+* `email`: Returns email and email\_verified from UserInfo
 * `offline_access`: Returns a refresh token
 
 The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server, otherwise this is a standard OAuth 2.1 server. All supported scopes must be in this array.
@@ -1005,9 +1231,11 @@ oauthProvider({
 
 ### Claims
 
-Internally, we support the following claims are supported: \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
+Internally supported claims include \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
 
-Id token and user info claims should be namespaced when possible to avoid potential future conflicts.
+ID token and UserInfo claims should be namespaced when possible to avoid potential future conflicts. In the authorization code flow, `profile`, `email`, and `claims.userinfo` request UserInfo claims; they are not added to the ID token unless you add them with `customIdTokenClaims`.
+
+`customIdTokenClaims` is additive for protocol-owned ID token claims. Reserved names such as `iss`, `sub`, `aud`, token lifetime claims, `nonce`, `sid`, hash claims, `auth_time`, `acr`, `amr`, and `azp` are stripped at issuance with a warning log. Use namespaced claim names such as `https://example.com/org` for application-specific data.
 
 Claims added inside `customIdTokenClaims` and `customUserInfoClaims` should be added to the `advertisedMetadata.claims_supported` so clients can validate that claim received. In the following example, it would be the base claims plus `locale` and `https://example.com/org`.
 
@@ -1022,16 +1250,20 @@ oauthProvider({
     };
   },
   // Attach claims to access tokens
-  customAccessTokenClaims: ({ user, scopes, referenceId, resource, metadata }) => {
+  customAccessTokenClaims: ({ user, scopes, referenceId, resources, metadata }) => {
     return {
       "https://example.com/org": referenceId,
+      "https://example.com/resources": resources,
       "https://example.com/roles": ["editor"],
     };
   },
   // Additional user info claims
-  customUserInfoClaims: ({ user, scopes, jwt }) => {
+  customUserInfoClaims: ({ user, scopes, requestedClaims, jwt }) => {
     return {
       locale: "en-GB",
+      ...(requestedClaims.includes("website")
+        ? { website: "https://example.com" }
+        : {}),
     };
   },
 })
@@ -1063,7 +1295,9 @@ Each token type and grant type can independently can set a default expiration.
 * `m2mAccessTokenExpiresIn` defaults 1 hour
 * `idTokenExpiresIn` defaults 10 hours
 * `refreshTokenExpiresIn` defaults 30 days
+* `refreshTokenReuseInterval` defaults 0 seconds
 * `codeExpiresIn` defaults 10 minutes
+* `assertionMaxLifetime` defaults 5 minutes — maximum allowed lifetime for `private_key_jwt` client assertions
 
 Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privilege scopes that require shorter expiration times. The earliest expiration will take precedence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
 
@@ -1088,7 +1322,7 @@ oauthProvider({
 })
 ```
 
-Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header. This is especially useful for an MCP to dynamically register themselves as a public client.
+Unauthenticated client registration additionally allows clients to register without an authorization header. Public clients are registered with `token_endpoint_auth_method: "none"`. Confidential clients receive a one-time `client_secret` in the registration response. For MCP auth support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of public clients.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1097,8 +1331,39 @@ oauthProvider({
 })
 ```
 
-<Callout type="warn">
-  Support for `allowUnauthenticatedClientRegistration` **will be deprecated** when the MCP protocol standardizes unauthenticated dynamic client registration. As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+<Callout type="info">
+  For MCP public-client identity, use the [CIMD plugin](/docs/plugins/cimd).
+</Callout>
+
+Protected dynamic client registration allows machine callers to register public or confidential clients without a Better Auth user session. Issue an RFC 7591 initial access token out of band, then validate the token from the `Authorization: Bearer <token>` header. Defining `validateInitialAccessToken` enables this path; while it is undefined, a Bearer token sent to the registration endpoint is rejected.
+
+```ts title="auth.ts"
+import { createHash, timingSafeEqual } from "node:crypto"
+
+const digest = (value: string) => createHash("sha256").update(value).digest()
+
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  validateInitialAccessToken: async ({ initialAccessToken, clientMetadata }) => {
+    // Compare in constant time; hashing both sides keeps the lengths equal.
+    const expected = digest(process.env.CLIENT_REGISTRATION_TOKEN ?? "")
+    if (!timingSafeEqual(digest(initialAccessToken), expected)) {
+      return false
+    }
+
+    return {
+      referenceId: "infra-provisioner",
+    }
+  },
+})
+```
+
+Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
+
+Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
+
+<Callout type="info">
+  With the [Bearer](/docs/plugins/bearer) plugin enabled, an `Authorization: Bearer` value that resolves to a valid user session is handled as that session, not as an initial access token.
 </Callout>
 
 #### Dynamic Client Registration Expiration
@@ -1114,7 +1379,9 @@ oauthProvider({
 
 #### Dynamic Client Registration Scopes
 
-To set a list of default scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationDefaultScopes` field. All scopes must be defined in `scopes`.
+Registration scope metadata describes the scopes a client is capable of requesting; it is not a user authorization grant. Better Auth validates a requested `scope` as a subset of the operator policy, then persists the complete operator-approved capability set so later authorization can step up without re-registering the client.
+
+Set the baseline capability list with `clientRegistrationDefaultScopes`. All values must be defined in `scopes`.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1123,7 +1390,7 @@ oauthProvider({
 })
 ```
 
-To also set a list of allowed scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationAllowedScopes` field. These are **in addition** to the `clientRegistrationDefaultScopes`. All scopes must be defined in `scopes`.
+Add capabilities with `clientRegistrationAllowedScopes`. The effective set is the deterministic, deduplicated union of both lists. When both options are omitted, `scopes` is the effective set. A DCR or CIMD document may request a subset, but that subset does not permanently prevent a later operation-specific step-up.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1143,16 +1410,16 @@ By default, PKCE is required for all clients. This provides maximum security and
 
 **PKCE is always required for:**
 
-* Public clients (native/user-agent-based applications)
-* Any authorization request with the `offline_access` scope (refresh tokens)
+* Clients using `token_endpoint_auth_method: "none"`
+* Authorization requests with the `offline_access` scope, unless a confidential client has opted out of PKCE and the OIDC request includes both `openid` and `nonce`
 
 #### Per-Client PKCE Configuration
 
-Individual clients can opt-out of PKCE requirement during registration if needed for compatibility:
+Admin-created confidential clients can opt out of the PKCE requirement if needed for compatibility:
 
-```ts title="register-client.ts"
+```ts title="admin-create-oauth.ts"
 // Register a confidential client that doesn't support PKCE
-const response = await auth.api.createOAuthClient({
+const response = await auth.api.adminCreateOAuthClient({
   headers,
   body: {
     client_name: 'Legacy Backend Service',
@@ -1169,7 +1436,20 @@ The `require_pkce` field:
 * Defaults to `true` (PKCE required)
 * Only applies to confidential clients
 * Ignored for public clients (PKCE always required)
-* Ignored for `offline_access` scope (PKCE always required)
+* Requires an OIDC request with both `openid` and `nonce` when `offline_access` is requested without PKCE
+
+#### Dynamic Client Registration PKCE Configuration
+
+Dynamic client registration does not accept `require_pkce` from client requests. To change the server-owned default for dynamically registered confidential clients, set `clientRegistrationRequirePKCE`.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  clientRegistrationRequirePKCE: false,
+})
+```
+
+This only applies to confidential clients created through dynamic client registration. Public clients still require PKCE. Confidential OIDC clients that request `offline_access` without PKCE must send both `openid` and `nonce`.
 
 **When to use `require_pkce: false`:**
 
@@ -1178,22 +1458,6 @@ The `require_pkce` field:
 * Temporary compatibility during a phased migration
 
 **Recommendation:** Keep PKCE enabled (default) whenever possible. PKCE provides defense-in-depth even for confidential clients.
-
-#### Migrating from oidc-provider
-
-If you're migrating from the deprecated `oidc-provider` plugin and have confidential clients that don't support PKCE:
-
-1. **For legacy clients, opt-out per-client:**
-   Set `require_pkce: false` when registering clients that cannot be updated to support PKCE.
-
-2. **For new clients, use PKCE:**
-   New client registrations should always use PKCE (the default) for better security.
-
-3. **Phase out non-PKCE clients:**
-   Plan to upgrade or replace clients that don't support PKCE over time.
-
-4. **Monitor usage:**
-   Track which clients have `require_pkce: false` for migration planning.
 
 #### Security Considerations
 
@@ -1204,6 +1468,96 @@ PKCE prevents authorization code interception attacks. Even for confidential cli
 * **Future-proof**: Aligns with OAuth 2.1 best practices
 
 Only disable PKCE for confidential clients when absolutely necessary for legacy compatibility.
+
+### Unauthenticated client discovery
+
+Some clients (notably MCP clients) need to connect to your authorization server without being registered in advance. The OAuth Provider plugin supports this through two mechanisms:
+
+* **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a client at request time. Confidential registrations receive a one-time `client_secret`; public registrations use `token_endpoint_auth_method: "none"`.
+* **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. Generic discovery follows [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02), while the MCP 2026-07-28 profile explicitly pins draft-00 requirements.
+
+### Provider extensions
+
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
+
+```ts title="custom-oauth-extension.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { extendOAuthProvider } from "@better-auth/oauth-provider";
+
+export const customOAuthExtension = () =>
+  ({
+    id: "custom-oauth-extension",
+    init(ctx) {
+      extendOAuthProvider(ctx, {
+        grants: {
+          "urn:example:params:oauth:grant-type:custom": async ({
+            provider,
+          }) => {
+            const { client } = await provider.authenticateClient();
+            return provider.issueTokens({
+              client,
+              scopes: ["openid"],
+              tokenResponse: {
+                issued_token_type:
+                  "urn:ietf:params:oauth:token-type:access_token",
+              },
+            });
+          },
+        },
+        metadata: () => ({
+          custom_grant_supported: true,
+        }),
+      });
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+Extension contributions follow two disciplines:
+
+* **Dispatched kinds** (`grants`, `clientAuthentication`) must be disjoint across extensions. Registering a grant type, `token_endpoint_auth_method`, or `client_assertion_type` that another extension already registered is rejected at setup, so a contribution can never be silently shadowed. Extension grants and auth methods are advertised in discovery automatically.
+* **Additive kinds** (`metadata`, `claims`) never override authorization-server core. A metadata field the provider already owns (`issuer`, `token_endpoint`, `grant_types_supported`, the authentication-method lists, ...) is kept, and a key two extensions both contribute resolves to the first-registered extension.
+
+A claims contributor can add new claim names but never replaces an identity, authentication-context, reserved RFC 9068, or other provider-owned claim. To advertise the claim names an extension emits, set `advertisedMetadata.claims_supported`: the provider owns `claims_supported` and does not infer it from contributors.
+
+#### Provider capabilities outside a grant
+
+A grant handler receives a `provider` capability surface (`getClient`, `authenticateClient`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). A plugin that needs those from its own endpoints (a back-channel authorization endpoint, a polling endpoint) obtains the same object with `getOAuthProviderApi(ctx, opts, grantType?)`, so it can resolve a client or verify a token without reaching into provider internals. Use `validateAccessToken` for introspection-style flows that can handle inactive payloads, and `requireActiveAccessToken` for protected-resource endpoints that should reject inactive or unknown tokens with an OAuth bearer challenge. Pass the grant type to mint tokens away from the token endpoint; omit it for read-only use, in which case `issueTokens` throws rather than mint an unlabeled grant.
+
+To sender-constrain an issued token (RFC 7800 `cnf`), pass `confirmation` to `issueTokens`, or return it from a `clientAuthentication` strategy. The provider stamps it as the access token's `cnf` and marks the response `token_type` accordingly. `cnf` is authorization-server-owned and cannot be set through a claim contributor.
+
+#### Client authentication obligations
+
+A `clientAuthentication` strategy verifies the assertion against its own key source and returns the client id it proved; the provider resolves and authorizes the client record itself, so a strategy proves identity but never supplies the record. After verifying the signature it must enforce the same assertion hygiene the built-in `private_key_jwt` method enforces, or the provider will accept a forged or replayed assertion. Use the exported `consumeClientAssertion` helper to bind the assertion to the endpoint audience, require a bounded lifetime, and reject `jti` replays:
+
+```ts
+import { consumeClientAssertion } from "@better-auth/oauth-provider";
+
+authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
+  const payload = await verifyAssertionSignature(assertion); // your key source
+  await consumeClientAssertion(ctx, opts, {
+    // Scopes the replay tombstone; the same jti may recur across distinct
+    // methods or clients but never within one.
+    namespace: `urn:example:attestation:${payload.sub}`,
+    payload,
+    expectedAudience: expectedAudience!,
+  });
+  // Return only the proven client id (and an optional `confirmation`). The
+  // provider resolves and authorizes the client record itself.
+  return { clientId: payload.sub as string };
+};
+```
+
+#### Claim precedence
+
+Three claim surfaces resolve contributions in a fixed order. Across all three, third-party extension claims are strictly additive, while the operator's own first-party callbacks may override profile-style identity claims; protocol-owned identity, lifetime, binding, and authentication-context claims are always pinned or reserved by the provider.
+
+| Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing                                                      |
+| ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names |
+| UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                            |
+
+Per-issuance `accessTokenClaims` are JWT-only: an opaque access token persists no per-issuance claims, so they do not reappear at introspection. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
 
 ### Organizations
 
@@ -1367,6 +1721,8 @@ The metadata endpoint can be customized so that the publicized scopes and claims
 
 All scopes inside the advertisedMetadata section MUST be listed in `scopes` otherwise initialization will fail.
 
+Better Auth advertises `acr_values_supported: ["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. Custom ACR policies are not currently supported. Because `acr_values` is voluntary, requests for other classes continue and the ID token reports `acr: "0"`. In an OpenID Connect request, an essential `claims.id_token.acr` request fails when its `value` or `values` does not include `"0"`.
+
 #### Scopes
 
 ```ts title="auth.ts"
@@ -1450,6 +1806,8 @@ Pairwise `sub` appears in:
 * `/oauth2/userinfo` response
 * Token introspection (`/oauth2/introspect`)
 
+When a resource server introspects a token issued to another client, it gets the `sub` that the issuing client sees, not one computed for the resource server itself. So a given user always appears under the same `sub` for that issuing client, whichever resource server asks.
+
 JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly.
 
 <Callout type="warn">
@@ -1462,165 +1820,11 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
 
 ### MCP
 
-You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/specification/draft/basic/authorization) simply by adding a resource server which directs users to this OAuth 2.1 authorization server.
+Use the [`@better-auth/mcp` plugin](/docs/plugins/mcp) when an MCP server is one of your protected resources. It builds on this OAuth Provider and adds MCP defaults, RFC 9728 protected resource metadata, and route helpers that return the authorization challenge MCP clients expect.
 
-<Callout type="info">
-  If you are using "openid" and confidential MCP clients, you cannot disable the JWT plugin since `id_token` verification may not necessarily be supported via a `client_secret`.
-</Callout>
+`mcp()` is the OAuth Provider for that Better Auth instance, so do not register both `mcp()` and `oauthProvider()`. It accepts the OAuth Provider options directly. Use `requireMcpAuth` when the MCP route shares the auth instance, or `createMcpProtectedRequestHandler` when the resource server runs separately.
 
-#### Installation
-
-<Steps>
-  <Step>
-    ### Ensure Well Known Paths are correct
-
-    See [well-known endpoints](#well-known).
-  </Step>
-
-  <Step>
-    ### Add Resource Server Client
-
-    (Optional) If you have your auth configuration available locally, add the configuration as a parameter to the client to fill in these values and warn you about configuration errors. You can always override these values in the function call. If this is not supplied, typescript will guide you with the minimal configuration values needed.
-
-    ```ts title="server-client.ts"
-    import { auth } from "@/lib/auth";
-    import { createAuthClient } from "better-auth/client";
-    import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
-
-    export const serverClient = createAuthClient({
-      plugins: [oauthProviderResourceClient(auth)], // auth optional
-    });
-    ```
-  </Step>
-
-  <Step>
-    ### Add OAuth Protected Resource Metadata to your API
-
-    ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import { serverClient } from "@/lib/server-client";
-
-    export const GET = async () => {
-      const metadata = await serverClient.getProtectedResourceMetadata({
-        resource: "https://api.example.com", // `aud` claim
-        authorization_servers: ["https://auth.example.com"],
-      })
-
-      return new Response(JSON.stringify(metadata), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control":
-            "public, max-age=15, stale-while-revalidate=15, stale-if-error=86400",
-        },
-      });
-    };
-    ```
-  </Step>
-
-  <Step>
-    If you use `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
-
-    ```ts
-    await auth.api.createOAuthClient({
-      headers,
-      body: {
-        redirect_uris: [redirectUri],
-      }
-    });
-    ```
-
-    These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
-
-    <Callout type="info">
-      If you choose to not support `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
-    </Callout>
-  </Step>
-
-  <Step>
-    ### Handle MCP Errors for your API
-
-    Always verify against a specified `audience`, the default will compare against all `validAudiences` or `baseUrl`.
-
-    * Using the client `verifyAccessToken` function
-
-    See [Verification](#verification) for verification examples.
-
-    * With auth available, use the client `verifyAccessToken` function to automatically determine endpoints
-
-    ```ts title="api/[endpoint].ts"
-    import { auth } from "@/lib/auth";
-    import { serverClient } from "@/lib/server-client";
-
-    export const GET = async (req: Request) => {
-      const authorization = req.headers?.get("authorization") ?? undefined;
-      const accessToken = authorization?.startsWith("Bearer ")
-        ? authorization.replace("Bearer ", "")
-        : authorization;
-      const payload = await serverClient.verifyAccessToken(
-        accessToken, {
-          verifyOptions: {
-            audience: "https://api.example.com",
-          }
-        }
-      );
-      // ...continue
-    }
-    ```
-
-    * Using `mcpHandler` helper
-
-    ```ts title="api/[transport]/route.ts"
-    import { createMcpHandler } from "mcp-handler";
-    import { mcpHandler } from "@better-auth/oauth-provider";
-    import { z } from "zod";
-
-    const handler = mcpHandler({
-      jwksUrl: "https://auth.example.com/api/auth/jwks",
-      verifyOptions: {
-        issuer: "https://auth.example.com",
-        audience: "https://api.example.com",
-      },
-    }, (req, jwt) => {
-      return createMcpHandler(
-        (server) => {
-          server.registerTool(
-            "echo", {
-              description: "Echo a message",
-              inputSchema: {
-                message: z.string(),
-              },
-            },
-            async ({ message }) => {
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: `Echo: ${message}${
-                      jwt?.sub
-                        ? ` for user ${jwt.sub}`
-                        : ""
-                    }`,
-                  },
-                ],
-              };
-            }
-          );
-        }, {
-          serverInfo: {
-            name: "demo-better-auth",
-            version: "1.0.0",
-          }
-        }, {
-          basePath: "/api",
-          maxDuration: 60,
-          verboseLogs: true,
-        }
-      )(req);
-    });
-
-    export { handler as GET, handler as POST, handler as DELETE };
-    ```
-  </Step>
-</Steps>
+The MCP plugin can also support a separate registered CLI through the device grant. MCP clients keep their discovery-driven authorization code flow, while the CLI asks the same provider for a resource-bound token through device authorization. See [Add device authorization for your own CLI](/docs/plugins/mcp#add-device-authorization-for-your-own-cli).
 
 ## Schema
 
@@ -1779,10 +1983,24 @@ export const oauthClientTableFields = [
     isOptional: true,
   },
   {
+    name: "backchannelLogoutUri",
+    type: "string",
+    description:
+      "RP URL that receives signed Logout Tokens when the user's OP session ends (OIDC Back-Channel Logout 1.0)",
+    isOptional: true,
+  },
+  {
+    name: "backchannelLogoutSessionRequired",
+    type: "boolean",
+    description:
+      "When true, the RP requires a `sid` claim in every Logout Token and user-scoped logouts are skipped",
+    isOptional: true,
+  },
+  {
     name: "tokenEndpointAuthMethod",
     type: "string",
     description:
-      "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post']",
+      "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post', 'private_key_jwt']",
     isOptional: true,
   },
   {
@@ -1799,22 +2017,30 @@ export const oauthClientTableFields = [
     isOptional: true,
   },
   {
-    name: "public",
-    type: "boolean",
-    description: "Indication if the client is confidential or public",
+    name: "applicationType",
+    type: "string",
+    description:
+      "OIDC application type used to classify redirect URI policy. Supports: ['web', 'native']",
     isOptional: true,
   },
   {
-    name: "type",
+    name: "clientDiscoveryId",
     type: "string",
     description:
-      "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
+      "Stable identifier of the client-discovery extension that owns refresh and metadata-resource transport for this client",
     isOptional: true,
   },
   {
     name: "requirePKCE",
     type: "boolean",
     description: "Whether PKCE is required for this client",
+    isOptional: true,
+  },
+  {
+    name: "dpopBoundAccessTokens",
+    type: "boolean",
+    description:
+      "Whether this client must receive and use DPoP-bound access tokens",
     isOptional: true,
   },
   {
@@ -1880,7 +2106,26 @@ export const oauthRefreshTokenTableFields = [
   {
     name: "revoked",
     type: "Date",
-    description: "Timestamp when the token was revoked",
+    description: "Timestamp when the token stopped being active",
+    isOptional: true,
+  },
+  {
+    name: "rotatedAt",
+    type: "Date",
+    description: "Timestamp when the token was consumed by rotation",
+    isOptional: true,
+  },
+  {
+    name: "rotationReplayResponse",
+    type: "string",
+    description:
+      "Encrypted token response and request fingerprint replayed during the configured refresh-token reuse interval",
+    isOptional: true,
+  },
+  {
+    name: "rotationReplayExpiresAt",
+    type: "Date",
+    description: "Timestamp when the cached rotation response stops being replayable",
     isOptional: true,
   },
   {
@@ -1899,6 +2144,13 @@ export const oauthRefreshTokenTableFields = [
     name: "expiresAt",
     type: "Date",
     description: "Timestamp when the token will expire",
+  },
+  {
+    name: "confirmation",
+    type: "json",
+    description:
+      "RFC 7800 cnf confirmation that sender-constrains this refresh-token family (e.g. DPoP { jkt }), carried forward on rotation",
+    isOptional: true,
   },
 ];
 
@@ -1974,6 +2226,20 @@ export const oauthAccessTokenTableFields = [
     type: "Date",
     description: "Timestamp when the token will expire",
   },
+  {
+    name: "confirmation",
+    type: "json",
+    description:
+      "RFC 7800 cnf confirmation that sender-constrains this access token (e.g. DPoP { jkt }), surfaced as cnf at introspection",
+    isOptional: true,
+  },
+  {
+    name: "revoked",
+    type: "Date",
+    description:
+      "When the token was revoked. Populated on session end and by back-channel logout; introspection and token use reject revoked tokens.",
+    isOptional: true,
+  },
 ];
 
 <DatabaseTable name="oauthAccessToken" fields={oauthAccessTokenTableFields} />
@@ -2015,6 +2281,12 @@ export const oauthConsentTableFields = [
     description: "Array of scopes consented to",
   },
   {
+    name: "requestedUserInfoClaims",
+    type: "string[]",
+    description: "Array of OIDC UserInfo claim names consented to",
+    isOptional: true,
+  },
+  {
     name: "createdAt",
     type: "Date",
     description: "Timestamp of when the consent was given",
@@ -2027,6 +2299,30 @@ export const oauthConsentTableFields = [
 ];
 
 <DatabaseTable name="oauthConsent" fields={oauthConsentTableFields} />
+
+### OAuth Client Assertion
+
+Table Name: `oauthClientAssertion`
+
+Records each `private_key_jwt` client assertion `jti` so it can only be used once. The row id is a digest of the per-client assertion identifier, so a replayed or concurrent assertion collides on the primary key and the database rejects it atomically, even across multiple server processes. A row keeps blocking its id until deleted; `expiresAt` marks when removal is safe, because the assertion it guards has already expired. No scheduled job prunes these rows, so remove expired rows with your own cleanup if the table grows.
+
+export const oauthClientAssertionTableFields = [
+  {
+    name: "id",
+    type: "string",
+    description:
+      "Digest of the per-client assertion identifier (`private_key_jwt:<clientId>:<jti>`)",
+    isPrimaryKey: true,
+  },
+  {
+    name: "expiresAt",
+    type: "Date",
+    description:
+      "When the guarded assertion expires and the row becomes safe to delete",
+  },
+];
+
+<DatabaseTable name="oauthClientAssertion" fields={oauthClientAssertionTableFields} />
 
 ## Options
 
@@ -2045,108 +2341,3 @@ The following are available under the `prefix` configuration setting:
 ## Optimizations
 
 To improve lookup performance, database adapters may map the field `client_id` on the table `oauthClient` to `id`. Note that `id` should support strings formatted like UUIDs and urls.
-
-## Migrations
-
-### From OIDC Provider Plugin
-
-See [OIDC Provider Plugin](/docs/plugins/oidc-provider) for the previous implementation.
-
-#### Configuration
-
-* **`idTokenExpiresIn`** now defaults to `10 hours` (previously `1 hour` through `accessTokenExpiresIn`)
-* **`refreshTokenExpiresIn`** now defaults to `30 days` (previously `7 days`)
-* **`advertisedMetadata`** (previously `metadata`) no longer supports changing metadata fields to prevent accidental misconfiguration.
-* **`clientRegistrationDefaultScopes`** (previously `defaultScope`) is now in array format instead of a space-separated string
-* **`consentPage`** is now required
-* **`getConsentHTML`** is removed in favor of the `consentPage` as raw html is not a response type supported by the authorize endpoint in OAuth
-* **`requirePKCE`** (global option) is removed. PKCE is now required by default per OAuth 2.1. Individual clients can opt-out using `require_pkce: false` during registration if needed for legacy compatibility.
-* **`allowPlainCodeChallengeMethod`** is removed as the `plain` code challenge is considered less secure than the default `S256` method
-* **`customUserInfoClaims`** (previously `getAdditionalUserInfoClaim`) passes the jwt payload instead of the client of the access token used in the request.
-* **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJwtPlugin: true` (previously `plain`).
-* JWT plugin now is enabled by default. To disable the plugin, set `disableJwtPlugin: true`.
-* Authorization query `code_challenge_method` "S256" must be in caps as described by OAuth 2.1
-
-#### Database
-
-##### Table: `oauthClient`
-
-Previously `oauthApplication`
-
-* If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
-  The following function will convert a `plain` representation into the default hash:
-
-```ts
-import { createHash } from "@better-auth/utils/hash";
-import { base64Url } from "@better-auth/utils/base64";
-
-const defaultHasher = async (value: string) => {
-	const hash = await createHash("SHA-256").digest(
-		new TextEncoder().encode(value),
-	);
-	const hashed = base64Url.encode(new Uint8Array(hash), {
-		padding: false,
-	});
-	return hashed;
-};
-```
-
-* `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
-  * Clients with `type: "public"`: set `type: undefined`, `public: true`, and `clientSecret: undefined`
-  * Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
-  * Clients with `type: "user-agent-based"`: set `public: true` and `clientSecret: undefined`
-  * Clients with `clientSecret: undefined`: set `public: true`
-* `redirectURLs` renamed to `redirectUris`
-* `requirePkce` field added (optional, defaults to `true`). For existing confidential clients that don't support PKCE, set `requirePkce: false`.
-* `metadata` is now stored in database as individual fields instead of a JSON object. Parse the metadata into their respective fields. The OIDC plugin did not utilize this field but this OAuth plugin may utilize them in the future.
-
-##### Table: `oauthAccessToken`
-
-Option 1 (simple):
-
-You may choose to opt-out of this table conversion with minimal impact. By doing so, users of the existing application will simply need to login again. Simply delete the existing table `oauthAccessToken`.
-
-Option 2 (more complex):
-
-Migrate all tables (you may need to create a clone of `oauthAccessToken` into `oauthRefreshToken` before a migration).
-
-* Convert `oauthAccessToken` with `refreshToken` field into a new `oauthRefreshToken` entry.
-
-```ts
-{
-  token: defaultHasher(refreshToken),
-  expiresAt: refreshTokenExpiresAt,
-  clientId: clientId,
-  scopes: scopes,
-  userId: userId,
-  createdAt: createdAt,
-  updatedAt: updatedAt,
-}
-```
-
-* Keep `oauthAccessToken` but reference new `oauthRefreshToken`.
-
-```ts
-{
-  token: defaultHasher(accessToken),
-  expiresAt: accessTokenExpiresAt,
-  clientId: clientId,
-  scopes: scopes,
-  refreshId: oauthRefreshToken.id, // `undefined` if no refreshToken
-  createdAt: createdAt,
-  updatedAt: updatedAt,
-}
-```
-
-### From MCP Plugin
-
-See [MCP Plugin](/docs/plugins/mcp) for prior MCP-specific endpoints.
-
-The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
-
-* `/oauth2/authorize` (previously `/mcp/authorize`)
-* `/oauth2/token` (previously `/mcp/token`)
-* `/oauth2/register` (previously `/mcp/register`)
-* `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
-* `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
-* Database changes are equivalent to the [From OIDC Provider Plugin](#from-oidc-provider-plugin) section.

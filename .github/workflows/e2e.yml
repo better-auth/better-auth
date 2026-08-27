@@ -75,6 +75,7 @@ jobs:
           deno-version: 2.6.4
 
       - name: Smoke
+        timeout-minutes: 10
         run: pnpm e2e:smoke
 
       - name: Docker Compose Diagnostics
@@ -120,6 +121,9 @@ jobs:
       - name: Install
         run: pnpm install
 
+      - name: Install Next.js demo
+        run: pnpm --dir demo/nextjs install --frozen-lockfile
+
       - name: Install Playwright Browsers
         uses: ./.github/actions/setup-playwright
 
@@ -133,6 +137,28 @@ jobs:
 
       - name: Integration
         run: pnpm e2e:integration --filter=./e2e/integration
+
+      - name: Build Next.js demo
+        working-directory: demo/nextjs
+        env:
+          BETTER_AUTH_SECRET: better-auth-scim-demo-ci-secret-at-least-thirty-two-characters
+          BETTER_AUTH_URL: http://127.0.0.1:3000
+          DEMO_SQLITE_PATH: ${{ runner.temp }}/better-auth-scim-demo-build.sqlite
+          SCIM_DEMO_ENABLED: "true"
+          SCIM_DEMO_OIDC_CLIENT_SECRET: better-auth-scim-demo-ci-oidc-client-secret
+          SCIM_DEMO_TOKEN: better-auth-scim-demo-ci-token
+        run: pnpm build
+
+      - name: Upload integration browser artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-playwright-artifacts
+          path: |
+            e2e/integration/playwright-report
+            e2e/integration/test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
@@ -157,6 +183,8 @@ jobs:
           - packages: "@better-auth-test/adapter-factory"
             compose_services: ""
           - packages: "@better-auth-test/drizzle-adapter"
+            compose_services: "postgres mysql"
+          - packages: "@better-auth-test/drizzle-v2-relations-adapter"
             compose_services: "postgres mysql"
           - packages: "@better-auth-test/kysely-prisma-adapter"
             compose_services: "postgres-kysely mysql-kysely postgres-kysely2 mssql"
@@ -204,7 +232,22 @@ jobs:
         if: matrix.compose_services != ''
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
-          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+          for startup_attempt in 1 2; do
+            if docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"; then
+              exit 0
+            fi
+
+            if [[ "$startup_attempt" -eq 2 ]]; then
+              exit 1
+            fi
+
+            echo "Container startup failed; resetting and retrying once."
+            docker compose ps --all || true
+            docker compose logs --no-color "${compose_services[@]}" || true
+            if ! docker compose down --volumes --remove-orphans; then
+              echo "::warning::Container cleanup failed; retrying startup with remaining resources."
+            fi
+          done
 
       - name: Adapter Integration
         run: pnpm e2e:integration --filter="$FILTER"
@@ -217,10 +260,16 @@ jobs:
           docker compose logs --no-color "${compose_services[@]}" || true
 
           # Capture container exit and OOM state without masking the test failure.
+          # cspell:ignore pids Pids
           for compose_service in "${compose_services[@]}"; do
             container_id="$(docker compose ps --all --quiet "$compose_service")"
             if [[ -n "$container_id" ]]; then
               docker inspect --format 'name={{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}' "$container_id" || true
+              docker inspect --format 'name={{.Name}} pids_limit={{.HostConfig.PidsLimit}} memory_limit={{.HostConfig.Memory}} memory_swap={{.HostConfig.MemorySwap}}' "$container_id" || true
+              image_id="$(docker inspect --format '{{.Image}}' "$container_id" || true)"
+              if [[ -n "$image_id" ]]; then
+                docker image inspect --format 'image_id={{.Id}} repo_digests={{json .RepoDigests}}' "$image_id" || true
+              fi
             fi
           done
 

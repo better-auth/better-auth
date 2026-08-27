@@ -1,9 +1,9 @@
 ---
 title: CLI
-description: Learn about the Better Auth CLI commands for generating and migrating database schemas, initializing projects, generating secret keys, and gathering diagnostic info.
+description: Learn about the Better Auth CLI commands for generating and migrating database schemas, creating initial admins, initializing projects, generating secret keys, and gathering diagnostic info.
 ---
 
-Better Auth comes with a built-in CLI to help you manage the database schemas, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
+Better Auth comes with a built-in CLI to help you manage the database schemas, create initial admin users, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
 
 ## Generate
 
@@ -15,9 +15,41 @@ npx auth@latest generate
 
 ### Options
 
+* `-c, --cwd` - The working directory. Defaults to the current directory.
 * `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it's an SQL file saved as schema.sql in your project root.
 * `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
-* `--yes` - Skip the confirmation prompt and generate the schema directly.
+* `-y, --yes` - Skip the confirmation prompt and generate the schema directly.
+* `--adapter` - The schema generator to use: `prisma`, `drizzle`, or `kysely`.
+* `--dialect` - The target database provider. It is required with `--adapter drizzle`. Prisma defaults to `postgresql`.
+
+### Generate Without a Database Connection
+
+Prisma and Drizzle can generate a schema without using the configured database adapter. The CLI still loads your config to include plugins and schema customizations.
+
+```package-install title="Terminal"
+npx auth@latest generate --adapter prisma --dialect postgresql
+```
+
+export const schemaGeneratorOptions = {
+  adapter: {
+    description: "The schema generator. Kysely still requires the configured database.",
+    type: '"prisma" | "drizzle" | "kysely"',
+    required: false,
+  },
+  dialect: {
+    description: 'The Prisma or Drizzle provider. "mongodb" is only supported by Prisma. Drizzle maps "postgresql" to "pg".',
+    type: '"postgresql" | "mysql" | "sqlite" | "mongodb"',
+    required: false,
+  },
+}
+
+<TypeTable type={schemaGeneratorOptions} />
+
+<Callout type="info">
+  Kysely introspects the configured database, so `--dialect` has no effect with `--adapter kysely`.
+</Callout>
+
+If `--adapter` is omitted, the CLI uses the adapter configured in your Better Auth config file. Passing `--dialect` by itself has no effect.
 
 ## Migrate
 
@@ -38,6 +70,28 @@ npx auth@latest migrate
   The migrate command automatically detects your configured `search_path` and creates tables in the correct schema. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
 </Callout>
 
+## Create Admin
+
+The `create-admin` command creates an initial admin user through your configured Better Auth instance. It requires the Admin plugin and a persistent database, and it uses the same server-side `auth.api.createUser` path as the Admin plugin so passwords are hashed and database hooks still run.
+
+```package-install title="Terminal"
+npx auth@latest create-admin --email admin@example.com --name "Admin" --role admin
+```
+
+If users already exist, the command asks for confirmation. Use `--force` or `--yes` to skip that prompt.
+
+### Options
+
+* `--email` - The email address for the admin user.
+* `--password` - The password for the admin user. If omitted, the CLI will prompt for it.
+* `--name` - The name for the admin user. Defaults to `Admin`.
+* `--role` - The role to assign. Defaults to `admin`.
+* `--data` - Additional user fields as a JSON object.
+* `--no-email-verified` - Create the admin user with an unverified email. By default, the CLI marks the admin email as verified.
+* `--config` - The path to your Better Auth config file.
+* `--force` - Create the admin user even when users already exist.
+* `--yes` - Skip the existing-users confirmation prompt.
+
 ## Init
 
 The `init` command allows you to initialize Better Auth in your project.
@@ -53,6 +107,19 @@ npx auth@latest init
 * `--plugins` - The plugins you want to use. You can specify multiple plugins by separating them with a comma.
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
+
+## Upgrade
+
+The `upgrade` command updates older `better-auth` dependencies and official `@better-auth/*` packages that participate in the synchronized release train to the version of the CLI being run. It compares the minimum version allowed by each `package.json` specifier; specifiers whose minimum is the same or newer are left unchanged. Independently versioned packages, such as `@better-auth/utils`, are not changed.
+
+```package-install title="Terminal"
+npx auth@latest upgrade
+```
+
+### Options
+
+* `--cwd` - The project directory containing the `package.json` to update. Defaults to the current directory.
+* `--yes` - Skip the confirmation prompt and install the updates directly.
 
 ## Info
 

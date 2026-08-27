@@ -2,8 +2,11 @@ export { getAuthTables } from "./get-tables";
 export type { BetterAuthPluginDBSchema } from "./plugin";
 export {
 	type Account,
+	type AccountKey,
 	accountSchema,
 	type BaseAccount,
+	createLocalAccountIssuer,
+	createOAuthAccountIssuer,
 } from "./schema/account";
 export {
 	type BaseRateLimit,
@@ -29,6 +32,7 @@ export type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 	DBPrimitive,
+	DBTableIndex,
 	InferDBFieldInput,
 	InferDBFieldOutput,
 	InferDBFieldsFromOptions,
