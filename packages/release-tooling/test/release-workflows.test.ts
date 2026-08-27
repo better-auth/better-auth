@@ -473,6 +473,11 @@ describe("release notes command security", () => {
 
 		expect(rewrite["continue-on-error"]).toBe(true);
 		expect(render.env).toHaveProperty("RAW_PATH");
+		expect(render.env).toHaveProperty(
+			"FALLBACKS",
+			expect.stringContaining("steps.rewrites.outputs.fallbacks"),
+		);
+		expect(render.run).toContain('--fallbacks "$FALLBACKS"');
 		expect(render.run).toContain('SOURCE="raw"');
 		expect(render.run).toContain('cp "$RAW_PATH" "$NOTES_PATH"');
 	});

@@ -77,6 +77,31 @@ export const releaseRewritesSchema = z.strictObject({
 	rewrites: z.array(releaseRewriteSchema).max(250),
 });
 
+const releaseReviewSchema = z.strictObject({
+	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
+	approved: z.boolean().describe("Whether the rewrite is ready to publish"),
+	feedback: z
+		.string()
+		.trim()
+		.min(1)
+		.max(500)
+		.nullable()
+		.describe("A specific correction for rejected copy, otherwise null"),
+});
+
+export const releaseReviewsSchema = z.strictObject({
+	reviews: z.array(releaseReviewSchema).max(250),
+});
+
+export const releaseRewriteFallbacksSchema = z
+	.array(
+		z.strictObject({
+			title: releaseTitleSchema,
+			prNumber: z.int().positive().nullable(),
+		}),
+	)
+	.max(250);
+
 export const releaseRewriteContextSchema = z
 	.record(
 		releaseRewriteKeySchema,
@@ -103,6 +128,12 @@ export type ReleaseManifest = z.infer<typeof releaseManifestSchema>;
 export type GeneratedReleaseRewrites = z.infer<
 	typeof releaseRewritesSchema
 >["rewrites"];
+export type GeneratedReleaseReviews = z.infer<
+	typeof releaseReviewsSchema
+>["reviews"];
+export type ReleaseRewriteFallback = z.infer<
+	typeof releaseRewriteFallbacksSchema
+>[number];
 export type ReleaseRewrites = Record<
 	string,
 	{ title: string; migration?: string }

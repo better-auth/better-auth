@@ -257,6 +257,7 @@ jobs:
           MANIFEST_PATH: ${{ steps.raw-notes.outputs.manifest_path }}
           RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
           REWRITES_PATH: ${{ steps.rewrites.outputs.path }}
+          FALLBACKS: ${{ steps.rewrites.outputs.fallbacks }}
           REWRITE_OUTCOME: ${{ steps.rewrites.outcome }}
           VERSION: ${{ steps.candidate.outputs.version }}
           HEAD_SHA: ${{ steps.command.outputs.head_sha }}
@@ -268,6 +269,7 @@ jobs:
 
           SOURCE="ai"
           MERGED_ARGS=()
+          FALLBACK_ARGS=()
           if [ "$MERGED" = "true" ]; then
             MERGED_ARGS+=(--merged)
           fi
@@ -287,11 +289,16 @@ jobs:
             echo "::warning::AI rewrite failed; using deterministic release notes for maintainer review"
           fi
 
+          if [ "$SOURCE" = "ai" ]; then
+            FALLBACK_ARGS+=(--fallbacks "$FALLBACKS")
+          fi
+
           pnpm --filter @better-auth/release-tooling release-notes:comment wrap \
             --version "$VERSION" \
             --head "$HEAD_SHA" \
             --source "$SOURCE" \
             "${MERGED_ARGS[@]}" \
+            "${FALLBACK_ARGS[@]}" \
             --body "$NOTES_PATH" \
             --output "$ARTIFACT_DIR/release-notes-comment.md"
           echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
