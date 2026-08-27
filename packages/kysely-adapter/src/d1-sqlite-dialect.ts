@@ -3,6 +3,7 @@ import type {
 	CompiledQuery,
 	DatabaseConnection,
 	DatabaseIntrospector,
+	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
@@ -18,6 +19,65 @@ import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 } from "./kysely-migration-tables";
+import type { DatabaseIndexIntrospector } from "./types";
+
+interface D1IndexListRow {
+	name: string;
+	partial: number;
+	unique: number;
+}
+
+interface D1IndexInfoRow {
+	name: string | null;
+	seqno: number;
+}
+
+function quoteSqliteStringLiteral(value: string) {
+	return `'${value.replaceAll("'", "''")}'`;
+}
+
+export function createD1IndexIntrospector(
+	database: D1Database,
+): DatabaseIndexIntrospector {
+	return async (tableNames) => {
+		if (tableNames.length === 0) return [];
+		const indexLists = await database.batch<D1IndexListRow>(
+			tableNames.map((tableName) =>
+				database.prepare(
+					`PRAGMA index_list(${quoteSqliteStringLiteral(tableName)})`,
+				),
+			),
+		);
+		const indexes = indexLists.flatMap((indexList, tablePosition) => {
+			const tableName = tableNames[tablePosition];
+			if (!tableName) return [];
+			return indexList.results.map((index) => ({
+				...index,
+				tableName,
+			}));
+		});
+		if (indexes.length === 0) return [];
+		const indexColumns = await database.batch<D1IndexInfoRow>(
+			indexes.map((index) =>
+				database.prepare(
+					`PRAGMA index_info(${quoteSqliteStringLiteral(index.name)})`,
+				),
+			),
+		);
+		return indexes.map((index, indexPosition) => ({
+			columns: (indexColumns[indexPosition]?.results ?? []).map((column) => ({
+				fullLength: column.name !== null,
+				name: column.name,
+				position: column.seqno,
+			})),
+			name: index.name,
+			partial: index.partial !== 0,
+			table: index.tableName,
+			unique: index.unique !== 0,
+			valid: true,
+		}));
+	};
+}
 
 class D1SqliteAdapter extends SqliteAdapter {}
 
@@ -192,7 +252,6 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 			return {
 				name: table.name,
 				isView: table.type === "view",
-				isForeign: false,
 				columns: columnInfo.map((col) => ({
 					name: col.name,
 					dataType: col.type,
@@ -202,6 +261,14 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 				})),
 			};
 		});
+	}
+
+	async getMetadata(
+		options?: DatabaseMetadataOptions,
+	): Promise<DatabaseMetadata> {
+		return {
+			tables: await this.getTables(options),
+		};
 	}
 }
 

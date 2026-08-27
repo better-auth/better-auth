@@ -682,6 +682,50 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10820
+	 */
+	it("should clear the expired expiration when banning again without a duration", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Reban User",
+				email: "reban@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id || "";
+		await client.admin.banUser(
+			{
+				userId,
+				banExpiresIn: 60 * 60,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(60 * 60 * 2 * 1000);
+		const res = await client.admin.banUser(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.banned).toBe(true);
+		expect(res.data?.user?.banExpires).toBeNull();
+		const signIn = await client.signIn.email({
+			email: "reban@email.com",
+			password: "test",
+		});
+		expect(signIn.error?.status).toBe(403);
+	});
+
 	it("should allow to unban user", async () => {
 		const res = await client.admin.unbanUser(
 			{
@@ -1375,6 +1419,14 @@ describe("Admin plugin", async () => {
 		});
 		expect(postSignIn.error).toBeNull();
 		expect(postSignIn.data?.user.id).toBe(userId);
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			accountId: userId,
+		});
 
 		await client.admin.removeUser({ userId }, { headers: adminHeaders });
 	});
@@ -2428,6 +2480,82 @@ describe("Admin plugin id-token sign-in", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("BANNED_USER");
 		expect(res.error?.message).toBe("Custom banned user message");
+	});
+});
+
+// Admin-created users flow through the createUser seam, so the provisioning
+// gate applies to them without the admin plugin calling it directly.
+describe("admin createUser validateUserInfo provisioning gate", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance(
+		{
+			user: {
+				validateUserInfo({ user, source }) {
+					if (source.method !== "admin") {
+						return;
+					}
+					expect(source.action).toBe("create-user");
+					if ((user.email as string).endsWith("@blocked.com")) {
+						return {
+							error: "admin_create_blocked",
+							errorDescription: "This email domain is not allowed",
+						};
+					}
+				},
+			},
+			plugins: [admin()],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("rejects an admin-created user when validateUserInfo returns error", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Blocked User",
+				email: "new@blocked.com",
+				password: "password",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("admin_create_blocked");
+	});
+
+	it("allows an admin-created user that passes validation", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Allowed User",
+				email: "ok@allowed.com",
+				password: "password",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user.email).toBe("ok@allowed.com");
 	});
 });
 

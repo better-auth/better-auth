@@ -188,6 +188,17 @@ export const communityAdapters: CommunityAdapter[] = [
 		},
 	},
 	{
+		name: "@proofkit/better-auth",
+		url: "https://github.com/proofsh/proofkit/tree/main/packages/better-auth",
+		database: "FileMaker OData",
+		databaseUrl: "https://www.claris.com/filemaker/",
+		author: {
+			name: "eluce2",
+			url: "https://github.com/eluce2",
+			avatar: "https://github.com/eluce2.png",
+		},
+	},
+	{
 		name: "@datar-platform/better-auth-dynamodb",
 		url: "https://github.com/datar-platform/better-auth-dynamodb",
 		database: "DynamoDB",
@@ -207,6 +218,39 @@ export const communityAdapters: CommunityAdapter[] = [
 			name: "BjornTech AB",
 			url: "https://github.com/bjorntech",
 			avatar: "https://github.com/bjorntech.png",
+		},
+	},
+	{
+		name: "better-auth-azure-cosmos",
+		url: "https://github.com/9hsein5/better-auth-azure-cosmos",
+		database: "Azure Cosmos DB",
+		databaseUrl: "https://learn.microsoft.com/azure/cosmos-db/nosql/",
+		author: {
+			name: "9hsein5",
+			url: "https://github.com/9hsein5",
+			avatar: "https://github.com/9hsein5.png",
+		},
+	},
+	{
+		name: "better-auth-mongoose",
+		url: "https://github.com/AshwinSathian/better-auth-mongoose",
+		database: "Mongoose",
+		databaseUrl: "https://mongoosejs.com",
+		author: {
+			name: "Ashwin Sathian",
+			url: "https://github.com/AshwinSathian",
+			avatar: "https://github.com/AshwinSathian.png",
+		},
+	},
+	{
+		name: "@ilbertt/better-auth-bun-sql",
+		url: "https://github.com/ilbertt/better-auth-bun-sql",
+		database: "Bun SQL",
+		databaseUrl: "https://bun.com/docs/api/sql",
+		author: {
+			name: "ilbertt",
+			url: "https://github.com/ilbertt",
+			avatar: "https://github.com/ilbertt.png",
 		},
 	},
 ];

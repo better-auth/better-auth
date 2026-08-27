@@ -28,7 +28,14 @@ export const notion = (options: NotionOptions) => {
 	return {
 		id: "notion",
 		name: "Notion",
-		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
+		accountSubject: ({ profile }) => profile.id,
+		createAuthorizationURL({
+			state,
+			scopes,
+			loginHint,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes: string[] = options.disableDefaultScope ? [] : [];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -41,6 +48,7 @@ export const notion = (options: NotionOptions) => {
 				redirectURI,
 				loginHint,
 				additionalParams: {
+					...(additionalParams ?? {}),
 					owner: "user",
 				},
 			});
@@ -93,7 +101,6 @@ export const notion = (options: NotionOptions) => {
 			const userMap = await options.mapProfileToUser?.(userProfile);
 			return {
 				user: {
-					id: userProfile.id,
 					name: userProfile.name || "",
 					email: userProfile.person?.email || null,
 					image: userProfile.avatar_url,

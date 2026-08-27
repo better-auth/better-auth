@@ -1,4 +1,4 @@
-import type { AsyncLocalStorage } from "node:async_hooks";
+import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
 import type { BetterAuthOptions } from "../types";
@@ -14,10 +14,12 @@ type HookContext = {
 
 const ensureAsyncStorage = async () => {
 	const betterAuthGlobal = __getBetterAuthGlobal();
-	if (!betterAuthGlobal.context.adapterAsyncStorage) {
-		const AsyncLocalStorage = await getAsyncLocalStorage();
-		betterAuthGlobal.context.adapterAsyncStorage = new AsyncLocalStorage();
+	const existing = betterAuthGlobal.context.adapterAsyncStorage;
+	if (existing) {
+		return existing as AsyncLocalStorage<HookContext>;
 	}
+	const AsyncLocalStorage = await getAsyncLocalStorage();
+	betterAuthGlobal.context.adapterAsyncStorage ??= new AsyncLocalStorage();
 	return betterAuthGlobal.context
 		.adapterAsyncStorage as AsyncLocalStorage<HookContext>;
 };
@@ -100,6 +102,9 @@ export const runWithTransaction = async <
 >(
 	adapter: DBAdapter<Options>,
 	fn: () => R,
+	options?: {
+		onAfterCommitHookError?: (error: unknown) => void | Promise<void>;
+	},
 ): Promise<R> => {
 	let called = false;
 	return ensureAsyncStorage()
@@ -128,11 +133,20 @@ export const runWithTransaction = async <
 				hasError = true;
 				error = e;
 			}
-			for (const hook of pendingHooks) {
-				await hook();
-			}
 			if (hasError) {
 				throw error;
+			}
+			for (const hook of pendingHooks) {
+				try {
+					await hook();
+				} catch (error) {
+					if (!options?.onAfterCommitHookError) throw error;
+					try {
+						await options.onAfterCommitHookError(error);
+					} catch {
+						// Reporting cannot roll back committed work or suppress later hooks.
+					}
+				}
 			}
 			return result!;
 		})
@@ -150,20 +164,27 @@ export const runWithTransaction = async <
  */
 export const queueAfterTransactionHook = async (
 	hook: () => Promise<void>,
+	options?: {
+		/** Handles a queued hook failure after the surrounding work has committed. */
+		onError?: (error: unknown) => void | Promise<void>;
+	},
 ): Promise<void> => {
-	return ensureAsyncStorage()
-		.then((als) => {
-			const store = als.getStore();
-			if (store) {
-				// We're in a transaction context, queue the hook
-				store.pendingHooks.push(hook);
-			} else {
-				// Not in a transaction, execute immediately
-				return hook();
-			}
-		})
-		.catch(() => {
-			// No async storage available, execute immediately
-			return hook();
-		});
+	const executeHook = async () => {
+		try {
+			await hook();
+		} catch (error) {
+			if (!options?.onError) throw error;
+			await options.onError(error);
+		}
+	};
+	let storage: Awaited<ReturnType<typeof ensureAsyncStorage>>;
+	try {
+		storage = await ensureAsyncStorage();
+	} catch {
+		return executeHook();
+	}
+
+	const store = storage.getStore();
+	if (!store?.isTransactionActive) return executeHook();
+	store.pendingHooks.push(executeHook);
 };

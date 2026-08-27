@@ -1,10 +1,10 @@
 {
   "name": "@better-auth/redis-storage",
-  "version": "1.6.26",
+  "version": "1.7.2",
   "description": "Redis storage for Better Auth secondary storage",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/storage",
+  "homepage": "https://www.better-auth.com/docs/concepts/database#redis-storage",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
@@ -47,8 +47,8 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@types/node": "^25.3.2",
-    "ioredis": "^5.9.3",
+    "@types/node": "^25.9.3",
+    "ioredis": "^5.11.1",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"

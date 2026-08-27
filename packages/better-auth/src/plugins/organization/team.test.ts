@@ -1311,6 +1311,344 @@ describe("multi team support", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7012
+ */
+describe("listUserTeams with userId parameter", async () => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: {
+					enabled: true,
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const ownerUser = {
+		email: "team-owner@test.com",
+		password: "password123",
+		name: "Owner User",
+	};
+
+	const memberUser = {
+		email: "team-member@test.com",
+		password: "password123",
+		name: "Member User",
+	};
+
+	const outsiderUser = {
+		email: "team-outsider@test.com",
+		password: "password123",
+		name: "Outsider User",
+	};
+
+	let ownerHeaders: Headers;
+	let memberHeaders: Headers;
+	let outsiderHeaders: Headers;
+	let organizationId: string;
+	let teamId: string;
+	let memberUserId: string;
+	let ownerUserId: string;
+
+	it("should setup organization with teams and members", async () => {
+		// Create owner
+		const ownerSignUp = await auth.api.signUpEmail({
+			body: ownerUser,
+		});
+		ownerUserId = ownerSignUp.user.id;
+		const ownerSignIn = await signInWithUser(
+			ownerUser.email,
+			ownerUser.password,
+		);
+		ownerHeaders = ownerSignIn.headers;
+
+		// Create org
+		const org = await auth.api.createOrganization({
+			headers: ownerHeaders,
+			body: {
+				name: "Teams Test Org",
+				slug: "teams-test-org",
+			},
+		});
+		organizationId = org.id;
+
+		await auth.api.setActiveOrganization({
+			headers: ownerHeaders,
+			body: { organizationId },
+		});
+
+		// Create team
+		const team = await auth.api.createTeam({
+			headers: ownerHeaders,
+			body: {
+				name: "Alpha Team",
+				organizationId,
+			},
+		});
+		teamId = team.id;
+
+		// Create member user
+		const memberSignUp = await auth.api.signUpEmail({
+			body: memberUser,
+		});
+		memberUserId = memberSignUp.user.id;
+		const memberSignIn = await signInWithUser(
+			memberUser.email,
+			memberUser.password,
+		);
+		memberHeaders = memberSignIn.headers;
+
+		// Add member to org
+		await auth.api.addMember({
+			headers: ownerHeaders,
+			body: {
+				organizationId,
+				userId: memberUserId,
+				role: "member",
+			},
+		});
+
+		// Add member to team
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId,
+				userId: memberUserId,
+			},
+		});
+
+		// Set member's active org
+		await auth.api.setActiveOrganization({
+			headers: memberHeaders,
+			body: { organizationId },
+		});
+
+		// Create outsider user (not in org)
+		await auth.api.signUpEmail({
+			body: outsiderUser,
+		});
+		const outsiderSignIn = await signInWithUser(
+			outsiderUser.email,
+			outsiderUser.password,
+		);
+		outsiderHeaders = outsiderSignIn.headers;
+	});
+
+	it("should list own teams without userId param (backwards compatible)", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: memberHeaders,
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamId);
+	});
+
+	it("should allow a user to list their own teams with userId param", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: memberHeaders,
+			query: { userId: memberUserId },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamId);
+	});
+
+	it("should allow an owner to list another user's teams", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: ownerHeaders,
+			query: { userId: memberUserId },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamId);
+	});
+
+	it("should not allow a member to list another user's teams", async () => {
+		const res = await auth.api
+			.listUserTeams({
+				headers: memberHeaders,
+				query: { userId: ownerUserId },
+			})
+			.catch((e: any) => e);
+		expect(res).toBeInstanceOf(Error);
+	});
+
+	it("should not allow querying teams of a user not in the organization", async () => {
+		const res = await auth.api
+			.listUserTeams({
+				headers: ownerHeaders,
+				query: { userId: "non-existent-user-id" },
+			})
+			.catch((e: any) => e);
+		expect(res).toBeInstanceOf(Error);
+	});
+
+	it("should fail when querying another user without an active organization", async () => {
+		const res = await auth.api
+			.listUserTeams({
+				headers: outsiderHeaders,
+				query: { userId: memberUserId },
+			})
+			.catch((e: any) => e);
+		expect(res).toBeInstanceOf(Error);
+	});
+});
+
+describe("listUserTeams with organizationId parameter", async () => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: {
+					enabled: true,
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const ownerUser = {
+		email: "multi-org-owner@test.com",
+		password: "password123",
+		name: "Multi Org Owner",
+	};
+
+	const memberUser = {
+		email: "multi-org-member@test.com",
+		password: "password123",
+		name: "Multi Org Member",
+	};
+
+	let ownerHeaders: Headers;
+	let memberHeaders: Headers;
+	let orgAId: string;
+	let orgBId: string;
+	let teamInAId: string;
+	let teamInBId: string;
+	let memberUserId: string;
+
+	it("should setup two organizations with teams", async () => {
+		// Create owner and sign in
+		await auth.api.signUpEmail({ body: ownerUser });
+		const ownerSignIn = await signInWithUser(
+			ownerUser.email,
+			ownerUser.password,
+		);
+		ownerHeaders = ownerSignIn.headers;
+
+		// Create org A and org B
+		const orgA = await auth.api.createOrganization({
+			headers: ownerHeaders,
+			body: { name: "Org A", slug: "multi-org-a" },
+		});
+		orgAId = orgA.id;
+
+		const orgB = await auth.api.createOrganization({
+			headers: ownerHeaders,
+			body: { name: "Org B", slug: "multi-org-b" },
+		});
+		orgBId = orgB.id;
+
+		// Owner's active org is B (last created)
+		await auth.api.setActiveOrganization({
+			headers: ownerHeaders,
+			body: { organizationId: orgBId },
+		});
+
+		// Create a team in each org
+		const teamA = await auth.api.createTeam({
+			headers: ownerHeaders,
+			body: { name: "Team in A", organizationId: orgAId },
+		});
+		teamInAId = teamA.id;
+
+		const teamB = await auth.api.createTeam({
+			headers: ownerHeaders,
+			body: { name: "Team in B", organizationId: orgBId },
+		});
+		teamInBId = teamB.id;
+
+		// Create member user and add them to both orgs + both teams
+		const memberSignUp = await auth.api.signUpEmail({ body: memberUser });
+		memberUserId = memberSignUp.user.id;
+		const memberSignIn = await signInWithUser(
+			memberUser.email,
+			memberUser.password,
+		);
+		memberHeaders = memberSignIn.headers;
+
+		await auth.api.addMember({
+			headers: ownerHeaders,
+			body: { organizationId: orgAId, userId: memberUserId, role: "member" },
+		});
+		await auth.api.addMember({
+			headers: ownerHeaders,
+			body: { organizationId: orgBId, userId: memberUserId, role: "member" },
+		});
+
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: { teamId: teamInAId, userId: memberUserId, organizationId: orgAId },
+		});
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: { teamId: teamInBId, userId: memberUserId, organizationId: orgBId },
+		});
+
+		// Member's active org is A
+		await auth.api.setActiveOrganization({
+			headers: memberHeaders,
+			body: { organizationId: orgAId },
+		});
+	});
+
+	it("should return self teams across all orgs when organizationId is omitted", async () => {
+		const teams = await auth.api.listUserTeams({ headers: memberHeaders });
+		expect(teams).toHaveLength(2);
+		const ids = teams.map((t) => t.id).sort();
+		expect(ids).toEqual([teamInAId, teamInBId].sort());
+	});
+
+	it("should scope self query to explicit organizationId", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: memberHeaders,
+			query: { organizationId: orgBId },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamInBId);
+	});
+
+	it("should allow owner to list another user's teams in a non-active org via explicit organizationId", async () => {
+		// Owner's active org is B, but we query against A.
+		const teams = await auth.api.listUserTeams({
+			headers: ownerHeaders,
+			query: { userId: memberUserId, organizationId: orgAId },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamInAId);
+	});
+
+	it("should forbid self query with explicit organizationId when user is not a member", async () => {
+		// Create an outsider user with no org membership
+		const outsiderUser = {
+			email: "multi-org-outsider@test.com",
+			password: "password123",
+			name: "Multi Org Outsider",
+		};
+		await auth.api.signUpEmail({ body: outsiderUser });
+		const outsiderSignIn = await signInWithUser(
+			outsiderUser.email,
+			outsiderUser.password,
+		);
+
+		const res = await auth.api
+			.listUserTeams({
+				headers: outsiderSignIn.headers,
+				query: { organizationId: orgAId },
+			})
+			.catch((e: any) => e);
+		expect(res).toBeInstanceOf(Error);
+	});
+});
+
 describe("invitation with team id containing comma", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance(
 		{
@@ -1605,6 +1943,117 @@ describe("accept-invitation validates team capacity before adding the member", a
 		});
 		expect(members).toHaveLength(2);
 		expect(members.some((m) => m.userId === userId)).toBe(true);
+
+		const teamAfter = await ctx.adapter.findOne<{ memberCount: number }>({
+			model: "team",
+			where: [{ field: "id", value: team.id }],
+		});
+		expect(teamAfter?.memberCount).toBe(2);
+	});
+
+	it("enforces the team limit when adding an existing organization member directly", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Direct Add Capacity Team", organizationId: org.id },
+		});
+		await seedTeamMember(team.id);
+		const firstUser = await auth.api.signUpEmail({
+			body: {
+				name: "Direct Add One",
+				email: "direct-add-one@email.com",
+				password: "password12345",
+			},
+		});
+		const secondUser = await auth.api.signUpEmail({
+			body: {
+				name: "Direct Add Two",
+				email: "direct-add-two@email.com",
+				password: "password12345",
+			},
+		});
+		for (const user of [firstUser.user, secondUser.user]) {
+			await ctx.adapter.create({
+				model: "member",
+				data: {
+					organizationId: org.id,
+					userId: user.id,
+					role: "member",
+					createdAt: new Date(),
+				},
+			});
+		}
+
+		const added = await auth.api.addTeamMember({
+			headers: owner.headers,
+			body: {
+				teamId: team.id,
+				userId: firstUser.user.id,
+				organizationId: org.id,
+			},
+		});
+		expect(added.userId).toBe(firstUser.user.id);
+
+		await expect(
+			auth.api.addTeamMember({
+				headers: owner.headers,
+				body: {
+					teamId: team.id,
+					userId: secondUser.user.id,
+					organizationId: org.id,
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { code: "TEAM_MEMBER_LIMIT_REACHED" },
+		});
+
+		const members = await ctx.adapter.findMany<{ userId: string }>({
+			model: "teamMember",
+			where: [{ field: "teamId", value: team.id }],
+		});
+		expect(members).toHaveLength(2);
+		expect(members.some((m) => m.userId === firstUser.user.id)).toBe(true);
+		expect(members.some((m) => m.userId === secondUser.user.id)).toBe(false);
+	});
+
+	it("rolls back addMember when the requested team is already full", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Add Member Full Team", organizationId: org.id },
+		});
+		await seedTeamMember(team.id);
+		await seedTeamMember(team.id);
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				name: "Full Team Add Member",
+				email: "full-team-add-member@email.com",
+				password: "password12345",
+			},
+		});
+
+		await expect(
+			auth.api.addMember({
+				headers: owner.headers,
+				body: {
+					userId: newUser.user.id,
+					role: "member",
+					organizationId: org.id,
+					teamId: team.id,
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { code: "TEAM_MEMBER_LIMIT_REACHED" },
+		});
+
+		const orgMember = await ctx.adapter.findOne<{ id: string }>({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: org.id },
+				{ field: "userId", value: newUser.user.id },
+			],
+		});
+		expect(orgMember).toBeNull();
 	});
 
 	it("rejects with TEAM_MEMBER_LIMIT_REACHED and creates no membership row when the team fills between invite and accept", async () => {
@@ -1653,6 +2102,53 @@ describe("accept-invitation validates team capacity before adding the member", a
 		expect(orgMembers.some((m) => m.userId === userId)).toBe(false);
 	});
 
+	it("accepts only one of two concurrent invitations competing for the final team slot", async () => {
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Final Slot Team", organizationId: org.id },
+		});
+		await seedTeamMember(team.id);
+		const firstInvite = await inviteAndSignUp(
+			team.id,
+			"final-slot-one@email.com",
+		);
+		const secondInvite = await inviteAndSignUp(
+			team.id,
+			"final-slot-two@email.com",
+		);
+
+		const results = await Promise.allSettled([
+			auth.api.acceptInvitation({
+				headers: firstInvite.inviteeHeaders,
+				body: { invitationId: firstInvite.invitationId },
+			}),
+			auth.api.acceptInvitation({
+				headers: secondInvite.inviteeHeaders,
+				body: { invitationId: secondInvite.invitationId },
+			}),
+		]);
+
+		expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+		expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+
+		const members = await ctx.adapter.findMany<{ userId: string }>({
+			model: "teamMember",
+			where: [{ field: "teamId", value: team.id }],
+		});
+		expect(members).toHaveLength(2);
+		const acceptedInviteeCount = members.filter(
+			(m) =>
+				m.userId === firstInvite.userId || m.userId === secondInvite.userId,
+		).length;
+		expect(acceptedInviteeCount).toBe(1);
+
+		const teamAfter = await ctx.adapter.findOne<{ memberCount: number }>({
+			model: "team",
+			where: [{ field: "id", value: team.id }],
+		});
+		expect(teamAfter?.memberCount).toBe(2);
+	});
+
 	it("accepts only once when the same invitation is accepted concurrently", async () => {
 		const team = await auth.api.createTeam({
 			headers: owner.headers,
@@ -1685,191 +2181,50 @@ describe("accept-invitation validates team capacity before adding the member", a
 		});
 		expect(orgMembers.filter((m) => m.userId === userId)).toHaveLength(1);
 	});
-});
 
-describe("direct team-add paths enforce maximumMembersPerTeam", async () => {
-	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [
-			organization({
-				async sendInvitationEmail() {},
-				teams: {
-					enabled: true,
-					maximumMembersPerTeam: 1,
-				},
-			}),
-		],
-		logger: { level: "error" },
-		databaseHooks: {
-			user: {
-				create: {
-					before: async (user) => ({
-						data: { ...user, emailVerified: true },
-					}),
-				},
-			},
-		},
-	});
-
-	const ctx = await auth.$context;
-	const owner = await signInWithTestUser();
-	const org = await auth.api.createOrganization({
-		headers: owner.headers,
-		body: { name: "Direct Add Org", slug: "direct-add-org" },
-	});
-	if (!org) throw new Error("failed to create organization");
-
-	let userCounter = 0;
-	const createOrgMember = async () => {
-		const created = await auth.api.signUpEmail({
-			body: {
-				name: `Direct ${userCounter}`,
-				email: `direct-${userCounter++}@email.com`,
-				password: "password12345",
-			},
-		});
-		await auth.api.addMember({
-			headers: owner.headers,
-			body: { userId: created.user.id, role: "member", organizationId: org.id },
-		});
-		return created.user.id;
-	};
-
-	const countTeamMembers = async (teamId: string) =>
-		(
-			await ctx.adapter.findMany<{ userId: string }>({
-				model: "teamMember",
-				where: [{ field: "teamId", value: teamId }],
-			})
-		).length;
-
-	it("rejects add-team-member once the team is at capacity", async () => {
+	it("does not reopen an invitation when a stale rollback loses its status guard", async () => {
 		const team = await auth.api.createTeam({
 			headers: owner.headers,
-			body: { name: "Full Direct Team", organizationId: org.id },
+			body: { name: "Rollback Guard Team", organizationId: org.id },
 		});
-		const firstUserId = await createOrgMember();
-		const secondUserId = await createOrgMember();
-
-		await auth.api.addTeamMember({
-			headers: owner.headers,
-			body: { teamId: team.id, userId: firstUserId },
-		});
-
-		await expect(
-			auth.api.addTeamMember({
-				headers: owner.headers,
-				body: { teamId: team.id, userId: secondUserId },
-			}),
-		).rejects.toMatchObject({
-			status: "FORBIDDEN",
-			body: { code: "TEAM_MEMBER_LIMIT_REACHED" },
-		});
-
-		expect(await countTeamMembers(team.id)).toBe(1);
-	});
-
-	it("rejects addMember with a teamId over capacity without creating the org member", async () => {
-		const team = await auth.api.createTeam({
-			headers: owner.headers,
-			body: { name: "Full AddMember Team", organizationId: org.id },
-		});
-		const seatedUserId = await createOrgMember();
-		await auth.api.addTeamMember({
-			headers: owner.headers,
-			body: { teamId: team.id, userId: seatedUserId },
-		});
-
-		const overflowUser = await auth.api.signUpEmail({
-			body: {
-				name: "Overflow",
-				email: "addmember-overflow@email.com",
-				password: "password12345",
-			},
-		});
-
-		await expect(
-			auth.api.addMember({
-				headers: owner.headers,
-				body: {
-					userId: overflowUser.user.id,
-					role: "member",
-					organizationId: org.id,
-					teamId: team.id,
-				},
-			}),
-		).rejects.toMatchObject({
-			status: "FORBIDDEN",
-			body: { code: "TEAM_MEMBER_LIMIT_REACHED" },
-		});
-
-		expect(await countTeamMembers(team.id)).toBe(1);
-
-		// Capacity is charged before the organization member is created, so a
-		// rejected team-add never leaves an orphan org membership.
-		const orgMembers = await ctx.adapter.findMany<{ userId: string }>({
-			model: "member",
-			where: [{ field: "organizationId", value: org.id }],
-		});
-		expect(orgMembers.some((m) => m.userId === overflowUser.user.id)).toBe(
-			false,
+		const { invitationId } = await inviteAndSignUp(
+			team.id,
+			"rollback-guard@email.com",
 		);
-	});
-});
 
-describe("addMember fails closed when a function team cap needs a session", async () => {
-	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [
-			organization({
-				async sendInvitationEmail() {},
-				teams: {
-					enabled: true,
-					maximumMembersPerTeam: () => 1,
-				},
-			}),
-		],
-		logger: { level: "error" },
-		databaseHooks: {
-			user: {
-				create: {
-					before: async (user) => ({
-						data: { ...user, emailVerified: true },
-					}),
-				},
-			},
-		},
-	});
-
-	const owner = await signInWithTestUser();
-	const org = await auth.api.createOrganization({
-		headers: owner.headers,
-		body: { name: "Fn Cap Org", slug: "fn-cap-org" },
-	});
-	if (!org) throw new Error("failed to create organization");
-
-	it("rejects a sessionless add that cannot evaluate the function limit", async () => {
-		const team = await auth.api.createTeam({
-			headers: owner.headers,
-			body: { name: "Fn Cap Team", organizationId: org.id },
+		const accepted = await ctx.adapter.update<{ status: string }>({
+			model: "invitation",
+			where: [
+				{ field: "id", value: invitationId },
+				{ field: "status", value: "pending" },
+			],
+			update: { status: "accepted" },
 		});
-		const target = await auth.api.signUpEmail({
-			body: {
-				name: "Target",
-				email: "fncap-target@email.com",
-				password: "password12345",
-			},
+		expect(accepted?.status).toBe("accepted");
+		const rejected = await ctx.adapter.update<{ status: string }>({
+			model: "invitation",
+			where: [
+				{ field: "id", value: invitationId },
+				{ field: "status", value: "accepted" },
+			],
+			update: { status: "rejected" },
 		});
+		expect(rejected?.status).toBe("rejected");
 
-		// No headers: the cap function has no session to evaluate, so the add must
-		// fail closed rather than silently skip the limit.
-		await expect(
-			auth.api.addMember({
-				body: {
-					userId: target.user.id,
-					role: "member",
-					organizationId: org.id,
-					teamId: team.id,
-				},
-			}),
-		).rejects.toThrow();
+		const staleRollback = await ctx.adapter.update<{ status: string }>({
+			model: "invitation",
+			where: [
+				{ field: "id", value: invitationId },
+				{ field: "status", value: "accepted" },
+			],
+			update: { status: "pending" },
+		});
+		expect(staleRollback).toBeNull();
+
+		const invitationAfter = await ctx.adapter.findOne<{ status: string }>({
+			model: "invitation",
+			where: [{ field: "id", value: invitationId }],
+		});
+		expect(invitationAfter?.status).toBe("rejected");
 	});
 });
