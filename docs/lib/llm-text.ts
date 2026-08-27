@@ -15,6 +15,7 @@ type PropertyDefinition = {
 };
 
 const docsPathPattern = /^\/docs(?:\/|$)/;
+const productionUrl = new URL("https://better-auth.com");
 const llmsDescription =
 	"The most comprehensive authentication framework for TypeScript";
 
@@ -279,24 +280,25 @@ export function getLLMsIndexTitle(version?: DocsVersion): string {
 		: "Better Auth";
 }
 
-export function getLLMsPageUrl(url: string): string {
+export function getMarkdownPageUrl(url: string, baseUrl?: URL): string {
 	if (!docsPathPattern.test(url)) return url;
-	const parsed = new URL(url, "https://better-auth.com");
+	const parsed = new URL(url, productionUrl);
 	const pathname = parsed.pathname.replace(/\/+$/, "");
-	return `/llms.txt${pathname}.md${parsed.search}${parsed.hash}`;
+	const markdownUrl = `${pathname}.md${parsed.search}${parsed.hash}`;
+	return baseUrl ? new URL(markdownUrl, baseUrl).toString() : markdownUrl;
 }
 
-function withLLMsPageUrl(node: Item): Item {
-	return { ...node, url: getLLMsPageUrl(node.url) };
+function withMarkdownPageUrl(node: Item): Item {
+	return { ...node, url: getMarkdownPageUrl(node.url, productionUrl) };
 }
 
-function withLLMsPageUrls(node: Node): Node {
-	if (node.type === "page") return withLLMsPageUrl(node);
+function withMarkdownPageUrls(node: Node): Node {
+	if (node.type === "page") return withMarkdownPageUrl(node);
 	if (node.type === "separator") return node;
 	return {
 		...node,
-		index: node.index ? withLLMsPageUrl(node.index) : undefined,
-		children: node.children.map(withLLMsPageUrls),
+		index: node.index ? withMarkdownPageUrl(node.index) : undefined,
+		children: node.children.map(withMarkdownPageUrls),
 	};
 }
 
@@ -307,7 +309,7 @@ export function getLLMsIndex(
 	const formatter = llms(loader);
 	const pageTree = loader.getPageTree();
 	const body = pageTree.children
-		.map((node) => formatter.indexNode(withLLMsPageUrls(node)))
+		.map((node) => formatter.indexNode(withMarkdownPageUrls(node)))
 		.join("\n");
 	return [
 		`# ${getLLMsIndexTitle(version)}`,

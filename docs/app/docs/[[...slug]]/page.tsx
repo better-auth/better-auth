@@ -31,6 +31,7 @@ import {
 	resolveVersionFromSlug,
 	scopeDocsHref,
 } from "@/lib/docs-versions";
+import { getMarkdownPageUrl } from "@/lib/llm-text";
 import { createMetadata } from "@/lib/metadata";
 import { getSourceFor } from "@/lib/source";
 import { cn } from "@/lib/utils";
@@ -55,7 +56,7 @@ export default async function Page({
 	// Upstream content always lives at docs/content/docs on each branch;
 	// `content/_generated` only contains local sync targets, not repo paths.
 	const githubBase = `https://github.com/better-auth/better-auth/blob/${version.branch}/docs/content/docs`;
-	const markdownUrl = `/llms.txt${page.url}.md`;
+	const markdownUrl = getMarkdownPageUrl(page.url);
 
 	// Keep every absolute /docs link scoped to the version being viewed.
 	const scope = (href: string | undefined) => scopeDocsHref(href, version);

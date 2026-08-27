@@ -25,6 +25,14 @@ const nextConfig = {
 			},
 		],
 	},
+	async rewrites() {
+		return [
+			{
+				source: "/docs/:path*\\.md",
+				destination: "/llms.txt/docs/:path*.md",
+			},
+		];
+	},
 	async redirects() {
 		return [
 			// Infrastructure backwards compatibility redirects
