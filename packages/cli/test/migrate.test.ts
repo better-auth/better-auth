@@ -933,6 +933,22 @@ describe("migrate command modes", () => {
 		expect(spinner?.stop).toHaveBeenCalled();
 	});
 
+	it("stops the CLI spinner when migration inspection fails", async () => {
+		const db = new Database(":memory:");
+		const auth = betterAuth({ database: db });
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+		vi.spyOn(releaseMigration, "getMigrations").mockRejectedValueOnce(
+			new Error("forced inspection failure"),
+		);
+
+		await expect(
+			migrateAction({ cwd: process.cwd(), mode: "plan" }),
+		).rejects.toThrow("forced inspection failure");
+
+		const spinner = vi.mocked(yoctoSpinner).mock.results.at(-1)?.value;
+		expect(spinner?.stop).toHaveBeenCalled();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10575#discussion_r3830648963
 	 */
@@ -1051,6 +1067,36 @@ describe("migrate command modes", () => {
 				`The migration decisions file "${migrationFile}" is invalid`,
 			),
 		);
+	});
+
+	it("prefers explicit subcommand paths over parent command paths", async () => {
+		const parentDirectory = await fs.mkdtemp(
+			path.join(os.tmpdir(), "better-auth-parent-migration-"),
+		);
+		const childDirectory = await fs.mkdtemp(
+			path.join(os.tmpdir(), "better-auth-child-migration-"),
+		);
+		const getConfig = vi.spyOn(config, "getConfig").mockResolvedValue(null);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await createMigrateCommand().parseAsync([
+			"node",
+			"auth",
+			"--cwd",
+			parentDirectory,
+			"--config",
+			"parent-auth.ts",
+			"plan",
+			"--cwd",
+			childDirectory,
+			"--config",
+			"child-auth.ts",
+		]);
+
+		expect(getConfig).toHaveBeenCalledWith({
+			configPath: "child-auth.ts",
+			cwd: childDirectory,
+		});
 	});
 
 	it("keeps the released plain migrate command as an apply alias", async () => {

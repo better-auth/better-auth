@@ -31,11 +31,20 @@ const cliEntry = path.resolve(
 );
 
 const postgresAdminUrl = "postgres://user:password@localhost:5433/postgres";
+const subprocessTimeoutMs = 120_000;
 
 interface MigrateCliResult {
 	exitCode: number | null;
 	stderr: string;
 	stdout: string;
+}
+
+function redactCommandOutput(output: string) {
+	return output.replace(/^([A-Z][A-Z0-9_]*_RESULT)=.*$/gm, "$1=[redacted]");
+}
+
+function formatCommandOutput(result: MigrateCliResult) {
+	return redactCommandOutput(`${result.stdout}\n${result.stderr}`);
 }
 
 function createDatabaseName() {
@@ -50,6 +59,7 @@ function runNode(
 	cwd: string,
 	args: string[],
 	environment: NodeJS.ProcessEnv = {},
+	timeoutMs = subprocessTimeoutMs,
 ): Promise<MigrateCliResult> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(process.execPath, args, {
@@ -67,8 +77,27 @@ function runNode(
 		child.stderr.on("data", (chunk: string) => {
 			stderr += chunk;
 		});
-		child.on("error", reject);
-		child.on("close", (exitCode) => resolve({ exitCode, stderr, stdout }));
+		let settled = false;
+		const settle = (callback: () => void) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			callback();
+		};
+		const timeout = setTimeout(() => {
+			child.kill();
+			settle(() =>
+				reject(
+					new Error(
+						`Subprocess timed out after ${timeoutMs}ms:\n${formatCommandOutput({ exitCode: null, stderr, stdout })}`,
+					),
+				),
+			);
+		}, timeoutMs);
+		child.on("error", (error) => settle(() => reject(error)));
+		child.on("close", (exitCode) =>
+			settle(() => resolve({ exitCode, stderr, stdout })),
+		);
 	});
 }
 
@@ -85,10 +114,36 @@ function readSentinelResult<Result>(stdout: string, sentinel: string): Result {
 		.split("\n")
 		.find((candidate) => candidate.startsWith(`${sentinel}=`));
 	if (!line) {
-		throw new Error(`Missing ${sentinel} in subprocess output:\n${stdout}`);
+		throw new Error(
+			`Missing ${sentinel} in subprocess output:\n${redactCommandOutput(stdout)}`,
+		);
 	}
 	return JSON.parse(line.slice(sentinel.length + 1)) as Result;
 }
+
+it("bounds subprocesses and redacts sentinel output from failures", async () => {
+	const failure = await runNode(
+		import.meta.dirname,
+		[
+			"-e",
+			'console.log("PUBLISHED_FIXTURE_RESULT={\\"clientSecret\\":\\"secret-value\\"}"); setInterval(() => {}, 1_000)',
+		],
+		{},
+		50,
+	).catch((error: unknown) => error);
+
+	expect(failure).toBeInstanceOf(Error);
+	expect((failure as Error).message).toContain(
+		"PUBLISHED_FIXTURE_RESULT=[redacted]",
+	);
+	expect((failure as Error).message).not.toContain("secret-value");
+	expect(() =>
+		readSentinelResult(
+			'PUBLISHED_FIXTURE_RESULT={"clientSecret":"secret-value"}',
+			"MISSING_RESULT",
+		),
+	).toThrow("PUBLISHED_FIXTURE_RESULT=[redacted]");
+});
 
 async function startIdentityProvider(subject: string) {
 	const identityProvider = new OAuth2Server();
@@ -191,7 +246,7 @@ it("guides a populated 1.6.30 PostgreSQL database through the CLI decisions file
 
 		const planRun = await runMigrateCli(projectDirectory, ["plan", "--json"]);
 
-		expect(planRun.exitCode, planRun.stderr).toBe(1);
+		expect(planRun.exitCode, formatCommandOutput(planRun)).toBe(1);
 		const plan = JSON.parse(planRun.stdout) as {
 			blockers: Array<{
 				code: string;
@@ -239,7 +294,7 @@ it("guides a populated 1.6.30 PostgreSQL database through the CLI decisions file
 			"--yes",
 		]);
 
-		expect(applyRun.exitCode, `${applyRun.stdout}\n${applyRun.stderr}`).toBe(0);
+		expect(applyRun.exitCode, formatCommandOutput(applyRun)).toBe(0);
 		expect(applyRun.stdout).toContain("migration was completed successfully!");
 
 		const auth17 = betterAuth({
@@ -376,7 +431,7 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 			published16Seed,
 			sourceDatabase,
 		]);
-		expect(seedRun.exitCode, `${seedRun.stdout}\n${seedRun.stderr}`).toBe(0);
+		expect(seedRun.exitCode, formatCommandOutput(seedRun)).toBe(0);
 		const source = readSentinelResult<{
 			accounts: Array<{
 				accountId: string;
@@ -416,9 +471,9 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 			},
 		);
 		expect(ordinaryMigration.exitCode).toBe(1);
-		expect(
-			`${ordinaryMigration.stdout}\n${ordinaryMigration.stderr}`,
-		).toContain("Cannot add a NOT NULL column with default value NULL");
+		expect(formatCommandOutput(ordinaryMigration)).toContain(
+			"Cannot add a NOT NULL column with default value NULL",
+		);
 		expect(readSqliteSchema(published17Database)).toEqual(ordinarySchemaBefore);
 
 		const migrationEnvironment = {
@@ -430,7 +485,9 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 			["plan", "--config", guidedConfig, "--json"],
 			migrationEnvironment,
 		);
-		expect(blockedPlanRun.exitCode, blockedPlanRun.stderr).toBe(1);
+		expect(blockedPlanRun.exitCode, formatCommandOutput(blockedPlanRun)).toBe(
+			1,
+		);
 		const blockedPlan = JSON.parse(blockedPlanRun.stdout) as {
 			blockers: Array<{ code: string }>;
 			releaseMigration: { actions: string[] };
@@ -473,7 +530,7 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 			["plan", decisionsFile, "--config", guidedConfig, "--json"],
 			migrationEnvironment,
 		);
-		expect(readyPlanRun.exitCode, readyPlanRun.stderr).toBe(0);
+		expect(readyPlanRun.exitCode, formatCommandOutput(readyPlanRun)).toBe(0);
 		const readyPlan = JSON.parse(readyPlanRun.stdout) as {
 			accountIdentity: {
 				migrationRequired: boolean;
@@ -500,17 +557,16 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 			["apply", decisionsFile, "--config", guidedConfig, "--yes", "--json"],
 			migrationEnvironment,
 		);
-		expect(applyRun.exitCode, `${applyRun.stdout}\n${applyRun.stderr}`).toBe(0);
+		expect(applyRun.exitCode, formatCommandOutput(applyRun)).toBe(0);
 		expect(JSON.parse(applyRun.stdout)).toMatchObject({ status: "applied" });
 		const repeatedPlanRun = await runMigrateCli(
 			fixtureDirectory,
 			["plan", decisionsFile, "--config", guidedConfig, "--json"],
 			migrationEnvironment,
 		);
-		expect(
-			repeatedPlanRun.exitCode,
-			`${repeatedPlanRun.stdout}\n${repeatedPlanRun.stderr}`,
-		).toBe(0);
+		expect(repeatedPlanRun.exitCode, formatCommandOutput(repeatedPlanRun)).toBe(
+			0,
+		);
 		expect(JSON.parse(repeatedPlanRun.stdout)).toMatchObject({
 			blockers: [],
 			changes: { addColumns: [], addIndexes: [], createTables: [] },
@@ -570,10 +626,9 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 				BETTER_AUTH_MIGRATION_SCIM_USER_ID: provisionedSourceAccount.userId,
 			},
 		);
-		expect(
-			verificationRun.exitCode,
-			`${verificationRun.stdout}\n${verificationRun.stderr}`,
-		).toBe(0);
+		expect(verificationRun.exitCode, formatCommandOutput(verificationRun)).toBe(
+			0,
+		);
 		const verified = readSentinelResult<{
 			credentialUserId: string;
 			oauthAccessToken: string;
@@ -632,7 +687,7 @@ it("keeps a populated published 1.7 issuer database unchanged when the strategy 
 			databasePath,
 			issuer,
 		]);
-		expect(seedRun.exitCode, `${seedRun.stdout}\n${seedRun.stderr}`).toBe(0);
+		expect(seedRun.exitCode, formatCommandOutput(seedRun)).toBe(0);
 		const source = readSentinelResult<{
 			accounts: Array<{
 				accountId: string;
@@ -667,7 +722,7 @@ it("keeps a populated published 1.7 issuer database unchanged when the strategy 
 			["plan", "--config", issuerConfig, "--json"],
 			migrationEnvironment,
 		);
-		expect(planRun.exitCode, `${planRun.stdout}\n${planRun.stderr}`).toBe(0);
+		expect(planRun.exitCode, formatCommandOutput(planRun)).toBe(0);
 		const plan = JSON.parse(planRun.stdout) as {
 			accountIdentity: {
 				detectedStrategy: string;
@@ -698,7 +753,7 @@ it("keeps a populated published 1.7 issuer database unchanged when the strategy 
 			["apply", "--config", issuerConfig, "--yes", "--json"],
 			migrationEnvironment,
 		);
-		expect(applyRun.exitCode, `${applyRun.stdout}\n${applyRun.stderr}`).toBe(0);
+		expect(applyRun.exitCode, formatCommandOutput(applyRun)).toBe(0);
 		expect(readSqliteSchema(databasePath)).toEqual(schemaBefore);
 
 		const verifierRun = await runNode(fixtureDirectory, [
@@ -706,10 +761,7 @@ it("keeps a populated published 1.7 issuer database unchanged when the strategy 
 			databasePath,
 			issuer,
 		]);
-		expect(
-			verifierRun.exitCode,
-			`${verifierRun.stdout}\n${verifierRun.stderr}`,
-		).toBe(0);
+		expect(verifierRun.exitCode, formatCommandOutput(verifierRun)).toBe(0);
 		const verified = readSentinelResult<{
 			accounts: typeof accountRowsBefore;
 			credentialUserId: string;

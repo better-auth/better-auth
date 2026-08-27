@@ -324,6 +324,9 @@ export async function migrateAction(opts: unknown) {
 		deferIndexBoundsToRelease: true,
 		legacyTableNames: decisions?.legacyTableNames,
 		throwOnUnsafe: false,
+	}).catch((error) => {
+		spinner?.stop();
+		throw error;
 	});
 	const hasChanges =
 		toBeAdded.length > 0 ||
@@ -334,12 +337,18 @@ export async function migrateAction(opts: unknown) {
 	let releaseMigrationBlockers = await collectReleaseMigrationBlockers(
 		config,
 		releaseMigrationOptions,
-	);
+	).catch((error) => {
+		spinner?.stop();
+		throw error;
+	});
 	let legacyReleaseState = await inspectReleaseMigrationState(
 		config,
 		releaseMigrationOptions,
 		releaseMigrationBlockers,
-	);
+	).catch((error) => {
+		spinner?.stop();
+		throw error;
+	});
 	const releaseMigration =
 		hasLegacyReleaseState(legacyReleaseState) ||
 		releaseMigrationBlockers.length > 0 ||
@@ -601,17 +610,23 @@ function resolveSharedMigrationCommandOptions(command: Command) {
 	const parentOptions = parent?.opts<SharedMigrationCommandOptions>();
 	return {
 		config:
-			parent?.getOptionValueSource("config") === "cli"
-				? parentOptions?.config
-				: options.config,
+			command.getOptionValueSource("config") === "cli"
+				? options.config
+				: parent?.getOptionValueSource("config") === "cli"
+					? parentOptions?.config
+					: options.config,
 		cwd:
-			parent?.getOptionValueSource("cwd") === "cli" && parentOptions
-				? parentOptions.cwd
-				: options.cwd,
+			command.getOptionValueSource("cwd") === "cli"
+				? options.cwd
+				: parent?.getOptionValueSource("cwd") === "cli" && parentOptions
+					? parentOptions.cwd
+					: options.cwd,
 		json:
-			parent?.getOptionValueSource("json") === "cli"
-				? parentOptions?.json
-				: options.json,
+			command.getOptionValueSource("json") === "cli"
+				? options.json
+				: parent?.getOptionValueSource("json") === "cli"
+					? parentOptions?.json
+					: options.json,
 	} satisfies SharedMigrationCommandOptions;
 }
 
@@ -623,13 +638,17 @@ function resolveApplyMigrationCommandOptions(command: Command) {
 	return {
 		...sharedOptions,
 		y:
-			parent?.getOptionValueSource("y") === "cli"
-				? parentOptions?.y
-				: options.y,
+			command.getOptionValueSource("y") === "cli"
+				? options.y
+				: parent?.getOptionValueSource("y") === "cli"
+					? parentOptions?.y
+					: options.y,
 		yes:
-			parent?.getOptionValueSource("yes") === "cli"
-				? parentOptions?.yes
-				: options.yes,
+			command.getOptionValueSource("yes") === "cli"
+				? options.yes
+				: parent?.getOptionValueSource("yes") === "cli"
+					? parentOptions?.yes
+					: options.yes,
 	} satisfies ApplyMigrationCommandOptions;
 }
 
