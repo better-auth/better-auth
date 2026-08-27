@@ -6,6 +6,7 @@ import { betterAuth } from "../auth/minimal";
 import type { InferCtx } from "../client/path-to-object";
 import { tanstackStartCookies } from "../integrations/tanstack-start";
 import { admin, organization, twoFactor } from "../plugins";
+import type { GenericOAuthConfig } from "../plugins/generic-oauth";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
@@ -115,7 +116,13 @@ describe("general types", async () => {
 							{
 								method: "GET",
 							},
-							async () => "ok",
+							async (context) => {
+								expectTypeOf(context.path).toEqualTypeOf<string>();
+								expectTypeOf(context.params).toEqualTypeOf<
+									Record<string, string | undefined> | undefined
+								>();
+								return "ok";
+							},
 						),
 						testServerScoped: createAuthEndpoint(
 							"/test-server-scoped",
@@ -330,6 +337,27 @@ describe("public type exports", () => {
 	it("should export GoogleProfile from better-auth/types", () => {
 		expectTypeOf<GoogleProfile>().not.toBeAny();
 	});
+
+	it("keeps Generic OAuth profile mapping separate from account identity", () => {
+		const config: GenericOAuthConfig = {
+			providerId: "company-oauth",
+			clientId: "client-id",
+			accountSubject: ({ profile }) => String(profile.employee_id),
+			// @ts-expect-error Provider identity belongs in accountSubject.
+			mapProfileToUser: () => ({ id: "provider-subject" }),
+		};
+		expectTypeOf(config.accountSubject).not.toBeAny();
+	});
+
+	it("requires Generic OAuth account identity to be resolved from provider data", () => {
+		const config: GenericOAuthConfig = {
+			providerId: "company-oauth",
+			clientId: "client-id",
+			// @ts-expect-error A static subject would assign every provider user one identity.
+			accountSubject: "employee-123",
+		};
+		expectTypeOf(config).not.toBeAny();
+	});
 });
 
 describe("HasRequiredKeys", () => {
@@ -357,6 +385,39 @@ describe("any-poisoning guards", () => {
 			{}
 		>;
 		expectTypeOf<Result["query"]>().toEqualTypeOf<{ page: number }>();
+	});
+
+	it("InferCtx should preserve each branch of a union body", () => {
+		type Result = InferCtx<
+			{
+				body: { accountId: string } | { useAccountCookie: true };
+				query: undefined;
+				method: "POST";
+			},
+			{}
+		>;
+		type AccountIdSelection = Extract<Result, { accountId: string }>;
+		type AccountCookieSelection = Extract<Result, { useAccountCookie: true }>;
+		expectTypeOf<AccountIdSelection["accountId"]>().toEqualTypeOf<string>();
+		expectTypeOf<AccountIdSelection>().not.toHaveProperty("useAccountCookie");
+		expectTypeOf<
+			AccountCookieSelection["useAccountCookie"]
+		>().toEqualTypeOf<true>();
+		expectTypeOf<AccountCookieSelection>().not.toHaveProperty("accountId");
+	});
+
+	it("InferCtx should preserve fields from an optional body", () => {
+		type Result = InferCtx<
+			{
+				body: { callbackURL: string } | undefined;
+				query: undefined;
+				method: "POST";
+			},
+			{}
+		>;
+		expectTypeOf<Result>().toHaveProperty("callbackURL");
+		expectTypeOf<Result["callbackURL"]>().toEqualTypeOf<string>();
+		expectTypeOf<HasRequiredKeys<Result>>().toEqualTypeOf<true>();
 	});
 
 	/**

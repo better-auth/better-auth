@@ -136,16 +136,17 @@ description: Learn how to configure Better Auth in your project.
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
-        // If your Prisma file is located elsewhere, you can change the path
-        import { PrismaClient } from "@/generated/prisma/client";
+        import { prisma } from "@/lib/prisma"; // your prisma client instance
 
-        const prisma = new PrismaClient();
         export const auth = betterAuth({
             database: prismaAdapter(prisma, {
-                provider: "sqlite", // or "mysql", "postgresql", ...etc
+                provider: "postgresql", // or "mysql", "sqlite", ...etc
             }),
         });
         ```
+
+        See the [Prisma adapter guide](/docs/adapters/prisma) for the Prisma 7
+        driver adapter and generated client setup.
       </Tab>
 
       <Tab value="mongodb">
@@ -382,8 +383,7 @@ description: Learn how to configure Better Auth in your project.
 
         app.all("/api/auth/*", toNodeHandler(auth));
 
-        // Mount express json middleware after Better Auth handler
-        // or only apply it to routes that don't interact with Better Auth
+        // Mount body-parsing middleware after the Better Auth handler.
         app.use(express.json());
 
         app.listen(port, () => {

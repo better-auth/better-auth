@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
@@ -52,6 +52,60 @@ describe("username", async () => {
 			},
 		);
 		expect(res.data?.token).toBeDefined();
+	});
+
+	it("uses only the canonical credential account during username sign-in", async () => {
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+		const signUp = await client.signUp.email({
+			email: "canonical-username@example.com",
+			username: "canonical_username",
+			password: "canonical-password",
+			name: "Canonical Username",
+		});
+		const userId = signUp.data!.user.id;
+		const context = await auth.$context;
+		const canonicalAccount =
+			await context.internalAdapter.findCredentialAccount(userId);
+		assert(
+			canonicalAccount?.password,
+			"canonical credential account is required",
+		);
+
+		await context.internalAdapter.deleteAccount(canonicalAccount.id);
+		await context.internalAdapter.createAccount({
+			userId,
+			providerId: "credential",
+			issuer: "local:decoy-credential",
+			accountId: "decoy-subject",
+			password: await context.password.hash("decoy-password"),
+		});
+		await context.internalAdapter.createAccount({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			accountId: userId,
+			password: canonicalAccount.password,
+		});
+
+		const canonicalSignIn = await client.signIn.username({
+			username: "canonical_username",
+			password: "canonical-password",
+		});
+		expect(canonicalSignIn.data?.user.id).toBe(userId);
+
+		const decoySignIn = await client.signIn.username({
+			username: "canonical_username",
+			password: "decoy-password",
+		});
+		expect(decoySignIn.data).toBeNull();
+		expect(decoySignIn.error?.status).toBe(401);
 	});
 
 	/**
@@ -712,6 +766,170 @@ describe("username email verification flow (no info leak)", async () => {
 	});
 });
 
+describe("immutable username", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					immutableUsername: true,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should sign up with username when immutable username is enabled", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-test@example.com",
+				username: "immutable_user",
+				password: "password123",
+				name: "Immutable Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutable_user");
+	});
+
+	it("should fail when trying to update username to a different value", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-update-test@example.com",
+				username: "immutable_update_user",
+				password: "password123",
+				name: "Immutable Update Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "new_username_attempt",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code,
+		);
+	});
+
+	it("should succeed setting username if previously unset", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-update-unset-test@example.com",
+				password: "password123",
+				name: "Immutable Update Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "new_username_previously_unset",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("new_username_previously_unset");
+	});
+
+	it("should succeed when updating username to the same value", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-same-value@example.com",
+				username: "immutable_same_user",
+				password: "password123",
+				name: "Immutable Same Value Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "immutable_same_user",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutable_same_user");
+	});
+
+	it("should succeed when updating displayUsername even with immutable username", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-display-update@example.com",
+				username: "immutable_display_user",
+				displayUsername: "Original Display",
+				password: "password123",
+				name: "Immutable Display Update Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			displayUsername: "Updated Display Name",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutable_display_user");
+		expect(session?.user.displayUsername).toBe("Updated Display Name");
+	});
+});
+
 describe("username sign-in verify-email callbackURL", async () => {
 	/**
 	 * The verify-email link sent on username sign-in for an unverified user must
@@ -758,5 +976,119 @@ describe("username sign-in verify-email callbackURL", async () => {
 		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
 			callbackURL,
 		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should sign up and normalize username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display@example.com",
+				username: "No_Display_User",
+				password: "new-password",
+				name: "No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("no_display_user");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+		// @ts-expect-error displayUsername should be excluded from inferred types
+		expect(session?.user.displayUsername).toBeUndefined();
+	});
+
+	it("should update username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display-update@example.com",
+				username: "update_no_display",
+				password: "new-password",
+				name: "Update No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "Updated_No_Display",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("updated_no_display");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled and a validator", async () => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+					displayUsernameValidator: (displayUsername) =>
+						/^[a-zA-Z0-9_-]+$/.test(displayUsername),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should not validate displayUsername from the body when the field is disabled", async () => {
+		const res = await client.signUp.email({
+			email: "disabled-validator@example.com",
+			username: "disabled_validator_user",
+			password: "new-password",
+			name: "Disabled Validator",
+			// displayUsername is disabled, so an invalid value must not be rejected
+			displayUsername: "Invalid Display!",
+		} as Parameters<typeof client.signUp.email>[0]);
+
+		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBe("disabled_validator_user");
+		expect("displayUsername" in (res.data?.user ?? {})).toBe(false);
 	});
 });
