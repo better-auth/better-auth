@@ -596,4 +596,155 @@ describe("drizzle-adapter", () => {
 			expect(result).toBeNull();
 		});
 	});
+
+	describe("MySQL serial inserts", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const userRow = {
+			id: 7,
+			name: "Test",
+			email: "test@example.com",
+			emailVerified: false,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const userTable = {
+			id: { name: "id" },
+			name: { name: "name" },
+			email: { name: "email" },
+			emailVerified: { name: "emailVerified" },
+			image: { name: "image" },
+			createdAt: { name: "createdAt" },
+			updatedAt: { name: "updatedAt" },
+		};
+
+		/**
+		 * Builds a mock MySQL db. `returningIdRows` is what the Drizzle insert
+		 * builder's `$returningId()` resolves to (omit it to model a builder
+		 * without `$returningId`). Every `select().from().where()` resolves to
+		 * `userRow`; the `where` predicates are recorded for inspection.
+		 */
+		function createSerialDb(returningIdRows?: unknown[]) {
+			const whereCalls: unknown[] = [];
+			const where = vi.fn((predicate: unknown) => {
+				whereCalls.push(predicate);
+				return {
+					limit: vi.fn().mockReturnValue({
+						execute: vi.fn().mockResolvedValue([userRow]),
+					}),
+				};
+			});
+			const select = vi.fn().mockReturnValue({
+				from: vi.fn().mockReturnValue({
+					where,
+					limit: vi.fn().mockReturnValue({
+						// What PlanetScale returns for `SELECT LAST_INSERT_ID()` on a
+						// fresh connection: UINT64 is returned uncast, as a string.
+						execute: vi.fn().mockResolvedValue([{ id: "0" }]),
+					}),
+				}),
+			});
+			const execute = vi.fn().mockResolvedValue(undefined);
+			const builder: Record<string, unknown> = {
+				config: { values: [{ name: { value: "Test" } }] },
+				execute,
+			};
+			if (returningIdRows) {
+				builder.$returningId = vi.fn().mockResolvedValue(returningIdRows);
+			}
+			const txProxy = new Proxy(
+				{},
+				{
+					get(_target, prop) {
+						if (prop === "select") return select;
+						return undefined;
+					},
+				},
+			);
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue(builder),
+				}),
+				select,
+				transaction: vi.fn().mockImplementation((fn: any) => fn(txProxy)),
+			} as any;
+			return { db, builder, execute, select, whereCalls };
+		}
+
+		function createSerialAdapter(db: any) {
+			return drizzleAdapter(db, { provider: "mysql" })({
+				secret: defaultSecret,
+				advanced: { database: { generateId: "serial" } },
+			});
+		}
+
+		/** Flattens the recorded `where` predicate into its raw query chunks. */
+		function chunksOf(predicate: unknown): unknown[] {
+			return is(predicate, SQL) ? predicate.queryChunks : [];
+		}
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8867
+		 */
+		it("reads the inserted id from $returningId() and re-selects the row", async () => {
+			const { db, builder, execute, whereCalls } = createSerialDb([{ id: 7 }]);
+			const adapter = createSerialAdapter(db);
+
+			const result = await adapter.create({
+				model: "user",
+				data: { name: "Test", email: "test@example.com" },
+			});
+
+			expect(result).toEqual({ ...userRow, id: "7" });
+			expect(builder.$returningId).toHaveBeenCalledTimes(1);
+			// The INSERT must run exactly once: $returningId() executes it.
+			expect(execute).not.toHaveBeenCalled();
+			// No LAST_INSERT_ID() probe and no extra transaction are needed.
+			expect(db.select).not.toHaveBeenCalledWith(expect.anything());
+			expect(db.transaction).not.toHaveBeenCalled();
+			expect(whereCalls).toHaveLength(1);
+			expect(chunksOf(whereCalls[0])).toContain(userTable.id);
+			expect(chunksOf(whereCalls[0])).toContain(7);
+		});
+
+		it("falls through to the unique-column lookup when $returningId() yields no usable id", async () => {
+			// Drivers that do not report `insertId` yield `0`; PlanetScale-style
+			// drivers may yield it as the string `"0"`, which is truthy.
+			for (const noId of [[{ id: "0" }], [{ id: 0 }], [{}], []]) {
+				const { db, execute, whereCalls } = createSerialDb(noId);
+				const adapter = createSerialAdapter(db);
+
+				const result = await adapter.create({
+					model: "user",
+					data: { name: "Test", email: "test@example.com" },
+				});
+
+				expect(result).toEqual({ ...userRow, id: "7" });
+				expect(execute).not.toHaveBeenCalled();
+				expect(db.select).not.toHaveBeenCalledWith(expect.anything());
+				// The row must never be looked up by a bogus id.
+				for (const predicate of whereCalls) {
+					expect(chunksOf(predicate)).not.toContain(userTable.id);
+				}
+				expect(chunksOf(whereCalls[0])).toContain(userTable.email);
+				expect(chunksOf(whereCalls[0])).toContain("test@example.com");
+			}
+		});
+
+		it("executes the insert and uses the fallbacks when the builder has no $returningId", async () => {
+			const { db, execute, whereCalls } = createSerialDb();
+			const adapter = createSerialAdapter(db);
+
+			const result = await adapter.create({
+				model: "user",
+				data: { name: "Test", email: "test@example.com" },
+			});
+
+			expect(result).toEqual({ ...userRow, id: "7" });
+			expect(execute).toHaveBeenCalledTimes(1);
+			expect(db.select).not.toHaveBeenCalledWith(expect.anything());
+			expect(chunksOf(whereCalls[0])).toContain(userTable.email);
+		});
+	});
 });
