@@ -1,0 +1,524 @@
+name: Release Notes Command
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: >-
+    release-notes-command-${{
+      github.event.issue.pull_request != null &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      startsWith(github.event.comment.body, '/release-notes') &&
+      github.event.issue.number || github.run_id
+    }}
+  cancel-in-progress: false
+
+jobs:
+  acknowledge:
+    if: >-
+      github.repository_owner == 'better-auth' &&
+      github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      startsWith(github.event.comment.body, '/release-notes')
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    continue-on-error: true
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      reaction_id: ${{ steps.reaction.outputs.reaction_id }}
+      token_source: ${{ steps.reaction.outputs.token_source }}
+    steps:
+      - name: Generate scoped App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Acknowledge command
+        id: reaction
+        continue-on-error: true
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          if [[ ! "$COMMENT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Comment ID is invalid"
+            exit 1
+          fi
+          REACTION_ID=$(gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content='eyes' --jq '.id')
+          if [[ ! "$REACTION_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Reaction ID is invalid"
+            exit 1
+          fi
+          echo "reaction_id=$REACTION_ID" >> "$GITHUB_OUTPUT"
+          if [ -n "$APP_TOKEN" ]; then
+            echo "token_source=app" >> "$GITHUB_OUTPUT"
+          else
+            echo "token_source=github" >> "$GITHUB_OUTPUT"
+          fi
+
+  generate:
+    if: >-
+      github.repository_owner == 'better-auth' &&
+      github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      startsWith(github.event.comment.body, '/release-notes')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      base_ref: ${{ steps.command.outputs.base_ref }}
+      head_sha: ${{ steps.command.outputs.head_sha }}
+      head_ref: ${{ steps.command.outputs.head_ref }}
+      merged: ${{ steps.command.outputs.merged }}
+      pr_number: ${{ steps.command.outputs.pr_number }}
+      version: ${{ steps.candidate.outputs.version }}
+    steps:
+      - name: Authorize command and resolve PR
+        id: command
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          if ! printf '%s' "$COMMENT_BODY" | grep -qE '^/release-notes[[:space:]]*$'; then
+            echo "::error::The supported command is /release-notes"
+            exit 1
+          fi
+
+          PERMISSION=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${COMMENT_AUTHOR}/permission" --jq '.permission')
+          case "$PERMISSION" in
+            admin|maintain|write) ;;
+            *)
+              echo "::error::${COMMENT_AUTHOR} does not have permission to generate release notes"
+              exit 1
+              ;;
+          esac
+
+          PR=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
+          HEAD_REPO=$(echo "$PR" | jq -r '.head.repo.full_name')
+          HEAD_REF=$(echo "$PR" | jq -r '.head.ref')
+          HEAD_SHA=$(echo "$PR" | jq -r '.head.sha')
+          BASE_REPO=$(echo "$PR" | jq -r '.base.repo.full_name')
+          BASE_REF=$(echo "$PR" | jq -r '.base.ref')
+          STATE=$(echo "$PR" | jq -r '.state')
+          MERGED=$(echo "$PR" | jq -r '.merged')
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] \
+             || [ "$BASE_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::Release notes commands only run on PRs in this repository"
+            exit 1
+          fi
+          if [ "$STATE" != "open" ] && [ "$MERGED" != "true" ]; then
+            echo "::error::Release notes commands only run on open or merged PRs"
+            exit 1
+          fi
+
+          RELEASE_CARRIER=false
+          if [[ "$HEAD_REF" == changeset-release/* ]]; then
+            RELEASE_CARRIER=true
+          elif [ "$HEAD_REF" = "next" ] && [ "$BASE_REF" = "main" ]; then
+            RELEASE_CARRIER=true
+          fi
+          if [ "$RELEASE_CARRIER" != "true" ]; then
+            echo "::error::Release notes commands only run on Version PRs or next-to-main promotion PRs"
+            exit 1
+          fi
+          if [[ "$BASE_REF" != "main" && "$BASE_REF" != "next" && \
+                ! "$BASE_REF" =~ ^v[0-9]+\.[0-9]+\.x$ ]]; then
+            echo "::error::Unsupported release base branch ${BASE_REF}"
+            exit 1
+          fi
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "merged=$MERGED" >> "$GITHUB_OUTPUT"
+
+      # issue_comment runs from the default branch. Execute that trusted code
+      # and read the release head only as git data.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install release tooling
+        run: pnpm install --frozen-lockfile --filter @better-auth/release-tooling
+
+      - name: Verify release PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.command.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+        run: |
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || \
+             [[ ! "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release PR identity is invalid"
+            exit 1
+          fi
+          if ! CURRENT_HEAD_SHA=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+            --jq '.head.sha'); then
+            echo "::error::Could not read the current release PR head"
+            exit 1
+          fi
+          if [[ ! "$CURRENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::GitHub returned an invalid release PR head SHA"
+            exit 1
+          fi
+          if [ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]; then
+            echo "::error::The release PR changed before candidate resolution"
+            exit 1
+          fi
+
+      - name: Resolve release candidate
+        id: candidate
+        env:
+          HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+          MERGED: ${{ steps.command.outputs.merged }}
+        run: |
+          if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release head is not a valid commit SHA"
+            exit 1
+          fi
+          # Fetch the immutable commit as data. Never check out or execute the PR tree.
+          if ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --no-write-fetch-head origin "$HEAD_SHA"
+          fi
+          git cat-file -e "${HEAD_SHA}^{commit}"
+          VERSION=$(git show "${HEAD_SHA}:packages/better-auth/package.json" | jq -r '.version')
+          if ! pnpm --filter @better-auth/release-tooling release-notes \
+            validate --version "$VERSION"; then
+            echo "::error::Could not determine a valid release candidate version"
+            exit 1
+          fi
+          if [ "$MERGED" = "true" ] && \
+             git rev-parse --verify "v${VERSION}^{commit}" >/dev/null 2>&1; then
+            echo "::error::Release v${VERSION} is already tagged"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release manifest
+        id: raw-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.candidate.outputs.version }}
+          HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+        run: |
+          pnpm --filter @better-auth/release-tooling release-notes collect \
+            --version "$VERSION" \
+            --branch "$HEAD_SHA" \
+            --commit-ref "$HEAD_SHA"
+
+      - name: Rewrite release notes with AI
+        id: rewrites
+        continue-on-error: true
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          CONTEXT_PATH: ${{ steps.raw-notes.outputs.context_path }}
+        run: |
+          REWRITES_PATH="${CONTEXT_PATH}.rewrites.json"
+          pnpm --filter @better-auth/release-tooling release-notes rewrite \
+            --context "$CONTEXT_PATH" \
+            --output "$REWRITES_PATH"
+          echo "path=$REWRITES_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Render and package final release notes
+        id: final-notes
+        env:
+          MANIFEST_PATH: ${{ steps.raw-notes.outputs.manifest_path }}
+          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
+          REWRITES_PATH: ${{ steps.rewrites.outputs.path }}
+          REWRITE_OUTCOME: ${{ steps.rewrites.outcome }}
+          VERSION: ${{ steps.candidate.outputs.version }}
+          HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+          MERGED: ${{ steps.command.outputs.merged }}
+        run: |
+          ARTIFACT_DIR="$RUNNER_TEMP/release-notes"
+          NOTES_PATH="$ARTIFACT_DIR/release-notes.md"
+          mkdir -p "$ARTIFACT_DIR"
+
+          SOURCE="ai"
+          MERGED_ARGS=()
+          if [ "$MERGED" = "true" ]; then
+            MERGED_ARGS+=(--merged)
+          fi
+          if [ "$REWRITE_OUTCOME" = "success" ] && \
+             pnpm --filter @better-auth/release-tooling release-notes render \
+               --manifest "$MANIFEST_PATH" \
+               --rewrites "$REWRITES_PATH" \
+               --output "$NOTES_PATH"; then
+            echo "Using AI-rewritten release notes"
+          else
+            if [ ! -s "$RAW_PATH" ]; then
+              echo "::error::Deterministic release notes are missing"
+              exit 1
+            fi
+            cp "$RAW_PATH" "$NOTES_PATH"
+            SOURCE="raw"
+            echo "::warning::AI rewrite failed; using deterministic release notes for maintainer review"
+          fi
+
+          pnpm --filter @better-auth/release-tooling release-notes:comment wrap \
+            --version "$VERSION" \
+            --head "$HEAD_SHA" \
+            --source "$SOURCE" \
+            "${MERGED_ARGS[@]}" \
+            --body "$NOTES_PATH" \
+            --output "$ARTIFACT_DIR/release-notes-comment.md"
+          echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release PR is unchanged
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.command.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ steps.command.outputs.head_sha }}
+        run: |
+          CURRENT_HEAD_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          if [ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ]; then
+            echo "::error::The release PR changed while release notes were being generated"
+            exit 1
+          fi
+
+      - name: Upload validated release notes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-notes/release-notes-comment.md
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-comment:
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Generate scoped App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Download validated release notes
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-notes-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-notes
+
+      - name: Verify release PR is unchanged
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ needs.generate.outputs.head_sha }}
+          EXPECTED_HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+          EXPECTED_BASE_REF: ${{ needs.generate.outputs.base_ref }}
+          EXPECTED_MERGED: ${{ needs.generate.outputs.merged }}
+        run: |
+          if ! PR=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"); then
+            echo "::error::Could not read the current release PR"
+            exit 1
+          fi
+          CURRENT_HEAD_SHA=$(echo "$PR" | jq -r '.head.sha')
+          CURRENT_HEAD_REF=$(echo "$PR" | jq -r '.head.ref')
+          CURRENT_BASE_REF=$(echo "$PR" | jq -r '.base.ref')
+          CURRENT_HEAD_REPO=$(echo "$PR" | jq -r '.head.repo.full_name')
+          CURRENT_BASE_REPO=$(echo "$PR" | jq -r '.base.repo.full_name')
+          CURRENT_STATE=$(echo "$PR" | jq -r '.state')
+          CURRENT_MERGED=$(echo "$PR" | jq -r '.merged')
+
+          if [[ ! "$CURRENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || \
+             [ "$CURRENT_HEAD_SHA" != "$EXPECTED_HEAD_SHA" ] || \
+             [ "$CURRENT_HEAD_REF" != "$EXPECTED_HEAD_REF" ] || \
+             [ "$CURRENT_BASE_REF" != "$EXPECTED_BASE_REF" ] || \
+             [ "$CURRENT_HEAD_REPO" != "$GITHUB_REPOSITORY" ] || \
+             [ "$CURRENT_BASE_REPO" != "$GITHUB_REPOSITORY" ] || \
+             [ "$CURRENT_MERGED" != "$EXPECTED_MERGED" ] || \
+             { [ "$CURRENT_STATE" != 'open' ] && [ "$CURRENT_MERGED" != 'true' ]; }; then
+            echo "::error::The release PR identity changed before release notes were published"
+            exit 1
+          fi
+
+      - name: Create or update release notes comment
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
+        run: |
+          COMMENT_FILE="$RUNNER_TEMP/release-notes/release-notes-comment.md"
+
+          COMMENTS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | jq -s 'add')
+          if [ -n "$RELEASE_APP_ID" ]; then
+            COMMENT_ID=$(echo "$COMMENTS" | jq -r --arg app "$RELEASE_APP_ID" \
+              '[.[] | select((.performed_via_github_app.id | tostring) == $app) | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last | .id // empty')
+          else
+            COMMENT_ID=$(echo "$COMMENTS" | jq -r \
+              '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last | .id // empty')
+          fi
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" \
+              -f body="$(cat "$COMMENT_FILE")" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$(cat "$COMMENT_FILE")" >/dev/null
+          fi
+
+      - name: Mark release PR ready
+        if: needs.generate.outputs.merged != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ needs.generate.outputs.head_sha }}
+          EXPECTED_HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+          EXPECTED_BASE_REF: ${{ needs.generate.outputs.base_ref }}
+        run: |
+          current_identity() {
+            local pr head head_ref base_ref head_repo base_repo state merged
+            if ! pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"); then
+              echo "::error::Could not read the current release PR" >&2
+              return 1
+            fi
+            head=$(echo "$pr" | jq -r '.head.sha')
+            head_ref=$(echo "$pr" | jq -r '.head.ref')
+            base_ref=$(echo "$pr" | jq -r '.base.ref')
+            head_repo=$(echo "$pr" | jq -r '.head.repo.full_name')
+            base_repo=$(echo "$pr" | jq -r '.base.repo.full_name')
+            state=$(echo "$pr" | jq -r '.state')
+            merged=$(echo "$pr" | jq -r '.merged')
+            if [[ ! "$head" =~ ^[0-9a-f]{40}$ ]] || \
+               [ "$head_ref" != "$EXPECTED_HEAD_REF" ] || \
+               [ "$base_ref" != "$EXPECTED_BASE_REF" ] || \
+               [ "$head_repo" != "$GITHUB_REPOSITORY" ] || \
+               [ "$base_repo" != "$GITHUB_REPOSITORY" ] || \
+               [ "$state" != 'open' ] || \
+               [ "$merged" != 'false' ]; then
+              echo "::error::The release PR identity changed" >&2
+              return 1
+            fi
+            printf '%s' "$head"
+          }
+
+          restore_draft() {
+            local is_draft
+            is_draft=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            if [ "$is_draft" != 'true' ]; then
+              gh pr ready "$PR_NUMBER" --undo --repo "$GITHUB_REPOSITORY"
+            fi
+          }
+
+          if ! HEAD_BEFORE_READY=$(current_identity); then
+            restore_draft
+            exit 1
+          fi
+          if [ "$HEAD_BEFORE_READY" != "$EXPECTED_HEAD_SHA" ]; then
+            restore_draft
+            echo "::error::The release PR changed before it was marked ready"
+            exit 1
+          fi
+
+          IS_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+          if [ "$IS_DRAFT" = 'true' ]; then
+            gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          fi
+
+          if ! HEAD_AFTER_READY=$(current_identity); then
+            restore_draft
+            exit 1
+          fi
+          if [ "$HEAD_AFTER_READY" != "$EXPECTED_HEAD_SHA" ]; then
+            restore_draft
+            echo "::error::The release PR changed while it was being marked ready"
+            exit 1
+          fi
+
+  finalize-command:
+    needs: [acknowledge, generate, publish-comment]
+    if: >-
+      !cancelled() &&
+      contains(fromJSON('["success", "failure"]'), needs.generate.result)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Generate scoped App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Set command status
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ needs.acknowledge.outputs.token_source == 'github' && secrets.GITHUB_TOKEN || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          REACTION_ID: ${{ needs.acknowledge.outputs.reaction_id }}
+          GENERATE_RESULT: ${{ needs.generate.result }}
+          PUBLISH_RESULT: ${{ needs.publish-comment.result }}
+        run: |
+          if [[ ! "$COMMENT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Comment ID is invalid"
+            exit 1
+          fi
+
+          if [ -n "$REACTION_ID" ]; then
+            if [[ ! "$REACTION_ID" =~ ^[0-9]+$ ]]; then
+              echo "::error::Reaction ID is invalid"
+              exit 1
+            fi
+            if ! gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions/${REACTION_ID}"; then
+              echo "::warning::Could not clear the command acknowledgement"
+            fi
+          fi
+
+          CONTENT='-1'
+          if [ "$GENERATE_RESULT" = 'success' ] && \
+             [ "$PUBLISH_RESULT" = 'success' ]; then
+            CONTENT='+1'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content="$CONTENT" >/dev/null

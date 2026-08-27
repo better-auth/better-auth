@@ -1,5 +1,13 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10859](https://github.com/better-auth/better-auth/pull/10859) [`ea77118`](https://github.com/better-auth/better-auth/commit/ea77118d4e00f69ddffed4fb42dfedc08594ea9e) Thanks [@bytaesu](https://github.com/bytaesu)! - Reject missing Drizzle schema fields before building compound `where` clauses, preventing malformed SQL when an application schema is out of date.
+
+- [#10941](https://github.com/better-auth/better-auth/pull/10941) [`5aea9f7`](https://github.com/better-auth/better-auth/commit/5aea9f77284dfb7b187e8e7bec0cebd4b8834123) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent one-to-one joins from failing in Drizzle Relations v1 and v2 when `usePlural` is enabled. Resolve generated and legacy relation keys from Drizzle runtime metadata, including Relations v2 setups without an adapter schema.
+
 ## 1.7.1
 
 ## 1.7.0
