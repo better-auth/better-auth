@@ -864,6 +864,30 @@ describe("captcha", async () => {
 
 			expect(res.error?.status).toBe(403);
 		});
+
+		it("fails closed when the BotID verification call never resolves", async () => {
+			vi.useFakeTimers();
+			vi.doMock("botid/server", () => ({
+				checkBotId: () => new Promise(() => {}),
+			}));
+
+			try {
+				const { vercelBotId } = await import("./verify-handlers/vercel-botid");
+				const resultPromise = vercelBotId({
+					request: new Request("http://localhost/sign-in/email"),
+				});
+				// Attach the rejection assertion before advancing timers so the
+				// rejection is handled synchronously and doesn't surface as unhandled.
+				const assertion = expect(resultPromise).rejects.toThrow();
+
+				await vi.advanceTimersByTimeAsync(CAPTCHA_VERIFY_TIMEOUT_MS);
+
+				await assertion;
+			} finally {
+				vi.useRealTimers();
+				vi.doUnmock("botid/server");
+			}
+		});
 	});
 
 	describe("action and hostname binding", async () => {
