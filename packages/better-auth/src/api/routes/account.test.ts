@@ -2680,6 +2680,9 @@ describe("account selector validation", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11004
+ */
 describe("token route response values", async () => {
 	it("returns the refreshed token values from /get-access-token", async () => {
 		const { auth, client, signInWithTestUser } = await getTestInstance({
