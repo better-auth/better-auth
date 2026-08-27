@@ -1910,7 +1910,12 @@ describe("TOTP enrollment verification", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10923
 	 */
-	it("rejects re-enrollment while a verified TOTP is active", async () => {
+	it.for([
+		{ state: "verified", verified: true },
+		{ state: "legacy", verified: null as unknown as boolean },
+	])("rejects re-enrollment while a $state TOTP is active", async ({
+		verified,
+	}) => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 			secret: DEFAULT_SECRET,
 			plugins: [twoFactor()],
@@ -1943,6 +1948,11 @@ describe("TOTP enrollment verification", async () => {
 		headers = convertSetCookieToCookie(verification.headers);
 		expect(verification.status).toBe(200);
 
+		await db.update({
+			model: "twoFactor",
+			update: { verified },
+			where: [{ field: "id", value: enrollment.id }],
+		});
 		const activeFactor = await db.findOne<TwoFactorTable>({
 			model: "twoFactor",
 			where: [{ field: "userId", value: userId }],
@@ -1967,7 +1977,7 @@ describe("TOTP enrollment verification", async () => {
 			id: activeFactor.id,
 			secret: activeFactor.secret,
 			backupCodes: activeFactor.backupCodes,
-			verified: true,
+			verified,
 		});
 	});
 
