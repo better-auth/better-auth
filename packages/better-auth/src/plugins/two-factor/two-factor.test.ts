@@ -1832,7 +1832,7 @@ describe("pre-migration twoFactor rows (verified absent)", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/8627
  */
-describe("OTP-only account adding TOTP (issue #8627)", async () => {
+describe("TOTP enrollment verification", async () => {
 	it("should create twoFactor row with verified=false on enableTwoFactor", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 			secret: DEFAULT_SECRET,
@@ -1907,74 +1907,50 @@ describe("OTP-only account adding TOTP (issue #8627)", async () => {
 		expect(updatedRecord?.verified).toBe(true);
 	});
 
-	it("should preserve verified state during re-enrollment", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10923
+	 */
+	it("requires verification for a new secret during re-enrollment", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 			secret: DEFAULT_SECRET,
-			plugins: [
-				twoFactor({
-					otpOptions: {
-						sendOTP() {},
-					},
-				}),
-			],
+			plugins: [twoFactor()],
 		});
-		let { headers } = await signInWithTestUser();
+		const signedIn = await signInWithTestUser();
+		let headers = signedIn.headers;
+		const userId = signedIn.user.id;
 
-		// Enable and fully verify TOTP
 		await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
 			headers,
 		});
-		const userId = (await auth.api.getSession({ headers }))?.user.id as string;
-		const record1 = await db.findOne<TwoFactorTable>({
+		const previousRecord = await db.findOne<TwoFactorTable>({
 			model: "twoFactor",
 			where: [{ field: "userId", value: userId }],
 		});
-		const decrypted = await symmetricDecrypt({
+		const decryptedSecret = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: record1!.secret,
+			data: previousRecord!.secret,
 		});
-		const code = await createOTP(decrypted).totp();
-		const verifyEnrollRes = await auth.api.verifyTOTP({
+		const code = await createOTP(decryptedSecret).totp();
+		const verification = await auth.api.verifyTOTP({
 			body: { code },
 			headers,
 			asResponse: true,
 		});
-		headers = convertSetCookieToCookie(verifyEnrollRes.headers);
-		expect(verifyEnrollRes.status).toBe(200);
+		headers = convertSetCookieToCookie(verification.headers);
+		expect(verification.status).toBe(200);
 
-		// Re-enroll — verified should be preserved
 		await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
 			headers,
-			asResponse: true,
 		});
-		const record2 = await db.findOne<TwoFactorTable>({
+		const newRecord = await db.findOne<TwoFactorTable>({
 			model: "twoFactor",
 			where: [{ field: "userId", value: userId }],
 		});
-		expect(record2?.verified).toBe(true);
 
-		// Sign in with the new secret should work
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
-			},
-			asResponse: true,
-		});
-		const signInHeaders = convertSetCookieToCookie(signInRes.headers);
-		const decrypted2 = await symmetricDecrypt({
-			key: DEFAULT_SECRET,
-			data: record2!.secret,
-		});
-		const code2 = await createOTP(decrypted2).totp();
-		const verifyRes = await auth.api.verifyTOTP({
-			body: { code: code2 },
-			headers: signInHeaders,
-			asResponse: true,
-		});
-		expect(verifyRes.status).toBe(200);
+		expect(newRecord?.secret).not.toBe(previousRecord?.secret);
+		expect(newRecord?.verified).toBe(false);
 	});
 
 	it("should reject unverified TOTP during sign-in and allow OTP fallback", async () => {

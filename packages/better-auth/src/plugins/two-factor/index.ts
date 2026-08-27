@@ -266,10 +266,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					const totpData = {
 						secret: encryptedSecret,
 						backupCodes: backupCodes.encryptedBackupCodes,
-						verified:
-							(existingTwoFactor != null &&
-								existingTwoFactor.verified === true) ||
-							!!options?.skipVerificationOnEnable,
+						verified: !!options?.skipVerificationOnEnable,
 					};
 					if (existingTwoFactor) {
 						await ctx.context.adapter.update({
