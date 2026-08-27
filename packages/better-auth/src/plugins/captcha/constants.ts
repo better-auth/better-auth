@@ -19,9 +19,13 @@ export const Providers = {
 	GOOGLE_RECAPTCHA: "google-recaptcha",
 	HCAPTCHA: "hcaptcha",
 	CAPTCHAFOX: "captchafox",
+	VERCEL_BOTID: "vercel-botid",
 } as const;
 
-export const siteVerifyMap: Record<Provider, string> = {
+export const siteVerifyMap: Record<
+	Exclude<Provider, typeof Providers.VERCEL_BOTID>,
+	string
+> = {
 	[Providers.CLOUDFLARE_TURNSTILE]:
 		"https://challenges.cloudflare.com/turnstile/v0/siteverify",
 	[Providers.GOOGLE_RECAPTCHA]:
