@@ -121,28 +121,30 @@ function readSentinelResult<Result>(stdout: string, sentinel: string): Result {
 	return JSON.parse(line.slice(sentinel.length + 1)) as Result;
 }
 
-it("bounds subprocesses and redacts sentinel output from failures", async () => {
+it("bounds subprocesses", async () => {
 	const failure = await runNode(
 		import.meta.dirname,
-		[
-			"-e",
-			'console.log("PUBLISHED_FIXTURE_RESULT={\\"clientSecret\\":\\"secret-value\\"}"); setInterval(() => {}, 1_000)',
-		],
+		["-e", "setInterval(() => {}, 1_000)"],
 		{},
 		50,
 	).catch((error: unknown) => error);
 
 	expect(failure).toBeInstanceOf(Error);
 	expect((failure as Error).message).toContain(
+		"Subprocess timed out after 50ms",
+	);
+});
+
+it("redacts sentinel output from failures", () => {
+	const output = 'PUBLISHED_FIXTURE_RESULT={"clientSecret":"secret-value"}';
+
+	expect(redactCommandOutput(output)).toBe(
 		"PUBLISHED_FIXTURE_RESULT=[redacted]",
 	);
-	expect((failure as Error).message).not.toContain("secret-value");
-	expect(() =>
-		readSentinelResult(
-			'PUBLISHED_FIXTURE_RESULT={"clientSecret":"secret-value"}',
-			"MISSING_RESULT",
-		),
-	).toThrow("PUBLISHED_FIXTURE_RESULT=[redacted]");
+	expect(redactCommandOutput(output)).not.toContain("secret-value");
+	expect(() => readSentinelResult(output, "MISSING_RESULT")).toThrow(
+		"PUBLISHED_FIXTURE_RESULT=[redacted]",
+	);
 });
 
 async function startIdentityProvider(subject: string) {
