@@ -2680,6 +2680,124 @@ describe("account selector validation", async () => {
 	});
 });
 
+describe("token route response values", async () => {
+	it("returns the refreshed token values from /get-access-token", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+		const context = await auth.$context;
+		const googleProvider = context.socialProviders.find(
+			(provider) => provider.id === "google",
+		)!;
+		const accessTokenExpiresAt = new Date("2030-01-01T00:00:00.000Z");
+		const idToken = "refreshed-id-token";
+		const refreshAccessTokenMock = vi
+			.spyOn(googleProvider, "refreshAccessToken")
+			.mockResolvedValue({
+				accessToken: "refreshed-access-token",
+				accessTokenExpiresAt,
+				idToken,
+				tokenType: "Bearer",
+			});
+		const { headers, user } = await signInWithTestUser();
+		const account = await context.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			issuer: "https://accounts.google.com",
+			accountId: "get-access-token-response-values",
+			accessToken: "expired-access-token",
+			accessTokenExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
+			refreshToken: "initial-refresh-token",
+			scope: "openid, profile",
+		});
+
+		const response = await client.getAccessToken(
+			{ accountId: account.id },
+			{ headers },
+		);
+
+		expect(response.error).toBeNull();
+		expect(response.data).toEqual({
+			accessToken: "refreshed-access-token",
+			accessTokenExpiresAt,
+			scopes: ["openid", "profile"],
+			idToken,
+			tokenType: "Bearer",
+		});
+		expect(refreshAccessTokenMock).toHaveBeenCalledWith(
+			"initial-refresh-token",
+			expect.anything(),
+		);
+	});
+
+	it("returns the refreshed token values from /refresh-token", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+		const context = await auth.$context;
+		const googleProvider = context.socialProviders.find(
+			(provider) => provider.id === "google",
+		)!;
+		const accessTokenExpiresAt = new Date("2030-01-02T00:00:00.000Z");
+		const refreshTokenExpiresAt = new Date("2030-02-01T00:00:00.000Z");
+		const idToken = "refreshed-id-token";
+		const refreshAccessTokenMock = vi
+			.spyOn(googleProvider, "refreshAccessToken")
+			.mockResolvedValue({
+				accessToken: "refreshed-access-token",
+				accessTokenExpiresAt,
+				idToken,
+				refreshToken: "refreshed-refresh-token",
+				refreshTokenExpiresAt,
+				tokenType: "Bearer",
+			});
+		const { headers, user } = await signInWithTestUser();
+		const account = await context.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			issuer: "https://accounts.google.com",
+			accountId: "refresh-token-response-values",
+			accessToken: "access-token",
+			refreshToken: "initial-refresh-token",
+			scope: "openid, profile",
+		});
+
+		const response = await client.refreshToken(
+			{ accountId: account.id },
+			{ headers },
+		);
+
+		expect(response.error).toBeNull();
+		expect(response.data).toEqual({
+			accessToken: "refreshed-access-token",
+			refreshToken: "refreshed-refresh-token",
+			accessTokenExpiresAt,
+			refreshTokenExpiresAt,
+			scope: "openid, profile",
+			idToken,
+			providerId: "google",
+			accountId: account.id,
+			tokenType: "Bearer",
+		});
+		expect(refreshAccessTokenMock).toHaveBeenCalledWith(
+			"initial-refresh-token",
+			expect.anything(),
+		);
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/9967
  */
