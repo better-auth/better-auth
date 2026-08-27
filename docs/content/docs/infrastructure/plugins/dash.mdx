@@ -1,7 +1,20 @@
 ---
-title: Dashboard Plugin (dash)
-description: The `dash()` plugin connects your Better Auth instance to Better Auth Infrastructure, enabling analytics tracking, event logging, and admin dashboard APIs.
+icon: infrastructurePluginsDashboard
+title: Dashboard
+description: The `dash()` plugin connects your Better Auth instance to Better Auth Infrastructure, enabling analytics tracking, activity monitoring, event logging, and admin dashboard APIs.
 ---
+
+The Dashboard plugin is the core connection between your Better Auth instance and Better Auth Infrastructure. It powers the web dashboard with real-time data, tracks user activity, and enables admin APIs.
+
+## What the Dashboard Plugin Enables
+
+Once `dash()` is active, the Better Auth Infrastructure dashboard gives you:
+
+* **User management** — view, search, ban, and delete users
+* **Session monitoring** — see active sessions and revoke them
+* **Organization overview** — manage organizations and members
+* **Analytics** — track sign-ups, sign-ins, and active users over time
+* **Audit logs** — query event history ([learn more](/docs/infrastructure/plugins/audit-logs))
 
 ## Installation
 
@@ -11,11 +24,7 @@ import { dash } from "@better-auth/infra";
 
 export const auth = betterAuth({
   plugins: [
-    dash({
-      apiUrl: process.env.BETTER_AUTH_API_URL,
-      kvUrl: process.env.BETTER_AUTH_KV_URL,
-      apiKey: process.env.BETTER_AUTH_API_KEY,
-    }),
+    dash(),
   ],
 });
 ```
@@ -26,31 +35,57 @@ export const auth = betterAuth({
 
 | Option                 | Type     | Description                                                                                  |
 | ---------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `apiUrl`               | `string` | Better Auth infrastructure URL. Default: `https://dash.better-auth.com`                      |
-| `kvUrl`                | `string` | Better Auth identification infrastructure URL. Default: `https://kv.better-auth.com`         |
-| `apiKey`               | `string` | Your API key for authentication.                                                             |
+| `apiUrl`               | `string` | Better Auth Infrastructure API URL. Default: `https://dash.better-auth.com`                  |
+| `kvUrl`                | `string` | KV store URL. Default: `https://kv.better-auth.com`                                          |
+| `apiKey`               | `string` | Your API key for authentication. Falls back to `BETTER_AUTH_API_KEY` in env.                 |
 | `apiOptions`           | `object` | Dash API HTTP client options. Accepts `timeout?: number` in ms.                              |
 | `kvOptions`            | `object` | KV HTTP client options. Accepts `timeout?: number` and `retry?: { attempts?: number; ... }`. |
 | `apiTimeout`           | `number` | Deprecated alias for `apiOptions.timeout`.                                                   |
 | `kvTimeout`            | `number` | Deprecated alias for `kvOptions.timeout`.                                                    |
 | `activityTracking`     | `object` | Activity tracking configuration.                                                             |
-| `managedDirectorySync` | `object` | Managed SCIM/directory-sync control plane options.                                           |
+| `managedDirectorySync` | `object` | Managed directory-sync control-plane options.                                                |
 
 ### Activity Tracking
+
+Track when users were last active in your application. When enabled, a `lastActiveAt` field is automatically updated on user activity.
 
 ```ts
 dash({
   apiKey: process.env.BETTER_AUTH_API_KEY,
   activityTracking: {
-    enabled: true,           // Enable activity tracking
+    enabled: true,
     updateInterval: 300000,  // Update interval in ms (default: 5 minutes)
   },
 }),
 ```
 
-When enabled, this adds a `lastActiveAt` field to your user schema that's automatically updated on user activity.
+#### Schema Changes
+
+When activity tracking is enabled, the plugin adds a field to your user schema:
+
+```ts
+user: {
+  fields: {
+    lastActiveAt: {
+      type: "date",
+    },
+  },
+}
+```
+
+<Callout type="warning">
+  Enabling activity tracking requires a database migration for the `lastActiveAt` user field. Run the migration step before relying on activity data.
+</Callout>
+
+```package-install
+npx auth migrate
+```
+
+If your app manages schema generation separately, run `npx auth generate` and apply the generated migration with your preferred tool.
 
 ### Managed Directory Sync
+
+The `managedDirectorySync` option is the dashboard-side companion to the SCIM 1.7 plugin-managed runtime flow. When `enabled` is `true`, the dashboard installs the reservation tables and APIs needed for managed directory-sync state. `ssoPairing` enables the SSO hooks needed when a directory-backed user identity is paired with an SSO provider, and `membershipProjection` lets the system project SCIM membership changes into organization membership records.
 
 ```ts
 dash({
@@ -96,11 +131,11 @@ npx auth migrate
 
 If your app manages schema generation separately, run `npx auth generate` and apply the generated migration with your preferred tool.
 
-### Database Schema
+#### Database Schema
 
 When `managedDirectorySync.enabled` is `true`, the dash plugin adds the following models. Better Auth supplies the primary `id` field for each model.
 
-#### `directorySyncConnection`
+##### `directorySyncConnection`
 
 Stores the managed directory's organization, SCIM connection, SSO pairing, lifecycle, and decommission state.
 
@@ -130,7 +165,7 @@ Stores the managed directory's organization, SCIM connection, SSO pairing, lifec
 | `decommissionedAt`      | `date`    | Optional                      | Time decommissioning completed.                  |
 | `lastError`             | `string`  | Optional, hidden              | Most recent reconciliation error.                |
 
-#### `directorySyncMembershipProvenance`
+##### `directorySyncMembershipProvenance`
 
 Tracks organization memberships created or managed by directory-sync projection so the plugin can reconcile only the memberships it owns.
 
@@ -352,7 +387,6 @@ export const authClient = createAuthClient({
 ```ts
 dashClient({
   resolveUserId: ({ userId, user, session }) => {
-    // Custom user ID resolution logic
     return userId || user?.id || session?.user?.id;
   },
 }),
@@ -403,28 +437,12 @@ console.log(activity.data?.total);
 
 See [Get all audit logs](/docs/infrastructure/plugins/audit-logs#get-all-audit-logs) for more information.
 
-## Schema Extensions
-
-When activity tracking is enabled, the plugin adds fields to your user schema:
-
-```ts
-user: {
-  fields: {
-    lastActiveAt: {
-      type: "date",
-    },
-  },
-}
-```
-
-Make sure to run database migrations after enabling activity tracking.
-
 ## Best Practices
 
-1. **Always set an API key** - Without it, the plugin cannot communicate with the infrastructure API.
+1. **Always set an API key** — without it, the plugin cannot communicate with the infrastructure API.
 
-2. **Use activity tracking wisely** - The update interval affects database writes. For high-traffic apps, consider a longer interval.
+2. **Use activity tracking wisely** — the update interval affects database writes. For high-traffic apps, consider a longer interval.
 
-3. **Monitor audit log retention** - Different plans have different retention periods. Check your plan limits.
+3. **Monitor audit log retention** — different plans have different retention periods. Check your plan limits.
 
-4. **Secure your endpoints** - Dashboard endpoints require authentication. Make sure your dashboard users have appropriate permissions.
+4. **Secure your endpoints** — dashboard endpoints require authentication. Make sure your dashboard users have appropriate permissions.

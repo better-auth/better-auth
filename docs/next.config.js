@@ -76,6 +76,16 @@ const nextConfig = {
 				destination: "/docs/ai-resources/:path*",
 				permanent: true,
 			},
+			{
+				source: "/docs/infrastructure/plugins/dashboard",
+				destination: "/docs/infrastructure/plugins/dash",
+				permanent: true,
+			},
+			{
+				source: "/docs/infrastructure/plugins/dashboard.md",
+				destination: "/docs/infrastructure/plugins/dash.md",
+				permanent: true,
+			},
 		];
 	},
 };
