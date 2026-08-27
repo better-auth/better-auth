@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Require verification before completing TOTP re-enrollment.
+Prevent repeated TOTP enrollment from replacing an active authenticator and its backup codes.

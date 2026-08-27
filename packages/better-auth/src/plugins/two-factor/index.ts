@@ -229,15 +229,21 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						return ctx.json({ method: "otp" as const });
 					}
 
-					const backupCodes = await generateBackupCodes(
-						ctx.context.secretConfig,
-						backupCodeOptions,
-					);
 					const existingTwoFactor =
 						await ctx.context.adapter.findOne<TwoFactorTable>({
 							model: opts.twoFactorTable,
 							where: [{ field: "userId", value: user.id }],
 						});
+					if (existingTwoFactor && existingTwoFactor.verified !== false) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TOTP_ALREADY_ENABLED,
+						);
+					}
+					const backupCodes = await generateBackupCodes(
+						ctx.context.secretConfig,
+						backupCodeOptions,
+					);
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secretConfig,
