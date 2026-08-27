@@ -29,7 +29,7 @@ export const docs = defineDocs({
 });
 
 export const docsBeta = defineDocs({
-	dir: "./content/_generated/beta",
+	dir: "./content/_generated/docs/beta",
 	docs: {
 		schema: docsPageSchema,
 		postprocess: {
@@ -40,7 +40,7 @@ export const docsBeta = defineDocs({
 });
 
 export const docsV16 = defineDocs({
-	dir: "./content/_generated/v1-6",
+	dir: "./content/_generated/docs/v1-6",
 	docs: {
 		schema: docsPageSchema,
 		postprocess: {

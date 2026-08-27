@@ -16,6 +16,7 @@ const repositoryDirectory = join(tempRoot, "repository");
 const releaseVersionsPath = join(
 	"content",
 	"_generated",
+	"docs",
 	"release-versions.json",
 );
 const versionsToSync = docsVersions.filter(

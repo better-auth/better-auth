@@ -8,6 +8,7 @@ export function getDocsReleaseVersions(): Record<string, string | null> {
 		process.cwd(),
 		"content",
 		"_generated",
+		"docs",
 		"release-versions.json",
 	);
 	let metadata: unknown;
