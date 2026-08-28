@@ -1,265 +1,103 @@
+import type { PlaceholderData } from "fumadocs-core/mdx-plugins/remark-llms.runtime";
+import { renderPlaceholder } from "fumadocs-core/mdx-plugins/remark-llms.runtime";
 import type { Item, Node } from "fumadocs-core/page-tree";
 import type { InferPageType } from "fumadocs-core/source";
 import { llms } from "fumadocs-core/source";
+import * as z from "zod";
+import {
+	apiMethodHttpMethods,
+	generateApiMethodExamples,
+	parseApiMethod,
+} from "./api-method";
 import type { DocsVersion } from "./docs-versions";
 import { getVersionById } from "./docs-versions";
 import { scopeMarkdownLinks } from "./markdown-links";
 import type { source } from "./source";
 
-type PropertyDefinition = {
-	name: string;
-	type: string;
-	required: boolean;
-	description: string;
-	exampleValue: string;
-	isServerOnly: boolean;
-	isClientOnly: boolean;
-};
-
 const docsPathPattern = /^\/docs(?:\/|$)/;
 const productionUrl = new URL("https://better-auth.com");
 const llmsDescription =
 	"The most comprehensive authentication framework for TypeScript";
+const expressionStringSchema = z
+	.object({ value: z.string() })
+	.transform(({ value }) => z.string().parse(JSON.parse(value)));
+const stringAttributeSchema = z.union([z.string(), expressionStringSchema]);
+const markerAttributeSchema = z
+	.null()
+	.optional()
+	.transform((value) => value === null);
+const apiMethodAttributesSchema = z.object({
+	path: stringAttributeSchema.pipe(z.string().startsWith("/")),
+	method: stringAttributeSchema
+		.pipe(z.enum(apiMethodHttpMethods))
+		.optional()
+		.default("GET"),
+	isServerOnly: markerAttributeSchema,
+	isClientOnly: markerAttributeSchema,
+	isExternalOnly: markerAttributeSchema,
+	noResult: markerAttributeSchema,
+	requireSession: markerAttributeSchema,
+	requireHeaders: markerAttributeSchema,
+	requireBearerToken: markerAttributeSchema,
+	headersComment: stringAttributeSchema.optional(),
+	note: stringAttributeSchema.optional(),
+	clientOnlyNote: stringAttributeSchema.optional(),
+	serverOnlyNote: stringAttributeSchema.optional(),
+	resultVariable: stringAttributeSchema.optional(),
+	forceAsBody: markerAttributeSchema,
+	forceAsParam: markerAttributeSchema,
+	forceAsQuery: markerAttributeSchema,
+});
 
-function extractAPIMethods(rawContent: string): string {
-	const apiMethodRegex = /<APIMethod\s+([^>]+)>([\s\S]*?)<\/APIMethod>/g;
+function unwrapCodeBlock(markdown: string): string {
+	const lines = markdown.trim().split("\n");
+	if (lines[0]?.startsWith("```") && lines.at(-1)?.trim() === "```") {
+		return lines.slice(1, -1).join("\n");
+	}
+	return markdown.trim();
+}
 
-	return rawContent.replace(apiMethodRegex, (match, attributes, content) => {
-		const pathMatch = attributes.match(/path="([^"]+)"/);
-		const methodMatch = attributes.match(/method="([^"]+)"/);
-		const requireSessionMatch = attributes.match(/requireSession/);
-		const noResultMatch = attributes.match(/noResult/);
-		const resultVariableMatch = attributes.match(/resultVariable="([^"]+)"/);
-		const forceAsBodyMatch = attributes.match(/forceAsBody/);
-		const forceAsQueryMatch = attributes.match(/forceAsQuery/);
+function formatNote(note: string | undefined): string {
+	return note ? `> **Note:** ${note}\n\n` : "";
+}
 
-		const path = pathMatch ? pathMatch[1] : "";
-		const method = methodMatch ? methodMatch[1] : "GET";
-		const requireSession = !!requireSessionMatch;
-		const noResult = !!noResultMatch;
-		const resultVariable = resultVariableMatch
-			? resultVariableMatch[1]
-			: "data";
-		const forceAsBody = !!forceAsBodyMatch;
-		const forceAsQuery = !!forceAsQueryMatch;
+export function renderApiMethodMarkdown({
+	attributes,
+	children,
+}: PlaceholderData): string {
+	const options = apiMethodAttributesSchema.parse(attributes);
+	const definition = parseApiMethod(unwrapCodeBlock(children));
+	if (!definition.functionName) return children;
 
-		const typeMatch = content.match(/type\s+(\w+)\s*=\s*\{([\s\S]*?)\}/);
-		if (!typeMatch) {
-			return match;
-		}
+	const examples = generateApiMethodExamples(definition, options);
+	const sections = [`**Endpoint:** \`${options.method} ${options.path}\``];
+	if (options.note) sections.push(formatNote(options.note).trimEnd());
 
-		const functionName = typeMatch[1];
-		const typeBody = typeMatch[2];
-
-		const properties = parseTypeBody(typeBody);
-
-		const clientCode = generateClientCode(functionName, properties, path);
-		const serverCode = generateServerCode(
-			functionName,
-			properties,
-			method,
-			requireSession,
-			forceAsBody,
-			forceAsQuery,
-			noResult,
-			resultVariable,
+	if (!options.isServerOnly && !options.isExternalOnly) {
+		sections.push(
+			`### Client Side\n\n${formatNote(options.clientOnlyNote)}\`\`\`ts\n${examples.client}\n\`\`\``,
 		);
-
-		return `
-### Client Side
-
-\`\`\`ts
-${clientCode}
-\`\`\`
-
-### Server Side
-
-\`\`\`ts
-${serverCode}
-\`\`\`
-
-### Type Definition
-
-\`\`\`ts
-type ${functionName} = {${typeBody}
-}
-\`\`\`
-`;
-	});
-}
-
-function parseTypeBody(typeBody: string): PropertyDefinition[] {
-	const properties: PropertyDefinition[] = [];
-
-	const lines = typeBody.split("\n");
-
-	for (const line of lines) {
-		const trimmed = line.trim();
-
-		if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("/*"))
-			continue;
-		const propMatch = trimmed.match(
-			/^(\w+)(\?)?:\s*(.+?)(\s*=\s*["']([^"']+)["'])?(\s*\/\/\s*(.+))?$/,
+	}
+	if (!options.isClientOnly) {
+		sections.push(
+			`### Server Side\n\n${formatNote(options.serverOnlyNote)}\`\`\`ts\n${examples.server}\n\`\`\``,
 		);
-		if (propMatch) {
-			const [, name, optional, type, , exampleValue, , description] = propMatch;
-
-			let cleanType = type.trim();
-			const cleanExampleValue = exampleValue || "";
-
-			cleanType = cleanType.replace(/,$/, "");
-
-			properties.push({
-				name,
-				type: cleanType,
-				required: !optional,
-				description: description || "",
-				exampleValue: cleanExampleValue,
-				isServerOnly: false,
-				isClientOnly: false,
-			});
-		}
 	}
-
-	return properties;
-}
-
-// Generate client code example
-function generateClientCode(
-	functionName: string,
-	properties: PropertyDefinition[],
-	path: string,
-): string {
-	if (!functionName || !path) {
-		return "// Unable to generate client code - missing function name or path";
-	}
-
-	const clientMethodPath = pathToDotNotation(path);
-	const body = createClientBody(properties);
-
-	return `const { data, error } = await authClient.${clientMethodPath}(${body});`;
-}
-
-// Generate server code example
-function generateServerCode(
-	functionName: string,
-	properties: PropertyDefinition[],
-	method: string,
-	requireSession: boolean,
-	forceAsBody: boolean,
-	forceAsQuery: boolean,
-	noResult: boolean,
-	resultVariable: string,
-): string {
-	if (!functionName) {
-		return "// Unable to generate server code - missing function name";
-	}
-
-	const body = createServerBody(
-		properties,
-		method,
-		requireSession,
-		forceAsBody,
-		forceAsQuery,
+	sections.push(
+		`### Type Definition\n\n\`\`\`ts\n${definition.typeDefinition}\n\`\`\``,
 	);
 
-	return `${noResult ? "" : `const ${resultVariable} = `}await auth.api.${functionName}(${body});`;
-}
-
-function pathToDotNotation(input: string): string {
-	return input
-		.split("/")
-		.filter(Boolean)
-		.map((segment) =>
-			segment
-				.split("-")
-				.map((word, i) =>
-					i === 0
-						? word.toLowerCase()
-						: word.charAt(0).toUpperCase() + word.slice(1),
-				)
-				.join(""),
-		)
-		.join(".");
-}
-
-function createClientBody(props: PropertyDefinition[]): string {
-	if (props.length === 0) return "{}";
-
-	let body = "{\n";
-
-	for (const prop of props) {
-		if (prop.isServerOnly) continue;
-
-		let comment = "";
-		if (!prop.required || prop.description) {
-			const comments: string[] = [];
-			if (!prop.required) comments.push("optional");
-			if (prop.description) comments.push(prop.description);
-			comment = ` // ${comments.join(", ")}`;
-		}
-
-		body += `    ${prop.name}${prop.exampleValue ? `: ${prop.exampleValue}` : ""}${prop.type === "Object" ? ": {}" : ""},${comment}\n`;
-	}
-
-	body += "}";
-	return body;
-}
-
-function createServerBody(
-	props: PropertyDefinition[],
-	method: string,
-	requireSession: boolean,
-	forceAsBody: boolean,
-	forceAsQuery: boolean,
-): string {
-	const relevantProps = props.filter((x) => !x.isClientOnly);
-
-	if (relevantProps.length === 0 && !requireSession) {
-		return "{}";
-	}
-
-	let serverBody = "{\n";
-
-	if (relevantProps.length > 0) {
-		const bodyKey =
-			(method === "POST" || forceAsBody) && !forceAsQuery ? "body" : "query";
-		serverBody += `    ${bodyKey}: {\n`;
-
-		for (const prop of relevantProps) {
-			let comment = "";
-			if (!prop.required || prop.description) {
-				const comments: string[] = [];
-				if (!prop.required) comments.push("optional");
-				if (prop.description) comments.push(prop.description);
-				comment = ` // ${comments.join(", ")}`;
-			}
-
-			serverBody += `        ${prop.name}${prop.exampleValue ? `: ${prop.exampleValue}` : ""}${prop.type === "Object" ? ": {}" : ""},${comment}\n`;
-		}
-
-		serverBody += "    }";
-	}
-
-	if (requireSession) {
-		if (relevantProps.length > 0) serverBody += ",";
-		serverBody +=
-			"\n    // This endpoint requires session cookies.\n    headers: await headers()";
-	}
-
-	serverBody += "\n}";
-	return serverBody;
+	return sections.join("\n\n");
 }
 
 export async function getLLMText(
 	docPage: InferPageType<typeof source>,
 	version?: DocsVersion,
 ): Promise<string> {
-	const pageData = docPage.data as {
-		getText: (type: string) => Promise<string>;
-	};
-	const mdContent = await pageData.getText("processed");
-	const renderedContent = extractAPIMethods(mdContent);
+	const mdContent = await docPage.data.getText("processed");
+	const renderedContent = await renderPlaceholder(mdContent, {
+		APIMethod: renderApiMethodMarkdown,
+	});
 	const processedContent =
 		version && version.id !== "latest"
 			? scopeMarkdownLinks(renderedContent, version)
