@@ -83,5 +83,5 @@ async function main() {
 }
 
 if (import.meta.main) {
-	void main();
+	await main();
 }

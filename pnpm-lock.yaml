@@ -471,6 +471,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      next-validate-link:
+        specifier: ^1.6.7
+        version: 1.6.7(@types/mdast@4.0.4)(@types/unist@3.0.3)
       postcss:
         specifier: ^8.5.25
         version: 8.5.25
@@ -489,6 +492,9 @@ importers:
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.3.1
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -11610,6 +11616,20 @@ packages:
     peerDependencies:
       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+
+  next-validate-link@1.6.7:
+    resolution: {integrity: sha512-ypJzO4Vj7PFgEmi0ZycpIF4K1n2KFVNTjHlrbO5KNR89mEzWlnN1Xa6iLjXG0OJjqDLavmI/UGZEEhmwRWzb0w==}
+    peerDependencies:
+      '@react-router/dev': 7.x.x
+      '@types/mdast': '*'
+      '@types/unist': '*'
+    peerDependenciesMeta:
+      '@react-router/dev':
+        optional: true
+      '@types/mdast':
+        optional: true
+      '@types/unist':
+        optional: true
 
   next@16.2.11:
     resolution: {integrity: sha512-B339zaqbyK8cmxhoAvLrcwoabwCP1wz21zSzfqxqXAemTu2BXnH7tQnfcglKv1vnMUIDBc+Hth7XODQriTZiRQ==}
@@ -25638,6 +25658,22 @@ snapshots:
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
+
+  next-validate-link@1.6.7(@types/mdast@4.0.4)(@types/unist@3.0.3):
+    dependencies:
+      picocolors: 1.1.1
+      remark: 15.0.1
+      remark-gfm: 4.0.1
+      remark-mdx: 3.1.1
+      tinyglobby: 0.2.17
+      unified: 11.0.5
+      unist-util-visit: 5.1.0
+      yaml: 2.9.0
+    optionalDependencies:
+      '@types/mdast': 4.0.4
+      '@types/unist': 3.0.3
+    transitivePeerDependencies:
+      - supports-color
 
   next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
