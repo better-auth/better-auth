@@ -46,7 +46,7 @@ if (duplicateIconKeys.length > 0) {
 }
 
 function hasIcon(key: string): key is IconKey {
-	return key in Icons;
+	return Object.hasOwn(Icons, key);
 }
 
 function renderIcon(key: string, source: string) {

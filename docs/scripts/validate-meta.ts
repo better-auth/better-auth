@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import * as z from "zod";
 
 const metaSchema = z.object({
-	pages: z.array(z.string()).optional(),
+	pages: z.array(z.string()),
 	pagesIndex: z.string().optional(),
 });
 
@@ -42,7 +42,7 @@ function validateDirectory(directory: string) {
 	}
 
 	const meta = metaSchema.parse(JSON.parse(readFileSync(metaPath, "utf8")));
-	const pages = meta.pages ?? [];
+	const pages = meta.pages;
 	const paths = pages.filter((entry) => !isNavigationSyntax(entry));
 	const mentioned = new Set(paths.map(getEntryPath));
 	const excluded = new Set(

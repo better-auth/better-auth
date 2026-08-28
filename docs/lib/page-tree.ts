@@ -16,7 +16,7 @@ export type SidebarPageNode = Extract<Node, { type: "page" }> &
 	SidebarPageMetadata;
 
 function hasIcon(key: string): key is IconKey {
-	return key in Icons;
+	return Object.hasOwn(Icons, key);
 }
 
 function renderIcon(key: string | undefined) {

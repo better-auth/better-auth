@@ -427,6 +427,7 @@ function NavigationNode({
 			folder={node}
 			pathname={pathname}
 			onNavigate={onNavigate}
+			nested={nested}
 		/>
 	);
 }
@@ -435,10 +436,12 @@ function NavigationFolder({
 	folder,
 	pathname,
 	onNavigate,
+	nested,
 }: {
 	folder: Folder;
 	pathname: string;
 	onNavigate?: () => void;
+	nested: boolean;
 }) {
 	const active = nodeContainsPath(folder, pathname);
 	const index = folder.index;
@@ -451,6 +454,7 @@ function NavigationFolder({
 					nodes={folder.children}
 					pathname={pathname}
 					onNavigate={onNavigate}
+					nested={nested}
 				/>
 			</>
 		);
@@ -467,7 +471,7 @@ function NavigationFolder({
 				}}
 				active={active}
 				onNavigate={onNavigate}
-				nested={false}
+				nested={nested}
 			/>
 			<AnimatePresence initial={false}>
 				{active && children.length > 0 ? (

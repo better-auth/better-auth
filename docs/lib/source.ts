@@ -5,20 +5,20 @@ import { blogCollection, docs, docsV16 } from "@/.source/server";
 import type { DocsVersionId } from "./docs-versions";
 import { pageTreePlugin } from "./page-tree";
 
-const iconPlugins = [pageTreePlugin(), lucideIconsPlugin()];
+const docsPlugins = [pageTreePlugin(), lucideIconsPlugin()];
 
 export const source = loader({
 	baseUrl: "/docs",
 	source: docs.toFumadocsSource(),
 	pageTree: { noRef: true },
-	plugins: iconPlugins,
+	plugins: docsPlugins,
 });
 
 export const sourceV16 = loader({
 	baseUrl: "/docs/1.6",
 	source: docsV16.toFumadocsSource(),
 	pageTree: { noRef: true },
-	plugins: iconPlugins,
+	plugins: docsPlugins,
 });
 
 const docsSources = {

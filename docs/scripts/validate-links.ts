@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import type { FileObject, PopulateParams } from "next-validate-link";
 import { printErrors, scanURLs, validateFiles } from "next-validate-link";
 import { remark } from "remark";
+import remarkMdx from "remark-mdx";
 import { visit } from "unist-util-visit";
 import { docsVersionSources } from "../lib/docs-version-sources.ts";
 import { docsVersions, versionedDocsHref } from "../lib/docs-versions.ts";
@@ -10,6 +11,7 @@ import { scopeMarkdownLinks } from "../lib/markdown-links.ts";
 
 const routeEntries: NonNullable<PopulateParams[string]> = [];
 const files: FileObject[] = [];
+const markdownParser = remark().use(remarkMdx);
 
 interface MarkdownNode {
 	type: string;
@@ -40,8 +42,22 @@ function createHeadingSlugger() {
 function getHeadingIds(content: string) {
 	const slug = createHeadingSlugger();
 	const headings: string[] = [];
-	visit(remark().parse(content), "heading", (node) => {
+	const tree = markdownParser.parse(content);
+	visit(tree, "heading", (node) => {
 		headings.push(slug(getNodeText(node)));
+	});
+	visit(tree, ["mdxJsxFlowElement", "mdxJsxTextElement"] as const, (node) => {
+		if (!node.name || !/^h[1-6]$/.test(node.name)) return;
+		for (const attribute of node.attributes) {
+			if (
+				attribute.type === "mdxJsxAttribute" &&
+				attribute.name === "id" &&
+				typeof attribute.value === "string"
+			) {
+				headings.push(attribute.value);
+				break;
+			}
+		}
 	});
 	return headings;
 }
