@@ -151,7 +151,15 @@ function useMobileDialog(active: boolean) {
 		document.addEventListener("keydown", onKeyDown);
 		return () => {
 			document.removeEventListener("keydown", onKeyDown);
-			previousFocus?.focus();
+			const focusTarget =
+				previousFocus &&
+				previousFocus !== document.body &&
+				previousFocus.isConnected
+					? previousFocus
+					: document.querySelector<HTMLElement>(
+							"[data-mobile-navigation-trigger]",
+						);
+			focusTarget?.focus({ preventScroll: true });
 		};
 	}, [active]);
 

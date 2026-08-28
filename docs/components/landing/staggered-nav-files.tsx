@@ -468,6 +468,7 @@ export function StaggeredNavFiles() {
 						</div>
 						<button
 							type="button"
+							data-mobile-navigation-trigger=""
 							aria-label={
 								mobileNavigationView === "closed" ? "Open menu" : "Close menu"
 							}

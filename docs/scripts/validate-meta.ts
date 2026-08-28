@@ -16,6 +16,7 @@ function isNavigationSyntax(entry: string) {
 	return (
 		entry.startsWith("---") ||
 		entry.startsWith("[") ||
+		entry.startsWith("external:[") ||
 		entry === "..." ||
 		entry === "z...a"
 	);
