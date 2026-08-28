@@ -56,7 +56,7 @@ npx auth migrate plan
   Never apply the 1.7 account schema directly over a populated 1.6 `account` table. A plain schema migration cannot preserve account identity or resolve collisions because the 1.6 rows have no `issuer` value.
 </Callout>
 
-Before the production cutover, restore a recent database backup into an isolated environment and rehearse this workflow. Verify the sign-in and provisioning paths your application uses, then run `plan` again and require an `up-to-date` result. This rehearsal confirms that the backup is restorable and that the migration choices, application configuration, and database work together.
+Before the production cutover, restore a recent database backup into an isolated environment and rehearse this workflow. Run `auth migrate apply` on the copy, verify the sign-in and provisioning paths your application uses, then run `plan` again and confirm it reports `up-to-date`. This rehearsal confirms that the backup is restorable and that the migration choices, application configuration, and database work together.
 
 During the production cutover, stop every v1.6 process that can write authentication data, including application instances, background jobs, and provisioning workers that handle credentials, OAuth, SSO, or SCIM. Do not run v1.6 and v1.7 writers against the same database at the same time. Take a final restorable backup, retain it for the rollback window, and apply the ready plan:
 
