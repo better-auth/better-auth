@@ -126,6 +126,53 @@ type patchUser = {
 		expect(markdown).toContain("**Endpoint:** `PATCH /scim/v2/Users/:id`");
 	});
 
+	it("supports explicit boolean marker attributes", () => {
+		const children = `\`\`\`ts
+type getSession = {
+}
+\`\`\``;
+		const withSession = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/get-session",
+				requireSession: { value: "true" },
+			},
+			children,
+		});
+		const withoutSession = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/get-session",
+				requireSession: { value: "false" },
+			},
+			children,
+		});
+
+		expect(withSession).toContain("This endpoint requires session cookies.");
+		expect(withoutSession).not.toContain(
+			"This endpoint requires session cookies.",
+		);
+	});
+
+	it("preserves endpoint metadata when the type definition is invalid", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/admin/list-users",
+				method: "GET",
+				note: "Requires administrator access.",
+			},
+			children: `\`\`\`ts
+interface ListUsers {}
+\`\`\``,
+		});
+
+		expect(markdown).toContain("**Endpoint:** `GET /admin/list-users`");
+		expect(markdown).toContain("> **Note:** Requires administrator access.");
+		expect(markdown).toContain("interface ListUsers {}");
+		expect(markdown).not.toContain("### Client Side");
+	});
+
 	it("returns a useful Markdown not-found response", () => {
 		const content = getLLMNotFound("/docs/missing.md");
 

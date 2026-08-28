@@ -18,14 +18,18 @@ const docsPathPattern = /^\/docs(?:\/|$)/;
 const productionUrl = new URL("https://better-auth.com");
 const llmsDescription =
 	"The most comprehensive authentication framework for TypeScript";
-const expressionStringSchema = z
-	.object({ value: z.string() })
-	.transform(({ value }) => z.string().parse(JSON.parse(value)));
+const expressionValueSchema = z.object({ value: z.string() });
+const expressionStringSchema = expressionValueSchema.transform(({ value }) =>
+	z.string().parse(JSON.parse(value)),
+);
+const expressionBooleanSchema = expressionValueSchema.transform(({ value }) =>
+	z.boolean().parse(JSON.parse(value)),
+);
 const stringAttributeSchema = z.union([z.string(), expressionStringSchema]);
 const markerAttributeSchema = z
-	.null()
+	.union([z.null(), z.boolean(), expressionBooleanSchema])
 	.optional()
-	.transform((value) => value === null);
+	.transform((value) => value === null || value === true);
 const apiMethodAttributesSchema = z.object({
 	path: stringAttributeSchema.pipe(z.string().startsWith("/")),
 	method: stringAttributeSchema
@@ -66,12 +70,16 @@ export function renderApiMethodMarkdown({
 	children,
 }: PlaceholderData): string {
 	const options = apiMethodAttributesSchema.parse(attributes);
-	const definition = parseApiMethod(unwrapCodeBlock(children));
-	if (!definition.functionName) return children;
-
-	const examples = generateApiMethodExamples(definition, options);
 	const sections = [`**Endpoint:** \`${options.method} ${options.path}\``];
 	if (options.note) sections.push(formatNote(options.note).trimEnd());
+
+	const definition = parseApiMethod(unwrapCodeBlock(children));
+	if (!definition.functionName) {
+		if (children.trim()) sections.push(children.trim());
+		return sections.join("\n\n");
+	}
+
+	const examples = generateApiMethodExamples(definition, options);
 
 	if (!options.isServerOnly && !options.isExternalOnly) {
 		sections.push(

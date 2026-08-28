@@ -289,20 +289,24 @@ function createClientBody(
 	const clientProperties = properties.filter(
 		(property) => !property.serverOnly,
 	);
-	let params = "";
+	let propertiesContent = "";
 
 	for (const [index, property] of clientProperties.entries()) {
-		if (!params) params = "{\n";
-		params += buildPropertyLine(
+		if (!propertiesContent) propertiesContent = "{\n";
+		propertiesContent += buildPropertyLine(
 			property,
 			property.path.length + baseIndentLevel,
 		);
-		params += closeNestedProperties(clientProperties, index, baseIndentLevel);
+		propertiesContent += closeNestedProperties(
+			clientProperties,
+			index,
+			baseIndentLevel,
+		);
 	}
 
-	if (!params) return "";
-	if (query) return `{\n    query: ${params}    },\n}`;
-	return `${params}}`;
+	if (!propertiesContent) return "";
+	if (query) return `{\n    query: ${propertiesContent}    },\n}`;
+	return `${propertiesContent}}`;
 }
 
 function createServerBody(
