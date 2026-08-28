@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { docsVersions } from "./docs-versions";
 import {
+	getDocsLLMsIndexUrl,
+	getLegacyMarkdownTarget,
+	getLLMNotFound,
 	getLLMsIndexTitle,
-	getLLMsPageUrl,
-	normalizeLLMsSlug,
+	getMarkdownPageUrl,
+	getRootLLMsIndex,
 } from "./llm-text";
 
 describe("LLM routes", () => {
 	it("uses the Better Auth product identity for latest docs", () => {
-		expect(getLLMsIndexTitle()).toBe("Better Auth");
+		expect(getLLMsIndexTitle()).toBe("Better Auth Documentation");
 	});
 
 	it("identifies archived documentation indexes", () => {
@@ -16,27 +19,55 @@ describe("LLM routes", () => {
 		expect(version).toBeDefined();
 		if (!version) return;
 
-		expect(getLLMsIndexTitle(version)).toBe("Better Auth — v1.6");
+		expect(getLLMsIndexTitle(version)).toBe("Better Auth Documentation — v1.6");
+		expect(getDocsLLMsIndexUrl(version)).toBe("/docs/1.6/llms.txt");
+	});
+
+	it("keeps the root index focused on discovery", () => {
+		const content = getRootLLMsIndex(docsVersions);
+
+		expect(content).toContain("https://better-auth.com/docs/llms.txt");
+		expect(content).toContain("https://better-auth.com/docs/1.6/llms.txt");
+		expect(content).toContain("https://mcp.better-auth.com/mcp");
+		expect(content).not.toContain("/llms.txt/docs/");
 	});
 
 	it("maps documentation pages to Markdown endpoints", () => {
-		expect(getLLMsPageUrl("/docs/introduction")).toBe(
-			"/llms.txt/docs/introduction.md",
+		expect(getMarkdownPageUrl("/docs/introduction")).toBe(
+			"/docs/introduction.md",
 		);
-		expect(getLLMsPageUrl("/docs/plugins/oauth?tab=server#usage")).toBe(
-			"/llms.txt/docs/plugins/oauth.md?tab=server#usage",
+		expect(getMarkdownPageUrl("/docs/plugins/oauth?tab=server#usage")).toBe(
+			"/docs/plugins/oauth.md?tab=server#usage",
 		);
-		expect(getLLMsPageUrl("/docs/foo(bar)/")).toBe(
-			"/llms.txt/docs/foo(bar).md",
-		);
-		expect(getLLMsPageUrl("/llms.txt")).toBe("/llms.txt");
+		expect(getMarkdownPageUrl("/docs/foo(bar)/")).toBe("/docs/foo(bar).md");
+		expect(
+			getMarkdownPageUrl(
+				"/docs/introduction",
+				new URL("https://better-auth.com"),
+			),
+		).toBe("https://better-auth.com/docs/introduction.md");
+		expect(getMarkdownPageUrl("/llms.txt")).toBe("/llms.txt");
 	});
 
-	it("normalizes Markdown version indexes before routing", () => {
-		expect(normalizeLLMsSlug(["1.6.md"])).toEqual(["1.6"]);
-		expect(normalizeLLMsSlug(["docs", "1.6", "introduction.md"])).toEqual([
-			"1.6",
-			"introduction",
-		]);
+	it("redirects legacy Markdown paths to canonical endpoints", () => {
+		expect(getLegacyMarkdownTarget(["docs", "introduction"])).toBe(
+			"/docs/introduction.md",
+		);
+		expect(getLegacyMarkdownTarget(["docs", "introduction.md"])).toBe(
+			"/docs/introduction.md",
+		);
+		expect(getLegacyMarkdownTarget(["1.6", "plugins", "scim"])).toBe(
+			"/docs/1.6/plugins/scim.md",
+		);
+		expect(getLegacyMarkdownTarget(["1.6"])).toBe("/docs/1.6/llms.txt");
+		expect(getLegacyMarkdownTarget(["docs", "introduction.txt"])).toBeNull();
+	});
+
+	it("returns a useful Markdown not-found response", () => {
+		const content = getLLMNotFound("/docs/missing.md");
+
+		expect(content).toContain("# Documentation Page Not Found");
+		expect(content).toContain("/docs/missing.md");
+		expect(content).toContain("https://better-auth.com/docs/llms.txt");
 	});
 });

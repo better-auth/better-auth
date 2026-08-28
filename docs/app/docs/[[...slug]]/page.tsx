@@ -32,6 +32,7 @@ import {
 	resolveVersionFromSlug,
 	scopeDocsHref,
 } from "@/lib/docs-versions";
+import { getMarkdownPageUrl } from "@/lib/llm-text";
 import { createMetadata } from "@/lib/metadata";
 import { getSourceFor } from "@/lib/source";
 import { cn } from "@/lib/utils";
@@ -56,7 +57,7 @@ export default async function Page({
 	const versionSource = docsVersionSources[version.id];
 	const contentRef = versionSource.commitSha ?? versionSource.editBranch;
 	const githubBase = `https://github.com/better-auth/better-auth/blob/${contentRef}/docs/content/docs`;
-	const markdownUrl = `/llms.txt${page.url}.md`;
+	const markdownUrl = getMarkdownPageUrl(page.url);
 
 	// Keep every absolute /docs link scoped to the version being viewed.
 	const scope = (href: string | undefined) => scopeDocsHref(href, version);
@@ -236,6 +237,12 @@ export async function generateMetadata({
 	return createMetadata({
 		title,
 		description: page.data.description,
+		alternates: {
+			canonical: page.url,
+			types: {
+				"text/markdown": getMarkdownPageUrl(page.url),
+			},
+		},
 		openGraph: {
 			title,
 			description: page.data.description,

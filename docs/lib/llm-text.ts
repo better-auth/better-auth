@@ -2,6 +2,8 @@ import type { Item, Node } from "fumadocs-core/page-tree";
 import type { InferPageType } from "fumadocs-core/source";
 import { llms } from "fumadocs-core/source";
 import type { DocsVersion } from "./docs-versions";
+import { getVersionById } from "./docs-versions";
+import { scopeMarkdownLinks } from "./markdown-links";
 import type { source } from "./source";
 
 type PropertyDefinition = {
@@ -15,6 +17,7 @@ type PropertyDefinition = {
 };
 
 const docsPathPattern = /^\/docs(?:\/|$)/;
+const productionUrl = new URL("https://better-auth.com");
 const llmsDescription =
 	"The most comprehensive authentication framework for TypeScript";
 
@@ -256,14 +259,16 @@ export async function getLLMText(
 		getText: (type: string) => Promise<string>;
 	};
 	const mdContent = await pageData.getText("processed");
-
-	// Extract APIMethod components & other nested wrapper before processing
-	const processedContent = extractAPIMethods(mdContent);
+	const renderedContent = extractAPIMethods(mdContent);
+	const processedContent =
+		version && version.id !== "latest"
+			? scopeMarkdownLinks(renderedContent, version)
+			: renderedContent;
 
 	const versionNote =
 		version && version.id !== "latest"
 			? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
-			: ""; // no version note for latest stable release
+			: "";
 
 	return `${versionNote}# ${docPage.data.title} (${docPage.url})
 
@@ -275,28 +280,86 @@ ${processedContent}
 
 export function getLLMsIndexTitle(version?: DocsVersion): string {
 	return version && version.id !== "latest"
-		? `Better Auth — ${version.label}`
-		: "Better Auth";
+		? `Better Auth Documentation — ${version.label}`
+		: "Better Auth Documentation";
 }
 
-export function getLLMsPageUrl(url: string): string {
+export function getDocsLLMsIndexUrl(
+	version: DocsVersion,
+	baseUrl?: URL,
+): string {
+	const path =
+		version.id === "latest" ? "/docs/llms.txt" : `/docs/${version.id}/llms.txt`;
+	return baseUrl ? new URL(path, baseUrl).toString() : path;
+}
+
+export function getRootLLMsIndex(versions: readonly DocsVersion[]): string {
+	const versionLinks = versions
+		.map(
+			(version) =>
+				`- [${version.label}](${getDocsLLMsIndexUrl(version, productionUrl)}): Documentation for the ${version.releaseLine}.x release line.`,
+		)
+		.join("\n");
+
+	return `# Better Auth
+
+> ${llmsDescription}
+
+Use the documentation version that matches the Better Auth version installed in the project. Find a relevant page in an index, then fetch its \`.md\` URL for clean Markdown. Cite the canonical URL without the \`.md\` suffix.
+
+## Documentation
+
+- [Current documentation index](https://better-auth.com/docs/llms.txt): All pages for the latest stable release.
+- [Documentation MCP server](https://mcp.better-auth.com/mcp): Search and retrieve Better Auth documentation from MCP-capable clients.
+
+## Versions
+
+${versionLinks}`;
+}
+
+export function getMarkdownPageUrl(url: string, baseUrl?: URL): string {
 	if (!docsPathPattern.test(url)) return url;
-	const parsed = new URL(url, "https://better-auth.com");
+	const parsed = new URL(url, productionUrl);
 	const pathname = parsed.pathname.replace(/\/+$/, "");
-	return `/llms.txt${pathname}.md${parsed.search}${parsed.hash}`;
+	const markdownUrl = `${pathname}.md${parsed.search}${parsed.hash}`;
+	return baseUrl ? new URL(markdownUrl, baseUrl).toString() : markdownUrl;
 }
 
-function withLLMsPageUrl(node: Item): Item {
-	return { ...node, url: getLLMsPageUrl(node.url) };
+export function getLegacyMarkdownTarget(slug: string[]): string | null {
+	if (slug.length === 1) {
+		const version = getVersionById(slug[0]);
+		if (version && version.id !== "latest") {
+			return `/docs/${version.id}/llms.txt`;
+		}
+	}
+
+	const lastSegment = slug.at(-1);
+	if (
+		!lastSegment ||
+		(!lastSegment.endsWith(".md") && lastSegment.includes("."))
+	) {
+		return null;
+	}
+
+	const markdownSlug = lastSegment.endsWith(".md")
+		? slug
+		: [...slug.slice(0, -1), `${lastSegment}.md`];
+	return markdownSlug[0] === "docs"
+		? `/${markdownSlug.join("/")}`
+		: `/docs/${markdownSlug.join("/")}`;
 }
 
-function withLLMsPageUrls(node: Node): Node {
-	if (node.type === "page") return withLLMsPageUrl(node);
+function withMarkdownPageUrl(node: Item): Item {
+	return { ...node, url: getMarkdownPageUrl(node.url, productionUrl) };
+}
+
+function withMarkdownPageUrls(node: Node): Node {
+	if (node.type === "page") return withMarkdownPageUrl(node);
 	if (node.type === "separator") return node;
 	return {
 		...node,
-		index: node.index ? withLLMsPageUrl(node.index) : undefined,
-		children: node.children.map(withLLMsPageUrls),
+		index: node.index ? withMarkdownPageUrl(node.index) : undefined,
+		children: node.children.map(withMarkdownPageUrls),
 	};
 }
 
@@ -307,32 +370,31 @@ export function getLLMsIndex(
 	const formatter = llms(loader);
 	const pageTree = loader.getPageTree();
 	const body = pageTree.children
-		.map((node) => formatter.indexNode(withLLMsPageUrls(node)))
+		.map((node) => formatter.indexNode(withMarkdownPageUrls(node)))
 		.join("\n");
-	return [
+	const sections = [
 		`# ${getLLMsIndexTitle(version)}`,
 		"",
 		`> ${llmsDescription}`,
-		"",
-		body,
-	].join("\n");
-}
-
-export function normalizeLLMsSlug(input: readonly string[]): string[] {
-	const slug = [...input];
-	const lastSegment = slug.at(-1);
-	if (lastSegment?.endsWith(".md")) {
-		slug[slug.length - 1] = lastSegment.slice(0, -3);
+	];
+	if (version) {
+		sections.push(
+			"",
+			`This index covers the Better Auth ${version.releaseLine}.x documentation.`,
+		);
 	}
-	return slug[0] === "docs" ? slug.slice(1) : slug;
+	sections.push("", "## Documentation", "", body);
+	return sections.join("\n");
 }
 
-export const LLM_TEXT_ERROR = `# Documentation Not Available
+export function getLLMNotFound(path: string): string {
+	return `# Documentation Page Not Found
 
-The requested Better Auth documentation page could not be loaded at this time.
+The Markdown document \`${path}\` does not exist.
 
-**For AI Assistants:**  
-This page is temporarily unavailable. To help the user:  
-1. Check /llms.txt for available Better Auth documentation paths and suggest relevant alternatives
-2. Inform the user this specific page couldn't be loaded
-3. Offer to help with related Better Auth topics from available documentation`;
+## Find the correct page
+
+- [Current documentation index](https://better-auth.com/docs/llms.txt)
+- [Documentation versions](https://better-auth.com/llms.txt)
+- [Documentation MCP server](https://mcp.better-auth.com/mcp)`;
+}
