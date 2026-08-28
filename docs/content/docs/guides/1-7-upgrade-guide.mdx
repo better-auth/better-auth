@@ -29,43 +29,65 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 
 ## Before you upgrade
 
-The upgrade command handles package updates. The database needs more care because some 1.7 features change tables or require a manual data step. The `auth` CLI requires Node.js 22.12 or newer.
-
-These features change the schema:
-
-| Feature                    | What it adds                                                                                                            | Manual preparation?                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Protected resources        | New resource tables and key columns                                                                                     | No                                                        |
-| Resource-bound tokens      | Resource columns on the token tables                                                                                    | No                                                        |
-| DPoP                       | A token-binding column                                                                                                  | No                                                        |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                       | No                                                        |
-| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                                                        |
-| Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                                                        |
-| Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                                                        |
-| Account identity           | A required `issuer` column and unique compound index on `issuer` and `accountId` in every 1.7 schema                    | **Yes for populated 1.6 account tables**                  |
-| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, retire, then reprovision**                         |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                                                        |
-| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, guided or manual client move**                     |
-| Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`       | **Yes, deduplicate; MySQL/SQL Server also bound strings** |
-
-<Callout type="warn">
-  Never apply the 1.7 account schema directly over a populated 1.6 `account` table. A plain schema migration cannot choose identity namespaces or resolve collisions. The OAuth provider and SCIM changes also require their guided or manual data steps.
-</Callout>
+The upgrade command handles package updates. The database needs a separate migration because some 1.7 features change tables or require a data decision. Run the `auth` CLI with Node.js 22.12 or newer, using the same Better Auth version that you will deploy.
 
 ### Migrate from 1.6 to 1.7
 
-`auth migrate` recognizes 1.6 data and switches to a guided migration that changes data and schema together. It covers the built-in PostgreSQL, MySQL, SQLite, and SQL Server configurations, plus SQL-backed Drizzle and Prisma adapters. Every 1.7 account schema requires `issuer` and `accountId` and enforces a unique compound index across them. A populated 1.6 database must set `account: { identityStrategy: "provider-id" }` before migration so the guided path preserves its logical `(providerId, accountId)` identities. Selecting `"issuer"` for populated 1.6 data is blocked because adopting authority-scoped identity is a re-key migration that needs separate review. An already-migrated v1.7 issuer database remains unchanged when the option is omitted.
+The supported path for a populated 1.6 database keeps existing accounts linked to the same users by preserving provider-scoped account identity. Prepare the v1.7 configuration with `provider-id` explicitly selected:
 
-Back up the database, stop authentication writes, and run:
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  account: { identityStrategy: "provider-id" },
+  // Your existing configuration
+});
+```
+
+Run the read-only plan before applying a generated schema or changing the database:
 
 ```bash title="Terminal"
 npx auth migrate plan
+```
+
+`migrate plan` reports `ready`, `blocked`, or `up-to-date`. Continue to the rehearsal and cutover when the plan is ready. A blocked plan leaves the database unchanged and gives the configuration or data correction required before you continue. Follow only the linked sections for the blockers it reports; do not run `apply` until the plan is ready.
+
+<Callout type="warn">
+  Never apply the 1.7 account schema directly over a populated 1.6 `account` table. A plain schema migration cannot preserve account identity or resolve collisions because the 1.6 rows have no `issuer` value.
+</Callout>
+
+Before the production cutover, restore a recent database backup into an isolated environment and rehearse this workflow. Verify the sign-in and provisioning paths your application uses, then run `plan` again and require an `up-to-date` result. This rehearsal confirms that the backup is restorable and that the migration choices, application configuration, and database work together.
+
+During the production cutover, stop every v1.6 process that can write authentication data, including application instances, background jobs, and provisioning workers that handle credentials, OAuth, SSO, or SCIM. Do not run v1.6 and v1.7 writers against the same database at the same time. Take a final restorable backup, retain it for the rollback window, and apply the ready plan:
+
+```bash title="Terminal"
 npx auth migrate apply
 ```
 
-`migrate plan` only reads the database. It prints the selected and detected account identity strategies, account counts, automatic namespace resolution, projected collisions, schema changes, irreversible release actions, and blockers. Each blocker has a stable code and links to the section of this guide that resolves it. On a populated 1.6 account table, an omitted strategy produces `account-identity-strategy-required`; add the exact provider-id configuration above and run the plan again. Explicit issuer produces `account-identity-strategy-unsupported`. `migrate apply` reruns the same preflight before changing data, asks about other release decisions it cannot make, and saves the reviewed answers to `better-auth-migration.json`. The file identifies the `1.6-to-1.7` transition, so the same choices can be inspected and replayed. A blocked run leaves the database unchanged.
+`migrate apply` reruns the same preflight and refuses to change the database unless the plan remains ready. After it succeeds, deploy the same v1.7 packages and configuration to every instance, run the cutover smoke tests, and then reopen application writes.
 
-Pass the saved file positionally to review or apply the same decisions in another environment:
+Keep the final backup and any renamed v1.6 tables until the rollback window closes. If you must roll back before reopening application writes, stop every v1.7 process, restore the complete backup, and redeploy v1.6 together. Do not restore selected authentication tables or reactivate legacy OAuth token tables individually, because a partial restore can combine incompatible schemas and token revocation states. After reopening application writes, restoring the backup would discard new accounts, sessions, and provisioning changes; use a forward fix or a separately reviewed data reconciliation instead.
+
+#### Resolve additional migration work
+
+Most applications do not need every migration branch below. Continue only when `migrate plan` reports one of these changes or when your database adapter requires the matching workflow.
+
+| Feature                    | What changes                                                                                                      | Additional preparation                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Protected resources        | New resource tables and key columns                                                                               | None                                                       |
+| Resource-bound tokens      | Resource columns on the token tables                                                                              | None                                                       |
+| DPoP                       | A token-binding column                                                                                            | None                                                       |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                 | None                                                       |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                      | None                                                       |
+| Back-channel logout        | Logout-URL and revoked columns                                                                                    | None                                                       |
+| Requested user-info claims | A requested-claims column on the token and consent tables                                                         | None                                                       |
+| Account identity           | Required `issuer` and `accountId`, with a unique compound index across them                                       | Populated 1.6 account tables                               |
+| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, that replace the legacy SCIM models        | Retire, then reprovision                                   |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                         | None                                                       |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                   | Guided or manual client move                               |
+| Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources` | Deduplicate; MySQL and SQL Server also need bounded values |
+
+When `apply` asks about release decisions that it cannot make, it saves the reviewed answers to `better-auth-migration.json`. The file identifies the `1.6-to-1.7` transition, so you can inspect and replay the same choices in another environment:
 
 ```bash title="Terminal"
 npx auth migrate plan better-auth-migration.json
@@ -95,20 +117,7 @@ Every generated 1.7 schema has the same physical identity fields: required `issu
 
 #### Populated 1.6: preserve provider-scoped account identity
 
-Set `"provider-id"` explicitly before planning:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-  account: {
-    identityStrategy: "provider-id",
-  },
-  // ...
-});
-```
-
-`auth migrate plan` reports provider-id as the selected strategy, inventories duplicate `(providerId, accountId)` identities, and plans the required issuer backfill and `(issuer, accountId)` index. `auth migrate apply` stores deterministic namespaces such as `local:oauth:google` for external connections, preserves local namespaces such as `local:credential`, makes `issuer` required, and creates the compound index. Returning sign-ins continue to recognize the same logical `(providerId, accountId)` identity.
+`"provider-id"` keeps the provider-scoped behavior configured in the migration path above. `auth migrate plan` inventories duplicate `(providerId, accountId)` identities and plans the required issuer backfill and `(issuer, accountId)` index. `auth migrate apply` stores deterministic namespaces such as `local:oauth:google` for external connections, preserves local namespaces such as `local:credential`, makes `issuer` required, and creates the compound index. Returning sign-ins continue to recognize the same logical `(providerId, accountId)` identity.
 
 The synthetic namespace is storage identity, not protocol trust. OAuth, OpenID Connect, One Tap, OAuth Proxy, OIDC SSO, and SAML SSO still verify the provider's trusted issuer or equivalent protocol authority before storing the provider namespace. Keep this option identical on every instance that reads or writes the database. Renaming a provider changes its account namespace, and 2 provider aliases for the same authority remain separate identities, matching the provider-scoped behavior of 1.6.
 
