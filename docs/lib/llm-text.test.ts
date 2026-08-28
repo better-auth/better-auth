@@ -6,6 +6,7 @@ import {
 	getLLMsIndexTitle,
 	getMarkdownPageUrl,
 	getRootLLMsIndex,
+	renderApiMethodMarkdown,
 } from "./llm-text";
 
 describe("LLM routes", () => {
@@ -46,6 +47,68 @@ describe("LLM routes", () => {
 			),
 		).toBe("https://better-auth.com/docs/introduction.md");
 		expect(getMarkdownPageUrl("/llms.txt")).toBe("/llms.txt");
+	});
+
+	it("renders API method placeholders with all endpoint metadata", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/admin/list-users",
+				method: "GET",
+				requireHeaders: null,
+				headersComment: "Forward the request headers.",
+				resultVariable: {
+					value: '"users"',
+				},
+			},
+			children: `\`\`\`ts
+type listUsers = {
+  limit?: number = 100
+}
+\`\`\``,
+		});
+
+		expect(markdown).toContain("**Endpoint:** `GET /admin/list-users`");
+		expect(markdown).toContain("const { data: users, error } =");
+		expect(markdown).toContain("const users = await auth.api.listUsers");
+		expect(markdown).toContain("Forward the request headers.");
+		expect(markdown).not.toContain("<APIMethod");
+	});
+
+	it("omits unavailable API method examples", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/api-key/verify",
+				method: "POST",
+				isServerOnly: null,
+			},
+			children: `\`\`\`ts
+type verifyApiKey = {
+  key: string = "secret"
+}
+\`\`\``,
+		});
+
+		expect(markdown).not.toContain("### Client Side");
+		expect(markdown).toContain("### Server Side");
+	});
+
+	it("renders PATCH API methods", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/scim/v2/Users/:id",
+				method: "PATCH",
+			},
+			children: `\`\`\`ts
+type patchUser = {
+  id: string = "user-id"
+}
+\`\`\``,
+		});
+
+		expect(markdown).toContain("**Endpoint:** `PATCH /scim/v2/Users/:id`");
 	});
 
 	it("returns a useful Markdown not-found response", () => {

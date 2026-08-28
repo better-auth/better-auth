@@ -1,3 +1,4 @@
+import type { LLMsOptions } from "fumadocs-core/mdx-plugins/remark-llms";
 import { pageSchema } from "fumadocs-core/source/schema";
 import {
 	defineCollections,
@@ -17,12 +18,16 @@ const docsPageSchema = pageSchema.extend({
 	sidebarTitle: z.string().min(1).optional(),
 });
 
+const processedMarkdownOptions = {
+	mdxAsPlaceholder: ["APIMethod"],
+} satisfies LLMsOptions;
+
 export const docs = defineDocs({
 	dir: "./content/docs",
 	docs: {
 		schema: docsPageSchema,
 		postprocess: {
-			includeProcessedMarkdown: true,
+			includeProcessedMarkdown: processedMarkdownOptions,
 		},
 		async: true,
 	},
@@ -33,7 +38,7 @@ export const docsV16 = defineDocs({
 	docs: {
 		schema: docsPageSchema,
 		postprocess: {
-			includeProcessedMarkdown: true,
+			includeProcessedMarkdown: processedMarkdownOptions,
 		},
 		async: true,
 	},
