@@ -31,7 +31,7 @@ function addReplacement(
 	});
 }
 
-export function scopeDocsContent(
+export function scopeMarkdownLinks(
 	content: string,
 	version: DocsVersion,
 ): string {

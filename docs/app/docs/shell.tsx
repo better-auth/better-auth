@@ -2,9 +2,9 @@
 
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import type { ReactNode } from "react";
-import { usePageTree } from "@/app/docs/provider";
+import { usePageTree } from "./provider";
 
-export function VersionedDocsLayout({ children }: { children: ReactNode }) {
+export function DocsShell({ children }: { children: ReactNode }) {
 	const tree = usePageTree();
 
 	return (

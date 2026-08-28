@@ -7,7 +7,7 @@ import { docsVersions } from "./docs-versions";
 
 const releaseVersionsSchema = z.record(z.string(), z.string());
 
-export function getResolvedDocsVersions(): ResolvedDocsVersion[] {
+export function loadDocsVersions(): ResolvedDocsVersion[] {
 	const metadataPath = join(
 		process.cwd(),
 		"content",

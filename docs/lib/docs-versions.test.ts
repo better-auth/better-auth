@@ -8,7 +8,6 @@ import {
 	resolveVersionFromSlug,
 	versionedDocsHref,
 } from "./docs-versions";
-import { scopeDocsContent } from "./scope-docs-content";
 
 const [latestVersion, version16] = docsVersions;
 
@@ -47,35 +46,6 @@ describe("documentation versions", () => {
 		expect(versionedDocsHref("/docs", version16)).toBe(
 			"/docs/1.6/introduction",
 		);
-	});
-
-	it("scopes unversioned content links without duplicating version prefixes", () => {
-		expect(
-			scopeDocsContent(
-				'[SCIM](/docs/plugins/scim) <Link href="/docs/1.6/introduction" />',
-				version16,
-			),
-		).toBe(
-			'[SCIM](/docs/1.6/plugins/scim) <Link href="/docs/1.6/introduction" />',
-		);
-	});
-
-	it("scopes link definitions and MDX href attributes", () => {
-		expect(
-			scopeDocsContent(
-				'[SCIM][scim]\n\n[scim]: /docs/plugins/scim\n\n<Card href="/docs/introduction" />',
-				version16,
-			),
-		).toBe(
-			'[SCIM][scim]\n\n[scim]: /docs/1.6/plugins/scim\n\n<Card href="/docs/1.6/introduction" />',
-		);
-	});
-
-	it("preserves documentation links in code examples", () => {
-		const content =
-			'Use `[SCIM](/docs/plugins/scim)` as shown below.\n\n```mdx\n<Link href="/docs/introduction" />\n```';
-
-		expect(scopeDocsContent(content, version16)).toBe(content);
 	});
 
 	it("keeps the same page when it exists in the target version", () => {

@@ -6,7 +6,7 @@ import { remark } from "remark";
 import { visit } from "unist-util-visit";
 import { docsVersionSources } from "../lib/docs-version-sources.ts";
 import { docsVersions, versionedDocsHref } from "../lib/docs-versions.ts";
-import { scopeDocsContent } from "../lib/scope-docs-content.ts";
+import { scopeMarkdownLinks } from "../lib/markdown-links.ts";
 
 const routeEntries: NonNullable<PopulateParams[string]> = [];
 const files: FileObject[] = [];
@@ -83,7 +83,7 @@ for (const version of docsVersions) {
 		const rawContent = readFileSync(filePath, "utf8");
 		const versionedContent =
 			version.id !== "latest"
-				? scopeDocsContent(rawContent, version)
+				? scopeMarkdownLinks(rawContent, version)
 				: rawContent;
 		const content = normalizeTrailingSlashAnchors(versionedContent);
 

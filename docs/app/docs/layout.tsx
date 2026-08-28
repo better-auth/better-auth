@@ -2,13 +2,13 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { AIChat, AIChatPanel, AIChatTrigger } from "@/components/ai-chat";
 import { DocsSidebar } from "@/components/docs/docs-sidebar";
-import { VersionedDocsLayout } from "@/components/docs/versioned-docs-layout";
 import type { DocsVersion, VersionAvailability } from "@/lib/docs-versions";
 import { docsVersions, stripVersionPrefix } from "@/lib/docs-versions";
-import { getResolvedDocsVersions } from "@/lib/resolved-docs-versions";
+import { loadDocsVersions } from "@/lib/release-versions";
 import { getSourceFor } from "@/lib/source";
 import type { PageTreesByVersion } from "./provider";
 import { DocsProvider } from "./provider";
+import { DocsShell } from "./shell";
 
 const [latestVersion, version16] = docsVersions;
 
@@ -28,7 +28,7 @@ const versionAvailability = {
 	latest: getAvailablePaths(latestVersion),
 	"1.6": getAvailablePaths(version16),
 } satisfies VersionAvailability;
-const resolvedDocsVersions = getResolvedDocsVersions();
+const resolvedDocsVersions = loadDocsVersions();
 export default function Layout({ children }: { children: ReactNode }) {
 	return (
 		<DocsProvider
@@ -40,7 +40,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 				<Suspense>
 					<DocsSidebar />
 				</Suspense>
-				<VersionedDocsLayout>
+				<DocsShell>
 					{children}
 					<AIChatPanel />
 					<AIChatTrigger>
@@ -50,7 +50,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 							<span className="text-[11px]">&#8984;</span>I
 						</kbd>
 					</AIChatTrigger>
-				</VersionedDocsLayout>
+				</DocsShell>
 			</AIChat>
 		</DocsProvider>
 	);
