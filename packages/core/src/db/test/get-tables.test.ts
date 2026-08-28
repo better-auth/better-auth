@@ -16,6 +16,23 @@ const secondaryStorageStub: SecondaryStorage = {
 };
 
 describe("getAuthTables", () => {
+	it.each([
+		undefined,
+		"issuer",
+		"provider-id",
+	] as const)("keeps the required issuer schema for the %s identity strategy", (identityStrategy) => {
+		const tables = getAuthTables({
+			...(identityStrategy && { account: { identityStrategy } }),
+		});
+
+		expect(tables.account?.fields.issuer).toMatchObject({ required: true });
+		expect(tables.account?.fields.accountId).toMatchObject({ required: true });
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+	});
+
 	it("creates a local account key without changing the provider account id", () => {
 		const credentialAccountKey: AccountKey = {
 			issuer: createLocalAccountIssuer("credential"),
@@ -117,29 +134,6 @@ describe("getAuthTables", () => {
 		);
 		expect(tables.account?.fields.providerId?.fieldName).toBe("provider_alias");
 		expect(tables.account?.fields.providerAccountId).toBeUndefined();
-		expect(tables.account?.indexes).toContainEqual({
-			fields: ["issuer", "accountId"],
-			unique: true,
-		});
-	});
-
-	it.each([
-		undefined,
-		"issuer",
-		"provider-id",
-	] as const)("keeps the required issuer schema when identityStrategy is %s", (identityStrategy) => {
-		const tables = getAuthTables({
-			account: { identityStrategy },
-		});
-
-		expect(tables.account?.fields.issuer).toMatchObject({
-			fieldName: "issuer",
-			required: true,
-		});
-		expect(tables.account?.fields.accountId).toMatchObject({
-			fieldName: "accountId",
-			required: true,
-		});
 		expect(tables.account?.indexes).toContainEqual({
 			fields: ["issuer", "accountId"],
 			unique: true,

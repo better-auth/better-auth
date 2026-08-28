@@ -1159,15 +1159,15 @@ export type BetterAuthOptions = {
 	account?:
 		| (BetterAuthDBOptions<"account", keyof BaseAccount> & {
 				/**
-				 * Determines the identity namespace persisted for an external account.
+				 * Determines which namespace Better Auth pairs with a provider's
+				 * account ID when recognizing an external account.
 				 *
-				 * `"issuer"` uses the verified authority, or the provider's synthetic
-				 * issuer when it has no authority of its own. `"provider-id"` persists a
-				 * deterministic namespace derived from the configured provider ID to
-				 * preserve Better Auth 1.6 provider-scoped identity. Both strategies use
-				 * the required `issuer` field and unique `(issuer, accountId)` index.
-				 * Changing strategy on populated 1.7 data requires a reviewed re-key
-				 * migration.
+				 * `"issuer"` uses the authority verified by the provider, or the
+				 * provider's synthetic issuer when it has no issuer of its own.
+				 * `"provider-id"` stores a deterministic provider namespace in the same
+				 * required issuer field, preserving logical v1.6 `(providerId, accountId)`
+				 * recognition. The guided 1.6 migration requires an explicit strategy for
+				 * populated accounts.
 				 *
 				 * @default "issuer" when omitted in v1.7 compatibility mode.
 				 * Generated configurations explicitly use "provider-id".
