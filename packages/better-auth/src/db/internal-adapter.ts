@@ -1449,7 +1449,6 @@ export const createInternalAdapter = (
 			value: string;
 			expiresAt: Date;
 		}): Promise<boolean> => {
-			const reservationId = await getReservationId(data.identifier, options);
 			const storageOption = getStorageOption(
 				data.identifier,
 				options.verification?.storeIdentifier,
@@ -1460,14 +1459,9 @@ export const createInternalAdapter = (
 			);
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
-				// Best-effort under concurrency: without a database primary key there
-				// is no first-writer-wins gate, so two callers racing a get-then-set
-				// can both observe an empty key and both win (mirrors the non-atomic
-				// secondary fallback in consumeVerificationValue).
-				// FIXME(reserve-secondary-atomic): require an atomic conditional set
-				// (set-if-absent) on SecondaryStorage, or require database-backed
-				// verification storage for reservations, so this path can guarantee
-				// first-writer-wins across processes.
+				// Secondary-storage-only path: use a string cache key, no database id needed.
+				// Get a reservation id for the cache value, but this won't be written to a DB column.
+				const reservationId = await getReservationId(data.identifier, options);
 				const cacheKey = `verification:${storedIdentifier}`;
 				const existing = await secondaryStorage.get(cacheKey);
 				if (existing) return false;
@@ -1483,6 +1477,10 @@ export const createInternalAdapter = (
 				);
 				return true;
 			}
+
+			// Database-backed path: need a database-compatible reservation id.
+			// This will throw for serial ids since they can't hold a derived key.
+			const reservationId = await getReservationId(data.identifier, options);
 
 			try {
 				await adapter.create({
