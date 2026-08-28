@@ -2698,6 +2698,69 @@ describe("oauth2", async () => {
 		expect(session.data).toBeNull();
 	});
 
+	it("should complete an earlier cookie-backed flow after a second one starts", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-parallel",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		// One cookie jar, as a single browser would have across two tabs.
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const startSignIn = async () => {
+			const res = await authClient.signIn.social({
+				provider: "test-cookie-parallel",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					// Send the jar as well as collect it, so the second sign-in sees
+					// the cookie the first one wrote.
+					headers,
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			return res.data?.url ?? "";
+		};
+
+		const firstURL = await startSignIn();
+		const secondURL = await startSignIn();
+
+		expect(firstURL).toBeTruthy();
+		expect(secondURL).toBeTruthy();
+		expect(new URL(firstURL).searchParams.get("state")).not.toBe(
+			new URL(secondURL).searchParams.get("state"),
+		);
+
+		// The older tab finishes first. Its nonce must still be honoured.
+		const { callbackURL } = await simulateOAuthFlow(
+			firstURL,
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).not.toContain("state_mismatch");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/4951
 	 * @see https://github.com/better-auth/better-auth/pull/9069

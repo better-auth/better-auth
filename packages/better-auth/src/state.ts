@@ -41,6 +41,52 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
+/**
+ * A browser can have several sign-in flows open at once: two tabs, a retry after
+ * a failure, or an authorize URL still sitting in history. The cookie strategy
+ * keeps them all, because it only has one cookie to put them in and the newest
+ * write would otherwise replace the nonce an older flow still needs, failing its
+ * callback with `state_security_mismatch`.
+ *
+ * Capped so the cookie stays well inside the 4KB per-cookie limit.
+ */
+const MAX_PENDING_STATES = 5;
+
+/**
+ * Cookies written before multi-flow support hold a single state object rather
+ * than a list, so both shapes have to parse while those are still in flight.
+ */
+const stateCookieSchema = z.union([z.array(stateDataSchema), stateDataSchema]);
+
+/**
+ * Normalises a decrypted `oauth_state` payload to the list of flows it holds.
+ * Exported because the oauth-proxy plugin carries the same cookie between
+ * environments and has to read it with the same rules.
+ */
+export function toPendingStates(value: unknown): StateData[] {
+	const parsed = stateCookieSchema.parse(value);
+	return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+async function readPendingStates(
+	c: GenericEndpointContext,
+	cookieName: string,
+): Promise<StateData[]> {
+	const encryptedData = c.getCookie(cookieName);
+	if (!encryptedData) return [];
+
+	try {
+		const decryptedData = await symmetricDecrypt({
+			key: c.context.secretConfig,
+			data: encryptedData,
+		});
+		return toPendingStates(JSON.parse(decryptedData));
+	} catch {
+		// An unreadable cookie is replaced rather than failing the new sign-in.
+		return [];
+	}
+}
+
 export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
 	Object.keys(stateDataSchema.shape),
 );
@@ -93,10 +139,6 @@ export async function generateGenericState(
 	// no verification record created
 	if (storeStateStrategy === "cookie") {
 		const payload: StateData = { ...stateData, oauthState: state };
-		const encryptedData = await symmetricEncrypt({
-			key: c.context.secretConfig,
-			data: JSON.stringify(payload),
-		});
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "oauth_state",
@@ -104,6 +146,18 @@ export async function generateGenericState(
 				maxAge: 10 * 60, // 10 minutes
 			},
 		);
+
+		// Keep the flows this browser already has open, dropping any that have
+		// expired, so a second sign-in does not invalidate the first one.
+		const now = Date.now();
+		const pending = await readPendingStates(c, stateCookie.name);
+		const retained = pending.filter((entry) => entry.expiresAt > now);
+		const nextStates = [...retained, payload].slice(-MAX_PENDING_STATES);
+
+		const encryptedData = await symmetricEncrypt({
+			key: c.context.secretConfig,
+			data: JSON.stringify(nextStates),
+		});
 
 		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
 
@@ -189,13 +243,14 @@ export async function parseGenericState(
 			});
 		}
 
+		let pendingStates: StateData[];
 		try {
 			const decryptedData = await symmetricDecrypt({
 				key: c.context.secretConfig,
 				data: encryptedData,
 			});
 
-			parsedData = stateDataSchema.parse(JSON.parse(decryptedData));
+			pendingStates = toPendingStates(JSON.parse(decryptedData));
 		} catch (error) {
 			throw new StateError(
 				"State invalid: Failed to decrypt or parse auth state",
@@ -207,19 +262,51 @@ export async function parseGenericState(
 			);
 		}
 
-		if (!parsedData.oauthState || parsedData.oauthState !== state) {
+		// Expired entries still match here so the expiry check below reports them
+		// as `state_mismatch` rather than as a security mismatch.
+		const matchedState = pendingStates.find(
+			(entry) => entry.oauthState === state,
+		);
+
+		if (!matchedState) {
 			throw new StateError(
 				"State mismatch: OAuth state parameter does not match stored state",
 				{
 					code: "state_security_mismatch",
 					details: { state },
-					errorURL: parsedData.errorURL,
+					// No flow matched, so fall back to the newest one's error URL. Every
+					// entry had its origin validated at sign-in.
+					errorURL: pendingStates.at(-1)?.errorURL,
 				},
 			);
 		}
 
-		// Clear the cookie after successful parsing
-		expireCookie(c, stateCookie);
+		parsedData = matchedState;
+
+		// Consume this flow, but leave any other tab's flow intact.
+		const now = Date.now();
+		const remainingStates = pendingStates.filter(
+			(entry) => entry !== matchedState && entry.expiresAt > now,
+		);
+
+		if (remainingStates.length === 0) {
+			expireCookie(c, stateCookie);
+		} else {
+			const refreshedCookie = c.context.createAuthCookie(
+				settings?.cookieName ?? "oauth_state",
+				{
+					maxAge: 10 * 60, // 10 minutes
+				},
+			);
+			c.setCookie(
+				refreshedCookie.name,
+				await symmetricEncrypt({
+					key: c.context.secretConfig,
+					data: JSON.stringify(remainingStates),
+				}),
+				refreshedCookie.attributes,
+			);
+		}
 	} else {
 		// Default: database strategy
 		const data = await c.context.internalAdapter.findVerificationValue(state);
