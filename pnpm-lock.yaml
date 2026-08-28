@@ -802,6 +802,9 @@ importers:
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../packages/stripe
+      auth:
+        specifier: workspace:*
+        version: link:../../packages/cli
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
