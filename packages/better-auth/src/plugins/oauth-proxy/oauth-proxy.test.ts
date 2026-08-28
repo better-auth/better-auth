@@ -631,10 +631,16 @@ describe("oauth-proxy", async () => {
 			expect(encryptedProfile).toBeTruthy();
 		});
 
-		it("should create user/session on preview from profile data", async () => {
+		it.each([
+			"issuer",
+			"provider-id",
+		] as const)("creates the preview account with explicit %s identity strategy", async (identityStrategy) => {
 			// Production instance - handles OAuth callback
 			const production = await getTestInstance(
 				{
+					// Deliberately differ from the preview strategy: production only
+					// verifies and relays the authority; preview selects storage.
+					account: { identityStrategy: "provider-id" },
 					baseURL: "http://localhost:3000",
 					plugins: [oAuthProxy()],
 					socialProviders: {
@@ -652,6 +658,7 @@ describe("oauth-proxy", async () => {
 			// Preview instance with SEPARATE database
 			const preview = await getTestInstance(
 				{
+					account: { identityStrategy },
 					baseURL: "http://preview.example.com",
 					plugins: [
 						oAuthProxy({
@@ -734,6 +741,11 @@ describe("oauth-proxy", async () => {
 			);
 			expect(previewAccounts.length).toBe(1);
 			expect(previewAccounts[0]?.providerId).toBe("google");
+			expect(previewAccounts[0]?.issuer).toBe(
+				identityStrategy === "provider-id"
+					? "local:oauth:google"
+					: "https://accounts.google.com",
+			);
 
 			// Verify session was created
 			const previewSessions = await previewCtx.internalAdapter.listSessions(

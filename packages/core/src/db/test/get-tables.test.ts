@@ -123,6 +123,29 @@ describe("getAuthTables", () => {
 		});
 	});
 
+	it.each([
+		undefined,
+		"issuer",
+		"provider-id",
+	] as const)("keeps the required issuer schema when identityStrategy is %s", (identityStrategy) => {
+		const tables = getAuthTables({
+			account: { identityStrategy },
+		});
+
+		expect(tables.account?.fields.issuer).toMatchObject({
+			fieldName: "issuer",
+			required: true,
+		});
+		expect(tables.account?.fields.accountId).toMatchObject({
+			fieldName: "accountId",
+			required: true,
+		});
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+	});
+
 	it("should propagate compound indexes from plugin schemas", () => {
 		const tables = getAuthTables({
 			plugins: [

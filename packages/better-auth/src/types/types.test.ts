@@ -53,6 +53,16 @@ declare module "@better-auth/core" {
 }
 
 describe("general types", async () => {
+	it("accepts the provider-scoped account identity strategy", () => {
+		const options = {
+			account: { identityStrategy: "provider-id" },
+		} satisfies BetterAuthOptions;
+
+		expectTypeOf(
+			options.account.identityStrategy,
+		).toEqualTypeOf<"provider-id">();
+	});
+
 	it("should infer base session", async () => {
 		const { auth } = await getTestInstance();
 		type Session = typeof auth.$Infer.Session;

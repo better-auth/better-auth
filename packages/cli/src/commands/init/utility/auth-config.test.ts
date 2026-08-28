@@ -20,7 +20,12 @@ describe("Init CLI - auth config generation", () => {
 			installDependency: mockInstallDependency,
 		});
 		const formattedAuthConfig = await formatConfigCode(authConfig);
-		const expectedCode = `database: prismaAdapter(client, { provider: "sqlite" })`;
+		const expectedCode = await formatConfigCode(
+			[
+				`database: prismaAdapter(client, { provider: "sqlite" }),`,
+				`account: { identityStrategy: "provider-id" },`,
+			].join("\n"),
+		);
 		expect(formattedAuthConfig).toEqual(expectedCode);
 	});
 
@@ -34,6 +39,7 @@ describe("Init CLI - auth config generation", () => {
 		const expectedCode = await formatConfigCode(
 			[
 				`database: prismaAdapter(client, { provider: "sqlite" }),`,
+				`account: { identityStrategy: "provider-id" },`,
 				`appName: "My App \\test",`,
 			].join("\n"),
 		);
@@ -51,6 +57,7 @@ describe("Init CLI - auth config generation", () => {
 		const expectedCode = await formatConfigCode(
 			[
 				`database: prismaAdapter(client, { provider: "sqlite" }),`,
+				`account: { identityStrategy: "provider-id" },`,
 				`appName: "My App \\test",`,
 				`baseURL: "https://my-app.com/",`,
 			].join("\n"),
@@ -70,6 +77,7 @@ describe("Init CLI - auth config generation", () => {
 		const expectedCode = await formatConfigCode(
 			[
 				`database: prismaAdapter(client, { provider: "sqlite" }),`,
+				`account: { identityStrategy: "provider-id" },`,
 				`appName: "My App \\test",`,
 				`baseURL: "https://my-app.com/",`,
 				`plugins: [username(), twoFactor()],`,

@@ -286,6 +286,53 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 	});
 
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("keeps the verified OIDC issuer in resolution hooks under explicit %s identity", async (identityStrategy) => {
+		subject = "provider-scoped-directory-user";
+		email = "provider-scoped@example.com";
+		const inputs: SSOUserResolutionInput[] = [];
+		const instance = await createInstance(
+			{
+				resolveUser(input) {
+					inputs.push(input);
+					return { action: "continue" };
+				},
+			},
+			(cleanup) => deferredCleanups.push(cleanup),
+			{ account: { identityStrategy } },
+		);
+
+		const signIn = await completeSignIn(instance.baseURL);
+		expect(signIn.callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(inputs).toHaveLength(1);
+		expect(inputs[0]).toMatchObject({
+			protocol: "oidc",
+			providerId: "workforce",
+			accountKey: {
+				issuer: identityProvider.issuer.url,
+				accountId: subject,
+			},
+		});
+		const accounts = await instance.db.findMany<Account>({
+			model: "account",
+			where: [],
+		});
+		expect(accounts).toEqual([
+			expect.objectContaining({
+				issuer:
+					identityStrategy === "provider-id"
+						? "local:oauth:workforce"
+						: identityProvider.issuer.url,
+				accountId: subject,
+				providerId: "workforce",
+			}),
+		]);
+	});
+
 	it("preserves an unverified selected profile on a same-email first link", async ({
 		onTestFinished,
 	}) => {
