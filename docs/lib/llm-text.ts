@@ -2,6 +2,7 @@ import type { Item, Node } from "fumadocs-core/page-tree";
 import type { InferPageType } from "fumadocs-core/source";
 import { llms } from "fumadocs-core/source";
 import type { DocsVersion } from "./docs-versions";
+import { getVersionById } from "./docs-versions";
 import { scopeMarkdownLinks } from "./markdown-links";
 import type { source } from "./source";
 
@@ -322,6 +323,30 @@ export function getMarkdownPageUrl(url: string, baseUrl?: URL): string {
 	const pathname = parsed.pathname.replace(/\/+$/, "");
 	const markdownUrl = `${pathname}.md${parsed.search}${parsed.hash}`;
 	return baseUrl ? new URL(markdownUrl, baseUrl).toString() : markdownUrl;
+}
+
+export function getLegacyMarkdownTarget(slug: string[]): string | null {
+	if (slug.length === 1) {
+		const version = getVersionById(slug[0]);
+		if (version && version.id !== "latest") {
+			return `/docs/${version.id}/llms.txt`;
+		}
+	}
+
+	const lastSegment = slug.at(-1);
+	if (
+		!lastSegment ||
+		(!lastSegment.endsWith(".md") && lastSegment.includes("."))
+	) {
+		return null;
+	}
+
+	const markdownSlug = lastSegment.endsWith(".md")
+		? slug
+		: [...slug.slice(0, -1), `${lastSegment}.md`];
+	return markdownSlug[0] === "docs"
+		? `/${markdownSlug.join("/")}`
+		: `/docs/${markdownSlug.join("/")}`;
 }
 
 function withMarkdownPageUrl(node: Item): Item {

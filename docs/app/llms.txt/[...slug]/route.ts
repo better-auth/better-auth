@@ -1,20 +1,5 @@
-import { getVersionById } from "@/lib/docs-versions";
-import { getLLMNotFound } from "@/lib/llm-text";
+import { getLegacyMarkdownTarget, getLLMNotFound } from "@/lib/llm-text";
 import { createMarkdownResponse } from "@/lib/markdown-response";
-
-// Redirect URLs published by the legacy `/llms.txt` index.
-function getLegacyMarkdownTarget(slug: string[]) {
-	if (slug.length === 1) {
-		const version = getVersionById(slug[0]);
-		if (version && version.id !== "latest") {
-			return `/docs/${version.id}/llms.txt`;
-		}
-	}
-
-	if (!slug.at(-1)?.endsWith(".md")) return null;
-
-	return slug[0] === "docs" ? `/${slug.join("/")}` : `/docs/${slug.join("/")}`;
-}
 
 export async function GET(
 	request: Request,

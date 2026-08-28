@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { docsVersions } from "./docs-versions";
 import {
 	getDocsLLMsIndexUrl,
+	getLegacyMarkdownTarget,
 	getLLMNotFound,
 	getLLMsIndexTitle,
 	getMarkdownPageUrl,
@@ -46,6 +47,20 @@ describe("LLM routes", () => {
 			),
 		).toBe("https://better-auth.com/docs/introduction.md");
 		expect(getMarkdownPageUrl("/llms.txt")).toBe("/llms.txt");
+	});
+
+	it("redirects legacy Markdown paths to canonical endpoints", () => {
+		expect(getLegacyMarkdownTarget(["docs", "introduction"])).toBe(
+			"/docs/introduction.md",
+		);
+		expect(getLegacyMarkdownTarget(["docs", "introduction.md"])).toBe(
+			"/docs/introduction.md",
+		);
+		expect(getLegacyMarkdownTarget(["1.6", "plugins", "scim"])).toBe(
+			"/docs/1.6/plugins/scim.md",
+		);
+		expect(getLegacyMarkdownTarget(["1.6"])).toBe("/docs/1.6/llms.txt");
+		expect(getLegacyMarkdownTarget(["docs", "introduction.txt"])).toBeNull();
 	});
 
 	it("returns a useful Markdown not-found response", () => {
