@@ -1,16 +1,16 @@
 "use client";
+import type { ApiMethodHttpMethod } from "@/lib/api-method";
 import { cn } from "@/lib/utils";
 
-type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
-
-const methodColors: Record<HttpMethod, string> = {
+const methodColors = {
 	GET: "text-green-600 dark:text-green-500",
 	POST: "text-yellow-600 dark:text-yellow-600",
 	PUT: "text-blue-600 dark:text-blue-400",
+	PATCH: "text-cyan-600 dark:text-cyan-400",
 	DELETE: "text-red-600 dark:text-red-400",
-};
+} satisfies Record<ApiMethodHttpMethod, string>;
 
-function Method({ method }: { method: HttpMethod }) {
+function Method({ method }: { method: ApiMethodHttpMethod }) {
 	return (
 		<span
 			className={cn(
@@ -29,7 +29,7 @@ export function Endpoint({
 	className,
 }: {
 	path: string;
-	method: HttpMethod;
+	method: ApiMethodHttpMethod;
 	className?: string;
 }) {
 	return (

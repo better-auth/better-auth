@@ -7,6 +7,7 @@ import {
 	getLLMsIndexTitle,
 	getMarkdownPageUrl,
 	getRootLLMsIndex,
+	renderApiMethodMarkdown,
 } from "./llm-text";
 
 describe("LLM routes", () => {
@@ -61,6 +62,115 @@ describe("LLM routes", () => {
 		);
 		expect(getLegacyMarkdownTarget(["1.6"])).toBe("/docs/1.6/llms.txt");
 		expect(getLegacyMarkdownTarget(["docs", "introduction.txt"])).toBeNull();
+	});
+
+	it("renders API method placeholders with all endpoint metadata", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/admin/list-users",
+				method: "GET",
+				requireHeaders: null,
+				headersComment: "Forward the request headers.",
+				resultVariable: {
+					value: '"users"',
+				},
+			},
+			children: `\`\`\`ts
+type listUsers = {
+  limit?: number = 100
+}
+\`\`\``,
+		});
+
+		expect(markdown).toContain("**Endpoint:** `GET /admin/list-users`");
+		expect(markdown).toContain("const { data: users, error } =");
+		expect(markdown).toContain("const users = await auth.api.listUsers");
+		expect(markdown).toContain("Forward the request headers.");
+		expect(markdown).not.toContain("<APIMethod");
+	});
+
+	it("omits unavailable API method examples", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/api-key/verify",
+				method: "POST",
+				isServerOnly: null,
+			},
+			children: `\`\`\`ts
+type verifyApiKey = {
+  key: string = "secret"
+}
+\`\`\``,
+		});
+
+		expect(markdown).not.toContain("### Client Side");
+		expect(markdown).toContain("### Server Side");
+	});
+
+	it("renders PATCH API methods", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/scim/v2/Users/:id",
+				method: "PATCH",
+			},
+			children: `\`\`\`ts
+type patchUser = {
+  id: string = "user-id"
+}
+\`\`\``,
+		});
+
+		expect(markdown).toContain("**Endpoint:** `PATCH /scim/v2/Users/:id`");
+	});
+
+	it("supports explicit boolean marker attributes", () => {
+		const children = `\`\`\`ts
+type getSession = {
+}
+\`\`\``;
+		const withSession = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/get-session",
+				requireSession: { value: "true" },
+			},
+			children,
+		});
+		const withoutSession = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/get-session",
+				requireSession: { value: "false" },
+			},
+			children,
+		});
+
+		expect(withSession).toContain("This endpoint requires session cookies.");
+		expect(withoutSession).not.toContain(
+			"This endpoint requires session cookies.",
+		);
+	});
+
+	it("preserves endpoint metadata when the type definition is invalid", () => {
+		const markdown = renderApiMethodMarkdown({
+			name: "APIMethod",
+			attributes: {
+				path: "/admin/list-users",
+				method: "GET",
+				note: "Requires administrator access.",
+			},
+			children: `\`\`\`ts
+interface ListUsers {}
+\`\`\``,
+		});
+
+		expect(markdown).toContain("**Endpoint:** `GET /admin/list-users`");
+		expect(markdown).toContain("> **Note:** Requires administrator access.");
+		expect(markdown).toContain("interface ListUsers {}");
+		expect(markdown).not.toContain("### Client Side");
 	});
 
 	it("returns a useful Markdown not-found response", () => {
