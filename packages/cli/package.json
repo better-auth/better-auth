@@ -64,7 +64,6 @@
     "@better-auth/utils": "catalog:",
     "@clack/prompts": "^1.6.0",
     "@mrleebo/prisma-ast": "^0.16.0",
-    "better-auth": "workspace:*",
     "c12": "^4.0.0-beta.5",
     "chalk": "^5.6.2",
     "commander": "^15.0.0",
@@ -78,6 +77,9 @@
     "yocto-spinner": "^1.2.0",
     "zod": "^4.3.6"
   },
+  "peerDependencies": {
+    "better-auth": "workspace:^"
+  },
   "devDependencies": {
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
@@ -85,6 +87,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
     "@types/semver": "^7.7.1",
+    "better-auth": "workspace:*",
     "better-auth-1-6-30": "npm:better-auth@1.6.30",
     "better-auth-scim-1-6-30": "npm:@better-auth/scim@1.6.30",
     "better-sqlite3": "^12.11.1",
