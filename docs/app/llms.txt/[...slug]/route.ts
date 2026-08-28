@@ -1,63 +1,35 @@
-import { notFound } from "next/navigation";
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import {
-	docsVersions,
-	resolveVersionFromSlug,
-} from "../../../lib/docs-versions";
-import {
-	getLLMsIndex,
-	getLLMText,
-	LLM_TEXT_ERROR,
-	normalizeLLMsSlug,
-} from "../../../lib/llm-text";
-import { getSourceFor } from "../../../lib/source";
+import { getVersionById } from "@/lib/docs-versions";
+import { getLLMNotFound } from "@/lib/llm-text";
+import { createMarkdownResponse } from "@/lib/markdown-response";
 
-export const revalidate = false;
+// Redirect URLs published by the legacy `/llms.txt` index.
+function getLegacyMarkdownTarget(slug: string[]) {
+	if (slug.length === 1) {
+		const version = getVersionById(slug[0]);
+		if (version && version.id !== "latest") {
+			return `/docs/${version.id}/llms.txt`;
+		}
+	}
+
+	if (!slug.at(-1)?.endsWith(".md")) return null;
+
+	return slug[0] === "docs" ? `/${slug.join("/")}` : `/docs/${slug.join("/")}`;
+}
 
 export async function GET(
-	_req: NextRequest,
-	{ params }: { params: Promise<{ slug: string[] }> },
+	request: Request,
+	{ params }: RouteContext<"/llms.txt/[...slug]">,
 ) {
-	const slug = normalizeLLMsSlug((await params).slug);
-	const versionIndex = docsVersions.find(
-		(version) => version.id !== "latest" && version.id === slug[0],
-	);
-	if (versionIndex && slug.length === 1) {
-		return new NextResponse(
-			getLLMsIndex(getSourceFor(versionIndex.id), versionIndex),
-			{
-				status: 200,
-				headers: { "Content-Type": "text/markdown; charset=utf-8" },
-			},
+	const slug = (await params).slug;
+	const target = getLegacyMarkdownTarget(slug);
+	if (!target) {
+		return createMarkdownResponse(
+			getLLMNotFound(`/llms.txt/${slug.join("/")}`),
+			{ status: 404 },
 		);
 	}
 
-	const { version, relSlug } = resolveVersionFromSlug(slug);
-	const page = getSourceFor(version.id).getPage(relSlug);
-	if (!page) notFound();
-
-	try {
-		const content = await getLLMText(page, version);
-		return new NextResponse(content, {
-			status: 200,
-			headers: { "Content-Type": "text/markdown; charset=utf-8" },
-		});
-	} catch (error) {
-		console.error("Error generating LLM text:", error);
-		return new NextResponse(LLM_TEXT_ERROR, {
-			status: 500,
-			headers: { "Content-Type": "text/markdown; charset=utf-8" },
-		});
-	}
-}
-
-export function generateStaticParams() {
-	return docsVersions.flatMap((v) => {
-		const src = getSourceFor(v.id);
-		const pageParams = src.generateParams().map((p) => ({
-			slug: v.id !== "latest" ? [v.id, ...(p.slug ?? [])] : (p.slug ?? []),
-		}));
-		return v.id !== "latest" ? [{ slug: [v.id] }, ...pageParams] : pageParams;
-	});
+	const redirectUrl = new URL(request.url);
+	redirectUrl.pathname = target;
+	return Response.redirect(redirectUrl, 308);
 }
