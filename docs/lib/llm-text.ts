@@ -1,4 +1,6 @@
+import type { Item, Node } from "fumadocs-core/page-tree";
 import type { InferPageType } from "fumadocs-core/source";
+import { llms } from "fumadocs-core/source";
 import type { DocsVersion } from "./docs-versions";
 import type { source } from "./source";
 
@@ -11,6 +13,10 @@ type PropertyDefinition = {
 	isServerOnly: boolean;
 	isClientOnly: boolean;
 };
+
+const docsPathPattern = /^\/docs(?:\/|$)/;
+const llmsDescription =
+	"The most comprehensive authentication framework for TypeScript";
 
 function extractAPIMethods(rawContent: string): string {
 	const apiMethodRegex = /<APIMethod\s+([^>]+)>([\s\S]*?)<\/APIMethod>/g;
@@ -254,16 +260,71 @@ export async function getLLMText(
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(mdContent);
 
-	const versionNote = version?.slug
-		? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
-		: ""; // no version note for latest stable release
+	const versionNote =
+		version && version.id !== "latest"
+			? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
+			: ""; // no version note for latest stable release
 
-	return `${versionNote}# ${docPage!.data.title}
+	return `${versionNote}# ${docPage.data.title} (${docPage.url})
 
-${docPage!.data.description || ""}
+${docPage.data.description || ""}
 
 ${processedContent}
 `;
+}
+
+export function getLLMsIndexTitle(version?: DocsVersion): string {
+	return version && version.id !== "latest"
+		? `Better Auth — ${version.label}`
+		: "Better Auth";
+}
+
+export function getLLMsPageUrl(url: string): string {
+	if (!docsPathPattern.test(url)) return url;
+	const parsed = new URL(url, "https://better-auth.com");
+	const pathname = parsed.pathname.replace(/\/+$/, "");
+	return `/llms.txt${pathname}.md${parsed.search}${parsed.hash}`;
+}
+
+function withLLMsPageUrl(node: Item): Item {
+	return { ...node, url: getLLMsPageUrl(node.url) };
+}
+
+function withLLMsPageUrls(node: Node): Node {
+	if (node.type === "page") return withLLMsPageUrl(node);
+	if (node.type === "separator") return node;
+	return {
+		...node,
+		index: node.index ? withLLMsPageUrl(node.index) : undefined,
+		children: node.children.map(withLLMsPageUrls),
+	};
+}
+
+export function getLLMsIndex(
+	loader: typeof source,
+	version?: DocsVersion,
+): string {
+	const formatter = llms(loader);
+	const pageTree = loader.getPageTree();
+	const body = pageTree.children
+		.map((node) => formatter.indexNode(withLLMsPageUrls(node)))
+		.join("\n");
+	return [
+		`# ${getLLMsIndexTitle(version)}`,
+		"",
+		`> ${llmsDescription}`,
+		"",
+		body,
+	].join("\n");
+}
+
+export function normalizeLLMsSlug(input: readonly string[]): string[] {
+	const slug = [...input];
+	const lastSegment = slug.at(-1);
+	if (lastSegment?.endsWith(".md")) {
+		slug[slug.length - 1] = lastSegment.slice(0, -3);
+	}
+	return slug[0] === "docs" ? slug.slice(1) : slug;
 }
 
 export const LLM_TEXT_ERROR = `# Documentation Not Available
