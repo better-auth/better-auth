@@ -1,21 +1,9 @@
 import { docsVersions } from "@/lib/docs-versions";
-import { getLLMsIndex } from "@/lib/llm-text";
-import { source } from "@/lib/source";
+import { getRootLLMsIndex } from "@/lib/llm-text";
+import { createMarkdownResponse } from "@/lib/markdown-response";
 
-export const revalidate = false;
+export const dynamic = "force-static";
 
 export function GET() {
-	const archivedVersions = docsVersions
-		.filter((version) => version.id !== "latest")
-		.map((version) => `- [${version.label}](/llms.txt/${version.id})`)
-		.join("\n");
-	const content = [
-		getLLMsIndex(source),
-		"## Other Versions",
-		archivedVersions,
-	].join("\n\n");
-
-	return new Response(content, {
-		headers: { "Content-Type": "text/markdown; charset=utf-8" },
-	});
+	return createMarkdownResponse(getRootLLMsIndex(docsVersions));
 }
