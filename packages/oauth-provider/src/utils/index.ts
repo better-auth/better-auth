@@ -159,10 +159,12 @@ export async function verifyOAuthQueryParams(
 	);
 	// Compare in base64url so signatures issued before this alphabet change keep
 	// verifying, and so a `sig` that went through a url decode still matches.
+	// URLSearchParams converts + to space, so restore it before converting.
+	const normalizedSig = sig.replace(/ /g, "+");
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(toBase64Url(sig), toBase64Url(verifySig)) &&
+		constantTimeEqual(toBase64Url(normalizedSig), toBase64Url(verifySig)) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }
