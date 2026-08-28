@@ -1,5 +1,7 @@
 import type { Html } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { formatUntrustedInlineMarkdown } from "../ai/generated-copy.ts";
+import type { ReleaseRewriteFallback } from "./schema.ts";
 import { parseSchema, releaseVersionSchema } from "./schema.ts";
 
 const protocolMarker = "<!-- better-auth-release-notes:v1 -->";
@@ -17,6 +19,7 @@ const commitShaPattern = /^[a-f0-9]{40}$/;
 export type ReleaseNoteSource = "ai" | "raw";
 
 interface ReleaseNotesCommentOptions {
+	fallbacks?: ReleaseRewriteFallback[];
 	merged?: boolean;
 	source?: ReleaseNoteSource;
 }
@@ -53,13 +56,32 @@ function validateReleaseNotes(notes: string): void {
 	}
 }
 
+function formatFallbackWarning(fallbacks: ReleaseRewriteFallback[]): string[] {
+	if (fallbacks.length === 0) return [];
+	const count = fallbacks.length;
+	return [
+		"> [!WARNING]",
+		`> **${count} release ${count === 1 ? "note needs" : "notes need"} a closer look.**`,
+		">",
+		"> I took a second pass, but the copy below still needs human review, so I kept the original wording.",
+		">",
+		...fallbacks.map((fallback) => {
+			const reference = fallback.prNumber ? `#${fallback.prNumber}: ` : "";
+			return `> - ${reference}${formatUntrustedInlineMarkdown(fallback.title)}`;
+		}),
+		">",
+		"> Review or edit the original wording before merging.",
+		"",
+	];
+}
+
 export function wrapReleaseNotesComment(
 	version: string,
 	head: string,
 	body: string,
 	options: ReleaseNotesCommentOptions = {},
 ): string {
-	const { merged = false, source = "ai" } = options;
+	const { fallbacks = [], merged = false, source = "ai" } = options;
 	validateReleaseIdentity(version, head);
 	const notes = body.trim();
 	validateReleaseNotes(notes);
@@ -77,6 +99,7 @@ export function wrapReleaseNotesComment(
 					"",
 				]
 			: []),
+		...(source === "ai" ? formatFallbackWarning(fallbacks) : []),
 		`# Release preview: v${version}`,
 		"",
 		"---",

@@ -62,6 +62,37 @@ describe("wrapReleaseNotesComment", () => {
 		expect(extractReleaseNotesComment(comment, version, head)).toBe(notes);
 	});
 
+	it("lists partial fallbacks outside the approved body", () => {
+		const comment = wrapReleaseNotesComment(version, head, notes, {
+			fallbacks: [
+				{
+					prNumber: 10907,
+					title: "fix(client): preserve plugin assignability",
+				},
+			],
+		});
+
+		expect(comment).toContain("**1 release note needs a closer look.**");
+		expect(comment).toContain(
+			"> - #10907: fix(client): preserve plugin assignability",
+		);
+		expect(comment.indexOf("> [!WARNING]")).toBeLessThan(
+			comment.indexOf(`# Release preview: v${version}`),
+		);
+		expect(extractReleaseNotesComment(comment, version, head)).toBe(notes);
+	});
+
+	it("uses plural copy for multiple partial fallbacks", () => {
+		const comment = wrapReleaseNotesComment(version, head, notes, {
+			fallbacks: [
+				{ prNumber: 42, title: "fix: first change" },
+				{ prNumber: 43, title: "fix: second change" },
+			],
+		});
+
+		expect(comment).toContain("**2 release notes need a closer look.**");
+	});
+
 	it("instructs merged release PRs to rerun the failed release", () => {
 		const comment = wrapReleaseNotesComment(version, head, notes, {
 			merged: true,
