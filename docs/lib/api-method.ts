@@ -239,6 +239,7 @@ function buildPropertyLine(
 ): string {
 	const comments = [...additionalComments];
 	if (!property.optional) comments.push("required");
+	if (property.description) comments.push(property.description);
 
 	const indent = indentation.repeat(indentLevel);
 	const value = property.exampleValue ? `: ${property.exampleValue}` : "";

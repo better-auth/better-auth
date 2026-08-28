@@ -49,8 +49,10 @@ describe("API method code generation", () => {
 		expect(examples.client).toContain(
 			"await authClient.twoFactor.verifyTotp({",
 		);
+		expect(examples.client).toContain("The current one-time password.");
 		expect(examples.client).not.toContain("metadata");
 		expect(examples.server).toContain("const data = await auth.api.verifyTotp");
+		expect(examples.server).toContain("The current one-time password.");
 		expect(examples.server).toContain("Forward the current request headers.");
 		expect(examples.server).toContain("headers: await headers()");
 		expect(examples.server).toContain("metadata: {");
