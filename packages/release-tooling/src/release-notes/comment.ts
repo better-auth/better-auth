@@ -79,20 +79,24 @@ export function wrapReleaseNotesComment(
 			: []),
 		`# Release preview: v${version}`,
 		"",
+		"---",
+		"",
 		bodyStartMarker,
 		"",
 		notes,
 		"",
 		bodyEndMarker,
 		"",
-		"Maintainers may edit the release notes above. Keep the hidden markers intact.",
+		"---",
+		"",
 		...(merged
 			? [
-					"This PR is already merged. Re-run the original failed Release workflow after reviewing these notes.",
+					"> [!IMPORTANT]",
+					"> **For maintainers:** This PR is already merged. Review and edit the notes above without changing the hidden markers. Re-run the original failed Release workflow when they are ready.",
 				]
 			: [
-					"Any head update returns this PR to Draft. Rerun `/release-notes` after it changes.",
-					"The release bot marks this PR ready. Merging it approves these release notes.",
+					"> [!TIP]",
+					"> **For maintainers:** You can edit the notes above, but keep the hidden markers intact. If the head changes, this PR returns to Draft. Rerun `/release-notes` after any update. Merging this PR approves the preview.",
 				]),
 	].join("\n");
 }

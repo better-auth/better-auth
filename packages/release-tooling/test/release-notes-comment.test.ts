@@ -20,6 +20,10 @@ describe("wrapReleaseNotesComment", () => {
 		expect(comment).toContain("<!-- release-body:start -->");
 		expect(comment).toContain(notes);
 		expect(comment).toContain("<!-- release-body:end -->");
+		expect(comment).toContain(
+			`# Release preview: v${version}\n\n---\n\n<!-- release-body:start -->`,
+		);
+		expect(comment).toContain("<!-- release-body:end -->\n\n---\n\n> [!TIP]");
 	});
 
 	it("rejects empty release notes", () => {
@@ -65,14 +69,17 @@ describe("wrapReleaseNotesComment", () => {
 
 		expect(comment).toContain("This PR is already merged");
 		expect(comment).toContain("Re-run the original failed Release workflow");
-		expect(comment).not.toContain("marks this PR ready");
+		expect(comment).toContain("> [!IMPORTANT]");
+		expect(comment).not.toContain("> [!TIP]");
 	});
 
 	it("explains the draft approval lifecycle", () => {
 		const comment = wrapReleaseNotesComment(version, head, notes);
 
-		expect(comment).toContain("Any head update returns this PR to Draft");
-		expect(comment).toContain("The release bot marks this PR ready");
+		expect(comment).toContain("> [!TIP]");
+		expect(comment).toContain("keep the hidden markers intact");
+		expect(comment).toContain("this PR returns to Draft");
+		expect(comment).toContain("Merging this PR approves the preview");
 	});
 
 	it("rejects malformed release identity markers", () => {
