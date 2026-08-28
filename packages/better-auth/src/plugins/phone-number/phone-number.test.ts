@@ -1430,6 +1430,54 @@ describe("custom verifyOTP", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10697
+	 */
+	it("should use custom verifyOTP when resetting the password", async () => {
+		const resetPhoneNumber = "+1222333444";
+		const newPassword = "new-password-123";
+
+		// Register the phone number so a user exists to reset the password for.
+		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
+		mockVerifyOTP.mockResolvedValueOnce(true);
+		await client.phoneNumber.verify({
+			phoneNumber: resetPhoneNumber,
+			code: "123456",
+		});
+
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: resetPhoneNumber,
+		});
+
+		mockVerifyOTP.mockClear();
+		// The provider accepts this code even though it is not the stored one,
+		// which is the point of delegating verification to it.
+		mockVerifyOTP.mockResolvedValueOnce(true);
+
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: resetPhoneNumber,
+			otp: "999999",
+			newPassword,
+		});
+
+		expect(mockVerifyOTP).toHaveBeenCalledWith(
+			expect.objectContaining({
+				phoneNumber: resetPhoneNumber,
+				code: "999999",
+			}),
+			expect.anything(),
+		);
+		expect(res.error).toBe(null);
+
+		// The reset must actually persist, not just return success.
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber: resetPhoneNumber,
+			password: newPassword,
+		});
+		expect(signInRes.error).toBe(null);
+		expect(signInRes.data?.user.phoneNumber).toBe(resetPhoneNumber);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9754
 	 */
 	it("should delegate server-side consumption to custom verifyOTP without an internal record", async () => {
