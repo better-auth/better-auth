@@ -353,4 +353,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/lapluviosilla.png",
 		},
 	},
+	{
+		name: "@better-geetest/better-auth-plugin-gt4",
+		url: "https://github.com/typed-sigterm/better-geetest/tree/main/packages/better-auth-plugin-gt4",
+		description:
+			"Integrate GeeTest gt4 bot protection by adding captcha verification for key endpoints.",
+		author: {
+			name: "Typed SIGTERM",
+			github: "typed-sigterm",
+			avatar: "https://github.com/typed-sigterm.png",
+		},
+	},
 ];
