@@ -1170,6 +1170,22 @@ describe("expo with cookieCache", async () => {
 			expect(await storage.getItemAsync("better-auth_cookie")).toBe(second);
 		});
 
+		it("should not let a chunked write on one key delay a read of another", async () => {
+			const { storage } = createAsyncStorage();
+			await storage.setItemAsync("better-auth_cookie", "cookie");
+
+			const order: string[] = [];
+			const write = storage
+				.setItemAsync("better-auth_session_data", "s".repeat(5_000))
+				.then(() => order.push("write"));
+			const read = storage
+				.getItemAsync("better-auth_cookie")
+				.then((value) => order.push(`read:${value}`));
+
+			await Promise.all([write, read]);
+			expect(order).toEqual(["read:cookie", "write"]);
+		});
+
 		it("should keep serving operations after one of them rejects", async () => {
 			const { storage } = createAsyncStorage();
 			let reads = 0;

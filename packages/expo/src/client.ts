@@ -299,29 +299,39 @@ function getStorageWrites(key: string, value: string): [string, string][] {
 }
 
 /**
- * Runs async storage operations one at a time, in call order. A chunked write
- * is several native round-trips (clear the base key, write each chunk, set the
- * marker), and any read that lands between them sees an empty or half-written
- * jar. That is exactly what happens on app start, where several requests fire
- * together and every response rewrites the cookie jar: one request's `init`
- * reads while another's `onSuccess` is mid-write, gets `""`, logs
- * "Error parsing JSON" and goes out without a Cookie header. Queueing the
- * operations keeps every read either fully before or fully after a write, and
- * keeps two concurrent writes from interleaving their chunks.
+ * Runs async storage operations on the same key one at a time, in call order.
+ * A chunked write is several native round-trips (clear the base key, write
+ * each chunk, set the marker), and any read that lands between them sees an
+ * empty or half-written jar. That is exactly what happens on app start, where
+ * several requests fire together and every response rewrites the cookie jar:
+ * one request's `init` reads while another's `onSuccess` is mid-write, gets
+ * `""`, logs "Error parsing JSON" and goes out without a Cookie header.
+ * Queueing keeps every read either fully before or fully after a write on
+ * that key, and keeps two concurrent writes from interleaving their chunks.
+ * Keys are independent (the cookie jar and the session cache are separate
+ * values), so a write to one never delays a read of the other.
  */
-function createQueue() {
-	let tail: Promise<unknown> = Promise.resolve();
-	return <T>(task: () => Promise<T>): Promise<T> => {
+function createKeyedQueue() {
+	const tails = new Map<string, Promise<unknown>>();
+	return <T>(key: string, task: () => Promise<T>): Promise<T> => {
+		const tail = tails.get(key) ?? Promise.resolve();
 		const run = tail.then(task, task);
 		// Swallow here only so a rejected task doesn't stall the queue; callers
 		// still get the original rejection through `run`.
-		tail = run.catch(() => {});
+		const next = run
+			.catch(() => {})
+			.then(() => {
+				if (tails.get(key) === next) {
+					tails.delete(key);
+				}
+			});
+		tails.set(key, next);
 		return run;
 	};
 }
 
 export function storageAdapter(storage: ExpoClientStorage) {
-	const enqueue = createQueue();
+	const enqueue = createKeyedQueue();
 	return {
 		/**
 		 * Reads a value, reassembling it if it was split across chunk keys. A value
@@ -348,9 +358,9 @@ export function storageAdapter(storage: ExpoClientStorage) {
 			}
 			return value;
 		},
-		getItemAsync: (name: string): Promise<string | null> =>
-			enqueue(async () => {
-				const key = normalizeCookieName(name);
+		getItemAsync: (name: string): Promise<string | null> => {
+			const key = normalizeCookieName(name);
+			return enqueue(key, async () => {
 				const stored = await storage.getItemAsync(key);
 				if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
 					return stored;
@@ -368,7 +378,8 @@ export function storageAdapter(storage: ExpoClientStorage) {
 					value += chunk;
 				}
 				return value;
-			}),
+			});
+		},
 		/**
 		 * Stores `value`, splitting it across chunk keys when it exceeds the
 		 * per-write limit. The base key is cleared before the chunks are rewritten
@@ -376,8 +387,8 @@ export function storageAdapter(storage: ExpoClientStorage) {
 		 * partway through reads as absent rather than a mix of old and new chunks.
 		 * Failures are logged, not thrown: persistence is best-effort and must not
 		 * break the request. The async variants additionally go through the
-		 * adapter's queue, so a concurrent read never observes the cleared base
-		 * key mid-write.
+		 * adapter's per-key queue, so a concurrent read never observes the
+		 * cleared base key mid-write.
 		 */
 		setItem: (name: string, value: string): void => {
 			const key = normalizeCookieName(name);
@@ -392,9 +403,9 @@ export function storageAdapter(storage: ExpoClientStorage) {
 				);
 			}
 		},
-		setItemAsync: (name: string, value: string): Promise<void> =>
-			enqueue(async () => {
-				const key = normalizeCookieName(name);
+		setItemAsync: (name: string, value: string): Promise<void> => {
+			const key = normalizeCookieName(name);
+			return enqueue(key, async () => {
 				try {
 					for (const [writeKey, writeValue] of getStorageWrites(key, value)) {
 						await storage.setItemAsync(writeKey, writeValue);
@@ -405,7 +416,8 @@ export function storageAdapter(storage: ExpoClientStorage) {
 						error,
 					);
 				}
-			}),
+			});
+		},
 	};
 }
 
