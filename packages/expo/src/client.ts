@@ -298,7 +298,30 @@ function getStorageWrites(key: string, value: string): [string, string][] {
 	return writes;
 }
 
+/**
+ * Runs async storage operations one at a time, in call order. A chunked write
+ * is several native round-trips (clear the base key, write each chunk, set the
+ * marker), and any read that lands between them sees an empty or half-written
+ * jar. That is exactly what happens on app start, where several requests fire
+ * together and every response rewrites the cookie jar: one request's `init`
+ * reads while another's `onSuccess` is mid-write, gets `""`, logs
+ * "Error parsing JSON" and goes out without a Cookie header. Queueing the
+ * operations keeps every read either fully before or fully after a write, and
+ * keeps two concurrent writes from interleaving their chunks.
+ */
+function createQueue() {
+	let tail: Promise<unknown> = Promise.resolve();
+	return <T>(task: () => Promise<T>): Promise<T> => {
+		const run = tail.then(task, task);
+		// Swallow here only so a rejected task doesn't stall the queue; callers
+		// still get the original rejection through `run`.
+		tail = run.catch(() => {});
+		return run;
+	};
+}
+
 export function storageAdapter(storage: ExpoClientStorage) {
+	const enqueue = createQueue();
 	return {
 		/**
 		 * Reads a value, reassembling it if it was split across chunk keys. A value
@@ -325,33 +348,36 @@ export function storageAdapter(storage: ExpoClientStorage) {
 			}
 			return value;
 		},
-		getItemAsync: async (name: string): Promise<string | null> => {
-			const key = normalizeCookieName(name);
-			const stored = await storage.getItemAsync(key);
-			if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
-				return stored;
-			}
-			const count = Number(stored.slice(CHUNK_MARKER.length));
-			if (!Number.isInteger(count) || count < 1) {
-				return null;
-			}
-			let value = "";
-			for (let i = 0; i < count; i++) {
-				const chunk = await storage.getItemAsync(`${key}.${i}`);
-				if (chunk == null) {
+		getItemAsync: (name: string): Promise<string | null> =>
+			enqueue(async () => {
+				const key = normalizeCookieName(name);
+				const stored = await storage.getItemAsync(key);
+				if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
+					return stored;
+				}
+				const count = Number(stored.slice(CHUNK_MARKER.length));
+				if (!Number.isInteger(count) || count < 1) {
 					return null;
 				}
-				value += chunk;
-			}
-			return value;
-		},
+				let value = "";
+				for (let i = 0; i < count; i++) {
+					const chunk = await storage.getItemAsync(`${key}.${i}`);
+					if (chunk == null) {
+						return null;
+					}
+					value += chunk;
+				}
+				return value;
+			}),
 		/**
 		 * Stores `value`, splitting it across chunk keys when it exceeds the
 		 * per-write limit. The base key is cleared before the chunks are rewritten
 		 * and set to the marker last, as the commit point, so a write interrupted
 		 * partway through reads as absent rather than a mix of old and new chunks.
 		 * Failures are logged, not thrown: persistence is best-effort and must not
-		 * break the request.
+		 * break the request. The async variants additionally go through the
+		 * adapter's queue, so a concurrent read never observes the cleared base
+		 * key mid-write.
 		 */
 		setItem: (name: string, value: string): void => {
 			const key = normalizeCookieName(name);
@@ -366,19 +392,20 @@ export function storageAdapter(storage: ExpoClientStorage) {
 				);
 			}
 		},
-		setItemAsync: async (name: string, value: string): Promise<void> => {
-			const key = normalizeCookieName(name);
-			try {
-				for (const [writeKey, writeValue] of getStorageWrites(key, value)) {
-					await storage.setItemAsync(writeKey, writeValue);
+		setItemAsync: (name: string, value: string): Promise<void> =>
+			enqueue(async () => {
+				const key = normalizeCookieName(name);
+				try {
+					for (const [writeKey, writeValue] of getStorageWrites(key, value)) {
+						await storage.setItemAsync(writeKey, writeValue);
+					}
+				} catch (error) {
+					console.error(
+						`[better-auth/expo] failed to persist "${key}" to storage`,
+						error,
+					);
 				}
-			} catch (error) {
-				console.error(
-					`[better-auth/expo] failed to persist "${key}" to storage`,
-					error,
-				);
-			}
-		},
+			}),
 	};
 }
 

@@ -1111,6 +1111,92 @@ describe("expo with cookieCache", async () => {
 		expect(error).toHaveBeenCalledTimes(2);
 		error.mockRestore();
 	});
+
+	/**
+	 * Native secure storage is one round-trip per key, so a chunked write is
+	 * several awaits long. Requests fire concurrently on app start and each
+	 * response rewrites the jar, so a read must never land between the base-key
+	 * clear and the marker write and come back empty or torn.
+	 */
+	describe("concurrent async access", () => {
+		// Every operation yields before touching the map so calls issued in the
+		// same tick genuinely interleave, the way native bridge calls do. A
+		// microtask, not a timer: this suite runs under fake timers.
+		function createAsyncStorage() {
+			const map = new Map<string, string>();
+			const tick = () =>
+				new Promise<void>((resolve) => queueMicrotask(resolve));
+			return {
+				map,
+				storage: storageAdapter({
+					getItem: (name) => map.get(name) ?? null,
+					setItem: (name, value) => map.set(name, value),
+					getItemAsync: async (name) => {
+						await tick();
+						return map.get(name) ?? null;
+					},
+					setItemAsync: async (name, value) => {
+						await tick();
+						map.set(name, value);
+					},
+				}),
+			};
+		}
+
+		it("should not read an empty or torn value while a chunked write is in flight", async () => {
+			const { storage } = createAsyncStorage();
+			const oldValue = "a".repeat(5_000);
+			await storage.setItemAsync("better-auth_cookie", oldValue);
+
+			const newValue = "b".repeat(5_000);
+			const write = storage.setItemAsync("better-auth_cookie", newValue);
+			// Issued while the write above is between its native round-trips.
+			const read = storage.getItemAsync("better-auth_cookie");
+
+			const [, result] = await Promise.all([write, read]);
+			expect(result).toBe(newValue);
+		});
+
+		it("should not interleave chunks of two concurrent writes", async () => {
+			const { storage } = createAsyncStorage();
+			const first = "a".repeat(5_000);
+			const second = "b".repeat(5_000);
+
+			await Promise.all([
+				storage.setItemAsync("better-auth_cookie", first),
+				storage.setItemAsync("better-auth_cookie", second),
+			]);
+
+			expect(await storage.getItemAsync("better-auth_cookie")).toBe(second);
+		});
+
+		it("should keep serving operations after one of them rejects", async () => {
+			const { storage } = createAsyncStorage();
+			let reads = 0;
+			const failing = storageAdapter({
+				getItem: () => null,
+				setItem: () => {},
+				getItemAsync: async () => {
+					if (reads++ === 0) {
+						throw new Error("keychain locked");
+					}
+					return "ok";
+				},
+				setItemAsync: async () => {},
+			});
+
+			await expect(failing.getItemAsync("better-auth_cookie")).rejects.toThrow(
+				"keychain locked",
+			);
+			await expect(failing.getItemAsync("better-auth_cookie")).resolves.toBe(
+				"ok",
+			);
+			// Unrelated adapters are not affected either way.
+			await expect(
+				storage.getItemAsync("better-auth_cookie"),
+			).resolves.toBeNull();
+		});
+	});
 });
 
 describe("expo with cookie storeStateStrategy", async () => {
