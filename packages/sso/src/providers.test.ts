@@ -2045,6 +2045,116 @@ kBGIJYs=
 			);
 		});
 
+		/**
+		 * Regression: a provider registered without wantAssertionsSigned (the only
+		 * shape that existed before @better-auth/infra 0.4.3) stores the field as
+		 * absent and treats it as false. An explicit update to true is a signing-
+		 * policy change and must be classified as an authentication-boundary change
+		 * so that callers can gate or log it.
+		 * @see https://github.com/better-auth/better-auth/issues/11054
+		 */
+		it("classifies upgrading wantAssertionsSigned from absent to true as an authentication-boundary change", async () => {
+			let isAuthenticationBoundaryChange: boolean | undefined;
+			const { auth, getAuthHeaders, data } = createTestAuth(false, false, {
+				guardProviderMutation(input) {
+					if (input.action === "update") {
+						isAuthenticationBoundaryChange =
+							input.isAuthenticationBoundaryChange;
+					}
+				},
+			});
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "absent-signing-policy",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						idpMetadata: { entityID: "https://idp.example.com" },
+					},
+				},
+				headers,
+			});
+
+			const storedBefore = safeJsonParse<SAMLConfig>(
+				data.ssoProvider[0]!.samlConfig!,
+			);
+			expect(storedBefore?.wantAssertionsSigned).toBeUndefined();
+
+			await auth.api.updateSSOProvider({
+				body: {
+					providerId: "absent-signing-policy",
+					samlConfig: { wantAssertionsSigned: true },
+				},
+				headers,
+			});
+
+			expect(isAuthenticationBoundaryChange).toBe(true);
+
+			const storedAfter = safeJsonParse<SAMLConfig>(
+				data.ssoProvider[0]!.samlConfig!,
+			);
+			expect(storedAfter?.wantAssertionsSigned).toBe(true);
+		});
+
+		/**
+		 * Regression: the absent → true policy flip must be blocked when a linked
+		 * account already exists. Without this guard, existing users whose IdP signs
+		 * only the Response (not the Assertion) would silently stop being able to
+		 * sign in after an unrelated provider update.
+		 * @see https://github.com/better-auth/better-auth/issues/11054
+		 */
+		it("rejects upgrading wantAssertionsSigned from absent to true when linked accounts exist", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "absent-policy-linked",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						idpMetadata: { entityID: "https://idp.example.com" },
+					},
+				},
+				headers,
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			data.account.push({
+				id: "linked-absent-policy-account",
+				userId: user!.id,
+				providerId: "absent-policy-linked",
+				accountId: "saml-name-id",
+			});
+
+			const response = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "absent-policy-linked",
+					samlConfig: { wantAssertionsSigned: true },
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(409);
+		});
+
 		it.each(
 			INVALID_CUSTOM_SP_METADATA,
 		)("rejects custom SP metadata with $name before updating the provider", async ({
