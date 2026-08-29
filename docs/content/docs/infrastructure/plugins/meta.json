@@ -1,4 +1,4 @@
 {
   "title": "Plugins",
-  "pages": ["dash", "audit-logs", "sentinel", "..."]
+  "pages": ["dashboard", "audit-logs", "sentinel", "..."]
 }

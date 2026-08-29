@@ -77,13 +77,13 @@ const nextConfig = {
 				permanent: true,
 			},
 			{
-				source: "/docs/infrastructure/plugins/dashboard",
-				destination: "/docs/infrastructure/plugins/dash",
+				source: "/docs/infrastructure/plugins/dash",
+				destination: "/docs/infrastructure/plugins/dashboard",
 				permanent: true,
 			},
 			{
-				source: "/docs/infrastructure/plugins/dashboard.md",
-				destination: "/docs/infrastructure/plugins/dash.md",
+				source: "/docs/infrastructure/plugins/dash.md",
+				destination: "/docs/infrastructure/plugins/dashboard.md",
 				permanent: true,
 			},
 		];
