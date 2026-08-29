@@ -83,7 +83,7 @@ npx auth migrate
 
 If your app manages schema generation separately, run `npx auth generate` and apply the generated migration with your preferred tool.
 
-### Managed Directory Sync
+## Managed Directory Sync
 
 The `managedDirectorySync` option is the dashboard-side companion to the SCIM 1.7 plugin-managed runtime flow. When `enabled` is `true`, the dashboard installs the reservation tables and APIs needed for managed directory-sync state. `ssoPairing` enables the SSO hooks needed when a directory-backed user identity is paired with an SSO provider, and `membershipProjection` lets the system project SCIM membership changes into organization membership records.
 
@@ -109,7 +109,7 @@ This opt-in control plane is for the SCIM 1.7 plugin-managed runtime flow. In Be
 
 The `managedDirectorySync` option enables the plugin-managed mode for directory-sync provisioning in `dash`. It creates the reserved schema and APIs needed to manage directory connections and paired SSO state.
 
-#### Managed directory sync options
+### Managed directory sync options
 
 | Option                         | Type      | Description                                                                                                                                                  |
 | ------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -131,11 +131,11 @@ npx auth migrate
 
 If your app manages schema generation separately, run `npx auth generate` and apply the generated migration with your preferred tool.
 
-#### Database Schema
+### Database Schema
 
 When `managedDirectorySync.enabled` is `true`, the dash plugin adds the following models. Better Auth supplies the primary `id` field for each model.
 
-##### `directorySyncConnection`
+#### `directorySyncConnection`
 
 Stores the managed directory's organization, SCIM connection, SSO pairing, lifecycle, and decommission state.
 
@@ -165,7 +165,7 @@ Stores the managed directory's organization, SCIM connection, SSO pairing, lifec
 | `decommissionedAt`      | `date`    | Optional                      | Time decommissioning completed.                  |
 | `lastError`             | `string`  | Optional, hidden              | Most recent reconciliation error.                |
 
-##### `directorySyncMembershipProvenance`
+#### `directorySyncMembershipProvenance`
 
 Tracks organization memberships created or managed by directory-sync projection so the plugin can reconcile only the memberships it owns.
 
