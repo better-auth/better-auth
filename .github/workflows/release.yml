@@ -173,9 +173,11 @@ jobs:
             echo "::error::Current commit does not match the approved release commit"
             exit 1
           fi
-          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
-          echo "notes_path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+          {
+            echo "pr_number=$PR_NUMBER"
+            echo "release_commit=$RELEASE_COMMIT"
+            echo "notes_path=$NOTES_FILE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Reject release commits with pending changesets
         if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
@@ -190,7 +192,7 @@ jobs:
             echo ""
             echo "This release commit still contains changesets that were not included in the approved Version PR. Publishing it would ship unapproved changes under the current version."
             echo ""
-            echo "Revert this release merge, let Changesets regenerate the Version PR, then run `/release-notes` again."
+            echo "Revert this release merge, let Changesets regenerate the Version PR, then run \`/release-notes\` again."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error::Release commit contains unconsumed changesets"
           exit 1
@@ -226,6 +228,7 @@ jobs:
 
           BODY=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')
           if ! printf '%s' "$BODY" | grep -qF '<!-- release-notes-draft -->'; then
+            # shellcheck disable=SC2016
             NOTICE='<!-- release-notes-draft -->
           > [!IMPORTANT]
           > Keep this PR in Draft. Run `/release-notes` to generate and review the release notes.
