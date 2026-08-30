@@ -166,7 +166,7 @@
   "dependencies": {
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "@standard-schema/spec": "^1.1.0",
-    "zod": "^4.3.6"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@better-auth/utils": "catalog:",

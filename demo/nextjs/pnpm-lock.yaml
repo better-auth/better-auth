@@ -31,7 +31,7 @@ importers:
         version: link:../../packages/electron
       '@better-auth/infra':
         specifier: ^0.3.5
-        version: 0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.3.6)
+        version: 0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.5.4)
       '@better-auth/kysely-adapter':
         specifier: link:../../packages/kysely-adapter
         version: link:../../packages/kysely-adapter
@@ -246,8 +246,8 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       zod:
-        specifier: ^4.3.6
-        version: 4.3.6
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.2.1
@@ -2425,20 +2425,23 @@ packages:
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
+
 snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
-  '@better-auth/infra@0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.3.6)':
+  '@better-auth/infra@0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.5.4)':
     dependencies:
       '@better-auth/core': link:../../packages/core
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
       better-auth: link:../../packages/better-auth
-      better-call: 1.3.7(zod@4.3.6)
+      better-call: 1.3.7(zod@4.5.4)
       jose: 6.2.2
       libphonenumber-js: 1.13.8
-      zod: 4.3.6
+      zod: 4.5.4
 
   '@better-auth/utils@0.4.0':
     dependencies:
@@ -3709,14 +3712,14 @@ snapshots:
 
   baseline-browser-mapping@2.11.1: {}
 
-  better-call@1.3.7(zod@4.3.6):
+  better-call@1.3.7(zod@4.5.4):
     dependencies:
       '@better-auth/utils': 0.4.0
       '@better-fetch/fetch': 1.3.1
       rou3: 0.7.12
       set-cookie-parser: 3.1.2
     optionalDependencies:
-      zod: 4.3.6
+      zod: 4.5.4
 
   caniuse-lite@1.0.30001806: {}
 
@@ -4368,3 +4371,5 @@ snapshots:
   ws@8.21.0: {}
 
   zod@4.3.6: {}
+
+  zod@4.5.4: {}

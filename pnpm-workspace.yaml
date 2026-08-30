@@ -6,7 +6,7 @@ packages:
 
 overrides:
   kysely: 0.28.17
-  zod@>=4: 4.3.6
+  zod@>=4: 4.5.4
   axios: '>=1.18.0 <2'
   node-forge: '>=1.4.0 <2'
   h3@<2: '>=1.15.9'

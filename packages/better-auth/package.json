@@ -489,7 +489,7 @@
     "jose": "^6.2.3",
     "kysely": "catalog:",
     "nanostores": "catalog:",
-    "zod": "^4.3.6"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@lynx-js/react": "^0.121.2",
