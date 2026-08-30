@@ -75,7 +75,7 @@
   },
   "dependencies": {
     "jose": "^6.2.3",
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
