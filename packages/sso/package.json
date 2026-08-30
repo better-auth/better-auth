@@ -70,7 +70,7 @@
     "jose": "^6.2.3",
     "samlify": "^2.13.1",
     "tldts": "^7.4.3",
-    "zod": "^4.5.4"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",

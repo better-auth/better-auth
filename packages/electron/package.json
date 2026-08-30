@@ -82,7 +82,7 @@
     }
   },
   "dependencies": {
-    "zod": "^4.5.4"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
