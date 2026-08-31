@@ -2698,8 +2698,11 @@ describe("oauth2", async () => {
 		expect(session.data).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11075
+	 */
 	it("should complete an earlier cookie-backed flow after a second one starts", async () => {
-		const { customFetchImpl, cookieSetter } = await getTestInstance({
+		const { client, customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2720,16 +2723,8 @@ describe("oauth2", async () => {
 
 		// One cookie jar, as a single browser would have across two tabs.
 		const headers = new Headers();
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				onSuccess: cookieSetter(headers),
-			},
-		});
-
 		const startSignIn = async () => {
-			const res = await authClient.signIn.social({
+			const res = await client.signIn.social({
 				provider: "test-cookie-parallel",
 				callbackURL: "http://localhost:3000/dashboard",
 				fetchOptions: {
@@ -2769,8 +2764,11 @@ describe("oauth2", async () => {
 		expect(secondFlow.callbackURL).not.toContain("state_mismatch");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11075
+	 */
 	it("should keep the newest cookie-backed flow usable when entries are oversized", async () => {
-		const { customFetchImpl, cookieSetter } = await getTestInstance({
+		const { client, customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2790,19 +2788,11 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				onSuccess: cookieSetter(headers),
-			},
-		});
-
 		// Long callback URLs push the encrypted cookie past the browser limit well
 		// before the entry cap is reached.
 		const longCallbackURL = `http://localhost:3000/dashboard?padding=${"x".repeat(1200)}`;
 		const startSignIn = async () => {
-			const res = await authClient.signIn.social({
+			const res = await client.signIn.social({
 				provider: "test-cookie-oversized",
 				callbackURL: longCallbackURL,
 				fetchOptions: {
@@ -2832,8 +2822,11 @@ describe("oauth2", async () => {
 		expect(callbackURL).not.toContain("state_mismatch");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11075
+	 */
 	it("should reject a single cookie-backed flow that cannot fit in a cookie", async () => {
-		const { customFetchImpl, cookieSetter } = await getTestInstance({
+		const { client } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2853,16 +2846,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				onSuccess: cookieSetter(headers),
-			},
-		});
-
 		// Trimming cannot rescue this: the single flow is over the budget by itself.
-		const res = await authClient.signIn.social({
+		const res = await client.signIn.social({
 			provider: "test-cookie-too-large",
 			callbackURL: `http://localhost:3000/dashboard?padding=${"x".repeat(6000)}`,
 			fetchOptions: { headers },
