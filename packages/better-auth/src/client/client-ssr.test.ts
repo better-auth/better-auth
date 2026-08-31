@@ -26,23 +26,24 @@ it("should call '/api/auth' for vue client", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/5358
  */
-it("uses stable Nuxt options for a session fetch", async () => {
-	const headers = { cookie: "better-auth.session_token=session" };
-	const useFetch = vi.fn(async () => ({
-		data: { value: null },
-		error: { value: null },
-	}));
+it("uses stable Nuxt options for a session fetch", () => {
+	const headers = {
+		cookie: "better-auth.session_token=session",
+		"x-optional": undefined,
+	};
+	const pendingFetch = new Promise<never>(() => undefined);
+	const useFetch = vi.fn(() => pendingFetch);
 	const client = createVueClient({
 		baseURL: "http://localhost:3000",
 		fetchOptions: { headers },
 	});
 
-	await client.useSession(useFetch);
+	void client.useSession(useFetch);
 
 	expect(useFetch).toHaveBeenCalledWith(
 		"http://localhost:3000/api/auth/get-session",
 		{
-			headers,
+			headers: { cookie: "better-auth.session_token=session" },
 			key: "better-auth:session:http://localhost:3000:/api/auth",
 			watch: [expect.anything()],
 		},

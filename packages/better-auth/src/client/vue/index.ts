@@ -1,11 +1,14 @@
-import type { BetterAuthClientOptions } from "@better-auth/core";
+import type {
+	BetterAuthClientOptions,
+	ClientFetchOption,
+} from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { DeepReadonly, Ref } from "vue";
+import type { DeepReadonly, Ref, WatchSource } from "vue";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
@@ -20,6 +23,19 @@ import { useStore } from "./vue-store";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
+}
+
+/** Removes undefined values accepted by Better Fetch but not by `HeadersInit`. */
+function toHeadersInit(
+	headers: ClientFetchOption["headers"],
+): HeadersInit | undefined {
+	if (!headers) return undefined;
+
+	const normalizedHeaders: Record<string, string> = {};
+	for (const [name, value] of Object.entries(headers)) {
+		if (value !== undefined) normalizedHeaders[name] = value;
+	}
+	return normalizedHeaders;
 }
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
@@ -56,28 +72,41 @@ type ClientSession<Option extends BetterAuthClientOptions> =
 			: Res
 		: never;
 
-type VueUseSession<Option extends BetterAuthClientOptions> = {
-	(): DeepReadonly<
-		Ref<{
-			data: ClientSession<Option>;
-			isPending: boolean;
-			isRefetching: boolean;
-			error: BetterFetchError | null;
-			refetch: (
-				queryParams?: { query?: SessionQueryParams } | undefined,
-			) => Promise<void>;
-		}>
-	>;
-	<F extends (...args: any) => any>(
-		useFetch: F,
-	): Promise<{
-		data: Ref<ClientSession<Option>>;
-		isPending: false;
-		error: Ref<{
-			message?: string | undefined;
-			status: number;
-			statusText: string;
-		}>;
+/**
+ * Minimal Nuxt-compatible fetch contract for `useSession(useFetch)`.
+ * Compatibility with Nuxt's `useFetch` and `UseFetchOptions` is checked by the Nuxt fixture type test.
+ */
+type SessionFetch = (
+	url: string,
+	options: {
+		headers?: HeadersInit;
+		key: string;
+		watch: WatchSource<unknown>[];
+	},
+) => Promise<{
+	data: Ref<unknown>;
+	error: Ref<unknown>;
+}>;
+
+type VueSessionState<Option extends BetterAuthClientOptions> = DeepReadonly<
+	Ref<{
+		data: ClientSession<Option>;
+		isPending: boolean;
+		isRefetching: boolean;
+		error: BetterFetchError | null;
+		refetch: (
+			queryParams?: { query?: SessionQueryParams } | undefined,
+		) => Promise<void>;
+	}>
+>;
+
+type SessionFetchResult<Option extends BetterAuthClientOptions> = {
+	data: Ref<ClientSession<Option>>;
+	isPending: false;
+	error: Ref<{
+		message?: string | undefined;
+		status: number;
+		statusText: string;
 	}>;
 };
 
@@ -89,7 +118,8 @@ export type VueAuthClient<Option extends BetterAuthClientOptions> =
 		InferClientAPI<Option> &
 		InferActions<Option> & {
 			hydrateSession(session: NonNullable<ClientSession<Option>> | null): void;
-			useSession: VueUseSession<Option>;
+			useSession(): VueSessionState<Option>;
+			useSession(useFetch: SessionFetch): Promise<SessionFetchResult<Option>>;
 			$Infer: {
 				Session: NonNullable<ClientSession<Option>>;
 			};
@@ -127,45 +157,29 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
 
-	function useSession(): DeepReadonly<
-		Ref<{
-			data: ClientSession<Option>;
-			isPending: boolean;
-			isRefetching: boolean;
-			error: BetterFetchError | null;
-			refetch: (
-				queryParams?: { query?: SessionQueryParams } | undefined,
-			) => Promise<void>;
-		}>
-	>;
-	function useSession<F extends (...args: any) => any>(
-		useFetch: F,
-	): Promise<{
-		data: Ref<ClientSession<Option>>;
-		isPending: false; //this is just to be consistent with the default hook
-		error: Ref<{
-			message?: string | undefined;
-			status: number;
-			statusText: string;
-		}>;
-	}>;
-	function useSession<UseFetch extends <_T>(...args: any) => any>(
-		useFetch?: UseFetch | undefined,
-	) {
+	function useSession(): VueSessionState<Option>;
+	function useSession(
+		useFetch: SessionFetch,
+	): Promise<SessionFetchResult<Option>>;
+	function useSession(useFetch?: SessionFetch | undefined) {
+		// Passing `useFetch` opts into Nuxt-managed session fetching and hydration.
 		if (useFetch) {
 			const sessionSignal = useStore($sessionSignal);
 			return useFetch(`${baseURL}/get-session`, {
-				headers: options?.fetchOptions?.headers,
+				headers: toHeadersInit(options?.fetchOptions?.headers),
 				key: sessionCacheKey,
 				watch: [sessionSignal],
-			}).then((res: any) => {
+			}).then((result) => {
+				const data = result.data as Ref<ClientSession<Option>>;
+				const error = result.error as SessionFetchResult<Option>["error"];
 				return {
-					data: res.data,
+					data,
 					isPending: false,
-					error: res.error,
+					error,
 				};
 			});
 		}
+		// Otherwise, return Better Auth's session state as a reactive Vue ref.
 		return resolvedHooks.useSession();
 	}
 
