@@ -2472,7 +2472,7 @@ describe("Additional Fields", async () => {
 
 	const orgOptions = {
 		teams: {
-			enabled: true,
+			enabled: true as const,
 		},
 		schema: {
 			organization: {
@@ -2770,6 +2770,7 @@ describe("Additional Fields", async () => {
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
+				teamRole?: "member" | undefined;
 				user: {
 					id: string;
 					email: string;
@@ -2831,6 +2832,7 @@ describe("Additional Fields", async () => {
 			role: "member" | "admin" | "owner";
 			createdAt: Date;
 			teamId?: string | undefined;
+			teamRole?: "member" | undefined;
 			user: {
 				id: string;
 				email: string;
@@ -3066,6 +3068,7 @@ describe("Additional Fields", async () => {
 			createdAt: Date;
 			userId: string;
 			teamId?: string | undefined;
+			teamRole?: "member" | undefined;
 			user: {
 				id: string;
 				email: string;
@@ -3086,6 +3089,7 @@ describe("Additional Fields", async () => {
 			expiresAt: Date;
 			createdAt: Date;
 			teamId?: string | undefined;
+			teamRole?: "member" | undefined;
 			invitationRequiredField: string;
 			invitationOptionalField?: string | undefined;
 			invitationHiddenField?: string | undefined;
@@ -3186,6 +3190,7 @@ describe("Additional Fields", async () => {
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
+				teamRole?: "member" | undefined;
 				user: {
 					id: string;
 					email: string;
@@ -3378,6 +3383,7 @@ describe("Additional Fields", async () => {
 			createdAt: Date;
 			expiresAt: Date;
 			teamId?: string | undefined;
+			teamRole?: "member" | undefined;
 			invitationRequiredField: string;
 			invitationOptionalField?: string | undefined;
 			invitationHiddenField?: string | undefined;
@@ -3412,6 +3418,7 @@ describe("Additional Fields", async () => {
 				createdAt: Date;
 				expiresAt: Date;
 				teamId?: string | undefined;
+				teamRole?: "member" | undefined;
 				invitationRequiredField: string;
 				invitationOptionalField?: string | undefined;
 				invitationHiddenField?: string | undefined;
@@ -3461,6 +3468,7 @@ describe("Additional Fields", async () => {
 			invitationOptionalField?: string | undefined;
 			invitationHiddenField?: string | undefined;
 			teamId?: string | undefined;
+			teamRole?: "member" | undefined;
 		}>();
 		expect(invitation.invitationRequiredField).toBe("hey");
 		expect(invitation.invitationOptionalField).toBe("hey2");

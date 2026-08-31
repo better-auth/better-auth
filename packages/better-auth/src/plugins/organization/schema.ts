@@ -36,6 +36,19 @@ interface OrganizationRoleDefaultFields {
 		type: "string";
 		required: true;
 	};
+	scope: {
+		type: "string";
+		required: true;
+		defaultValue: "organization";
+	};
+	teamId: {
+		type: "string";
+		required: false;
+		references: {
+			model: "team";
+			field: "id";
+		};
+	};
 	permission: {
 		type: "string";
 		required: true;
@@ -97,6 +110,11 @@ interface TeamMemberDefaultFields {
 			model: "user";
 			field: "id";
 		};
+	};
+	role: {
+		type: "string";
+		required: true;
+		defaultValue: "member";
 	};
 	membershipKey: {
 		type: "string";
@@ -182,6 +200,11 @@ interface InvitationDefaultFields {
 	role: {
 		type: "string";
 		required: true;
+		sortable: true;
+	};
+	teamRole: {
+		type: "string";
+		required: false;
 		sortable: true;
 	};
 	status: {
@@ -332,6 +355,7 @@ export const invitationSchema = z.object({
 	role: roleSchema,
 	status: invitationStatus,
 	teamId: z.string().nullish(),
+	teamRole: z.string().nullish(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
 	createdAt: z.date().default(() => new Date()),
@@ -349,13 +373,16 @@ export const teamMemberSchema = z.object({
 	id: z.string().default(generateId),
 	teamId: z.string(),
 	userId: z.string(),
+	role: roleSchema,
 	createdAt: z.date().default(() => new Date()),
 });
 
 export const organizationRoleSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
+	teamId: z.string().nullish(),
 	role: z.string(),
+	scope: z.string().default("organization"),
 	permission: z.record(z.string(), z.array(z.string())),
 	createdAt: z.date().default(() => new Date()),
 	updatedAt: z.date().optional(),
@@ -395,6 +422,14 @@ export type InferOrganizationRolesFromOption<
 		: "admin" | "member" | "owner"
 	: "admin" | "member" | "owner";
 
+export type InferTeamRolesFromOption<
+	O extends OrganizationOptions | undefined,
+> = O extends { teams: { roles: any } }
+	? keyof O["teams"]["roles"] extends infer K extends string
+		? K
+		: "member"
+	: "member";
+
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
 import type { DBFieldAttribute } from "@better-auth/core/db";
@@ -427,6 +462,7 @@ export type InferMember<
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
+				teamRole?: InferTeamRolesFromOption<O> | undefined;
 				user: {
 					id: string;
 					email: string;
@@ -457,6 +493,13 @@ export type InferOrganization<
 	Organization & InferAdditionalFieldsOutput<"organization", O, isClientSide>
 >;
 
+export type InferTeamMember<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	TeamMember & { role: InferTeamRolesFromOption<O> } & InferAdditionalFieldsOutput<"teamMember", O, isClientSide>
+>;
+
 export type InferTeam<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
@@ -479,6 +522,7 @@ export type InferInvitation<
 				expiresAt: Date;
 				createdAt: Date;
 				teamId?: string | undefined;
+				teamRole?: InferTeamRolesFromOption<O> | undefined;
 			}
 		: {
 				id: string;

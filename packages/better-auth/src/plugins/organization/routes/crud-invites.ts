@@ -68,6 +68,18 @@ const baseInvitationSchema = z.object({
 			})
 			.optional(),
 	]),
+	teamRole: z.union([
+		z.string().meta({
+			description: "The team role to assign to the user",
+		}),
+		z.array(
+			z.string().meta({
+				description: "The team roles to assign to the user",
+			}),
+		),
+	]).optional().meta({
+		description: "The team role(s) to assign to the user in the team.",
+	}),
 });
 
 type DynamicOrganizationRole<O extends OrganizationOptions> = O extends {
@@ -140,10 +152,19 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			method: "POST",
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
-			body: z.object({
-				...baseInvitationSchema.shape,
-				...additionalFieldsSchema.shape,
-			}),
+			body: z
+				.object({
+					...baseInvitationSchema.shape,
+					...additionalFieldsSchema.shape,
+				})
+				.and(
+					option.teams?.enabled
+						? z.object({
+								teamId: z.union([z.string(), z.array(z.string())]).optional(),
+								teamRole: z.union([z.string(), z.array(z.string())]).optional(),
+						  })
+						: z.object({}),
+				),
 			metadata: {
 				$Infer: {
 					body: {} as {
@@ -175,6 +196,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 								 * being invited to.
 								 */
 								teamId?: (string | string[]) | undefined;
+								/**
+								 * The team role(s) to assign
+								 * in the team.
+								 */
+								teamRole?: string | string[] | undefined;
 							}
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
@@ -283,6 +309,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
 			const roles = parseRoles(ctx.body.role);
+			const teamRoles = (ctx.body as any).teamRole ? parseRoles((ctx.body as any).teamRole) : "";
 
 			const rolesArray = roles
 				.split(",")
@@ -333,6 +360,52 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
 				);
+			}
+
+			// Grant Ceiling enforcement for Organization Role
+			const { cacheAllRoles } = await import("../permission");
+			const { checkIfMemberHasPermission } = await import("../has-permission");
+			
+			let acRoles = cacheAllRoles.get(organizationId);
+			if (!acRoles) {
+				await hasPermission(
+					{
+						organizationId,
+						role: member.role,
+						options: ctx.context.orgOptions,
+						permissions: {},
+					},
+					ctx,
+				);
+				acRoles = cacheAllRoles.get(organizationId)!;
+			}
+
+			for (const r of rolesArray) {
+				const targetRole = acRoles[r];
+				if (!targetRole) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					);
+				}
+
+				if (targetRole.scope === "team") {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					);
+				}
+
+				const targetPermissions = targetRole.statements;
+				await checkIfMemberHasPermission({
+					ctx,
+					permissionRequired: targetPermissions as Record<string, string[]>,
+					options: ctx.context.orgOptions,
+					organizationId,
+					member: member,
+					user: session.user,
+					action: "create",
+				});
 			}
 
 			const alreadyMember = await adapter.findMemberByEmail({
@@ -482,6 +555,45 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
 						);
 					}
+
+					// Grant Ceiling enforcement for Team Role
+					if (teamRoles) {
+						const currentTeamMember = await adapter.findTeamMember({
+							userId: session.user.id,
+							teamId,
+						});
+
+						const teamRolesArray = teamRoles.split(",").map((r) => r.trim());
+						for (const r of teamRolesArray) {
+							const targetRole = acRoles[r];
+							if (!targetRole) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+								);
+							}
+
+							if (targetRole.scope === "organization") {
+								throw APIError.from(
+									"BAD_REQUEST",
+									ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+								);
+							}
+
+							const targetPermissions = targetRole.statements;
+							await checkIfMemberHasPermission({
+								ctx,
+								permissionRequired: targetPermissions as Record<string, string[]>,
+								options: ctx.context.orgOptions,
+								organizationId,
+								teamId,
+								member,
+								teamMember: currentTeamMember,
+								user: session.user,
+								action: "create",
+							});
+						}
+					}
 				}
 			}
 
@@ -547,6 +659,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			let invitationData = {
 				role: roles,
+				teamRole: teamRoles,
 				email: email,
 				organizationId: organizationId,
 				teamIds,
@@ -794,8 +907,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 									: ctx.context.orgOptions.teams.maximumMembersPerTeam;
 
 							const result = await adapter.addTeamMemberWithLimit({
-								teamId,
 								userId: session.user.id,
+								teamId: teamId as string,
+								role: (acceptedI as any).teamRole || ctx.context.orgOptions.teams?.defaultRole || "member",
 								maximumMembersPerTeam,
 							});
 							if (result.status === "limitReached") {
@@ -806,8 +920,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 							}
 						} else {
 							await adapter.findOrCreateTeamMember({
-								teamId: teamId,
 								userId: session.user.id,
+								teamId: teamId as string,
+								role: (acceptedI as any).teamRole || ctx.context.orgOptions.teams?.defaultRole || "member",
 							});
 						}
 					}
