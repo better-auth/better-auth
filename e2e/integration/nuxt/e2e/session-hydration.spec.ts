@@ -3,7 +3,6 @@ import { expect, test } from "@nuxt/test-utils/playwright";
 
 test.use({
 	nuxt: {
-		buildDir: fileURLToPath(new URL("../.nuxt", import.meta.url)),
 		rootDir: fileURLToPath(new URL("..", import.meta.url)),
 	},
 });
