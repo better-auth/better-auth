@@ -69,13 +69,8 @@ test("hydrates an authenticated session without mismatch or refetch", async ({
 	await expect(
 		page.getByRole("heading", { name: "Signed in as Nuxt User" }),
 	).toBeVisible();
-	const deferredSessionRequest = await page
-		.waitForRequest(
-			(request) => new URL(request.url()).pathname === "/api/auth/get-session",
-			{ timeout: 500 },
-		)
-		.catch(() => null);
-	expect(deferredSessionRequest).toBeNull();
+	// Observe a short post-hydration window for deferred session requests.
+	await page.waitForTimeout(500);
 	expect({ clientSessionRequests, hydrationMessages }).toEqual({
 		clientSessionRequests: [],
 		hydrationMessages: [],
