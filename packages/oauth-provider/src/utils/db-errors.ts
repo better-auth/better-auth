@@ -45,7 +45,7 @@ const UNIQUE_CONSTRAINT_MESSAGE_PATTERN = /unique|duplicate/i;
  */
 // cspell:ignore-next-line doesn
 const MISSING_TABLE_PATTERN =
-	/no such table|relation.*does not exist|table.*does(?: not|n['’´]?t) exist/i;
+	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist/i;
 
 /**
  * Bounds the `cause` walk. Chains can be cyclic, and a pathologically deep
