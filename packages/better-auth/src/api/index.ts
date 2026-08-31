@@ -17,6 +17,7 @@ import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
 import type { OverrideMerge, UnionToIntersection } from "../types";
+import { isPathEnabled } from "../utils/enabled-paths";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -297,6 +298,11 @@ export const router = <Option extends BetterAuthOptions>(
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const normalizedPath = normalizePathname(req.url, basePath);
 			if (disabledPaths.includes(normalizedPath)) {
+				return new Response("Not Found", { status: 404 });
+			}
+
+			//handle enabled paths
+			if (!isPathEnabled(normalizedPath, ctx.options.enabledPaths)) {
 				return new Response("Not Found", { status: 404 });
 			}
 

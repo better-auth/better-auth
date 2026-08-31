@@ -290,3 +290,100 @@ describe("base path leading-prefix enforcement", () => {
 		expect(confused.status).toBe(404);
 	});
 });
+
+describe("enabledPaths", () => {
+	const signUpBody = JSON.stringify({
+		email: "user@example.com",
+		password: "password12345",
+		name: "Test User",
+	});
+
+	it("serves listed paths and returns 404 for every other path", async () => {
+		const { auth } = await getTestInstance({
+			enabledPaths: ["/sign-up/email"],
+		});
+
+		const allowed = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: signUpBody,
+			}),
+		);
+		expect(allowed.status).toBe(200);
+
+		const blocked = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+			}),
+		);
+		expect(blocked.status).toBe(404);
+	});
+
+	it("matches wildcard entries like rate-limit custom rules", async () => {
+		const { auth } = await getTestInstance({
+			enabledPaths: ["/sign-up/*"],
+		});
+
+		const allowed = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: signUpBody,
+			}),
+		);
+		expect(allowed.status).toBe(200);
+
+		const blocked = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: "user@example.com",
+					password: "password12345",
+				}),
+			}),
+		);
+		expect(blocked.status).toBe(404);
+	});
+
+	it("blocks every path when the list is empty", async () => {
+		const { auth } = await getTestInstance({
+			enabledPaths: [],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+			}),
+		);
+		expect(response.status).toBe(404);
+	});
+
+	it("keeps paths from disabledPaths disabled even when listed", async () => {
+		const { auth } = await getTestInstance({
+			enabledPaths: ["/sign-up/email"],
+			disabledPaths: ["/sign-up/email"],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: signUpBody,
+			}),
+		);
+		expect(response.status).toBe(404);
+	});
+
+	it("does not affect server-side api calls", async () => {
+		const { auth } = await getTestInstance({
+			enabledPaths: ["/sign-up/email"],
+		});
+
+		const session = await auth.api.getSession({
+			headers: new Headers(),
+		});
+		expect(session).toBeNull();
+	});
+});

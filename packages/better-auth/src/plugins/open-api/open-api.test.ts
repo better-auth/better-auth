@@ -335,6 +335,16 @@ describe("open-api", async () => {
 		expect(schema).toMatchSnapshot("openAPISchema");
 	});
 
+	it("should omit paths outside enabledPaths", async () => {
+		const { auth: authWithEnabledPaths } = await getTestInstance({
+			plugins: [openAPI()],
+			enabledPaths: ["/sign-in/email"],
+		});
+		const schema = await authWithEnabledPaths.api.generateOpenAPISchema();
+		expect(schema.paths["/sign-in/email"]).toBeDefined();
+		expect(schema.paths["/sign-up/email"]).toBeUndefined();
+	});
+
 	it("should mark model id fields as required and read-only", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<

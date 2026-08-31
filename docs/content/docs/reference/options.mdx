@@ -961,6 +961,17 @@ export const auth = betterAuth({
 })
 ```
 
+## `enabledPaths`
+
+Serve only the listed auth paths and return `404 Not Found` for every other path. Entries match exactly, or as a wildcard pattern when they contain `*`. Server-side `auth.api` calls are not affected, and paths listed in `disabledPaths` stay disabled.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	enabledPaths: ["/sign-in/email", "/sign-out", "/get-session", "/callback/*"],
+})
+```
+
 ## `telemetry`
 
 Enable or disable Better Auth's telemetry collection. (default: `false`)
