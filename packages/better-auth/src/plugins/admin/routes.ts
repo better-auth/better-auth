@@ -1633,8 +1633,17 @@ export const removeUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
+			if (opts?.hooks?.beforeRemoveUser) {
+				await opts.hooks.beforeRemoveUser(user);
+			}
+
 			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
+
+			if (opts?.hooks?.afterRemoveUser) {
+				await opts.hooks.afterRemoveUser(user);
+			}
+
 			return ctx.json({
 				success: true,
 			});

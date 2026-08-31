@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { logger } from "@better-auth/core/env";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -1268,6 +1269,69 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
 		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10902
+	 */
+	it("should warn when a signed compact cookie has an invalid payload", async () => {
+		const secret = "test-secret";
+		const bakeCookie = async (emailVerified: boolean | null) => {
+			const now = new Date().toISOString();
+			const sessionData = {
+				session: {
+					id: "s1",
+					token: "tok",
+					userId: "u1",
+					expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+					createdAt: now,
+					updatedAt: now,
+				},
+				user: {
+					id: "u1",
+					name: "Test",
+					email: "a@b.com",
+					emailVerified,
+					createdAt: now,
+					updatedAt: now,
+				},
+				updatedAt: Date.now(),
+				version: "1",
+			};
+			const expiresAt = Date.now() + 300_000;
+			const signature = await createHMAC("SHA-256", "base64urlnopad").sign(
+				secret,
+				JSON.stringify({ ...sessionData, expiresAt }),
+			);
+			return base64Url.encode(
+				JSON.stringify({ session: sessionData, expiresAt, signature }),
+				{ padding: false },
+			);
+		};
+		const config = {
+			cookiePrefix: "p",
+			isSecure: false,
+			secret,
+		};
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		try {
+			const validCache = await getCookieCache(
+				new Headers({ cookie: `p.session_data=${await bakeCookie(false)}` }),
+				config,
+			);
+			expect(validCache).not.toBeNull();
+			expect(warn).not.toHaveBeenCalled();
+
+			const invalidCache = await getCookieCache(
+				new Headers({ cookie: `p.session_data=${await bakeCookie(null)}` }),
+				config,
+			);
+
+			expect(invalidCache).toBeNull();
+			expect(warn).toHaveBeenCalledTimes(1);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it("should return null for invalid JWT token", async () => {

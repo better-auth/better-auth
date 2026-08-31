@@ -13,7 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { createAuthMiddleware, getSessionFromCtx } from "../../api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -2677,5 +2677,200 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 			fetchOptions: { headers: attackerHeaders },
 		});
 		expect(listUsers.error?.status).toBe(401);
+	});
+});
+
+describe("removeUser hooks", async () => {
+	// Instance with a beforeRemoveUser that always throws — used to verify
+	// that deletion is aborted and afterRemoveUser is never reached.
+	const afterBlockingSpy = vi.fn().mockResolvedValue(undefined);
+	const {
+		auth: blockingAuth,
+		signInWithTestUser: signInBlocking,
+		customFetchImpl: blockingFetchImpl,
+	} = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					hooks: {
+						beforeRemoveUser: async (_user) => {
+							throw new APIError("BAD_REQUEST", {
+								message: "blocked by hook",
+							});
+						},
+						afterRemoveUser: afterBlockingSpy,
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{ testUser: { name: "Admin" } },
+	);
+
+	const blockingClient = createAuthClient({
+		fetchOptions: {
+			customFetchImpl: blockingFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+	const { headers: blockingAdminHeaders } = await signInBlocking();
+
+	// Instance with spied hooks that both resolve — used to verify
+	// that hooks are called with the correct arguments on a successful deletion.
+	const beforeResolvingSpy = vi.fn().mockResolvedValue(undefined);
+	const afterResolvingSpy = vi.fn().mockResolvedValue(undefined);
+	const {
+		signInWithTestUser: signInResolving,
+		customFetchImpl: resolvingFetchImpl,
+	} = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					hooks: {
+						beforeRemoveUser: beforeResolvingSpy,
+						afterRemoveUser: afterResolvingSpy,
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{ testUser: { name: "Admin" } },
+	);
+
+	const resolvingClient = createAuthClient({
+		fetchOptions: {
+			customFetchImpl: resolvingFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+	const { headers: resolvingAdminHeaders } = await signInResolving();
+
+	describe("beforeRemoveUser", () => {
+		it("aborts deletion when hook throws — user still exists in DB", async () => {
+			const created = await blockingClient.admin.createUser(
+				{
+					name: "Target User",
+					email: "target-before@example.com",
+					password: "password1234",
+					role: "user",
+				},
+				{ headers: blockingAdminHeaders },
+			);
+			const userId = created.data?.user.id || "";
+
+			const res = await blockingClient.admin.removeUser(
+				{ userId },
+				{ headers: blockingAdminHeaders },
+			);
+
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("blocked by hook");
+
+			const still = await (
+				await blockingAuth.$context
+			).internalAdapter.findUserById(userId);
+			expect(still).not.toBeNull();
+			expect(still?.id).toBe(userId);
+		});
+
+		it("allows deletion when hook resolves", async () => {
+			beforeResolvingSpy.mockClear();
+
+			const created = await resolvingClient.admin.createUser(
+				{
+					name: "Target User",
+					email: "target-resolves@example.com",
+					password: "password1234",
+					role: "user",
+				},
+				{ headers: resolvingAdminHeaders },
+			);
+			const userId = created.data?.user.id || "";
+
+			const res = await resolvingClient.admin.removeUser(
+				{ userId },
+				{ headers: resolvingAdminHeaders },
+			);
+
+			expect(res.data?.success).toBe(true);
+			expect(beforeResolvingSpy).toHaveBeenCalledOnce();
+			expect(beforeResolvingSpy).toHaveBeenCalledWith(
+				expect.objectContaining({ id: userId }),
+			);
+		});
+	});
+
+	describe("afterRemoveUser", () => {
+		it("is called with the deleted user after successful deletion", async () => {
+			afterResolvingSpy.mockClear();
+
+			const created = await resolvingClient.admin.createUser(
+				{
+					name: "Target User",
+					email: "target-after@example.com",
+					password: "password1234",
+					role: "user",
+				},
+				{ headers: resolvingAdminHeaders },
+			);
+			const userId = created.data?.user.id || "";
+
+			const res = await resolvingClient.admin.removeUser(
+				{ userId },
+				{ headers: resolvingAdminHeaders },
+			);
+
+			expect(res.data?.success).toBe(true);
+			expect(afterResolvingSpy).toHaveBeenCalledOnce();
+			expect(afterResolvingSpy).toHaveBeenCalledWith(
+				expect.objectContaining({ id: userId }),
+			);
+		});
+
+		it("is NOT called when beforeRemoveUser throws", async () => {
+			afterBlockingSpy.mockClear();
+
+			const created = await blockingClient.admin.createUser(
+				{
+					name: "Target User",
+					email: "target-after-blocked@example.com",
+					password: "password1234",
+					role: "user",
+				},
+				{ headers: blockingAdminHeaders },
+			);
+			const userId = created.data?.user.id || "";
+
+			await blockingClient.admin.removeUser(
+				{ userId },
+				{ headers: blockingAdminHeaders },
+			);
+
+			expect(afterBlockingSpy).not.toHaveBeenCalled();
+		});
 	});
 });
