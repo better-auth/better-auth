@@ -41,23 +41,28 @@ export const vercelBotId = async ({
 	checkBotIdOptions,
 	validateRequest = defaultValidateRequest,
 }: Params) => {
-	let verification: BotIdVerification;
+	let isValid: boolean;
 	try {
-		const { checkBotId } = await import("botid/server"); // botid is an optional dependency
-		verification = await withTimeout(
-			checkBotId({
-				...checkBotIdOptions,
-				advancedOptions: {
-					...checkBotIdOptions?.advancedOptions,
-					// Forward the current request's headers so BotID can classify it
-					// in runtimes where it can't recover ambient request context on its own.
-					// Explicit overrides in checkBotIdOptions still win per header name.
-					headers: requestToIncomingHeaders(
-						request,
-						checkBotIdOptions?.advancedOptions?.headers,
-					),
-				},
-			}),
+		isValid = await withTimeout(
+			(async () => {
+				const { checkBotId } = await import("botid/server"); // botid is an optional dependency
+				const verification = await checkBotId({
+					...checkBotIdOptions,
+					advancedOptions: {
+						...checkBotIdOptions?.advancedOptions,
+						// Forward the current request's headers so BotID can classify it
+						// in runtimes where it can't recover ambient request context on its own.
+						// Explicit overrides in checkBotIdOptions still win per header name.
+						headers: requestToIncomingHeaders(
+							request,
+							checkBotIdOptions?.advancedOptions?.headers,
+						),
+					},
+				});
+				return validateRequest({ request, verification });
+			})(),
+			// Bounds checkBotId and validateRequest together, so a slow custom
+			// validateRequest can't hold the request open past the deadline either.
 			CAPTCHA_VERIFY_TIMEOUT_MS,
 		);
 	} catch (error) {
@@ -65,7 +70,6 @@ export const vercelBotId = async ({
 			cause: error,
 		});
 	}
-	const isValid = await validateRequest({ request, verification });
 
 	if (isValid) return undefined;
 
