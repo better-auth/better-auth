@@ -260,6 +260,97 @@ describe("seedResources (integration via plugin init)", () => {
 			allowedScopes: null, // cleared
 		});
 	});
+
+	/**
+	 * `drizzle-orm` throws an `Error` whose `message` is the failed SQL and
+	 * whose `cause` carries the Postgres SQLSTATE. Reported as
+	 * better-auth#11034.
+	 */
+	const drizzleUniqueViolation = () =>
+		Object.assign(
+			new Error(
+				'Failed query: insert into "oauthResource" ("id", "identifier") values ($1, $2) returning "id"',
+			),
+			{
+				cause: Object.assign(
+					new Error(
+						'duplicate key value violates unique constraint "oauthResource_identifier_unique"',
+					),
+					{ code: "23505", constraint: "oauthResource_identifier_unique" },
+				),
+			},
+		);
+
+	it("treats a Drizzle-wrapped unique violation as a lost insert race", async () => {
+		const identifier = "https://api.example.com/wrapped-race";
+		const instance = await bootWithResourcesOption({});
+		const ctx = (await instance.auth.$context) as unknown as AuthContext;
+		const debugSpy = vi
+			.spyOn(logger, "debug")
+			.mockImplementation(() => undefined);
+		const createSpy = vi
+			.spyOn(ctx.adapter, "create")
+			.mockRejectedValue(drizzleUniqueViolation());
+
+		try {
+			await expect(
+				seedResources(ctx, {
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [{ identifier }],
+				} as OAuthOptions<Scope[]>),
+			).resolves.toBeUndefined();
+			expect(createSpy).toHaveBeenCalledTimes(1);
+			expect(
+				debugSpy.mock.calls.map((call: unknown[]) => String(call[0] ?? "")).join("\n"),
+			).toContain("already inserted by a concurrent process");
+		} finally {
+			createSpy.mockRestore();
+			debugSpy.mockRestore();
+		}
+	});
+
+	it("still rethrows an unrelated wrapped adapter failure", async () => {
+		const instance = await bootWithResourcesOption({});
+		const ctx = (await instance.auth.$context) as unknown as AuthContext;
+		const wrapped = Object.assign(new Error("Failed query: insert into \"oauthResource\""), {
+			cause: Object.assign(new Error("deadlock detected"), { code: "40P01" }),
+		});
+		const createSpy = vi.spyOn(ctx.adapter, "create").mockRejectedValue(wrapped);
+
+		try {
+			await expect(
+				seedResources(ctx, {
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [{ identifier: "https://api.example.com/wrapped-deadlock" }],
+				} as OAuthOptions<Scope[]>),
+			).rejects.toBe(wrapped);
+		} finally {
+			createSpy.mockRestore();
+		}
+	});
+
+	it("defers seeding when a wrapped error reports the table is missing", async () => {
+		const instance = await bootWithResourcesOption({});
+		const ctx = (await instance.auth.$context) as unknown as AuthContext;
+		const wrapped = Object.assign(new Error('Failed query: select from "oauthResource"'), {
+			cause: new Error('relation "oauthResource" does not exist'),
+		});
+		const findOneSpy = vi.spyOn(ctx.adapter, "findOne").mockRejectedValue(wrapped);
+
+		try {
+			await expect(
+				seedResources(ctx, {
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [{ identifier: "https://api.example.com/wrapped-missing-table" }],
+				} as OAuthOptions<Scope[]>),
+			).resolves.toBeUndefined();
+		} finally {
+			findOneSpy.mockRestore();
+		}
+	});
 });
 
 describe("getResource + cache", () => {
