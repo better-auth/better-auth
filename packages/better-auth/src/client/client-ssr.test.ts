@@ -54,15 +54,23 @@ it("uses stable Nuxt options for a session fetch", () => {
  * @see https://github.com/better-auth/better-auth/issues/5358
  */
 it.each([
-	["Headers", new Headers({ cookie: "better-auth.session_token=session" })],
+	[
+		"Headers",
+		new Headers({ cookie: "better-auth.session_token=session" }),
+		new Headers({ cookie: "better-auth.session_token=session" }),
+	],
 	[
 		"tuple array",
 		[["cookie", "better-auth.session_token=session"]] satisfies [
 			string,
 			string,
 		][],
+		[["cookie", "better-auth.session_token=session"]] satisfies [
+			string,
+			string,
+		][],
 	],
-])("preserves %s for a Nuxt session fetch", (_name, headers) => {
+])("preserves %s for a Nuxt session fetch", (_name, headers, expectedHeaders) => {
 	const pendingFetch = new Promise<never>(() => undefined);
 	const useFetch = vi.fn(() => pendingFetch);
 	const client = createVueClient({
@@ -75,7 +83,7 @@ it.each([
 	expect(useFetch).toHaveBeenCalledWith(
 		"http://localhost:3000/api/auth/get-session",
 		{
-			headers,
+			headers: expectedHeaders,
 			key: "better-auth:session:http://localhost:3000:/api/auth",
 			watch: [expect.anything()],
 		},
