@@ -415,3 +415,53 @@ describe("getResource + cache", () => {
 		expect(third?.name).toBe("Mutated externally");
 	});
 });
+
+describe("oauthProvider init resilience to a lost seed race", () => {
+	let debugSpy: ReturnType<typeof vi.spyOn>;
+	let infoSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => undefined);
+		infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+	});
+
+	afterEach(() => {
+		debugSpy.mockRestore();
+		infoSpy.mockRestore();
+	});
+
+	/**
+	 * Minimal AuthContext stand-in reproducing production ordering: the table
+	 * exists, `findOne` finds nothing, and `create` loses the race with a
+	 * concurrent boot. `disableJwtPlugin` keeps init off the issuer-validation
+	 * branch, which needs a full plugin registry.
+	 */
+	const stubContext = (createError: unknown) =>
+		({
+			options: {},
+			baseURL: "http://localhost:3000",
+			adapter: {
+				findOne: async () => null,
+				create: async () => {
+					throw createError;
+				},
+			},
+		}) as unknown as AuthContext;
+
+	it("returns the session databaseHooks when the seed insert loses the race", async () => {
+		const plugin = oauthProvider({
+			loginPage: "/login",
+			consentPage: "/consent",
+			disableJwtPlugin: true,
+			resources: ["https://api.example.com/init-race"],
+		} as OAuthOptions<Scope[]>);
+		const wrapped = Object.assign(
+			new Error('Failed query: insert into "oauthResource" ("id", "identifier") values ($1, $2)'),
+			{ cause: Object.assign(new Error("duplicate key value"), { code: "23505" }) },
+		);
+
+		const result = await plugin.init?.(stubContext(wrapped));
+
+		expect(result?.options?.databaseHooks?.session?.delete).toBeDefined();
+	});
+});
