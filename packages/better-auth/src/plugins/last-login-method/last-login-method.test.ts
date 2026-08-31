@@ -388,7 +388,9 @@ describe("lastLoginMethod", async () => {
 					},
 				},
 			},
-		} as any)) as unknown as { headers: Headers } | undefined;
+		} as Parameters<NonNullable<typeof handler>>[0])) as unknown as
+			| { headers: Headers }
+			| undefined;
 
 		const cookies = parseSetCookieHeader(
 			result?.headers.get("set-cookie") || "",
