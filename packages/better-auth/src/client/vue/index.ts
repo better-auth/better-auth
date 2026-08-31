@@ -25,11 +25,12 @@ function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
 }
 
-/** Removes undefined values accepted by Better Fetch but not by `HeadersInit`. */
+/** Preserves standard `HeadersInit` values and removes undefined record entries. */
 function toHeadersInit(
 	headers: ClientFetchOption["headers"],
 ): HeadersInit | undefined {
 	if (!headers) return undefined;
+	if (headers instanceof Headers || Array.isArray(headers)) return headers;
 
 	const normalizedHeaders: Record<string, string> = {};
 	for (const [name, value] of Object.entries(headers)) {
