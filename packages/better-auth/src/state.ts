@@ -42,27 +42,24 @@ const stateDataSchema = z.looseObject({
 export type StateData = z.infer<typeof stateDataSchema>;
 
 /**
- * A browser can have several sign-in flows open at once: two tabs, a retry after
- * a failure, or an authorize URL still sitting in history. The cookie strategy
- * keeps them all, because it only has one cookie to put them in and the newest
- * write would otherwise replace the nonce an older flow still needs, failing its
- * callback with `state_security_mismatch`.
- *
- * Capped so the cookie stays well inside the 4KB per-cookie limit.
+ * Sign-ins that overlap in time share one cookie, so each response rewrites it
+ * from the snapshot its own request carried. Sequential flows (a second tab, a
+ * retry, a stale authorize URL) are preserved. Two requests genuinely in flight
+ * at the same instant still resolve last-write-wins, which is what a single
+ * cookie can express; the database strategy has no such limit.
  */
 const MAX_PENDING_STATES = 5;
 
 /**
- * Cookies written before multi-flow support hold a single state object rather
- * than a list, so both shapes have to parse while those are still in flight.
+ * Browsers cap a cookie at roughly 4KB including its name and attributes, and
+ * silently drop anything larger. Flows carrying long callback URLs or server
+ * context can reach that before the entry cap does.
  */
+const MAX_STATE_COOKIE_LENGTH = 3500;
+
+/** Cookies written before multi-flow support hold one state rather than a list. */
 const stateCookieSchema = z.union([z.array(stateDataSchema), stateDataSchema]);
 
-/**
- * Normalises a decrypted `oauth_state` payload to the list of flows it holds.
- * Exported because the oauth-proxy plugin carries the same cookie between
- * environments and has to read it with the same rules.
- */
 export function toPendingStates(value: unknown): StateData[] {
 	const parsed = stateCookieSchema.parse(value);
 	return Array.isArray(parsed) ? parsed : [parsed];
@@ -76,11 +73,14 @@ async function readPendingStates(
 	if (!encryptedData) return [];
 
 	try {
-		const decryptedData = await symmetricDecrypt({
-			key: c.context.secretConfig,
-			data: encryptedData,
-		});
-		return toPendingStates(JSON.parse(decryptedData));
+		return toPendingStates(
+			JSON.parse(
+				await symmetricDecrypt({
+					key: c.context.secretConfig,
+					data: encryptedData,
+				}),
+			),
+		);
 	} catch {
 		// An unreadable cookie is replaced rather than failing the new sign-in.
 		return [];
@@ -147,17 +147,28 @@ export async function generateGenericState(
 			},
 		);
 
-		// Keep the flows this browser already has open, dropping any that have
-		// expired, so a second sign-in does not invalidate the first one.
-		const now = Date.now();
 		const pending = await readPendingStates(c, stateCookie.name);
-		const retained = pending.filter((entry) => entry.expiresAt > now);
-		const nextStates = [...retained, payload].slice(-MAX_PENDING_STATES);
+		const nextStates = [
+			...pending.filter((entry) => entry.expiresAt > Date.now()),
+			payload,
+		].slice(-MAX_PENDING_STATES);
 
-		const encryptedData = await symmetricEncrypt({
-			key: c.context.secretConfig,
-			data: JSON.stringify(nextStates),
-		});
+		const encryptStates = async (states: StateData[]) =>
+			symmetricEncrypt({
+				key: c.context.secretConfig,
+				data: JSON.stringify(states),
+			});
+
+		// Drop the oldest pending flows until the cookie fits. This flow is the one
+		// the caller is about to be redirected into, so it is never dropped.
+		let encryptedData = await encryptStates(nextStates);
+		while (
+			encryptedData.length > MAX_STATE_COOKIE_LENGTH &&
+			nextStates.length > 1
+		) {
+			nextStates.shift();
+			encryptedData = await encryptStates(nextStates);
+		}
 
 		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
 
@@ -230,9 +241,13 @@ export async function parseGenericState(
 	let parsedData: StateData;
 
 	if (storeStateStrategy === "cookie") {
-		// Retrieve state data from encrypted cookie
+		// Retrieve state data from encrypted cookie. Carries write attributes so
+		// the remaining flows can be stored back below.
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "oauth_state",
+			{
+				maxAge: 10 * 60, // 10 minutes
+			},
 		);
 		const encryptedData = c.getCookie(stateCookie.name);
 
@@ -262,8 +277,8 @@ export async function parseGenericState(
 			);
 		}
 
-		// Expired entries still match here so the expiry check below reports them
-		// as `state_mismatch` rather than as a security mismatch.
+		// Expired entries match here so the check below still reports them as
+		// `state_mismatch` rather than as a security mismatch.
 		const matchedState = pendingStates.find(
 			(entry) => entry.oauthState === state,
 		);
@@ -274,8 +289,7 @@ export async function parseGenericState(
 				{
 					code: "state_security_mismatch",
 					details: { state },
-					// No flow matched, so fall back to the newest one's error URL. Every
-					// entry had its origin validated at sign-in.
+					// Origin-validated at sign-in, so the newest is a safe fallback.
 					errorURL: pendingStates.at(-1)?.errorURL,
 				},
 			);
@@ -283,28 +297,20 @@ export async function parseGenericState(
 
 		parsedData = matchedState;
 
-		// Consume this flow, but leave any other tab's flow intact.
-		const now = Date.now();
 		const remainingStates = pendingStates.filter(
-			(entry) => entry !== matchedState && entry.expiresAt > now,
+			(entry) => entry.oauthState !== state && entry.expiresAt > Date.now(),
 		);
 
 		if (remainingStates.length === 0) {
 			expireCookie(c, stateCookie);
 		} else {
-			const refreshedCookie = c.context.createAuthCookie(
-				settings?.cookieName ?? "oauth_state",
-				{
-					maxAge: 10 * 60, // 10 minutes
-				},
-			);
 			c.setCookie(
-				refreshedCookie.name,
+				stateCookie.name,
 				await symmetricEncrypt({
 					key: c.context.secretConfig,
 					data: JSON.stringify(remainingStates),
 				}),
-				refreshedCookie.attributes,
+				stateCookie.attributes,
 			);
 		}
 	} else {

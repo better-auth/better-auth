@@ -2761,6 +2761,69 @@ describe("oauth2", async () => {
 		expect(callbackURL).not.toContain("state_mismatch");
 	});
 
+	it("should keep the newest cookie-backed flow usable when entries are oversized", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-oversized",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		// Long callback URLs push the encrypted cookie past the browser limit well
+		// before the entry cap is reached.
+		const longCallbackURL = `http://localhost:3000/dashboard?padding=${"x".repeat(1200)}`;
+		const startSignIn = async () => {
+			const res = await authClient.signIn.social({
+				provider: "test-cookie-oversized",
+				callbackURL: longCallbackURL,
+				fetchOptions: {
+					headers,
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			return res.data?.url ?? "";
+		};
+
+		await startSignIn();
+		await startSignIn();
+		const newestURL = await startSignIn();
+
+		const stateCookie = headers
+			.get("cookie")
+			?.split("; ")
+			.find((entry) => entry.startsWith("better-auth.oauth_state="));
+		expect(stateCookie?.length ?? 0).toBeLessThan(4096);
+
+		const { callbackURL } = await simulateOAuthFlow(
+			newestURL,
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).not.toContain("state_mismatch");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/4951
 	 * @see https://github.com/better-auth/better-auth/pull/9069

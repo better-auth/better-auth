@@ -434,9 +434,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								key: getEncryptionKey(ctx),
 								data: statePackage.stateCookie,
 							});
-							// The cookie can hold several in-flight sign-ins, so pick the one
-							// this callback is for. Falling back to the newest keeps the
-							// binding check below meaningful when nothing matches.
+							// The cookie can hold several in-flight sign-ins. Falling back to
+							// the newest leaves the binding check below to reject a mismatch.
 							const pendingStates = toPendingStates(
 								parseJSON<unknown>(decryptedState),
 							);
