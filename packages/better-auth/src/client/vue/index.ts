@@ -113,6 +113,14 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		$store,
 		atomListeners,
 	} = getClientConfig(options, false);
+
+	const sessionCacheKey = [
+		"better-auth",
+		"session",
+		options?.baseURL || "inferred", // Treat an empty URL as unset.
+		options?.basePath ?? "/api/auth", // Preserve an empty root path.
+	].join(":");
+
 	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
@@ -146,7 +154,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		if (useFetch) {
 			const ref = useStore(pluginsAtoms.$sessionSignal!);
 			return useFetch(`${baseURL}/get-session`, {
-				ref,
+				headers: options?.fetchOptions?.headers,
+				key: sessionCacheKey,
+				watch: [ref],
 			}).then((res: any) => {
 				return {
 					data: res.data,
