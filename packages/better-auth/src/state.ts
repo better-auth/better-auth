@@ -170,6 +170,15 @@ export async function generateGenericState(
 			encryptedData = await encryptStates(nextStates);
 		}
 
+		// A single flow can still be too large on its own. Writing it keeps the
+		// existing behaviour, but the browser will drop the cookie and the callback
+		// will fail with `state_mismatch`, so say why here rather than there.
+		if (encryptedData.length > MAX_STATE_COOKIE_LENGTH) {
+			c.context.logger.warn(
+				`OAuth state cookie is ${encryptedData.length} bytes, which most browsers will reject. Shorten callbackURL, errorCallbackURL or any additional state data.`,
+			);
+		}
+
 		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
 
 		return {

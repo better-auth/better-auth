@@ -2752,13 +2752,17 @@ describe("oauth2", async () => {
 		);
 
 		// The older tab finishes first. Its nonce must still be honoured.
-		const { callbackURL } = await simulateOAuthFlow(
-			firstURL,
-			headers,
+		const first = await simulateOAuthFlow(firstURL, headers, customFetchImpl);
+		expect(first.callbackURL).not.toContain("state_mismatch");
+
+		// And consuming it must leave the newer tab's flow usable, rather than
+		// clearing the cookie outright.
+		const second = await simulateOAuthFlow(
+			secondURL,
+			first.headers,
 			customFetchImpl,
 		);
-
-		expect(callbackURL).not.toContain("state_mismatch");
+		expect(second.callbackURL).not.toContain("state_mismatch");
 	});
 
 	it("should keep the newest cookie-backed flow usable when entries are oversized", async () => {
