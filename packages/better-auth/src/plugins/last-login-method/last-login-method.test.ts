@@ -344,6 +344,60 @@ describe("lastLoginMethod", async () => {
 		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10995
+	 */
+	it("should resolve Google One Tap callbacks as google", async () => {
+		const updateUser = vi.fn();
+		const plugin = lastLoginMethod({ storeInDatabase: true });
+		const initResult = await plugin.init?.({
+			internalAdapter: { updateUser },
+			logger: { error: vi.fn() },
+		} as unknown as Parameters<NonNullable<typeof plugin.init>>[0]);
+		const sessionCreateAfter =
+			initResult?.options?.databaseHooks?.session?.create?.after;
+		if (!sessionCreateAfter) throw new Error("Expected a session create hook");
+
+		await sessionCreateAfter(
+			{ userId: "user-123" } as Parameters<typeof sessionCreateAfter>[0],
+			{
+				path: "/one-tap/callback",
+			} as Parameters<typeof sessionCreateAfter>[1],
+		);
+
+		expect(updateUser).toHaveBeenCalledWith("user-123", {
+			lastLoginMethod: "google",
+		});
+	});
+
+	it("should set the last login method cookie for Google One Tap", async () => {
+		const plugin = lastLoginMethod();
+		const handler = plugin.hooks?.after?.[0]?.handler;
+
+		const result = (await handler?.({
+			path: "/one-tap/callback",
+			returnHeaders: true,
+			context: {
+				responseHeaders: new Headers({
+					"set-cookie": "better-auth.session_token=session-token",
+				}),
+				authCookies: {
+					sessionToken: {
+						name: "better-auth.session_token",
+						attributes: {},
+					},
+				},
+			},
+		} as any)) as unknown as { headers: Headers } | undefined;
+
+		const cookies = parseSetCookieHeader(
+			result?.headers.get("set-cookie") || "",
+		);
+		expect(cookies.get("better-auth.last_used_login_method")?.value).toBe(
+			"google",
+		);
+	});
+
 	it("should ignore missing path in after hooks", async () => {
 		const plugin = lastLoginMethod();
 		const handler = plugin.hooks?.after?.[0]?.handler;
