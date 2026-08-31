@@ -1,13 +1,17 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
+import { createRemoteJWKSet, decodeJwt } from "jose";
 import { logger } from "../env";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type {
+	OAuthIdTokenConfig,
+	OAuthProvider,
+	ProviderOptions,
+} from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	validateAuthorizationCode,
+	verifyProviderIdToken,
 } from "../oauth2";
-import type { GenericEndpointContext } from "../types";
 
 const ISSUER = "https://auth.agentid.com";
 
@@ -59,38 +63,22 @@ function localPart(email: string): string {
 /** Creates an AgentID social provider. */
 export const agentid = (options: AgentIdOptions) => {
 	const tokenEndpoint = options.tokenEndpoint ?? TOKEN_ENDPOINT;
-
-	let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
-	const getJwks = () => (jwks ??= createRemoteJWKSet(new URL(JWKS_URL)));
-	const verifyAgentIdToken = async (token: string, nonce?: string) => {
-		try {
-			const { payload } = await jwtVerify(token, getJwks(), {
-				issuer: ISSUER,
-				audience: options.clientId,
-				algorithms: [ID_TOKEN_ALG],
-			});
-			if (nonce && payload.nonce !== nonce) {
-				return false;
-			}
-			return true;
-		} catch (error) {
-			logger.error("Failed to verify AgentID ID token:", error);
-			return false;
-		}
-	};
-	const verifyToken = (
-		token: string,
-		nonce?: string,
-		ctx?: GenericEndpointContext,
-	) => {
-		return options.verifyIdToken
-			? options.verifyIdToken(token, nonce, ctx)
-			: verifyAgentIdToken(token, nonce);
-	};
+	const idToken = {
+		jwks: createRemoteJWKSet(new URL(JWKS_URL)),
+		issuer: ISSUER,
+		audience: options.clientId,
+		algorithms: [ID_TOKEN_ALG],
+	} satisfies OAuthIdTokenConfig;
+	const callbackVerificationOptions = options.disableIdTokenSignIn
+		? { ...options, disableIdTokenSignIn: false }
+		: options;
 
 	return {
 		id: "agentid",
 		name: "AgentID",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: ISSUER,
+		issuer: ISSUER,
 
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			if (!getPrimaryClientId(options.clientId)) {
@@ -132,19 +120,17 @@ export const agentid = (options: AgentIdOptions) => {
 			});
 			if (
 				!tokens.idToken ||
-				!(await verifyToken(tokens.idToken, undefined, undefined))
+				!(await verifyProviderIdToken(
+					{ idToken, options: callbackVerificationOptions },
+					tokens.idToken,
+				))
 			) {
 				return null;
 			}
 			return tokens;
 		},
 
-		async verifyIdToken(token, nonce, ctx?: GenericEndpointContext) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			return verifyToken(token, nonce, ctx);
-		},
+		idToken,
 
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -190,7 +176,6 @@ export const agentid = (options: AgentIdOptions) => {
 
 			return {
 				user: {
-					id: profile.sub,
 					name,
 					email: profile.email,
 					emailVerified: profile.email_verified === true,

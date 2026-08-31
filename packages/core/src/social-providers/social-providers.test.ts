@@ -49,6 +49,7 @@ describe("OAuth account identity contract", () => {
 		userPoolId: "us-east-1_test",
 	};
 	const providers: OAuthProvider[] = [
+		socialProviders.agentid(providerOptions),
 		socialProviders.apple(providerOptions),
 		socialProviders.atlassian(providerOptions),
 		socialProviders.cognito(providerOptions),
@@ -142,6 +143,7 @@ describe("OAuth account identity contract", () => {
 				.map((provider) => provider.id)
 				.sort(),
 		).toEqual([
+			"agentid",
 			"apple",
 			"cognito",
 			"facebook",

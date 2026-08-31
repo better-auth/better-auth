@@ -8,6 +8,7 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import { verifyProviderIdToken } from "../oauth2";
 import { agentid } from "./agentid";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -248,13 +249,13 @@ describe("agentid.validateAuthorizationCode", () => {
 	});
 });
 
-describe("agentid.verifyIdToken", () => {
+describe("agentid ID token verification", () => {
 	it("accepts a valid ES256 token", async () => {
 		const { publicJWK, token } = await createSignedAgentIdToken();
 		mockJwks(publicJWK);
 
 		await expect(
-			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+			verifyProviderIdToken(agentid(OPEN_CLIENT), token, undefined),
 		).resolves.toBe(true);
 	});
 
@@ -264,7 +265,7 @@ describe("agentid.verifyIdToken", () => {
 		mockJwks(publicJWK);
 
 		await expect(
-			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+			verifyProviderIdToken(agentid(OPEN_CLIENT), token, undefined),
 		).resolves.toBe(false);
 	});
 
@@ -275,7 +276,7 @@ describe("agentid.verifyIdToken", () => {
 		mockJwks(publicJWK);
 
 		await expect(
-			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+			verifyProviderIdToken(agentid(OPEN_CLIENT), token, undefined),
 		).resolves.toBe(false);
 	});
 
@@ -286,7 +287,7 @@ describe("agentid.verifyIdToken", () => {
 		mockJwks(publicJWK);
 
 		await expect(
-			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+			verifyProviderIdToken(agentid(OPEN_CLIENT), token, undefined),
 		).resolves.toBe(false);
 	});
 
@@ -297,7 +298,7 @@ describe("agentid.verifyIdToken", () => {
 		mockJwks(publicJWK);
 
 		await expect(
-			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+			verifyProviderIdToken(agentid(OPEN_CLIENT), token, undefined),
 		).resolves.toBe(false);
 	});
 
@@ -308,7 +309,7 @@ describe("agentid.verifyIdToken", () => {
 		mockJwks(publicJWK);
 
 		await expect(
-			agentid(OPEN_CLIENT).verifyIdToken(token, "different-nonce"),
+			verifyProviderIdToken(agentid(OPEN_CLIENT), token, "different-nonce"),
 		).resolves.toBe(false);
 	});
 });
@@ -324,7 +325,6 @@ describe("agentid.getUserInfo", () => {
 		});
 
 		expect(res?.user).toMatchObject({
-			id: SUB,
 			name: "Acme Support",
 			email: "support@acme.agentmail.to",
 			emailVerified: true,
@@ -407,7 +407,7 @@ describe("agentid.getUserInfo", () => {
 			accessToken: "access-token",
 		});
 
-		expect(res?.user.id).toBe(SUB);
+		expect(res?.data.sub).toBe(SUB);
 		expect(res?.data.owner_name).toBeUndefined();
 		expect(res?.data.owner_email).toBeUndefined();
 	});
@@ -422,7 +422,7 @@ describe("agentid.getUserInfo", () => {
 			accessToken: "access-token",
 		});
 
-		expect(res?.user.id).toBe(SUB);
+		expect(res?.data.sub).toBe(SUB);
 		expect(res?.data.owner_email).toBeUndefined();
 	});
 
