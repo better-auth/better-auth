@@ -409,12 +409,24 @@ export async function checkOAuthClient(
 
 	// Validate correlation between grant_types and response_types
 	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
-	for (const grantType of grantTypes) {
-		if (!supportedGrantTypes.has(grantType)) {
+	if (isClientMetadataDocument) {
+		// One metadata document serves every authorization server the client talks
+		// to, so it declares a grant union; require one mutual grant and let the
+		// token endpoint refuse the rest.
+		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
-				error_description: `unsupported grant_type ${grantType}`,
+				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
 			});
+		}
+	} else {
+		for (const grantType of grantTypes) {
+			if (!supportedGrantTypes.has(grantType)) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description: `unsupported grant_type ${grantType}`,
+				});
+			}
 		}
 	}
 	if (
