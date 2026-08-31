@@ -2752,17 +2752,21 @@ describe("oauth2", async () => {
 		);
 
 		// The older tab finishes first. Its nonce must still be honoured.
-		const first = await simulateOAuthFlow(firstURL, headers, customFetchImpl);
-		expect(first.callbackURL).not.toContain("state_mismatch");
+		const firstFlow = await simulateOAuthFlow(
+			firstURL,
+			headers,
+			customFetchImpl,
+		);
+		expect(firstFlow.callbackURL).not.toContain("state_mismatch");
 
 		// And consuming it must leave the newer tab's flow usable, rather than
 		// clearing the cookie outright.
-		const second = await simulateOAuthFlow(
+		const secondFlow = await simulateOAuthFlow(
 			secondURL,
-			first.headers,
+			firstFlow.headers,
 			customFetchImpl,
 		);
-		expect(second.callbackURL).not.toContain("state_mismatch");
+		expect(secondFlow.callbackURL).not.toContain("state_mismatch");
 	});
 
 	it("should keep the newest cookie-backed flow usable when entries are oversized", async () => {
@@ -2826,6 +2830,46 @@ describe("oauth2", async () => {
 		);
 
 		expect(callbackURL).not.toContain("state_mismatch");
+	});
+
+	it("should reject a single cookie-backed flow that cannot fit in a cookie", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-too-large",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		// Trimming cannot rescue this: the single flow is over the budget by itself.
+		const res = await authClient.signIn.social({
+			provider: "test-cookie-too-large",
+			callbackURL: `http://localhost:3000/dashboard?padding=${"x".repeat(6000)}`,
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.url).toBeFalsy();
+		expect(res.error).toBeTruthy();
 	});
 
 	/**

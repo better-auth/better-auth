@@ -51,11 +51,11 @@ export type StateData = z.infer<typeof stateDataSchema>;
 const MAX_PENDING_STATES = 5;
 
 /**
- * Browsers cap a cookie at roughly 4KB including its name and attributes, and
- * silently drop anything larger. Flows carrying long callback URLs or server
- * context can reach that before the entry cap does.
+ * Browsers keep about 4KB per cookie including its name and attributes, and
+ * silently drop anything larger. This budgets the encrypted value, leaving room
+ * for the name and for `Path`, `SameSite`, `Secure` and `Max-Age`.
  */
-const MAX_STATE_COOKIE_LENGTH = 3500;
+const MAX_STATE_COOKIE_LENGTH = 3800;
 
 /** Cookies written before multi-flow support hold one state rather than a list. */
 const stateCookieSchema = z.union([z.array(stateDataSchema), stateDataSchema]);
@@ -170,12 +170,13 @@ export async function generateGenericState(
 			encryptedData = await encryptStates(nextStates);
 		}
 
-		// A single flow can still be too large on its own. Writing it keeps the
-		// existing behaviour, but the browser will drop the cookie and the callback
-		// will fail with `state_mismatch`, so say why here rather than there.
+		// Trimming cannot help once a single flow is too large on its own. The
+		// browser would drop the cookie and the callback would fail with a
+		// `state_mismatch` that names nothing, so fail where the cause is visible.
 		if (encryptedData.length > MAX_STATE_COOKIE_LENGTH) {
-			c.context.logger.warn(
-				`OAuth state cookie is ${encryptedData.length} bytes, which most browsers will reject. Shorten callbackURL, errorCallbackURL or any additional state data.`,
+			throw new StateError(
+				`OAuth state is ${encryptedData.length} bytes, larger than a browser will store in a cookie. Shorten callbackURL, errorCallbackURL or any additional state data.`,
+				{ code: "state_generation_error" },
 			);
 		}
 
