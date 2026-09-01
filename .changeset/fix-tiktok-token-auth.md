@@ -1,5 +1,4 @@
 ---
----
 "@better-auth/core": patch
 ---
 
