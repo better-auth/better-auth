@@ -10,6 +10,7 @@ interface MCPOptions {
 	cursor?: boolean;
 	claudeCode?: boolean;
 	openCode?: boolean;
+	fx?: boolean;
 	manual?: boolean;
 }
 
@@ -22,6 +23,8 @@ async function mcpAction(options: MCPOptions) {
 		handleClaudeCodeAction();
 	} else if (options.openCode) {
 		handleOpenCodeAction();
+	} else if (options.fx) {
+		handleFxAction();
 	} else if (options.manual) {
 		handleManualAction();
 	} else {
@@ -111,6 +114,34 @@ function handleClaudeCodeAction() {
 		chalk.gray(
 			"• You can now use Better Auth features directly in Claude Code",
 		),
+	);
+}
+
+function handleFxAction() {
+	console.log(chalk.bold.blue("⚡ Adding Better Auth MCP to fx..."));
+
+	const command = `fx mcp add --transport http better-auth ${REMOTE_MCP_URL}`;
+
+	try {
+		execSync(command, { stdio: "inherit" });
+		console.log(chalk.green("\n✓ fx MCP configured!"));
+	} catch {
+		console.log(
+			chalk.yellow(
+				"\n⚠ Could not automatically add to fx. Please run this command manually:",
+			),
+		);
+		console.log(chalk.cyan(command));
+	}
+
+	console.log(chalk.bold.white("\n✨ Next Steps:"));
+	console.log(
+		chalk.gray(
+			"• The server is saved to ~/.fx/mcp.json and available in every project",
+		),
+	);
+	console.log(
+		chalk.gray("• Run `fx mcp list --connect` to verify the connection"),
 	);
 }
 
@@ -225,6 +256,7 @@ function showAllOptions() {
 		chalk.cyan("  --claude-code ") + chalk.gray("Add to Claude Code"),
 	);
 	console.log(chalk.cyan("  --open-code   ") + chalk.gray("Add to Open Code"));
+	console.log(chalk.cyan("  --fx          ") + chalk.gray("Add to fx"));
 	console.log(
 		chalk.cyan("  --manual      ") + chalk.gray("Manual configuration"),
 	);
@@ -244,5 +276,6 @@ export const mcp = new Command("mcp")
 	.option("--cursor", "Automatically open Cursor with the MCP configuration")
 	.option("--claude-code", "Show Claude Code MCP configuration command")
 	.option("--open-code", "Show Open Code MCP configuration")
+	.option("--fx", "Add the MCP server to fx")
 	.option("--manual", "Show manual MCP configuration for mcp.json")
 	.action(mcpAction);

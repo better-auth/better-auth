@@ -20,7 +20,7 @@ npx auth@latest mcp
 
 With no flags, the command lists supported targets. You can pass a target directly:
 
-<Tabs items={["Cursor", "Claude Code", "Open Code", "Manual"]}>
+<Tabs items={["Cursor", "Claude Code", "Open Code", "fx", "Manual"]}>
   <Tab value="Cursor">
     ```bash title="terminal"
     npx auth@latest mcp --cursor
@@ -47,6 +47,16 @@ With no flags, the command lists supported targets. You can pass a target direct
     ```
 
     This merges a `better-auth` entry into `opencode.json` in the current directory (remote transport, URL above).
+  </Tab>
+
+  <Tab value="fx">
+    ```bash title="terminal"
+    npx auth@latest mcp --fx
+    ```
+
+    This runs `fx mcp add` with the Better Auth URL, saving the server to `~/.fx/mcp.json` so it is available in every project. If that fails, the CLI prints the exact command to run yourself.
+
+    Run `fx mcp list --connect` to verify the connection.
   </Tab>
 
   <Tab value="Manual">
