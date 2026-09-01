@@ -354,14 +354,25 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "better-auth-eve-online",
-		url: "https://github.com/localisprimary/better-auth-eve-online",
+		name: "@better-geetest/better-auth-plugin-gt4",
+		url: "https://github.com/typed-sigterm/better-geetest/tree/main/packages/better-auth-plugin-gt4",
 		description:
-			"EVE Online provider for Better Auth",
+			"Integrate GeeTest gt4 bot protection by adding captcha verification for key endpoints.",
 		author: {
-			name: "Local Is Primary",
-			github: "localisprimary",
-			avatar: "https://github.com/localisprimary.png",
+			name: "Typed SIGTERM",
+			github: "typed-sigterm",
+			avatar: "https://github.com/typed-sigterm.png",
+		},
+	},
+	{
+		name: "better-auth-evp",
+		url: "https://github.com/qamarq/better-auth-evp",
+		description:
+			"Email Verification Protocol (Chrome origin trial) plugin - lets a supporting browser verify mailbox ownership in the background and sign the user in, with automatic fallback to any other sign-in method when unsupported.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
 		},
 	},
 ];

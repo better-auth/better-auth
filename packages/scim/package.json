@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/scim",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "SCIM plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",

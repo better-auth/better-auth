@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { AccountKey } from "@better-auth/core/db";
 import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import {
@@ -6,6 +7,10 @@ import {
 	BetterAuthError,
 } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
+
+type AccountIdentityStrategy = NonNullable<
+	BetterAuthOptions["account"]
+>["identityStrategy"];
 
 /**
  * Exposes a provider-declared profile as the raw claim record used by
@@ -17,12 +22,26 @@ export function toOAuthProfileRecord(profile: object): Record<string, unknown> {
 }
 
 /**
+ * Resolves the issuer a provider establishes for every account it
+ * authenticates, or `undefined` when the issuer comes from the provider
+ * response and is only known during an authentication.
+ */
+export function resolveStaticOAuthAccountIssuer<Profile extends object>(
+	provider: Pick<OAuthProvider<Profile>, "accountIssuer" | "id">,
+): string | undefined {
+	const accountIssuer = provider.accountIssuer;
+	if (typeof accountIssuer === "function") return undefined;
+	return accountIssuer ?? createOAuthAccountIssuer(provider.id);
+}
+
+/**
  * Resolves the stable account key established by an OAuth provider response.
  */
 export async function resolveOAuthAccountKey<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
+	identityStrategy?: AccountIdentityStrategy,
 ): Promise<AccountKey> {
 	const accountKeyContext = { tokens, profile };
 	const accountSubject = provider.accountSubject;
@@ -40,11 +59,11 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 
 	const accountIssuer = provider.accountIssuer;
 	const issuer =
-		accountIssuer === undefined
+		identityStrategy === "provider-id"
 			? createOAuthAccountIssuer(provider.id)
 			: typeof accountIssuer === "function"
 				? await accountIssuer(accountKeyContext)
-				: accountIssuer;
+				: resolveStaticOAuthAccountIssuer(provider);
 	if (
 		typeof issuer !== "string" ||
 		issuer.trim().length === 0 ||
@@ -68,9 +87,15 @@ export async function resolveOAuthAccountKeyForAPI<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
+	identityStrategy?: AccountIdentityStrategy,
 ): Promise<AccountKey> {
 	try {
-		return await resolveOAuthAccountKey(provider, tokens, profile);
+		return await resolveOAuthAccountKey(
+			provider,
+			tokens,
+			profile,
+			identityStrategy,
+		);
 	} catch {
 		throw APIError.from(
 			"UNAUTHORIZED",
