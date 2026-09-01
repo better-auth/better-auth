@@ -247,7 +247,7 @@ function getErrorURL(
  * the full 127.0.0.0/8 range, [::1], and the `localhost` hostname, matching
  * on scheme+host+path+query and ignoring port. §8.3 prefers loopback IP
  * literals over `localhost` as *client guidance*, but registration
- * (`assertValidRedirectUris`) accepts `http://localhost` for native clients —
+ * (`validateClientRedirectUri`) accepts `http://localhost` for native clients —
  * so the matcher must accept it too, or such clients (e.g. CIMD documents
  * registering port-less `http://localhost/callback`) can never complete an
  * authorization from an ephemeral port.
@@ -268,6 +268,9 @@ function findRegisteredRedirectUri(
 	return registered.find((url) => {
 		if (url === requested) return true;
 		if (!req) return false;
+		// RFC 6749 §3.1.2 forbids fragments in redirect URIs and registration
+		// rejects userinfo; never let either ride in via port variance.
+		if (req.hash || req.username || req.password) return false;
 		try {
 			const reg = new URL(url);
 			return (

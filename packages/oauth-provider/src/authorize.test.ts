@@ -1592,6 +1592,22 @@ describe("oauth authorize - RFC 8252 §7.3 loopback port variance", async () => 
 		expect(location).toContain("error=invalid_redirect");
 	});
 
+	it("rejects a loopback redirect carrying a fragment", async () => {
+		const location = await authorizeRedirect(
+			"http://localhost:51234/callback#fragment",
+		);
+		expect(location).toContain("error=");
+		expect(location).not.toContain("code=");
+	});
+
+	it("rejects a loopback redirect carrying userinfo", async () => {
+		const location = await authorizeRedirect(
+			"http://user:pw@localhost:51234/callback",
+		);
+		expect(location).toContain("error=");
+		expect(location).not.toContain("code=");
+	});
+
 	it("does not extend variance to localhost look-alike hostnames", async () => {
 		const location = await authorizeRedirect(
 			"http://localhost.evil.example:51234/callback",
