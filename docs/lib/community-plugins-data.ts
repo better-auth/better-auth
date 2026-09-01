@@ -364,4 +364,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/typed-sigterm.png",
 		},
 	},
+	{
+		name: "better-auth-evp",
+		url: "https://github.com/qamarq/better-auth-evp",
+		description:
+			"Email Verification Protocol (Chrome origin trial) plugin - lets a supporting browser verify mailbox ownership in the background and sign the user in, with automatic fallback to any other sign-in method when unsupported.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
+		},
+	},
 ];
