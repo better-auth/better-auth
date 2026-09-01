@@ -17,6 +17,13 @@ export type TokenEndpointAuth =
 			method: "client_secret_post";
 	  }
 	| {
+			method: "custom";
+			/**
+			 * Customize the token request after standard grant parameters are set.
+			 */
+			customizeRequest: TokenEndpointRequestHook;
+	  }
+	| {
 			method: "private_key_jwt";
 			getClientAssertion: ClientAssertionGetter;
 	  };
@@ -24,6 +31,24 @@ export type TokenEndpointAuth =
 export type TokenEndpointAuthMethod = TokenEndpointAuth["method"];
 
 export type TokenEndpointSecretAuthentication = "basic" | "post";
+
+/**
+ * Mutable token request state passed to a custom authentication strategy.
+ */
+export interface TokenEndpointRequestContext {
+	body: URLSearchParams;
+	headers: Record<string, string>;
+	options: TokenEndpointClientOptions;
+	tokenEndpoint: string;
+	grantType: ClientAssertionGrantType;
+}
+
+/**
+ * Applies provider-specific authentication to a token request.
+ */
+export type TokenEndpointRequestHook = (
+	context: TokenEndpointRequestContext,
+) => void | Promise<void>;
 
 export interface TokenEndpointClientOptions {
 	clientId?: string | string[] | undefined;
@@ -171,6 +196,17 @@ export async function applyTokenEndpointAuth({
 
 	const auth =
 		tokenEndpointAuth ?? getDefaultTokenEndpointAuth(options, authentication);
+
+	if (auth.method === "custom") {
+		await auth.customizeRequest({
+			body,
+			headers,
+			options,
+			tokenEndpoint,
+			grantType,
+		});
+		return;
+	}
 
 	if (auth.method === "private_key_jwt") {
 		assertNoClientSecret(auth.method, options, body);
