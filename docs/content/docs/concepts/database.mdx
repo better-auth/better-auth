@@ -506,6 +506,19 @@ export const accountTableFields = [
 
 The database requires `issuer` and `accountId` and enforces a unique compound index across them for every account identity strategy. Newly generated configurations explicitly use [`account.identityStrategy: "provider-id"`](/docs/reference/options#identitystrategy), so `issuer` contains a deterministic `local:oauth:<encoded providerId>` namespace, or `local:credential` for credential accounts. An omitted strategy remains a v1.7 compatibility mode that stores the verified authority and warns once; explicit `"issuer"` selects the same namespace without a warning. The selected strategy changes the stored namespace value, not the generated schema.
 
+<Callout type="info">
+  The CLI creates this index for you as `account_issuer_accountId_uidx`. If you
+  manage the schema by hand, add it yourself over the columns mapped to `issuer`
+  and `accountId`:
+
+  ```sql
+  CREATE UNIQUE INDEX account_issuer_accountId_uidx ON account (issuer, account_id);
+  ```
+
+  Substitute the physical table and column names your adapter maps these fields
+  to.
+</Callout>
+
 ### Verification
 
 Table Name: `verification`
