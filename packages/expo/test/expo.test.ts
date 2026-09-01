@@ -1018,8 +1018,12 @@ describe("expo with cookieCache", async () => {
 		);
 	});
 
-	it("should fail closed when a chunk is missing", () => {
-		const map = new Map<string, string>();
+	it("should read values written with the legacy chunk marker", async () => {
+		const map = new Map<string, string>([
+			["better-auth_cookie", "\u0001ba-chunks:2"],
+			["better-auth_cookie.0", "legacy-"],
+			["better-auth_cookie.1", "value"],
+		]);
 		const storage = storageAdapter({
 			getItem: (name) => map.get(name) ?? null,
 			setItem: (name, value) => map.set(name, value),
@@ -1029,49 +1033,207 @@ describe("expo with cookieCache", async () => {
 			},
 		});
 
-		storage.setItem("better-auth_cookie", "y".repeat(5_000));
-		// Simulate a torn write: drop one data chunk.
-		map.delete("better-auth_cookie.1");
-
-		expect(storage.getItem("better-auth_cookie")).toBeNull();
+		expect(storage.getItem("better-auth_cookie")).toBe("legacy-value");
+		await expect(storage.getItemAsync("better-auth_cookie")).resolves.toBe(
+			"legacy-value",
+		);
 	});
 
-	it("should not return mixed old/new data when a chunked overwrite is interrupted", () => {
-		const map = new Map<string, string>();
-		let failAfter = Number.POSITIVE_INFINITY;
-		let writes = 0;
+	it("should fail closed when a chunk is missing", async () => {
+		const map = new Map<string, string>([
+			["better-auth_cookie", "\u0001ba-chunks:2:0"],
+			["better-auth_cookie.0.0", "first chunk"],
+		]);
 		const storage = storageAdapter({
 			getItem: (name) => map.get(name) ?? null,
-			setItem: (name, value) => {
-				if (writes++ >= failAfter) {
-					throw new Error("interrupted");
-				}
-				map.set(name, value);
-			},
+			setItem: (name, value) => map.set(name, value),
 			getItemAsync: async (name) => map.get(name) ?? null,
 			setItemAsync: async (name, value) => {
-				if (writes++ >= failAfter) {
-					throw new Error("interrupted");
-				}
 				map.set(name, value);
 			},
 		});
+		expect(storage.getItem("better-auth_cookie")).toBeNull();
+		await expect(
+			storage.getItemAsync("better-auth_cookie"),
+		).resolves.toBeNull();
+	});
 
-		const oldValue = "a".repeat(5_000);
-		storage.setItem("better-auth_cookie", oldValue);
-		expect(storage.getItem("better-auth_cookie")).toBe(oldValue);
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11082
+	 */
+	describe("chunked storage consistency", () => {
+		function createAsyncStorage() {
+			const map = new Map<string, string>();
+			const nextTask = () =>
+				new Promise<void>((resolve) => queueMicrotask(resolve));
+			return storageAdapter({
+				getItem: (name) => map.get(name) ?? null,
+				setItem: (name, value) => map.set(name, value),
+				getItemAsync: async (name) => {
+					await nextTask();
+					return map.get(name) ?? null;
+				},
+				setItemAsync: async (name, value) => {
+					await nextTask();
+					map.set(name, value);
+				},
+			});
+		}
 
-		// Overwrite with another large value, failing after the marker clear and
-		// the first chunk so the remaining chunks keep their old data.
-		const error = vi.spyOn(console, "error").mockImplementation(() => {});
-		writes = 0;
-		failAfter = 2;
-		storage.setItem("better-auth_cookie", "b".repeat(5_000));
-		error.mockRestore();
+		it("should preserve the previous value when a sync overwrite fails", () => {
+			const map = new Map<string, string>();
+			let failAfter = Number.POSITIVE_INFINITY;
+			let writes = 0;
+			const storage = storageAdapter({
+				getItem: (name) => map.get(name) ?? null,
+				setItem: (name, value) => {
+					if (writes++ >= failAfter) {
+						throw new Error("interrupted");
+					}
+					map.set(name, value);
+				},
+				getItemAsync: async (name) => map.get(name) ?? null,
+				setItemAsync: async (name, value) => {
+					if (writes++ >= failAfter) {
+						throw new Error("interrupted");
+					}
+					map.set(name, value);
+				},
+			});
 
-		// The reassembled value must never splice old "a" chunks into the new write.
-		const result = storage.getItem("better-auth_cookie");
-		expect(result ?? "").not.toContain("a");
+			storage.setItem("better-auth_cookie", "a".repeat(3_000));
+			const previousValue = "b".repeat(5_000);
+			storage.setItem("better-auth_cookie", previousValue);
+			expect(storage.getItem("better-auth_cookie")).toBe(previousValue);
+
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			writes = 0;
+			failAfter = 2;
+			storage.setItem("better-auth_cookie", "c".repeat(5_000));
+
+			expect(error).toHaveBeenCalledTimes(1);
+			expect(storage.getItem("better-auth_cookie")).toBe(previousValue);
+		});
+
+		it.for([
+			{ failedWrite: 1 },
+			{ failedWrite: 2 },
+			{ failedWrite: 3 },
+			{ failedWrite: 4 },
+			{ failedWrite: 5 },
+		])("should preserve the previous value when async write $failedWrite fails", async ({
+			failedWrite,
+		}) => {
+			const map = new Map<string, string>();
+			let writeIndex = 0;
+			let failing = false;
+			const storage = storageAdapter({
+				getItem: (name) => map.get(name) ?? null,
+				setItem: (name, value) => map.set(name, value),
+				getItemAsync: async (name) => map.get(name) ?? null,
+				setItemAsync: async (name, value) => {
+					if (failing && ++writeIndex === failedWrite) {
+						throw new Error("interrupted");
+					}
+					map.set(name, value);
+				},
+			});
+			await storage.setItemAsync("better-auth_cookie", "a".repeat(3_000));
+			const previousValue = "b".repeat(5_000);
+			await storage.setItemAsync("better-auth_cookie", previousValue);
+			writeIndex = 0;
+			failing = true;
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			await storage.setItemAsync("better-auth_cookie", "c".repeat(5_000));
+
+			expect(error).toHaveBeenCalledTimes(1);
+			await expect(storage.getItemAsync("better-auth_cookie")).resolves.toBe(
+				previousValue,
+			);
+		});
+
+		it("should disable fallback while its slot is being overwritten", async () => {
+			const map = new Map<string, string>();
+			let writeIndex = 0;
+			let failing = false;
+			const storage = storageAdapter({
+				getItem: (name) => map.get(name) ?? null,
+				setItem: (name, value) => map.set(name, value),
+				getItemAsync: async (name) => map.get(name) ?? null,
+				setItemAsync: async (name, value) => {
+					if (failing && ++writeIndex === 3) {
+						throw new Error("interrupted");
+					}
+					map.set(name, value);
+				},
+			});
+			await storage.setItemAsync("better-auth_cookie", "a".repeat(3_000));
+			await storage.setItemAsync("better-auth_cookie", "b".repeat(5_000));
+			writeIndex = 0;
+			failing = true;
+			vi.spyOn(console, "error").mockImplementation(() => {});
+
+			await storage.setItemAsync("better-auth_cookie", "c".repeat(5_000));
+			map.delete("better-auth_cookie.1.1");
+
+			expect(storage.getItem("better-auth_cookie")).toBeNull();
+			await expect(
+				storage.getItemAsync("better-auth_cookie"),
+			).resolves.toBeNull();
+		});
+
+		it("should fall back when the active slot is incomplete", async () => {
+			const map = new Map<string, string>();
+			const storage = storageAdapter({
+				getItem: (name) => map.get(name) ?? null,
+				setItem: (name, value) => map.set(name, value),
+				getItemAsync: async (name) => map.get(name) ?? null,
+				setItemAsync: async (name, value) => {
+					map.set(name, value);
+				},
+			});
+			const previousValue = "a".repeat(3_000);
+			await storage.setItemAsync("better-auth_cookie", previousValue);
+			await storage.setItemAsync("better-auth_cookie", "b".repeat(5_000));
+			map.delete("better-auth_cookie.1.1");
+
+			expect(storage.getItem("better-auth_cookie")).toBe(previousValue);
+			await expect(storage.getItemAsync("better-auth_cookie")).resolves.toBe(
+				previousValue,
+			);
+		});
+
+		it("should read the previous value during a chunked overwrite", async () => {
+			const storage = createAsyncStorage();
+			await storage.setItemAsync("better-auth_cookie", "a".repeat(3_000));
+			const previousValue = "b".repeat(5_000);
+			await storage.setItemAsync("better-auth_cookie", previousValue);
+			const newValue = "c".repeat(5_000);
+
+			const write = storage.setItemAsync("better-auth_cookie", newValue);
+			const read = storage.getItemAsync("better-auth_cookie");
+			const [stored] = await Promise.all([read, write]);
+
+			expect(stored).toBe(previousValue);
+		});
+
+		it("should serialize concurrent chunked overwrites", async () => {
+			const storage = createAsyncStorage();
+			const firstValue = "a".repeat(5_000);
+			const secondValue = "b".repeat(5_000);
+			const thirdValue = "c".repeat(5_000);
+
+			await Promise.all([
+				storage.setItemAsync("better-auth_cookie", firstValue),
+				storage.setItemAsync("better-auth_cookie", secondValue),
+				storage.setItemAsync("better-auth_cookie", thirdValue),
+			]);
+
+			await expect(storage.getItemAsync("better-auth_cookie")).resolves.toBe(
+				thirdValue,
+			);
+		});
 	});
 
 	it("should shrink from chunked to a single value without bleeding stale chunks", () => {

@@ -274,36 +274,176 @@ export function normalizeCookieName(name: string) {
 const STORAGE_VALUE_LIMIT = 1800;
 
 /**
- * Marks a base key whose value is split across `<key>.0..N` chunks. The leading
- * control char can't start a JSON value (so it never collides) and, unlike NUL,
- * survives the native storage bridge without C-string truncation.
+ * Marks a base key whose value is split across multiple storage keys. Legacy
+ * markers contain only the chunk count. Current markers also identify the
+ * active slot and retain the previous slot's chunk count for recovery.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11082
  */
 const CHUNK_MARKER = "\u0001ba-chunks:";
 
-function getStorageWrites(key: string, value: string): [string, string][] {
+type ChunkSlot = 0 | 1;
+
+interface ChunkMarker {
+	count: number;
+	slot: ChunkSlot | null;
+	fallbackCount: number | null;
+}
+
+function parseChunkCount(value: string | undefined): number | null {
+	if (value === undefined) {
+		return null;
+	}
+	const count = Number(value);
+	return Number.isInteger(count) && count > 0 ? count : null;
+}
+
+function parseChunkMarker(baseValue: string): ChunkMarker | null {
+	const parts = baseValue.slice(CHUNK_MARKER.length).split(":");
+	if (parts.length > 3) {
+		return null;
+	}
+	const [countValue, slotValue, fallbackCountValue] = parts;
+	const count = parseChunkCount(countValue);
+	if (count === null) {
+		return null;
+	}
+	if (slotValue === undefined) {
+		return fallbackCountValue === undefined
+			? { count, slot: null, fallbackCount: null }
+			: null;
+	}
+	if (slotValue !== "0" && slotValue !== "1") {
+		return null;
+	}
+	const fallbackCount = parseChunkCount(fallbackCountValue);
+	if (fallbackCountValue !== undefined && fallbackCount === null) {
+		return null;
+	}
+	return {
+		count,
+		slot: slotValue === "0" ? 0 : 1,
+		fallbackCount,
+	};
+}
+
+function getChunkKey(key: string, marker: ChunkMarker, index: number) {
+	return marker.slot === null
+		? `${key}.${index}`
+		: `${key}.${marker.slot}.${index}`;
+}
+
+function getOtherSlot(slot: ChunkSlot): ChunkSlot {
+	return slot === 0 ? 1 : 0;
+}
+
+function serializeChunkMarker(marker: ChunkMarker) {
+	if (marker.slot === null) {
+		return `${CHUNK_MARKER}${marker.count}`;
+	}
+	const fallback =
+		marker.fallbackCount === null ? "" : `:${marker.fallbackCount}`;
+	return `${CHUNK_MARKER}${marker.count}:${marker.slot}${fallback}`;
+}
+
+function readChunks(
+	storage: Pick<ExpoClientStorage, "getItem">,
+	key: string,
+	marker: ChunkMarker,
+): string | null {
+	let value = "";
+	for (let i = 0; i < marker.count; i++) {
+		const chunk = storage.getItem(getChunkKey(key, marker, i));
+		if (chunk == null) {
+			return null;
+		}
+		value += chunk;
+	}
+	return value;
+}
+
+async function readChunksAsync(
+	storage: Pick<ExpoClientStorage, "getItemAsync">,
+	key: string,
+	marker: ChunkMarker,
+): Promise<string | null> {
+	let value = "";
+	for (let i = 0; i < marker.count; i++) {
+		const chunk = await storage.getItemAsync(getChunkKey(key, marker, i));
+		if (chunk == null) {
+			return null;
+		}
+		value += chunk;
+	}
+	return value;
+}
+
+function getStorageWrites(
+	key: string,
+	value: string,
+	currentBaseValue: string | null,
+): [string, string][] {
 	if (value.length <= STORAGE_VALUE_LIMIT) {
 		return [[key, value]];
 	}
 
 	const count = Math.ceil(value.length / STORAGE_VALUE_LIMIT);
-	const writes: [string, string][] = [[key, ""]];
+	const currentMarker = currentBaseValue?.startsWith(CHUNK_MARKER)
+		? parseChunkMarker(currentBaseValue)
+		: null;
+	const slot: ChunkSlot = currentMarker?.slot === 0 ? 1 : 0;
+	const marker: ChunkMarker = {
+		count,
+		slot,
+		fallbackCount: currentMarker?.slot == null ? null : currentMarker.count,
+	};
+	const writes: [string, string][] = [];
+	if (currentMarker?.slot != null && currentMarker.fallbackCount !== null) {
+		// The fallback slot becomes the next write target.
+		// Stop readers from using it until the new value is complete.
+		writes.push([
+			key,
+			serializeChunkMarker({ ...currentMarker, fallbackCount: null }),
+		]);
+	}
 	for (let i = 0; i < count; i++) {
 		const start = i * STORAGE_VALUE_LIMIT;
 		writes.push([
-			`${key}.${i}`,
+			getChunkKey(key, marker, i),
 			value.slice(start, start + STORAGE_VALUE_LIMIT),
 		]);
 	}
-	writes.push([key, `${CHUNK_MARKER}${count}`]);
+	writes.push([key, serializeChunkMarker(marker)]);
 	return writes;
 }
 
+function createKeyedWriteQueue() {
+	const tails = new Map<string, Promise<unknown>>();
+	return <Result>(
+		key: string,
+		operation: () => Promise<Result>,
+	): Promise<Result> => {
+		const previous = tails.get(key) ?? Promise.resolve();
+		const queued = previous.then(operation, operation);
+		tails.set(key, queued);
+
+		const cleanup = () => {
+			if (tails.get(key) === queued) {
+				tails.delete(key);
+			}
+		};
+		void queued.then(cleanup, cleanup);
+		return queued;
+	};
+}
+
 export function storageAdapter(storage: ExpoClientStorage) {
+	const enqueueWrite = createKeyedWriteQueue();
 	return {
 		/**
 		 * Reads a value, reassembling it if it was split across chunk keys. A value
-		 * that fit is returned as-is (values written before chunking still read
-		 * back); a missing chunk returns `null` so a torn write fails closed.
+		 * that fit is returned as-is. If the active slot is incomplete, the previous
+		 * slot is used as a fallback.
 		 */
 		getItem: (name: string): string | null => {
 			const key = normalizeCookieName(name);
@@ -311,19 +451,23 @@ export function storageAdapter(storage: ExpoClientStorage) {
 			if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
 				return stored;
 			}
-			const count = Number(stored.slice(CHUNK_MARKER.length));
-			if (!Number.isInteger(count) || count < 1) {
+			const marker = parseChunkMarker(stored);
+			if (!marker) {
 				return null;
 			}
-			let value = "";
-			for (let i = 0; i < count; i++) {
-				const chunk = storage.getItem(`${key}.${i}`);
-				if (chunk == null) {
-					return null;
-				}
-				value += chunk;
+			const value = readChunks(storage, key, marker);
+			if (
+				value !== null ||
+				marker.slot === null ||
+				marker.fallbackCount === null
+			) {
+				return value;
 			}
-			return value;
+			return readChunks(storage, key, {
+				count: marker.fallbackCount,
+				slot: getOtherSlot(marker.slot),
+				fallbackCount: null,
+			});
 		},
 		getItemAsync: async (name: string): Promise<string | null> => {
 			const key = normalizeCookieName(name);
@@ -331,32 +475,42 @@ export function storageAdapter(storage: ExpoClientStorage) {
 			if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
 				return stored;
 			}
-			const count = Number(stored.slice(CHUNK_MARKER.length));
-			if (!Number.isInteger(count) || count < 1) {
+			const marker = parseChunkMarker(stored);
+			if (!marker) {
 				return null;
 			}
-			let value = "";
-			for (let i = 0; i < count; i++) {
-				const chunk = await storage.getItemAsync(`${key}.${i}`);
-				if (chunk == null) {
-					return null;
-				}
-				value += chunk;
+			const value = await readChunksAsync(storage, key, marker);
+			if (
+				value !== null ||
+				marker.slot === null ||
+				marker.fallbackCount === null
+			) {
+				return value;
 			}
-			return value;
+			return readChunksAsync(storage, key, {
+				count: marker.fallbackCount,
+				slot: getOtherSlot(marker.slot),
+				fallbackCount: null,
+			});
 		},
 		/**
 		 * Stores `value`, splitting it across chunk keys when it exceeds the
-		 * per-write limit. The base key is cleared before the chunks are rewritten
-		 * and set to the marker last, as the commit point, so a write interrupted
-		 * partway through reads as absent rather than a mix of old and new chunks.
+		 * per-write limit. Chunked writes fill the inactive slot before changing the
+		 * base marker, so readers see either the previous value or the new value. A
+		 * fallback is temporarily removed while its slot is being overwritten.
 		 * Failures are logged, not thrown: persistence is best-effort and must not
 		 * break the request.
 		 */
 		setItem: (name: string, value: string): void => {
 			const key = normalizeCookieName(name);
 			try {
-				for (const [writeKey, writeValue] of getStorageWrites(key, value)) {
+				const currentBaseValue =
+					value.length > STORAGE_VALUE_LIMIT ? storage.getItem(key) : null;
+				for (const [writeKey, writeValue] of getStorageWrites(
+					key,
+					value,
+					currentBaseValue,
+				)) {
 					storage.setItem(writeKey, writeValue);
 				}
 			} catch (error) {
@@ -366,18 +520,28 @@ export function storageAdapter(storage: ExpoClientStorage) {
 				);
 			}
 		},
-		setItemAsync: async (name: string, value: string): Promise<void> => {
+		setItemAsync: (name: string, value: string): Promise<void> => {
 			const key = normalizeCookieName(name);
-			try {
-				for (const [writeKey, writeValue] of getStorageWrites(key, value)) {
-					await storage.setItemAsync(writeKey, writeValue);
+			return enqueueWrite(key, async () => {
+				try {
+					const currentBaseValue =
+						value.length > STORAGE_VALUE_LIMIT
+							? await storage.getItemAsync(key)
+							: null;
+					for (const [writeKey, writeValue] of getStorageWrites(
+						key,
+						value,
+						currentBaseValue,
+					)) {
+						await storage.setItemAsync(writeKey, writeValue);
+					}
+				} catch (error) {
+					console.error(
+						`[better-auth/expo] failed to persist "${key}" to storage`,
+						error,
+					);
 				}
-			} catch (error) {
-				console.error(
-					`[better-auth/expo] failed to persist "${key}" to storage`,
-					error,
-				);
-			}
+			});
 		},
 	};
 }
