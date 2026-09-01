@@ -55,12 +55,8 @@ export interface TokenEndpointClientOptions {
 	clientSecret?: string | undefined;
 }
 
-export interface ApplyTokenEndpointAuthInput {
-	body: URLSearchParams;
-	headers: Record<string, string>;
-	options: TokenEndpointClientOptions;
-	tokenEndpoint: string;
-	grantType: ClientAssertionGrantType;
+export interface ApplyTokenEndpointAuthInput
+	extends TokenEndpointRequestContext {
 	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	authentication?: TokenEndpointSecretAuthentication | undefined;
 }
