@@ -109,14 +109,13 @@ describe("wrapReleaseNotesComment", () => {
 				{
 					prNumber: 42,
 					title: "fix: preserve safe copy",
-					reason:
-						"See [the migration](https://example.com) and notify @maintainers.",
+					reason: '</sub><a href="https://example.com">unsafe</a>@maintainers',
 				},
 			],
 		});
 
 		expect(comment).toContain(
-			"<sub>`See [the migration](https://example.com) and notify @maintainers.`</sub>",
+			'<sub>`</sub><a href="https://example.com">unsafe</a>@maintainers`</sub>',
 		);
 	});
 

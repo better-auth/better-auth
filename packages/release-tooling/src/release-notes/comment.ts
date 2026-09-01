@@ -63,7 +63,7 @@ function formatFallbackWarning(fallbacks: ReleaseRewriteFallback[]): string[] {
 		"> [!WARNING]",
 		`> **${count} release ${count === 1 ? "note needs" : "notes need"} a closer look.**`,
 		">",
-		"> I took a second pass, but the copy below still needs human review, so I kept the original wording.",
+		"> I couldn't confidently improve the copy below, so I kept the original wording.",
 		">",
 		...fallbacks.map((fallback) => {
 			const reference = fallback.prNumber ? `#${fallback.prNumber}: ` : "";

@@ -22,8 +22,9 @@ const maxBatchCharacters = 60_000;
 const maxContextCharacters = 500_000;
 const maxOutputTokensPerBatch = 32_000;
 const maxReviewOutputTokensPerBatch = 8_000;
-const defaultFallbackReason =
-	"The rewrite could not be approved after a second pass.";
+const defaultFallbackReason = "The rewrite was not approved by review.";
+const invalidCopyFallbackReason =
+	"The rewrite did not pass deterministic copy validation.";
 
 const rewriteInstructions = readFileSync(
 	new URL("./rewrite.prompt.md", import.meta.url),
@@ -142,6 +143,16 @@ function validationFeedback(
 	}
 }
 
+function fallbackReason(
+	reviewFeedback: string | null,
+	copyFeedback: string | null,
+): string {
+	return (
+		reviewFeedback ??
+		(copyFeedback ? invalidCopyFallbackReason : defaultFallbackReason)
+	);
+}
+
 export async function rewriteReleaseNotes(
 	contextPath: string,
 	outputPath: string,
@@ -202,10 +213,11 @@ export async function rewriteReleaseNotes(
 				const feedback = review.feedback ?? copyFeedback;
 				if (feedback) {
 					feedbackById.set(review.id, feedback);
-					fallbackReasons.set(review.id, feedback);
-				} else {
-					fallbackReasons.set(review.id, defaultFallbackReason);
 				}
+				fallbackReasons.set(
+					review.id,
+					fallbackReason(review.feedback, copyFeedback),
+				);
 			}
 		}
 
@@ -260,7 +272,7 @@ export async function rewriteReleaseNotes(
 				} else {
 					fallbackReasons.set(
 						review.id,
-						review.feedback ?? copyFeedback ?? defaultFallbackReason,
+						fallbackReason(review.feedback, copyFeedback),
 					);
 				}
 			}

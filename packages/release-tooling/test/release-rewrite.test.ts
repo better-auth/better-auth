@@ -10,6 +10,7 @@ import { rewriteReleaseNotes } from "../src/release-notes/rewrite.ts";
 import {
 	parseSchema,
 	releaseRewriteContextSchema,
+	releaseRewriteFallbacksSchema,
 	releaseRewritesSchema,
 } from "../src/release-notes/schema.ts";
 
@@ -338,7 +339,7 @@ describe("release-note rewriting", () => {
 		});
 	});
 
-	test("omits copy that remains rejected after one repair", async ({
+	test("returns reasons for copy rejected before and after repair", async ({
 		releaseFiles,
 	}) => {
 		writeFileSync(
@@ -356,6 +357,13 @@ describe("release-note rewriting", () => {
 					title: "fix: prevent duplicate refreshes",
 					changesetDescription: "Prevent duplicate session refreshes.",
 					prNumber: 43,
+					packageNames: ["better-auth"],
+					changeType: "fix",
+				},
+				"pr-44": {
+					title: "fix: preserve account linking",
+					changesetDescription: "Preserve account linking behavior.",
+					prNumber: 44,
 					packageNames: ["better-auth"],
 					changeType: "fix",
 				},
@@ -377,6 +385,11 @@ describe("release-note rewriting", () => {
 							{
 								id: "pr-43",
 								title: "Prevented duplicate session refreshes",
+								migration: null,
+							},
+							{
+								id: "pr-44",
+								title: "Preserved account linking behavior",
 								migration: null,
 							},
 						],
@@ -403,6 +416,7 @@ describe("release-note rewriting", () => {
 										"Preserve both standard path support and open-redirect protection.",
 								},
 								{ id: "pr-43", approved: true, feedback: null },
+								{ id: "pr-44", approved: false, feedback: null },
 							],
 						}
 					: {
@@ -433,6 +447,64 @@ describe("release-note rewriting", () => {
 				prNumber: 42,
 				reason:
 					"Preserve both standard path support and open-redirect protection.",
+			},
+			{
+				title: "fix: preserve account linking",
+				prNumber: 44,
+				reason: "The rewrite was not approved by review.",
+			},
+		]);
+	});
+
+	test("bounds fallback reasons from deterministic validation", async ({
+		releaseFiles,
+	}) => {
+		const id = "x".repeat(600);
+		writeFileSync(
+			releaseFiles.contextPath,
+			JSON.stringify({
+				[id]: {
+					title: "fix: preserve safe output",
+					changesetDescription: "Preserve safe output.",
+					prNumber: 42,
+					packageNames: ["better-auth"],
+					changeType: "fix",
+				},
+			}),
+		);
+
+		const fallbacks = await rewriteReleaseNotes(
+			releaseFiles.contextPath,
+			releaseFiles.outputPath,
+			generatorFor((request) =>
+				request.name === "release_note_rewrites" ||
+				request.name === "release_note_repairs"
+					? {
+							rewrites: [
+								{
+									id,
+									title: "Preserved safe output",
+									migration: "Change an unrelated setting.",
+								},
+							],
+						}
+					: {
+							reviews: [{ id, approved: true, feedback: null }],
+						},
+			),
+		);
+
+		expect(
+			parseSchema(
+				releaseRewriteFallbacksSchema,
+				fallbacks,
+				"Invalid test fallbacks",
+			),
+		).toEqual([
+			{
+				title: "fix: preserve safe output",
+				prNumber: 42,
+				reason: "The rewrite did not pass deterministic copy validation.",
 			},
 		]);
 	});
