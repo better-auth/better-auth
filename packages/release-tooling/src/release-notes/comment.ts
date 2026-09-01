@@ -67,7 +67,7 @@ function formatFallbackWarning(fallbacks: ReleaseRewriteFallback[]): string[] {
 		">",
 		...fallbacks.map((fallback) => {
 			const reference = fallback.prNumber ? `#${fallback.prNumber}: ` : "";
-			return `> - ${reference}${formatUntrustedInlineMarkdown(fallback.title)}`;
+			return `> - ${reference}${formatUntrustedInlineMarkdown(fallback.title)}<br><sub>${formatUntrustedInlineMarkdown(fallback.reason)}</sub>`;
 		}),
 		">",
 		"> Review or edit the original wording before merging.",

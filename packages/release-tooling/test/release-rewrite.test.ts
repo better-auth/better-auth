@@ -431,6 +431,8 @@ describe("release-note rewriting", () => {
 			{
 				title: "fix: preserve redirect validation",
 				prNumber: 42,
+				reason:
+					"Preserve both standard path support and open-redirect protection.",
 			},
 		]);
 	});

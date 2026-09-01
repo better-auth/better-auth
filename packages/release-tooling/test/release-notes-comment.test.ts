@@ -68,13 +68,15 @@ describe("wrapReleaseNotesComment", () => {
 				{
 					prNumber: 10907,
 					title: "fix(client): preserve plugin assignability",
+					reason:
+						"State that assignability was restored for clients using additional plugins.",
 				},
 			],
 		});
 
 		expect(comment).toContain("**1 release note needs a closer look.**");
 		expect(comment).toContain(
-			"> - #10907: fix(client): preserve plugin assignability",
+			"> - #10907: fix(client): preserve plugin assignability<br><sub>State that assignability was restored for clients using additional plugins.</sub>",
 		);
 		expect(comment.indexOf("> [!WARNING]")).toBeLessThan(
 			comment.indexOf(`# Release preview: v${version}`),
@@ -85,12 +87,37 @@ describe("wrapReleaseNotesComment", () => {
 	it("uses plural copy for multiple partial fallbacks", () => {
 		const comment = wrapReleaseNotesComment(version, head, notes, {
 			fallbacks: [
-				{ prNumber: 42, title: "fix: first change" },
-				{ prNumber: 43, title: "fix: second change" },
+				{
+					prNumber: 42,
+					title: "fix: first change",
+					reason: "Preserve the first behavior.",
+				},
+				{
+					prNumber: 43,
+					title: "fix: second change",
+					reason: "Preserve the second behavior.",
+				},
 			],
 		});
 
 		expect(comment).toContain("**2 release notes need a closer look.**");
+	});
+
+	it("neutralizes unsupported Markdown in review reasons", () => {
+		const comment = wrapReleaseNotesComment(version, head, notes, {
+			fallbacks: [
+				{
+					prNumber: 42,
+					title: "fix: preserve safe copy",
+					reason:
+						"See [the migration](https://example.com) and notify @maintainers.",
+				},
+			],
+		});
+
+		expect(comment).toContain(
+			"<sub>`See [the migration](https://example.com) and notify @maintainers.`</sub>",
+		);
 	});
 
 	it("instructs merged release PRs to rerun the failed release", () => {
