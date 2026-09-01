@@ -193,14 +193,28 @@ describe("oauthConsent", async () => {
 
 		expect(res.error?.status).toBe(401);
 	});
-
 	it("should delete the consent and revoke associated tokens", async () => {
+		const referenceId = "reference-1";
+		const otherReferenceId = "reference-2";
+
+		// Make consent1 correspond to referenceId.
+		consent1 = await auth.api.testerCreateConsent({
+			headers,
+			body: {
+				clientId: oauthClient1.client_id,
+				userId: user.id,
+				referenceId,
+				scopes: oauthClient1Scopes,
+			},
+		});
+
 		const refreshToken = await db.create({
 			model: "oauthRefreshToken",
 			data: {
 				token: "test-refresh-token",
 				clientId: oauthClient1.client_id,
 				userId: user.id,
+				referenceId,
 				scopes: oauthClient1Scopes,
 				expiresAt: new Date(Date.now() + 60 * 60 * 1000),
 				createdAt: new Date(),
@@ -213,7 +227,50 @@ describe("oauthConsent", async () => {
 				token: "test-access-token",
 				clientId: oauthClient1.client_id,
 				userId: user.id,
+				referenceId,
 				refreshId: refreshToken.id,
+				scopes: oauthClient1Scopes,
+				expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+				createdAt: new Date(),
+			},
+		});
+
+		// This access token has no refreshId. It must still be revoked.
+		const standaloneAccessToken = await db.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "test-standalone-access-token",
+				clientId: oauthClient1.client_id,
+				userId: user.id,
+				referenceId,
+				scopes: oauthClient1Scopes,
+				expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+				createdAt: new Date(),
+			},
+		});
+
+		// Credentials belonging to another reference must survive.
+		const otherRefreshToken = await db.create({
+			model: "oauthRefreshToken",
+			data: {
+				token: "test-other-refresh-token",
+				clientId: oauthClient1.client_id,
+				userId: user.id,
+				referenceId: otherReferenceId,
+				scopes: oauthClient1Scopes,
+				expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+				createdAt: new Date(),
+			},
+		});
+
+		const otherAccessToken = await db.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "test-other-access-token",
+				clientId: oauthClient1.client_id,
+				userId: user.id,
+				referenceId: otherReferenceId,
+				refreshId: otherRefreshToken.id,
 				scopes: oauthClient1Scopes,
 				expiresAt: new Date(Date.now() + 60 * 60 * 1000),
 				createdAt: new Date(),
@@ -222,25 +279,9 @@ describe("oauthConsent", async () => {
 
 		expect(refreshToken).toBeDefined();
 		expect(accessToken).toBeDefined();
-
-		const beforeRefreshTokens = await db.findMany({
-			model: "oauthRefreshToken",
-			where: [
-				{ field: "clientId", value: oauthClient1.client_id },
-				{ field: "userId", value: user.id },
-			],
-		});
-
-		const beforeAccessTokens = await db.findMany({
-			model: "oauthAccessToken",
-			where: [
-				{ field: "clientId", value: oauthClient1.client_id },
-				{ field: "userId", value: user.id },
-			],
-		});
-
-		expect(beforeRefreshTokens).toHaveLength(1);
-		expect(beforeAccessTokens).toHaveLength(1);
+		expect(standaloneAccessToken).toBeDefined();
+		expect(otherRefreshToken).toBeDefined();
+		expect(otherAccessToken).toBeDefined();
 
 		const consent = await authClient.oauth2.deleteConsent({
 			id: consent1.id,
@@ -248,7 +289,7 @@ describe("oauthConsent", async () => {
 
 		expect(consent.data).toBeNull();
 
-		const afterRefreshTokens = await db.findMany({
+		const afterRefreshTokens = await db.findMany<{ id: string }>({
 			model: "oauthRefreshToken",
 			where: [
 				{ field: "clientId", value: oauthClient1.client_id },
@@ -256,7 +297,7 @@ describe("oauthConsent", async () => {
 			],
 		});
 
-		const afterAccessTokens = await db.findMany({
+		const afterAccessTokens = await db.findMany<{ id: string }>({
 			model: "oauthAccessToken",
 			where: [
 				{ field: "clientId", value: oauthClient1.client_id },
@@ -264,7 +305,10 @@ describe("oauthConsent", async () => {
 			],
 		});
 
-		expect(afterRefreshTokens).toHaveLength(0);
-		expect(afterAccessTokens).toHaveLength(0);
+		expect(afterRefreshTokens).toHaveLength(1);
+		expect(afterRefreshTokens[0]?.id).toBe(otherRefreshToken.id);
+
+		expect(afterAccessTokens).toHaveLength(1);
+		expect(afterAccessTokens[0]?.id).toBe(otherAccessToken.id);
 	});
 });

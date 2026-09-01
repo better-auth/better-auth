@@ -90,7 +90,12 @@ export async function deleteConsentEndpoint(
 	}
 	if (consent.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
 
-	await invalidateRefreshFamily(ctx, consent.clientId, consent.userId);
+	await invalidateRefreshFamily(
+		ctx,
+		consent.clientId,
+		consent.userId,
+		consent.referenceId,
+	);
 
 	await ctx.context.adapter.delete({
 		model: "oauthConsent",
