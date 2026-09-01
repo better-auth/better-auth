@@ -82,7 +82,7 @@ function resolveRegistrationResponseTypes(
 
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
-	defaultApplicationType: "web" | null = "web",
+	defaultApplicationType: "web" | "native" | null = "web",
 ): OAuthClientRegistrationMetadata {
 	const grantTypes = resolveRegistrationGrantTypes(client);
 	return {
@@ -95,6 +95,33 @@ function applyOAuthClientRegistrationDefaults(
 		grant_types: grantTypes,
 		response_types: resolveRegistrationResponseTypes(client, grantTypes),
 	};
+}
+
+function isNonHttpRedirectUri(redirectUri: string): boolean {
+	try {
+		const protocol = new URL(redirectUri).protocol;
+		return protocol !== "http:" && protocol !== "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Server-owned default for dynamic registrations that omit `application_type`.
+ * `"infer"` classifies as native only when every redirect URI is a
+ * non-http(s) scheme; a sent `application_type` is never overridden because
+ * `applyOAuthClientRegistrationDefaults` only fills the absent field.
+ */
+function resolveDynamicRegistrationDefaultApplicationType(
+	opts: OAuthOptions<Scope[]>,
+	client: OAuthClientRegistrationMetadata,
+): "web" | "native" {
+	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
+	if (configured !== "infer") return configured;
+	const redirectUris = client.redirect_uris ?? [];
+	return redirectUris.length > 0 && redirectUris.every(isNonHttpRedirectUri)
+		? "native"
+		: "web";
 }
 
 const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
@@ -347,7 +374,11 @@ export async function checkOAuthClient(
 		settings?.registrationSource === "clientMetadataDocument";
 	const clientWithDefaults = applyOAuthClientRegistrationDefaults(
 		client,
-		isClientMetadataDocument ? null : "web",
+		isClientMetadataDocument
+			? null
+			: settings?.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(opts, client)
+				: "web",
 	);
 	const tokenEndpointAuthMethod =
 		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
@@ -751,7 +782,14 @@ async function persistOAuthClientRegistration(
 			: input.metadata;
 	const body = applyOAuthClientRegistrationDefaults(
 		registrationMetadata,
-		input.registrationSource === "clientMetadataDocument" ? null : "web",
+		input.registrationSource === "clientMetadataDocument"
+			? null
+			: input.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(
+						opts,
+						registrationMetadata,
+					)
+				: "web",
 	);
 
 	// Determine whether registration request for public client

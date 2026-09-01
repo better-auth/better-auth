@@ -444,6 +444,21 @@ Application type is independent of client authentication. For example, a native 
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
+Some native MCP clients omit `application_type` in DCR (current Cursor builds do), which the OIDC default classifies as `web` — rejecting their custom-scheme redirect. `clientRegistrationDefaultApplicationType` sets server-owned policy for that absent field: `"web"` (the default, strict OIDC behavior), `"native"`, or `"infer"`, which classifies a registration as `native` only when every `redirect_uris` entry uses a non-http(s) scheme. An `application_type` the client actually sends is never overridden, and web-client redirect policy is unchanged.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  allowUnauthenticatedClientRegistration: true,
+  clientRegistrationDefaultApplicationType: "infer",
+  // ... other options
+})
+```
+
+<Callout type="warn">
+  Accepting private-use schemes without a period (such as `cursor:`) deviates from the [RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1) recommendation that authorization servers reject schemes lacking a domain-based dot. Better Auth mitigates redirect interception by requiring PKCE for all public-client authorization requests, which makes an intercepted authorization code unusable without the code verifier.
+</Callout>
+
 Note the following parameters are not yet supported:
 
 * `sector_identifier_uri`
