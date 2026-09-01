@@ -244,8 +244,13 @@ function getErrorURL(
 /**
  * Finds the matching entry in a client's registered redirect_uris for a
  * requested redirect_uri. Honors RFC 8252 §7.3 loopback port variance for
- * the full 127.0.0.0/8 range and [::1], matching on scheme+host+path+query
- * and ignoring port. DNS names like "localhost" are excluded per §8.3.
+ * the full 127.0.0.0/8 range, [::1], and the `localhost` hostname, matching
+ * on scheme+host+path+query and ignoring port. §8.3 prefers loopback IP
+ * literals over `localhost` as *client guidance*, but registration
+ * (`assertValidRedirectUris`) accepts `http://localhost` for native clients —
+ * so the matcher must accept it too, or such clients (e.g. CIMD documents
+ * registering port-less `http://localhost/callback`) can never complete an
+ * authorization from an ephemeral port.
  */
 function findRegisteredRedirectUri(
 	registered: readonly string[] | undefined,
@@ -266,7 +271,7 @@ function findRegisteredRedirectUri(
 		try {
 			const reg = new URL(url);
 			return (
-				isLoopbackIP(reg.hostname) &&
+				(isLoopbackIP(reg.hostname) || reg.hostname === "localhost") &&
 				reg.hostname === req.hostname &&
 				reg.pathname === req.pathname &&
 				reg.protocol === req.protocol &&

@@ -1512,3 +1512,91 @@ describe("oauth authorize - consented resources", async () => {
 		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
 });
+
+describe("oauth authorize - RFC 8252 §7.3 loopback port variance", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let portlessLoopbackClient: OAuthClient | null;
+	beforeAll(async () => {
+		// A native client registered the way CIMD clients commonly are (e.g.
+		// Claude Code's metadata document): PORT-LESS loopback redirect URIs.
+		// Native clients bind an ephemeral port at runtime, so the authorize
+		// request always carries a port the registration could not know.
+		portlessLoopbackClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [
+					"http://localhost/callback",
+					"http://127.0.0.1/callback",
+				],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+	});
+
+	async function authorizeRedirect(redirectUri: string) {
+		const clientId = portlessLoopbackClient?.client_id;
+		if (!clientId) throw new Error("beforeAll not run properly");
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		url.searchParams.set("client_id", clientId);
+		url.searchParams.set("redirect_uri", redirectUri);
+		url.searchParams.set("response_type", "code");
+		url.searchParams.set("scope", "openid");
+		url.searchParams.set("state", "123");
+		url.searchParams.set("code_challenge", generateRandomString(43));
+		url.searchParams.set("code_challenge_method", "S256");
+		let location = "";
+		await authenticatedClient.$fetch(url.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		return location;
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10937
+	 */
+	it("matches a registered port-less localhost redirect at any requested port", async () => {
+		const location = await authorizeRedirect("http://localhost:51234/callback");
+		expect(location).toContain("http://localhost:51234/callback");
+		expect(location).toContain("code=");
+		expect(location).not.toContain("error=");
+	});
+
+	it("still honors port variance for the 127.0.0.1 literal", async () => {
+		const location = await authorizeRedirect("http://127.0.0.1:51234/callback");
+		expect(location).toContain("http://127.0.0.1:51234/callback");
+		expect(location).toContain("code=");
+	});
+
+	it("keeps rejecting a localhost redirect whose path differs", async () => {
+		const location = await authorizeRedirect("http://localhost:51234/other");
+		expect(location).toContain("error=invalid_redirect");
+	});
+
+	it("does not extend variance to localhost look-alike hostnames", async () => {
+		const location = await authorizeRedirect(
+			"http://localhost.evil.example:51234/callback",
+		);
+		expect(location).toContain("error=");
+		expect(location).not.toContain("code=");
+	});
+});
