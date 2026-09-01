@@ -17,15 +17,15 @@ export type TokenEndpointAuth =
 			method: "client_secret_post";
 	  }
 	| {
+			method: "private_key_jwt";
+			getClientAssertion: ClientAssertionGetter;
+	  }
+	| {
 			method: "custom";
 			/**
 			 * Customize the token request after standard grant parameters are set.
 			 */
 			customizeRequest: TokenEndpointRequestHook;
-	  }
-	| {
-			method: "private_key_jwt";
-			getClientAssertion: ClientAssertionGetter;
 	  };
 
 export type TokenEndpointAuthMethod = TokenEndpointAuth["method"];
