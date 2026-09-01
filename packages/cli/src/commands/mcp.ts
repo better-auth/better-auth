@@ -137,7 +137,7 @@ function handleFxAction() {
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(
 		chalk.gray(
-			"• The server is saved to ~/.fx/mcp.json and available in every project",
+			"• Once configured, the server is saved to ~/.fx/mcp.json and available in every project",
 		),
 	);
 	console.log(
