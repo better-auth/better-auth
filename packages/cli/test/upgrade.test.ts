@@ -116,6 +116,30 @@ describe("upgradeAction", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11072
+	 */
+	it("skips pnpm catalog dependencies with an actionable warning", async () => {
+		const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+		mockGetPackageInfo.mockReturnValue({
+			dependencies: {
+				"better-auth": "catalog:",
+			},
+		});
+
+		await expect(
+			upgradeAction({ cwd: process.cwd(), yes: true }),
+		).resolves.toBeUndefined();
+
+		expect(warning).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"Update its catalog entry in pnpm-workspace.yaml",
+			),
+		);
+		expect(mockDetectPackageManager).not.toHaveBeenCalled();
+		expect(mockInstallDependencies).not.toHaveBeenCalled();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10760
 	 */
 	it("does not align independently versioned Better Auth packages", async () => {
