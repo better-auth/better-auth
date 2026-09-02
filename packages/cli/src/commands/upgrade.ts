@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
@@ -10,10 +10,11 @@ import changesetConfig from "../../../../.changeset/config.json" with {
 	type: "json",
 };
 import { detectPackageManager } from "../utils/check-package-managers";
-import { findMonorepoRoot, getPackageInfo } from "../utils/get-package-info";
+import { getPackageInfo } from "../utils/get-package-info";
 import { spawnCommand } from "../utils/helper";
 import { installDependencies } from "../utils/install-dependencies";
 import {
+	findPnpmWorkspaceRoot,
 	formatCatalogTargetVersion,
 	getPnpmCatalogVersion,
 	getPnpmWorkspaceYamlPath,
@@ -199,8 +200,8 @@ export async function upgradeAction(opts: unknown) {
 
 	try {
 		if (catalogUpgrades.length > 0) {
-			const monorepoRoot = await findMonorepoRoot(cwd);
-			if (!monorepoRoot) {
+			const workspaceRoot = await findPnpmWorkspaceRoot(cwd);
+			if (!workspaceRoot) {
 				installSpinner.stop();
 				console.error(
 					"Could not find a pnpm workspace root to update catalog dependencies.",
@@ -208,27 +209,34 @@ export async function upgradeAction(opts: unknown) {
 				process.exit(1);
 			}
 
-			const workspaceYamlPath = getPnpmWorkspaceYamlPath(monorepoRoot);
-			for (const upgrade of catalogUpgrades) {
-				const currentCatalogVersion = getPnpmCatalogVersion(
-					workspaceYamlPath,
-					upgrade.name,
-					upgrade.catalogName,
-				);
-				if (!currentCatalogVersion) {
-					throw new Error(
-						`Could not find ${upgrade.name} in pnpm-workspace.yaml`,
+			const workspaceYamlPath = getPnpmWorkspaceYamlPath(workspaceRoot);
+			const originalWorkspaceYaml = readFileSync(workspaceYamlPath, "utf-8");
+
+			try {
+				for (const upgrade of catalogUpgrades) {
+					const currentCatalogVersion = getPnpmCatalogVersion(
+						workspaceYamlPath,
+						upgrade.name,
+						upgrade.catalogName,
+					);
+					if (!currentCatalogVersion) {
+						throw new Error(
+							`Could not find ${upgrade.name} in pnpm-workspace.yaml`,
+						);
+					}
+					setPnpmCatalogVersion(
+						workspaceYamlPath,
+						upgrade.name,
+						formatCatalogTargetVersion(currentCatalogVersion, upgrade.target),
+						upgrade.catalogName,
 					);
 				}
-				setPnpmCatalogVersion(
-					workspaceYamlPath,
-					upgrade.name,
-					formatCatalogTargetVersion(currentCatalogVersion, upgrade.target),
-					upgrade.catalogName,
-				);
-			}
 
-			await spawnCommand("pnpm install", monorepoRoot);
+				await spawnCommand("pnpm install", workspaceRoot);
+			} catch (error) {
+				writeFileSync(workspaceYamlPath, originalWorkspaceYaml);
+				throw error;
+			}
 		}
 
 		if (semverUpgrades.length > 0) {

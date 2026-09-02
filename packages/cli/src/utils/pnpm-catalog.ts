@@ -1,7 +1,6 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { parse, stringify } from "yaml";
-import { findMonorepoRoot } from "./get-package-info";
+import { parse, parseDocument } from "yaml";
 
 export function parseCatalogSpec(
 	version: string,
@@ -13,8 +12,28 @@ export function parseCatalogSpec(
 	return catalogName ? { catalogName } : {};
 }
 
-export function getPnpmWorkspaceYamlPath(monorepoRoot: string): string {
-	return path.join(monorepoRoot, "pnpm-workspace.yaml");
+export function getPnpmWorkspaceYamlPath(workspaceRoot: string): string {
+	return path.join(workspaceRoot, "pnpm-workspace.yaml");
+}
+
+export async function findPnpmWorkspaceRoot(
+	startDir: string,
+): Promise<string | null> {
+	let currentDir = path.resolve(startDir);
+	const root = path.parse(currentDir).root;
+
+	while (currentDir !== root) {
+		if (existsSync(getPnpmWorkspaceYamlPath(currentDir))) {
+			return currentDir;
+		}
+		const parentDir = path.dirname(currentDir);
+		if (parentDir === currentDir) {
+			break;
+		}
+		currentDir = parentDir;
+	}
+
+	return null;
 }
 
 type WorkspaceYaml = {
@@ -42,11 +61,27 @@ export function formatCatalogTargetVersion(
 	currentCatalogVersion: string,
 	target: string,
 ): string {
-	if (currentCatalogVersion.startsWith("^")) {
+	const trimmed = currentCatalogVersion.trim();
+	if (trimmed.startsWith("^")) {
 		return `^${target}`;
 	}
-	if (currentCatalogVersion.startsWith("~")) {
+	if (trimmed.startsWith("~")) {
 		return `~${target}`;
+	}
+	if (trimmed.startsWith(">=")) {
+		return `>=${target}`;
+	}
+	if (trimmed.startsWith("<=")) {
+		return `<=${target}`;
+	}
+	if (trimmed.startsWith(">")) {
+		return `>${target}`;
+	}
+	if (trimmed.startsWith("<")) {
+		return `<${target}`;
+	}
+	if (trimmed === "*") {
+		return trimmed;
 	}
 	return target;
 }
@@ -57,16 +92,16 @@ export function setPnpmCatalogVersion(
 	newVersion: string,
 	catalogName?: string,
 ): void {
-	const workspace = readWorkspaceYaml(workspaceYamlPath);
+	const content = readFileSync(workspaceYamlPath, "utf-8");
+	const doc = parseDocument(content);
+
 	if (catalogName) {
-		workspace.catalogs ??= {};
-		workspace.catalogs[catalogName] ??= {};
-		workspace.catalogs[catalogName][packageName] = newVersion;
+		doc.setIn(["catalogs", catalogName, packageName], newVersion);
 	} else {
-		workspace.catalog ??= {};
-		workspace.catalog[packageName] = newVersion;
+		doc.setIn(["catalog", packageName], newVersion);
 	}
-	writeFileSync(workspaceYamlPath, stringify(workspace));
+
+	writeFileSync(workspaceYamlPath, String(doc));
 }
 
 export async function resolveCatalogDependencyVersion(
@@ -79,12 +114,12 @@ export async function resolveCatalogDependencyVersion(
 		return null;
 	}
 
-	const monorepoRoot = await findMonorepoRoot(cwd);
-	if (!monorepoRoot) {
+	const workspaceRoot = await findPnpmWorkspaceRoot(cwd);
+	if (!workspaceRoot) {
 		return null;
 	}
 
-	const workspaceYamlPath = getPnpmWorkspaceYamlPath(monorepoRoot);
+	const workspaceYamlPath = getPnpmWorkspaceYamlPath(workspaceRoot);
 	const catalogVersion = getPnpmCatalogVersion(
 		workspaceYamlPath,
 		packageName,
