@@ -161,7 +161,12 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 
 			try {
 				await ctx.context.runInBackgroundOrAwait(
-					opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
+					Promise.resolve().then(() =>
+						opts.sendVerificationOTP(
+							{ email, otp, type: ctx.body.type },
+							ctx,
+						),
+					),
 				);
 			} catch (error) {
 				if (ctx.body.type !== "forget-password") {
@@ -786,19 +791,18 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 			try {
 				await ctx.context.runInBackgroundOrAwait(
-					opts.sendVerificationOTP(
-						{
-							email,
-							otp,
-							type: "forget-password",
-						},
-						ctx,
+					Promise.resolve().then(() =>
+						opts.sendVerificationOTP(
+							{
+								email,
+								otp,
+								type: "forget-password",
+							},
+							ctx,
+						),
 					),
 				);
-			} catch {
-				// Already logged. Keep the generic success payload so send
-				// failures cannot enumerate registered emails.
-			}
+			} catch {}
 			return ctx.json({
 				success: true,
 			});
@@ -883,19 +887,18 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 			}
 			try {
 				await ctx.context.runInBackgroundOrAwait(
-					opts.sendVerificationOTP(
-						{
-							email,
-							otp,
-							type: "forget-password",
-						},
-						ctx,
+					Promise.resolve().then(() =>
+						opts.sendVerificationOTP(
+							{
+								email,
+								otp,
+								type: "forget-password",
+							},
+							ctx,
+						),
 					),
 				);
-			} catch {
-				// Already logged. Keep the generic success payload so send
-				// failures cannot enumerate registered emails.
-			}
+			} catch {}
 			return ctx.json({
 				success: true,
 			});
@@ -1149,19 +1152,18 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			try {
 				await ctx.context.runInBackgroundOrAwait(
-					opts.sendVerificationOTP(
-						{
-							email: newEmail,
-							otp,
-							type: "change-email",
-						},
-						ctx,
+					Promise.resolve().then(() =>
+						opts.sendVerificationOTP(
+							{
+								email: newEmail,
+								otp,
+								type: "change-email",
+							},
+							ctx,
+						),
 					),
 				);
-			} catch {
-				// Already logged. A send failure on an available email must
-				// not differ from the generic success used for taken emails.
-			}
+			} catch {}
 			return ctx.json({
 				success: true,
 			});

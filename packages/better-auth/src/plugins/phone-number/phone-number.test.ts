@@ -436,17 +436,20 @@ describe("phone-number password reset send failures", async () => {
 	it("keeps generic success when sendPasswordResetOTP fails", async () => {
 		const phone = "+251900111222";
 		await client.phoneNumber.sendOtp({ phoneNumber: phone });
-		await client.phoneNumber.verify({
+		const verifyRes = await client.phoneNumber.verify({
 			phoneNumber: phone,
 			code: otp,
 		});
+		expect(verifyRes.error).toBe(null);
 
 		const registered = await client.phoneNumber.requestPasswordReset({
 			phoneNumber: phone,
 		});
+		expect(sendPasswordResetOTP).toHaveBeenCalledOnce();
 		const unknown = await client.phoneNumber.requestPasswordReset({
 			phoneNumber: "+251900000000",
 		});
+		expect(sendPasswordResetOTP).toHaveBeenCalledOnce();
 
 		expect(registered.error).toBe(null);
 		expect(registered.data?.status).toBe(true);

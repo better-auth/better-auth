@@ -134,19 +134,18 @@ export const requestPasswordReset = createAuthEndpoint(
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		try {
 			await ctx.context.runInBackgroundOrAwait(
-				ctx.context.options.emailAndPassword.sendResetPassword(
-					{
-						user: user.user,
-						url,
-						token: verificationToken,
-					},
-					ctx.request,
+				Promise.resolve().then(() =>
+					ctx.context.options.emailAndPassword.sendResetPassword(
+						{
+							user: user.user,
+							url,
+							token: verificationToken,
+						},
+						ctx.request,
+					),
 				),
 			);
-		} catch {
-			// Already logged by runInBackgroundOrAwait. Do not leak send
-			// failures — they would distinguish registered emails.
-		}
+		} catch {}
 		return ctx.json({
 			status: true,
 			message:
