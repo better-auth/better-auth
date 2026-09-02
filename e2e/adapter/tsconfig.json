@@ -6,7 +6,8 @@
   },
   "include": [
     "test/**/*.ts",
-    "test/prisma-adapter/.tmp/prisma-client-base/**/*.ts"
+    "test/prisma-adapter/.tmp/prisma-client-base/**/*.ts",
+    "test/prisma-adapter/.tmp/prisma-client-migration-mapped/**/*.ts"
   ],
   "references": [
     {

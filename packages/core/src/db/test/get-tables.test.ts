@@ -16,6 +16,23 @@ const secondaryStorageStub: SecondaryStorage = {
 };
 
 describe("getAuthTables", () => {
+	it.each([
+		undefined,
+		"issuer",
+		"provider-id",
+	] as const)("keeps the required issuer schema for the %s identity strategy", (identityStrategy) => {
+		const tables = getAuthTables({
+			...(identityStrategy && { account: { identityStrategy } }),
+		});
+
+		expect(tables.account?.fields.issuer).toMatchObject({ required: true });
+		expect(tables.account?.fields.accountId).toMatchObject({ required: true });
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+	});
+
 	it("creates a local account key without changing the provider account id", () => {
 		const credentialAccountKey: AccountKey = {
 			issuer: createLocalAccountIssuer("credential"),
