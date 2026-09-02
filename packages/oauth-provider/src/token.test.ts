@@ -1,6 +1,10 @@
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
-import { generateRandomString } from "better-auth/crypto";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
 import {
 	authorizationCodeRequest,
@@ -1897,6 +1901,86 @@ describe("oauth token - refresh_token reuse interval", async () => {
 		});
 	}
 
+	async function expectInactiveSessionReplayRejected(
+		originalRefreshToken: string,
+		rotatedRefreshToken: string,
+	) {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("OAuth client unavailable");
+		}
+		const replay = await refresh(originalRefreshToken);
+		expect((replay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const next = await refresh(rotatedRefreshToken);
+		expect(next.error).toBeNull();
+		expect(next.data?.access_token).toBeDefined();
+		const introspection = await client.$fetch<{
+			active?: boolean;
+			sid?: string;
+		}>("/oauth2/introspect", {
+			method: "POST",
+			body: new URLSearchParams({
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				token: next.data!.access_token!,
+				token_type_hint: "access_token",
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(introspection.error).toBeNull();
+		expect(introspection.data).toMatchObject({ active: true });
+		expect(introspection.data?.sid).toBeUndefined();
+
+		const detachedReplay = await refresh(rotatedRefreshToken);
+		expect(detachedReplay.error).toBeNull();
+		expect(detachedReplay.data).toMatchObject({
+			access_token: next.data?.access_token,
+			expires_at: next.data?.expires_at,
+			id_token: next.data?.id_token,
+			refresh_token: next.data?.refresh_token,
+			scope: next.data?.scope,
+			token_type: next.data?.token_type,
+		});
+		expect(detachedReplay.data?.expires_in).toBeLessThanOrEqual(
+			next.data!.expires_in!,
+		);
+	}
+
+	async function removeReplaySessionMetadata() {
+		if (!oauthClient?.client_id) throw Error("OAuth client unavailable");
+		const context = await authorizationServer.$context;
+		const rows = await context.adapter.findMany<{
+			id: string;
+			rotationReplayResponse?: string | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		const replayRow = rows.find((row) => row.rotationReplayResponse);
+		if (!replayRow?.rotationReplayResponse) {
+			throw Error("Rotation replay unavailable");
+		}
+		const replay = JSON.parse(
+			await symmetricDecrypt({
+				data: replayRow.rotationReplayResponse,
+				key: context.secretConfig,
+			}),
+		) as Record<string, unknown>;
+		const legacyReplay = { request: replay.request, response: replay.response };
+		await context.adapter.update({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: replayRow.id }],
+			update: {
+				rotationReplayResponse: await symmetricEncrypt({
+					data: JSON.stringify(legacyReplay),
+					key: context.secretConfig,
+				}),
+			},
+		});
+	}
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8512
 	 */
@@ -1938,6 +2022,25 @@ describe("oauth token - refresh_token reuse interval", async () => {
 		);
 	});
 
+	it("replays a legacy cached response while its session remains live", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		await removeReplaySessionMetadata();
+
+		const replay = await refresh(tokens.refresh_token!);
+		expect(replay.error).toBeNull();
+		expect(replay.data).toMatchObject({
+			access_token: firstRefresh.data?.access_token,
+			refresh_token: firstRefresh.data?.refresh_token,
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11132
 	 */
@@ -1962,36 +2065,69 @@ describe("oauth token - refresh_token reuse interval", async () => {
 				update: { expiresAt: new Date() },
 			});
 
-			const replay = await refresh(tokens.refresh_token!);
-			expect((replay.error as { error?: string } | null)?.error).toBe(
-				"invalid_grant",
+			await expectInactiveSessionReplayRejected(
+				tokens.refresh_token!,
+				firstRefresh.data!.refresh_token!,
 			);
-
-			const next = await refresh(firstRefresh.data!.refresh_token!);
-			expect(next.error).toBeNull();
-			expect(next.data?.access_token).toBeDefined();
-			const introspection = await client.$fetch<{
-				active?: boolean;
-				sid?: string;
-			}>("/oauth2/introspect", {
-				method: "POST",
-				body: new URLSearchParams({
-					client_id: oauthClient.client_id,
-					client_secret: oauthClient.client_secret!,
-					token: next.data!.access_token!,
-					token_type_hint: "access_token",
-				}),
-				headers: { "content-type": "application/x-www-form-urlencoded" },
-			});
-			expect(introspection.error).toBeNull();
-			expect(introspection.data).toMatchObject({ active: true });
-			expect(introspection.data?.sid).toBeUndefined();
 		} finally {
 			await context.adapter.update({
 				model: "session",
 				where: [{ field: "id", value: session.session.id }],
 				update: { expiresAt: session.session.expiresAt },
 			});
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11132
+	 */
+	it.each([
+		["current", false],
+		["legacy", true],
+	] as const)("rejects a %s cached session-bound response after the session is deleted", async (_format, legacyEnvelope) => {
+		oauthClient = await createOAuthClient();
+		const session = await authorizationServer.api.getSession({ headers });
+		if (!session) throw new Error("test session unavailable");
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+		if (legacyEnvelope) await removeReplaySessionMetadata();
+		const context = await authorizationServer.$context;
+		let sessionDeleted = false;
+		try {
+			await context.adapter.delete({
+				model: "session",
+				where: [{ field: "id", value: session.session.id }],
+			});
+			sessionDeleted = true;
+			const refreshRows = await context.adapter.findMany<{
+				rotationReplayResponse?: string | null;
+				sessionId?: string | null;
+			}>({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: oauthClient.client_id }],
+			});
+			expect(
+				refreshRows.find((row) => row.rotationReplayResponse)?.sessionId,
+			).toBeNull();
+			await expectInactiveSessionReplayRejected(
+				tokens.refresh_token!,
+				firstRefresh.data!.refresh_token!,
+			);
+		} finally {
+			if (sessionDeleted) {
+				await context.adapter.create({
+					model: "session",
+					data: session.session,
+					forceAllowId: true,
+				});
+			}
 		}
 	});
 

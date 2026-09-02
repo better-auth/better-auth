@@ -841,6 +841,7 @@ type RefreshTokenRotationReplayRequest = {
 type RefreshTokenRotationReplay = {
 	request: RefreshTokenRotationReplayRequest;
 	response: OAuthTokenResponse;
+	sessionId?: string | null;
 };
 
 function normalizeReplayValues(values: string[] | undefined) {
@@ -934,7 +935,10 @@ function isRefreshTokenRotationReplay(
 				))) &&
 		(request.confirmation === undefined ||
 			isConfirmation(request.confirmation)) &&
-		isOAuthTokenResponse(replay.response)
+		isOAuthTokenResponse(replay.response) &&
+		(replay.sessionId === undefined ||
+			replay.sessionId === null ||
+			typeof replay.sessionId === "string")
 	);
 }
 
@@ -1003,6 +1007,7 @@ async function storeRefreshTokenRotationReplay(
 	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
 	request: RefreshTokenRotationReplayRequest,
 	response: OAuthTokenResponse,
+	sessionId: string | undefined,
 ) {
 	if ((opts.refreshTokenReuseInterval ?? 0) <= 0) {
 		return;
@@ -1014,6 +1019,7 @@ async function storeRefreshTokenRotationReplay(
 			rotationReplayResponse: await encryptRefreshTokenRotationReplay(ctx, {
 				request,
 				response,
+				sessionId: sessionId ?? null,
 			}),
 		},
 	});
@@ -1039,6 +1045,17 @@ async function getRefreshTokenRotationReplay(
 		if (
 			!replay ||
 			!sameRefreshTokenRotationReplayRequest(replay.request, request)
+		) {
+			return undefined;
+		}
+		const replaySessionId =
+			replay.sessionId === undefined
+				? refreshToken.sessionId
+				: replay.sessionId;
+		if (
+			(replay.sessionId === undefined && !replaySessionId) ||
+			(replaySessionId &&
+				!(await resolveActiveRefreshSessionId(ctx, replaySessionId)))
 		) {
 			return undefined;
 		}
@@ -1346,6 +1363,7 @@ async function createUserTokens(
 					confirmation,
 				}),
 				responseBody,
+				sessionId,
 			);
 		} catch (error) {
 			ctx.context.logger.error(
@@ -1910,15 +1928,6 @@ async function handleRefreshTokenGrant(
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
-			if (
-				refreshToken.sessionId &&
-				!(await resolveActiveRefreshSessionId(ctx, refreshToken.sessionId))
-			) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid refresh token",
-					error: "invalid_grant",
-				});
-			}
 			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
 				ctx,
 				opts,
