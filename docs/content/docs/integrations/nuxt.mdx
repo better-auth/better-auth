@@ -1,16 +1,16 @@
 ---
 icon: integrationsNuxt
 sidebarTitle: "Nuxt"
-title: Nuxt Integration
-description: Integrate Better Auth with Nuxt.
+title: Nuxt
+description: Add authentication with Better Auth.
 ---
 
-## Install the Nuxt module
+## Install the module
 
-The [`@nuxtjs/better-auth`](https://better-auth.nuxt.dev) module is the recommended way to use Better Auth with Nuxt. It mounts the auth handler and adds Nuxt composables for accessing the current session during SSR and on the client.
+[`@nuxtjs/better-auth`](https://better-auth.nuxt.dev) is the recommended integration. It mounts the auth handler and provides session composables for SSR and the browser.
 
 <Callout type="info">
-  The Nuxt module is maintained by the Nuxt Modules team outside the Better Auth repository. Report module-specific issues in the [`nuxt-modules/better-auth`](https://github.com/nuxt-modules/better-auth/issues) repository.
+  The Nuxt Modules team maintains this integration outside the Better Auth repository. Report module-specific issues in [`nuxt-modules/better-auth`](https://github.com/nuxt-modules/better-auth/issues).
 </Callout>
 
 {/* cspell:ignore nuxi */}
@@ -19,7 +19,7 @@ The [`@nuxtjs/better-auth`](https://better-auth.nuxt.dev) module is the recommen
 npx nuxi module add @nuxtjs/better-auth
 ```
 
-The command adds the module to `nuxt.config` and creates server and client configuration files. Continue with the [Nuxt module installation guide](https://better-auth.nuxt.dev/getting-started/installation) to configure your secret, authentication methods, and database.
+The command adds the module to `nuxt.config.ts` and creates `server/auth.config.ts` and `<srcDir>/auth.config.ts`, usually `app/auth.config.ts`. Continue with the [configuration guide](https://better-auth.nuxt.dev/getting-started/configuration) to set up your secret, authentication methods, and database.
 
 ## Manual setup
 
