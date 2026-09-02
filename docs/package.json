@@ -106,7 +106,7 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "catalog:tailwind",
     "typesense": "^3.0.6",
-    "typesense-fumadocs-adapter": "^0.4.1",
+    "typesense-fumadocs-adapter": "^0.4.2",
     "unist-util-visit": "^5.1.0",
     "vaul": "^1.1.2",
     "zod": "catalog:"
