@@ -68,7 +68,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - NEVER create separate clients with `createAuthClient()` in tests
 - Default test DB is SQLite in-memory; use `testWith` for other databases
 - Adapter tests need Docker: `docker compose up -d`
-- Regression tests: add `@see` comment with issue URL above `it()` or `describe()`:
+- Regression tests: use `@see` for relevant issues or authoritative sources. Do not reference the current pull request or its review comments:
   ```typescript
   /**
    * @see https://github.com/better-auth/better-auth/issues/{issue_number}
@@ -77,6 +77,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
     // ...
   });
   ```
+- Put a shared `@see` above a focused `describe()` when multiple regression tests share the same reference. For a standalone regression test, put it above `it()`.
 
 ## Important Development Notes
 
