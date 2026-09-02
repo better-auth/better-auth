@@ -1,13 +1,80 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
+import * as z from "zod";
 import { tryCatch } from "./helper";
+
+const packageManifestSchema = z.object({
+	name: z.string(),
+	version: z.string(),
+});
 
 export function getPackageInfo(cwd?: string) {
 	const packageJsonPath = cwd
 		? path.join(cwd, "package.json")
 		: path.join("package.json");
 	return JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+}
+
+function readPackageVersion(
+	packageJsonPath: string,
+	packageName: string,
+): string | null {
+	if (!existsSync(packageJsonPath)) {
+		return null;
+	}
+	try {
+		const result = packageManifestSchema.safeParse(
+			JSON.parse(readFileSync(packageJsonPath, "utf-8")),
+		);
+		return result.success && result.data.name === packageName
+			? result.data.version
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+function findPackageVersion(
+	resolvedPath: string,
+	packageName: string,
+): string | null {
+	let currentDirectory = path.dirname(resolvedPath);
+	const rootDirectory = path.parse(currentDirectory).root;
+
+	while (true) {
+		const version = readPackageVersion(
+			path.join(currentDirectory, "package.json"),
+			packageName,
+		);
+		if (version) {
+			return version;
+		}
+		if (currentDirectory === rootDirectory) {
+			return null;
+		}
+		currentDirectory = path.dirname(currentDirectory);
+	}
+}
+
+export function getInstalledPackageVersion(
+	packageName: string,
+	projectDirectory: string,
+): string | null {
+	const resolve = createRequire(
+		path.join(path.resolve(projectDirectory), "package.json"),
+	).resolve;
+
+	for (const specifier of [`${packageName}/package.json`, packageName]) {
+		try {
+			const version = findPackageVersion(resolve(specifier), packageName);
+			if (version) {
+				return version;
+			}
+		} catch {}
+	}
+	return null;
 }
 
 export function getPrismaVersion(cwd?: string): number | null {
