@@ -34,11 +34,18 @@ describe("create-admin", () => {
 		db?.close();
 	});
 
-	async function setupAuth(withAdmin = true, requireEmailVerification = false) {
+	async function setupAuth(
+		withAdmin = true,
+		requireEmailVerification = false,
+		emailValidator?:
+			| ((email: string) => boolean | Promise<boolean>)
+			| undefined,
+	) {
 		db = new Database(":memory:");
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
 			database: db,
+			...(emailValidator ? { user: { emailValidator } } : {}),
 			emailAndPassword: {
 				enabled: true,
 				requireEmailVerification,
@@ -56,6 +63,53 @@ describe("create-admin", () => {
 
 		return auth;
 	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10920
+	 */
+	it("uses the configured email validator when creating an admin", async () => {
+		const customEmail = "χρήστης@example.com";
+		const emailValidator = vi.fn(
+			async (email: string) => email === customEmail,
+		);
+		await setupAuth(true, false, emailValidator);
+
+		await createAdminAction({
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			email: customEmail,
+			password: "secure-password",
+			name: "Root Admin",
+		});
+
+		expect(emailValidator).toHaveBeenCalledWith(customEmail);
+		const user = db
+			.prepare("SELECT email, role FROM user WHERE email = ?")
+			.get(customEmail) as { email: string; role: string };
+		expect(user).toEqual({
+			email: customEmail,
+			role: "admin",
+		});
+	});
+
+	it("retains default email validation when no validator is configured", async () => {
+		await setupAuth();
+
+		await expect(
+			createAdminAction({
+				cwd: process.cwd(),
+				config: "test/auth.ts",
+				email: "not-an-email",
+				password: "secure-password",
+				name: "Root Admin",
+			}),
+		).rejects.toThrow(/invalid email/i);
+
+		const result = db.prepare("SELECT COUNT(*) AS count FROM user").get() as {
+			count: number;
+		};
+		expect(result.count).toBe(0);
+	});
 
 	it("creates an initial admin user that can sign in with password", async () => {
 		const auth = await setupAuth(true, true);
