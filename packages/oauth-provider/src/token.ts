@@ -1037,33 +1037,32 @@ async function getRefreshTokenRotationReplay(
 		return undefined;
 	}
 
+	let replay: RefreshTokenRotationReplay | undefined;
 	try {
-		const replay = await decryptRefreshTokenRotationReplay(
+		replay = await decryptRefreshTokenRotationReplay(
 			ctx,
 			refreshToken.rotationReplayResponse,
 		);
-		if (
-			!replay ||
-			!sameRefreshTokenRotationReplayRequest(replay.request, request)
-		) {
-			return undefined;
-		}
-		const replaySessionId =
-			replay.sessionId === undefined
-				? refreshToken.sessionId
-				: replay.sessionId;
-		if (
-			(replay.sessionId === undefined && !replaySessionId) ||
-			(replaySessionId &&
-				!(await resolveActiveRefreshSessionId(ctx, replaySessionId)))
-		) {
-			return undefined;
-		}
-		return replay.response;
 	} catch (error) {
 		ctx.context.logger.error("refresh token rotation replay failed", error);
 		return undefined;
 	}
+	if (
+		!replay ||
+		!sameRefreshTokenRotationReplayRequest(replay.request, request)
+	) {
+		return undefined;
+	}
+	const replaySessionId =
+		replay.sessionId === undefined ? refreshToken.sessionId : replay.sessionId;
+	if (
+		(replay.sessionId === undefined && !replaySessionId) ||
+		(replaySessionId &&
+			!(await resolveActiveRefreshSessionId(ctx, replaySessionId)))
+	) {
+		return undefined;
+	}
+	return replay.response;
 }
 
 async function resolveRefreshTokenRotationReplayRequest(

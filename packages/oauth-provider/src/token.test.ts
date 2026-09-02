@@ -2041,6 +2041,42 @@ describe("oauth token - refresh_token reuse interval", async () => {
 		});
 	});
 
+	it("does not revoke the refresh family when replay session lookup fails", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const context = await authorizationServer.$context;
+		const findOne = context.adapter.findOne;
+		let rejectSessionLookup = true;
+		context.adapter.findOne = async (options) => {
+			if (options.model === "session" && rejectSessionLookup) {
+				rejectSessionLookup = false;
+				throw new Error("synthetic session storage outage");
+			}
+			return findOne.call(context.adapter, options);
+		};
+		try {
+			const replay = await refresh(tokens.refresh_token!);
+			expect(replay.error?.status).toBe(500);
+			expect((replay.error as { error?: string } | null)?.error).not.toBe(
+				"invalid_grant",
+			);
+
+			const next = await refresh(firstRefresh.data!.refresh_token!);
+			expect(next.error).toBeNull();
+			expect(next.data?.refresh_token).toBeDefined();
+		} finally {
+			context.adapter.findOne = findOne;
+		}
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11132
 	 */
