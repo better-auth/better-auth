@@ -15,6 +15,7 @@ export const generateSchema = async (opts: {
 	adapter: DBAdapter;
 	file?: string;
 	options: BetterAuthOptions;
+	cwd?: string;
 }): Promise<SchemaGeneratorResult> => {
 	const adapter = opts.adapter;
 
