@@ -719,6 +719,29 @@ export interface OAuthOptions<
 	 */
 	allowUnauthenticatedClientRegistration?: boolean;
 	/**
+	 * Whether the token endpoint accepts PUBLIC clients — clients registered
+	 * with `token_endpoint_auth_method: "none"` that hold no client secret.
+	 *
+	 * Controls `public_client_supported` and, through it, the `"none"` entry
+	 * in the discovery documents' `token_endpoint_auth_methods_supported`.
+	 *
+	 * This is a separate concern from
+	 * {@link OAuthOptions.allowUnauthenticatedClientRegistration}, which
+	 * governs whether dynamic client registration requires an authenticated
+	 * caller. A provider may require a session (or an initial access token) to
+	 * REGISTER a client and still accept that client as a public one at the
+	 * token endpoint: `validateClientCredentials` demands a `client_secret`
+	 * only from a client that is not marked public, regardless of either
+	 * option. Leaving the two conflated makes a provider with protected DCR
+	 * advertise `["client_secret_basic", "client_secret_post"]`, which
+	 * RFC 8414 §2 gives a conformant client exactly one reading of: public
+	 * clients are not supported. Such a client then never attempts the
+	 * request that would have succeeded, and nothing errors anywhere.
+	 *
+	 * @default `allowUnauthenticatedClientRegistration || a contributed clientDiscovery`
+	 */
+	publicClientsSupported?: boolean;
+	/**
 	 * Allow dynamic client registration (RFC 7591) at `POST /oauth2/register`.
 	 *
 	 * Once enabled, a registration request is authorized through one of three

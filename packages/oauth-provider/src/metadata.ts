@@ -122,8 +122,14 @@ function buildAuthServerMetadata(
 	// Any contributed `clientDiscovery` implicitly produces public clients
 	// (CIMD, wallet attestation, etc.), so it flips `public_client_supported`
 	// and the advertised `"none"` auth method alongside unauthenticated DCR.
+	// `publicClientsSupported` decouples the ADVERTISEMENT of public-client
+	// support from how clients are registered: a provider with protected DCR
+	// still accepts public clients at the token endpoint, and must be able to
+	// say so.
 	const publicClientSupported =
-		opts.allowUnauthenticatedClientRegistration || clientDiscoveries.length > 0;
+		opts.publicClientsSupported ??
+		(opts.allowUnauthenticatedClientRegistration ||
+			clientDiscoveries.length > 0);
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
