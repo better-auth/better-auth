@@ -18,7 +18,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - ALWAYS use `pnpm` (never npm, yarn, or bun)
 - NEVER run `pnpm test` (runs all packages). Use `vitest path/to/test -t <pattern>`
 - Type check: `pnpm typecheck`
-- After changing a dependency in `package.json`, run `pnpm install --lockfile-only` to avoid unrelated lockfile updates, then verify with `pnpm install --frozen-lockfile`.
+- After changing a dependency version in `package.json` or `pnpm-workspace.yaml`, run `pnpm install --lockfile-only` from the affected workspace root to avoid unrelated lockfile updates. Verify with `pnpm install --frozen-lockfile`. Nested `demo/*` workspaces have separate lockfiles.
 - Formatting/linting runs automatically on commit (Lefthook + Biome). No need to run manually.
 
 ## Writing Code
