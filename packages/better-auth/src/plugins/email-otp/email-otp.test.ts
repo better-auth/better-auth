@@ -2733,21 +2733,104 @@ describe("email-otp sendVerificationOTP error surfacing", () => {
 			],
 		});
 
-		try {
-			await auth.api.sendVerificationOTP({
+		await expect(
+			auth.api.sendVerificationOTP({
 				body: {
 					email: testUser.email,
 					type: "email-verification",
 				},
-			});
-			expect.fail("Expected sendVerificationOTP to throw");
-		} catch (error) {
-			expect(error).toBeInstanceOf(APIError);
-			if (error instanceof APIError) {
-				expect(error.status).toBe("TOO_MANY_REQUESTS");
-				expect(error.body?.code).toBe("RATE_LIMIT_EXCEEDED");
-			}
-		}
+			}),
+		).rejects.toMatchObject({
+			status: "TOO_MANY_REQUESTS",
+			body: { code: "RATE_LIMIT_EXCEEDED" },
+		});
+	});
+
+	it("keeps generic success when forget-password sendVerificationOTP fails", async () => {
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP() {
+						throw new Error("SMTP provider error");
+					},
+				}),
+			],
+		});
+
+		const result = await auth.api.sendVerificationOTP({
+			body: {
+				email: testUser.email,
+				type: "forget-password",
+			},
+		});
+		expect(result).toEqual({ success: true });
+	});
+
+	it("keeps generic success when request-password-reset OTP send fails", async () => {
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP() {
+						throw new Error("SMTP provider error");
+					},
+				}),
+			],
+		});
+
+		const registered = await auth.api.requestPasswordResetEmailOTP({
+			body: { email: testUser.email },
+		});
+		const unknown = await auth.api.requestPasswordResetEmailOTP({
+			body: { email: "unknown-user@example.com" },
+		});
+		expect(registered).toEqual({ success: true });
+		expect(unknown).toEqual({ success: true });
+	});
+
+	it("keeps generic success when deprecated forget-password email OTP send fails", async () => {
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP() {
+						throw new Error("SMTP provider error");
+					},
+				}),
+			],
+		});
+
+		const registered = await auth.api.forgetPasswordEmailOTP({
+			body: { email: testUser.email },
+		});
+		const unknown = await auth.api.forgetPasswordEmailOTP({
+			body: { email: "unknown-user@example.com" },
+		});
+		expect(registered).toEqual({ success: true });
+		expect(unknown).toEqual({ success: true });
+	});
+
+	it("keeps generic success when change-email OTP send fails", async () => {
+		const { auth, testUser, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					changeEmail: { enabled: true },
+					async sendVerificationOTP() {
+						throw new Error("SMTP provider error");
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const available = await auth.api.requestEmailChangeEmailOTP({
+			body: { newEmail: "available-change@example.com" },
+			headers,
+		});
+		const taken = await auth.api.requestEmailChangeEmailOTP({
+			body: { newEmail: testUser.email },
+			headers,
+		});
+		expect(available).toEqual({ success: true });
+		expect(taken).toEqual({ success: true });
 	});
 
 	it("does not block the request when a backgroundTasks handler is configured", async () => {

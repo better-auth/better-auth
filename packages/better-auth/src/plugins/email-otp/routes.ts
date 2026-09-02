@@ -159,9 +159,15 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				return ctx.json({ success: true });
 			}
 
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
-			);
+			try {
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
+				);
+			} catch (error) {
+				if (ctx.body.type !== "forget-password") {
+					throw error;
+				}
+			}
 			return ctx.json({ success: true });
 		},
 	);
@@ -778,16 +784,21 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					success: true,
 				});
 			}
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: "forget-password",
-					},
-					ctx,
-				),
-			);
+			try {
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: "forget-password",
+						},
+						ctx,
+					),
+				);
+			} catch {
+				// Already logged. Keep the generic success payload so send
+				// failures cannot enumerate registered emails.
+			}
 			return ctx.json({
 				success: true,
 			});
@@ -870,16 +881,21 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 					success: true,
 				});
 			}
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: "forget-password",
-					},
-					ctx,
-				),
-			);
+			try {
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: "forget-password",
+						},
+						ctx,
+					),
+				);
+			} catch {
+				// Already logged. Keep the generic success payload so send
+				// failures cannot enumerate registered emails.
+			}
 			return ctx.json({
 				success: true,
 			});
@@ -1131,16 +1147,21 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email: newEmail,
-						otp,
-						type: "change-email",
-					},
-					ctx,
-				),
-			);
+			try {
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendVerificationOTP(
+						{
+							email: newEmail,
+							otp,
+							type: "change-email",
+						},
+						ctx,
+					),
+				);
+			} catch {
+				// Already logged. A send failure on an available email must
+				// not differ from the generic success used for taken emails.
+			}
 			return ctx.json({
 				success: true,
 			});

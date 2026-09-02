@@ -404,6 +404,57 @@ describe("phone-number send otp background handler failures", async () => {
 	});
 });
 
+describe("phone-number password reset send failures", async () => {
+	let otp = "";
+	const sendPasswordResetOTP = vi.fn(async () => {
+		throw new Error("SMS provider error");
+	});
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("keeps generic success when sendPasswordResetOTP fails", async () => {
+		const phone = "+251900111222";
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+		await client.phoneNumber.verify({
+			phoneNumber: phone,
+			code: otp,
+		});
+
+		const registered = await client.phoneNumber.requestPasswordReset({
+			phoneNumber: phone,
+		});
+		const unknown = await client.phoneNumber.requestPasswordReset({
+			phoneNumber: "+251900000000",
+		});
+
+		expect(registered.error).toBe(null);
+		expect(registered.data?.status).toBe(true);
+		expect(unknown.error).toBe(null);
+		expect(unknown.data?.status).toBe(true);
+	});
+});
+
 describe("phone auth flow", async () => {
 	let otp = "";
 

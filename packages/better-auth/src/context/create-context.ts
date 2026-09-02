@@ -410,11 +410,15 @@ Most of the features of Better Auth will not work correctly.`,
 		) {
 			if (options.advanced?.backgroundTasks?.handler) {
 				if (promise instanceof Promise) {
-					options.advanced.backgroundTasks.handler(
-						promise.catch((e) => {
-							logger.error("Failed to run background task:", e);
-						}),
-					);
+					try {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					} catch (e) {
+						logger.error("Failed to run background task:", e);
+					}
 				}
 				return;
 			}
