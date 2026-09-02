@@ -1939,6 +1939,63 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11132
+	 */
+	it("rejects a cached session-bound response after the session expires", async () => {
+		oauthClient = await createOAuthClient();
+		const session = await authorizationServer.api.getSession({ headers });
+		if (!session) throw new Error("test session unavailable");
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+		const context = await authorizationServer.$context;
+		try {
+			await context.adapter.update({
+				model: "session",
+				where: [{ field: "id", value: session.session.id }],
+				update: { expiresAt: new Date() },
+			});
+
+			const replay = await refresh(tokens.refresh_token!);
+			expect((replay.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+
+			const next = await refresh(firstRefresh.data!.refresh_token!);
+			expect(next.error).toBeNull();
+			expect(next.data?.access_token).toBeDefined();
+			const introspection = await client.$fetch<{
+				active?: boolean;
+				sid?: string;
+			}>("/oauth2/introspect", {
+				method: "POST",
+				body: new URLSearchParams({
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret!,
+					token: next.data!.access_token!,
+					token_type_hint: "access_token",
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
+			expect(introspection.error).toBeNull();
+			expect(introspection.data).toMatchObject({ active: true });
+			expect(introspection.data?.sid).toBeUndefined();
+		} finally {
+			await context.adapter.update({
+				model: "session",
+				where: [{ field: "id", value: session.session.id }],
+				update: { expiresAt: session.session.expiresAt },
+			});
+		}
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8512
 	 */
 	it("replays equivalent requests when scope and resource order differ", async () => {

@@ -1779,6 +1779,19 @@ async function handleClientCredentialsGrant(
  * Refresh tokens will only allow the same or lesser scopes as the initial authorize request.
  * To add scopes, you must restart the authorize process again.
  */
+async function resolveActiveRefreshSessionId(
+	ctx: GenericEndpointContext,
+	sessionId: string | null | undefined,
+): Promise<string | undefined> {
+	if (!sessionId) return undefined;
+	const session = await ctx.context.adapter.findOne<Session>({
+		model: "session",
+		where: [{ field: "id", value: sessionId }],
+	});
+	if (!session || session.expiresAt <= new Date()) return undefined;
+	return sessionId;
+}
+
 async function handleRefreshTokenGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1897,6 +1910,15 @@ async function handleRefreshTokenGrant(
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
+			if (
+				refreshToken.sessionId &&
+				!(await resolveActiveRefreshSessionId(ctx, refreshToken.sessionId))
+			) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "invalid refresh token",
+					error: "invalid_grant",
+				});
+			}
 			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
 				ctx,
 				opts,
@@ -1941,16 +1963,10 @@ async function handleRefreshTokenGrant(
 		refreshToken.authTime != null
 			? normalizeTimestampValue(refreshToken.authTime)
 			: undefined;
-	let sessionId = refreshToken.sessionId ?? undefined;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [{ field: "id", value: sessionId }],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
-		}
-	}
+	const sessionId = await resolveActiveRefreshSessionId(
+		ctx,
+		refreshToken.sessionId,
+	);
 
 	// Generate new tokens
 	return createUserTokens(ctx, opts, {
