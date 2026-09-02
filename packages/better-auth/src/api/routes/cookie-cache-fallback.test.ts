@@ -21,7 +21,14 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 		vi.useRealTimers();
 	});
 
-	it("ignores and clears retired session_data when cookie caching is disabled", async () => {
+	it.each([
+		{ mode: "in configuration", enabled: false, query: undefined },
+		{
+			mode: "for the request",
+			enabled: true,
+			query: { disableCookieCache: true },
+		},
+	])("ignores retired session_data when caching is disabled $mode", async (test) => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			advanced: {
 				cookies: {
@@ -29,7 +36,9 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 					session_data: { name: "custom.session" },
 				},
 			},
-			session: { cookieCache: { enabled: false } },
+			session: {
+				cookieCache: { enabled: test.enabled, strategy: "compact" },
+			},
 		});
 		const headers = new Headers();
 		await client.signIn.email(
@@ -49,6 +58,7 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 
 		let setCookieHeader = "";
 		const session = await client.getSession({
+			query: test.query,
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -59,11 +69,10 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 		expect(session.data?.user.email).toBe(testUser.email);
 
 		const responseCookies = parseSetCookieHeader(setCookieHeader);
-		for (const name of [
-			"custom.session",
-			"custom.session.0",
-			"custom.session.1",
-		]) {
+		expect(responseCookies.get("custom.session")?.["max-age"]).toBe(
+			test.enabled ? 300 : 0,
+		);
+		for (const name of ["custom.session.0", "custom.session.1"]) {
 			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
 		}
 		expect(responseCookies.has("custom.session_token")).toBe(false);
