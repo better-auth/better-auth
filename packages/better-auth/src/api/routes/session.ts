@@ -92,10 +92,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					return null;
 				}
 
-				const sessionDataCookie = getChunkedCookie(
-					ctx,
-					ctx.context.authCookies.sessionData.name,
-				);
+				const sessionDataCookie = ctx.context.options.session?.cookieCache
+					?.enabled
+					? getChunkedCookie(ctx, ctx.context.authCookies.sessionData.name)
+					: null;
 
 				const sessionDataPayload = sessionDataCookie
 					? await decodeCookieCache(ctx, sessionDataCookie)

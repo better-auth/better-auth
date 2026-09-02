@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCookies } from "../../cookies";
+import { symmetricEncodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 /**
@@ -19,6 +20,34 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11119
+	 */
+	it("should ignore retired session_data when cookie caching is disabled", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: false } },
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const retiredCache = await symmetricEncodeJWT(
+			{ retired: true },
+			"better-auth-secret-that-is-long-enough-for-validation-test",
+			"better-auth-session",
+		);
+		headers.set(
+			"cookie",
+			`${headers.get("cookie")}; better-auth.session_data=${retiredCache}`,
+		);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
 	it("should fall through to session_token DB validation when session_data HMAC fails", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			session: {
