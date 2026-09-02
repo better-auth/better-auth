@@ -255,7 +255,7 @@ export const communityAdapters: CommunityAdapter[] = [
 	},
 	{
 		name: "@a77ay/better-auth-mikro-orm",
-		url: "https://www.npmjs.com/package/@a77ay/better-auth-mikro-orm",
+		url: "https://github.com/a77ay/better-auth-mikro-orm",
 		database: "MikroORM",
 		databaseUrl: "https://mikro-orm.io/",
 		author: {
