@@ -490,6 +490,11 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * This is useful for operations like sending emails where we want
 			 * to avoid blocking the response when possible (for timing attack
 			 * mitigation), but still ensure the operation completes.
+			 *
+			 * When no background handler is configured, rejections from the
+			 * awaited promise propagate to the caller (after being logged).
+			 * When a handler is configured, failures are logged on the
+			 * background promise and do not block the current request.
 			 */
 			runInBackgroundOrAwait: (
 				promise: Promise<unknown> | void,

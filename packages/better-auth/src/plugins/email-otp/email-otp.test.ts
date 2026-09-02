@@ -1,3 +1,4 @@
+import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
@@ -2711,5 +2712,74 @@ describe("email-otp send origin/CSRF protection", async () => {
 		const response = await auth.handler(legitimateRequest);
 		expect(response.status).toBe(200);
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11107
+ */
+describe("email-otp sendVerificationOTP error surfacing", () => {
+	it("surfaces sendVerificationOTP errors when no backgroundTasks handler is configured", async () => {
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP() {
+						throw APIError.from("TOO_MANY_REQUESTS", {
+							code: "RATE_LIMIT_EXCEEDED",
+							message: "Too many requests. Please try again later.",
+						});
+					},
+				}),
+			],
+		});
+
+		try {
+			await auth.api.sendVerificationOTP({
+				body: {
+					email: testUser.email,
+					type: "email-verification",
+				},
+			});
+			expect.fail("Expected sendVerificationOTP to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("TOO_MANY_REQUESTS");
+				expect(error.body?.code).toBe("RATE_LIMIT_EXCEEDED");
+			}
+		}
+	});
+
+	it("does not block the request when a backgroundTasks handler is configured", async () => {
+		const backgroundTasks: Promise<unknown>[] = [];
+		const { auth, testUser } = await getTestInstance({
+			advanced: {
+				backgroundTasks: {
+					handler: (promise) => {
+						backgroundTasks.push(promise);
+					},
+				},
+			},
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP() {
+						throw APIError.from("TOO_MANY_REQUESTS", {
+							code: "RATE_LIMIT_EXCEEDED",
+							message: "Too many requests. Please try again later.",
+						});
+					},
+				}),
+			],
+		});
+
+		const result = await auth.api.sendVerificationOTP({
+			body: {
+				email: testUser.email,
+				type: "email-verification",
+			},
+		});
+		expect(result).toEqual({ success: true });
+		expect(backgroundTasks.length).toBeGreaterThan(0);
+		await Promise.all(backgroundTasks);
 	});
 });

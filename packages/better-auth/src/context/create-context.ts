@@ -408,20 +408,21 @@ Most of the features of Better Auth will not work correctly.`,
 		async runInBackgroundOrAwait(
 			promise: Promise<unknown> | Promise<void> | void | unknown,
 		) {
-			try {
-				if (options.advanced?.backgroundTasks?.handler) {
-					if (promise instanceof Promise) {
-						options.advanced.backgroundTasks.handler(
-							promise.catch((e) => {
-								logger.error("Failed to run background task:", e);
-							}),
-						);
-					}
-				} else {
-					await promise;
+			if (options.advanced?.backgroundTasks?.handler) {
+				if (promise instanceof Promise) {
+					options.advanced.backgroundTasks.handler(
+						promise.catch((e) => {
+							logger.error("Failed to run background task:", e);
+						}),
+					);
 				}
+				return;
+			}
+			try {
+				await promise;
 			} catch (e) {
 				logger.error("Failed to run background task:", e);
+				throw e;
 			}
 		},
 		getPlugin: getPluginFn,

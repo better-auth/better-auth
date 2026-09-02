@@ -303,6 +303,8 @@ export const auth = betterAuth({
 
 Defers the task when a handler is configured, otherwise awaits it. Use for operations that must complete (e.g. sending emails) but benefit from not blocking when a handler exists. Configure the handler in [advanced.backgroundTasks](/docs/reference/options#backgroundtasks).
 
+Without a handler, a rejected promise is logged and then rethrown so the caller (and HTTP response) can surface the original error. With a handler, failures are logged on the background promise and do not block the request.
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
