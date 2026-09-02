@@ -289,7 +289,7 @@ tokenEndpointAuth: {
 },
 ```
 
-`method: "custom"` preserves Better Auth's standard grant parameters, but replaces its built-in client authentication. The hook must add every credential parameter or header required by the provider.
+Better Auth builds the standard grant parameters, while `customizeRequest` adds the client authentication required by the provider.
 
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
