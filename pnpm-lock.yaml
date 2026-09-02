@@ -435,8 +435,8 @@ importers:
         specifier: ^3.0.6
         version: 3.0.6(@babel/runtime@7.29.2)
       typesense-fumadocs-adapter:
-        specifier: ^0.4.1
-        version: 0.4.1(f8cd0429ca9c88ff7de5886f478169dd)
+        specifier: ^0.4.2
+        version: 0.4.2(f8cd0429ca9c88ff7de5886f478169dd)
       unist-util-visit:
         specifier: ^5.1.0
         version: 5.1.0
@@ -15076,8 +15076,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  typesense-fumadocs-adapter@0.4.1:
-    resolution: {integrity: sha512-yKF+T5aFzevLPlyqX6OA4PUvTnr1BMa5CWIn5vC6/UqKW0bg8L5xpu3sb0AqsOcPxciuUzd6cRMfMVmcfDE/YA==}
+  typesense-fumadocs-adapter@0.4.2:
+    resolution: {integrity: sha512-KmctDfcAdm7C+HS9zYNMYULuShZJDetKLO9mTyWw1EWGIjPjIRmnWyRsD41aErzEwDIN6TguUBjomp2Lx7klGg==}
     peerDependencies:
       fumadocs-core: ^16.0.0
       fumadocs-ui: ^16.0.0
@@ -32290,7 +32290,7 @@ snapshots:
 
   typescript@6.0.3: {}
 
-  typesense-fumadocs-adapter@0.4.1(f8cd0429ca9c88ff7de5886f478169dd):
+  typesense-fumadocs-adapter@0.4.2(f8cd0429ca9c88ff7de5886f478169dd):
     dependencies:
       fumadocs-core: 16.12.0(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.17)(lucide-react@1.21.0(react@19.2.7))(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.5.4)
       fumadocs-ui: 16.12.0(@types/mdx@2.0.14)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(fumadocs-core@16.12.0(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.17)(lucide-react@1.21.0(react@19.2.7))(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.5.4))(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
