@@ -8,10 +8,12 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { findMonorepoRoot } from "../src/utils/get-package-info";
 import {
 	findPnpmWorkspaceRoot,
 	formatCatalogTargetVersion,
 	getPnpmCatalogVersion,
+	isWildcardCatalogVersion,
 	parseCatalogSpec,
 	resolveCatalogDependencyVersion,
 	setPnpmCatalogVersion,
@@ -132,15 +134,23 @@ describe("pnpm-catalog", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11072
 	 */
-	it("finds the pnpm workspace root past nearer generic monorepo markers", async () => {
+	it("resolves catalog via pnpm workspace root instead of generic monorepo markers", async () => {
 		const { appDir, root } = createWorkspace({
 			catalog: { "better-auth": "^1.6.26" },
-			packageJson: { name: "web" },
+			packageJson: {
+				name: "web",
+				dependencies: {
+					"better-auth": "catalog:",
+				},
+			},
 			extraFiles: {
 				"apps/turbo.json": "{}\n",
 			},
 		});
 
+		await expect(findMonorepoRoot(appDir)).resolves.toBe(
+			path.join(root, "apps"),
+		);
 		await expect(findPnpmWorkspaceRoot(appDir)).resolves.toBe(root);
 		await expect(
 			resolveCatalogDependencyVersion(appDir, "better-auth", "catalog:"),
@@ -155,6 +165,15 @@ describe("pnpm-catalog", () => {
 		expect(formatCatalogTargetVersion(">=1.6.26", "1.7.2")).toBe(">=1.7.2");
 		expect(formatCatalogTargetVersion("*", "1.7.2")).toBe("*");
 		expect(formatCatalogTargetVersion("1.6.26", "1.7.2")).toBe("1.7.2");
+		expect(formatCatalogTargetVersion("^0.28.17 || ^0.29.0", "1.7.2")).toBe(
+			"^1.7.2 || ^1.7.2",
+		);
+	});
+
+	it("detects wildcard catalog versions", () => {
+		expect(isWildcardCatalogVersion("*")).toBe(true);
+		expect(isWildcardCatalogVersion(" ^* ")).toBe(false);
+		expect(isWildcardCatalogVersion("^1.6.26")).toBe(false);
 	});
 
 	it("preserves comments when updating catalog entries", () => {

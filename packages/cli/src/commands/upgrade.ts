@@ -18,6 +18,7 @@ import {
 	formatCatalogTargetVersion,
 	getPnpmCatalogVersion,
 	getPnpmWorkspaceYamlPath,
+	isWildcardCatalogVersion,
 	parseCatalogSpec,
 	resolveCatalogDependencyVersion,
 	setPnpmCatalogVersion,
@@ -122,6 +123,10 @@ export async function upgradeAction(opts: unknown) {
 				catalogWarnings.push(
 					`Could not resolve ${name} (${current}) from pnpm-workspace.yaml`,
 				);
+				continue;
+			}
+
+			if (isWildcardCatalogVersion(resolved.version)) {
 				continue;
 			}
 

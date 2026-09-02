@@ -98,6 +98,40 @@ catalog:
 		expect(mockSpawnCommand).toHaveBeenCalledWith("pnpm install", root);
 	});
 
+	it("does not offer wildcard catalog entries for upgrade", async () => {
+		const { appDir, workspacePath } = createCatalogProject();
+		writeFileSync(
+			workspacePath,
+			`packages:
+  - apps/**
+catalog:
+  better-auth: "*"
+`,
+		);
+		writeFileSync(
+			path.join(appDir, "package.json"),
+			`${JSON.stringify(
+				{
+					name: "web",
+					dependencies: {
+						"better-auth": "catalog:",
+					},
+				},
+				null,
+				2,
+			)}\n`,
+		);
+		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await upgradeAction({ cwd: appDir, yes: true });
+
+		expect(readFileSync(workspacePath, "utf-8")).toContain('better-auth: "*"');
+		expect(mockSpawnCommand).not.toHaveBeenCalled();
+		expect(logSpy).toHaveBeenCalledWith(
+			"All better-auth packages are up to date.",
+		);
+	});
+
 	it("restores pnpm-workspace.yaml when pnpm install fails", async () => {
 		mockSpawnCommand.mockRejectedValueOnce(new Error("install failed"));
 		const { appDir, workspacePath } = createCatalogProject();

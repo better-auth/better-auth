@@ -62,6 +62,15 @@ export function formatCatalogTargetVersion(
 	target: string,
 ): string {
 	const trimmed = currentCatalogVersion.trim();
+	if (trimmed === "*") {
+		return trimmed;
+	}
+	if (trimmed.includes("||")) {
+		return trimmed.replace(
+			/(\^|~|>=|<=|>|<)?(\d+\.\d+\.\d+[^\s|]*)/g,
+			(_match, operator: string | undefined) => `${operator ?? ""}${target}`,
+		);
+	}
 	if (trimmed.startsWith("^")) {
 		return `^${target}`;
 	}
@@ -80,10 +89,11 @@ export function formatCatalogTargetVersion(
 	if (trimmed.startsWith("<")) {
 		return `<${target}`;
 	}
-	if (trimmed === "*") {
-		return trimmed;
-	}
 	return target;
+}
+
+export function isWildcardCatalogVersion(catalogVersion: string): boolean {
+	return catalogVersion.trim() === "*";
 }
 
 export function setPnpmCatalogVersion(
