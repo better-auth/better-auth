@@ -132,20 +132,18 @@ export const requestPasswordReset = createAuthEndpoint(
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		try {
-			await ctx.context.runInBackgroundOrAwait(
-				Promise.resolve().then(() =>
-					ctx.context.options.emailAndPassword.sendResetPassword(
-						{
-							user: user.user,
-							url,
-							token: verificationToken,
-						},
-						ctx.request,
-					),
+		ctx.context.runInBackground(
+			Promise.resolve().then(() =>
+				ctx.context.options.emailAndPassword.sendResetPassword?.(
+					{
+						user: user.user,
+						url,
+						token: verificationToken,
+					},
+					ctx.request,
 				),
-			);
-		} catch {}
+			),
+		);
 		return ctx.json({
 			status: true,
 			message:

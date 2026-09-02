@@ -159,8 +159,8 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				return ctx.json({ success: true });
 			}
 
-			try {
-				await ctx.context.runInBackgroundOrAwait(
+			if (ctx.body.type === "forget-password") {
+				ctx.context.runInBackground(
 					Promise.resolve().then(() =>
 						opts.sendVerificationOTP(
 							{ email, otp, type: ctx.body.type },
@@ -168,10 +168,10 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 						),
 					),
 				);
-			} catch (error) {
-				if (ctx.body.type !== "forget-password") {
-					throw error;
-				}
+			} else {
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
+				);
 			}
 			return ctx.json({ success: true });
 		},
@@ -789,20 +789,18 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					success: true,
 				});
 			}
-			try {
-				await ctx.context.runInBackgroundOrAwait(
-					Promise.resolve().then(() =>
-						opts.sendVerificationOTP(
-							{
-								email,
-								otp,
-								type: "forget-password",
-							},
-							ctx,
-						),
+			ctx.context.runInBackground(
+				Promise.resolve().then(() =>
+					opts.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: "forget-password",
+						},
+						ctx,
 					),
-				);
-			} catch {}
+				),
+			);
 			return ctx.json({
 				success: true,
 			});
@@ -885,20 +883,18 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 					success: true,
 				});
 			}
-			try {
-				await ctx.context.runInBackgroundOrAwait(
-					Promise.resolve().then(() =>
-						opts.sendVerificationOTP(
-							{
-								email,
-								otp,
-								type: "forget-password",
-							},
-							ctx,
-						),
+			ctx.context.runInBackground(
+				Promise.resolve().then(() =>
+					opts.sendVerificationOTP(
+						{
+							email,
+							otp,
+							type: "forget-password",
+						},
+						ctx,
 					),
-				);
-			} catch {}
+				),
+			);
 			return ctx.json({
 				success: true,
 			});
@@ -1150,20 +1146,18 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			try {
-				await ctx.context.runInBackgroundOrAwait(
-					Promise.resolve().then(() =>
-						opts.sendVerificationOTP(
-							{
-								email: newEmail,
-								otp,
-								type: "change-email",
-							},
-							ctx,
-						),
+			ctx.context.runInBackground(
+				Promise.resolve().then(() =>
+					opts.sendVerificationOTP(
+						{
+							email: newEmail,
+							otp,
+							type: "change-email",
+						},
+						ctx,
 					),
-				);
-			} catch {}
+				),
+			);
 			return ctx.json({
 				success: true,
 			});

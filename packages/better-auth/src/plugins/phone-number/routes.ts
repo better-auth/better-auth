@@ -726,20 +726,17 @@ export const requestPasswordResetPhoneNumber = (
 				});
 			}
 			if (opts.sendPasswordResetOTP) {
-				const sendPasswordResetOTP = opts.sendPasswordResetOTP;
-				try {
-					await ctx.context.runInBackgroundOrAwait(
-						Promise.resolve().then(() =>
-							sendPasswordResetOTP(
-								{
-									phoneNumber: ctx.body.phoneNumber,
-									code,
-								},
-								ctx,
-							),
+				ctx.context.runInBackground(
+					Promise.resolve().then(() =>
+						opts.sendPasswordResetOTP?.(
+							{
+								phoneNumber: ctx.body.phoneNumber,
+								code,
+							},
+							ctx,
 						),
-					);
-				} catch {}
+					),
+				);
 			}
 			return ctx.json({
 				status: true,
