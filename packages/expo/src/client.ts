@@ -497,20 +497,7 @@ function createKeyedWriteQueue() {
 	};
 }
 
-const storageWriteQueues = new WeakMap<
-	ExpoClientStorage,
-	ReturnType<typeof createKeyedWriteQueue>
->();
-
-function getStorageWriteQueue(storage: ExpoClientStorage) {
-	const existing = storageWriteQueues.get(storage);
-	if (existing) {
-		return existing;
-	}
-	const queue = createKeyedWriteQueue();
-	storageWriteQueues.set(storage, queue);
-	return queue;
-}
+const storageWriteQueue = createKeyedWriteQueue();
 
 interface ExpoStorageAdapter {
 	getItem(name: string): string | null;
@@ -525,7 +512,6 @@ interface StoredUpdate {
 }
 
 function createManagedStorage(storage: ExpoClientStorage) {
-	const writeQueue = getStorageWriteQueue(storage);
 	const logWriteError = (key: string, error: unknown) => {
 		console.error(
 			`[better-auth/expo] failed to persist "${key}" to storage`,
@@ -569,7 +555,7 @@ function createManagedStorage(storage: ExpoClientStorage) {
 	};
 	const setItem = (name: string, value: string): void => {
 		const key = normalizeCookieName(name);
-		if (writeQueue.pending(key)) {
+		if (storageWriteQueue.pending(key)) {
 			logWriteError(
 				key,
 				new Error("Cannot write synchronously while an async write is pending"),
@@ -586,7 +572,7 @@ function createManagedStorage(storage: ExpoClientStorage) {
 	};
 	const setItemAsync = (name: string, value: string): Promise<void> => {
 		const key = normalizeCookieName(name);
-		return writeQueue.enqueue(key, async () => {
+		return storageWriteQueue.enqueue(key, async () => {
 			try {
 				const currentBaseValue =
 					value.length > STORAGE_VALUE_LIMIT
@@ -603,7 +589,7 @@ function createManagedStorage(storage: ExpoClientStorage) {
 		update: (currentValue: string | null) => string,
 	): Promise<StoredUpdate | null> => {
 		const key = normalizeCookieName(name);
-		return writeQueue.enqueue(key, async () => {
+		return storageWriteQueue.enqueue(key, async () => {
 			try {
 				const currentBaseValue = await storage.getItemAsync(key);
 				const previousValue = await readStoredValueAsync(

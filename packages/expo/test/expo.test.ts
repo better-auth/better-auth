@@ -1249,11 +1249,11 @@ describe("expo with cookieCache", async () => {
 			);
 		});
 
-		it("should serialize writes across adapters sharing storage", async () => {
+		it("should serialize writes across wrappers sharing storage", async () => {
 			const map = new Map<string, string>();
 			let activeWrites = 0;
 			let peakWrites = 0;
-			const backingStorage = {
+			const createStorage = () => ({
 				getItem: (name: string) => map.get(name) ?? null,
 				setItem: (name: string, value: string) => map.set(name, value),
 				getItemAsync: async (name: string) => map.get(name) ?? null,
@@ -1264,9 +1264,9 @@ describe("expo with cookieCache", async () => {
 					map.set(name, value);
 					activeWrites--;
 				},
-			};
-			const first = storageAdapter(backingStorage);
-			const second = storageAdapter(backingStorage);
+			});
+			const first = storageAdapter(createStorage());
+			const second = storageAdapter(createStorage());
 
 			await Promise.all([
 				first.setItemAsync("better-auth_cookie", "a".repeat(5_000)),
@@ -1286,7 +1286,7 @@ describe("expo with cookieCache", async () => {
 
 		it("should not mix a sync write into a pending async write", async () => {
 			const map = new Map<string, string>();
-			const backingStorage = {
+			const createStorage = () => ({
 				getItem: (name: string) => map.get(name) ?? null,
 				setItem: (name: string, value: string) => map.set(name, value),
 				getItemAsync: async (name: string) => map.get(name) ?? null,
@@ -1294,9 +1294,9 @@ describe("expo with cookieCache", async () => {
 					await new Promise<void>((resolve) => queueMicrotask(resolve));
 					map.set(name, value);
 				},
-			};
-			const asyncStorage = storageAdapter(backingStorage);
-			const syncStorage = storageAdapter(backingStorage);
+			});
+			const asyncStorage = storageAdapter(createStorage());
+			const syncStorage = storageAdapter(createStorage());
 			const asyncValue = "a".repeat(5_000);
 			const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -1312,7 +1312,7 @@ describe("expo with cookieCache", async () => {
 
 		it("should update a value without losing concurrent changes", async () => {
 			const map = new Map<string, string>();
-			const backingStorage = {
+			const createStorage = () => ({
 				getItem: (name: string) => map.get(name) ?? null,
 				setItem: (name: string, value: string) => map.set(name, value),
 				getItemAsync: async (name: string) => map.get(name) ?? null,
@@ -1320,17 +1320,18 @@ describe("expo with cookieCache", async () => {
 					await new Promise<void>((resolve) => queueMicrotask(resolve));
 					map.set(name, value);
 				},
-			};
-			const first = expoClient({ scheme: "test", storage: backingStorage });
-			const second = expoClient({ scheme: "test", storage: backingStorage });
+			});
+			const first = expoClient({ scheme: "test", storage: createStorage() });
+			const second = expoClient({ scheme: "test", storage: createStorage() });
 
 			await Promise.all([
 				applyCookieResponse(first, "better-auth.first=value; Path=/"),
 				applyCookieResponse(second, "better-auth.second=value; Path=/"),
 			]);
 
-			const stored =
-				await storageAdapter(backingStorage).getItemAsync("better-auth_cookie");
+			const stored = await storageAdapter(createStorage()).getItemAsync(
+				"better-auth_cookie",
+			);
 			expect(JSON.parse(stored ?? "{}")).toMatchObject({
 				"better-auth.first": { value: "value" },
 				"better-auth.second": { value: "value" },
