@@ -15,7 +15,7 @@ description: Cloudflare provider setup and usage.
     4. Use the Authorization Code flow with `code` as the response type
     5. Set **Token Authentication Method** to `client_secret_basic`
     6. Set the redirect URL to `http://localhost:3000/api/auth/callback/cloudflare` for local development. For production, set it to your application URL, for example `https://example.com/api/auth/callback/cloudflare`
-    7. Select **User Details Read** and any other Cloudflare API scopes your application needs
+    7. Select **User Details Read** as a required scope, then select any other Cloudflare API scopes your application needs
     8. Save your client ID and client secret securely
 
     If you change the base path of the auth routes, update the redirect URL accordingly.
@@ -70,7 +70,9 @@ For the full list of options supported by all social providers, check the [Provi
 
 Cloudflare OAuth scope names correspond to Cloudflare API token permission names. Select the scopes your application needs when creating the OAuth client. Better Auth does not limit which Cloudflare scopes you can request; pass any scope IDs that are configured on your Cloudflare OAuth client.
 
-The provider requests `user-details.read` by default. To request additional Cloudflare API scopes, select them on your Cloudflare OAuth client and add their exact scope IDs with the `scope` option.
+The provider requests `user-details.read` by default. Configure it as a required scope on the Cloudflare OAuth client, because Better Auth needs it to read the user's email from the `/user` endpoint. If it is optional, a user can decline it and sign-in cannot complete.
+
+To request additional Cloudflare API scopes, select them on your Cloudflare OAuth client and add their exact scope IDs with the `scope` option.
 
 For example:
 
@@ -130,7 +132,9 @@ export const auth = betterAuth({
 
 ### Public clients
 
-Cloudflare supports public OAuth clients. If your Cloudflare OAuth client is configured with `token_endpoint_auth_method` set to `none`, omit `clientSecret` and set `tokenEndpointAuthMethod` to `none`:
+Cloudflare OAuth clients are private by default, which limits authorization to members of the parent Cloudflare account. To let any Cloudflare user authorize your application, promote the client to public. Cloudflare requires a client name, logo, client URL, scopes, and DNS TXT verification for the client domain before promotion. Promotion is permanent, so review the client configuration first.
+
+For a public client, configure `token_endpoint_auth_method` as `none`, omit `clientSecret`, and set `tokenEndpointAuthMethod` to `none`. Better Auth uses PKCE for the authorization code flow.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -145,9 +149,29 @@ export const auth = betterAuth({
 })
 ```
 
+### Refresh tokens
+
+The default configuration is sufficient for signing users in. If your application needs long-lived access to the Cloudflare API, configure the OAuth client with both the `authorization_code` and `refresh_token` grant types, then request the `offline_access` scope explicitly:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        cloudflare: {
+            clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
+            clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
+            scope: ["offline_access"], // [!code highlight]
+        },
+    },
+})
+```
+
+Keep `offline_access` opt-in when Cloudflare access is only needed during sign-in.
+
 ### Profile and email verification
 
-The provider reads the user's profile from the Cloudflare API `/user` endpoint. This returns the user's `id`, `email`, `first_name`, and `last_name`. The display name is composed from the first and last name, and Cloudflare does not provide a profile picture, so `image` is left empty.
+The provider reads the user's profile from the Cloudflare API `/user` endpoint. This returns the user's `id` and `email`, with optional `first_name` and `last_name` fields. The display name is composed from the available name fields and falls back to the email when both are absent. Cloudflare does not provide a profile picture, so `image` is left empty.
 
 Cloudflare's `/user` endpoint does not expose an email-verification status, so the account email is treated as unverified (`emailVerified: false`) by default. If you verify the email through another trusted mechanism, map it yourself with `mapProfileToUser`:
 
