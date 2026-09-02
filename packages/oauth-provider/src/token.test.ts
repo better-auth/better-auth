@@ -862,13 +862,17 @@ describe("oauth token - refresh_token", async () => {
 	}
 
 	/** Initial authorization */
-	async function authorizeForRefreshToken(scopes: string[]) {
+	async function authorizeForRefreshToken(
+		scopes: string[],
+		authorizationHeaders = headers,
+	) {
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
 			scopes,
 		});
 
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
+			headers: authorizationHeaders,
 			onError(context) {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
 			},
@@ -896,6 +900,89 @@ describe("oauth token - refresh_token", async () => {
 
 		return tokens.data;
 	}
+
+	async function issueSessionBoundRefreshToken() {
+		const { headers: sessionHeaders } = await signInWithTestUser();
+		const session = await authorizationServer.api.getSession({
+			headers: sessionHeaders,
+		});
+		if (!session) throw new Error("test session unavailable");
+
+		const tokens = await authorizeForRefreshToken(
+			["openid", "profile", "offline_access"],
+			sessionHeaders,
+		);
+		if (!tokens?.refresh_token) throw new Error("refresh token unavailable");
+
+		return {
+			refreshToken: tokens.refresh_token,
+			sessionId: session.session.id,
+		};
+	}
+
+	async function refreshWithJwtAccessToken(refreshToken: string) {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			resource: validResource,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11132
+	 */
+	describe("refresh token issuance-session liveness", () => {
+		it("preserves sid while the issuance session is live", async () => {
+			const issued = await issueSessionBoundRefreshToken();
+			const refreshed = await refreshWithJwtAccessToken(issued.refreshToken);
+
+			expect(refreshed.error).toBeNull();
+			expect(decodeJwt(refreshed.data!.access_token!).sid).toBe(
+				issued.sessionId,
+			);
+		});
+
+		it("omits sid after the issuance session expires", async () => {
+			const issued = await issueSessionBoundRefreshToken();
+			const context = await authorizationServer.$context;
+			await context.adapter.update({
+				model: "session",
+				where: [{ field: "id", value: issued.sessionId }],
+				update: { expiresAt: new Date(Date.now() - 60_000) },
+			});
+
+			const refreshed = await refreshWithJwtAccessToken(issued.refreshToken);
+
+			expect(refreshed.error).toBeNull();
+			expect(decodeJwt(refreshed.data!.access_token!).sid).toBeUndefined();
+		});
+
+		it("omits sid after the issuance session is deleted", async () => {
+			const issued = await issueSessionBoundRefreshToken();
+			const context = await authorizationServer.$context;
+			await context.adapter.delete({
+				model: "session",
+				where: [{ field: "id", value: issued.sessionId }],
+			});
+
+			const refreshed = await refreshWithJwtAccessToken(issued.refreshToken);
+
+			expect(refreshed.error).toBeNull();
+			expect(decodeJwt(refreshed.data!.access_token!).sid).toBeUndefined();
+		});
+	});
 
 	it("returns invalid_request when refresh_token omits client_id", async () => {
 		const response = await client.$fetch<Record<string, unknown>>(

@@ -1941,6 +1941,16 @@ async function handleRefreshTokenGrant(
 		refreshToken.authTime != null
 			? normalizeTimestampValue(refreshToken.authTime)
 			: undefined;
+	let sessionId = refreshToken.sessionId ?? undefined;
+	if (sessionId) {
+		const session = await ctx.context.adapter.findOne<Session>({
+			model: "session",
+			where: [{ field: "id", value: sessionId }],
+		});
+		if (!session || session.expiresAt < new Date()) {
+			sessionId = undefined;
+		}
+	}
 
 	// Generate new tokens
 	return createUserTokens(ctx, opts, {
@@ -1950,7 +1960,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
+		sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
