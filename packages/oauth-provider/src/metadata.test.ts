@@ -132,6 +132,55 @@ describe("oauth metadata", async () => {
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
+	it('should advertise "none" when publicClientsSupported is set, without opening dynamic client registration', async () => {
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				allowUnauthenticatedClientRegistration: false,
+				publicClientsSupported: true,
+			},
+		});
+
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata?.token_endpoint_auth_methods_supported).toEqual([
+			"none",
+			"client_secret_basic",
+			"client_secret_post",
+			"private_key_jwt",
+		]);
+
+		// The introspection and revocation endpoints never accept public
+		// clients, so they must not gain "none" alongside the token endpoint.
+		expect(metadata?.introspection_endpoint_auth_methods_supported).toEqual([
+			"client_secret_basic",
+			"client_secret_post",
+			"private_key_jwt",
+		]);
+
+		// Registration stays authenticated: the option advertises what the
+		// token endpoint accepts, it does not open `/oauth2/register`.
+		const registration = await auth.api
+			.registerOAuthClient({
+				body: { redirect_uris: ["https://example.com/callback"] },
+			})
+			.catch((error: unknown) => error);
+		expect(registration).toBeInstanceOf(APIError);
+		expect((registration as APIError).status).toBe("UNAUTHORIZED");
+	});
+
+	it("should keep deriving public-client support from registration when publicClientsSupported is unset", async () => {
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: { allowUnauthenticatedClientRegistration: true },
+		});
+
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata?.token_endpoint_auth_methods_supported).toEqual([
+			"none",
+			"client_secret_basic",
+			"client_secret_post",
+			"private_key_jwt",
+		]);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8343
 	 */
