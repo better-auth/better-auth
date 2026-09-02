@@ -1,4 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { logger } from "../env";
 import type {
 	OAuthProvider,
 	ProviderOptions,
@@ -12,13 +13,12 @@ import {
 
 const authorizationEndpoint = "https://dash.cloudflare.com/oauth2/auth";
 const tokenEndpoint = "https://dash.cloudflare.com/oauth2/token";
+
 /**
  * Cloudflare's OIDC `userinfo` endpoint only returns the `sub` claim, so it
  * cannot be used to build a user. The user's profile (email, name, ...) is
  * read from the Cloudflare API `/user` endpoint instead, which the access
  * token can call when the `user-details.read` scope is granted.
- *
- * @see https://developers.cloudflare.com/api/resources/user/methods/get/
  */
 const userEndpoint = "https://api.cloudflare.com/client/v4/user";
 
@@ -28,53 +28,106 @@ const userEndpoint = "https://api.cloudflare.com/client/v4/user";
  * @see https://developers.cloudflare.com/api/resources/user/methods/get/
  */
 export interface CloudflareProfile {
-	/** Identifier of the user. */
+	/**
+	 * Identifier of the user.
+	 */
 	id: string;
-	/** Current email address of the user. */
+	/**
+	 * Current email address of the user.
+	 */
 	email: string;
-	/** The user's first name. */
+	/**
+	 * The user's first name.
+	 */
 	first_name?: string | null | undefined;
-	/** The user's last name. */
+	/**
+	 * The user's last name.
+	 */
 	last_name?: string | null | undefined;
-	/** The country in which the user lives. */
+	/**
+	 * The country in which the user lives.
+	 */
 	country?: string | null | undefined;
-	/** The user's telephone number. */
+	/**
+	 * The user's telephone number.
+	 */
 	telephone?: string | null | undefined;
-	/** The zipcode or postal code where the user lives. */
+	/**
+	 * The zipcode or postal code where the user lives.
+	 */
 	zipcode?: string | null | undefined;
-	/** Indicates whether two-factor authentication is enabled for the user account. */
+	/**
+	 * Indicates whether two-factor authentication is enabled for the user account.
+	 */
 	two_factor_authentication_enabled?: boolean | undefined;
-	/** Indicates whether the user has been suspended. */
+	/**
+	 * Indicates whether the user has been suspended.
+	 */
 	suspended?: boolean | undefined;
 }
 
-/** The standard Cloudflare API response envelope for the `/user` endpoint. */
+/**
+ * The standard Cloudflare API response envelope for the `/user` endpoint.
+ */
 interface CloudflareUserResponse {
 	success: boolean;
 	errors: { code: number; message: string }[];
 	result: CloudflareProfile | null;
 }
 
-export interface CloudflareOptions extends ProviderOptions<CloudflareProfile> {
-	clientId: string;
+/**
+ * Token endpoint authentication supported by Cloudflare OAuth clients.
+ *
+ * @see https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#choose-a-flow
+ */
+type CloudflareClientAuthentication =
+	| {
+			/**
+			 * The client secret of a confidential Cloudflare OAuth client.
+			 */
+			clientSecret: string;
+			/**
+			 * The authentication method configured for the token endpoint.
+			 *
+			 * @default "client_secret_basic"
+			 */
+			tokenEndpointAuthMethod?:
+				| "client_secret_basic"
+				| "client_secret_post"
+				| undefined;
+	  }
+	| {
+			/**
+			 * Clients that use PKCE do not have a client secret.
+			 */
+			clientSecret?: undefined;
+			/**
+			 * Clients without a secret do not authenticate at the token endpoint.
+			 *
+			 * @default "none"
+			 */
+			tokenEndpointAuthMethod?: "none" | undefined;
+	  };
+
+interface CloudflareBaseOptions extends ProviderOptions<CloudflareProfile> {
 	/**
-	 * The token endpoint authentication method configured for the Cloudflare OAuth client.
-	 *
-	 * @default "client_secret_basic" when clientSecret is set, otherwise "none"
+	 * The client ID of the Cloudflare OAuth client.
 	 */
-	tokenEndpointAuthMethod?:
-		| "client_secret_basic"
-		| "client_secret_post"
-		| "none"
-		| undefined;
+	clientId: string;
 }
+
+/**
+ * Options for configuring the Cloudflare social provider.
+ */
+export type CloudflareOptions = CloudflareBaseOptions &
+	CloudflareClientAuthentication;
 
 const getTokenEndpointAuth = (
 	options: CloudflareOptions,
 ): TokenEndpointAuth => {
-	const method =
-		options.tokenEndpointAuthMethod ??
-		(options.clientSecret ? "client_secret_basic" : "none");
+	const defaultMethod = options.clientSecret ? "client_secret_basic" : "none";
+	const method = options.tokenEndpointAuthMethod ?? defaultMethod;
+
 	return { method };
 };
 
@@ -85,12 +138,15 @@ export const cloudflare = (options: CloudflareOptions) => {
 		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user-details.read"];
+
 			if (options.scope?.length) {
 				_scopes.push(...options.scope);
 			}
+
 			if (scopes?.length) {
 				_scopes.push(...scopes);
 			}
+
 			return createAuthorizationURL({
 				id: "cloudflare",
 				options,
@@ -129,18 +185,26 @@ export const cloudflare = (options: CloudflareOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
+
 			const { data, error } = await betterFetch<CloudflareUserResponse>(
 				userEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },
 			);
+
 			if (error || !data?.success || !data.result) {
+				logger.error(
+					"Failed to fetch user info from Cloudflare:",
+					error ?? data?.errors,
+				);
 				return null;
 			}
+
 			const profile = data.result;
-			const name = [profile.first_name, profile.last_name]
-				.filter(Boolean)
-				.join(" ");
+			const name =
+				[profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
+				profile.email;
 			const userMap = await options.mapProfileToUser?.(profile);
+
 			return {
 				user: {
 					name,
