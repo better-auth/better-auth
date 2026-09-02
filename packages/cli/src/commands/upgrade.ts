@@ -10,8 +10,17 @@ import changesetConfig from "../../../../.changeset/config.json" with {
 	type: "json",
 };
 import { detectPackageManager } from "../utils/check-package-managers";
-import { getPackageInfo } from "../utils/get-package-info";
+import { findMonorepoRoot, getPackageInfo } from "../utils/get-package-info";
+import { spawnCommand } from "../utils/helper";
 import { installDependencies } from "../utils/install-dependencies";
+import {
+	formatCatalogTargetVersion,
+	getPnpmCatalogVersion,
+	getPnpmWorkspaceYamlPath,
+	parseCatalogSpec,
+	resolveCatalogDependencyVersion,
+	setPnpmCatalogVersion,
+} from "../utils/pnpm-catalog";
 import { cliVersion } from "../version";
 
 const fixedReleaseGroup = changesetConfig.fixed.find((group) =>
@@ -34,6 +43,9 @@ interface UpgradeEntry {
 	current: string;
 	target: string;
 	depType: "prod" | "dev";
+	source: "semver" | "catalog";
+	catalogName?: string;
+	resolvedVersion?: string;
 }
 
 /** @internal */
@@ -95,14 +107,55 @@ export async function upgradeAction(opts: unknown) {
 	const spinner = yoctoSpinner({ text: "checking for updates..." }).start();
 
 	const upgrades: UpgradeEntry[] = [];
+	const catalogWarnings: string[] = [];
+
 	for (const { name, current, depType } of candidates) {
+		const catalogSpec = parseCatalogSpec(current);
+		if (catalogSpec) {
+			const resolved = await resolveCatalogDependencyVersion(
+				cwd,
+				name,
+				current,
+			);
+			if (!resolved) {
+				catalogWarnings.push(
+					`Could not resolve ${name} (${current}) from pnpm-workspace.yaml`,
+				);
+				continue;
+			}
+
+			const currentVersion = semver.minVersion(resolved.version);
+			if (currentVersion && semver.lt(currentVersion, cliVersion)) {
+				upgrades.push({
+					name,
+					current,
+					target: cliVersion,
+					depType,
+					source: "catalog",
+					catalogName: resolved.catalogName,
+					resolvedVersion: resolved.version,
+				});
+			}
+			continue;
+		}
+
 		const currentVersion = semver.minVersion(current);
 		if (currentVersion && semver.lt(currentVersion, cliVersion)) {
-			upgrades.push({ name, current, target: cliVersion, depType });
+			upgrades.push({
+				name,
+				current,
+				target: cliVersion,
+				depType,
+				source: "semver",
+			});
 		}
 	}
 
 	spinner.stop();
+
+	for (const warning of catalogWarnings) {
+		console.warn(chalk.yellow(warning));
+	}
 
 	if (upgrades.length === 0) {
 		console.log("All better-auth packages are up to date.");
@@ -111,8 +164,12 @@ export async function upgradeAction(opts: unknown) {
 
 	console.log(`\nThe following packages can be upgraded:\n`);
 	for (const u of upgrades) {
+		const currentLabel =
+			u.source === "catalog" && u.resolvedVersion
+				? `${u.current} (${u.resolvedVersion} in pnpm-workspace.yaml)`
+				: u.current;
 		console.log(
-			`  ${chalk.cyan(u.name)}  ${chalk.gray(u.current)} ${chalk.white("→")} ${chalk.green(u.target)}`,
+			`  ${chalk.cyan(u.name)}  ${chalk.gray(currentLabel)} ${chalk.white("→")} ${chalk.green(u.target)}`,
 		);
 	}
 	console.log();
@@ -133,36 +190,75 @@ export async function upgradeAction(opts: unknown) {
 		return;
 	}
 
-	const { packageManager } = await detectPackageManager(cwd, packageJson);
-
-	const prodUpgrades = upgrades
-		.filter((u) => u.depType === "prod")
-		.map((u) => `${u.name}@${u.target}`);
-	const devUpgrades = upgrades
-		.filter((u) => u.depType === "dev")
-		.map((u) => `${u.name}@${u.target}`);
+	const catalogUpgrades = upgrades.filter((u) => u.source === "catalog");
+	const semverUpgrades = upgrades.filter((u) => u.source === "semver");
 
 	const installSpinner = yoctoSpinner({
 		text: "installing updates...",
 	}).start();
 
 	try {
-		if (prodUpgrades.length > 0) {
-			await installDependencies({
-				dependencies: prodUpgrades,
-				packageManager,
-				cwd,
-				type: "prod",
-			});
+		if (catalogUpgrades.length > 0) {
+			const monorepoRoot = await findMonorepoRoot(cwd);
+			if (!monorepoRoot) {
+				installSpinner.stop();
+				console.error(
+					"Could not find a pnpm workspace root to update catalog dependencies.",
+				);
+				process.exit(1);
+			}
+
+			const workspaceYamlPath = getPnpmWorkspaceYamlPath(monorepoRoot);
+			for (const upgrade of catalogUpgrades) {
+				const currentCatalogVersion = getPnpmCatalogVersion(
+					workspaceYamlPath,
+					upgrade.name,
+					upgrade.catalogName,
+				);
+				if (!currentCatalogVersion) {
+					throw new Error(
+						`Could not find ${upgrade.name} in pnpm-workspace.yaml`,
+					);
+				}
+				setPnpmCatalogVersion(
+					workspaceYamlPath,
+					upgrade.name,
+					formatCatalogTargetVersion(currentCatalogVersion, upgrade.target),
+					upgrade.catalogName,
+				);
+			}
+
+			await spawnCommand("pnpm install", monorepoRoot);
 		}
-		if (devUpgrades.length > 0) {
-			await installDependencies({
-				dependencies: devUpgrades,
-				packageManager,
-				cwd,
-				type: "dev",
-			});
+
+		if (semverUpgrades.length > 0) {
+			const { packageManager } = await detectPackageManager(cwd, packageJson);
+
+			const prodUpgrades = semverUpgrades
+				.filter((u) => u.depType === "prod")
+				.map((u) => `${u.name}@${u.target}`);
+			const devUpgrades = semverUpgrades
+				.filter((u) => u.depType === "dev")
+				.map((u) => `${u.name}@${u.target}`);
+
+			if (prodUpgrades.length > 0) {
+				await installDependencies({
+					dependencies: prodUpgrades,
+					packageManager,
+					cwd,
+					type: "prod",
+				});
+			}
+			if (devUpgrades.length > 0) {
+				await installDependencies({
+					dependencies: devUpgrades,
+					packageManager,
+					cwd,
+					type: "dev",
+				});
+			}
 		}
+
 		installSpinner.stop();
 		console.log(chalk.green("Successfully upgraded better-auth packages."));
 	} catch (error) {
