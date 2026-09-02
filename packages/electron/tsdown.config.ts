@@ -13,21 +13,20 @@ export default defineConfig([
 		treeshake: true,
 	},
 	{
-		dts: { build: true, incremental: true },
+		dts: false,
 		format: ["esm"],
 		entry: ["./src/preload.ts"],
 		deps: {
-			neverBundle: (id, _, isResolved) => {
-				if (isResolved) return false;
-				return (
-					!id.startsWith(".") &&
-					!id.startsWith("better-call") &&
-					!id.startsWith("@better-auth/core")
-				);
-			},
-			alwaysBundle: [/^@better-auth\/core/, /^better-call/],
-			onlyAllowBundle: ["better-call", "@standard-schema/spec"],
+			alwaysBundle: [/^@better-auth\/core(?:\/|$)/, /^better-call(?:\/|$)/],
+			onlyBundle: ["better-call"],
 		},
+		treeshake: true,
+	},
+	{
+		dts: { build: true, incremental: false, emitDtsOnly: true },
+		format: ["esm"],
+		entry: ["./src/preload.ts"],
+		deps: { skipNodeModulesBundle: true },
 		treeshake: true,
 	},
 ]);

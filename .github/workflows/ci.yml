@@ -27,29 +27,32 @@ jobs:
       group: ${{ github.workflow }}-lint-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache turbo build setup
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
 
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Reject stale release merge groups
+        if: github.event_name == 'merge_group'
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          BASE_VERSION=$(git show "${BASE_SHA}:packages/better-auth/package.json" | jq -r '.version')
+          HEAD_VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          if [ "$BASE_VERSION" != "$HEAD_VERSION" ]; then
+            pnpm --filter @better-auth/release-tooling release-notes \
+              check-changesets --branch "$GITHUB_SHA"
+          fi
 
       - name: Build
         env:
@@ -98,35 +101,29 @@ jobs:
       group: ${{ github.workflow }}-typecheck-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache turbo build setup
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
-
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Build package declarations
+        run: pnpm build
+
+      - name: Typecheck workspace consumers
+        run: pnpm typecheck:consumers
 
       - name: Typecheck dist declarations
         run: pnpm typecheck:dist
@@ -143,30 +140,29 @@ jobs:
       fail-fast: false
       matrix:
         node-version: [22.x, 24.x]
+    env:
+      COMPOSE_SERVICES: postgres postgres-kysely mongodb
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache turbo build setup
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
-
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
         with:
           node-version: ${{ matrix.node-version }}
-          registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Test release tooling
+        if: matrix.node-version == '24.x'
+        run: pnpm --filter @better-auth/release-tooling test
 
       - name: Rebuild native bindings for matrix node
         run: pnpm -r rebuild better-sqlite3
@@ -175,7 +171,9 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
       - name: Start Docker Containers
-        run: docker compose up -d --wait --wait-timeout 60
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Test
         run: pnpm coverage
@@ -183,8 +181,9 @@ jobs:
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''
         run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
-          docker compose logs --no-color mssql || true
+          docker compose logs --no-color "${compose_services[@]}" || true
 
       - name: Stop Docker Containers
         if: always() && hashFiles('docker-compose.yml') != ''

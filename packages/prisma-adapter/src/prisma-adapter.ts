@@ -5,10 +5,29 @@ import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
+	MigrationDatabaseConnection,
+	MigrationDatabaseDialect,
+	MigrationDatabaseQueryResult,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
+
+/** Controls the Prisma interactive transaction used by release migrations. */
+export interface PrismaMigrationTransactionConfig {
+	/**
+	 * Maximum time to wait for Prisma to acquire the transaction.
+	 *
+	 * @default 60000
+	 */
+	maxWait?: number | undefined;
+	/**
+	 * Maximum time the release migration may run inside the transaction.
+	 *
+	 * @default 600000
+	 */
+	timeout?: number | undefined;
+}
 
 export interface PrismaConfig {
 	/**
@@ -44,20 +63,41 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+
+	/**
+	 * Interactive transaction limits for a Better Auth release migration.
+	 *
+	 * These limits do not change normal adapter transactions.
+	 */
+	migrationTransaction?: PrismaMigrationTransactionConfig | undefined;
 }
 
 interface PrismaClient {}
 
+// Prisma raises `P2025` for every "record not found" surface area we care
+// about (`update`, `delete`, and `incrementOne`) with the actual cause
+// distinguishable via `meta.cause` (e.g. "Record to update not found." vs
+// "Record to delete does not exist."). Match on the code alone: any other
+// failure (constraint, connection, permission) must propagate so the caller
+// sees a real error rather than a silent `null`/no-op.
 function isPrismaNotFoundError(e: any): boolean {
-	return (
-		e?.code === "P2025" || e?.meta?.cause === "Record to delete does not exist."
-	);
+	return e?.code === "P2025";
 }
 
 type PrismaClientInternal = {
-	$transaction: (
-		callback: (db: PrismaClient) => Awaitable<any>,
-	) => Promise<any>;
+	$transaction: <Result>(
+		callback: (db: PrismaClient) => Awaitable<Result>,
+		options?: PrismaMigrationTransactionConfig,
+	) => Promise<Result>;
+	$executeRawUnsafe?: (
+		query: string,
+		...parameters: readonly unknown[]
+	) => Promise<number>;
+	$queryRawUnsafe?: (
+		query: string,
+		...parameters: readonly unknown[]
+	) => Promise<unknown>;
+	_runtimeDataModel?: PrismaRuntimeDataModel | undefined;
 } & {
 	[model: string]: {
 		create: (data: any) => Promise<any>;
@@ -70,8 +110,154 @@ type PrismaClientInternal = {
 	};
 };
 
+type PrismaRuntimeDataModel = {
+	models: Record<
+		string,
+		{
+			dbName?: string | null | undefined;
+			fields: Array<{
+				dbName?: string | null | undefined;
+				name: string;
+			}>;
+		}
+	>;
+};
+
+const defaultMigrationTransaction = {
+	maxWait: 60_000,
+	timeout: 600_000,
+} satisfies Required<PrismaMigrationTransactionConfig>;
+
+function getPrismaMigrationDialect(
+	provider: PrismaConfig["provider"],
+): MigrationDatabaseDialect | undefined {
+	if (provider === "postgresql" || provider === "cockroachdb")
+		return "postgres";
+	if (provider === "sqlserver") return "mssql";
+	if (provider === "mysql" || provider === "sqlite") return provider;
+	return undefined;
+}
+
+function isReadMigrationQuery(query: string): boolean {
+	return /^\s*(?:SELECT|WITH|PRAGMA|SHOW|EXPLAIN|DESCRIBE)\b/i.test(query);
+}
+
+function getPrismaMigrationRows(
+	rows: unknown,
+): readonly Record<string, unknown>[] {
+	if (!Array.isArray(rows)) return [];
+	return rows.filter(
+		(row): row is Record<string, unknown> =>
+			typeof row === "object" && row !== null,
+	);
+}
+
+function createPrismaMigrationConnection(
+	prisma: PrismaClientInternal,
+	provider: PrismaConfig["provider"],
+	migrationTransaction: PrismaMigrationTransactionConfig,
+	inTransaction = false,
+	runtimeDataModel = prisma._runtimeDataModel,
+): MigrationDatabaseConnection | undefined {
+	const dialect = getPrismaMigrationDialect(provider);
+	if (!dialect) return undefined;
+	const connection: MigrationDatabaseConnection = {
+		dialect,
+		async resolvePhysicalSchema(schema) {
+			if (!runtimeDataModel) {
+				throw new BetterAuthError(
+					"Prisma migration schema resolution requires Prisma runtime model metadata.",
+				);
+			}
+			return Object.fromEntries(
+				Object.entries(schema).map(([schemaKey, table]) => {
+					const modelEntry = Object.entries(runtimeDataModel.models).find(
+						([modelName, model]) =>
+							modelName === table.modelName ||
+							modelName.toLowerCase() === table.modelName.toLowerCase() ||
+							model.dbName === table.modelName,
+					);
+					if (!modelEntry) return [schemaKey, table];
+					const [modelName, model] = modelEntry;
+					const fields = Object.fromEntries(
+						Object.entries(table.fields).map(([fieldKey, field]) => {
+							const prismaFieldName = field.fieldName || fieldKey;
+							const prismaField = model.fields.find(
+								(candidate) => candidate.name === prismaFieldName,
+							);
+							return [
+								fieldKey,
+								{
+									...field,
+									fieldName:
+										prismaField?.dbName || prismaField?.name || prismaFieldName,
+								},
+							];
+						}),
+					);
+					return [
+						schemaKey,
+						{
+							...table,
+							modelName: model.dbName || modelName,
+							fields,
+						},
+					];
+				}),
+			);
+		},
+		async execute(query): Promise<MigrationDatabaseQueryResult> {
+			if (isReadMigrationQuery(query.sql)) {
+				if (!prisma.$queryRawUnsafe) {
+					throw new BetterAuthError(
+						"Prisma migration inspection requires $queryRawUnsafe on the Prisma client.",
+					);
+				}
+				const rows = await prisma.$queryRawUnsafe(
+					query.sql,
+					...query.parameters,
+				);
+				return { rows: getPrismaMigrationRows(rows) };
+			}
+			if (!prisma.$executeRawUnsafe) {
+				throw new BetterAuthError(
+					"Prisma migration execution requires $executeRawUnsafe on the Prisma client.",
+				);
+			}
+			const affectedRows = await prisma.$executeRawUnsafe(
+				query.sql,
+				...query.parameters,
+			);
+			return { numAffectedRows: BigInt(affectedRows), rows: [] };
+		},
+	};
+	if (!inTransaction) {
+		connection.transaction = async (callback) =>
+			prisma.$transaction(async (transactionClient) => {
+				const transactionConnection = createPrismaMigrationConnection(
+					transactionClient as PrismaClientInternal,
+					provider,
+					migrationTransaction,
+					true,
+					runtimeDataModel,
+				);
+				if (!transactionConnection) {
+					throw new BetterAuthError(
+						`Prisma does not expose a SQL migration connection for ${provider}.`,
+					);
+				}
+				return callback(transactionConnection);
+			}, migrationTransaction);
+	}
+	return connection;
+}
+
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	const migrationTransaction = {
+		...defaultMigrationTransaction,
+		...config.migrationTransaction,
+	};
 	const createCustomAdapter =
 		(
 			prisma: PrismaClient,
@@ -550,10 +736,25 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						action: "update",
 					});
 
-					return await db[model]!.update({
-						where: whereClause,
-						data: update,
-					});
+					// `prisma.model.update` requires a WhereUniqueInput but still
+					// applies any non-unique predicates as guards before mutating
+					// the row. When those guards exclude the row (e.g. a CAS like
+					// `WHERE id = ? AND revoked IS NULL` losing the race, or the
+					// row simply not existing) Prisma raises P2025 rather than
+					// silently returning the row. Surface that as `null` so every
+					// adapter — Kysely's RETURNING/OUTPUT paths, this one, the
+					// in-memory adapter — agree on the "guarded update matched no
+					// row" signal. `incrementOne` and `delete` already convert
+					// P2025 the same way.
+					try {
+						return await db[model]!.update({
+							where: whereClause,
+							data: update,
+						});
+					} catch (e: any) {
+						if (isPrismaNotFoundError(e)) return null;
+						throw e;
+					}
 				},
 				async updateMany({ model, where, update }) {
 					if (!db[model]) {
@@ -602,9 +803,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
+						// Deletes are idempotent: a missing row is a no-op. Any other
+						// failure must propagate instead of reporting success.
 						if (isPrismaNotFoundError(e)) return;
-						// otherwise if it's an unknown error, we want to just log it for debugging.
-						console.log(e);
+						throw e;
 					}
 				},
 				async deleteMany({ model, where }) {
@@ -686,6 +888,87 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						? claimFromTransaction(db)
 						: db.$transaction(claimFromTransaction);
 				},
+				async incrementOne({ model, where, increment, set }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+
+					// Prisma applies `{ [field]: { increment: delta } }` server-side, so
+					// the read of the current value and the write of `value + delta`
+					// happen in a single statement. The contract mutates at most one
+					// row, so we resolve a single target id and key the write on it the
+					// same way `consumeOne` does, never `updateMany`.
+					const data: Record<string, unknown> = { ...(set ?? {}) };
+					for (const [field, delta] of Object.entries(increment)) {
+						data[field] = { increment: delta };
+					}
+
+					// `prisma.model.update` requires a WhereUniqueInput and returns the
+					// mutated row. When the caller keys on the primary key we update in a
+					// single round trip; otherwise we resolve the target id inside a
+					// transaction and update by id. Either way the original guard stays in
+					// the where, so a racer that invalidated it (e.g. remaining dropped to
+					// 0) yields P2025 and we report no mutation.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (hasIdField) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "update",
+						});
+						try {
+							const row = await db[model]!.update({
+								where: whereClause,
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					}
+
+					const findWhere = convertWhereClause({
+						model,
+						where,
+						action: "findOne",
+					});
+					const mutateInTransaction = async (tx: PrismaClient) => {
+						const target = await (tx as any)[model].findFirst({
+							where: findWhere,
+						});
+						if (!target) return null;
+						try {
+							const row = await (tx as any)[model].update({
+								where: convertWhereClause({
+									model,
+									where: [
+										...where,
+										{
+											field: "id",
+											value: (target as any).id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "update",
+								}),
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					};
+
+					return inTransaction || typeof db.$transaction !== "function"
+						? mutateInTransaction(db)
+						: db.$transaction(mutateInTransaction);
+				},
 				options: config,
 			};
 		};
@@ -695,6 +978,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		config: {
 			adapterId: "prisma",
 			adapterName: "Prisma Adapter",
+			migrationConnection: createPrismaMigrationConnection(
+				prisma as PrismaClientInternal,
+				config.provider,
+				migrationTransaction,
+			),
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,

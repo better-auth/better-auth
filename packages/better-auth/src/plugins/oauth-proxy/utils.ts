@@ -26,17 +26,39 @@ function getVendorBaseURL() {
 }
 
 /**
- * Resolve the current URL from various sources
+ * Resolve the current URL from various sources.
+ *
+ * The request URL host can come from an untrusted source (`Host` / forwarded host),
+ * and this origin becomes the receiver for the encrypted OAuth profile replay.
+ * So a request-derived origin is only honored when it is an explicitly trusted
+ * origin; otherwise resolution falls back to the configured platform/base URL,
+ * never the raw request host. An explicit `opts.currentURL` and the vendor/base
+ * URLs are configured by the developer and trusted as-is.
  */
 export function resolveCurrentURL(
 	ctx: GenericEndpointContext,
 	opts?: OAuthProxyOptions,
 ) {
+	if (opts?.currentURL) {
+		return new URL(opts.currentURL);
+	}
+
+	const requestURL = ctx.request?.url;
+	if (requestURL) {
+		const origin = getOrigin(requestURL);
+		if (origin && ctx.context.isTrustedOrigin(origin)) {
+			return new URL(requestURL);
+		}
+	}
+
+	// getVendorBaseURL() returns a full URL on some platforms (Vercel, Netlify,
+	// Render) but a bare function name on others (AWS Lambda, GCP, Azure). Only
+	// use it when it parses as a URL; otherwise fall back to the base URL.
+	const vendorBaseURL = getVendorBaseURL();
 	return new URL(
-		opts?.currentURL ||
-			ctx.request?.url ||
-			getVendorBaseURL() ||
-			ctx.context.baseURL,
+		vendorBaseURL && getOrigin(vendorBaseURL)
+			? vendorBaseURL
+			: ctx.context.baseURL,
 	);
 }
 

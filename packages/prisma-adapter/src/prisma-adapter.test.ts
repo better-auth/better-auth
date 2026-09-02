@@ -1,12 +1,107 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import { describe, expect, it, vi } from "vitest";
 import { prismaAdapter } from "./prisma-adapter";
 
 describe("prisma-adapter", () => {
+	it("resolves Prisma model and field mappings for migrations", async () => {
+		const options = {};
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				_runtimeDataModel: {
+					models: {
+						Account: {
+							dbName: "auth_account",
+							fields: [
+								{ name: "accountId", dbName: "account_id" },
+								{ name: "providerId", dbName: "provider_id" },
+								{ name: "issuer", dbName: "identity_issuer" },
+							],
+						},
+					},
+				},
+			} as never,
+			{ provider: "sqlite" },
+		)(options);
+
+		const accountSchema = {
+			modelName: "account",
+			fields: {
+				accountId: { type: "string", fieldName: "accountId" },
+				providerId: { type: "string", fieldName: "providerId" },
+				issuer: { type: "string", fieldName: "issuer" },
+			},
+		} satisfies BetterAuthDBSchema[string];
+		const resolved =
+			await adapter.options?.adapterConfig.migrationConnection?.resolvePhysicalSchema?.(
+				{ account: accountSchema },
+			);
+
+		expect(resolved?.account?.modelName).toBe("auth_account");
+		expect(resolved?.account?.fields.accountId?.fieldName).toBe("account_id");
+		expect(resolved?.account?.fields.providerId?.fieldName).toBe("provider_id");
+		expect(resolved?.account?.fields.issuer?.fieldName).toBe("identity_issuer");
+	});
+
+	it("keeps declared names for schema additions missing from the Prisma model", async () => {
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				_runtimeDataModel: {
+					models: {
+						Account: {
+							dbName: "auth_account",
+							fields: [{ name: "id", dbName: "account_id" }],
+						},
+					},
+				},
+			} as never,
+			{ provider: "sqlite" },
+		)({});
+
+		const resolved =
+			await adapter.options?.adapterConfig.migrationConnection?.resolvePhysicalSchema?.(
+				{
+					account: {
+						modelName: "account",
+						fields: {
+							id: { type: "string", fieldName: "id" },
+							issuer: { type: "string", fieldName: "issuer" },
+						},
+					},
+					jwks: {
+						modelName: "jwks",
+						fields: { id: { type: "string", fieldName: "id" } },
+					},
+				},
+			);
+
+		expect(resolved?.account?.modelName).toBe("auth_account");
+		expect(resolved?.account?.fields.id?.fieldName).toBe("account_id");
+		expect(resolved?.account?.fields.issuer?.fieldName).toBe("issuer");
+		expect(resolved?.jwks?.modelName).toBe("jwks");
+		expect(resolved?.jwks?.fields.id?.fieldName).toBe("id");
+	});
+
 	const createTestAdapter = (prisma: Record<string, unknown>) =>
 		prismaAdapter(prisma as never, {
 			provider: "sqlite",
 		})({} as BetterAuthOptions);
+
+	// incrementOne mutates numeric counters; declare the fields it touches on an
+	// existing model so the factory's where/input transforms recognize them.
+	const createCounterAdapter = (prisma: Record<string, unknown>) =>
+		prismaAdapter(prisma as never, {
+			provider: "sqlite",
+		})({
+			verification: {
+				additionalFields: {
+					remaining: { type: "number" },
+					lastRefill: { type: "number", required: false },
+				},
+			},
+		} as BetterAuthOptions);
 
 	it("should create prisma adapter", () => {
 		const prisma = {
@@ -16,6 +111,116 @@ describe("prisma-adapter", () => {
 			provider: "sqlite",
 		});
 		expect(adapter).toBeDefined();
+	});
+
+	it("exposes a parameterized migration connection", async () => {
+		const queryRaw = vi
+			.fn()
+			.mockResolvedValue([{ providerId: "credential", count: 2 }]);
+		const executeRaw = vi.fn().mockResolvedValue(2);
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: executeRaw,
+			$queryRawUnsafe: queryRaw,
+			$transaction: vi.fn(),
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		expect(migrationConnection?.dialect).toBe("sqlite");
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["credential"],
+				sql: "SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			}),
+		).resolves.toEqual({
+			rows: [{ providerId: "credential", count: 2 }],
+		});
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["issuer"],
+				sql: "UPDATE account SET issuer = ?",
+			}),
+		).resolves.toEqual({
+			numAffectedRows: 2n,
+			rows: [],
+		});
+		expect(queryRaw).toHaveBeenCalledWith(
+			"SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			"credential",
+		);
+		expect(executeRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"issuer",
+		);
+	});
+
+	it("uses Prisma's transaction-scoped client for migration queries", async () => {
+		const rootExecuteRaw = vi.fn();
+		const transactionExecuteRaw = vi.fn().mockResolvedValue(1);
+		const transactionClient = {
+			$executeRawUnsafe: transactionExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: rootExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+			$transaction: transaction,
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		await migrationConnection?.transaction?.(async (connection) => {
+			await connection.execute({
+				parameters: ["local:credential"],
+				sql: "UPDATE account SET issuer = ?",
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+			maxWait: 60_000,
+			timeout: 600_000,
+		});
+		expect(transactionExecuteRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"local:credential",
+		);
+		expect(rootExecuteRaw).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10575#pullrequestreview-4970996114
+	 */
+	it("passes migration transaction timeouts to Prisma", async () => {
+		const transactionClient = {
+			$executeRawUnsafe: vi.fn(),
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = prismaAdapter(
+			{
+				$executeRawUnsafe: vi.fn(),
+				$queryRawUnsafe: vi.fn(),
+				$transaction: transaction,
+			} as never,
+			{
+				migrationTransaction: { maxWait: 12_000, timeout: 420_000 },
+				provider: "sqlite",
+			},
+		)({} as BetterAuthOptions);
+
+		await adapter.options?.adapterConfig.migrationConnection?.transaction?.(
+			async () => undefined,
+		);
+
+		expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+			maxWait: 12_000,
+			timeout: 420_000,
+		});
 	});
 
 	/**
@@ -109,6 +314,60 @@ describe("prisma-adapter", () => {
 			token: "session-token",
 			userId: "user-id",
 		});
+	});
+
+	// A guarded `adapter.update` (e.g. `WHERE id = ? AND revoked IS NULL`)
+	// uses Prisma's `db.update` because `id` is unique, but the extra
+	// predicates still gate the write. When the guard misses, Prisma raises
+	// P2025; we must surface that as `null` so the contract matches every
+	// other adapter (Kysely's RETURNING/OUTPUT paths, the memory adapter).
+	// Without this, callers building CAS on top of `adapter.update` see an
+	// exception on Prisma and `null` everywhere else.
+	it("update returns null when a guarded predicate excludes the row (P2025)", async () => {
+		const notFound = Object.assign(new Error("Record to update not found."), {
+			code: "P2025",
+		});
+		const update = vi.fn().mockRejectedValue(notFound);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				update,
+			},
+		});
+
+		const result = await adapter.update({
+			model: "user",
+			where: [
+				{ field: "id", value: "user-id" },
+				{ field: "emailVerified", value: false },
+			],
+			update: { emailVerified: true },
+		});
+
+		expect(result).toBeNull();
+		expect(update).toHaveBeenCalledTimes(1);
+	});
+
+	it("update propagates non-P2025 errors from db.update", async () => {
+		const failure = Object.assign(new Error("connection refused"), {
+			code: "P1001",
+		});
+		const update = vi.fn().mockRejectedValue(failure);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				update,
+			},
+		});
+
+		await expect(
+			adapter.update({
+				model: "user",
+				where: [{ field: "id", value: "user-id" }],
+				update: { name: "test" },
+			}),
+		).rejects.toThrow("connection refused");
+		expect(update).toHaveBeenCalledTimes(1);
 	});
 
 	it("should fall back to updateMany when where has insensitive mode on a supporting provider", async () => {
@@ -249,6 +508,213 @@ describe("prisma-adapter", () => {
 				],
 			},
 		});
+	});
+
+	// A delete that fails for any reason other than the record not existing
+	// (constraint violation, connection loss, permission denial) must surface
+	// the error. Reporting success would hide real data-integrity failures.
+	it("delete propagates non-not-found errors instead of swallowing them", async () => {
+		const failure = Object.assign(new Error("connection refused"), {
+			code: "P1001",
+		});
+		const del = vi.fn().mockRejectedValue(failure);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				delete: del,
+			},
+		});
+
+		await expect(
+			adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: "user-id" }],
+			}),
+		).rejects.toThrow("connection refused");
+		expect(del).toHaveBeenCalledTimes(1);
+	});
+
+	// Prisma raises P2025 when the targeted row no longer exists. Deletes are
+	// idempotent, so this specific case is a no-op rather than an error.
+	it("delete treats a not-found (P2025) error as an idempotent no-op", async () => {
+		const failure = Object.assign(
+			new Error("Record to delete does not exist."),
+			{ code: "P2025" },
+		);
+		const del = vi.fn().mockRejectedValue(failure);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				delete: del,
+			},
+		});
+
+		await expect(
+			adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: "user-id" }],
+			}),
+		).resolves.toBeUndefined();
+		expect(del).toHaveBeenCalledTimes(1);
+	});
+
+	it("incrementOne keyed on the primary key updates that one row in a single round trip", async () => {
+		const update = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const findFirst = vi.fn();
+		const adapter = createCounterAdapter({
+			$transaction: vi.fn(),
+			verification: { findFirst, update },
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+		// No transaction or pre-read: the unique key resolves a single row directly.
+		expect(findFirst).not.toHaveBeenCalled();
+		expect(update).toHaveBeenCalledWith({
+			where: { id: "counter-id" },
+			data: { remaining: { increment: 1 } },
+		});
+	});
+
+	it("incrementOne decrements with a negative delta and applies set values", async () => {
+		const target = { id: "counter-id", remaining: 2 };
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				update: vi.fn().mockResolvedValue({
+					id: "counter-id",
+					remaining: 1,
+					lastRefill: 1700,
+				}),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+			set: { lastRefill: 1700 },
+		});
+
+		expect(result).toEqual({
+			id: "counter-id",
+			remaining: 1,
+			lastRefill: 1700,
+		});
+		expect(txClient.verification.update).toHaveBeenCalledWith({
+			where: {
+				id: "counter-id",
+				AND: [{ remaining: { gt: 0 } }],
+			},
+			data: expect.objectContaining({
+				lastRefill: 1700,
+				remaining: { increment: -1 },
+			}),
+		});
+	});
+
+	// A non-unique guard (e.g. `remaining > 0`) can match many rows, but the
+	// contract mutates at most one. The adapter resolves a single target id and
+	// keys the write on it, so `update` (single-row) runs and `updateMany` never
+	// does, leaving every other matching row untouched.
+	it("incrementOne with a non-unique guard mutates exactly one matching row", async () => {
+		const target = { id: "row-1", remaining: 5 };
+		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+		const updateMany = vi.fn();
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				update,
+				updateMany,
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(result).toEqual({ id: "row-1", remaining: 4 });
+		expect(updateMany).not.toHaveBeenCalled();
+		expect(update).toHaveBeenCalledTimes(1);
+		expect(update).toHaveBeenCalledWith({
+			where: {
+				id: "row-1",
+				AND: [{ remaining: { gt: 0 } }],
+			},
+			data: { remaining: { increment: -1 } },
+		});
+	});
+
+	it("incrementOne returns null when the guard matches no row", async () => {
+		const update = vi.fn();
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(null),
+				update,
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(result).toBeNull();
+		expect(update).not.toHaveBeenCalled();
+	});
+
+	it("incrementOne returns null when a racer invalidated the guard between read and write", async () => {
+		const target = { id: "counter-id", remaining: 1 };
+		const notFound = Object.assign(new Error("Record to update not found."), {
+			code: "P2025",
+		});
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				// The guarded update matches no row because a concurrent caller
+				// already drove `remaining` to 0 after the read; Prisma raises P2025.
+				update: vi.fn().mockRejectedValue(notFound),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "remaining", value: 0, operator: "gt" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(result).toBeNull();
+		expect(txClient.verification.update).toHaveBeenCalledTimes(1);
 	});
 
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {

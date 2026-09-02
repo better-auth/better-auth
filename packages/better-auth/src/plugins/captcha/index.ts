@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getIp } from "../../utils/get-request-ip";
+import { getIP } from "@better-auth/core/utils/ip";
 import { middlewareResponse } from "../../utils/middleware-response";
+import { wildcardMatch } from "../../utils/wildcard";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
@@ -18,6 +19,20 @@ import * as verifyHandlers from "./verify-handlers";
 
 export type * from "./types";
 
+const normalizeEndpointPath = (pathname: string, basePath: string) => {
+	const pathWithoutBase = pathname.startsWith(basePath)
+		? pathname.slice(basePath.length)
+		: pathname;
+	let normalizedPathname = pathWithoutBase.replace(/\/{2,}/g, "/");
+	if (!normalizedPathname.startsWith("/")) {
+		normalizedPathname = `/${normalizedPathname}`;
+	}
+	if (normalizedPathname.length > 1 && normalizedPathname.endsWith("/")) {
+		normalizedPathname = normalizedPathname.slice(0, -1);
+	}
+	return normalizedPathname;
+};
+
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
@@ -31,30 +46,13 @@ export const captcha = (options: CaptchaOptions) =>
 
 				const url = new URL(request.url);
 				const basePath = ctx.options.basePath ?? "/api/auth";
-				let pathname = url.pathname.replace(basePath, "");
+				const pathname = normalizeEndpointPath(url.pathname, basePath);
 
-				// remove trailing or leading slashes & add leading slash if not present
-				if (pathname.endsWith("//")) pathname = pathname.slice(0, -1);
-				if (pathname.startsWith("//")) pathname = pathname.slice(1);
-				if (!pathname.startsWith("/")) pathname = "/" + pathname;
-
-				// we don't want to accidentally block email-otp endpoint.
-				const exemptPaths = ["/sign-in/email-otp"].reduce<string[]>(
-					(acc, curr) => {
-						// if custom endpoints include an exempt path, we don't include the exempt path in the exempt paths array
-						if (options.endpoints?.length && options.endpoints.includes(curr)) {
-							return acc;
-						}
-						return [...acc, curr];
-					},
-					[],
+				const match = endpoints.some((endpoint) =>
+					endpoint.includes("*")
+						? wildcardMatch(endpoint)(pathname)
+						: endpoint === pathname,
 				);
-				const match = endpoints.some((endpoint) => {
-					return (
-						pathname.includes(endpoint) &&
-						!exemptPaths.some((p) => pathname.includes(p))
-					);
-				});
 
 				if (!match) {
 					return undefined;
@@ -65,7 +63,7 @@ export const captcha = (options: CaptchaOptions) =>
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
-				const remoteUserIP = getIp(request, ctx.options) ?? undefined;
+				const remoteUserIP = getIP(request, ctx.options) ?? undefined;
 
 				if (!captchaResponse) {
 					return middlewareResponse({
@@ -86,13 +84,19 @@ export const captcha = (options: CaptchaOptions) =>
 				};
 
 				if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {
-					return await verifyHandlers.cloudflareTurnstile(handlerParams);
+					return await verifyHandlers.cloudflareTurnstile({
+						...handlerParams,
+						expectedAction: options.expectedAction,
+						allowedHostnames: options.allowedHostnames,
+					});
 				}
 
 				if (options.provider === Providers.GOOGLE_RECAPTCHA) {
 					return await verifyHandlers.googleRecaptcha({
 						...handlerParams,
 						minScore: options.minScore,
+						expectedAction: options.expectedAction,
+						allowedHostnames: options.allowedHostnames,
 					});
 				}
 

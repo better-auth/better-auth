@@ -5,10 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import type { Session } from "@/lib/auth";
+import type { DeviceSession } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 
-export function SelectAccountBtn({ session }: { session: Partial<Session> }) {
+export function SelectAccountBtn({ session }: { session: DeviceSession }) {
 	return (
 		<Button
 			className="w-full gap-2 h-12"
@@ -30,11 +30,11 @@ export function SelectAccountBtn({ session }: { session: Partial<Session> }) {
 					const { data, error } = await authClient.oauth2.continue({
 						selected: true,
 					});
-					if (error || !active?.session || !data.redirect || !data?.uri) {
+					if (error || !active?.session || !data.redirect || !data.url) {
 						toast.error(error?.message ?? "Failed to continue");
 						return;
 					}
-					window.location.href = data.uri;
+					window.location.href = data.url;
 				} catch (error) {
 					toast.error(String(error));
 				}

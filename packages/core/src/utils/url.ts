@@ -25,21 +25,70 @@ export function normalizePathname(
 		return "/";
 	}
 
-	if (basePath === "/" || basePath === "") {
+	// Canonicalize the basePath the same way as the request pathname. A baseURL
+	// with a trailing slash yields a basePath like "/api/auth/"; without this it
+	// would never match the slash-stripped pathname and the prefix would leak
+	// through to disabledPaths and rate-limit special-rule matching.
+	const normalizedBasePath = basePath.replace(/\/+$/, "");
+
+	if (normalizedBasePath === "") {
 		return pathname;
 	}
 
 	// Check for exact match or proper path boundary (basePath followed by "/" or end)
 	// This prevents "/api/auth" from matching "/api/authevil/..."
-	if (pathname === basePath) {
+	if (pathname === normalizedBasePath) {
 		return "/";
 	}
 
-	if (pathname.startsWith(basePath + "/")) {
-		return pathname.slice(basePath.length).replace(/\/+$/, "") || "/";
+	if (pathname.startsWith(normalizedBasePath + "/")) {
+		return pathname.slice(normalizedBasePath.length).replace(/\/+$/, "") || "/";
 	}
 
 	return pathname;
+}
+
+const URL_REFERENCE_ORIGIN = "https://better-auth.invalid";
+
+/**
+ * Appends query parameters before the fragment of an absolute or root-relative URL.
+ * Existing query text is retained without parsing it into name-value pairs.
+ *
+ * This function only composes URLs. Callers must validate untrusted input.
+ *
+ * @throws TypeError if parsing fails or a relative input changes authority.
+ */
+export function appendQueryParams(
+	input: string,
+	params: URLSearchParams,
+): string {
+	const relative = input.startsWith("/");
+	const hasAuthorityPrefix = input.startsWith("//") || input.startsWith("/\\");
+	if (hasAuthorityPrefix) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+
+	const parsedURL = relative
+		? new URL(input, URL_REFERENCE_ORIGIN)
+		: new URL(input);
+
+	if (relative && parsedURL.origin !== URL_REFERENCE_ORIGIN) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+
+	const query = params.toString();
+	if (!query) {
+		return input;
+	}
+
+	const separator = parsedURL.search.endsWith("&") ? "" : "&";
+	parsedURL.search = parsedURL.search
+		? `${parsedURL.search}${separator}${query}`
+		: query;
+
+	return relative
+		? parsedURL.href.slice(parsedURL.origin.length)
+		: parsedURL.href;
 }
 
 /**

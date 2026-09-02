@@ -5,6 +5,15 @@ yocto
 numberid
 dbgenerated
 dflt
+seqno
+MyISAM
+attnum
+attrelid
+indisunique
+indisvalid
+indexrelid
+indnkeyatts
+ordinality
 undim
 timestamptz
 nvarchar
@@ -13,6 +22,7 @@ base64urlnopad
 remoteip
 noreferrer
 noopener
+Referer
 pcre
 llms
 svgjs
@@ -65,4 +75,11 @@ Oligo
 febf
 fdff
 fffe
+apng
+jfif
+pcss
+pjpeg
+styl
 vbscript
+unvalidated
+describedby

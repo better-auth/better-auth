@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
 	Awaitable,
 	BetterAuthClientOptions,
@@ -31,6 +31,23 @@ afterAll(async () => {
 	}
 });
 
+const TEST_PASSWORD_HASH_PREFIX = "$test$sha256$";
+
+/**
+ * Intentionally fast for tests
+ */
+function createTestPasswordHash(password: string) {
+	return `${TEST_PASSWORD_HASH_PREFIX}${createHash("sha256")
+		.update(password.normalize("NFKC"))
+		.digest("hex")}`;
+}
+
+const testPassword = {
+	hash: async (password: string) => createTestPasswordHash(password),
+	verify: async ({ hash, password }: { hash: string; password: string }) =>
+		hash === createTestPasswordHash(password),
+};
+
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
@@ -43,6 +60,7 @@ export async function getTestInstance<
 				disableTestUser?: boolean;
 				testUser?: Partial<User>;
 				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+				transaction?: boolean;
 		  }
 		| undefined,
 ) {
@@ -96,7 +114,12 @@ export async function getTestInstance<
 	async function mongodbClient() {
 		const { MongoClient } = await import("mongodb");
 		const dbClient = async (connectionString: string, dbName: string) => {
-			const client = new MongoClient(connectionString);
+			// Fail fast in CI/local when Mongo is unreachable instead of hanging
+			// until Vitest's default 10s testTimeout (driver default is 30s).
+			const client = new MongoClient(connectionString, {
+				serverSelectionTimeoutMS: 2000,
+				connectTimeoutMS: 2000,
+			});
 			await client.connect();
 			const db = client.db(dbName);
 			return db;
@@ -119,14 +142,22 @@ export async function getTestInstance<
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
-				? { db: await getPostgres(), type: "postgres" }
+				? {
+						db: await getPostgres(),
+						type: "postgres",
+						transaction: config?.transaction,
+					}
 				: testWith === "mongodb"
 					? await Promise.all([
 							mongodbClient(),
 							await import("../adapters/mongodb-adapter"),
 						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
-						? { db: await getMysql(), type: "mysql" }
+						? {
+								db: await getMysql(),
+								type: "mysql",
+								transaction: config?.transaction,
+							}
 						: await getSqlite(),
 		emailAndPassword: {
 			enabled: true,
@@ -146,6 +177,11 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
+		emailAndPassword: {
+			...opts.emailAndPassword,
+			...options?.emailAndPassword,
+			password: options?.emailAndPassword?.password ?? testPassword,
+		},
 		plugins: [bearer(), ...(options?.plugins || [])],
 	} as unknown as O);
 

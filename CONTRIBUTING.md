@@ -139,10 +139,41 @@ reproduction.
 
 New features start with discussion. Open a [feature request](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml) describing the problem, your proposed solution, and how it would benefit the project. This gives us room to align on scope and API shape before anyone writes code.
 
+### Social Provider Integrations
+
+New social providers that can be supported by the
+[Generic OAuth plugin](https://www.better-auth.com/docs/plugins/generic-oauth)
+default to a community-maintained helper. Better Auth prioritizes extensibility
+over maintaining the details of every provider integration.
+Adding a provider to this repository is an ongoing maintenance commitment and
+requires Better Auth to commit to maintaining it.
+
+| Integration | Criteria | Maintainer |
+| --- | --- | --- |
+| Built-in social provider | Broad use or provider-specific behavior beyond Generic OAuth | Better Auth |
+| Built-in provider helper | Broad demand and supported by Generic OAuth | Better Auth |
+| Community provider helper | Supported by Generic OAuth | Provider or community |
+
+When a missing capability is provider-agnostic, prefer improving Generic OAuth
+over adding provider-specific code.
+
+Open a feature request before implementing a built-in social provider or
+built-in provider helper. A vendor contribution or support in another auth
+library may demonstrate demand, but does not by itself determine whether Better
+Auth will maintain the integration.
+
+Community helpers can be developed and published independently. They may be
+submitted for listing in the
+[Other Social Providers](https://www.better-auth.com/docs/authentication/other-social-providers#community-provider-helpers)
+documentation. A listing must identify the package, repository, documentation,
+maintainer, supported Better Auth versions, and relevant tests. Helpers must use
+Better Auth's public APIs and document their callback URL, scopes, and token
+endpoint authentication.
+
 ### Security Reports
 
 Do not open a public issue for security vulnerabilities.
-Email [security@better-auth.com](mailto:security@better-auth.com) instead.
+Report them via [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories/new) instead.
 See [SECURITY.md](/SECURITY.md) for details.
 
 ## Pull Request Guidelines

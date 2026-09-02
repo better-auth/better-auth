@@ -1,8 +1,8 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	getCurrentAdapter,
-	getCurrentAuthContext,
 	queueAfterTransactionHook,
+	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
 import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
@@ -36,7 +36,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext().catch(() => null);
+		const context = tryGetCurrentAuthEndpointContext();
 		let actualData = data;
 		for (const { source, hooks } of hooksEntries) {
 			const toRun = hooks[model]?.create?.before;
@@ -110,7 +110,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext().catch(() => null);
+		const context = tryGetCurrentAuthEndpointContext();
 		let actualData = data;
 
 		for (const { source, hooks } of hooksEntries) {
@@ -185,7 +185,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext().catch(() => null);
+		const context = tryGetCurrentAuthEndpointContext();
 		let actualData = data;
 
 		for (const { source, hooks } of hooksEntries) {
@@ -260,7 +260,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext().catch(() => null);
+		const context = tryGetCurrentAuthEndpointContext();
 		let entityToDelete: T | null = null;
 
 		try {
@@ -344,7 +344,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext().catch(() => null);
+		const context = tryGetCurrentAuthEndpointContext();
 		let entitiesToDelete: T[] = [];
 
 		try {
@@ -437,7 +437,7 @@ export function getWithHooks(
 		consumeFn: () => Promise<T | null>,
 		preSnapshot?: T | null,
 	): Promise<T | null> {
-		const context = await getCurrentAuthContext().catch(() => null);
+		const context = tryGetCurrentAuthEndpointContext();
 		const beforeHooks = hooksEntries.flatMap(({ source, hooks }) => {
 			const fn = hooks[model]?.delete?.before;
 			return fn ? [{ source, fn }] : [];

@@ -19,7 +19,7 @@ import { createRouter } from "better-call";
 import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
-import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
+import { onRequestRateLimit } from "./rate-limiter";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -301,6 +301,12 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 
 			let currentRequest = req;
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await withSpan(
@@ -320,15 +326,9 @@ export const router = <Option extends BetterAuthOptions>(
 				}
 			}
 
-			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
-			if (rateLimitResponse) {
-				return rateLimitResponse;
-			}
-
 			return currentRequest;
 		},
 		async onResponse(res, req) {
-			await onResponseRateLimit(req, ctx);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await withSpan(
@@ -406,14 +406,16 @@ export {
 	type AuthMiddleware,
 	createAuthEndpoint,
 	createAuthMiddleware,
+	NO_STORE_HEADERS,
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
-export { getIp } from "../utils/get-request-ip";
+export { getIP } from "@better-auth/core/utils/ip";
 export { isAPIError } from "../utils/is-api-error";
+export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
-export { getOAuthState } from "./state/oauth";
+export { addOAuthServerContext, getOAuthState } from "./state/oauth";
 export {
 	getShouldSkipSessionRefresh,
 	setShouldSkipSessionRefresh,

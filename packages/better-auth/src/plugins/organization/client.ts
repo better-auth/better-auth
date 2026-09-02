@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { BetterFetch } from "@better-fetch/fetch";
 import { atom } from "nanostores";
 import { useAuthQuery } from "../../client";
 import type {
@@ -147,7 +148,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					: false;
 			};
 		}>,
-		getActions: ($fetch, _$store, co) => ({
+		getActions: ($fetch: BetterFetch, _$store, co) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
 				Organization: {} as InferOrganization<CO>,
@@ -177,7 +178,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 			},
 		}),
-		getAtoms: ($fetch) => {
+		getAtoms: ($fetch: BetterFetch) => {
 			const listOrganizations = useAuthQuery<InferOrganization<CO>[]>(
 				$listOrg,
 				"/organization/list",

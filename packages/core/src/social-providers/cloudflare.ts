@@ -1,5 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type {
+	OAuthProvider,
+	ProviderOptions,
+	TokenEndpointAuth,
+} from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
@@ -65,28 +69,20 @@ export interface CloudflareOptions extends ProviderOptions<CloudflareProfile> {
 		| undefined;
 }
 
-const getTokenEndpointAuthentication = (options: CloudflareOptions) => {
+const getTokenEndpointAuth = (
+	options: CloudflareOptions,
+): TokenEndpointAuth => {
 	const method =
 		options.tokenEndpointAuthMethod ??
 		(options.clientSecret ? "client_secret_basic" : "none");
-
-	return method === "client_secret_basic" ? "basic" : undefined;
-};
-
-const getTokenEndpointOptions = (options: CloudflareOptions) => {
-	if (options.tokenEndpointAuthMethod !== "none") {
-		return options;
-	}
-	return {
-		...options,
-		clientSecret: undefined,
-	};
+	return { method };
 };
 
 export const cloudflare = (options: CloudflareOptions) => {
 	return {
 		id: "cloudflare",
 		name: "Cloudflare",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user-details.read"];
 			if (options.scope?.length) {
@@ -110,9 +106,9 @@ export const cloudflare = (options: CloudflareOptions) => {
 				code,
 				codeVerifier,
 				redirectURI,
-				options: getTokenEndpointOptions(options),
+				options,
 				tokenEndpoint,
-				authentication: getTokenEndpointAuthentication(options),
+				tokenEndpointAuth: getTokenEndpointAuth(options),
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -120,14 +116,13 @@ export const cloudflare = (options: CloudflareOptions) => {
 			: async (refreshToken) => {
 					return refreshAccessToken({
 						refreshToken,
-						options: getTokenEndpointOptions({
+						options: {
 							clientId: options.clientId,
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
-							tokenEndpointAuthMethod: options.tokenEndpointAuthMethod,
-						}),
+						},
 						tokenEndpoint,
-						authentication: getTokenEndpointAuthentication(options),
+						tokenEndpointAuth: getTokenEndpointAuth(options),
 					});
 				},
 		async getUserInfo(token) {
@@ -148,7 +143,6 @@ export const cloudflare = (options: CloudflareOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id,
 					name,
 					email: profile.email,
 					// Cloudflare does not expose email verification status

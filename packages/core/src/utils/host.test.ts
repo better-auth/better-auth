@@ -145,6 +145,12 @@ describe("Host Classification", () => {
 			expect(classifyHost("254.255.255.254").kind).toBe("reserved");
 		});
 
+		it("should identify 6to4 relay anycast 192.88.99.0/24 as reserved (RFC 7526)", () => {
+			expect(classifyHost("192.88.99.1").kind).toBe("reserved");
+			expect(classifyHost("192.88.99.255").kind).toBe("reserved");
+			expect(isPublicRoutableHost("192.88.99.1")).toBe(false);
+		});
+
 		it("should identify public addresses", () => {
 			expect(classifyHost("8.8.8.8").kind).toBe("public");
 			expect(classifyHost("1.1.1.1").kind).toBe("public");
@@ -192,6 +198,12 @@ describe("Host Classification", () => {
 			expect(classifyHost("2001:0db8:abcd::1").kind).toBe("documentation");
 		});
 
+		it("should flag deprecated site-local fec0::/10 (RFC 3879)", () => {
+			expect(classifyHost("fec0::1").kind).toBe("reserved");
+			expect(classifyHost("fef0::1").kind).toBe("reserved");
+			expect(isPublicRoutableHost("fec0::1")).toBe(false);
+		});
+
 		it("should identify public IPv6", () => {
 			expect(classifyHost("2606:4700:4700::1111").kind).toBe("public");
 			expect(classifyHost("2a00:1450:4001:828::200e").kind).toBe("public");
@@ -231,6 +243,49 @@ describe("Host Classification", () => {
 				expect(classifyHost("2001:0:0:0:0:0:80ff:fffe").kind).toBe("reserved");
 				// 169.254.169.254 XOR 0xFFFFFFFF → 5601:5601
 				expect(classifyHost("2001:0:0:0:0:0:5601:5601").kind).toBe("reserved");
+			});
+
+			it("should flag deprecated IPv4-compatible ::/96 (RFC 4291 §2.5.5.1)", () => {
+				// WHATWG URL normalizes [::127.0.0.1] to [::7f00:1] (no ::ffff: marker)
+				expect(classifyHost("::7f00:1").kind).toBe("reserved"); // 127.0.0.1
+				expect(classifyHost("::a9fe:a9fe").kind).toBe("reserved"); // IMDS
+				expect(classifyHost("::a00:1").kind).toBe("reserved"); // 10.0.0.1
+				expect(classifyHost("::808:808").kind).toBe("reserved"); // 8.8.8.8 (deprecated form)
+				expect(isPublicRoutableHost("::7f00:1")).toBe(false);
+			});
+		});
+
+		describe("IANA special-purpose ranges (not globally reachable)", () => {
+			// @see https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml
+			it("should flag 64:ff9b:1::/48 local-use translation (RFC 8215)", () => {
+				expect(classifyHost("64:ff9b:1::").kind).toBe("reserved");
+				expect(classifyHost("64:ff9b:1::a9fe:a9fe").kind).toBe("reserved");
+				expect(isPublicRoutableHost("64:ff9b:1::")).toBe(false);
+			});
+
+			it("should flag 2001:2::/48 benchmarking (RFC 5180)", () => {
+				expect(classifyHost("2001:2::").kind).toBe("benchmarking");
+				expect(classifyHost("2001:2::1").kind).toBe("benchmarking");
+				expect(isPublicRoutableHost("2001:2::1")).toBe(false);
+			});
+
+			it("should flag 3fff::/20 documentation (RFC 9637)", () => {
+				expect(classifyHost("3fff::").kind).toBe("documentation");
+				expect(classifyHost("3fff:0fff::1").kind).toBe("documentation");
+				expect(isPublicRoutableHost("3fff::")).toBe(false);
+			});
+
+			it("should flag 5f00::/16 SRv6 SIDs (RFC 9602)", () => {
+				expect(classifyHost("5f00::").kind).toBe("reserved");
+				expect(classifyHost("5f00:abcd::1").kind).toBe("reserved");
+				expect(isPublicRoutableHost("5f00::")).toBe(false);
+			});
+
+			it("should keep globally-reachable hosts outside these blocks public", () => {
+				// 2001:20::/28 (ORCHIDv2) is globally reachable; an address one
+				// /48 outside the benchmarking block must stay public.
+				expect(isPublicRoutableHost("2001:20::1")).toBe(true);
+				expect(classifyHost("2001:2:1::").kind).toBe("public");
 			});
 		});
 	});

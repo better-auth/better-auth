@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getCurrentAuthContext } from "@better-auth/core/context";
+import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
@@ -74,7 +74,7 @@ export interface HaveIBeenPwnedOptions {
 	/**
 	 * Paths to check for password
 	 *
-	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
+	 * @default ["/sign-up/email", "/change-password", "/reset-password", "/email-otp/reset-password", "/phone-number/reset-password", "/admin/create-user", "/admin/set-user-password"]
 	 */
 	paths?: string[];
 	/**
@@ -90,6 +90,10 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 		"/sign-up/email",
 		"/change-password",
 		"/reset-password",
+		"/email-otp/reset-password",
+		"/phone-number/reset-password",
+		"/admin/create-user",
+		"/admin/set-user-password",
 	];
 
 	return {
@@ -104,7 +108,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 						async hash(password) {
 							if (options?.enabled === false) return originalHash(password);
 
-							const c = await getCurrentAuthContext();
+							const c = getCurrentAuthEndpointContext();
 							if (!c.path || !paths.includes(c.path)) {
 								return originalHash(password);
 							}

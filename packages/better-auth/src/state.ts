@@ -26,9 +26,24 @@ const stateDataSchema = z.looseObject({
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
+	/**
+	 * OIDC nonce sent as the authorization request `nonce` parameter when the
+	 * provider requires an ID token to be bound to this redirect flow.
+	 */
+	idTokenNonce: z.string().optional(),
+	/**
+	 * Server-controlled values that ride the state across the provider redirect.
+	 * Populated only by `generateState` from `addOAuthServerContext`, never from
+	 * the request body, so it is safe to trust on the callback.
+	 */
+	serverContext: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type StateData = z.infer<typeof stateDataSchema>;
+
+export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
+	Object.keys(stateDataSchema.shape),
+);
 
 export type StateErrorCode =
 	| "state_generation_error"

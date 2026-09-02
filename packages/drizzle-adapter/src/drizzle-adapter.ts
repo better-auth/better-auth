@@ -4,6 +4,10 @@ import type {
 	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
+	MigrationDatabaseConnection,
+	MigrationDatabaseDialect,
+	MigrationDatabaseQuery,
+	MigrationDatabaseQueryResult,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
@@ -13,12 +17,15 @@ import type { SQL } from "drizzle-orm";
 import {
 	and,
 	asc,
+	Column,
 	count,
 	desc,
 	eq,
+	getTableName,
 	gt,
 	gte,
 	inArray,
+	is,
 	isNotNull,
 	isNull,
 	like,
@@ -30,6 +37,10 @@ import {
 	sql,
 } from "drizzle-orm";
 import {
+	buildRelationKeysByModel,
+	getOneToOneRelationKey,
+} from "./join-relation-key";
+import {
 	insensitiveEq,
 	insensitiveIlike,
 	insensitiveInArray,
@@ -39,6 +50,447 @@ import {
 
 export interface DB {
 	[key: string]: any;
+}
+
+/**
+ * Derive the number of affected rows from a Drizzle write result.
+ *
+ * Drizzle returns the raw per-driver result for a non-returning write, so the
+ * count lives under a different field per driver: node-postgres / neon expose
+ * `rowCount`, postgres-js / bun-sql carry `count` on an Array subclass, mysql2
+ * reports `affectedRows` (in a result-header array), planetscale and other
+ * serverless drivers use `rowsAffected`, better-sqlite3 uses `changes`, and
+ * Cloudflare D1 nests the count under `meta.changes`. This normalizes them so
+ * write methods that depend on affected rows honor the adapter contract instead
+ * of leaking the raw driver result.
+ */
+function getAffectedRowCount(
+	result: unknown,
+	operation: "updateMany" | "deleteMany" | "consumeOne",
+	context: { model: string; where: Where[] },
+): number {
+	let count: unknown = 0;
+	if (result && typeof result === "object" && "rowCount" in result) {
+		// node-postgres / neon expose `rowCount`.
+		count = (result as { rowCount: unknown }).rowCount;
+	} else if (
+		result &&
+		typeof result === "object" &&
+		typeof (result as { count?: unknown }).count === "number"
+	) {
+		// postgres-js / bun-sql return an Array subclass carrying `count`.
+		// A non-returning write has length 0, so read this before the Array
+		// branch falls back to `result.length`.
+		count = (result as { count: number }).count;
+	} else if (Array.isArray(result)) {
+		// mysql2 returns a `[ResultSetHeader]` tuple.
+		count =
+			result.length > 0 && hasDriverRowCount(result[0])
+				? readDriverRowCount(result[0])
+				: result.length;
+	} else if (hasDriverRowCount(result)) {
+		count = readDriverRowCount(result);
+	}
+	if (typeof count !== "number" || !Number.isFinite(count)) {
+		logger.error(
+			`[Drizzle Adapter] The result of the ${operation} operation is not a finite number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
+			{ result, ...context },
+		);
+		throw new BetterAuthError(
+			`Drizzle adapter ${operation} returned an invalid affected row count`,
+		);
+	}
+	return count;
+}
+
+function readDriverRowCount(result: unknown): unknown {
+	if (!result || typeof result !== "object") return undefined;
+	const driverResult = result as Record<string, unknown>;
+	if ("rowCount" in driverResult) return driverResult.rowCount;
+	if ("count" in driverResult) return driverResult.count;
+	if ("affectedRows" in driverResult) return driverResult.affectedRows;
+	if ("rowsAffected" in driverResult) return driverResult.rowsAffected;
+	if ("changes" in driverResult) return driverResult.changes;
+
+	// Cloudflare D1 nests the affected-row count under `meta.changes`.
+	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
+	if ("meta" in driverResult) {
+		const meta = driverResult.meta;
+		if (meta && typeof meta === "object" && "changes" in meta) {
+			return meta.changes;
+		}
+	}
+
+	return undefined;
+}
+
+function hasDriverRowCount(result: unknown): boolean {
+	return readDriverRowCount(result) !== undefined;
+}
+
+function isDriverResultHeader(result: unknown): boolean {
+	if (!result || typeof result !== "object") return false;
+	const driverResult = result as Record<string, unknown>;
+	return (
+		"affectedRows" in driverResult ||
+		"rowsAffected" in driverResult ||
+		"changes" in driverResult ||
+		("meta" in driverResult &&
+			driverResult.meta !== null &&
+			typeof driverResult.meta === "object" &&
+			"changes" in driverResult.meta)
+	);
+}
+
+function getMigrationRows(result: unknown): readonly Record<string, unknown>[] {
+	if (Array.isArray(result)) {
+		if (result.length > 0 && isDriverResultHeader(result[0])) return [];
+		if (Array.isArray(result[0])) {
+			return result[0].filter(
+				(row): row is Record<string, unknown> =>
+					typeof row === "object" && row !== null,
+			);
+		}
+		return result.filter(
+			(row): row is Record<string, unknown> =>
+				typeof row === "object" && row !== null,
+		);
+	}
+	if (!result || typeof result !== "object") return [];
+	if ("rows" in result && Array.isArray(result.rows)) {
+		return result.rows.filter(
+			(row): row is Record<string, unknown> =>
+				typeof row === "object" && row !== null,
+		);
+	}
+	if ("results" in result && Array.isArray(result.results)) {
+		return result.results.filter(
+			(row): row is Record<string, unknown> =>
+				typeof row === "object" && row !== null,
+		);
+	}
+	return [];
+}
+
+interface MigrationParameterMarker {
+	length: number;
+	offset: number;
+	parameterIndex: number;
+}
+
+function findMigrationParameterMarkers(
+	query: string,
+	dialect: MigrationDatabaseDialect,
+): MigrationParameterMarker[] {
+	const markers: MigrationParameterMarker[] = [];
+	let offset = 0;
+	let positionalParameter = 0;
+	while (offset < query.length) {
+		const character = query[offset];
+		const nextCharacter = query[offset + 1];
+
+		if (character === "-" && nextCharacter === "-") {
+			offset = query.indexOf("\n", offset + 2);
+			if (offset === -1) break;
+			continue;
+		}
+		if (dialect === "mysql" && character === "#") {
+			offset = query.indexOf("\n", offset + 1);
+			if (offset === -1) break;
+			continue;
+		}
+		if (character === "/" && nextCharacter === "*") {
+			let depth = 1;
+			offset += 2;
+			while (offset < query.length && depth > 0) {
+				if (query[offset] === "/" && query[offset + 1] === "*") {
+					depth += 1;
+					offset += 2;
+					continue;
+				}
+				if (query[offset] === "*" && query[offset + 1] === "/") {
+					depth -= 1;
+					offset += 2;
+					continue;
+				}
+				offset += 1;
+			}
+			continue;
+		}
+		if (character === "'" || character === '"' || character === "`") {
+			const quote = character;
+			offset += 1;
+			while (offset < query.length) {
+				if (dialect === "mysql" && query[offset] === "\\") {
+					offset += 2;
+					continue;
+				}
+				if (query[offset] !== quote) {
+					offset += 1;
+					continue;
+				}
+				if (query[offset + 1] === quote) {
+					offset += 2;
+					continue;
+				}
+				offset += 1;
+				break;
+			}
+			continue;
+		}
+		if (character === "[") {
+			offset += 1;
+			while (offset < query.length) {
+				if (query[offset] !== "]") {
+					offset += 1;
+					continue;
+				}
+				if (query[offset + 1] === "]") {
+					offset += 2;
+					continue;
+				}
+				offset += 1;
+				break;
+			}
+			continue;
+		}
+		if (dialect === "postgres" && character === "$") {
+			const dollarQuote = query
+				.slice(offset)
+				.match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0];
+			if (dollarQuote) {
+				const closingOffset = query.indexOf(
+					dollarQuote,
+					offset + dollarQuote.length,
+				);
+				offset =
+					closingOffset === -1
+						? query.length
+						: closingOffset + dollarQuote.length;
+				continue;
+			}
+			const parameterMarker = query.slice(offset).match(/^\$(\d+)/);
+			if (parameterMarker) {
+				markers.push({
+					length: parameterMarker[0].length,
+					offset,
+					parameterIndex: Number.parseInt(parameterMarker[1] ?? "", 10) - 1,
+				});
+				offset += parameterMarker[0].length;
+				continue;
+			}
+		}
+		if (dialect !== "postgres" && character === "?") {
+			markers.push({ length: 1, offset, parameterIndex: positionalParameter });
+			positionalParameter += 1;
+		}
+		offset += 1;
+	}
+	return markers;
+}
+
+function buildMigrationStatement(
+	query: MigrationDatabaseQuery,
+	dialect: MigrationDatabaseDialect,
+): SQL {
+	if (query.parameters.length === 0) return sql.raw(query.sql);
+	const markers = findMigrationParameterMarkers(query.sql, dialect);
+	const chunks: SQL[] = [];
+	let sqlOffset = 0;
+	for (const marker of markers) {
+		chunks.push(sql.raw(query.sql.slice(sqlOffset, marker.offset)));
+		const parameterIndex = marker.parameterIndex;
+		if (
+			!Number.isInteger(parameterIndex) ||
+			parameterIndex < 0 ||
+			parameterIndex >= query.parameters.length
+		) {
+			throw new BetterAuthError(
+				"Drizzle migration query has an invalid parameter marker.",
+			);
+		}
+		chunks.push(sql`${query.parameters[parameterIndex]}`);
+		sqlOffset = marker.offset + marker.length;
+	}
+	chunks.push(sql.raw(query.sql.slice(sqlOffset)));
+	if (
+		(dialect === "postgres"
+			? new Set(markers.map(({ parameterIndex }) => parameterIndex)).size
+			: markers.length) !== query.parameters.length
+	) {
+		throw new BetterAuthError(
+			"Drizzle migration query parameter count does not match its SQL markers.",
+		);
+	}
+	return sql.join(chunks, sql.raw(""));
+}
+
+function getMigrationQueryResult(
+	driverResult: unknown,
+	isRead: boolean,
+): MigrationDatabaseQueryResult {
+	if (isRead) return { rows: getMigrationRows(driverResult) };
+	const affectedRows =
+		Array.isArray(driverResult) && driverResult.length > 0
+			? (readDriverRowCount(driverResult[0]) ??
+				readDriverRowCount(driverResult))
+			: readDriverRowCount(driverResult);
+	return {
+		rows: getMigrationRows(driverResult),
+		...(typeof affectedRows === "number" && Number.isFinite(affectedRows)
+			? { numAffectedRows: BigInt(affectedRows) }
+			: {}),
+	};
+}
+
+function isDrizzleMigrationRead(query: MigrationDatabaseQuery): boolean {
+	const sql = query.sql.trimStart();
+	if (/^(?:select|with|explain)\b/i.test(sql)) return true;
+	return /^pragma\b/i.test(sql) && !/^pragma\b[^;]*=/i.test(sql);
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+	return (
+		value !== null &&
+		(typeof value === "object" || typeof value === "function") &&
+		"then" in value &&
+		typeof value.then === "function"
+	);
+}
+
+function createDrizzleMigrationConnection(
+	db: DB,
+	dialect: MigrationDatabaseDialect,
+	drizzleSchema: Record<string, unknown> | undefined,
+	inTransaction = false,
+	supportsTransactions = true,
+): MigrationDatabaseConnection {
+	const connection: MigrationDatabaseConnection = {
+		dialect,
+		async resolvePhysicalSchema(schema) {
+			if (!drizzleSchema) {
+				throw new BetterAuthError(
+					"Drizzle migration schema resolution requires a schema object.",
+				);
+			}
+			return Object.fromEntries(
+				Object.entries(schema).map(([schemaKey, table]) => {
+					const drizzleTable =
+						drizzleSchema[schemaKey] ?? drizzleSchema[table.modelName];
+					if (!drizzleTable || typeof drizzleTable !== "object") {
+						throw new BetterAuthError(
+							`Drizzle migration schema could not resolve model "${table.modelName}".`,
+						);
+					}
+					const fields = Object.fromEntries(
+						Object.entries(table.fields).map(([fieldKey, field]) => {
+							const drizzleFieldName = field.fieldName || fieldKey;
+							const drizzleTableFields = drizzleTable as Record<
+								string,
+								unknown
+							>;
+							const column =
+								drizzleTableFields[fieldKey] ??
+								drizzleTableFields[drizzleFieldName];
+							if (!is(column, Column)) {
+								throw new BetterAuthError(
+									`Drizzle migration schema could not resolve field "${drizzleFieldName}" on model "${table.modelName}".`,
+								);
+							}
+							return [
+								fieldKey,
+								{
+									...field,
+									fieldName: column.name,
+								},
+							];
+						}),
+					);
+					return [
+						schemaKey,
+						{
+							...table,
+							modelName: getTableName(drizzleTable as never),
+							fields,
+						},
+					];
+				}),
+			);
+		},
+		async execute(query) {
+			const statement = buildMigrationStatement(query, dialect);
+			const isRead = isDrizzleMigrationRead(query);
+			const driverResult =
+				dialect === "sqlite"
+					? isRead
+						? await db.all(statement)
+						: await db.run(statement)
+					: await db.execute(statement);
+			return getMigrationQueryResult(driverResult, isRead);
+		},
+	};
+	if (inTransaction || !supportsTransactions) return connection;
+	connection.transaction = async (callback) => {
+		if (dialect === "sqlite") {
+			const probe = db.run(sql.raw("SELECT 1"));
+			if (isPromiseLike(probe)) {
+				await probe;
+				if (typeof db.transaction !== "function") {
+					throw new BetterAuthError(
+						"Drizzle migration transactions for asynchronous SQLite drivers require a native transaction-scoped database.",
+					);
+				}
+				return db.transaction((transactionDatabase: DB) =>
+					callback(
+						createDrizzleMigrationConnection(
+							transactionDatabase,
+							dialect,
+							drizzleSchema,
+							true,
+							true,
+						),
+					),
+				);
+			}
+			await connection.execute({
+				parameters: [],
+				sql: "BEGIN IMMEDIATE",
+			});
+			try {
+				const result = await callback(
+					createDrizzleMigrationConnection(
+						db,
+						dialect,
+						drizzleSchema,
+						true,
+						true,
+					),
+				);
+				await connection.execute({ parameters: [], sql: "COMMIT" });
+				return result;
+			} catch (error) {
+				await connection.execute({ parameters: [], sql: "ROLLBACK" });
+				throw error;
+			}
+		}
+		if (typeof db.transaction !== "function") {
+			throw new BetterAuthError(
+				`Drizzle does not expose transactions for the ${dialect} migration connection.`,
+			);
+		}
+		return db.transaction((transactionDatabase: DB) =>
+			callback(
+				createDrizzleMigrationConnection(
+					transactionDatabase,
+					dialect,
+					drizzleSchema,
+					true,
+					true,
+				),
+			),
+		);
+	};
+	return connection;
 }
 
 export interface DrizzleAdapterConfig {
@@ -77,11 +529,28 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Database schema namespace, used during the Better Auth CLI to generate the schema.
+	 *
+	 * Only applies to PostgreSQL. It will generate something like this:
+	 *
+	 * ```ts
+	 * export const authSchema = pgSchema("auth");
+	 *
+	 * export const user = authSchema.table("user", {...});
+	 * export const session = authSchema.table("session", {...});
+	 * ```
+	 *
+	 * @example "auth"
+	 * @default undefined
+	 */
+	schemaName?: string | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
+	const relationKeysByModel = buildRelationKeysByModel(db._?.schema);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({
@@ -253,18 +722,22 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			};
 			function convertWhereClause(where: Where[], model: string) {
 				const schemaModel = getSchema(model);
+				const resolveFieldName = (where: Where) => {
+					const field = getFieldName({ model, field: where.field });
+					if (!is(schemaModel[field], Column)) {
+						throw new BetterAuthError(
+							`The field "${where.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+						);
+					}
+					return field;
+				};
 				if (!where) return [];
 				if (where.length === 1) {
 					const w = where[0];
 					if (!w) {
 						return [];
 					}
-					const field = getFieldName({ model, field: w.field });
-					if (!schemaModel[field]) {
-						throw new BetterAuthError(
-							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
-						);
-					}
+					const field = resolveFieldName(w);
 					const mode = w.mode ?? "sensitive";
 					const isInsensitive =
 						mode === "insensitive" &&
@@ -378,7 +851,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				const andClause = and(
 					...andGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
+						const field = resolveFieldName(w);
 						const mode = w.mode ?? "sensitive";
 						const isInsensitive =
 							mode === "insensitive" &&
@@ -481,12 +954,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
-						if (!schemaModel[field]) {
-							throw new BetterAuthError(
-								`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
-							);
-						}
+						const field = resolveFieldName(w);
 						const mode = w.mode ?? "sensitive";
 						const isInsensitive =
 							mode === "insensitive" &&
@@ -632,6 +1100,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			 *    corresponds to the same table object
 			 */
 			function getQueryModel(model: string): string | null {
+				if (!db.query) return null;
 				if (db.query[model]) return model;
 
 				if (config.usePlural) {
@@ -656,6 +1125,25 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return null;
 			}
 
+			function getJoinRelationKey(
+				baseModel: string,
+				joinModel: string,
+				relationKeys: ReadonlySet<string> | undefined,
+				isUnique: boolean,
+			) {
+				if (isUnique) {
+					return getOneToOneRelationKey({
+						baseModel,
+						joinModel,
+						relationKeys,
+						schema: baSchema,
+						getDefaultModelName,
+					});
+				}
+				// Preserve the legacy Relations v1 generator rule: append "s" when usePlural is disabled.
+				return config.usePlural ? joinModel : `${joinModel}s`;
+			}
+
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
@@ -668,7 +1156,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
@@ -680,23 +1168,28 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const isUnique = joinAttr.relation === "one-to-one";
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
-									if (!isUnique) {
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
-									}
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [joinModel, joinAttr] of joinEntries) {
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const isUnique = joinAttr.relation === "one-to-one";
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
+								includes[relationKey] = isUnique ? true : { limit };
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
 								}
 							}
 							const query = db.query[queryModel].findFirst({
@@ -716,14 +1209,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const pluralJoinResult of pluralJoinResults) {
-									const singularKey = !config.usePlural
-										? pluralJoinResult.slice(0, -1)
-										: pluralJoinResult;
-									res[singularKey] = res[pluralJoinResult];
-									if (pluralJoinResult !== singularKey) {
-										delete res[pluralJoinResult];
-									}
+								for (const { key, target } of renamedJoinResults) {
+									res[target] = res[key];
+									delete res[key];
 								}
 							}
 							return res;
@@ -755,9 +1243,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
-						if (!queryModel) {
+						if (!db.query || !queryModel) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
@@ -767,22 +1255,28 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const isUnique = joinAttr.relation === "one-to-one";
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
-									if (!isUnique)
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [joinModel, joinAttr] of joinEntries) {
+								const isUnique = joinAttr.relation === "one-to-one";
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
+								includes[relationKey] = isUnique ? true : { limit };
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
 								}
 							}
 							let orderBy: SQL<unknown>[] | undefined = undefined;
@@ -813,13 +1307,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const pluralJoinResult of pluralJoinResults) {
-										const singularKey = !config.usePlural
-											? pluralJoinResult.slice(0, -1)
-											: pluralJoinResult;
-										if (singularKey === pluralJoinResult) continue;
-										item[singularKey] = item[pluralJoinResult];
-										delete item[pluralJoinResult];
+									for (const { key, target } of renamedJoinResults) {
+										item[target] = item[key];
+										delete item[key];
 									}
 								}
 							}
@@ -888,7 +1378,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
-					return await builder;
+					const res = await builder;
+					return getAffectedRowCount(res, "updateMany", { model, where });
 				},
 				async delete({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -901,21 +1392,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = convertWhereClause(where, model);
 					const builder = db.delete(schemaModel).where(...clause);
 					const res = await builder;
-					let count = 0;
-					if (res && "rowCount" in res) count = res.rowCount;
-					else if (Array.isArray(res)) count = res.length;
-					else if (
-						res &&
-						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
-					)
-						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
-					if (typeof count !== "number") {
-						logger.error(
-							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
-							{ res, model, where },
-						);
-					}
-					return count;
+					return getAffectedRowCount(res, "deleteMany", { model, where });
 				},
 				async consumeOne({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -944,12 +1421,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.delete(schemaModel)
 								.where(eq(idColumn, targetId))
 								.execute();
-							const count =
-								(delRes &&
-									(delRes.rowsAffected ??
-										delRes.affectedRows ??
-										delRes.changes)) ??
-								0;
+							const count = getAffectedRowCount(delRes, "consumeOne", {
+								model,
+								where,
+							});
 							return count > 0 ? (target as any) : null;
 						};
 						return inTransaction
@@ -971,6 +1446,91 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.returning();
 					return (deleted[0] as any) ?? null;
 				},
+				async incrementOne({ model, where, increment, set }) {
+					const schemaModel = getSchema(model);
+					const clause = convertWhereClause(where, model);
+					const idField = getFieldName({ model, field: "id" });
+					const idColumn = schemaModel[idField];
+
+					// Build `field = field + delta` for each increment plus the absolute
+					// `set` assignments. The where clause selects and guards the row, but
+					// the mutation is pinned to a single id so a non-unique guard cannot
+					// touch more than one row (single-row contract, like consumeOne).
+					const assignments: Record<string, unknown> = {};
+					for (const [field, delta] of Object.entries(increment)) {
+						const columnName = getFieldName({ model, field });
+						const column = schemaModel[columnName];
+						if (!column) {
+							throw new BetterAuthError(
+								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+							);
+						}
+						assignments[columnName] = sql`${column} + ${sql.param(delta)}`;
+					}
+					if (set) {
+						for (const [field, value] of Object.entries(set)) {
+							const columnName = getFieldName({ model, field });
+							if (!schemaModel[columnName]) {
+								throw new BetterAuthError(
+									`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+								);
+							}
+							assignments[columnName] = value;
+						}
+					}
+
+					if (config.provider === "mysql") {
+						// MySQL has no UPDATE ... RETURNING. Hold the guarded row under
+						// SELECT ... FOR UPDATE inside a transaction so concurrent updates
+						// serialize, then read the mutated row back by id.
+						const mutateInTransaction = async (tx: DB) => {
+							const rows = await tx
+								.select()
+								.from(schemaModel)
+								.where(...clause)
+								.for("update")
+								.limit(1);
+							const target = rows[0];
+							if (!target) return null;
+							const targetId = target[idField] ?? (target as any).id;
+							if (targetId === undefined || targetId === null || !idColumn) {
+								return null;
+							}
+							await tx
+								.update(schemaModel)
+								.set(assignments)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const updated = await tx
+								.select()
+								.from(schemaModel)
+								.where(eq(idColumn, targetId))
+								.limit(1)
+								.execute();
+							return (updated[0] as any) ?? null;
+						};
+						return inTransaction
+							? mutateInTransaction(db)
+							: db.transaction(mutateInTransaction);
+					}
+
+					if (!idColumn) {
+						return null;
+					}
+					// Pin the update to one selected id so a non-unique guard mutates at
+					// most one row, mirroring consumeOne's single-row selection.
+					const targetIds = db
+						.select({ id: idColumn })
+						.from(schemaModel)
+						.where(...clause)
+						.limit(1);
+					const updated = await db
+						.update(schemaModel)
+						.set(assignments)
+						.where(inArray(idColumn, targetIds))
+						.returning();
+					return (updated[0] as any) ?? null;
+				},
 				options: config,
 			};
 		};
@@ -979,6 +1539,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		config: {
 			adapterId: "drizzle",
 			adapterName: "Drizzle Adapter",
+			migrationConnection: createDrizzleMigrationConnection(
+				db,
+				config.provider === "pg" ? "postgres" : config.provider,
+				config.schema || db._?.fullSchema,
+				false,
+				config.transaction === true,
+			),
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,

@@ -6,6 +6,7 @@ import { PACKAGE_VERSION } from "../../version";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { RequiredPhoneNumberOptions } from "./routes";
 import {
+	consumePhoneNumberOTP,
 	requestPasswordResetPhoneNumber,
 	resetPasswordPhoneNumber,
 	sendPhoneNumberOTP,
@@ -85,6 +86,9 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 		endpoints: {
 			signInPhoneNumber: signInPhoneNumber(opts as RequiredPhoneNumberOptions),
 			sendPhoneNumberOTP: sendPhoneNumberOTP(
+				opts as RequiredPhoneNumberOptions,
+			),
+			consumePhoneNumberOTP: consumePhoneNumberOTP(
 				opts as RequiredPhoneNumberOptions,
 			),
 			verifyPhoneNumber: verifyPhoneNumber(opts as RequiredPhoneNumberOptions),
