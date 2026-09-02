@@ -11,6 +11,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
+	createSessionStore,
 	decodeCookieCache,
 	deleteSessionCookie,
 	expireCookie,
@@ -18,10 +19,7 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import {
-	createSessionStore,
-	getSessionQuerySchema,
-} from "../../cookies/session-store";
+import { getSessionQuerySchema } from "../../cookies/session-store";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
@@ -95,15 +93,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					return null;
 				}
 
-				const isCookieCacheEnabled =
-					ctx.context.options.session?.cookieCache?.enabled;
+				const cookieCache = ctx.context.options.session?.cookieCache;
 				const shouldUseCookieCache =
-					isCookieCacheEnabled && !ctx.query?.disableCookieCache;
+					cookieCache?.enabled && !ctx.query?.disableCookieCache;
 				const sessionDataCookie = getChunkedCookie(
 					ctx,
 					ctx.context.authCookies.sessionData.name,
 				);
-				if (sessionDataCookie && !isCookieCacheEnabled) {
+				if (sessionDataCookie && !cookieCache?.enabled) {
 					const sessionStore = createSessionStore(
 						ctx.context.authCookies.sessionData.name,
 						ctx.context.authCookies.sessionData.attributes,

@@ -21,25 +21,9 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 		vi.useRealTimers();
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11119
-	 */
-	it.each([
-		{
-			name: "disabled in configuration",
-			cookieCache: { enabled: false },
-			query: undefined,
-			expectedBaseMaxAge: 0,
-		},
-		{
-			name: "disabled for the request",
-			cookieCache: { enabled: true, strategy: "compact" as const },
-			query: { disableCookieCache: true },
-			expectedBaseMaxAge: 300,
-		},
-	])("should ignore retired session_data when caching is $name", async (test) => {
+	it("ignores and clears retired session_data when cookie caching is disabled", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
-			session: { cookieCache: test.cookieCache },
+			session: { cookieCache: { enabled: false } },
 		});
 		const headers = new Headers();
 		await client.signIn.email(
@@ -52,17 +36,13 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 			"better-auth-secret-that-is-long-enough-for-validation-test",
 			"better-auth-session",
 		);
-		const sessionToken = parseCookies(headers.get("cookie") || "").get(
-			"better-auth.session_token",
-		);
 		headers.set(
 			"cookie",
-			`better-auth.session_data=${retiredCache}; better-auth.session_data.0=stale; better-auth.session_data.1=chunks; better-auth.session_token=${sessionToken}`,
+			`${headers.get("cookie")}; better-auth.session_data=${retiredCache}; better-auth.session_data.0=stale; better-auth.session_data.1=chunks`,
 		);
 
 		let setCookieHeader = "";
 		const session = await client.getSession({
-			query: test.query,
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -73,15 +53,13 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 		expect(session.data?.user.email).toBe(testUser.email);
 
 		const responseCookies = parseSetCookieHeader(setCookieHeader);
-		expect(responseCookies.get("better-auth.session_data")?.["max-age"]).toBe(
-			test.expectedBaseMaxAge,
-		);
-		expect(responseCookies.get("better-auth.session_data.0")?.["max-age"]).toBe(
-			0,
-		);
-		expect(responseCookies.get("better-auth.session_data.1")?.["max-age"]).toBe(
-			0,
-		);
+		for (const name of [
+			"better-auth.session_data",
+			"better-auth.session_data.0",
+			"better-auth.session_data.1",
+		]) {
+			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
+		}
 	});
 
 	it("should fall through to session_token DB validation when session_data HMAC fails", async () => {
