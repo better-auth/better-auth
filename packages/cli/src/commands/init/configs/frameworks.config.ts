@@ -97,6 +97,11 @@ export const { GET, POST } = toNextJsHandler(auth.handler);`,
 		name: "Nuxt",
 		id: "nuxt",
 		dependency: "nuxt",
+		setup: {
+			name: "@nuxtjs/better-auth",
+			executable: "nuxi",
+			args: ["module", "add", "@nuxtjs/better-auth"],
+		},
 		authClient: {
 			importPath: "better-auth/vue",
 		},
@@ -226,6 +231,11 @@ export const Route = createFileRoute('/api/auth/$')({
 	name: string;
 	id: string;
 	dependency: string;
+	setup?: {
+		name: string;
+		executable: string;
+		args: readonly string[];
+	};
 	authClient: {
 		importPath: string;
 	} | null;

@@ -13,13 +13,13 @@ The [`@nuxtjs/better-auth`](https://better-auth.nuxt.dev) module is the recommen
   The Nuxt module is maintained by the Nuxt Modules team outside the Better Auth repository. Report module-specific issues in the [`nuxt-modules/better-auth`](https://github.com/nuxt-modules/better-auth/issues) repository.
 </Callout>
 
-{/* cspell:ignore nuxi */}
+Run Better Auth's CLI from your Nuxt project:
 
 ```package-install title="Terminal"
-npx nuxi module add @nuxtjs/better-auth
+npx auth@latest init
 ```
 
-The command adds the module to `nuxt.config` and creates server and client configuration files. Continue with the [Nuxt module installation guide](https://better-auth.nuxt.dev/getting-started/installation) to configure your secret, authentication methods, and database.
+The CLI detects Nuxt and asks to install the module. The module install updates `nuxt.config` and creates server and client configuration files. Continue with the [Nuxt module installation guide](https://better-auth.nuxt.dev/getting-started/installation) to configure your secret, authentication methods, and database.
 
 <Accordions>
   <Accordion id="manual-setup" title="Manual setup">

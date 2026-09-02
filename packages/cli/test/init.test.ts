@@ -1,4 +1,4 @@
-import { exec as execMock } from "node:child_process";
+import { exec as execMock, spawn as spawnMock } from "node:child_process";
 import path from "node:path";
 import { vol } from "memfs";
 import prompts from "prompts";
@@ -31,6 +31,7 @@ vi.mock("prompts", () => ({
 }));
 vi.mock("node:child_process", () => ({
 	exec: vi.fn(),
+	spawn: vi.fn(),
 }));
 vi.mock("../src/utils/get-package-info", () => {
 	const mockGetPackageInfo = vi.fn();
@@ -67,12 +68,83 @@ vi.mock("../src/generators/drizzle", () => ({
 // Type the mocked functions
 const mockPrompts = vi.mocked(prompts);
 const mockExec = vi.mocked(execMock);
+const mockSpawn = vi.mocked(spawnMock);
 const mockGetPackageInfo = vi.mocked(getPackageInfo);
 const mockHasDependency = vi.mocked(hasDependency);
 const mockDetectPackageManager = vi.mocked(detectPackageManager);
 const mockInstallDependencies = vi.mocked(installDependencies);
 const mockGeneratePrismaSchema = vi.mocked(generatePrismaSchema);
 const mockGenerateDrizzleSchema = vi.mocked(generateDrizzleSchema);
+
+const setupNuxtProject = async (
+	tmp: string,
+	{ includeBetterAuth = false }: { includeBetterAuth?: boolean } = {},
+) => {
+	const packageJson = {
+		name: "nuxt-project",
+		version: "1.0.0",
+		dependencies: {
+			...(includeBetterAuth ? { "better-auth": "latest" } : {}),
+			nuxt: "latest",
+		},
+	};
+	await fs.writeFile(
+		path.join(tmp, "package.json"),
+		JSON.stringify(packageJson),
+	);
+	mockGetPackageInfo.mockReturnValue(packageJson);
+	mockHasDependency.mockImplementation(
+		(_packageJson, dependency) => dependency in packageJson.dependencies,
+	);
+};
+
+const mockManualNuxtSetupPrompts = () => {
+	mockPrompts.mockImplementation(async (questions: any) => {
+		const question = Array.isArray(questions) ? questions[0] : questions;
+
+		if (question.message?.includes("@nuxtjs/better-auth")) {
+			return { value: false };
+		}
+		if (question.message?.includes("set environment variables")) {
+			return { value: false };
+		}
+		if (question.message?.includes("auth instance")) {
+			return { filePath: "lib/auth.ts" };
+		}
+		if (question.message?.includes("configure a database")) {
+			return { value: "skip" };
+		}
+		if (
+			question.message?.includes("email & password") ||
+			question.message?.includes("setup social providers") ||
+			question.message?.includes("auth client configuration")
+		) {
+			return { value: false };
+		}
+		if (question.message?.includes("route handler")) {
+			return { filePath: "server/api/auth/[...all].ts" };
+		}
+		if (question.name === "connect") {
+			return { connect: false };
+		}
+
+		return {};
+	});
+};
+
+const mockFrameworkSetupExit = (exitCode: number) => {
+	mockSpawn.mockImplementation(() => {
+		const child = {
+			once: (event: string, listener: (value: number | null) => void) => {
+				if (event === "close") {
+					queueMicrotask(() => listener(exitCode));
+				}
+				return child;
+			},
+		};
+		return child as unknown as ReturnType<typeof spawnMock>;
+	});
+};
 
 describe("initAction", () => {
 	let originalExit: typeof process.exit;
@@ -119,6 +191,68 @@ describe("initAction", () => {
 		process.exit = originalExit;
 		vi.restoreAllMocks();
 	});
+
+	for (const [packageManager, command, prefix] of [
+		["npm", "npx", []],
+		["pnpm", "pnpm", []],
+		["yarn", "yarn", []],
+		["bun", "bun", ["x"]],
+	] as const) {
+		testWithTmpDir(
+			`should delegate Nuxt setup with ${packageManager}`,
+			async ({ tmp }) => {
+				await setupNuxtProject(tmp);
+				mockDetectPackageManager.mockResolvedValue({ packageManager });
+				mockPrompts.mockResolvedValue({ value: true });
+				mockFrameworkSetupExit(0);
+
+				await initAction({ cwd: tmp });
+
+				expect(mockSpawn).toHaveBeenCalledWith(
+					command,
+					[...prefix, "nuxi", "module", "add", "@nuxtjs/better-auth"],
+					expect.objectContaining({
+						cwd: path.resolve(tmp),
+						stdio: "inherit",
+					}),
+				);
+				expect(mockPrompts).toHaveBeenCalledOnce();
+				expect(mockInstallDependencies).not.toHaveBeenCalled();
+			},
+		);
+	}
+
+	testWithTmpDir(
+		"should report a failed Nuxt module setup",
+		async ({ tmp }) => {
+			await setupNuxtProject(tmp);
+			mockPrompts.mockResolvedValue({ value: true });
+			mockFrameworkSetupExit(1);
+
+			await expect(initAction({ cwd: tmp })).rejects.toThrow(
+				"@nuxtjs/better-auth setup exited with code 1.",
+			);
+			expect(mockInstallDependencies).not.toHaveBeenCalled();
+		},
+	);
+
+	testWithTmpDir(
+		"should keep the manual Nuxt setup when the module is declined",
+		async ({ tmp }) => {
+			await setupNuxtProject(tmp, { includeBetterAuth: true });
+			mockManualNuxtSetupPrompts();
+
+			await initAction({ cwd: tmp });
+
+			expect(mockSpawn).not.toHaveBeenCalled();
+			expect(
+				await fs.readFile(
+					path.join(tmp, "server/api/auth/[...all].ts"),
+					"utf-8",
+				),
+			).toContain("auth.handler");
+		},
+	);
 
 	testWithTmpDir(
 		"should complete full init flow with database setup",

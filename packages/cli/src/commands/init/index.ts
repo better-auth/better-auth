@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import chalk from "chalk";
@@ -415,6 +415,49 @@ export async function initAction(opts: any) {
 	>();
 	const filesToWrite: (() => Promise<unknown>)[] = [];
 
+	// Let frameworks with a dedicated integration own their setup.
+	const detectedFramework = await detectFramework(cwd, packageJson);
+	if (detectedFramework && "setup" in detectedFramework) {
+		const shouldUseFrameworkSetup = await confirm({
+			message: `Would you like to set up Better Auth with ${chalk.cyan(detectedFramework.setup.name)}?`,
+			initial: true,
+		});
+		if (isCancel(shouldUseFrameworkSetup)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+
+		if (shouldUseFrameworkSetup) {
+			await nextStep(`Install ${detectedFramework.setup.name}`);
+			const setupCommand = pm === "npm" ? "npx" : pm;
+			const setupArgs = [
+				...(pm === "bun" ? ["x"] : []),
+				detectedFramework.setup.executable,
+				...detectedFramework.setup.args,
+			];
+			await new Promise<void>((resolve, reject) => {
+				const child = spawn(setupCommand, setupArgs, {
+					cwd,
+					stdio: "inherit",
+					shell: process.platform === "win32",
+				});
+				child.once("error", reject);
+				child.once("close", (code) => {
+					if (code === 0) {
+						resolve();
+						return;
+					}
+					reject(
+						new Error(
+							`${detectedFramework.setup.name} setup exited with code ${code ?? "unknown"}.`,
+						),
+					);
+				});
+			});
+			return;
+		}
+	}
+
 	// Install Better Auth
 	await (async () => {
 		const hasBetterAuth = await hasDependency(packageJson, "better-auth");
@@ -579,7 +622,6 @@ export async function initAction(opts: any) {
 	})();
 
 	// Auto-detect framework silently
-	const detectedFramework = await detectFramework(cwd, packageJson);
 	let framework: Framework =
 		detectedFramework || FRAMEWORKS.find((f) => f.id === "next")!;
 	const frameworkWasDetected = !!detectedFramework;
