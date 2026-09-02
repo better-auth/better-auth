@@ -18,7 +18,10 @@ import {
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
-import { getSessionQuerySchema } from "../../cookies/session-store";
+import {
+	createSessionStore,
+	getSessionQuerySchema,
+} from "../../cookies/session-store";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
@@ -92,15 +95,28 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					return null;
 				}
 
-				const sessionDataCookie = ctx.context.options.session?.cookieCache
-					?.enabled
-					? getChunkedCookie(ctx, ctx.context.authCookies.sessionData.name)
-					: null;
+				const isCookieCacheEnabled =
+					ctx.context.options.session?.cookieCache?.enabled;
+				const shouldUseCookieCache =
+					isCookieCacheEnabled && !ctx.query?.disableCookieCache;
+				const sessionDataCookie = getChunkedCookie(
+					ctx,
+					ctx.context.authCookies.sessionData.name,
+				);
+				if (sessionDataCookie && !isCookieCacheEnabled) {
+					const sessionStore = createSessionStore(
+						ctx.context.authCookies.sessionData.name,
+						ctx.context.authCookies.sessionData.attributes,
+						ctx,
+					);
+					sessionStore.setCookies(sessionStore.clean());
+				}
 
-				const sessionDataPayload = sessionDataCookie
-					? await decodeCookieCache(ctx, sessionDataCookie)
-					: null;
-				if (sessionDataCookie && !sessionDataPayload) {
+				const sessionDataPayload =
+					shouldUseCookieCache && sessionDataCookie
+						? await decodeCookieCache(ctx, sessionDataCookie)
+						: null;
+				if (shouldUseCookieCache && sessionDataCookie && !sessionDataPayload) {
 					expireCookie(ctx, ctx.context.authCookies.sessionData);
 				}
 
@@ -112,11 +128,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				/**
 				 * If session data is present in the cookie, check if it should be used or refreshed
 				 */
-				if (
-					sessionDataPayload?.session &&
-					ctx.context.options.session?.cookieCache?.enabled &&
-					!ctx.query?.disableCookieCache
-				) {
+				if (sessionDataPayload?.session && shouldUseCookieCache) {
 					const session = sessionDataPayload.session;
 
 					let shouldExpireCookieCache =
