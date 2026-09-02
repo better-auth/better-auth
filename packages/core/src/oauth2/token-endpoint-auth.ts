@@ -201,6 +201,7 @@ export async function applyTokenEndpointAuth({
 			tokenEndpoint,
 			grantType,
 		});
+		assertCompleteManualClientAssertion(body);
 		return;
 	}
 
