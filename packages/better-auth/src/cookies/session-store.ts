@@ -54,7 +54,11 @@ function readExistingChunks(
 	const cookies = parseCookies(ctx.headers?.get("cookie") || "");
 
 	for (const [name, value] of cookies) {
-		if (name.startsWith(cookieName)) {
+		if (
+			name === cookieName ||
+			(name.startsWith(`${cookieName}.`) &&
+				/^\d+$/.test(name.slice(cookieName.length + 1)))
+		) {
 			chunks[name] = value;
 		}
 	}

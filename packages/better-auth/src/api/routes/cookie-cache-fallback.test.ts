@@ -23,6 +23,12 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 
 	it("ignores and clears retired session_data when cookie caching is disabled", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
+			advanced: {
+				cookies: {
+					session_token: { name: "custom.session_token" },
+					session_data: { name: "custom.session" },
+				},
+			},
 			session: { cookieCache: { enabled: false } },
 		});
 		const headers = new Headers();
@@ -38,7 +44,7 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 		);
 		headers.set(
 			"cookie",
-			`${headers.get("cookie")}; better-auth.session_data=${retiredCache}; better-auth.session_data.0=stale; better-auth.session_data.1=chunks`,
+			`${headers.get("cookie")}; custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks`,
 		);
 
 		let setCookieHeader = "";
@@ -54,12 +60,13 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 
 		const responseCookies = parseSetCookieHeader(setCookieHeader);
 		for (const name of [
-			"better-auth.session_data",
-			"better-auth.session_data.0",
-			"better-auth.session_data.1",
+			"custom.session",
+			"custom.session.0",
+			"custom.session.1",
 		]) {
 			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
 		}
+		expect(responseCookies.has("custom.session_token")).toBe(false);
 	});
 
 	it("should fall through to session_token DB validation when session_data HMAC fails", async () => {
