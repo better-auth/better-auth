@@ -61,6 +61,7 @@ export default defineConfig({
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
 		"./src/plugins/siwe/index.ts",
+		"./src/plugins/solid-oidc/index.ts",
 		"./src/test-utils/index.ts",
 	],
 	treeshake: true,

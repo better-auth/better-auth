@@ -13,6 +13,7 @@
     "generic-oauth",
     "one-tap",
     "siwe",
+    "solid-oidc",
     "---Authorization---",
     "admin",
     "agent-auth",

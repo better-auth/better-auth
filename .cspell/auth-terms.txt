@@ -42,3 +42,5 @@ jkt
 reissuance
 TOCTOU
 SSOOIDC
+webid
+solidoidc

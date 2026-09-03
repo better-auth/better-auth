@@ -306,6 +306,11 @@
       "types": "./dist/plugins/siwe/index.d.mts",
       "default": "./dist/plugins/siwe/index.mjs"
     },
+    "./plugins/solid-oidc": {
+      "dev-source": "./src/plugins/solid-oidc/index.ts",
+      "types": "./dist/plugins/solid-oidc/index.d.mts",
+      "default": "./dist/plugins/solid-oidc/index.mjs"
+    },
     "./plugins/device-authorization": {
       "dev-source": "./src/plugins/device-authorization/index.ts",
       "types": "./dist/plugins/device-authorization/index.d.mts",
@@ -466,6 +471,9 @@
       ],
       "plugins/siwe": [
         "./dist/plugins/siwe/index.d.mts"
+      ],
+      "plugins/solid-oidc": [
+        "./dist/plugins/solid-oidc/index.d.mts"
       ],
       "plugins/device-authorization": [
         "./dist/plugins/device-authorization/index.d.mts"

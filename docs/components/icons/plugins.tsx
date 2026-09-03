@@ -3,6 +3,7 @@ import {
 	BotIcon,
 	FileBoxIcon,
 	FlaskConical,
+	IdCard,
 	Key,
 	KeyRound,
 	Mail,
@@ -69,6 +70,7 @@ export const pluginIcons = {
 			></path>
 		</svg>
 	),
+	pluginsSolidOIDC: () => <IdCard className="size-4" />,
 	pluginsSIWE: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

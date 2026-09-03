@@ -83,3 +83,6 @@ styl
 vbscript
 unvalidated
 describedby
+punct
+unparseable
+SPARQL
