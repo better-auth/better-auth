@@ -364,6 +364,51 @@ describe("siwx", async (it) => {
 		expect(error?.code).toBe("INVALID_NONCE_BINDING");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/7238#discussion_r3927843781
+	 */
+	it("should not leak internal error details to the client", async () => {
+		const secret = "constraint account_provider_id_unique on table account";
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwx({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage() {
+							throw new Error(secret);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siwxClient()],
+				},
+			},
+		);
+
+		await client.siwx.nonce({
+			address: evmAddress,
+			chainType: "evm",
+			chainId: "1",
+		});
+
+		const { error } = await client.siwx.verify({
+			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			signature: "valid_evm_signature",
+			address: evmAddress,
+			chainType: "evm",
+			chainId: "1",
+		});
+
+		expect(error).toBeDefined();
+		expect(error?.status).toBe(401);
+		expect(JSON.stringify(error)).not.toContain(secret);
+	});
+
 	it("should not allow nonce reuse", async () => {
 		const { client } = await getTestInstance(
 			{

@@ -358,9 +358,13 @@ export const siwx = (options: SIWXPluginOptions) => {
 						});
 					} catch (error: unknown) {
 						if (error instanceof APIError) throw error;
+						// Log the raw failure server-side only. Returning the underlying
+						// message to the client can disclose internal details (a DB
+						// exception may carry table, column, or constraint names) on an
+						// authentication endpoint.
+						ctx.context.logger.error("SIWX verification failed", error);
 						throw new APIError("UNAUTHORIZED", {
 							message: "Something went wrong. Please try again later.",
-							error: error instanceof Error ? error.message : "Unknown error",
 							status: 401,
 						});
 					}
