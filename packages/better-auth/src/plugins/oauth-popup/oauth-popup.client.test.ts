@@ -1,10 +1,34 @@
 // @vitest-environment happy-dom
 import type { BetterFetch } from "@better-fetch/fetch";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSignInPopup, popupBearerFetchPlugin } from "./client";
 import { OAUTH_POPUP_MESSAGE_TYPE, POPUP_TOKEN_STORAGE_KEY } from "./constants";
 
 const AUTH_ORIGIN = "https://auth.example.com";
+
+function createStorage(): Storage {
+	const store = new Map<string, string>();
+	return {
+		get length() {
+			return store.size;
+		},
+		clear() {
+			store.clear();
+		},
+		getItem(key) {
+			return store.get(key) ?? null;
+		},
+		key(index) {
+			return [...store.keys()][index] ?? null;
+		},
+		removeItem(key) {
+			store.delete(key);
+		},
+		setItem(key, value) {
+			store.set(key, String(value));
+		},
+	};
+}
 
 function fakePopup() {
 	return {
@@ -52,7 +76,14 @@ function post(origin: string, data: unknown) {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
-	localStorage.clear();
+	window.localStorage.clear();
+});
+
+beforeEach(() => {
+	Object.defineProperty(window, "localStorage", {
+		configurable: true,
+		value: createStorage(),
+	});
 });
 
 describe("signIn.popup completion gate", () => {
@@ -77,7 +108,7 @@ describe("signIn.popup completion gate", () => {
 			data: { success: true },
 			error: null,
 		});
-		expect(localStorage.getItem(POPUP_TOKEN_STORAGE_KEY)).toBe("real");
+		expect(window.localStorage.getItem(POPUP_TOKEN_STORAGE_KEY)).toBe("real");
 	});
 
 	it("ignores a wrong message type", async () => {
@@ -87,7 +118,7 @@ describe("signIn.popup completion gate", () => {
 		post(AUTH_ORIGIN, { type: OAUTH_POPUP_MESSAGE_TYPE, nonce, token: "real" });
 
 		await result;
-		expect(localStorage.getItem(POPUP_TOKEN_STORAGE_KEY)).toBe("real");
+		expect(window.localStorage.getItem(POPUP_TOKEN_STORAGE_KEY)).toBe("real");
 	});
 
 	it("relays a completion error from the auth origin", async () => {
@@ -110,7 +141,7 @@ describe("popup bearer fetch plugin", () => {
 		({ request: new Request(`${AUTH_ORIGIN}/api/auth${path}`) }) as never;
 
 	it("attaches the stored token only when embedded", async () => {
-		localStorage.setItem(POPUP_TOKEN_STORAGE_KEY, "tok");
+		window.localStorage.setItem(POPUP_TOKEN_STORAGE_KEY, "tok");
 
 		const topLevel = await popupBearerFetchPlugin.hooks!.onRequest!({
 			headers: new Headers(),
@@ -129,8 +160,8 @@ describe("popup bearer fetch plugin", () => {
 	});
 
 	it("clears the token when the session ends", async () => {
-		localStorage.setItem(POPUP_TOKEN_STORAGE_KEY, "tok");
+		window.localStorage.setItem(POPUP_TOKEN_STORAGE_KEY, "tok");
 		await popupBearerFetchPlugin.hooks!.onSuccess!(request("/sign-out"));
-		expect(localStorage.getItem(POPUP_TOKEN_STORAGE_KEY)).toBeNull();
+		expect(window.localStorage.getItem(POPUP_TOKEN_STORAGE_KEY)).toBeNull();
 	});
 });

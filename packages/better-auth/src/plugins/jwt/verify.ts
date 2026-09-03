@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAuthContext } from "@better-auth/core/context";
+import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import type { JWTPayload } from "jose";
 import { importJWK, jwtVerify } from "jose";
@@ -14,7 +14,7 @@ export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 	token: string,
 	options?: JwtOptions,
 ): Promise<(T & Required<Pick<JWTPayload, "sub" | "aud">>) | null> {
-	const ctx = await getCurrentAuthContext();
+	const ctx = getCurrentAuthEndpointContext();
 	try {
 		const parts = token.split(".");
 		if (parts.length !== 3) {

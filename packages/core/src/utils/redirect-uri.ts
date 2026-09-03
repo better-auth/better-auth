@@ -2,6 +2,26 @@ import * as z from "zod";
 import { isLoopbackHost } from "./host";
 import { DANGEROUS_URL_SCHEMES } from "./url";
 
+const REVERSE_DOMAIN_PRIVATE_USE_SCHEME =
+	/^[a-z](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i;
+
+/**
+ * Returns whether a parsed redirect URI uses an authority-free, reverse-domain
+ * private-use scheme as recommended by RFC 8252 §7.1.
+ */
+export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
+	const scheme = uri.protocol.slice(0, -1);
+	const schemeSpecificPart = uri.href.slice(uri.protocol.length);
+	return (
+		uri.protocol !== "http:" &&
+		uri.protocol !== "https:" &&
+		uri.host.length === 0 &&
+		schemeSpecificPart.startsWith("/") &&
+		!schemeSpecificPart.startsWith("//") &&
+		REVERSE_DOMAIN_PRIVATE_USE_SCHEME.test(scheme)
+	);
+}
+
 /**
  * Zod schema for OAuth redirect URIs and other developer-supplied URLs that the
  * server stores and later hands back to a browser.
