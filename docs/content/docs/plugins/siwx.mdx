@@ -132,7 +132,13 @@ The server builds the canonical message (`data.message`) that the wallet must si
 Sign the server-issued `data.message` with the user's wallet, then submit that exact message with the signature. The server accepts only an exact match, so the issued nonce is authoritative:
 
 ```ts title="verify-siwx.ts"
+// The `message` must be the exact string returned by `siwx.nonce` above.
 // For EVM chains
+const { data: nonce } = await authClient.siwx.nonce({
+  address: "0x1234567890abcdef1234567890abcdef12345678",
+  chainType: "evm",
+});
+
 const { data, error } = await authClient.siwx.verify({
   message: nonce.message, // the exact message returned by siwx.nonce
   signature: "0x...", // The signature from the user's wallet
@@ -143,8 +149,13 @@ const { data, error } = await authClient.siwx.verify({
 });
 
 // For Solana
-const { data, error } = await authClient.siwx.verify({
-  message: nonce.message, // the exact message returned by siwx.nonce
+const { data: solanaNonce } = await authClient.siwx.nonce({
+  address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
+  chainType: "solana",
+});
+
+const { data: solanaResult, error: solanaError } = await authClient.siwx.verify({
+  message: solanaNonce.message, // the exact message returned by siwx.nonce
   signature: "base58EncodedSignature",
   address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
   chainType: "solana",
