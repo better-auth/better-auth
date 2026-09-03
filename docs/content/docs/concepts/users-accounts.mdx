@@ -421,7 +421,7 @@ The `"issuer"` scope stores the verified authority. Provider configurations that
 
 The `"provider"` scope stores a deterministic namespace for each configured provider. Provider aliases therefore remain separate accounts. Protocol verification is unchanged by this storage choice.
 
-The `auth init` command selects `"provider"` for new projects. Existing configurations that omit `account.identityScope` continue to use issuer scope and log a warning during auth initialization. Keep the scope consistent across every application instance. Switching scopes on a populated v1.7 database requires an account re-key migration. See the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#choose-account-identity-scope) before changing it.
+The `auth init` command selects `"provider"` for new projects. Existing configurations that omit `account.identityScope` continue to use issuer scope. `auth migrate plan` reports this compatibility choice. Keep the scope consistent across every application instance. Switching scopes on a populated v1.7 database requires an account re-key migration. See the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#choose-account-identity-scope) before changing it.
 
 ### List User Accounts
 

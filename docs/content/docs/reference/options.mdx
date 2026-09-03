@@ -498,7 +498,7 @@ Controls the namespace stored in `issuer` and paired with `accountId` to identif
 
 The `"issuer"` scope stores the verified authority. When a provider has no trusted issuer, Better Auth uses a deterministic provider namespace. The `"provider"` scope always stores a deterministic namespace such as `local:oauth:google`.
 
-The `auth init` command generates `account: { identityScope: "provider" }`. Omitting this option continues to use issuer scope and logs a warning during auth initialization.
+The `auth init` command generates `account: { identityScope: "provider" }`. Omitting this option continues to use issuer scope. Auth initialization remains silent, while `auth migrate plan` reports this compatibility choice.
 
 Use `"provider"` when migrating populated 1.6 data to preserve `(providerId, accountId)` identity. Both scopes use the same Account schema and unique `(issuer, accountId)` index.
 

@@ -133,7 +133,7 @@ npx auth@latest init
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
 
-The generated `auth.ts` includes `account: { identityScope: "provider" }`. Existing configurations that omit this option continue to use issuer scope and log a warning during auth initialization.
+The generated `auth.ts` includes `account: { identityScope: "provider" }`. Existing configurations that omit this option continue to use issuer scope. `auth migrate plan` reports this compatibility choice.
 
 ## Upgrade
 
