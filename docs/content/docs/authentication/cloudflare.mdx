@@ -130,11 +130,9 @@ export const auth = betterAuth({
 })
 ```
 
-### Public clients
+### Clients without a secret
 
-Cloudflare OAuth clients are private by default, which limits authorization to members of the parent Cloudflare account. To let any Cloudflare user authorize your application, promote the client to public. Cloudflare requires a client name, logo, client URL, scopes, and DNS TXT verification for the client domain before promotion. Promotion is permanent, so review the client configuration first.
-
-For a public client, configure `token_endpoint_auth_method` as `none`, omit `clientSecret`, and set `tokenEndpointAuthMethod` to `none`. Better Auth uses PKCE for the authorization code flow.
+Cloudflare's [OAuth flow guidance](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#choose-a-flow) requires clients that cannot securely store a secret, such as browser-based, mobile, desktop, or CLI applications, to use the Authorization Code flow with PKCE (`S256`) and `token_endpoint_auth_method` set to `none`. For one of these clients, omit `clientSecret` and set `tokenEndpointAuthMethod` to `none`. Better Auth supplies the PKCE challenge and verifier during the authorization flow.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -148,6 +146,12 @@ export const auth = betterAuth({
     },
 })
 ```
+
+### Client visibility
+
+Cloudflare [client visibility](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#private-and-public-clients) is separate from token endpoint authentication. New OAuth clients are private, so only members of the parent Cloudflare account can authorize them. To allow any Cloudflare user to authorize your application, promote the client to public.
+
+Promotion requires a client name, logo, client URL, scopes, and DNS TXT verification for the client domain. It is permanent. Public visibility does not determine whether the client uses a secret; choose the token authentication method based on whether the application can securely store one.
 
 ### Refresh tokens
 
