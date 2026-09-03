@@ -13,7 +13,7 @@ import type {
 	SIWXVerifyMessageArgs,
 	SignatureType,
 } from "./types";
-import { getOrigin, messageBindsNonce, toChecksumAddress } from "./utils";
+import { getOrigin, toChecksumAddress } from "./utils";
 
 export interface SIWXPluginOptions {
 	domain: string;
@@ -25,11 +25,10 @@ export interface SIWXPluginOptions {
 	/**
 	 * Verify that `signature` is a valid signature of `message` by `address`.
 	 *
-	 * The server has already confirmed the issued nonce is bound into `message`
-	 * as a delimited token before this runs. When using a structured message
-	 * format (for example CAIP-122), verify against the server-built `cacao`
-	 * payload so the message's authoritative nonce is the issued one, rather
-	 * than trusting a client-supplied message string on its own.
+	 * `message` is the server-issued challenge (the client must sign it verbatim),
+	 * and verify has already confirmed the submitted message matched it exactly,
+	 * so the nonce is authoritative. Verify only that the signature is valid for
+	 * this message and address.
 	 */
 	verifyMessage: (args: SIWXVerifyMessageArgs) => Promise<boolean>;
 	nameLookup?:
@@ -86,6 +85,42 @@ function buildCAIP10(
 	return `${namespace}:${chainId}:${address}`;
 }
 
+/**
+ * Build the canonical CAIP-122 sign-in message the wallet must sign. The server
+ * owns this message so the nonce it contains is authoritative: the client signs
+ * exactly this string and sends it back, and verify accepts only an exact match.
+ */
+function buildSiwxMessage(args: {
+	domain: string;
+	address: string;
+	statement: string;
+	chainType: ChainType;
+	chainId: string;
+	nonce: string;
+	issuedAt: string;
+}): string {
+	const { domain, address, statement, chainType, chainId, nonce, issuedAt } =
+		args;
+	return [
+		`${domain} wants you to sign in with your ${chainType} account:`,
+		address,
+		"",
+		statement,
+		"",
+		`URI: ${domain}`,
+		"Version: 1",
+		`Chain ID: ${chainId}`,
+		`Nonce: ${nonce}`,
+		`Issued At: ${issuedAt}`,
+	].join("\n");
+}
+
+interface StoredSiwxChallenge {
+	nonce: string;
+	issuedAt: string;
+	message: string;
+}
+
 const chainTypeSchema = z.enum(["evm", "solana"]);
 
 const getSiwxNonceBodySchema = z.object({
@@ -137,17 +172,32 @@ export const siwx = (options: SIWXPluginOptions) => {
 					const chainId = requestedChainId ?? DEFAULT_CHAIN_IDS[chainType];
 					const normalizedAddress = normalizeAddress(chainType, address);
 					const nonce = await options.getNonce();
+					const issuedAt = new Date().toISOString();
 					const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-					// Store nonce with chain type, chain ID, and address context
+					// The server builds the canonical message the wallet must sign, so
+					// the nonce it carries is authoritative. Persist it alongside the
+					// nonce and issued-at so verify can reconstruct the exact same CACAO.
+					const message = buildSiwxMessage({
+						domain: options.domain,
+						address: normalizedAddress,
+						statement,
+						chainType,
+						chainId,
+						nonce,
+						issuedAt,
+					});
+
+					const stored: StoredSiwxChallenge = { nonce, issuedAt, message };
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: `siwx:${chainType}:${chainId}:${normalizedAddress}`,
-						value: nonce,
+						value: JSON.stringify(stored),
 						expiresAt,
 					});
 
 					return ctx.json({
 						nonce,
+						message,
 						expiresAt: expiresAt.toISOString(),
 						statement,
 						chainId,
@@ -207,26 +257,25 @@ export const siwx = (options: SIWXPluginOptions) => {
 							});
 						}
 
-						const { value: nonce } = verification;
+						const stored = JSON.parse(
+							verification.value,
+						) as StoredSiwxChallenge;
+						const { nonce, issuedAt, message: expectedMessage } = stored;
 
-						// Bind the signed message to the issued nonce. Without this the
-						// server only relies on `verifyMessage` to enforce the nonce, so a
-						// naive implementation that checks signature validity alone would
-						// accept a replayed signature over any previously signed message.
-						// Require the nonce as a delimited token, not a bare substring, so
-						// a message whose authoritative nonce differs but that embeds the
-						// issued nonce inside another field is rejected. `verifyMessage`
-						// remains responsible for ensuring the message's own nonce is the
-						// authoritative one when it uses a structured message format.
-						if (!messageBindsNonce(message, nonce)) {
+						// The signed message must be exactly the server-issued one. Because
+						// the server authored the message (and its nonce), an equality check
+						// makes the nonce authoritative: a signature over any other message,
+						// even one that merely embeds this nonce, cannot satisfy it.
+						if (message !== expectedMessage) {
 							throw new APIError("UNAUTHORIZED", {
-								message: "Unauthorized: Message does not contain the nonce",
+								message: "Unauthorized: Message does not match the challenge",
 								status: 401,
 								code: "INVALID_NONCE_BINDING",
 							});
 						}
 
-						// Build CAIP-122 compliant CACAO object for verification
+						// Rebuild the CAIP-122 CACAO from the stored challenge so its nonce
+						// and issued-at match the signed message exactly.
 						const cacao: Cacao = {
 							h: { t: "caip122" },
 							p: {
@@ -235,7 +284,7 @@ export const siwx = (options: SIWXPluginOptions) => {
 								aud: options.domain,
 								version: "1",
 								nonce,
-								iat: new Date().toISOString(),
+								iat: issuedAt,
 								statement,
 							},
 							s: {
@@ -246,7 +295,7 @@ export const siwx = (options: SIWXPluginOptions) => {
 
 						// Verify message signature using user-provided verification function
 						const verified = await options.verifyMessage({
-							message,
+							message: expectedMessage,
 							signature,
 							address: normalizedAddress,
 							chainType,

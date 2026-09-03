@@ -119,19 +119,22 @@ const { data, error } = await authClient.siwx.nonce({
 
 if (data) {
   console.log("Nonce:", data.nonce);
+  console.log("Message:", data.message); // the canonical message to sign
   console.log("Statement:", data.statement);
   console.log("Expires:", data.expiresAt);
 }
 ```
 
+The server builds the canonical message (`data.message`) that the wallet must sign. Sign it verbatim, the client does not construct its own message.
+
 ### Verify and Sign In
 
-After generating a nonce and signing the message with the user's wallet, verify the signature:
+Sign the server-issued `data.message` with the user's wallet, then submit that exact message with the signature. The server accepts only an exact match, so the issued nonce is authoritative:
 
 ```ts title="verify-siwx.ts"
 // For EVM chains
 const { data, error } = await authClient.siwx.verify({
-  message: "Your signed message string",
+  message: nonce.message, // the exact message returned by siwx.nonce
   signature: "0x...", // The signature from the user's wallet
   address: "0x1234567890abcdef1234567890abcdef12345678",
   chainType: "evm",
@@ -141,7 +144,7 @@ const { data, error } = await authClient.siwx.verify({
 
 // For Solana
 const { data, error } = await authClient.siwx.verify({
-  message: "Your signed message string",
+  message: nonce.message, // the exact message returned by siwx.nonce
   signature: "base58EncodedSignature",
   address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
   chainType: "solana",
@@ -180,10 +183,10 @@ const { data } = await authClient.siwx.nonce({
   chainType: "evm",
 });
 
-const signature = await walletClient.signMessage({ message: data.nonce });
+const signature = await walletClient.signMessage({ message: data.message });
 
 await authClient.siwx.verify({
-  message: data.nonce,
+  message: data.message,
   signature,
   address: walletAddress,
   chainType: "evm",
@@ -215,12 +218,12 @@ const { data } = await authClient.siwx.nonce({
   chainType: "solana",
 });
 
-const encoded = new TextEncoder().encode(data.nonce);
+const encoded = new TextEncoder().encode(data.message);
 const signedBytes = await signMessage(encoded);
 const signature = bs58.encode(signedBytes);
 
 await authClient.siwx.verify({
-  message: data.nonce,
+  message: data.message,
   signature,
   address: publicKey.toBase58(),
   chainType: "solana",
@@ -274,7 +277,7 @@ siwx({
 </Callout>
 
 <Callout type="warning">
-  The signed `message` must contain the `nonce` returned by `siwx.nonce` as a delimited token (bounded by non-alphanumeric characters or the start/end of the message), not merely as a substring of a larger value. The server rejects any verify request whose message does not bind the issued nonce, which prevents replaying a previously signed message. Sign the `nonce` directly (as in the examples above) or embed it in a structured message (for example a SIWE/CAIP-122 message). When you use a structured message, make sure your `verifyMessage` treats the issued nonce as the message's authoritative nonce (verify against the server-built `cacao`) rather than trusting a client-supplied message string on its own.
+  The server builds the canonical message and its nonce, so the wallet must sign `data.message` verbatim and submit that exact string to `siwx.verify`. The server accepts only an exact match, which makes the issued nonce authoritative and prevents replaying a signature over any other message. Your `verifyMessage` only needs to confirm the signature is valid for the given `message` and `address`.
 </Callout>
 
 ## Configuration Options

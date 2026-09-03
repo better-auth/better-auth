@@ -189,14 +189,14 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -232,13 +232,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: solanaAddress,
 			chainType: "solana",
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_solana_signature",
 			address: solanaAddress,
 			chainType: "solana",
@@ -306,13 +306,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "invalid_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -323,7 +323,7 @@ describe("siwx", async (it) => {
 		expect(error?.code).toBe("UNAUTHORIZED_INVALID_SIGNATURE");
 	});
 
-	it("should reject a message that does not contain the nonce", async () => {
+	it("should reject a message that does not match the challenge", async () => {
 		const { client } = await getTestInstance(
 			{
 				plugins: [
@@ -333,7 +333,7 @@ describe("siwx", async (it) => {
 							return "A1b2C3d4E5f6G7h8J";
 						},
 						// A naive verifier that only checks signature validity, not the
-						// nonce. The server must reject the replay before reaching here.
+						// message. The server must reject the mismatch before reaching here.
 						async verifyMessage({ signature }) {
 							return signature === "valid_evm_signature";
 						},
@@ -352,90 +352,10 @@ describe("siwx", async (it) => {
 			chainType: "evm",
 		});
 
+		// A signature over any message other than the exact server-issued
+		// challenge must be rejected, even one that embeds the issued nonce.
 		const { error } = await client.siwx.verify({
-			message: "Replayed message without the issued nonce",
-			signature: "valid_evm_signature",
-			address: evmAddress,
-			chainType: "evm",
-		});
-
-		expect(error).toBeDefined();
-		expect(error?.status).toBe(401);
-		expect(error?.code).toBe("INVALID_NONCE_BINDING");
-	});
-
-	it("should reject a nonce embedded inside a larger token", async () => {
-		const { client } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage({ signature }) {
-							return signature === "valid_evm_signature";
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		await client.siwx.nonce({
-			address: evmAddress,
-			chainType: "evm",
-		});
-
-		// The issued nonce only appears as a substring of a larger alphanumeric
-		// run, so it must not satisfy the delimited binding check.
-		const { error } = await client.siwx.verify({
-			message: "Nonce: XA1b2C3d4E5f6G7h8JZ",
-			signature: "valid_evm_signature",
-			address: evmAddress,
-			chainType: "evm",
-		});
-
-		expect(error).toBeDefined();
-		expect(error?.status).toBe(401);
-		expect(error?.code).toBe("INVALID_NONCE_BINDING");
-	});
-
-	it("should reject a nonce flanked by Unicode token characters", async () => {
-		const { client } = await getTestInstance(
-			{
-				plugins: [
-					siwx({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage({ signature }) {
-							return signature === "valid_evm_signature";
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siwxClient()],
-				},
-			},
-		);
-
-		await client.siwx.nonce({
-			address: evmAddress,
-			chainType: "evm",
-		});
-
-		// Non-ASCII letters adjacent to the nonce are token characters, so the
-		// nonce is embedded rather than delimited and must be rejected.
-		const { error } = await client.siwx.verify({
-			message: "Nonce: αA1b2C3d4E5f6G7h8Jβ",
+			message: "Sign in\nNonce: A1b2C3d4E5f6G7h8J",
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -472,14 +392,14 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -513,14 +433,14 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 
 		const first = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -530,7 +450,7 @@ describe("siwx", async (it) => {
 		expect(first.data?.success).toBe(true);
 
 		const second = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -563,26 +483,26 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 		const first = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 
-		await client.siwx.nonce({
+		const nonceRes2 = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 		const second = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes2.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -614,26 +534,26 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 		const evmAuth = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 
-		await client.siwx.nonce({
+		const nonceRes2 = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "137",
 		});
 		const polygonAuth = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes2.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -666,23 +586,23 @@ describe("siwx", async (it) => {
 		);
 		const anotherAddress = "0x1111111111111111111111111111111111111111";
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 		const first = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
 		});
 
-		await client.siwx.nonce({
+		const nonceRes2 = await client.siwx.nonce({
 			address: anotherAddress,
 			chainType: "evm",
 		});
 		const second = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes2.data!.message,
 			signature: "valid_evm_signature",
 			address: anotherAddress,
 			chainType: "evm",
@@ -714,13 +634,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -753,13 +673,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -792,13 +712,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		const { data, error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -832,13 +752,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -872,13 +792,13 @@ describe("siwx", async (it) => {
 		);
 		const lowercaseAddress = evmAddress.toLowerCase();
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: lowercaseAddress,
 			chainType: "evm",
 		});
 
 		const { data } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: lowercaseAddress,
 			chainType: "evm",
@@ -909,23 +829,23 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress.toLowerCase(),
 			chainType: "evm",
 		});
 		const first = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress.toLowerCase(),
 			chainType: "evm",
 		});
 
-		await client.siwx.nonce({
+		const nonceRes2 = await client.siwx.nonce({
 			address: evmAddress.toUpperCase(),
 			chainType: "evm",
 		});
 		const second = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes2.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress.toUpperCase(),
 			chainType: "evm",
@@ -956,13 +876,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: solanaAddress,
 			chainType: "solana",
 		});
 
 		const { data } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_solana_signature",
 			address: solanaAddress,
 			chainType: "solana",
@@ -1002,13 +922,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		const { data } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -1051,13 +971,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -1092,13 +1012,13 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 		});
 
 		await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -1190,14 +1110,14 @@ describe("siwx", async (it) => {
 
 		getContext = () => auth.$context as never;
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 
 		const { error } = await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",
@@ -1233,14 +1153,14 @@ describe("siwx", async (it) => {
 			},
 		);
 
-		await client.siwx.nonce({
+		const nonceRes = await client.siwx.nonce({
 			address: evmAddress,
 			chainType: "evm",
 			chainId: "1",
 		});
 
 		await client.siwx.verify({
-			message: "Sign in message\nNonce: A1b2C3d4E5f6G7h8J",
+			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
 			address: evmAddress,
 			chainType: "evm",

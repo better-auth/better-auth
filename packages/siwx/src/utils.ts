@@ -25,32 +25,6 @@ export function toChecksumAddress(address: string) {
 	return ret;
 }
 
-/**
- * Whether `message` binds `nonce` as a standalone token rather than as an
- * incidental substring of a larger token. A bare `includes` check would accept
- * a signed message whose authoritative nonce differs but that happens to embed
- * the issued nonce inside another field, so the nonce must be delimited on both
- * sides by a non-token character (or the start/end of the message). Any Unicode
- * letter, number, or mark counts as a token character, and boundaries are read
- * as whole code points so surrogate pairs are not split.
- * @param message - The signed message to inspect
- * @param nonce - The server-issued nonce that must be bound
- * @returns Whether the nonce appears as a delimited token in the message
- */
-export function messageBindsNonce(message: string, nonce: string): boolean {
-	if (nonce.length === 0) return false;
-	const isTokenChar = (char: string | undefined) =>
-		char !== undefined && /[\p{L}\p{N}\p{M}]/u.test(char);
-	let from = message.indexOf(nonce);
-	while (from !== -1) {
-		const before = message.slice(0, from).match(/.$/su)?.[0];
-		const after = message.slice(from + nonce.length).match(/^./su)?.[0];
-		if (!isTokenChar(before) && !isTokenChar(after)) return true;
-		from = message.indexOf(nonce, from + 1);
-	}
-	return false;
-}
-
 export function getOrigin(url: string) {
 	try {
 		const parsedUrl = new URL(url);
