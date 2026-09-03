@@ -4,10 +4,11 @@
   "type": "module",
   "scripts": {
     "e2e:integration": "vitest run",
-    "prepare": "prisma generate"
+    "prepare": "prisma generate && prisma generate --schema migration-mapped.prisma"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/scim": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
@@ -16,6 +17,7 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "better-auth": "workspace:*",
+    "better-auth-1-6-30": "npm:better-auth@1.6.30",
     "better-sqlite3": "^12.11.1",
     "prisma": "^7.8.0"
   }

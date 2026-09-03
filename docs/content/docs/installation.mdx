@@ -1,4 +1,5 @@
 ---
+icon: installation
 title: Installation
 description: Learn how to configure Better Auth in your project.
 ---
@@ -383,8 +384,7 @@ description: Learn how to configure Better Auth in your project.
 
         app.all("/api/auth/*", toNodeHandler(auth));
 
-        // Mount express json middleware after Better Auth handler
-        // or only apply it to routes that don't interact with Better Auth
+        // Mount body-parsing middleware after the Better Auth handler.
         app.use(express.json());
 
         app.listen(port, () => {

@@ -1,4 +1,3 @@
-# cSpell:words anthropics
 name: Release
 
 on:
@@ -6,23 +5,13 @@ on:
     branches:
       - main
       - next
-      - release/**
+      - 'v*.*.x'
   workflow_dispatch:
     inputs:
       snapshot:
         description: 'Snapshot tag (e.g. "snapshot"). Leave empty for normal release.'
         required: false
         default: ''
-        type: string
-      preview_version:
-        description: 'Preview release notes for a version (e.g. "1.6.0-beta.0"). Leave empty for normal release.'
-        required: false
-        default: ''
-        type: string
-      preview_branch:
-        description: 'Branch to read changeset data from (for preview mode).'
-        required: false
-        default: 'next'
         type: string
 
 permissions: {}
@@ -37,10 +26,11 @@ env:
 jobs:
   release:
     if: >
-      (github.event_name != 'workflow_dispatch' || (inputs.snapshot == '' && inputs.preview_version == '')) &&
+      (github.event_name != 'workflow_dispatch' || inputs.snapshot == '') &&
       github.repository_owner == 'better-auth' &&
-      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/release/'))
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || (startsWith(github.ref, 'refs/heads/v') && endsWith(github.ref, '.x')))
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: Release
     permissions:
       contents: write
@@ -57,6 +47,8 @@ jobs:
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -89,16 +81,121 @@ jobs:
           REF="${GITHUB_REF_NAME}"
           if [[ "$REF" == "main" ]]; then
             echo "tag=latest" >> "$GITHUB_OUTPUT"
-          elif [[ "$REF" =~ ^release/ ]]; then
-            # Maintenance branches publish with a version-specific tag (e.g., release-1.5)
-            TAG="release-${REF#release/}"
+          elif [[ "$REF" =~ ^v([0-9]+)\.([0-9]+)\.x$ ]]; then
+            TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          else
-            # next and other branches: changesets handles the tag via pre.json
+          elif [ "$REF" = "next" ]; then
             echo "tag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unsupported release branch ${REF}"
+            exit 1
           fi
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
+
+      - name: Detect release commit
+        id: release-candidate
+        run: |
+          CURRENT_VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          pnpm --filter @better-auth/release-tooling release-notes candidate \
+            --version "$CURRENT_VERSION" \
+            --branch "$GITHUB_SHA"
+
+      - name: Resolve approved release notes
+        id: approved-notes
+        if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.release-candidate.outputs.version }}
+          VERSION_COMMIT: ${{ steps.release-candidate.outputs.version_commit }}
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
+        run: |
+          if [[ ! "$VERSION_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release version commit is not a valid SHA"
+            exit 1
+          fi
+          PR_NUMBER=""
+          for COMMIT_SHA in "$VERSION_COMMIT" $(git show -s --format='%P' "$VERSION_COMMIT"); do
+            PULLS=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${COMMIT_SHA}/pulls" \
+              -H 'Accept: application/vnd.github+json')
+            PR_NUMBER=$(echo "$PULLS" | jq -r --arg base "$GITHUB_REF_NAME" \
+              '[.[] | select(.merged_at != null) | select(.base.ref == $base) | select((.head.ref | startswith("changeset-release/")) or (.head.ref == "next" and .base.ref == "main"))] | last | .number // empty')
+            [ -n "$PR_NUMBER" ] && break
+          done
+          if [ -z "$PR_NUMBER" ]; then
+            echo "::error::Could not find the merged Version or promotion PR"
+            exit 1
+          fi
+
+          PR=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
+          PR_HEAD_SHA=$(echo "$PR" | jq -r '.head.sha')
+          RELEASE_COMMIT=$(echo "$PR" | jq -r '.merge_commit_sha // empty')
+          if [[ ! "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release PR merge commit is not a valid SHA"
+            exit 1
+          fi
+          COMMENTS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | jq -s 'add')
+          if [ -n "$RELEASE_APP_ID" ]; then
+            COMMENT=$(echo "$COMMENTS" | jq -c --arg app "$RELEASE_APP_ID" \
+              '[.[] | select((.performed_via_github_app.id | tostring) == $app) | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
+          else
+            COMMENT=$(echo "$COMMENTS" | jq -c \
+              '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
+          fi
+          if [ -z "$COMMENT" ]; then
+            {
+              echo "### Approved release notes are missing"
+              echo ""
+              echo "Comment \`/release-notes\` on merged PR #${PR_NUMBER}, review the generated preview, then re-run this failed Release workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::No approved release notes comment found on PR #${PR_NUMBER}"
+            exit 1
+          fi
+
+          COMMENT_FILE="$RUNNER_TEMP/release-notes-comment.md"
+          NOTES_FILE="$RUNNER_TEMP/release-notes-approved.md"
+          echo "$COMMENT" | jq -r '.body' > "$COMMENT_FILE"
+          pnpm --filter @better-auth/release-tooling release-notes:comment extract \
+            --version "$VERSION" \
+            --head "$PR_HEAD_SHA" \
+            --comment "$COMMENT_FILE" \
+            --output "$NOTES_FILE"
+          if [ "$GITHUB_SHA" != "$RELEASE_COMMIT" ]; then
+            {
+              echo "### Release retry requires the original workflow run"
+              echo ""
+              echo "- Version: \`v${VERSION}\`"
+              echo "- Release commit: \`${RELEASE_COMMIT}\`"
+              echo "- Current workflow commit: \`${GITHUB_SHA}\`"
+              echo ""
+              echo "Re-run the original failed Release workflow so npm packages and the GitHub tag are built from the approved release commit."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Current commit does not match the approved release commit"
+            exit 1
+          fi
+          {
+            echo "pr_number=$PR_NUMBER"
+            echo "release_commit=$RELEASE_COMMIT"
+            echo "notes_path=$NOTES_FILE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Reject release commits with pending changesets
+        if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
+        run: |
+          if pnpm --filter @better-auth/release-tooling release-notes \
+            check-changesets --branch "$GITHUB_SHA"; then
+            exit 0
+          fi
+
+          {
+            echo "### Unsafe release merge"
+            echo ""
+            echo "This release commit still contains changesets that were not included in the approved Version PR. Publishing it would ship unapproved changes under the current version."
+            echo ""
+            echo "Revert this release merge, let Changesets regenerate the Version PR, then run \`/release-notes\` again."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Release commit contains unconsumed changesets"
+          exit 1
 
       - name: Create Release Pull Request or Publish
         id: changesets
@@ -110,6 +207,7 @@ jobs:
           title: "chore: release"
           commit: "chore: release"
           createGithubReleases: false
+          prDraft: always
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
@@ -121,143 +219,55 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
         run: |
-          VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          PR_DATA=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName,headRefOid)
+          HEAD_REF=$(echo "$PR_DATA" | jq -r '.headRefName')
+          HEAD_SHA=$(echo "$PR_DATA" | jq -r '.headRefOid')
+          git fetch origin "$HEAD_REF"
+          VERSION=$(git show "${HEAD_SHA}:packages/better-auth/package.json" | jq -r '.version')
           gh pr edit "$PR_NUMBER" --title "chore: release v${VERSION}"
 
-      - name: Generate raw release notes
-        id: raw-notes
-        if: steps.changesets.outputs.published == 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
-        run: node .github/scripts/release-notes.ts --branch "$GITHUB_REF_NAME"
-
-      - name: Build AI prompt from template
-        id: ai-prompt
-        if: steps.raw-notes.outcome == 'success'
-        continue-on-error: true
-        env:
-          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
-          CONTEXT_PATH: ${{ steps.raw-notes.outputs.context_path }}
-        run: |
-          PROMPT=$(sed \
-            -e "s|__RAW_CHANGELOG_PATH__|${RAW_PATH}|g" \
-            -e "s|__CONTEXT_PATH__|${CONTEXT_PATH:-none}|g" \
-            -e "s|__GITHUB_REPOSITORY__|${GITHUB_REPOSITORY}|g" \
-            .github/prompts/release-notes-rewrite.md)
-          EOF_DELIM="PROMPT_EOF_$(openssl rand -hex 8)"
-          {
-            echo "prompt<<${EOF_DELIM}"
-            echo "$PROMPT"
-            echo "${EOF_DELIM}"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Rewrite release notes with AI
-        id: ai-notes
-        if: steps.ai-prompt.outcome == 'success'
-        continue-on-error: true
-        uses: anthropics/claude-code-action/base-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16 # v1.0.142
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: ${{ steps.ai-prompt.outputs.prompt }}
-          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
-
-      - name: Validate AI output
-        if: steps.ai-notes.outcome == 'success'
-        continue-on-error: true
-        env:
-          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
-        run: |
-          FINAL="${RAW_PATH}.final"
-          if [ ! -f "$FINAL" ]; then
-            echo "AI did not produce output file"
-            exit 0
-          fi
-
-          # Count PR links in both files
-          RAW_COUNT=$(grep -coP "\\[#\\d+\\]" "$RAW_PATH" 2>/dev/null || true)
-          RAW_COUNT=${RAW_COUNT:-0}
-          FINAL_COUNT=$(grep -coP "\\[#\\d+\\]" "$FINAL" 2>/dev/null || true)
-          FINAL_COUNT=${FINAL_COUNT:-0}
-
-          if [ "$FINAL_COUNT" -lt "$RAW_COUNT" ]; then
-            echo "::warning::AI output has fewer PR links ($FINAL_COUNT) than raw ($RAW_COUNT). Falling back to raw notes."
-            rm -f "$FINAL"
-            exit 0
-          fi
-
-          # Verify all package headings from raw are present in final
-          MISSING=0
-          while IFS= read -r heading; do
-            if ! grep -qF "$heading" "$FINAL"; then
-              echo "::warning::Missing package heading: $heading"
-              MISSING=$((MISSING + 1))
-            fi
-          done < <(grep -oP "## \`[^\`]+\`" "$RAW_PATH")
-
-          if [ "$MISSING" -gt 0 ]; then
-            echo "::warning::AI output is missing $MISSING package heading(s). Falling back to raw notes."
-            rm -f "$FINAL"
+          BODY=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')
+          if ! printf '%s' "$BODY" | grep -qF '<!-- release-notes-draft -->'; then
+            # shellcheck disable=SC2016
+            NOTICE='<!-- release-notes-draft -->
+          > [!IMPORTANT]
+          > Keep this PR in Draft. Run `/release-notes` to generate and review the release notes.
+          > The release bot marks the PR ready when the preview matches the current head. Do not manually mark it ready.'
+            BODY_FILE=$(mktemp)
+            printf '%s\n\n%s\n' "$NOTICE" "$BODY" > "$BODY_FILE"
+            gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$BODY_FILE"
+            rm -f "$BODY_FILE"
           fi
 
       - name: Create GitHub Release
-        if: steps.changesets.outputs.published == 'true'
-        continue-on-error: true
+        if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true' && steps.changesets.outputs.hasChangesets == 'false'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.raw-notes.outputs.version }}
-          IS_BETA: ${{ steps.raw-notes.outputs.is_beta }}
-          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          VERSION: ${{ steps.release-candidate.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.approved-notes.outputs.release_commit }}
+          NOTES_FILE: ${{ steps.approved-notes.outputs.notes_path }}
         run: |
-          # Determine version: from raw-notes output, or parse from publishedPackages
-          if [ -z "$VERSION" ]; then
-            VERSION=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version // empty')
+          if [ -z "$VERSION" ] || [ ! -s "$NOTES_FILE" ]; then
+            echo "::error::Approved release notes are missing"
+            exit 1
           fi
-          if [ -z "$VERSION" ]; then
-            echo "::warning::Could not determine version, skipping release creation"
-            exit 0
-          fi
-
           TAG="v${VERSION}"
 
-          # Use AI-rewritten notes > raw notes > minimal fallback
-          if [ -n "$RAW_PATH" ] && [ -f "${RAW_PATH}.final" ]; then
-            NOTES_FILE="${RAW_PATH}.final"
-            echo "Using AI-rewritten release notes"
-          elif [ -n "$RAW_PATH" ] && [ -f "${RAW_PATH}" ]; then
-            NOTES_FILE="${RAW_PATH}"
-            echo "Using raw release notes (AI step skipped or failed)"
-          else
-            NOTES_FILE=$(mktemp)
-            echo "Release ${TAG}" > "$NOTES_FILE"
-            echo "Using minimal fallback (note generation failed)"
-          fi
-
-          # Tag the exact commit that triggered this workflow run
-          COMMIT_SHA="${GITHUB_SHA}"
-
-          # Create tag via GitHub API (git push has no credentials with persist-credentials: false)
-          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
-            -f ref="refs/tags/${TAG}" -f sha="$COMMIT_SHA" 2>/dev/null \
-            || echo "Tag $TAG already exists"
-
-          # Create or update release, targeting the exact commit
           PRERELEASE_FLAG=""
-          if [ "$IS_BETA" = "true" ] || echo "$VERSION" | grep -q '-'; then
+          if echo "$VERSION" | grep -q '-'; then
             PRERELEASE_FLAG="--prerelease"
           fi
-
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$NOTES_FILE" $PRERELEASE_FLAG
-            echo "Updated release $TAG"
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --notes-file "$NOTES_FILE" $PRERELEASE_FLAG
+            echo "Updated release ${TAG}"
           else
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file "$NOTES_FILE" --target "$COMMIT_SHA" $PRERELEASE_FLAG
-            echo "Created release $TAG"
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --notes-file "$NOTES_FILE" \
+              --target "$RELEASE_COMMIT" \
+              $PRERELEASE_FLAG
+            echo "Created release ${TAG}"
           fi
 
       - name: Sync main to next via PR
@@ -313,6 +323,7 @@ jobs:
   snapshot:
     if: github.event_name == 'workflow_dispatch' && inputs.snapshot != '' && github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: Release
     permissions:
       contents: read
@@ -355,111 +366,3 @@ jobs:
         env:
           SNAPSHOT_TAG: ${{ inputs.snapshot }}
         run: pnpm changeset publish --no-git-tag --tag "$SNAPSHOT_TAG"
-
-  preview-notes:
-    if: github.event_name == 'workflow_dispatch' && inputs.preview_version != '' && github.repository_owner == 'better-auth'
-    runs-on: ubuntu-latest
-    environment: Release
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Generate App Token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        if: vars.RELEASE_APP_ID != ''
-        with:
-          app-id: ${{ vars.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
-      # Always check out main for trusted scripts — the preview_branch
-      # input controls which ref changeset files are read from (via --branch),
-      # not which code is executed.
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          ref: main
-          fetch-depth: 0
-          persist-credentials: false
-          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: '.nvmrc'
-          package-manager-cache: false
-
-      - name: Validate inputs
-        env:
-          INPUT_VERSION: ${{ inputs.preview_version }}
-          INPUT_BRANCH: ${{ inputs.preview_branch }}
-        run: |
-          git fetch origin "$INPUT_BRANCH" || { echo "::error::Branch '$INPUT_BRANCH' not found"; exit 1; }
-          if echo "$INPUT_VERSION" | grep -q '-'; then
-            if ! git show "origin/${INPUT_BRANCH}:.changeset/pre.json" >/dev/null 2>&1; then
-              echo "::error::Version '$INPUT_VERSION' is a pre-release but branch '$INPUT_BRANCH' has no .changeset/pre.json"
-              exit 1
-            fi
-          fi
-
-      - name: Generate raw release notes
-        id: raw-notes
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          INPUT_VERSION: ${{ inputs.preview_version }}
-          INPUT_BRANCH: ${{ inputs.preview_branch }}
-        run: |
-          node .github/scripts/release-notes.ts \
-            --version "$INPUT_VERSION" \
-            --branch "origin/$INPUT_BRANCH"
-
-      - name: Build AI prompt from template
-        id: ai-prompt
-        continue-on-error: true
-        env:
-          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
-          CONTEXT_PATH: ${{ steps.raw-notes.outputs.context_path }}
-        run: |
-          PROMPT=$(sed \
-            -e "s|__RAW_CHANGELOG_PATH__|${RAW_PATH}|g" \
-            -e "s|__CONTEXT_PATH__|${CONTEXT_PATH:-none}|g" \
-            -e "s|__GITHUB_REPOSITORY__|${GITHUB_REPOSITORY}|g" \
-            .github/prompts/release-notes-rewrite.md)
-          EOF_DELIM="PROMPT_EOF_$(openssl rand -hex 8)"
-          {
-            echo "prompt<<${EOF_DELIM}"
-            echo "$PROMPT"
-            echo "${EOF_DELIM}"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Rewrite release notes with AI
-        id: ai-notes
-        if: steps.ai-prompt.outcome == 'success'
-        continue-on-error: true
-        uses: anthropics/claude-code-action/base-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16 # v1.0.142
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: ${{ steps.ai-prompt.outputs.prompt }}
-          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
-
-      - name: Post results to job summary
-        env:
-          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
-          VERSION: ${{ steps.raw-notes.outputs.version }}
-        run: |
-          {
-            echo "# Release Notes Preview: v${VERSION}"
-            echo ""
-            if [ -f "${RAW_PATH}.final" ]; then
-              echo "## AI-Rewritten (final)"
-              echo ""
-              cat "${RAW_PATH}.final"
-              echo ""
-              echo "---"
-              echo ""
-            fi
-            echo "## Raw (deterministic)"
-            echo ""
-            cat "${RAW_PATH}"
-          } >> "$GITHUB_STEP_SUMMARY"

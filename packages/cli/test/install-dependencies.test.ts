@@ -131,6 +131,18 @@ describe("installDependencies", () => {
 		},
 	);
 
+	testWithTmpDir("should skip empty dependency lists", async ({ tmp }) => {
+		const result = await installDependencies({
+			dependencies: [],
+			packageManager: "pnpm",
+			cwd: tmp,
+			type: "dev",
+		});
+
+		expect(result).toBe(true);
+		expect(mockExec).not.toHaveBeenCalled();
+	});
+
 	testWithTmpDir(
 		"should run pnpm add with --save-catalog for catalog dependencies",
 		async ({ tmp }) => {
@@ -312,6 +324,26 @@ describe("installDependencies", () => {
 				cwd: tmp,
 			});
 			await expect(promise).rejects.toThrow("test error");
+		},
+	);
+
+	testWithTmpDir(
+		"should reject with stdout when stderr is empty",
+		async ({ tmp }) => {
+			const execError = Object.assign(new Error("Command failed"), { code: 1 });
+			mockExec.mockImplementation((_cmd, _opts, callback) => {
+				if (callback) {
+					callback(execError, "missing package name", "");
+				}
+				return {} as ReturnType<typeof exec>;
+			});
+
+			const promise = installDependencies({
+				dependencies: "invalid-package",
+				packageManager: "pnpm",
+				cwd: tmp,
+			});
+			await expect(promise).rejects.toThrow("missing package name");
 		},
 	);
 

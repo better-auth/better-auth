@@ -242,4 +242,26 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/AshwinSathian.png",
 		},
 	},
+	{
+		name: "@ilbertt/better-auth-bun-sql",
+		url: "https://github.com/ilbertt/better-auth-bun-sql",
+		database: "Bun SQL",
+		databaseUrl: "https://bun.com/docs/api/sql",
+		author: {
+			name: "ilbertt",
+			url: "https://github.com/ilbertt",
+			avatar: "https://github.com/ilbertt.png",
+		},
+	},
+	{
+		name: "@a77ay/better-auth-mikro-orm",
+		url: "https://github.com/a77ay/better-auth-mikro-orm",
+		database: "MikroORM",
+		databaseUrl: "https://mikro-orm.io/",
+		author: {
+			name: "A77AY",
+			url: "https://github.com/a77ay",
+			avatar: "https://github.com/a77ay.png",
+		},
+	},
 ];

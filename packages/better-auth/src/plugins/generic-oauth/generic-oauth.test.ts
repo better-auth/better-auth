@@ -3118,11 +3118,45 @@ describe("oauth2", async () => {
 				sub: "token-pairwise-sub",
 				oid: "token-stable-oid",
 				tid: "token-tenant-id",
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
 				emailVerified: false,
 			});
-			expect(userInfo?.email).toBeUndefined();
 			expect(userInfo?.name).toBeUndefined();
 			expect(userInfo?.image).toBeUndefined();
+		});
+
+		it("keeps the placeholder unverified for an unexpected null Graph email claim", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+						name: "Graph User",
+						email: null,
+						email_verified: true,
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				name: "Graph User",
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
+				emailVerified: false,
+			});
 		});
 
 		it("should normalize personal Microsoft account givenname and familyname claims", async () => {
@@ -3827,6 +3861,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3857,6 +3892,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3902,6 +3938,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3930,6 +3967,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3952,6 +3990,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [

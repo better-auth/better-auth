@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -489,7 +489,7 @@
     "jose": "^6.2.3",
     "kysely": "catalog:",
     "nanostores": "catalog:",
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@lynx-js/react": "^0.121.2",

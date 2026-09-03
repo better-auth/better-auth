@@ -8,9 +8,10 @@ import type {
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
-	getCurrentAuthContext,
+	getCurrentAuthEndpointContext,
 	queueAfterTransactionHook,
 	runWithTransaction,
+	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
@@ -288,7 +289,7 @@ export const createInternalAdapter = (
 				let endpointContext: GenericEndpointContext;
 				try {
 					endpointContext =
-						(await getCurrentAuthContext()) as GenericEndpointContext;
+						getCurrentAuthEndpointContext() as GenericEndpointContext;
 				} catch (error) {
 					logger.error(
 						"Unable to run validateUserInfo: missing endpoint context",
@@ -473,7 +474,7 @@ export const createInternalAdapter = (
 				| undefined,
 		) => {
 			const headers: Headers | undefined = await (async () => {
-				const ctx = await getCurrentAuthContext().catch(() => null);
+				const ctx = tryGetCurrentAuthEndpointContext();
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
@@ -1005,14 +1006,8 @@ export const createInternalAdapter = (
 			>({
 				model: "account",
 				where: [
-					{
-						field: "issuer",
-						value: issuer,
-					},
-					{
-						field: "accountId",
-						value: accountId,
-					},
+					{ field: "issuer", value: issuer },
+					{ field: "accountId", value: accountId },
 				],
 				join: {
 					user: true,
@@ -1145,18 +1140,12 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
-					{
-						field: "providerId",
-						value: "credential",
-					},
+					{ field: "providerId", value: "credential" },
 					{
 						field: "issuer",
 						value: createLocalAccountIssuer("credential"),
 					},
-					{
-						field: "accountId",
-						value: userId,
-					},
+					{ field: "accountId", value: userId },
 				],
 				"account",
 				undefined,
@@ -1195,14 +1184,8 @@ export const createInternalAdapter = (
 				{
 					model: "account",
 					where: [
-						{
-							field: "issuer",
-							value: issuer,
-						},
-						{
-							field: "accountId",
-							value: accountId,
-						},
+						{ field: "issuer", value: issuer },
+						{ field: "accountId", value: accountId },
 					],
 				},
 			);

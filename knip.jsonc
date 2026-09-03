@@ -7,9 +7,7 @@
 	"tags": ["-lintignore"],
 	"ignore": [
 		// test utilities only imported by test files — invisible to --production
-		"packages/better-auth/src/client/test-plugin.ts",
-		// CI scripts used by GitHub Actions workflows, not by packages
-		".github/scripts/**"
+		"packages/better-auth/src/client/test-plugin.ts"
 	],
 	// pbcopy/xclip/clip: OS clipboard utilities shelled out from the CLI; auth: the CLI's own bin, self-invoked
 	"ignoreBinaries": [
@@ -57,6 +55,10 @@
 				"kysely!",
 				"nanostores!"
 			]
+		},
+		"packages/release-tooling": {
+			"entry": ["src/commands/*.ts!"],
+			"project": ["src/**/*.ts!", "test/**/*.ts!", "vitest.config.ts!"]
 		},
 		"packages/test-utils": {},
 		"packages/expo": {
