@@ -274,7 +274,7 @@ siwx({
 </Callout>
 
 <Callout type="warning">
-  The signed `message` must contain the `nonce` returned by `siwx.nonce`. The server rejects any verify request whose message does not include the issued nonce, which prevents replaying a previously signed message. Sign the `nonce` directly (as in the examples above) or embed it in a structured message (for example a SIWE/CAIP-122 message).
+  The signed `message` must contain the `nonce` returned by `siwx.nonce` as a delimited token (bounded by non-alphanumeric characters or the start/end of the message), not merely as a substring of a larger value. The server rejects any verify request whose message does not bind the issued nonce, which prevents replaying a previously signed message. Sign the `nonce` directly (as in the examples above) or embed it in a structured message (for example a SIWE/CAIP-122 message). When you use a structured message, make sure your `verifyMessage` treats the issued nonce as the message's authoritative nonce (verify against the server-built `cacao`) rather than trusting a client-supplied message string on its own.
 </Callout>
 
 ## Configuration Options
