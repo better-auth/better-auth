@@ -102,17 +102,10 @@ export async function upgradeAction(opts: unknown) {
 	const upgrades: UpgradeEntry[] = [];
 	const warnings: string[] = [];
 	for (const { name, current, depType } of candidates) {
-		if (current.startsWith("catalog:")) {
-			warnings.push(
-				`Skipped ${name} (${current}). Update its catalog entry in pnpm-workspace.yaml.`,
-			);
-			continue;
-		}
-
 		const currentRange = semver.validRange(current);
 		if (!currentRange) {
 			warnings.push(
-				`Skipped ${name} because '${current}' is not a semver range.`,
+				`Skipped ${name} (${current}). Automatic upgrades require a semver range.`,
 			);
 			continue;
 		}

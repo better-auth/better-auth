@@ -139,22 +139,21 @@ describe("upgradeAction", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11072
 	 */
-	it("skips pnpm catalog dependencies with an actionable warning", async () => {
+	it.each([
+		"catalog:",
+		"file:../better-auth",
+	])("skips unsupported dependency specifier %s", async (specifier) => {
 		const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
 		mockGetPackageInfo.mockReturnValue({
 			dependencies: {
-				"better-auth": "catalog:",
+				"better-auth": specifier,
 			},
 		});
 
-		await expect(
-			upgradeAction({ cwd: process.cwd(), yes: true }),
-		).resolves.toBeUndefined();
+		await upgradeAction({ cwd: process.cwd(), yes: true });
 
 		expect(warning).toHaveBeenCalledWith(
-			expect.stringContaining(
-				"Update its catalog entry in pnpm-workspace.yaml",
-			),
+			expect.stringContaining("Automatic upgrades require a semver range"),
 		);
 		expect(mockDetectPackageManager).not.toHaveBeenCalled();
 		expect(mockInstallDependencies).not.toHaveBeenCalled();
