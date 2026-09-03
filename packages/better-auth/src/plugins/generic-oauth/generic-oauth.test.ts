@@ -5043,7 +5043,7 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("fails provider initialization when discovery cannot establish an account issuer", async () => {
+		it("skips a provider when discovery cannot establish an account issuer", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5075,9 +5075,10 @@ describe("oauth2", async () => {
 					{ disableTestUser: true },
 				);
 
-				await expect(auth.$context).rejects.toThrow(
-					"discovery did not return an issuer",
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("issuerless-discovery");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((error) => (error ? reject(error) : resolve())),
@@ -5085,7 +5086,7 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("fails provider initialization when required ID token verification metadata is unavailable", async () => {
+		it("skips a provider when required ID token verification metadata is unavailable", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5121,9 +5122,10 @@ describe("oauth2", async () => {
 					{ disableTestUser: true },
 				);
 
-				await expect(auth.$context).rejects.toThrow(
-					"requires verified ID tokens",
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("verified-id-token-required");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((error) => (error ? reject(error) : resolve())),
@@ -5131,7 +5133,7 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("fails provider initialization when discovery returns a malformed jwks_uri", async () => {
+		it("skips a provider when discovery returns a malformed jwks_uri", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5166,9 +5168,10 @@ describe("oauth2", async () => {
 					},
 					{ disableTestUser: true },
 				);
-				await expect(auth.$context).rejects.toThrow(
-					'invalid jwks_uri "http://[malformed"',
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("malformed-jwks");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
@@ -5224,7 +5227,7 @@ describe("oauth2", async () => {
 				name: "Repro",
 			},
 		});
-		expect(signUp.token).toBeDefined();
+		expect(signUp.token).toEqual(expect.any(String));
 	});
 });
 
