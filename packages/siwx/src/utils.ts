@@ -25,6 +25,31 @@ export function toChecksumAddress(address: string) {
 	return ret;
 }
 
+/**
+ * Whether `message` binds `nonce` as a standalone token rather than as an
+ * incidental substring of a larger alphanumeric run. A bare `includes` check
+ * would accept a signed message whose authoritative nonce differs but that
+ * happens to embed the issued nonce inside another field, so the nonce must be
+ * delimited by a non-alphanumeric character (or the start/end of the message)
+ * on both sides.
+ * @param message - The signed message to inspect
+ * @param nonce - The server-issued nonce that must be bound
+ * @returns Whether the nonce appears as a delimited token in the message
+ */
+export function messageBindsNonce(message: string, nonce: string): boolean {
+	if (nonce.length === 0) return false;
+	const isAlphanumeric = (char: string | undefined) =>
+		char !== undefined && /[A-Za-z0-9]/.test(char);
+	let from = message.indexOf(nonce);
+	while (from !== -1) {
+		const before = from === 0 ? undefined : message[from - 1];
+		const after = message[from + nonce.length];
+		if (!isAlphanumeric(before) && !isAlphanumeric(after)) return true;
+		from = message.indexOf(nonce, from + 1);
+	}
+	return false;
+}
+
 export function getOrigin(url: string) {
 	try {
 		const parsedUrl = new URL(url);

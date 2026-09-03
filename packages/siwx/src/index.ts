@@ -13,7 +13,7 @@ import type {
 	SIWXVerifyMessageArgs,
 	SignatureType,
 } from "./types";
-import { getOrigin, toChecksumAddress } from "./utils";
+import { getOrigin, messageBindsNonce, toChecksumAddress } from "./utils";
 
 export interface SIWXPluginOptions {
 	domain: string;
@@ -22,6 +22,15 @@ export interface SIWXPluginOptions {
 	statement?: string | undefined;
 	supportedChains?: ChainType[] | undefined;
 	getNonce: () => Promise<string>;
+	/**
+	 * Verify that `signature` is a valid signature of `message` by `address`.
+	 *
+	 * The server has already confirmed the issued nonce is bound into `message`
+	 * as a delimited token before this runs. When using a structured message
+	 * format (for example CAIP-122), verify against the server-built `cacao`
+	 * payload so the message's authoritative nonce is the issued one, rather
+	 * than trusting a client-supplied message string on its own.
+	 */
 	verifyMessage: (args: SIWXVerifyMessageArgs) => Promise<boolean>;
 	nameLookup?:
 		| ((args: NameLookupArgs) => Promise<NameLookupResult>)
@@ -204,7 +213,12 @@ export const siwx = (options: SIWXPluginOptions) => {
 						// server only relies on `verifyMessage` to enforce the nonce, so a
 						// naive implementation that checks signature validity alone would
 						// accept a replayed signature over any previously signed message.
-						if (!message.includes(nonce)) {
+						// Require the nonce as a delimited token, not a bare substring, so
+						// a message whose authoritative nonce differs but that embeds the
+						// issued nonce inside another field is rejected. `verifyMessage`
+						// remains responsible for ensuring the message's own nonce is the
+						// authoritative one when it uses a structured message format.
+						if (!messageBindsNonce(message, nonce)) {
 							throw new APIError("UNAUTHORIZED", {
 								message: "Unauthorized: Message does not contain the nonce",
 								status: 401,
