@@ -65,6 +65,13 @@ describe("isUniqueConstraintError", () => {
 		expect(isUniqueConstraintError(drizzleWrapped(Object.assign(new Error("deadlock detected"), { code: "40P01" })))).toBe(false);
 	});
 
+	it("does not misclassify an unconstrained mention of the word 'unique'", () => {
+		// A bare "unique" match would swallow this unrelated failure and
+		// misreport it as a lost insert race (flagged in PR #11087 review).
+		expect(isUniqueConstraintError(new Error("could not uniquely identify row for update"))).toBe(false);
+		expect(isUniqueConstraintError(new Error("column values are not unique across shards"))).toBe(false);
+	});
+
 	it("tolerates non-object throwables", () => {
 		expect(isUniqueConstraintError(undefined)).toBe(false);
 		expect(isUniqueConstraintError(null)).toBe(false);

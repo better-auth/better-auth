@@ -32,9 +32,14 @@ const UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS = new Set([
 
 /**
  * Message fallback for adapters that surface no machine-readable code.
- * Wording differs per engine, hence the alternation.
+ * Wording differs per engine, hence the alternation — SQLite says "UNIQUE
+ * constraint failed", MySQL/MongoDB say "Duplicate entry"/"duplicate key".
+ *
+ * Deliberately narrower than a bare `unique`/`duplicate` match: an
+ * unconstrained "unique" (e.g. "could not uniquely identify row") would
+ * misclassify an unrelated failure as a lost insert race and swallow it.
  */
-const UNIQUE_CONSTRAINT_MESSAGE_PATTERN = /unique|duplicate/i;
+const UNIQUE_CONSTRAINT_MESSAGE_PATTERN = /duplicate|unique constraint|unique key/i;
 
 /**
  * Matched against adapter errors to detect the "table not yet created" case —
