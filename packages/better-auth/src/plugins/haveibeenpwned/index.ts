@@ -21,16 +21,24 @@ const ERROR_CODES = defineErrorCodes({
 });
 
 function getPasswordCompromiseCount(response: string, hashSuffix: string) {
-	const matchingEntryPrefix = `${hashSuffix}:`;
-	for (const line of response.split("\n")) {
-		if (!line.startsWith(matchingEntryPrefix)) continue;
+	const matchingEntryPrefix = `${hashSuffix.toUpperCase()}:`;
 
-		const compromiseCount = Number(line.slice(matchingEntryPrefix.length));
-		if (!Number.isSafeInteger(compromiseCount) || compromiseCount < 0) {
+	for (const line of response.split(/\r?\n/)) {
+		const entryPrefix = line.slice(0, matchingEntryPrefix.length).toUpperCase();
+		if (entryPrefix !== matchingEntryPrefix) continue;
+
+		const compromiseCountText = line.slice(matchingEntryPrefix.length);
+		const compromiseCount = Number(compromiseCountText);
+		const validCompromiseCount =
+			Number.isSafeInteger(compromiseCount) &&
+			compromiseCount >= 0 &&
+			String(compromiseCount) === compromiseCountText;
+		if (!validCompromiseCount) {
 			throw new Error("Invalid password compromise count");
 		}
 		return compromiseCount;
 	}
+
 	return 0;
 }
 

@@ -299,6 +299,9 @@ describe("have-i-been-pwned", async () => {
 	});
 });
 
+/**
+ * @see https://haveibeenpwned.com/API/v3#PwnedPasswords
+ */
 describe("isPasswordCompromised", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
@@ -331,6 +334,18 @@ describe("isPasswordCompromised", () => {
 		);
 
 		await expect(isPasswordCompromised(password)).resolves.toBe(false);
+	});
+
+	it("should match lowercase hash suffixes in CRLF responses", async () => {
+		const password = "compromised-password";
+		const hash = (
+			await createHash("SHA-1", "hex").digest(password)
+		).toUpperCase();
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(`${hash.slice(5).toLowerCase()}:1\r\n`, { status: 200 }),
+		);
+
+		await expect(isPasswordCompromised(password)).resolves.toBe(true);
 	});
 
 	it("should not query the service for an empty password", async () => {
@@ -366,13 +381,17 @@ describe("isPasswordCompromised", () => {
 		});
 	});
 
-	it("should reject an invalid compromise count", async () => {
+	it.each([
+		"",
+		"   ",
+		"invalid",
+	])("should reject an invalid compromise count %#", async (compromiseCount) => {
 		const password = "password";
 		const hash = (
 			await createHash("SHA-1", "hex").digest(password)
 		).toUpperCase();
 		vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response(`${hash.slice(5)}:invalid\n`, { status: 200 }),
+			new Response(`${hash.slice(5)}:${compromiseCount}\n`, { status: 200 }),
 		);
 
 		await expect(isPasswordCompromised(password)).rejects.toMatchObject({
