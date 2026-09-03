@@ -405,6 +405,47 @@ describe("siwx", async (it) => {
 		expect(error?.code).toBe("INVALID_NONCE_BINDING");
 	});
 
+	it("should reject a nonce flanked by Unicode token characters", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwx({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_evm_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siwxClient()],
+				},
+			},
+		);
+
+		await client.siwx.nonce({
+			address: evmAddress,
+			chainType: "evm",
+		});
+
+		// Non-ASCII letters adjacent to the nonce are token characters, so the
+		// nonce is embedded rather than delimited and must be rejected.
+		const { error } = await client.siwx.verify({
+			message: "Nonce: αA1b2C3d4E5f6G7h8Jβ",
+			signature: "valid_evm_signature",
+			address: evmAddress,
+			chainType: "evm",
+		});
+
+		expect(error).toBeDefined();
+		expect(error?.status).toBe(401);
+		expect(error?.code).toBe("INVALID_NONCE_BINDING");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/6738
 	 */
