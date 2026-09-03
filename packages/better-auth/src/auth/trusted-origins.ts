@@ -1,6 +1,10 @@
 import { getHost, getOrigin, getProtocol } from "../utils/url";
 import { wildcardMatch } from "../utils/wildcard";
 
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
+const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
+const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
+
 /**
  * Resolves `.` and `..` segments in a path after percent-decoding so a
  * path-pinned pattern cannot be bypassed with traversal: e.g.
@@ -39,6 +43,10 @@ const normalizePath = (path: string): string => {
  * a path-pinned pattern.
  */
 const parseCustomSchemeOrigin = (value: string) => {
+	if (CONTROL_CHARACTER_PATTERN.test(value)) {
+		return null;
+	}
+
 	const schemeEnd = value.indexOf(":");
 	if (schemeEnd <= 0) {
 		return null;
@@ -59,14 +67,10 @@ const parseCustomSchemeOrigin = (value: string) => {
 			rest = rest.slice(authorityEnd);
 		}
 	}
-	const path = normalizePath(rest.replace(/[?#].*$/, ""));
+	const pathEnd = rest.search(/[?#]/);
+	const path = normalizePath(pathEnd === -1 ? rest : rest.slice(0, pathEnd));
 	return { scheme, authority: authority.toLowerCase(), path };
 };
-
-const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
-const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
-const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
-
 /**
  * Validates root-relative redirects against ambiguous browser and router parsing.
  *

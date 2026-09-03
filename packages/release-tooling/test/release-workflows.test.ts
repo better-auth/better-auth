@@ -476,6 +476,26 @@ describe("release notes command security", () => {
 		expect(render.run).toContain('SOURCE="raw"');
 		expect(render.run).toContain('cp "$RAW_PATH" "$NOTES_PATH"');
 	});
+
+	it("passes partial fallbacks only with AI-rewritten notes", () => {
+		const render = getStep(
+			getJob(commandWorkflow, "generate"),
+			"Render and package final release notes",
+		);
+
+		expect(render.env).toHaveProperty(
+			"FALLBACKS",
+			expect.stringContaining("steps.rewrites.outputs.fallbacks"),
+		);
+		expect(render.run).toContain(
+			[
+				'if [ "$SOURCE" = "ai" ]; then',
+				'  FALLBACK_ARGS+=(--fallbacks "$FALLBACKS")',
+				"fi",
+			].join("\n"),
+		);
+		expect(render.run).toContain('"${FALLBACK_ARGS[@]}"');
+	});
 });
 
 describe("release publication security", () => {

@@ -1738,6 +1738,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 			enabled: true,
 		},
 		account: {
+			identityStrategy: "issuer",
 			accountLinking: {
 				enabled: true,
 				trustedProviders: ["google", "github"],
@@ -1883,6 +1884,67 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
+	});
+
+	it("persists the provider namespace when linking under provider-id identity", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				account: {
+					identityStrategy: "provider-id",
+					accountLinking: {
+						enabled: true,
+						trustedProviders: ["github"],
+					},
+				},
+				emailAndPassword: { enabled: true },
+				socialProviders: {
+					github: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		const signUp = await client.signUp.email(
+			{
+				email: "provider-id-link@example.com",
+				password: "password123",
+				name: "Provider ID Link",
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(signUp.error).toBeNull();
+
+		mockGithubToken(
+			"provider-id-link",
+			Number(SHARED_ACCOUNT_ID),
+			"provider-id-link@example.com",
+		);
+		const link = await client.linkSocial(
+			{ provider: "github", callbackURL: "/settings" },
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		const state = new URL(link.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/github", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+		});
+
+		const context = await auth.$context;
+		const user = (await client.getSession({ fetchOptions: { headers } })).data!
+			.user;
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		expect(accounts).toContainEqual(
+			expect.objectContaining({
+				providerId: "github",
+				accountId: SHARED_ACCOUNT_ID,
+				issuer: "local:oauth:github",
+			}),
+		);
 	});
 });
 

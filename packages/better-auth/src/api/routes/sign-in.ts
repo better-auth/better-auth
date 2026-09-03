@@ -323,6 +323,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					provider,
 					oauthTokens,
 					userInfo.data,
+					c.context.options.account?.identityStrategy,
 				);
 				const providerProfile = toOAuthProfileRecord(userInfo.data);
 				const data = await handleOAuthUserInfo(c, {

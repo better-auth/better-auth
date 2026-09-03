@@ -6,12 +6,18 @@ import {
 	extractReleaseNotesComment,
 	wrapReleaseNotesComment,
 } from "../release-notes/comment.ts";
+import type { ReleaseRewriteFallback } from "../release-notes/schema.ts";
+import {
+	parseSchema,
+	releaseRewriteFallbacksSchema,
+} from "../release-notes/schema.ts";
 
 interface CommandArgs {
 	mode: "wrap" | "extract";
 	version: string;
 	head: string;
 	source: ReleaseNoteSource;
+	fallbacks: ReleaseRewriteFallback[];
 	inputPath: string;
 	merged: boolean;
 	outputPath: string;
@@ -29,6 +35,7 @@ function parseCommandArgs(): CommandArgs {
 			comment: { type: "string" },
 			merged: { type: "boolean", default: false },
 			source: { type: "string" },
+			fallbacks: { type: "string" },
 			output: { type: "string" },
 		},
 	});
@@ -62,16 +69,37 @@ function parseCommandArgs(): CommandArgs {
 	if (mode === "extract" && values.source !== undefined) {
 		throw new Error("extract does not accept --source");
 	}
+	if (mode === "extract" && values.fallbacks !== undefined) {
+		throw new Error("extract does not accept --fallbacks");
+	}
 	if (mode === "extract" && merged) {
 		throw new Error("extract does not accept --merged");
 	}
 	if (!version || !head || !inputPath || !outputPath) {
 		throw new Error(
-			"Usage: release-notes:comment <wrap|extract> --version <version> --head <sha> <--body|--comment> <path> --output <path> [--merged]",
+			"Usage: release-notes:comment <wrap|extract> --version <version> --head <sha> <--body|--comment> <path> --output <path> [--merged] [--fallbacks <json>]",
 		);
 	}
 
-	return { mode, version, head, source, inputPath, merged, outputPath };
+	const fallbacks =
+		mode === "wrap"
+			? parseSchema(
+					releaseRewriteFallbacksSchema,
+					JSON.parse(values.fallbacks ?? "[]"),
+					"Invalid release-note fallbacks",
+				)
+			: [];
+
+	return {
+		mode,
+		version,
+		head,
+		source,
+		fallbacks,
+		inputPath,
+		merged,
+		outputPath,
+	};
 }
 
 function runReleaseNotesComment(): void {
@@ -81,6 +109,7 @@ function runReleaseNotesComment(): void {
 		args.mode === "wrap"
 			? wrapReleaseNotesComment(args.version, args.head, input, {
 					source: args.source,
+					fallbacks: args.fallbacks,
 					merged: args.merged,
 				})
 			: extractReleaseNotesComment(input, args.version, args.head);

@@ -171,14 +171,11 @@ describe("AI release-note rewrites", () => {
 		expect(result.output).toContain("@bytaesu");
 	});
 
-	it("rejects a missing rewrite", () => {
+	it("uses deterministic copy for a missing rewrite", () => {
 		const result = renderReleaseRewrites({ rewrites: [] });
 
-		expect(result.status).toBe(1);
-		expect(result.output).toBeNull();
-		expect(result.stderr).toContain(
-			"AI rewrite IDs did not match the manifest",
-		);
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.output).toContain("fix(client): avoid duplicate requests");
 	});
 
 	it("rejects an unknown rewrite", () => {
@@ -246,7 +243,7 @@ describe("AI release-note rewrites", () => {
 		);
 	});
 
-	it("rejects migration copy for a non-breaking change", () => {
+	it("uses deterministic copy when a non-breaking rewrite has a migration", () => {
 		const result = renderReleaseRewrites({
 			rewrites: [
 				{
@@ -257,14 +254,14 @@ describe("AI release-note rewrites", () => {
 			],
 		});
 
-		expect(result.status).toBe(1);
-		expect(result.output).toBeNull();
+		expect(result.status).toBe(0);
+		expect(result.output).toContain("fix(client): avoid duplicate requests");
 		expect(result.stderr).toContain(
 			"Non-breaking AI rewrite pr-10769 cannot have a migration",
 		);
 	});
 
-	it("requires migration copy for a breaking change", () => {
+	it("uses deterministic copy when a breaking rewrite has no migration", () => {
 		const result = renderReleaseRewrites(
 			{
 				rewrites: [
@@ -278,8 +275,8 @@ describe("AI release-note rewrites", () => {
 			true,
 		);
 
-		expect(result.status).toBe(1);
-		expect(result.output).toBeNull();
+		expect(result.status).toBe(0);
+		expect(result.output).toContain("fix(client): avoid duplicate requests");
 		expect(result.stderr).toContain(
 			"Breaking AI rewrite pr-10769 must have a single-line migration",
 		);
@@ -321,13 +318,13 @@ describe("AI release-note rewrites", () => {
 		"See [the migration guide](https://example.com)",
 		"Notify @maintainers before upgrading",
 		"<img src=x onerror=alert(1)>",
-	])("rejects unsupported AI Markdown: %s", (title) => {
+	])("uses deterministic copy for unsupported AI Markdown: %s", (title) => {
 		const result = renderReleaseRewrites({
 			rewrites: [{ id: "pr-10769", title, migration: null }],
 		});
 
-		expect(result.status).toBe(1);
-		expect(result.output).toBeNull();
+		expect(result.status).toBe(0);
+		expect(result.output).toContain("fix(client): avoid duplicate requests");
 		expect(result.stderr).toContain(
 			"AI rewrite pr-10769 title contains unsupported Markdown",
 		);

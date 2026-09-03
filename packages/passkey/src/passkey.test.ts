@@ -70,6 +70,29 @@ describe("passkey", async () => {
 		serverMocks.verifyAuthenticationResponse.mockReset();
 	});
 
+	it("should reject registration without a response", async () => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		headers.set("content-type", "application/json");
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/passkey/verify-registration",
+			{
+				method: "POST",
+				headers,
+				body: JSON.stringify({}),
+			},
+		);
+
+		expect(response.status).toBe(400);
+		expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
+	});
+
 	it("should generate register options", async () => {
 		const { headers } = await signInWithTestUser();
 		const options = await auth.api.generatePasskeyRegistrationOptions({

@@ -1006,14 +1006,8 @@ export const createInternalAdapter = (
 			>({
 				model: "account",
 				where: [
-					{
-						field: "issuer",
-						value: issuer,
-					},
-					{
-						field: "accountId",
-						value: accountId,
-					},
+					{ field: "issuer", value: issuer },
+					{ field: "accountId", value: accountId },
 				],
 				join: {
 					user: true,
@@ -1146,18 +1140,12 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
-					{
-						field: "providerId",
-						value: "credential",
-					},
+					{ field: "providerId", value: "credential" },
 					{
 						field: "issuer",
 						value: createLocalAccountIssuer("credential"),
 					},
-					{
-						field: "accountId",
-						value: userId,
-					},
+					{ field: "accountId", value: userId },
 				],
 				"account",
 				undefined,
@@ -1196,14 +1184,8 @@ export const createInternalAdapter = (
 				{
 					model: "account",
 					where: [
-						{
-							field: "issuer",
-							value: issuer,
-						},
-						{
-							field: "accountId",
-							value: accountId,
-						},
+						{ field: "issuer", value: issuer },
+						{ field: "accountId", value: accountId },
 					],
 				},
 			);

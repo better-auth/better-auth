@@ -5,6 +5,7 @@ export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
 	OTP_NOT_CONFIGURED: "OTP is not available",
 	OTP_HAS_EXPIRED: "OTP has expired",
 	TOTP_NOT_ENABLED: "TOTP not enabled",
+	TOTP_ALREADY_ENABLED: "TOTP is already enabled",
 	TOTP_NOT_CONFIGURED: "TOTP is not available",
 	TWO_FACTOR_NOT_ENABLED: "Two factor isn't enabled",
 	BACKUP_CODES_NOT_ENABLED: "Backup codes aren't enabled",

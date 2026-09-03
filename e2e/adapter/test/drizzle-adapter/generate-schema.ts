@@ -1,12 +1,20 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import type { DB, DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 
 let generationCount = 0;
+let generationNamespace = randomUUID();
 
-const schemaCache = new Map<string, { count: number; schema: any }>();
+type GeneratedDrizzleSchema = Record<string, unknown>;
+
+const schemaCache = new Map<
+	string,
+	{ fileName: string; schema: GeneratedDrizzleSchema }
+>();
 
 /**
  * generates a drizzle schema based on BetterAuthOptions & a given dialect.
@@ -14,20 +22,22 @@ const schemaCache = new Map<string, { count: number; schema: any }>();
  * Useful for testing the Drizzle adapter.
  */
 export const generateDrizzleSchema = async (
-	db: any,
+	db: DB,
 	options: BetterAuthOptions,
 	dialect: "sqlite" | "mysql" | "pg",
+	adapterConfig?: Pick<DrizzleAdapterConfig, "camelCase">,
 ) => {
-	const cacheKey = `${dialect}-${JSON.stringify(options)}`;
+	const cacheKey = `${dialect}-${JSON.stringify(options)}-${JSON.stringify(adapterConfig)}`;
 	if (schemaCache.has(cacheKey)) {
-		const { count, schema } = schemaCache.get(cacheKey)!;
+		const { fileName, schema } = schemaCache.get(cacheKey)!;
 		return {
 			schema,
-			fileName: `./.tmp/generated-${dialect}-schema-${count}`,
+			fileName,
 		};
 	}
 	generationCount++;
 	const thisCount = generationCount;
+	const fileName = `./.tmp/generated-${dialect}-schema-${generationNamespace}-${thisCount}`;
 	const i = async (x: string) => {
 		// Clear the Node.js module cache for the generated schema file to ensure fresh import
 		try {
@@ -66,7 +76,10 @@ export const generateDrizzleSchema = async (
 		await fs.mkdir(join(import.meta.dirname, `/.tmp`), { recursive: true });
 	}
 
-	const adapter = drizzleAdapter(db, { provider: dialect })(options);
+	const adapter = drizzleAdapter(db, {
+		provider: dialect,
+		...adapterConfig,
+	})(options);
 
 	const { code } = await generateSchema({
 		adapter,
@@ -74,22 +87,19 @@ export const generateDrizzleSchema = async (
 	});
 
 	await fs.writeFile(
-		join(
-			import.meta.dirname,
-			`/.tmp/generated-${dialect}-schema-${thisCount}.ts`,
-		),
+		join(import.meta.dirname, `${fileName}.ts`),
 		code || "",
 		"utf-8",
 	);
 
-	const res = await i(`./.tmp/generated-${dialect}-schema-${thisCount}`);
+	const res = (await i(fileName)) as GeneratedDrizzleSchema;
 	schemaCache.set(cacheKey, {
-		count: thisCount,
+		fileName,
 		schema: res,
 	});
 	return {
 		schema: res,
-		fileName: `./.tmp/generated-${dialect}-schema-${thisCount}`,
+		fileName,
 	};
 };
 
@@ -99,4 +109,5 @@ export const clearSchemaCache = () => {
 
 export const resetGenerationCount = () => {
 	generationCount = 0;
+	generationNamespace = randomUUID();
 };

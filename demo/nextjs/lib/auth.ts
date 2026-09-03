@@ -38,6 +38,15 @@ import { getSCIMDemoOIDCProvider } from "./scim-demo-oidc.ts";
 
 const DEMO_SQLITE_CONTENTION_TIMEOUT_MS = 5_000;
 
+const demoAccountIdentityStrategy = (() => {
+	const strategy = process.env.DEMO_ACCOUNT_IDENTITY_STRATEGY;
+	if (!strategy) return undefined;
+	if (strategy === "issuer" || strategy === "provider-id") return strategy;
+	throw new Error(
+		'DEMO_ACCOUNT_IDENTITY_STRATEGY must be either "issuer" or "provider-id"',
+	);
+})();
+
 const database = (() => {
 	if (process.env.DEMO_SQLITE_PATH) {
 		return {
@@ -129,6 +138,9 @@ const authOptions = {
 		},
 	},
 	account: {
+		...(demoAccountIdentityStrategy && {
+			identityStrategy: demoAccountIdentityStrategy,
+		}),
 		accountLinking: {
 			trustedProviders: [
 				"email-password",
