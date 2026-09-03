@@ -89,7 +89,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		if (path.includes("siwe")) return "siwe";
 		if (path.includes("/passkey/verify-authentication")) return "passkey";
 		if (path.startsWith("/magic-link/verify")) return "magic-link";
-		if (path.startsWith("/sign-in/email-otp")) return "email-otp";
+		if (path === "/sign-in/email-otp") return "email-otp";
 		return null;
 	};
 	const getResolveContext = (ctx: GenericEndpointContext) => {
