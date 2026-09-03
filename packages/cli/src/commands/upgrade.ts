@@ -15,7 +15,9 @@ import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
 import { cliVersion } from "../version";
 
-const dependencyMapSchema = z.record(z.string(), z.string()).catch({});
+const dependencyMapSchema = z
+	.record(z.string(), z.string().catch(""))
+	.catch({});
 
 const fixedReleaseGroup = changesetConfig.fixed.find((group) =>
 	group.includes("better-auth"),
