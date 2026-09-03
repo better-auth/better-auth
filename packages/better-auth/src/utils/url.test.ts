@@ -11,6 +11,63 @@ import {
 	trimTrailingSlashes,
 } from "./url";
 
+describe("validateProxyHeader (ReDoS guard)", () => {
+	it("accepts valid hostnames", () => {
+		const valid = [
+			"example.com",
+			"api.example.com",
+			"api.v1.staging.example.com",
+			"my-app.vercel.app",
+			"localhost",
+			"localhost:3000",
+			"example.com:8080",
+			"192.168.1.1",
+			"192.168.1.1:3000",
+			"[2001:db8::1]",
+			"[2001:db8::1]:443",
+		];
+		for (const host of valid) {
+			const request = new Request("http://fallback.invalid/test", {
+				headers: { host },
+			});
+			expect(getHostFromSource(request)).toBe(host);
+		}
+	});
+
+	it("rejects invalid hostnames", () => {
+		const invalid = [
+			"../etc/passwd",
+			"<script>alert(1)</script>",
+			"-bad-start.com",
+			"bad-.com",
+			"",
+			"   ",
+		];
+		for (const host of invalid) {
+			const request = new Request("http://fallback.invalid/test", {
+				headers: host ? { host } : {},
+			});
+			const result = getHostFromSource(request);
+			expect(result).not.toBe(host);
+		}
+	});
+
+	it("rejects and completes quickly on a crafted ReDoS payload", () => {
+		const malicious =
+			"a".repeat(60) + "-." + "b".repeat(60) + "-." + "c".repeat(60) + "-";
+
+		const start = Date.now();
+		const request = new Request("http://fallback.invalid/test", {
+			headers: { host: malicious },
+		});
+		const result = getHostFromSource(request);
+		const elapsed = Date.now() - start;
+
+		expect(result).toBe("fallback.invalid");
+		expect(elapsed).toBeLessThan(500);
+	});
+});
+
 describe("trimTrailingSlashes", () => {
 	it("should remove trailing slashes", () => {
 		expect(trimTrailingSlashes("https://example.com///")).toBe(
