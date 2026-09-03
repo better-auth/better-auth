@@ -176,19 +176,22 @@ Keep `offline_access` opt-in when Cloudflare access is only needed during sign-i
 
 The provider reads the user's profile from the Cloudflare API `/user` endpoint. This returns the user's `id` and `email`, with optional `first_name` and `last_name` fields. The display name is composed from the available name fields and falls back to the email when both are absent. Cloudflare does not provide a profile picture, so `image` is left empty.
 
-Cloudflare's `/user` endpoint does not expose an email-verification status, so the account email is treated as unverified (`emailVerified: false`) by default. If you verify the email through another trusted mechanism, map it yourself with `mapProfileToUser`:
+Cloudflare's `/user` endpoint does not expose an email-verification status, so the account email is treated as unverified (`emailVerified: false`) by default. If your application verifies the email through another trusted mechanism, return that result from `mapProfileToUser`:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { verifyEmailOwnership } from "@/lib/email-verification"
 
 export const auth = betterAuth({
     socialProviders: {
         cloudflare: {
             clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
             clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
-            mapProfileToUser: (profile) => ({
-                emailVerified: true, // [!code highlight]
-            }),
+            mapProfileToUser: async (profile) => {
+                // Verify the user's email through a trusted mechanism.
+                const emailVerified = await verifyEmailOwnership(profile.email)
+                return { emailVerified }
+            },
         },
     },
 })
