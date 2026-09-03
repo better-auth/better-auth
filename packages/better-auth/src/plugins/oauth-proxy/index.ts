@@ -7,19 +7,27 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { AccountKey } from "@better-auth/core/db";
+import { accountSchema, userSchema } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
+import { setOAuthState } from "../../api/state/oauth";
 import { parseJSON } from "../../client/parser";
 import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import {
+	resolveOAuthAccountKey,
+	toOAuthProfileRecord,
+} from "../../oauth2/account-key";
 import { redirectOnError } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
-import type { Account, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
@@ -97,29 +105,42 @@ type OAuthProxyStatePackage = {
  * without creating user/session on production.
  * @internal
  */
-type PassthroughPayload = {
-	userInfo: Omit<User, "createdAt" | "updatedAt">;
-	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
-	state: string;
-	callbackURL: string;
-	newUserURL?: string;
-	errorURL?: string;
-	disableSignUp?: boolean;
-	timestamp: number;
-};
+const passthroughPayloadSchema = z.looseObject({
+	userInfo: z.looseObject(
+		userSchema.omit({ createdAt: true, updatedAt: true }).shape,
+	),
+	account: z.looseObject(
+		accountSchema.omit({
+			id: true,
+			userId: true,
+			createdAt: true,
+			updatedAt: true,
+		}).shape,
+	),
+	profile: z.record(z.string(), z.unknown()).optional(),
+	state: z.string().min(1),
+	callbackURL: z.string().min(1),
+	newUserURL: z.string().optional(),
+	errorURL: z.string().optional(),
+	disableSignUp: z.boolean().optional(),
+	timestamp: z.number(),
+});
 
-const consumeOAuthProxyState = async (
+type PassthroughPayload = z.infer<typeof passthroughPayloadSchema>;
+
+const restoreOAuthProxyState = async (
 	ctx: GenericEndpointContext,
 	state: string,
 ) => {
 	try {
-		await parseGenericState(ctx, state, {
+		const stateData = await parseGenericState(ctx, state, {
 			skipStateCookieCheck: true,
 		});
-		return true;
+		await setOAuthState(stateData);
+		return stateData;
 	} catch (e) {
 		ctx.context.logger.warn("OAuth proxy state missing or invalid", e);
-		return false;
+		return null;
 	}
 };
 
@@ -135,6 +156,7 @@ const oauthProxyQuerySchema = z.object({
 const oauthCallbackQuerySchema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
+	user: z.string().optional(),
 });
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
@@ -143,11 +165,126 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 		ctx: GenericEndpointContext,
 	): string | SecretConfig => opts?.secret ?? ctx.context.secretConfig;
 
+	const oauthProxyCompletion = createAuthEndpoint(
+		"/callback/:id/oauth-proxy",
+		{
+			method: "GET",
+			operationId: "oauthProxyCompletion",
+			query: oauthProxyQuerySchema,
+			use: [originCheck((ctx) => ctx.query.callbackURL)],
+			metadata: {
+				scope: "http",
+			},
+		},
+		async (ctx) => {
+			const baseURLStr =
+				typeof ctx.context.options.baseURL === "string"
+					? ctx.context.options.baseURL
+					: getOrigin(ctx.context.baseURL) || "";
+			const defaultErrorURL =
+				ctx.context.options.onAPIError?.errorURL ||
+				`${stripTrailingSlash(baseURLStr)}/api/auth/error`;
+
+			const encryptedProfile = ctx.query.profile;
+			if (!encryptedProfile) {
+				ctx.context.logger.error("OAuth proxy callback missing profile data");
+				throw redirectOnError(ctx, defaultErrorURL, "missing_profile");
+			}
+
+			// Decrypt profile payload
+			let decryptedPayload: string;
+			try {
+				decryptedPayload = await symmetricDecrypt({
+					key: getEncryptionKey(ctx),
+					data: encryptedProfile,
+				});
+			} catch (e) {
+				ctx.context.logger.error("Failed to decrypt OAuth proxy profile", e);
+				throw redirectOnError(ctx, defaultErrorURL, "invalid_profile");
+			}
+
+			let payload: PassthroughPayload;
+			try {
+				payload = passthroughPayloadSchema.parse(parseJSON(decryptedPayload));
+			} catch (e) {
+				ctx.context.logger.error("Failed to parse OAuth proxy payload", e);
+				throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
+			}
+
+			const errorURL = payload.errorURL || defaultErrorURL;
+			if (
+				ctx.path?.startsWith("/callback/") &&
+				ctx.params.id !== payload.account.providerId
+			) {
+				ctx.context.logger.warn("OAuth proxy callback provider mismatch");
+				throw redirectOnError(ctx, errorURL, "provider_mismatch");
+			}
+
+			// Allow up to 10 seconds of future skew for clock skew
+			const now = Date.now();
+			const age = (now - payload.timestamp) / 1000;
+			if (age > maxAge || age < -10) {
+				ctx.context.logger.error(
+					`OAuth proxy payload expired or invalid (age: ${age}s, maxAge: ${maxAge}s)`,
+				);
+				throw redirectOnError(ctx, errorURL, "payload_expired");
+			}
+
+			const stateData = await restoreOAuthProxyState(ctx, payload.state);
+			if (!stateData) {
+				throw redirectOnError(ctx, errorURL, "state_mismatch");
+			}
+
+			let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+			try {
+				result = await handleOAuthUserInfo(ctx, {
+					userInfo: payload.userInfo,
+					account: payload.account,
+					callbackURL: payload.callbackURL,
+					disableSignUp: payload.disableSignUp,
+					source: {
+						method: "oauth",
+						oauth: {
+							providerId: payload.account.providerId,
+							profile: payload.profile,
+						},
+					},
+				});
+			} catch (e) {
+				if (isAPIError(e) && e.body?.code) {
+					throw redirectOnError(ctx, errorURL, e.body.code, e.body.message);
+				}
+				throw e;
+			}
+			if (result.error) {
+				ctx.context.logger.error("OAuth proxy callback error", result.error);
+				throw redirectOnError(ctx, errorURL, result.error.split(" ").join("_"));
+			}
+			if (!result.data) {
+				ctx.context.logger.error("OAuth proxy callback missing session data");
+				throw redirectOnError(ctx, errorURL, "user_creation_failed");
+			}
+
+			await setSessionCookie(ctx, result.data);
+
+			// Redirect to final callback URL
+			const finalURL = result.isRegister
+				? payload.newUserURL || payload.callbackURL
+				: payload.callbackURL;
+
+			throw ctx.redirect(finalURL);
+		},
+	);
+
 	return {
 		id: "oauth-proxy",
 		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		endpoints: {
+			/**
+			 * @deprecated OAuth proxy callbacks now use `/callback/:id/oauth-proxy`.
+			 * This endpoint will be removed in the next minor release.
+			 */
 			oAuthProxy: createAuthEndpoint(
 				"/oauth-proxy-callback",
 				{
@@ -158,6 +295,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					metadata: {
 						openapi: {
 							operationId: "oauthProxyCallback",
+							deprecated: true,
 							description: "OAuth Proxy Callback",
 							parameters: [
 								{
@@ -189,133 +327,28 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						},
 					},
 				},
-				async (ctx) => {
-					const baseURLStr =
-						typeof ctx.context.options.baseURL === "string"
-							? ctx.context.options.baseURL
-							: getOrigin(ctx.context.baseURL) || "";
-					const defaultErrorURL =
-						ctx.context.options.onAPIError?.errorURL ||
-						`${stripTrailingSlash(baseURLStr)}/api/auth/error`;
-
-					const encryptedProfile = ctx.query.profile;
-					if (!encryptedProfile) {
-						ctx.context.logger.error(
-							"OAuth proxy callback missing profile data",
-						);
-						throw redirectOnError(ctx, defaultErrorURL, "missing_profile");
-					}
-
-					// Decrypt profile payload
-					let decryptedPayload: string;
-					try {
-						decryptedPayload = await symmetricDecrypt({
-							key: getEncryptionKey(ctx),
-							data: encryptedProfile,
-						});
-					} catch (e) {
-						ctx.context.logger.error(
-							"Failed to decrypt OAuth proxy profile",
-							e,
-						);
-						throw redirectOnError(ctx, defaultErrorURL, "invalid_profile");
-					}
-
-					let payload: PassthroughPayload;
-					try {
-						payload = parseJSON<PassthroughPayload>(decryptedPayload);
-					} catch (e) {
-						ctx.context.logger.error("Failed to parse OAuth proxy payload", e);
-						throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
-					}
-
-					// Validate required payload fields
-					if (
-						typeof payload.timestamp !== "number" ||
-						!payload.userInfo ||
-						!payload.account ||
-						!payload.state ||
-						!payload.callbackURL
-					) {
-						ctx.context.logger.error("Failed to parse OAuth proxy payload");
-						throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
-					}
-
-					const errorURL = payload.errorURL || defaultErrorURL;
-
-					// Allow up to 10 seconds of future skew for clock skew
-					const now = Date.now();
-					const age = (now - payload.timestamp) / 1000;
-					if (age > maxAge || age < -10) {
-						ctx.context.logger.error(
-							`OAuth proxy payload expired or invalid (age: ${age}s, maxAge: ${maxAge}s)`,
-						);
-						throw redirectOnError(ctx, errorURL, "payload_expired");
-					}
-
-					const stateConsumed = await consumeOAuthProxyState(
-						ctx,
-						payload.state,
-					);
-					if (!stateConsumed) {
-						throw redirectOnError(ctx, errorURL, "state_mismatch");
-					}
-
-					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
-					try {
-						result = await handleOAuthUserInfo(ctx, {
-							userInfo: payload.userInfo,
-							account: payload.account,
-							callbackURL: payload.callbackURL,
-							disableSignUp: payload.disableSignUp,
-						});
-					} catch (e) {
-						if (isAPIError(e) && e.body?.code) {
-							throw redirectOnError(ctx, errorURL, e.body.code, e.body.message);
-						}
-						throw e;
-					}
-					if (result.error) {
-						ctx.context.logger.error(
-							"OAuth proxy callback error",
-							result.error,
-						);
-						throw redirectOnError(
-							ctx,
-							errorURL,
-							result.error.split(" ").join("_"),
-						);
-					}
-					if (!result.data) {
-						ctx.context.logger.error(
-							"OAuth proxy callback missing session data",
-						);
-						throw redirectOnError(ctx, errorURL, "user_creation_failed");
-					}
-
-					await setSessionCookie(ctx, result.data);
-
-					// Redirect to final callback URL
-					const finalURL = result.isRegister
-						? payload.newUserURL || payload.callbackURL
-						: payload.callbackURL;
-
-					throw ctx.redirect(finalURL);
-				},
+				async (ctx) =>
+					oauthProxyCompletion({
+						...ctx,
+						params: { id: "oauth-proxy" },
+					}),
 			),
+			oAuthProxyCompletion: oauthProxyCompletion,
 		},
 		hooks: {
 			before: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
 						if (skipProxy) {
+							return;
+						}
+
+						const providerId = ctx.body?.provider;
+						if (!providerId) {
 							return;
 						}
 
@@ -334,13 +367,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						// Construct proxy callback URL
 						const newCallbackURL = `${stripTrailingSlash(currentURL.origin)}${
 							ctx.context.options.basePath || "/api/auth"
-						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
+						}/callback/${providerId}/oauth-proxy?callbackURL=${encodeURIComponent(
 							originalCallbackURL,
 						)}`;
-
-						if (!ctx.body) {
-							return;
-						}
 
 						ctx.body.callbackURL = newCallbackURL;
 					}),
@@ -396,7 +425,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							);
 							return;
 						}
-						const { code, error } = query.data;
+						const { code, error, user: userData } = query.data;
 
 						// Decrypt state to get codeVerifier and callbackURL
 						let stateData: StateData;
@@ -456,7 +485,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
+								redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
 							});
 						} catch (e) {
 							ctx.context.logger.error(
@@ -470,8 +499,25 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "invalid_code");
 						}
 
+						const parsedUserData = userData
+							? safeJSONParse<{
+									name?: {
+										firstName?: string;
+										lastName?: string;
+									};
+									email?: string;
+								}>(userData)
+							: null;
+
 						// Get user info from provider
-						const userInfoResult = await provider.getUserInfo(tokens);
+						const userInfoResult = await provider.getUserInfo({
+							...tokens,
+							/**
+							 * The user object from the provider
+							 * This is only available for some providers like Apple
+							 */
+							user: parsedUserData ?? undefined,
+						});
 						const userInfo = userInfoResult?.user;
 
 						if (!userInfo) {
@@ -483,6 +529,26 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
+						let accountKey: AccountKey;
+						try {
+							// Relay the verified authority. The receiving environment applies
+							// its configured storage namespace in handleOAuthUserInfo.
+							accountKey = await resolveOAuthAccountKey(
+								provider,
+								tokens,
+								userInfoResult.data,
+							);
+						} catch (error) {
+							ctx.context.logger.error(
+								"Unable to derive provider account identity",
+								{
+									providerId: provider.id,
+									error,
+								},
+							);
+							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
+						}
+						const providerProfile = toOAuthProfileRecord(userInfoResult.data);
 
 						const proxyCallbackURL = new URL(stateData.callbackURL);
 						const finalCallbackURL =
@@ -491,15 +557,16 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const payload: PassthroughPayload = {
 							userInfo: {
-								id: String(userInfo.id),
+								id: accountKey.accountId,
 								email: userInfo.email,
 								name: userInfo.name || "",
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
+							profile: providerProfile,
 							account: {
 								providerId: provider.id,
-								accountId: String(userInfo.id),
+								...accountKey,
 								accessToken: tokens.accessToken,
 								refreshToken: tokens.refreshToken,
 								idToken: tokens.idToken,
@@ -525,7 +592,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						// Add the profile parameter to proxy callback URL
 						proxyCallbackURL.searchParams.set("profile", encryptedPayload);
 
-						// Redirect to preview's oauth-proxy-callback with profile data
+						// Redirect to the preview's OAuth proxy callback with profile data
 						throw ctx.redirect(proxyCallbackURL.toString());
 					}),
 				},
@@ -533,10 +600,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return !!context.path?.startsWith("/sign-in/social");
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
@@ -646,7 +710,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						const location = headers?.get("location");
 
 						if (
-							!location?.includes("/oauth-proxy-callback?callbackURL") ||
+							(!location?.includes("/oauth-proxy?callbackURL") &&
+								!location?.includes("/oauth-proxy-callback?callbackURL")) ||
 							!location.startsWith("http")
 						) {
 							return;

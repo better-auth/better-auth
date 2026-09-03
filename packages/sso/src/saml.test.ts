@@ -5,14 +5,17 @@ import {
 	randomUUID,
 } from "node:crypto";
 import type { createServer } from "node:http";
+import { DatabaseSync } from "node:sqlite";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { betterFetch } from "@better-fetch/fetch";
+import type { Account, DBTransactionAdapter, User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
-import { getTestInstance } from "better-auth/test";
+import { getHttpTestInstance, getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
 import type {
 	Application as ExpressApp,
@@ -20,6 +23,7 @@ import type {
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
+import { Kysely } from "kysely";
 import type { RequestInfo } from "samlify/types/src/types";
 import {
 	afterAll,
@@ -31,302 +35,334 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { getMigrations } from "../../better-auth/src/db/get-migration";
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { computeSSOProviderReference } from "./provider-reference";
+import { findSAMLProvider } from "./routes/helpers";
+import { getSafeRedirectUrl } from "./routes/saml-pipeline";
 import { saml } from "./samlify";
+import type { SSOOptions, SSOUserResolutionInput } from "./types";
 import { normalizePem } from "./utils";
 
 const spMetadata = `
-    <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
-    <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-        <md:KeyDescriptor use="signing">
-        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-            <ds:X509Data>
-            <ds:X509Certificate>MIIE3jCCAsYCCQDE5FzoAkixzzANBgkqhkiG9w0BAQsFADAxMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzAeFw0yMzExMTkxMjUyMTVaFw0zMzExMTYxMjUyMTVaMDExCzAJBgNVBAYTAlVTMRAwDgYDVQQIDAdGbG9yaWRhMRAwDgYDVQQHDAdPcmxhbmRvMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2ELJsLZs4yBH7a2U5pA7xw+Oiut7b/ROKh2BqSTKRbEG4xy7WwljT02Mh7GTjLvswtZSUObWFO5v14HNORa3+J9JT2DH+9F+FJ770HX8a3cKYBNQt3xP4IeUyjI3QWzrGtkYPwSZ74tDpAUtuqPAxtoCaZXFDtX6lvCJDqiPnfxRZrKkepYWINSwu4DRpg6KoiPWRCYTsEcCzImInzlACdM97jpG1gLGA6a4dmjalQbRtvC56N0Z56gIhYq2F5JdzB2a10pqoIY8ggXZGIJS9I++8mmdTj6So5pPxLwnCYUhwDew1/DMbi9xIwYozs9pEtHCTn1l34jldDwTziVAxGQZO7QUuoMl997zqcPS7pVWRnfz5odKuytLvQDA0lRVfzOxtqbM3qVhoLT2iDmnuEtlZzgfbt4WEuT2538qxZJkFRpZQIrTj3ybqmWAv36Cp49dfeMwaqjhfX7/mVfbsPMSC653DSZBB+n+Uz0FC3QhH+vIdNhXNAQ5tBseHUR6pXiMnLtI/WVbMvpvFwK2faFTcx1oaP/Qk6yCq66tJvPbnatT9qGF8rdBJmAk9aBdQTI+hAh5mDtDweCrgVL+Tm/+Q85hSl4HGzH/LhLVS478tZVX+o+0yorZ35LCW3e4v8iX+1VEGSdg2ooOWtbSSXK2cYZr8ilyUQp0KueenR0CAwEAATANBgkqhkiG9w0BAQsFAAOCAgEAsonAahruWuHlYbDNQVD0ryhL/b+ttKKqVeT87XYDkvVhlSSSVAKcCwK/UU6z8Ty9dODUkd93Qsbof8fGMlXeYCtDHMRanvWLtk4wVkAMyNkDYHzJ1FbO7v44ZBbqNzSLy2kosbRELlcz+P3/42xumlDqAw/k13tWUdlLDxb0pd8R5yBev6HkIdJBIWtKmUuI+e8F/yTNf5kY7HO1p0NeKdVeZw4Ydw33+BwVxVNmhIxzdP5ZFQv0XRFWhCMo/6RLEepCvWUp/T1WRFqgwAdURaQrvvfpjO/Ls+neht1SWDeP8RRgsDrXIc3gZfaD8q4liIDTZ6HsFi7FmLbZatU8jJ4pCstxQLCvmix+1zF6Fwa9V5OApSTbVqBOsDZbJxeAoSzy5Wx28wufAZT4Kc/OaViXPV5o/ordPs4EYKgd/eNFCgIsZYXe75rYXqnieAIfJEGddsLBpqlgLkwvf5KVS4QNqqX+2YubP63y+3sICq2ScdhO3LZs3nlqQ/SgMiJnCBbDUDZ9GGgJNJVVytcSz5IDQHeflrq/zTt1c4q1DO3CS7mimAnTCjetERRQ3mgY/2hRiuCDFj3Cy7QMjFs3vBsbWrjNWlqyveFmHDRkq34Om7eA2jl3LZ5u7vSm0/ylp/vtoysMjwEmw/0NA3hZPTG3OJxcvFcXBsz0SiFcd1U=</ds:X509Certificate>
-            </ds:X509Data>
-        </ds:KeyInfo>
-        </md:KeyDescriptor>
-        <md:KeyDescriptor use="encryption">
-        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-            <ds:X509Data>
-            <ds:X509Certificate>MIIE3jCCAsYCCQDE5FzoAkixzzANBgkqhkiG9w0BAQsFADAxMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzAeFw0yMzExMTkxMjUyMTVaFw0zMzExMTYxMjUyMTVaMDExCzAJBgNVBAYTAlVTMRAwDgYDVQQIDAdGbG9yaWRhMRAwDgYDVQQHDAdPcmxhbmRvMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2ELJsLZs4yBH7a2U5pA7xw+Oiut7b/ROKh2BqSTKRbEG4xy7WwljT02Mh7GTjLvswtZSUObWFO5v14HNORa3+J9JT2DH+9F+FJ770HX8a3cKYBNQt3xP4IeUyjI3QWzrGtkYPwSZ74tDpAUtuqPAxtoCaZXFDtX6lvCJDqiPnfxRZrKkepYWINSwu4DRpg6KoiPWRCYTsEcCzImInzlACdM97jpG1gLGA6a4dmjalQbRtvC56N0Z56gIhYq2F5JdzB2a10pqoIY8ggXZGIJS9I++8mmdTj6So5pPxLwnCYUhwDew1/DMbi9xIwYozs9pEtHCTn1l34jldDwTziVAxGQZO7QUuoMl997zqcPS7pVWRnfz5odKuytLvQDA0lRVfzOxtqbM3qVhoLT2iDmnuEtlZzgfbt4WEuT2538qxZJkFRpZQIrTj3ybqmWAv36Cp49dfeMwaqjhfX7/mVfbsPMSC653DSZBB+n+Uz0FC3QhH+vIdNhXNAQ5tBseHUR6pXiMnLtI/WVbMvpvFwK2faFTcx1oaP/Qk6yCq66tJvPbnatT9qGF8rdBJmAk9aBdQTI+hAh5mDtDweCrgVL+Tm/+Q85hSl4HGzH/LhLVS478tZVX+o+0yorZ35LCW3e4v8iX+1VEGSdg2ooOWtbSSXK2cYZr8ilyUQp0KueenR0CAwEAATANBgkqhkiG9w0BAQsFAAOCAgEAsonAahruWuHlYbDNQVD0ryhL/b+ttKKqVeT87XYDkvVhlSSSVAKcCwK/UU6z8Ty9dODUkd93Qsbof8fGMlXeYCtDHMRanvWLtk4wVkAMyNkDYHzJ1FbO7v44ZBbqNzSLy2kosbRELlcz+P3/42xumlDqAw/k13tWUdlLDxb0pd8R5yBev6HkIdJBIWtKmUuI+e8F/yTNf5kY7HO1p0NeKdVeZw4Ydw33+BwVxVNmhIxzdP5ZFQv0XRFWhCMo/6RLEepCvWUp/T1WRFqgwAdURaQrvvfpjO/Ls+neht1SWDeP8RRgsDrXIc3gZfaD8q4liIDTZ6HsFi7FmLbZatU8jJ4pCstxQLCvmix+1zF6Fwa9V5OApSTbVqBOsDZbJxeAoSzy5Wx28wufAZT4Kc/OaViXPV5o/ordPs4EYKgd/eNFCgIsZYXe75rYXqnieAIfJEGddsLBpqlgLkwvf5KVS4QNqqX+2YubP63y+3sICq2ScdhO3LZs3nlqQ/SgMiJnCBbDUDZ9GGgJNJVVytcSz5IDQHeflrq/zTt1c4q1DO3CS7mimAnTCjetERRQ3mgY/2hRiuCDFj3Cy7QMjFs3vBsbWrjNWlqyveFmHDRkq34Om7eA2jl3LZ5u7vSm0/ylp/vtoysMjwEmw/0NA3hZPTG3OJxcvFcXBsz0SiFcd1U=</ds:X509Certificate>
-            </ds:X509Data>
-        </ds:KeyInfo>
-        </md:KeyDescriptor>
-        <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3001/api/sso/saml2/sp/sls"/>
-        <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
-        <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:3001/api/sso/saml2/sp/acs" index="1"/>
-        <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3001/api/sso/saml2/sp/acs" index="1"/>
-        </md:SPSSODescriptor>
-    <md:Organization>
-        <md:OrganizationName xml:lang="en-US">Organization Name</md:OrganizationName>
-        <md:OrganizationDisplayName xml:lang="en-US">Organization DisplayName</md:OrganizationDisplayName>
-        <md:OrganizationURL xml:lang="en-US">http://localhost:3001/</md:OrganizationURL>
-    </md:Organization>
-    <md:ContactPerson contactType="technical">
-        <md:GivenName>Technical Contact Name</md:GivenName>
-        <md:EmailAddress>technical_contact@gmail.com</md:EmailAddress>
-    </md:ContactPerson>
-    <md:ContactPerson contactType="support">
-        <md:GivenName>Support Contact Name</md:GivenName>
-        <md:EmailAddress>support_contact@gmail.com</md:EmailAddress>
-    </md:ContactPerson>
-    </md:EntityDescriptor>
-    `;
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
+<md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+<md:KeyDescriptor use="signing">
+<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+<ds:X509Data>
+<ds:X509Certificate>MIIE3jCCAsYCCQDE5FzoAkixzzANBgkqhkiG9w0BAQsFADAxMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzAeFw0yMzExMTkxMjUyMTVaFw0zMzExMTYxMjUyMTVaMDExCzAJBgNVBAYTAlVTMRAwDgYDVQQIDAdGbG9yaWRhMRAwDgYDVQQHDAdPcmxhbmRvMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2ELJsLZs4yBH7a2U5pA7xw+Oiut7b/ROKh2BqSTKRbEG4xy7WwljT02Mh7GTjLvswtZSUObWFO5v14HNORa3+J9JT2DH+9F+FJ770HX8a3cKYBNQt3xP4IeUyjI3QWzrGtkYPwSZ74tDpAUtuqPAxtoCaZXFDtX6lvCJDqiPnfxRZrKkepYWINSwu4DRpg6KoiPWRCYTsEcCzImInzlACdM97jpG1gLGA6a4dmjalQbRtvC56N0Z56gIhYq2F5JdzB2a10pqoIY8ggXZGIJS9I++8mmdTj6So5pPxLwnCYUhwDew1/DMbi9xIwYozs9pEtHCTn1l34jldDwTziVAxGQZO7QUuoMl997zqcPS7pVWRnfz5odKuytLvQDA0lRVfzOxtqbM3qVhoLT2iDmnuEtlZzgfbt4WEuT2538qxZJkFRpZQIrTj3ybqmWAv36Cp49dfeMwaqjhfX7/mVfbsPMSC653DSZBB+n+Uz0FC3QhH+vIdNhXNAQ5tBseHUR6pXiMnLtI/WVbMvpvFwK2faFTcx1oaP/Qk6yCq66tJvPbnatT9qGF8rdBJmAk9aBdQTI+hAh5mDtDweCrgVL+Tm/+Q85hSl4HGzH/LhLVS478tZVX+o+0yorZ35LCW3e4v8iX+1VEGSdg2ooOWtbSSXK2cYZr8ilyUQp0KueenR0CAwEAATANBgkqhkiG9w0BAQsFAAOCAgEAsonAahruWuHlYbDNQVD0ryhL/b+ttKKqVeT87XYDkvVhlSSSVAKcCwK/UU6z8Ty9dODUkd93Qsbof8fGMlXeYCtDHMRanvWLtk4wVkAMyNkDYHzJ1FbO7v44ZBbqNzSLy2kosbRELlcz+P3/42xumlDqAw/k13tWUdlLDxb0pd8R5yBev6HkIdJBIWtKmUuI+e8F/yTNf5kY7HO1p0NeKdVeZw4Ydw33+BwVxVNmhIxzdP5ZFQv0XRFWhCMo/6RLEepCvWUp/T1WRFqgwAdURaQrvvfpjO/Ls+neht1SWDeP8RRgsDrXIc3gZfaD8q4liIDTZ6HsFi7FmLbZatU8jJ4pCstxQLCvmix+1zF6Fwa9V5OApSTbVqBOsDZbJxeAoSzy5Wx28wufAZT4Kc/OaViXPV5o/ordPs4EYKgd/eNFCgIsZYXe75rYXqnieAIfJEGddsLBpqlgLkwvf5KVS4QNqqX+2YubP63y+3sICq2ScdhO3LZs3nlqQ/SgMiJnCBbDUDZ9GGgJNJVVytcSz5IDQHeflrq/zTt1c4q1DO3CS7mimAnTCjetERRQ3mgY/2hRiuCDFj3Cy7QMjFs3vBsbWrjNWlqyveFmHDRkq34Om7eA2jl3LZ5u7vSm0/ylp/vtoysMjwEmw/0NA3hZPTG3OJxcvFcXBsz0SiFcd1U=</ds:X509Certificate>
+</ds:X509Data>
+</ds:KeyInfo>
+</md:KeyDescriptor>
+<md:KeyDescriptor use="encryption">
+<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+<ds:X509Data>
+<ds:X509Certificate>MIIE3jCCAsYCCQDE5FzoAkixzzANBgkqhkiG9w0BAQsFADAxMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzAeFw0yMzExMTkxMjUyMTVaFw0zMzExMTYxMjUyMTVaMDExCzAJBgNVBAYTAlVTMRAwDgYDVQQIDAdGbG9yaWRhMRAwDgYDVQQHDAdPcmxhbmRvMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2ELJsLZs4yBH7a2U5pA7xw+Oiut7b/ROKh2BqSTKRbEG4xy7WwljT02Mh7GTjLvswtZSUObWFO5v14HNORa3+J9JT2DH+9F+FJ770HX8a3cKYBNQt3xP4IeUyjI3QWzrGtkYPwSZ74tDpAUtuqPAxtoCaZXFDtX6lvCJDqiPnfxRZrKkepYWINSwu4DRpg6KoiPWRCYTsEcCzImInzlACdM97jpG1gLGA6a4dmjalQbRtvC56N0Z56gIhYq2F5JdzB2a10pqoIY8ggXZGIJS9I++8mmdTj6So5pPxLwnCYUhwDew1/DMbi9xIwYozs9pEtHCTn1l34jldDwTziVAxGQZO7QUuoMl997zqcPS7pVWRnfz5odKuytLvQDA0lRVfzOxtqbM3qVhoLT2iDmnuEtlZzgfbt4WEuT2538qxZJkFRpZQIrTj3ybqmWAv36Cp49dfeMwaqjhfX7/mVfbsPMSC653DSZBB+n+Uz0FC3QhH+vIdNhXNAQ5tBseHUR6pXiMnLtI/WVbMvpvFwK2faFTcx1oaP/Qk6yCq66tJvPbnatT9qGF8rdBJmAk9aBdQTI+hAh5mDtDweCrgVL+Tm/+Q85hSl4HGzH/LhLVS478tZVX+o+0yorZ35LCW3e4v8iX+1VEGSdg2ooOWtbSSXK2cYZr8ilyUQp0KueenR0CAwEAATANBgkqhkiG9w0BAQsFAAOCAgEAsonAahruWuHlYbDNQVD0ryhL/b+ttKKqVeT87XYDkvVhlSSSVAKcCwK/UU6z8Ty9dODUkd93Qsbof8fGMlXeYCtDHMRanvWLtk4wVkAMyNkDYHzJ1FbO7v44ZBbqNzSLy2kosbRELlcz+P3/42xumlDqAw/k13tWUdlLDxb0pd8R5yBev6HkIdJBIWtKmUuI+e8F/yTNf5kY7HO1p0NeKdVeZw4Ydw33+BwVxVNmhIxzdP5ZFQv0XRFWhCMo/6RLEepCvWUp/T1WRFqgwAdURaQrvvfpjO/Ls+neht1SWDeP8RRgsDrXIc3gZfaD8q4liIDTZ6HsFi7FmLbZatU8jJ4pCstxQLCvmix+1zF6Fwa9V5OApSTbVqBOsDZbJxeAoSzy5Wx28wufAZT4Kc/OaViXPV5o/ordPs4EYKgd/eNFCgIsZYXe75rYXqnieAIfJEGddsLBpqlgLkwvf5KVS4QNqqX+2YubP63y+3sICq2ScdhO3LZs3nlqQ/SgMiJnCBbDUDZ9GGgJNJVVytcSz5IDQHeflrq/zTt1c4q1DO3CS7mimAnTCjetERRQ3mgY/2hRiuCDFj3Cy7QMjFs3vBsbWrjNWlqyveFmHDRkq34Om7eA2jl3LZ5u7vSm0/ylp/vtoysMjwEmw/0NA3hZPTG3OJxcvFcXBsz0SiFcd1U=</ds:X509Certificate>
+</ds:X509Data>
+</ds:KeyInfo>
+</md:KeyDescriptor>
+<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3001/api/sso/saml2/sp/sls"/>
+<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:3001/api/sso/saml2/sp/acs" index="1"/>
+<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:3001/api/sso/saml2/sp/acs" index="1"/>
+</md:SPSSODescriptor>
+<md:Organization>
+<md:OrganizationName xml:lang="en-US">Organization Name</md:OrganizationName>
+<md:OrganizationDisplayName xml:lang="en-US">Organization DisplayName</md:OrganizationDisplayName>
+<md:OrganizationURL xml:lang="en-US">http://localhost:3001/</md:OrganizationURL>
+</md:Organization>
+<md:ContactPerson contactType="technical">
+<md:GivenName>Technical Contact Name</md:GivenName>
+<md:EmailAddress>technical_contact@gmail.com</md:EmailAddress>
+</md:ContactPerson>
+<md:ContactPerson contactType="support">
+<md:GivenName>Support Contact Name</md:GivenName>
+<md:EmailAddress>support_contact@gmail.com</md:EmailAddress>
+</md:ContactPerson>
+</md:EntityDescriptor>
+`;
 const idpMetadata = `
-    <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/idp/metadata">
-    <md:IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-        <md:KeyDescriptor use="signing">
-        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-            <ds:X509Data>
-            <ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
-            </ds:X509Data>
-        </ds:KeyInfo>
-        </md:KeyDescriptor>
-        <md:KeyDescriptor use="encryption">
-        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-            <ds:X509Data>
-            <ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
-            </ds:X509Data>
-        </ds:KeyInfo>
-        </md:KeyDescriptor>
-        <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/slo"/>
-        <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
-        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/redirect"/>
-        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/post"/>
-        </md:IDPSSODescriptor>
-    <md:Organization>
-        <md:OrganizationName xml:lang="en-US">Your Organization Name</md:OrganizationName>
-        <md:OrganizationDisplayName xml:lang="en-US">Your Organization DisplayName</md:OrganizationDisplayName>
-        <md:OrganizationURL xml:lang="en-US">http://localhost:8081</md:OrganizationURL>
-    </md:Organization>
-    <md:ContactPerson contactType="technical">
-        <md:GivenName>Technical Contact Name</md:GivenName>
-        <md:EmailAddress>technical_contact@gmail.com</md:EmailAddress>
-    </md:ContactPerson>
-    <md:ContactPerson contactType="support">
-        <md:GivenName>Support Contact Name</md:GivenName>
-        <md:EmailAddress>support_contact@gmail.com</md:EmailAddress>
-    </md:ContactPerson>
-    </md:EntityDescriptor>
-    `;
-/**
- * Strips the indentation that keeps these PEM fixtures readable in the source.
- * samlify >= 2.11 parses keys with Node's native crypto (OpenSSL 3), which
- * rejects leading whitespace in PEM blocks; node-forge previously tolerated it.
- */
-const dedentPem = (strings: TemplateStringsArray) =>
-	`${(strings[0] ?? "")
-		.split("\n")
-		.map((line) => line.trim())
-		.join("\n")
-		.trim()}\n`;
-const idPk = dedentPem`
-    -----BEGIN RSA PRIVATE KEY-----
-    MIIJKgIBAAKCAgEA+YIi6C8hA+NSB7dEcQf5OseCtL8wCohnnD8nnUTUdaMor9zm
-    JLhuY4ExNsHD2XO5A9RIOXerYdAVh8v6L2jUuZpIJzleoypDGlluLAjEpy52lstL
-    Hn7TytzuJjXmaTOXvWpo9oF52byqyvHKpyf27FFEL18bbVzVVZjh1oP7d3NryeF7
-    lH6YesCCm649veyC87gBUTbwFcXktLRJcHqb2eVm3+x3NTDkQKk6cP5qfHEYx0c2
-    AgPcujjOIYFbNYL0yUvFhqDJrHQGR2jp7/byyb1t4wy0EHnDoXmCCZ3FoHBEsyRS
-    JJl2naK2AhH1ocMAXVaYZJ5ni6+ATKSQXJQGGhY2AyyCqTHF2DuZP9q9wYEj5cOK
-    Km8W0eYHg9OZsimLWf8DVLZLtdfDY4SHyRbpVP5Hw3Kda2GJL84AX6q/NMIDabOK
-    EM1a9Zp6YB7EkwIVzLmW2kwciUZj6nnMr8kKkUHESDdKEyyTRss6FH9EZB+gyieP
-    u6g4ZauGYZX7KPThTL/cXjjXyKyaOR7U3xWX4nZF2aoq9masKjZTTjHyuQ7GKt+8
-    dhpIKooOJ6i6SE18sX50KS9h7GqBa5XLbfzi/mam2uzU+IXmJPRl/KpQEviKbL+k
-    9h0gDW2oeeaEkt7r3KwzroNmau/hmDCyktSClCocF/sCzMZjMEiUPWYBcH0CAwEA
-    AQKCAgABJVzdriG7r9aXnHre/gdiArqR8/LXiYrYR935tfA33hj4vc38yzAOmvBL
-    7RXmMMbfwqDWSrtpxpfiuMgcYaHgfFnqfDP4EeCfBVwhLaUhk3AN/z8IE9MLMnqR
-    iFvXjdobj5qNz0hs/JXYOsYQgHl82l6yzQAGP4/nRb17y71i7g/HrJZxtyciITI4
-    XtN/xM9RKT4wTk1J/E+xmMZhkt6WYJxZWO+vOdtChMR08mYwziAsAiK4XaYs4Mfp
-    lXuCwmg3aHauyJxEg3/n4g55AKxaytjvWwaUsMp6OmGjg6r9sqZOIFOUQXQvAylM
-    1yJGrOuagiRPCf81wAeZ0oOrOS7R+4fF4Ypa+V7Cp6Ty3VPcw8BFpXJ6fRtf92kh
-    ix00DnFEK/TdndyBpFKdmf8f2SSFBLrPlmTfjdMAvShE5yFpeWyXQjftI5q/0d3U
-    Ug0MBby66yT/TZtTKVPdK6bG3fYvzgKCpZGrKgn+umq4XR+gh9S0ptmwNF5mzJy4
-    mol5CkazGPlOSwlBc4oKeepcqZ0TKCJwonub90CJeH8IKoyRsswShRl6YTRza1SB
-    Fx4Gis5xcaNp7eXnLBDgKV/1bhCUSvQ886r+Xo4nfhk9n8WrtaQFC4tFID1e8TAM
-    jYxZIBpCHOZHX/+BpC3FyqD4RbI12iudyz4KwS5Ps/wlIpVMQQKCAQEA/70X3Fz2
-    SJyPP9UdiiqLot1ppbagQGjG20yFnfRDhNY+q2U8N77yJUXWvE7YQ6OUTOaPuJX2
-    X7vulTSQ0YyFYp0B5G4QiFtvPOpBvn7OxrFKBKxwbOU7L2rAuXWYEIRuKuwBRMFU
-    oaar8gkKlnsUtUxrLM827gmL13i3GX2bmm6NhhGCKbSCoD51+UUGo7Ix5ZLznKmX
-    G1mq4IxtJe8vLk/9RT9CzRV7VO61EgEh7Iji7g4cDIiZV+B9gG8YMlTOcALPpgud
-    nF7SEvDuMH3dgOj+iSO9piJ53okU59Mk4Nyka3p3v6RABMcDYO1/wkbE83+Oobrx
-    RiRQHtBgo1r9cQKCAQEA+cNpxVCi/BkatlzKentRabnQjfxrEQdIdc9xqzr5k2xK
-    w9n+XGzeNT+HKI/S1KkfvJTQC0j9WBQ3uupf8Zg6/mNF84YCXpun3JXpvzc+4ya3
-    i1AXtdul/JYU5qhMrJI+I1WXrWAls5zbIs23iz1Fq530Mb7FUQ5jmO0p123AmMGG
-    hSTJDqvKDMpQXdUYQMqrSL/aNh8u7wpw2S052uj2bdbdgq1FboLzbwWTOsVYs3aS
-    HABb95263Cf3OdRr4lyN6khFMLhQPUhYnn6l2ob0kIZ7V2f8fxKvJoTTDTxWpUgF
-    FrdHigaDo09WYkIukj+YdSZY/ZEAu7lyMmY0l8HNzQKCAQEA7HE3jlWknp2hE7NG
-    DGgpkfqDouKmZuZ4dGjbYJ5ljntGldCTTDcOSce4MYH0ERU8F51TY6XCk+B9RRXE
-    jvkMmY/wH/Ji9q8SuY8cGbPEGY/wj0Ge8A9AGSbp6I4AecT21lg9FARq6sneT3hs
-    gZRqIPT2YgdzEcFhuWWyY67uHmn4DuxBG634147oI/7dlJs75rVm5oElY/QTOGic
-    wWXSiU8LKurCKDqkPHI2lt7VLougw9fntu7UV5sGbahJBr/B3W277hjvL5O7Rifb
-    EJpOINFKBCE3RlK5ujWjTnK4te1JVtVzwYtqZQBa71KlvEkR7s8QYBcm22LXcKXX
-    szB9AQKCAQEAwUua8DoX6UMEiV4G1gPaXhiQb1KLCgK48XQ6ZGqf/JgyxKBRWvZm
-    go9H6vxkDnFVPn1tBU7XwvLirqX02uUVwwrReEaeTtnob68V2AbJhMLSCd9Sekwj
-    ifgc9OYLcQM9U9tKJ8PhacBbV/QduIUTBl6YPmeGDdU0/4WMfE1UYORlV2XAtLn/
-    BScOS5A/1OUE6qiQGJLJn/ZUn7+ApwrkrN09UYUH1x9BhwqphzJ0E3AQY9tjUZ+g
-    ngHQM9FSLT20Fz0XTz1V3BfBfehGM3l+jNuHWX4Ay9eJ9iWVsQihhgjW512w4AFq
-    n1knYaQWptjRBNlIxfUSvDYpSxgOW+SBgQKCAQEA7ikfNUZDmhyShcmIl9Hgcral
-    o2M/ggUVwWd9AaJD+Y/WcGoR0DPGt8UGLGTBNBwbyTgHdDzsWA+02r5r+5ArhhnP
-    iWQ1soQI9FpZIUCyzAjTQpfpzo5dGqpQbW9LuHJOEbDyY2wG+lFhIm4JJBJ/vws1
-    yt9Y170VbPXmDdLevDLmlFOILdMJWWl3hrtlU3KEogqWKDOXciYtG5Ji0+512BqH
-    yY9+uVNb1eu6MLU5R5U9GdvOFZZjShIhOlpZVR1K21dg5frBCWBZ0pvu4fZf2FAV
-    lX6+ORENSjqJsQWTaeiMoAPOj8QxQuOwUCajbVkrCZV6D49E0D9XxmZcuKCAXg==
-    -----END RSA PRIVATE KEY-----
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/idp/metadata">
+<md:IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+<md:KeyDescriptor use="signing">
+<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+<ds:X509Data>
+<ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
+</ds:X509Data>
+</ds:KeyInfo>
+</md:KeyDescriptor>
+<md:KeyDescriptor use="encryption">
+<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+<ds:X509Data>
+<ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
+</ds:X509Data>
+</ds:KeyInfo>
+</md:KeyDescriptor>
+<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/slo"/>
+<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/redirect"/>
+<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/post"/>
+</md:IDPSSODescriptor>
+<md:Organization>
+<md:OrganizationName xml:lang="en-US">Your Organization Name</md:OrganizationName>
+<md:OrganizationDisplayName xml:lang="en-US">Your Organization DisplayName</md:OrganizationDisplayName>
+<md:OrganizationURL xml:lang="en-US">http://localhost:8081</md:OrganizationURL>
+</md:Organization>
+<md:ContactPerson contactType="technical">
+<md:GivenName>Technical Contact Name</md:GivenName>
+<md:EmailAddress>technical_contact@gmail.com</md:EmailAddress>
+</md:ContactPerson>
+<md:ContactPerson contactType="support">
+<md:GivenName>Support Contact Name</md:GivenName>
+<md:EmailAddress>support_contact@gmail.com</md:EmailAddress>
+</md:ContactPerson>
+</md:EntityDescriptor>
+`;
+
+function extractSigningCertificateFromMetadata(metadata: string): string {
+	const certificateMatch = metadata.match(
+		/<ds:X509Certificate>([^<]+)<\/ds:X509Certificate>/,
+	);
+	const certificateBody = certificateMatch?.[1]?.trim();
+	if (!certificateBody) {
+		throw new Error("IdP metadata does not contain a signing certificate");
+	}
+	return `-----BEGIN CERTIFICATE-----\n${certificateBody}\n-----END CERTIFICATE-----`;
+}
+
+const mockIdentityProviderMetadata = {
+	entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
+};
+
+const idPk = `
+-----BEGIN RSA PRIVATE KEY-----
+MIIJKgIBAAKCAgEA+YIi6C8hA+NSB7dEcQf5OseCtL8wCohnnD8nnUTUdaMor9zm
+JLhuY4ExNsHD2XO5A9RIOXerYdAVh8v6L2jUuZpIJzleoypDGlluLAjEpy52lstL
+Hn7TytzuJjXmaTOXvWpo9oF52byqyvHKpyf27FFEL18bbVzVVZjh1oP7d3NryeF7
+lH6YesCCm649veyC87gBUTbwFcXktLRJcHqb2eVm3+x3NTDkQKk6cP5qfHEYx0c2
+AgPcujjOIYFbNYL0yUvFhqDJrHQGR2jp7/byyb1t4wy0EHnDoXmCCZ3FoHBEsyRS
+JJl2naK2AhH1ocMAXVaYZJ5ni6+ATKSQXJQGGhY2AyyCqTHF2DuZP9q9wYEj5cOK
+Km8W0eYHg9OZsimLWf8DVLZLtdfDY4SHyRbpVP5Hw3Kda2GJL84AX6q/NMIDabOK
+EM1a9Zp6YB7EkwIVzLmW2kwciUZj6nnMr8kKkUHESDdKEyyTRss6FH9EZB+gyieP
+u6g4ZauGYZX7KPThTL/cXjjXyKyaOR7U3xWX4nZF2aoq9masKjZTTjHyuQ7GKt+8
+dhpIKooOJ6i6SE18sX50KS9h7GqBa5XLbfzi/mam2uzU+IXmJPRl/KpQEviKbL+k
+9h0gDW2oeeaEkt7r3KwzroNmau/hmDCyktSClCocF/sCzMZjMEiUPWYBcH0CAwEA
+AQKCAgABJVzdriG7r9aXnHre/gdiArqR8/LXiYrYR935tfA33hj4vc38yzAOmvBL
+7RXmMMbfwqDWSrtpxpfiuMgcYaHgfFnqfDP4EeCfBVwhLaUhk3AN/z8IE9MLMnqR
+iFvXjdobj5qNz0hs/JXYOsYQgHl82l6yzQAGP4/nRb17y71i7g/HrJZxtyciITI4
+XtN/xM9RKT4wTk1J/E+xmMZhkt6WYJxZWO+vOdtChMR08mYwziAsAiK4XaYs4Mfp
+lXuCwmg3aHauyJxEg3/n4g55AKxaytjvWwaUsMp6OmGjg6r9sqZOIFOUQXQvAylM
+1yJGrOuagiRPCf81wAeZ0oOrOS7R+4fF4Ypa+V7Cp6Ty3VPcw8BFpXJ6fRtf92kh
+ix00DnFEK/TdndyBpFKdmf8f2SSFBLrPlmTfjdMAvShE5yFpeWyXQjftI5q/0d3U
+Ug0MBby66yT/TZtTKVPdK6bG3fYvzgKCpZGrKgn+umq4XR+gh9S0ptmwNF5mzJy4
+mol5CkazGPlOSwlBc4oKeepcqZ0TKCJwonub90CJeH8IKoyRsswShRl6YTRza1SB
+Fx4Gis5xcaNp7eXnLBDgKV/1bhCUSvQ886r+Xo4nfhk9n8WrtaQFC4tFID1e8TAM
+jYxZIBpCHOZHX/+BpC3FyqD4RbI12iudyz4KwS5Ps/wlIpVMQQKCAQEA/70X3Fz2
+SJyPP9UdiiqLot1ppbagQGjG20yFnfRDhNY+q2U8N77yJUXWvE7YQ6OUTOaPuJX2
+X7vulTSQ0YyFYp0B5G4QiFtvPOpBvn7OxrFKBKxwbOU7L2rAuXWYEIRuKuwBRMFU
+oaar8gkKlnsUtUxrLM827gmL13i3GX2bmm6NhhGCKbSCoD51+UUGo7Ix5ZLznKmX
+G1mq4IxtJe8vLk/9RT9CzRV7VO61EgEh7Iji7g4cDIiZV+B9gG8YMlTOcALPpgud
+nF7SEvDuMH3dgOj+iSO9piJ53okU59Mk4Nyka3p3v6RABMcDYO1/wkbE83+Oobrx
+RiRQHtBgo1r9cQKCAQEA+cNpxVCi/BkatlzKentRabnQjfxrEQdIdc9xqzr5k2xK
+w9n+XGzeNT+HKI/S1KkfvJTQC0j9WBQ3uupf8Zg6/mNF84YCXpun3JXpvzc+4ya3
+i1AXtdul/JYU5qhMrJI+I1WXrWAls5zbIs23iz1Fq530Mb7FUQ5jmO0p123AmMGG
+hSTJDqvKDMpQXdUYQMqrSL/aNh8u7wpw2S052uj2bdbdgq1FboLzbwWTOsVYs3aS
+HABb95263Cf3OdRr4lyN6khFMLhQPUhYnn6l2ob0kIZ7V2f8fxKvJoTTDTxWpUgF
+FrdHigaDo09WYkIukj+YdSZY/ZEAu7lyMmY0l8HNzQKCAQEA7HE3jlWknp2hE7NG
+DGgpkfqDouKmZuZ4dGjbYJ5ljntGldCTTDcOSce4MYH0ERU8F51TY6XCk+B9RRXE
+jvkMmY/wH/Ji9q8SuY8cGbPEGY/wj0Ge8A9AGSbp6I4AecT21lg9FARq6sneT3hs
+gZRqIPT2YgdzEcFhuWWyY67uHmn4DuxBG634147oI/7dlJs75rVm5oElY/QTOGic
+wWXSiU8LKurCKDqkPHI2lt7VLougw9fntu7UV5sGbahJBr/B3W277hjvL5O7Rifb
+EJpOINFKBCE3RlK5ujWjTnK4te1JVtVzwYtqZQBa71KlvEkR7s8QYBcm22LXcKXX
+szB9AQKCAQEAwUua8DoX6UMEiV4G1gPaXhiQb1KLCgK48XQ6ZGqf/JgyxKBRWvZm
+go9H6vxkDnFVPn1tBU7XwvLirqX02uUVwwrReEaeTtnob68V2AbJhMLSCd9Sekwj
+ifgc9OYLcQM9U9tKJ8PhacBbV/QduIUTBl6YPmeGDdU0/4WMfE1UYORlV2XAtLn/
+BScOS5A/1OUE6qiQGJLJn/ZUn7+ApwrkrN09UYUH1x9BhwqphzJ0E3AQY9tjUZ+g
+ngHQM9FSLT20Fz0XTz1V3BfBfehGM3l+jNuHWX4Ay9eJ9iWVsQihhgjW512w4AFq
+n1knYaQWptjRBNlIxfUSvDYpSxgOW+SBgQKCAQEA7ikfNUZDmhyShcmIl9Hgcral
+o2M/ggUVwWd9AaJD+Y/WcGoR0DPGt8UGLGTBNBwbyTgHdDzsWA+02r5r+5ArhhnP
+iWQ1soQI9FpZIUCyzAjTQpfpzo5dGqpQbW9LuHJOEbDyY2wG+lFhIm4JJBJ/vws1
+yt9Y170VbPXmDdLevDLmlFOILdMJWWl3hrtlU3KEogqWKDOXciYtG5Ji0+512BqH
+yY9+uVNb1eu6MLU5R5U9GdvOFZZjShIhOlpZVR1K21dg5frBCWBZ0pvu4fZf2FAV
+lX6+ORENSjqJsQWTaeiMoAPOj8QxQuOwUCajbVkrCZV6D49E0D9XxmZcuKCAXg==
+-----END RSA PRIVATE KEY-----
 
     `;
-const spPrivateKey = dedentPem`
-    -----BEGIN RSA PRIVATE KEY-----
-    Proc-Type: 4,ENCRYPTED
-    DEK-Info: DES-EDE3-CBC,9C86371F0420A091
+const spPrivateKey = `
+-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: DES-EDE3-CBC,9C86371F0420A091
 
-    77TqgiK/IYRgO5w3ZMyV81/gk0zN5wPTGWxoztNFjQKXCySFnrL30kUqlGituBxX
-    VgxwXbkoYMrd5MoDZKL5EJuf0H59hq92O0+3uwJA8QyZjOm4brQcjXKmIrkvihgs
-    FvpaJiGzp6kS/O7vFBDNTQWr9yY9Y3FBPcmOUWufpRp4Q5nhpSlqnMmIqZyWQUL/
-    YJSJETtzJVsk38lCqIxxDT3LtbGySahj0jRuRqspAZQeLTpnJqzNMC4vnJew9luC
-    R+UffrX7gVsnwOhNtyRzYaMsLnbRfXT8Jqx2gRHg36GxkOVgyU7e62nk9CzeC0WA
-    kHHCNVqqivRx9/EC0mQkkRgRzo3BZWp0o671sUsGTy57JhktiGfTnWMrl7ZfhAza
-    SZnjyTwuI1bTQipIkNI3aJBTP/o/gNUE1sj5D5FZlFdpq5ks2Vxww3GNx1FRrvWd
-    98z5CNt78ZR0ihLmdz/EakEBKBUteQu/5zPLUlwmGuou4wPuEHG2BsjGzb/d5Zfc
-    ElIjUV+yrMmGHvBfPyPnDUrCUyLn18S1NZiCMCdN5PqCybjhk8oMPYZhWBqp8Ymr
-    yHIC7BCnTJhIvgQZR6M68NwVv0aBBgH/I/DB0jADo6/B5Eajwus9i6zSv8QIbqhw
-    fusKtI04vxc91aP0GWRr0J/O4mkxXYNPfa3a/I7sGTXGl0k0CygckE3fLXRy/WEk
-    ikZt4UHqg5ZQ8vc5NSAM5f5Yx/72CU1I6ehFtxHsyE5yndpZXWp2X2S4l31e8fLs
-    ddOoybroJgbyLrh7JT3Yac3XOEsKATWIvqU+hNYq6KwqLWev9jInHVgjzfyOKbmF
-    hkrzDDHaKULYZuTsUq5mLc1SzSu98lXYfXp1WE4XsH0X0VicPzf8ZH4Kutuig0VG
-    5Kg9HB/Cin65VMm0ffEiTraO6johIlwFGRrtAs38ONKgsPCQUv7ee9SEGOHViNZq
-    NpWPr1KOzbI4wEB1ueKoZuEQ0a+tzfJgszJrM48bM82J6iEjN/PSOTsdTKJq9e47
-    dlUp+tqQsvGkbBOIOt5OOpkr8Z+8qbEd21ojF9Q0p0T4WMThRP6YBRKvt8mmFwRs
-    DjEhMiPa4L70Eqldfu2lWdI6ietfHrK97WXwQO1gF73LOnA+EdMXNxr1iLd0Tdke
-    z6fUSw3hKZL+I7nX6O40+KgkhXVSZOsRz5CEvo2iChIUrYGEGDl94K/ofqGu71Y+
-    G8KBvbha6EC7xcUrTYP5Gek5wsrw7cGgDZJjMsyXYFBZjQO1N6g9fncLmc5pB5Ix
-    W3gLfQS/My4daWNTvrYOgfA08J4M4ZWd0v5TglxOSV78psG4J4slppDySNFB2d/3
-    7JiwWVm5SMk0StLWwb2azmTvBoinnrZJzPnPlOytxvE5uGJ/i0WAik7C99YgVJkS
-    9hO3FJGasrOnHeiOvMZEdRuIVspKz9iMFx7hWHpVHTTyjwceEpaiEkhmqLM9QkKh
-    kCZqeWyVsKBIc0sse+CKNK8ik9eTeUlCklGMV1Q4kKjR6uuHUOLyjk/xhqslV4TS
-    jnnjCjsK5YzTa4hmbHhPZIW262KoFV9TqxYKkhP5ab7AXRSakrdrY2cwACWN4AMT
-    -----END RSA PRIVATE KEY-----
+77TqgiK/IYRgO5w3ZMyV81/gk0zN5wPTGWxoztNFjQKXCySFnrL30kUqlGituBxX
+VgxwXbkoYMrd5MoDZKL5EJuf0H59hq92O0+3uwJA8QyZjOm4brQcjXKmIrkvihgs
+FvpaJiGzp6kS/O7vFBDNTQWr9yY9Y3FBPcmOUWufpRp4Q5nhpSlqnMmIqZyWQUL/
+YJSJETtzJVsk38lCqIxxDT3LtbGySahj0jRuRqspAZQeLTpnJqzNMC4vnJew9luC
+R+UffrX7gVsnwOhNtyRzYaMsLnbRfXT8Jqx2gRHg36GxkOVgyU7e62nk9CzeC0WA
+kHHCNVqqivRx9/EC0mQkkRgRzo3BZWp0o671sUsGTy57JhktiGfTnWMrl7ZfhAza
+SZnjyTwuI1bTQipIkNI3aJBTP/o/gNUE1sj5D5FZlFdpq5ks2Vxww3GNx1FRrvWd
+98z5CNt78ZR0ihLmdz/EakEBKBUteQu/5zPLUlwmGuou4wPuEHG2BsjGzb/d5Zfc
+ElIjUV+yrMmGHvBfPyPnDUrCUyLn18S1NZiCMCdN5PqCybjhk8oMPYZhWBqp8Ymr
+yHIC7BCnTJhIvgQZR6M68NwVv0aBBgH/I/DB0jADo6/B5Eajwus9i6zSv8QIbqhw
+fusKtI04vxc91aP0GWRr0J/O4mkxXYNPfa3a/I7sGTXGl0k0CygckE3fLXRy/WEk
+ikZt4UHqg5ZQ8vc5NSAM5f5Yx/72CU1I6ehFtxHsyE5yndpZXWp2X2S4l31e8fLs
+ddOoybroJgbyLrh7JT3Yac3XOEsKATWIvqU+hNYq6KwqLWev9jInHVgjzfyOKbmF
+hkrzDDHaKULYZuTsUq5mLc1SzSu98lXYfXp1WE4XsH0X0VicPzf8ZH4Kutuig0VG
+5Kg9HB/Cin65VMm0ffEiTraO6johIlwFGRrtAs38ONKgsPCQUv7ee9SEGOHViNZq
+NpWPr1KOzbI4wEB1ueKoZuEQ0a+tzfJgszJrM48bM82J6iEjN/PSOTsdTKJq9e47
+dlUp+tqQsvGkbBOIOt5OOpkr8Z+8qbEd21ojF9Q0p0T4WMThRP6YBRKvt8mmFwRs
+DjEhMiPa4L70Eqldfu2lWdI6ietfHrK97WXwQO1gF73LOnA+EdMXNxr1iLd0Tdke
+z6fUSw3hKZL+I7nX6O40+KgkhXVSZOsRz5CEvo2iChIUrYGEGDl94K/ofqGu71Y+
+G8KBvbha6EC7xcUrTYP5Gek5wsrw7cGgDZJjMsyXYFBZjQO1N6g9fncLmc5pB5Ix
+W3gLfQS/My4daWNTvrYOgfA08J4M4ZWd0v5TglxOSV78psG4J4slppDySNFB2d/3
+7JiwWVm5SMk0StLWwb2azmTvBoinnrZJzPnPlOytxvE5uGJ/i0WAik7C99YgVJkS
+9hO3FJGasrOnHeiOvMZEdRuIVspKz9iMFx7hWHpVHTTyjwceEpaiEkhmqLM9QkKh
+kCZqeWyVsKBIc0sse+CKNK8ik9eTeUlCklGMV1Q4kKjR6uuHUOLyjk/xhqslV4TS
+jnnjCjsK5YzTa4hmbHhPZIW262KoFV9TqxYKkhP5ab7AXRSakrdrY2cwACWN4AMT
+-----END RSA PRIVATE KEY-----
     `;
-const idpPrivateKey = dedentPem`
-    -----BEGIN RSA PRIVATE KEY-----
-    Proc-Type: 4,ENCRYPTED
-    DEK-Info: DES-EDE3-CBC,116B0EBB2F2F0A9D
+const idpPrivateKey = `
+-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: DES-EDE3-CBC,116B0EBB2F2F0A9D
 
-    HMmUsJPVPTsq1e06yrrskfinY21OOHosfRzibLueBg9ByFFZ7+/oW/DKy1GcDeBc
-    ycL+3gylIoGUYuZ+DPC11ArjdxFqLFnHJb96rwy5h4sTP0lE+qHy+06AwsowUgp3
-    pdD2unPFeydpu5h/dqgoDzkGSucz0Ty/spHXNBvns0vJO18B7XlzXUtfH5aHco22
-    DyVY6FrJwMts9E4Rzs9JsxJJ7mi/6+Qsc0rOr8/6KKsRo1sKD6cvQIQ05dEvGrE9
-    /2fubHkRTl+zBqOVyQvC6iUtocwxlMP4KfmyYrD1wlQAnP/+smq2G+xf7uGc4X4P
-    8q0jEy2P9n5ASlwZ3XCS9hZgp8VRAcXWOYjzzNouQp3NEP9d5D3wN4aFKa/JW6pk
-    a6VwraEweuyJqvZ7nnam1emW0ge0z7hJabR0+j0PnUxFIwkI5jO3HI5UiuUzuQFe
-    2bTLA3XnJ7QD08ZKom0rmApbFrmm9BWBRTmt46NlQDy49VODPY4gFuQ/mpaFjaBy
-    fSNJaOSS/MDuAdPabNEh3l+yCGKtHIbPVIms76PxYf6o0VVxW96/Q25hrvyOJCxn
-    dVQyyJbQ1jGenu4ViDNrW9ZQfw4aJCPpY7lUQd09BGz2NMKgkrSl8bKSan4lvlF3
-    ok8BjfIw+pIrTyesPU5tF0YudDxwi8fbIG70iwrpsSt2wVIMa+Nz2lwFT1dV8be7
-    NARkkkhLWJYAsxsyVfdl+ucNSqhvo8xLITuG8CZnzKf0T2HMKnMNegFx/ipfM7ff
-    Mx5CjayN5Oy99MWsagYEutUGzCGPAuVpqYpJuuYa3lWbFk2XWihWkAiUwgRqIluE
-    M6LpO8l3LVXVjN1+6bK1GZpbfLay+E6vy4W38XMuXZSNpyhy6e+XggTPH2xbbwoi
-    OcAzcojhMaxVGpxm/aXyRxg9zBdrQjtqM/aCN91ri55bvOKxELVi+D/VcZKpd2CR
-    X/vWcqoGaK/6+vlPWMZSHCJkPa4KBT0aUcnEdeFWx2nmrwdrHvETzCYLAzVBSECV
-    ZoYH0xTkFr/RI2AOAzx701LSuYbnPoCq+w7TXtjPaooZdYVVgrYuI+j4JOlseFS7
-    1c9iRiJVPBfnpUNIZdHLw19+k81IJ/FmumiuDhfLS5pwQmtuXkO3DWZDa3UPlV8e
-    6dmZeP1XGwRLL9VpOKx7NCqZM+CdEt87CXpFFWXdw8tL+3K/2r8w4lHIzBKaVPSS
-    5uFqXc1vzfP6Qeov31IjeLPE1pWTHNqRPdmvt9Scq9tKS3o18wmLBxOVinOE0cxQ
-    oddzPd0z5NxNYVayqZORwDdVv6CVXKnrvBSnOFFslZqv1G8/diE5BXxeaAPEMcZE
-    3lD7MzdoEHK5oL2MXofLWZbNtMkOZLaLqY80zKT1UG3Gs8U44d44aLXO1dBL0HGX
-    dNfNUaH+IGZf2ccS6OR1RhwIazDZ8qk0XeUwQV588adwC3FUvscVA3eHZa95z4kX
-    xvHg+ylzRtKRfpSPzB2IVwgV9/rsOg0OmvwhV8+5IQpdcFr+hf2Bn6AVn6H9aX8A
-    JjycN6KMcHaFa0EUqagGm9tsQLmf/MGCj8sy9am1IbRmFCz5lB5A7P/YLPM2Csjg
-    -----END RSA PRIVATE KEY-----`;
+HMmUsJPVPTsq1e06yrrskfinY21OOHosfRzibLueBg9ByFFZ7+/oW/DKy1GcDeBc
+ycL+3gylIoGUYuZ+DPC11ArjdxFqLFnHJb96rwy5h4sTP0lE+qHy+06AwsowUgp3
+pdD2unPFeydpu5h/dqgoDzkGSucz0Ty/spHXNBvns0vJO18B7XlzXUtfH5aHco22
+DyVY6FrJwMts9E4Rzs9JsxJJ7mi/6+Qsc0rOr8/6KKsRo1sKD6cvQIQ05dEvGrE9
+/2fubHkRTl+zBqOVyQvC6iUtocwxlMP4KfmyYrD1wlQAnP/+smq2G+xf7uGc4X4P
+8q0jEy2P9n5ASlwZ3XCS9hZgp8VRAcXWOYjzzNouQp3NEP9d5D3wN4aFKa/JW6pk
+a6VwraEweuyJqvZ7nnam1emW0ge0z7hJabR0+j0PnUxFIwkI5jO3HI5UiuUzuQFe
+2bTLA3XnJ7QD08ZKom0rmApbFrmm9BWBRTmt46NlQDy49VODPY4gFuQ/mpaFjaBy
+fSNJaOSS/MDuAdPabNEh3l+yCGKtHIbPVIms76PxYf6o0VVxW96/Q25hrvyOJCxn
+dVQyyJbQ1jGenu4ViDNrW9ZQfw4aJCPpY7lUQd09BGz2NMKgkrSl8bKSan4lvlF3
+ok8BjfIw+pIrTyesPU5tF0YudDxwi8fbIG70iwrpsSt2wVIMa+Nz2lwFT1dV8be7
+NARkkkhLWJYAsxsyVfdl+ucNSqhvo8xLITuG8CZnzKf0T2HMKnMNegFx/ipfM7ff
+Mx5CjayN5Oy99MWsagYEutUGzCGPAuVpqYpJuuYa3lWbFk2XWihWkAiUwgRqIluE
+M6LpO8l3LVXVjN1+6bK1GZpbfLay+E6vy4W38XMuXZSNpyhy6e+XggTPH2xbbwoi
+OcAzcojhMaxVGpxm/aXyRxg9zBdrQjtqM/aCN91ri55bvOKxELVi+D/VcZKpd2CR
+X/vWcqoGaK/6+vlPWMZSHCJkPa4KBT0aUcnEdeFWx2nmrwdrHvETzCYLAzVBSECV
+ZoYH0xTkFr/RI2AOAzx701LSuYbnPoCq+w7TXtjPaooZdYVVgrYuI+j4JOlseFS7
+1c9iRiJVPBfnpUNIZdHLw19+k81IJ/FmumiuDhfLS5pwQmtuXkO3DWZDa3UPlV8e
+6dmZeP1XGwRLL9VpOKx7NCqZM+CdEt87CXpFFWXdw8tL+3K/2r8w4lHIzBKaVPSS
+5uFqXc1vzfP6Qeov31IjeLPE1pWTHNqRPdmvt9Scq9tKS3o18wmLBxOVinOE0cxQ
+oddzPd0z5NxNYVayqZORwDdVv6CVXKnrvBSnOFFslZqv1G8/diE5BXxeaAPEMcZE
+3lD7MzdoEHK5oL2MXofLWZbNtMkOZLaLqY80zKT1UG3Gs8U44d44aLXO1dBL0HGX
+dNfNUaH+IGZf2ccS6OR1RhwIazDZ8qk0XeUwQV588adwC3FUvscVA3eHZa95z4kX
+xvHg+ylzRtKRfpSPzB2IVwgV9/rsOg0OmvwhV8+5IQpdcFr+hf2Bn6AVn6H9aX8A
+JjycN6KMcHaFa0EUqagGm9tsQLmf/MGCj8sy9am1IbRmFCz5lB5A7P/YLPM2Csjg
+-----END RSA PRIVATE KEY-----`;
 const certificate = `
-    -----BEGIN CERTIFICATE-----
-    MIIDlzCCAn+gAwIBAgIJAO1ymQc33+bWMA0GCSqGSIb3DQEBCwUAMGIxCzAJBgNV
-    BAYTAkhLMRMwEQYDVQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQ
-    cm92aWRlcjEUMBIGA1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDAeFw0x
-    NTA3MDUxODAyMjdaFw0xODA3MDQxODAyMjdaMGIxCzAJBgNVBAYTAkhLMRMwEQYD
-    VQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQcm92aWRlcjEUMBIG
-    A1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDCCASIwDQYJKoZIhvcNAQEB
-    BQADggEPADCCAQoCggEBAODZsWhCe+yG0PalQPTUoD7yko5MTWMCRxJ8hSm2k7mG
-    3Eg/Y2v0EBdCmTw7iDCevRqUmbmFnq7MROyV4eriJzh0KabAdZf7/k6koghst3ZU
-    tWOwzshyxkBtWDwGmBpQGTGsKxJ8M1js3aSqNRXBT4OBWM9w2Glt1+8ty30RhYv3
-    pSF+/HHLH7Ac+vLSIAlokaFW34RWTcJ/8rADuRWlXih4GfnIu0W/ncm5nTSaJiRA
-    vr3dGDRO/khiXoJdbbOj7dHPULxVGbH9IbPK76TCwLbF7ikIMsPovVbTrpyL6vsb
-    VUKeEl/5GKppTwp9DLAOeoSYpCYkkDkYKu9TRQjF02MCAwEAAaNQME4wHQYDVR0O
-    BBYEFP2ut2AQdy6D1dwdwK740IHmbh38MB8GA1UdIwQYMBaAFP2ut2AQdy6D1dwd
-    wK740IHmbh38MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBANMZUoPN
-    mHzgja2PYkbvBYMHmpvUkVoiuvQ9cJPlqGTB2CRfG68BNNs/Clz8P7cIrAdkhCUw
-    i1rSBhDuslGFNrSaIpv6B10FpBuKwef3G7YrPWFNEN6khY7aHNWSTHqKgs1DrGef
-    2B9hvkrnHWbQVSVXrBFKe1wTCqcgGcOpYoSK7L8C6iX6uIA/uZYnVQ4NgBrizJ0a
-    zkjdegz3hwO/gt4malEURy8D85/AAVt6PAzhpb9VJUGxSXr/EfntVUEz3L2gUFWW
-    k1CnZFyz0rIOEt/zPmeAY8BLyd/Tjxm4Y+gwNazKq5y9AJS+m858b/nM4QdCnUE4
-    yyoWAJDUHiAmvFA=
-    -----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIIDlzCCAn+gAwIBAgIJAO1ymQc33+bWMA0GCSqGSIb3DQEBCwUAMGIxCzAJBgNV
+BAYTAkhLMRMwEQYDVQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQ
+cm92aWRlcjEUMBIGA1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDAeFw0x
+NTA3MDUxODAyMjdaFw0xODA3MDQxODAyMjdaMGIxCzAJBgNVBAYTAkhLMRMwEQYD
+VQQIDApTb21lLVN0YXRlMRowGAYDVQQKDBFJZGVudGl0eSBQcm92aWRlcjEUMBIG
+A1UECwwLRGV2ZWxvcG1lbnQxDDAKBgNVBAMMA0lEUDCCASIwDQYJKoZIhvcNAQEB
+BQADggEPADCCAQoCggEBAODZsWhCe+yG0PalQPTUoD7yko5MTWMCRxJ8hSm2k7mG
+3Eg/Y2v0EBdCmTw7iDCevRqUmbmFnq7MROyV4eriJzh0KabAdZf7/k6koghst3ZU
+tWOwzshyxkBtWDwGmBpQGTGsKxJ8M1js3aSqNRXBT4OBWM9w2Glt1+8ty30RhYv3
+pSF+/HHLH7Ac+vLSIAlokaFW34RWTcJ/8rADuRWlXih4GfnIu0W/ncm5nTSaJiRA
+vr3dGDRO/khiXoJdbbOj7dHPULxVGbH9IbPK76TCwLbF7ikIMsPovVbTrpyL6vsb
+VUKeEl/5GKppTwp9DLAOeoSYpCYkkDkYKu9TRQjF02MCAwEAAaNQME4wHQYDVR0O
+BBYEFP2ut2AQdy6D1dwdwK740IHmbh38MB8GA1UdIwQYMBaAFP2ut2AQdy6D1dwd
+wK740IHmbh38MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBANMZUoPN
+mHzgja2PYkbvBYMHmpvUkVoiuvQ9cJPlqGTB2CRfG68BNNs/Clz8P7cIrAdkhCUw
+i1rSBhDuslGFNrSaIpv6B10FpBuKwef3G7YrPWFNEN6khY7aHNWSTHqKgs1DrGef
+2B9hvkrnHWbQVSVXrBFKe1wTCqcgGcOpYoSK7L8C6iX6uIA/uZYnVQ4NgBrizJ0a
+zkjdegz3hwO/gt4malEURy8D85/AAVt6PAzhpb9VJUGxSXr/EfntVUEz3L2gUFWW
+k1CnZFyz0rIOEt/zPmeAY8BLyd/Tjxm4Y+gwNazKq5y9AJS+m858b/nM4QdCnUE4
+yyoWAJDUHiAmvFA=
+-----END CERTIFICATE-----
     `;
-const idpEncryptionKey = dedentPem`
-    -----BEGIN RSA PRIVATE KEY-----
-    Proc-Type: 4,ENCRYPTED
-    DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
+const idpEncryptionKey = `
+-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
 
-    bMpTdWaAEqNciUFQhHYNv1F9N12aqOQd6cFbMozfRnNR19HW6QIPDmEOPSSCaaRy
-    QCnJhbpcSnaz9pvI7EzeJzdykDmR8Boos+0NSK9qIX0buBO55mfPr7hjx7bLFEVl
-    kkHk+k9F1rLyjyAGJrVoTNoWjyuMOFUCWR7ZxoYticwM/sL+Rbhn1FsfdkdfhFW0
-    08OHTouRK33Aifx0A3MWxR0ILvw49E6urtbbIrskEzKzfWQug8gY1TJhI3sbsMsI
-    1bS5Vg88TvilFFBGn0Yv6GEJjgOrsrKDGKtYGhuBfK4fd4rwnQKKvC6gTKeNXIfV
-    7Qm1R20LUJXC8zv35pdKoVk+NdS/MGNXJRFgO3Kkp01aVf3n1oo2+AllS02AYyWt
-    1svHecsRwbibXip8gSQsOtDdpqQrEDyqZlFHXEw/IcJE9vQWEJmpHD5GFhbKtttp
-    E0B3ZtNl6YcyUz0rSf9zjuMx/wReWdRb6H2WoIqoRS7vAUONDRPt7wvfjtLlDRVi
-    bc2RTN8yce/57lGnA1n8bxPV5+9VxCJOEipV3io/nrj+uNO8i/0rUpkKdZy8wy2C
-    Rksoxq4TxwegONz1HQcJVpJu0iBdu7B+BXVjxQQScvMQlOTbua8k+YdaCeZAb83j
-    JVX89/PFy+Xj7eGyzzBTqz7dV0Xkxq9mpiMYUCoyNL5Iq1jD9Xb5TzVW1Gbh8zCZ
-    YXjcZEQKeartaBC4/fRWyxqK3gJRX4SJkl4gYMQrPS2pbTzVCO+WLxSwIh3dOZpo
-    eErXLSrylIv9cE2Xrs0McXAR+hfGrqgtILBWwgbh2NhmUiFfLwUTUxU51eu7QZ2T
-    V1VFBX0QTmn2kM0JLSSC96mDUzbs6qfURUaXbuffF5cqdUjXgtzZj5SFEbIv4UFS
-    0DAS+6i/jTGSz7aAp/uofOxhYkCqK/s2Cex2jQbDpcKXKiWzPdULOCjAh3fdCAp0
-    3ua3fdAI7H8PslSDiPFrcY78OxZaWXzazEiun77WKbzrMloLMP5dpCPlUCOqxbZ0
-    ykSuo0M7p/UPY34yi3AMHS9grvQQ1DykMPoqKKEheI6nUGcQ1AFcdr307ILWRsPO
-    T6gHOLXZaR4+UEeYfkTKsjrMUhozx7JIyuLgTXA9TWC+tZ9WZpbJ7i3bpQ+RNwX2
-    AxQSwc9ZOcNxg8YCbGlJgJHnRVhA202kNT5ORplcRKqaOaO9LK7491gaaShjaspg
-    4THDnH+HHFORmbgwyO9P74wuw+n6tI40Ia3qzRLVz6sJBQMtLEN+cvNoNi3KYkNj
-    GJM1iWfSz6PjrEGxbzQZKoFPPiZrVRnVfPhBNyT2OZj+TJii9CaukhmkkA2/AJmS
-    5XoO3GNIaqOGYV9HLyh1++cn3NhjgFYe/Q3ORCTIg2Ltd8Qr6mYe0LcONQFgiv4c
-    AUOZtOq05fJDXE74R1JjYHPaQF6uZEbTF98jN9QZIfCEvDdv1nC83MvSwATi0j5S
-    LvdU/MSPaZ0VKzPc4JPwv72dveEPME6QyswKx9izioJVrQJr36YtmrhDlKR1WBny
-    ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
-    -----END RSA PRIVATE KEY-----
+bMpTdWaAEqNciUFQhHYNv1F9N12aqOQd6cFbMozfRnNR19HW6QIPDmEOPSSCaaRy
+QCnJhbpcSnaz9pvI7EzeJzdykDmR8Boos+0NSK9qIX0buBO55mfPr7hjx7bLFEVl
+kkHk+k9F1rLyjyAGJrVoTNoWjyuMOFUCWR7ZxoYticwM/sL+Rbhn1FsfdkdfhFW0
+08OHTouRK33Aifx0A3MWxR0ILvw49E6urtbbIrskEzKzfWQug8gY1TJhI3sbsMsI
+1bS5Vg88TvilFFBGn0Yv6GEJjgOrsrKDGKtYGhuBfK4fd4rwnQKKvC6gTKeNXIfV
+7Qm1R20LUJXC8zv35pdKoVk+NdS/MGNXJRFgO3Kkp01aVf3n1oo2+AllS02AYyWt
+1svHecsRwbibXip8gSQsOtDdpqQrEDyqZlFHXEw/IcJE9vQWEJmpHD5GFhbKtttp
+E0B3ZtNl6YcyUz0rSf9zjuMx/wReWdRb6H2WoIqoRS7vAUONDRPt7wvfjtLlDRVi
+bc2RTN8yce/57lGnA1n8bxPV5+9VxCJOEipV3io/nrj+uNO8i/0rUpkKdZy8wy2C
+Rksoxq4TxwegONz1HQcJVpJu0iBdu7B+BXVjxQQScvMQlOTbua8k+YdaCeZAb83j
+JVX89/PFy+Xj7eGyzzBTqz7dV0Xkxq9mpiMYUCoyNL5Iq1jD9Xb5TzVW1Gbh8zCZ
+YXjcZEQKeartaBC4/fRWyxqK3gJRX4SJkl4gYMQrPS2pbTzVCO+WLxSwIh3dOZpo
+eErXLSrylIv9cE2Xrs0McXAR+hfGrqgtILBWwgbh2NhmUiFfLwUTUxU51eu7QZ2T
+V1VFBX0QTmn2kM0JLSSC96mDUzbs6qfURUaXbuffF5cqdUjXgtzZj5SFEbIv4UFS
+0DAS+6i/jTGSz7aAp/uofOxhYkCqK/s2Cex2jQbDpcKXKiWzPdULOCjAh3fdCAp0
+3ua3fdAI7H8PslSDiPFrcY78OxZaWXzazEiun77WKbzrMloLMP5dpCPlUCOqxbZ0
+ykSuo0M7p/UPY34yi3AMHS9grvQQ1DykMPoqKKEheI6nUGcQ1AFcdr307ILWRsPO
+T6gHOLXZaR4+UEeYfkTKsjrMUhozx7JIyuLgTXA9TWC+tZ9WZpbJ7i3bpQ+RNwX2
+AxQSwc9ZOcNxg8YCbGlJgJHnRVhA202kNT5ORplcRKqaOaO9LK7491gaaShjaspg
+4THDnH+HHFORmbgwyO9P74wuw+n6tI40Ia3qzRLVz6sJBQMtLEN+cvNoNi3KYkNj
+GJM1iWfSz6PjrEGxbzQZKoFPPiZrVRnVfPhBNyT2OZj+TJii9CaukhmkkA2/AJmS
+5XoO3GNIaqOGYV9HLyh1++cn3NhjgFYe/Q3ORCTIg2Ltd8Qr6mYe0LcONQFgiv4c
+AUOZtOq05fJDXE74R1JjYHPaQF6uZEbTF98jN9QZIfCEvDdv1nC83MvSwATi0j5S
+LvdU/MSPaZ0VKzPc4JPwv72dveEPME6QyswKx9izioJVrQJr36YtmrhDlKR1WBny
+ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
+-----END RSA PRIVATE KEY-----
     `;
-const spEncryptionKey = dedentPem`
-    -----BEGIN RSA PRIVATE KEY-----
-    Proc-Type: 4,ENCRYPTED
-    DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
+const spEncryptionKey = `
+-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: DES-EDE3-CBC,860FDB9F3BE14699
 
-    bMpTdWaAEqNciUFQhHYNv1F9N12aqOQd6cFbMozfRnNR19HW6QIPDmEOPSSCaaRy
-    QCnJhbpcSnaz9pvI7EzeJzdykDmR8Boos+0NSK9qIX0buBO55mfPr7hjx7bLFEVl
-    kkHk+k9F1rLyjyAGJrVoTNoWjyuMOFUCWR7ZxoYticwM/sL+Rbhn1FsfdkdfhFW0
-    08OHTouRK33Aifx0A3MWxR0ILvw49E6urtbbIrskEzKzfWQug8gY1TJhI3sbsMsI
-    1bS5Vg88TvilFFBGn0Yv6GEJjgOrsrKDGKtYGhuBfK4fd4rwnQKKvC6gTKeNXIfV
-    7Qm1R20LUJXC8zv35pdKoVk+NdS/MGNXJRFgO3Kkp01aVf3n1oo2+AllS02AYyWt
-    1svHecsRwbibXip8gSQsOtDdpqQrEDyqZlFHXEw/IcJE9vQWEJmpHD5GFhbKtttp
-    E0B3ZtNl6YcyUz0rSf9zjuMx/wReWdRb6H2WoIqoRS7vAUONDRPt7wvfjtLlDRVi
-    bc2RTN8yce/57lGnA1n8bxPV5+9VxCJOEipV3io/nrj+uNO8i/0rUpkKdZy8wy2C
-    Rksoxq4TxwegONz1HQcJVpJu0iBdu7B+BXVjxQQScvMQlOTbua8k+YdaCeZAb83j
-    JVX89/PFy+Xj7eGyzzBTqz7dV0Xkxq9mpiMYUCoyNL5Iq1jD9Xb5TzVW1Gbh8zCZ
-    YXjcZEQKeartaBC4/fRWyxqK3gJRX4SJkl4gYMQrPS2pbTzVCO+WLxSwIh3dOZpo
-    eErXLSrylIv9cE2Xrs0McXAR+hfGrqgtILBWwgbh2NhmUiFfLwUTUxU51eu7QZ2T
-    V1VFBX0QTmn2kM0JLSSC96mDUzbs6qfURUaXbuffF5cqdUjXgtzZj5SFEbIv4UFS
-    0DAS+6i/jTGSz7aAp/uofOxhYkCqK/s2Cex2jQbDpcKXKiWzPdULOCjAh3fdCAp0
-    3ua3fdAI7H8PslSDiPFrcY78OxZaWXzazEiun77WKbzrMloLMP5dpCPlUCOqxbZ0
-    ykSuo0M7p/UPY34yi3AMHS9grvQQ1DykMPoqKKEheI6nUGcQ1AFcdr307ILWRsPO
-    T6gHOLXZaR4+UEeYfkTKsjrMUhozx7JIyuLgTXA9TWC+tZ9WZpbJ7i3bpQ+RNwX2
-    AxQSwc9ZOcNxg8YCbGlJgJHnRVhA202kNT5ORplcRKqaOaO9LK7491gaaShjaspg
-    4THDnH+HHFORmbgwyO9P74wuw+n6tI40Ia3qzRLVz6sJBQMtLEN+cvNoNi3KYkNj
-    GJM1iWfSz6PjrEGxbzQZKoFPPiZrVRnVfPhBNyT2OZj+TJii9CaukhmkkA2/AJmS
-    5XoO3GNIaqOGYV9HLyh1++cn3NhjgFYe/Q3ORCTIg2Ltd8Qr6mYe0LcONQFgiv4c
-    AUOZtOq05fJDXE74R1JjYHPaQF6uZEbTF98jN9QZIfCEvDdv1nC83MvSwATi0j5S
-    LvdU/MSPaZ0VKzPc4JPwv72dveEPME6QyswKx9izioJVrQJr36YtmrhDlKR1WBny
-    ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
-    -----END RSA PRIVATE KEY-----
+bMpTdWaAEqNciUFQhHYNv1F9N12aqOQd6cFbMozfRnNR19HW6QIPDmEOPSSCaaRy
+QCnJhbpcSnaz9pvI7EzeJzdykDmR8Boos+0NSK9qIX0buBO55mfPr7hjx7bLFEVl
+kkHk+k9F1rLyjyAGJrVoTNoWjyuMOFUCWR7ZxoYticwM/sL+Rbhn1FsfdkdfhFW0
+08OHTouRK33Aifx0A3MWxR0ILvw49E6urtbbIrskEzKzfWQug8gY1TJhI3sbsMsI
+1bS5Vg88TvilFFBGn0Yv6GEJjgOrsrKDGKtYGhuBfK4fd4rwnQKKvC6gTKeNXIfV
+7Qm1R20LUJXC8zv35pdKoVk+NdS/MGNXJRFgO3Kkp01aVf3n1oo2+AllS02AYyWt
+1svHecsRwbibXip8gSQsOtDdpqQrEDyqZlFHXEw/IcJE9vQWEJmpHD5GFhbKtttp
+E0B3ZtNl6YcyUz0rSf9zjuMx/wReWdRb6H2WoIqoRS7vAUONDRPt7wvfjtLlDRVi
+bc2RTN8yce/57lGnA1n8bxPV5+9VxCJOEipV3io/nrj+uNO8i/0rUpkKdZy8wy2C
+Rksoxq4TxwegONz1HQcJVpJu0iBdu7B+BXVjxQQScvMQlOTbua8k+YdaCeZAb83j
+JVX89/PFy+Xj7eGyzzBTqz7dV0Xkxq9mpiMYUCoyNL5Iq1jD9Xb5TzVW1Gbh8zCZ
+YXjcZEQKeartaBC4/fRWyxqK3gJRX4SJkl4gYMQrPS2pbTzVCO+WLxSwIh3dOZpo
+eErXLSrylIv9cE2Xrs0McXAR+hfGrqgtILBWwgbh2NhmUiFfLwUTUxU51eu7QZ2T
+V1VFBX0QTmn2kM0JLSSC96mDUzbs6qfURUaXbuffF5cqdUjXgtzZj5SFEbIv4UFS
+0DAS+6i/jTGSz7aAp/uofOxhYkCqK/s2Cex2jQbDpcKXKiWzPdULOCjAh3fdCAp0
+3ua3fdAI7H8PslSDiPFrcY78OxZaWXzazEiun77WKbzrMloLMP5dpCPlUCOqxbZ0
+ykSuo0M7p/UPY34yi3AMHS9grvQQ1DykMPoqKKEheI6nUGcQ1AFcdr307ILWRsPO
+T6gHOLXZaR4+UEeYfkTKsjrMUhozx7JIyuLgTXA9TWC+tZ9WZpbJ7i3bpQ+RNwX2
+AxQSwc9ZOcNxg8YCbGlJgJHnRVhA202kNT5ORplcRKqaOaO9LK7491gaaShjaspg
+4THDnH+HHFORmbgwyO9P74wuw+n6tI40Ia3qzRLVz6sJBQMtLEN+cvNoNi3KYkNj
+GJM1iWfSz6PjrEGxbzQZKoFPPiZrVRnVfPhBNyT2OZj+TJii9CaukhmkkA2/AJmS
+5XoO3GNIaqOGYV9HLyh1++cn3NhjgFYe/Q3ORCTIg2Ltd8Qr6mYe0LcONQFgiv4c
+AUOZtOq05fJDXE74R1JjYHPaQF6uZEbTF98jN9QZIfCEvDdv1nC83MvSwATi0j5S
+LvdU/MSPaZ0VKzPc4JPwv72dveEPME6QyswKx9izioJVrQJr36YtmrhDlKR1WBny
+ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
+-----END RSA PRIVATE KEY-----
     `;
+const mockIdpSigningCert = `-----BEGIN CERTIFICATE-----
+MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==
+-----END CERTIFICATE-----`;
+const unrelatedCertificate = `-----BEGIN CERTIFICATE-----
+MIIDATCCAemgAwIBAgIUTDC29D27otkSCpMVYZSZ7135bZcwDQYJKoZIhvcNAQEL
+BQAwEDEOMAwGA1UEAwwFVGVzdDIwHhcNMjYwMzI3MTcyNDA4WhcNMzYwMzI0MTcy
+NDA4WjAQMQ4wDAYDVQQDDAVUZXN0MjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+AQoCggEBALXz/zRq88hhlLTJ47MoLdFqwjC9A9HiV6xOdezHhZ+vBaqCXsUcru9N
+3FfG6EVtuxSTLQIfgMpxifS4tF2tqkxBcW7JDGIuN02hjeWzlVztyAzISlZJUrGS
+kNnE11Br7p4O3OC1OcrpTBi/uBUPBiCFeeQCSIk+pf0h7Y4NUa27oTsZ6Qy0II7A
+2m5yqtlfyvxyLKIVIlDt1yCcvvJ2MSdiCcGDfyB/BmL5ow8kaR6bal1w/NRh8pNr
+OOjHmx3W+6Qv6g1M/mK7tITlstEEFJyWdzw6yEAZ7jyrHMkJKj9wTgmMxlx/H1d7
+st234qgFjm6w3WxA0AwaqNcjiD3SpxkCAwEAAaNTMFEwHQYDVR0OBBYEFPegA1b2
+piumrJ5DhMqgauhDrSYpMB8GA1UdIwQYMBaAFPegA1b2piumrJ5DhMqgauhDrSYp
+MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAE9imWiQSn1nde7x
+HPCZTuu3ydTNl6vT8yDHYUYBAC7kqUuhJ3gFd8x6toolxP2FvVuF4I7ovvRpW5zk
+eJ/AGOY4YB5g6K0MUpgy42V5WDXTqLR/62VCH+jQHgIjd0I728FWVoElXHYhupnR
+EKG5qVkfs8ySaBr/IV5nTSa0R9IyJX+Sb+qqITcD4CUmtNSwB1XhJq403VFCwiu+
+TQNsZdoNl0fm5SR11rDA3IffIxeAvTtZwSJ/hOfBQM1RnM24t6xYX7Oe/2ZPhN7v
+epyw0Ikhqk/BFtQCRei+t1HJ9GIu6qnsC7CxrUA80IcxZjeg7N6ua+uctzRWzDhn
+kBGIJYs=
+-----END CERTIFICATE-----`;
 const generateRequestID = () => {
 	return "_" + randomUUID();
 };
@@ -334,6 +370,7 @@ const generateRequestID = () => {
 interface MockSAMLTemplateOverrides {
 	audience?: string;
 	destination?: string;
+	inResponseTo?: string;
 	subjectRecipient?: string;
 }
 
@@ -375,7 +412,7 @@ const createTemplateCallback =
 			SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater.toISOString(),
 			NameIDFormat: selectedNameIDFormat,
 			NameID: email,
-			InResponseTo: "null",
+			InResponseTo: overrides.inResponseTo ?? "null",
 			AuthnStatement: "",
 			attrFirstName: "Test",
 			attrLastName: "User",
@@ -529,14 +566,36 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 			};
 			const queryValue = (value: unknown) =>
 				typeof value === "string" ? value : undefined;
+			const idpInitiated = req.query.idpInitiated === "true";
+			const parsedRequest =
+				!idpInitiated &&
+				!options.wantAuthnRequestsSigned &&
+				typeof req.query.SAMLRequest === "string"
+					? await idp.parseLoginRequest(sp, "redirect", {
+							query: req.query,
+						})
+					: null;
+			const requestInfo: RequestInfo = parsedRequest
+				? {
+						extract: parsedRequest.extract,
+						samlContent: parsedRequest.samlContent,
+						sigAlg: parsedRequest.sigAlg,
+					}
+				: { extract: {} };
+			const requestId = requestInfo.extract.request?.id;
 			const templateOverrides: MockSAMLTemplateOverrides = {
 				audience: queryValue(req.query.audience),
 				destination: queryValue(req.query.destination),
+				inResponseTo: idpInitiated
+					? ""
+					: typeof requestId === "string"
+						? requestId
+						: "null",
 				subjectRecipient: queryValue(req.query.recipient),
 			};
 			const { context, entityEndpoint } = (await idp.createLoginResponse(
 				sp,
-				{} as any,
+				requestInfo,
 				saml.Constants.wording.binding.post,
 				user,
 				createTemplateCallback(idp, sp, user.emailAddress, templateOverrides),
@@ -574,7 +633,7 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 		}
 	});
 	app.post(
-		"/api/sso/saml2/callback/:providerId",
+		"/api/sso/saml2/sp/acs/:providerId",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
 			try {
@@ -665,7 +724,6 @@ describe("SAML SSO with defaultSSO array", async () => {
 					issuer: "http://localhost:8081",
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -715,6 +773,18 @@ describe("SAML SSO with defaultSSO array", async () => {
 		});
 	});
 
+	it("should reject additionalParams when routing to a SAML provider", async () => {
+		await expect(
+			auth.api.signInSSO({
+				body: {
+					providerId: "default-saml",
+					callbackURL: "http://localhost:3000/dashboard",
+					additionalParams: { domain_hint: "contoso.com" },
+				},
+			}),
+		).rejects.toThrow(/additionalParams is not supported for SAML/);
+	});
+
 	it("should fetch sp metadata for a defaultSSO provider", async () => {
 		const spMetadataRes = await auth.api.spMetadata({
 			query: {
@@ -729,20 +799,20 @@ describe("SAML SSO with defaultSSO array", async () => {
 
 describe("SAML SSO with signed AuthnRequests", async () => {
 	const idpMetadataWithSignedRequests = `
-    <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8082/api/sso/saml2/idp/metadata">
-    <md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-        <md:KeyDescriptor use="signing">
-        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-            <ds:X509Data>
-            <ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
-            </ds:X509Data>
-        </ds:KeyInfo>
-        </md:KeyDescriptor>
-        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8082/api/sso/saml2/idp/redirect"/>
-        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8082/api/sso/saml2/idp/post"/>
-        </md:IDPSSODescriptor>
-    </md:EntityDescriptor>
-    `;
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8082/api/sso/saml2/idp/metadata">
+<md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+<md:KeyDescriptor use="signing">
+<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+<ds:X509Data>
+<ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
+</ds:X509Data>
+</ds:KeyInfo>
+</md:KeyDescriptor>
+<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8082/api/sso/saml2/idp/redirect"/>
+<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8082/api/sso/saml2/idp/post"/>
+</md:IDPSSODescriptor>
+</md:EntityDescriptor>
+`;
 
 	const signedMockIdP = createMockSAMLIdP(8082, {
 		idpMetadataXml: idpMetadataWithSignedRequests,
@@ -770,7 +840,6 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 					issuer: "http://localhost:8082",
 					entryPoint: "http://localhost:8082/api/sso/saml2/idp/redirect",
 					cert: certificate,
-					callbackUrl: "http://localhost:8082/dashboard",
 					wantAssertionsSigned: false,
 					authnRequestsSigned: true,
 					signatureAlgorithm: "sha256",
@@ -876,7 +945,6 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 								issuer: "http://localhost:8082",
 								entryPoint: "http://localhost:8082/api/sso/saml2/idp/redirect",
 								cert: certificate,
-								callbackUrl: "http://localhost:8082/dashboard",
 								authnRequestsSigned: true,
 								spMetadata: {},
 								idpMetadata: {
@@ -922,7 +990,6 @@ describe("SAML SSO without signed AuthnRequests", async () => {
 					issuer: "http://localhost:8082",
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8082/dashboard",
 					wantAssertionsSigned: false,
 					authnRequestsSigned: false,
 					signatureAlgorithm: "sha256",
@@ -993,7 +1060,6 @@ describe("SAML SSO with idpMetadata but without metadata XML (fallback to top-le
 					issuer: "http://localhost:8083/issuer",
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
 					cert: certificate,
-					callbackUrl: "http://localhost:8083/dashboard",
 					wantAssertionsSigned: false,
 					authnRequestsSigned: false,
 					spMetadata: {},
@@ -1078,6 +1144,12 @@ describe("SAML SSO", async () => {
 					attributes: userInfo.attributes,
 				};
 			}),
+		saml: {
+			// Disable for the shared instance — InResponseTo validation has
+			// dedicated tests. Enabling it here would require every test to
+			// go through the SP-initiated flow to store an AuthnRequest first.
+			enableInResponseToValidation: false,
+		},
 	};
 
 	const auth = betterAuth({
@@ -1150,7 +1222,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1183,7 +1254,6 @@ describe("SAML SSO", async () => {
 			samlConfig: {
 				entryPoint: sharedMockIdP.metadataUrl,
 				cert: expect.any(String),
-				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 				wantAssertionsSigned: false,
 				signatureAlgorithm: "sha256",
 				digestAlgorithm: "sha256",
@@ -1206,7 +1276,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/sp/acs",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1258,7 +1327,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: `${issuer}/api/sso/saml2/sp/acs`,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1303,7 +1371,7 @@ describe("SAML SSO", async () => {
 			`<EntityDescriptor entityID="${issuer}"`,
 		);
 		expect(spMetadataResResValue).toContain(
-			`Location="${issuer}/api/sso/saml2/sp/acs"`,
+			`Location="http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider-1"`,
 		);
 	});
 	it("should initiate SAML login and handle response", async () => {
@@ -1320,7 +1388,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1367,7 +1434,7 @@ describe("SAML SSO", async () => {
 		});
 		let redirectLocation = "";
 		await betterFetch(
-			"http://localhost:8081/api/sso/saml2/callback/saml-provider-1",
+			"http://localhost:8081/api/sso/saml2/sp/acs/saml-provider-1",
 			{
 				method: "POST",
 				redirect: "manual",
@@ -1420,6 +1487,7 @@ describe("SAML SSO", async () => {
 				},
 				plugins: [
 					sso({
+						saml: { enableInResponseToValidation: false },
 						defaultSSO: [
 							{
 								domain: "localhost:8084",
@@ -1482,7 +1550,7 @@ describe("SAML SSO", async () => {
 
 			const response = await encryptedAuth.handler(
 				new Request(
-					"http://localhost:3000/api/auth/sso/saml2/callback/encrypted-saml-provider",
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/encrypted-saml-provider",
 					{
 						method: "POST",
 						headers: {
@@ -1517,7 +1585,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1548,7 +1616,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1569,7 +1637,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1608,7 +1676,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1629,7 +1697,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1648,6 +1716,120 @@ describe("SAML SSO", async () => {
 		});
 	});
 
+	it("should reject registration when no cert source is provided", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "no-cert-source",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: sharedMockIdP.metadataUrl,
+						idpMetadata: mockIdentityProviderMetadata,
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "CERT_SOURCE_MISSING" },
+		});
+	});
+
+	it.each([
+		["bad-then-good", [unrelatedCertificate, mockIdpSigningCert]],
+		["good-then-bad", [mockIdpSigningCert, unrelatedCertificate]],
+	])("should validate SAML response when signing cert matches any in the array (%s)", async (_name, certs) => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-multi-cert",
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certs,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
+						singleSignOnService: [
+							{
+								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+								Location: "http://localhost:8081/api/sso/saml2/idp/post",
+							},
+							{
+								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+								Location: "http://localhost:8081/api/sso/saml2/idp/post",
+							},
+						],
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+						privateKey: spPrivateKey,
+						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provider-multi-cert",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		expect(signInResponse.response).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+
+		let samlResponse: any;
+		await betterFetch(signInResponse.response?.url as string, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const samlRedirectUrl = new URL(signInResponse.response?.url as string);
+		const callbackResponse = await auth.api.acsEndpoint({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: samlRedirectUrl.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: signInResponse.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provider-multi-cert",
+			},
+			asResponse: true,
+		});
+
+		expect(callbackResponse.headers.get("location")).toContain("dashboard");
+	});
+
 	it("should not allow creating a provider with duplicate providerId", async () => {
 		const headers = await getAuthHeaders();
 		await authClient.signIn.email(testUser, {
@@ -1663,7 +1845,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					idpMetadata: mockIdentityProviderMetadata,
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -1681,7 +1863,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -1699,7 +1881,7 @@ describe("SAML SSO", async () => {
 
 	it("should initiate SAML login and validate RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -1711,7 +1893,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1750,7 +1931,7 @@ describe("SAML SSO", async () => {
 		});
 
 		const samlRedirectUrl = new URL(signInResponse?.url);
-		const callbackResponse = await auth.api.callbackSSOSAML({
+		const callbackResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -1768,9 +1949,9 @@ describe("SAML SSO", async () => {
 		expect(callbackResponse.headers.get("location")).toContain("dashboard");
 	});
 
-	it("should initiate SAML login and fallback to callbackUrl on invalid RelayState", async () => {
+	it("should reject an invalid RelayState even when InResponseTo validation is disabled", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -1782,7 +1963,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1820,7 +2000,7 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		const callbackResponse = await auth.api.callbackSSOSAML({
+		const callbackResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -1836,14 +2016,21 @@ describe("SAML SSO", async () => {
 		});
 
 		expect(callbackResponse.status).toBe(302);
-		expect(callbackResponse.headers.get("location")).toBe(
-			"http://localhost:3000/dashboard",
+		const location = callbackResponse.headers.get("location") ?? "";
+		expect(location).toContain("error=invalid_state");
+		expect(location).toContain(
+			"error_description=invalid_or_expired_relay_state",
 		);
 	});
 
 	it("should initiate SAML login and signup user when disableImplicitSignUp is true but requestSignup is explicitly enabled", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ disableImplicitSignUp: true })],
+			plugins: [
+				sso({
+					disableImplicitSignUp: true,
+					saml: { enableInResponseToValidation: false },
+				}),
+			],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -1855,7 +2042,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1895,7 +2081,7 @@ describe("SAML SSO", async () => {
 		});
 
 		const samlRedirectUrl = new URL(signInResponse?.url);
-		const callbackResponse = await auth.api.callbackSSOSAML({
+		const callbackResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -1916,7 +2102,12 @@ describe("SAML SSO", async () => {
 	it("should reject SAML sign-in when disableImplicitSignUp is true and user doesn't exist", async () => {
 		const { auth: authWithDisabledSignUp, signInWithTestUser } =
 			await getTestInstance({
-				plugins: [sso({ disableImplicitSignUp: true })],
+				plugins: [
+					sso({
+						disableImplicitSignUp: true,
+						saml: { enableInResponseToValidation: false },
+					}),
+				],
 			});
 
 		const { headers } = await signInWithTestUser();
@@ -1930,7 +2121,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1958,7 +2148,7 @@ describe("SAML SSO", async () => {
 
 		const response = await authWithDisabledSignUp.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/saml-test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -1966,7 +2156,6 @@ describe("SAML SSO", async () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -1980,7 +2169,12 @@ describe("SAML SSO", async () => {
 	it("should reject SAML ACS (IdP-initiated) when disableImplicitSignUp is true and user doesn't exist", async () => {
 		const { auth: authWithDisabledSignUp, signInWithTestUser } =
 			await getTestInstance({
-				plugins: [sso({ disableImplicitSignUp: true })],
+				plugins: [
+					sso({
+						disableImplicitSignUp: true,
+						saml: { enableInResponseToValidation: false },
+					}),
+				],
 			});
 
 		const { headers } = await signInWithTestUser();
@@ -1993,7 +2187,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2027,7 +2220,6 @@ describe("SAML SSO", async () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -2121,7 +2313,7 @@ describe("SAML SSO", async () => {
 					trustedProviders: [],
 				},
 			},
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2134,7 +2326,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2173,7 +2364,7 @@ describe("SAML SSO", async () => {
 
 		const response = await authUntrusted.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/untrusted-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/untrusted-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2204,7 +2395,7 @@ describe("SAML SSO", async () => {
 						trustedProviders: ["trusted-saml-provider"],
 					},
 				},
-				plugins: [sso()],
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 			},
 		);
 
@@ -2218,7 +2409,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2261,7 +2451,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2287,7 +2476,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/strict-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/strict-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2302,10 +2491,10 @@ describe("SAML SSO", async () => {
 
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
-		expect(redirectLocation).toContain("error=unsolicited_response");
+		expect(redirectLocation).toContain("error=invalid_saml_response");
 	});
 
-	it("should allow unsolicited SAML response when allowIdpInitiated is true (default)", async () => {
+	it("should allow unsolicited SAML response when allowIdpInitiated is explicitly true", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
@@ -2327,7 +2516,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2353,7 +2541,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/permissive-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/permissive-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2392,7 +2580,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2418,7 +2605,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/legacy-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/legacy-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2458,8 +2645,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl:
-						"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
 					audience: "http://localhost:3000",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
@@ -2488,7 +2673,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2503,7 +2688,10 @@ describe("SAML SSO", async () => {
 
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
-		expect(redirectLocation).toContain("error=unsolicited_response");
+		// The mock IdP response includes InResponseTo, but no matching
+		// AuthnRequest was stored — so it's rejected as unknown request ID,
+		// not as unsolicited (which would require InResponseTo to be absent).
+		expect(redirectLocation).toContain("error=invalid_saml_response");
 	});
 
 	it("should use verification table for InResponseTo validation", async () => {
@@ -2528,7 +2716,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2556,7 +2743,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/db-fallback-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/db-fallback-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2569,10 +2756,146 @@ describe("SAML SSO", async () => {
 			),
 		);
 
-		// Should reject unsolicited response, proving validation is active
+		// The mock response has InResponseTo but no matching stored request
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
-		expect(redirectLocation).toContain("error=unsolicited_response");
+		expect(redirectLocation).toContain("error=invalid_saml_response");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8607
+	 */
+	it("should reject SAML response with mismatched audience restriction", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					saml: {
+						enableInResponseToValidation: false,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "audience-mismatch-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					audience: "https://wrong-audience.example.com",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+					},
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/audience-mismatch-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain(
+			"error=invalid_saml_response&error_description=Audience+mismatch",
+		);
+	});
+
+	it("should accept SAML response when audience matches configured value", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					saml: {
+						enableInResponseToValidation: false,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		// The mock IdP's SP entity ID is the audience it sends in assertions
+		// Configure the provider's audience to match it
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "audience-match-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					audience: "http://localhost:3001/api/sso/saml2/sp/metadata",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+					},
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/audience-match-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+					}),
+				},
+			),
+		);
+
+		// Should not redirect to an error — the audience matches
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).not.toContain("error=");
 	});
 
 	/**
@@ -2580,7 +2903,7 @@ describe("SAML SSO", async () => {
 	 */
 	it("should correctly parse verification-ID-based RelayState on ACS route (SP-initiated)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2593,7 +2916,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2665,7 +2987,7 @@ describe("SAML SSO", async () => {
 
 	it("should redirect to signIn callbackURL when relay_state cookie is missing on callback route (cross-site POST)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2678,9 +3000,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl:
-						"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
-					audience: "http://localhost:3000",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2721,7 +3040,7 @@ describe("SAML SSO", async () => {
 		// IdP POSTs back without relay_state cookie (SameSite=Lax blocks cross-site POST cookies)
 		const callbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2738,13 +3057,13 @@ describe("SAML SSO", async () => {
 		expect(callbackResponse.status).toBe(302);
 		const redirectLocation = callbackResponse.headers.get("location") || "";
 		expect(redirectLocation).toContain("/dashboard");
-		expect(redirectLocation).not.toContain("/sso/saml2/callback/");
+		expect(redirectLocation).not.toContain("/sso/saml2/sp/acs/");
 		expect(redirectLocation).not.toContain("error");
 	});
 
 	it("should redirect to signIn callbackURL when relay_state cookie is missing on ACS route (cross-site POST)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2757,9 +3076,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl:
-						"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
-					audience: "http://localhost:3000",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2823,7 +3139,7 @@ describe("SAML SSO", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7777
 	 */
-	it("should fallback to provider callbackUrl on ACS route when RelayState is invalid", async () => {
+	it("should fallback to baseURL on ACS route when RelayState is invalid", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
 		});
@@ -2838,7 +3154,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2862,7 +3177,7 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// POST with a garbage RelayState - should fallback to provider callbackUrl
+		// POST with a garbage RelayState - should fallback to baseURL
 		const acsResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-bad-relay-provider",
@@ -2881,8 +3196,8 @@ describe("SAML SSO", async () => {
 
 		expect(acsResponse.status).toBe(302);
 		const location = acsResponse.headers.get("location") || "";
-		// Should redirect to the provider's callbackUrl, not the garbage RelayState
-		expect(location).toContain("dashboard");
+		// Should redirect to baseURL with error, not the garbage RelayState
+		expect(location).toContain("http://localhost:3000");
 		expect(location).not.toContain("not-a-valid-relay-state");
 	});
 });
@@ -2977,7 +3292,6 @@ describe("SAML SSO with custom fields", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3010,7 +3324,6 @@ describe("SAML SSO with custom fields", () => {
 			samlConfig: {
 				entryPoint: sharedMockIdP.metadataUrl,
 				cert: expect.any(String),
-				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 				wantAssertionsSigned: false,
 				signatureAlgorithm: "sha256",
 				digestAlgorithm: "sha256",
@@ -3066,6 +3379,9 @@ describe("safeJsonParse", () => {
 });
 
 describe("SSO Provider Config Parsing", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10329
+	 */
 	it("returns parsed SAML config and avoids [object Object] in response", async () => {
 		const data = {
 			user: [] as any[],
@@ -3112,7 +3428,9 @@ describe("SSO Provider Config Parsing", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/sso",
 					cert: "test-cert",
+					idpMetadata: mockIdentityProviderMetadata,
 					callbackUrl: "http://localhost:3000/callback",
+					idpInitiatedCallbackUrl: "/dashboard",
 					spMetadata: {
 						entityID: "test-entity",
 					},
@@ -3125,6 +3443,7 @@ describe("SSO Provider Config Parsing", () => {
 		expect(typeof provider.samlConfig).toBe("object");
 		expect(provider.samlConfig?.entryPoint).toBe("http://localhost:8081/sso");
 		expect(provider.samlConfig?.cert).toBe("test-cert");
+		expect(provider.samlConfig?.idpInitiatedCallbackUrl).toBe("/dashboard");
 
 		const serialized = JSON.stringify(provider.samlConfig);
 		expect(serialized).not.toContain("[object Object]");
@@ -3188,7 +3507,6 @@ describe("SSO Provider Config Parsing", () => {
 						clientSecret: "test-secret",
 						tokenEndpointAuthentication: "client_secret_basic",
 						mapping: {
-							id: "sub",
 							email: "email",
 							name: "name",
 						},
@@ -3205,7 +3523,10 @@ describe("SSO Provider Config Parsing", () => {
 			const serialized = JSON.stringify(provider.oidcConfig);
 			expect(serialized).not.toContain("[object Object]");
 
-			expect(provider.oidcConfig?.mapping?.id).toBe("sub");
+			expect(provider.oidcConfig?.mapping).toEqual({
+				email: "email",
+				name: "name",
+			});
 		} finally {
 			await oidcServer.stop().catch(() => {});
 		}
@@ -3215,7 +3536,7 @@ describe("SSO Provider Config Parsing", () => {
 describe("SAML SSO - IdP Initiated Flow", () => {
 	it("should handle IdP-initiated flow with GET after POST redirect", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -3231,7 +3552,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3264,11 +3584,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
-				RelayState: "http://localhost:3000/dashboard",
 			},
 			params: {
 				providerId: "idp-initiated-provider",
@@ -3279,10 +3598,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
 		const redirectLocation = postResponse.headers.get("location");
-		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(redirectLocation).toBe("http://localhost:3000");
 
 		const cookieHeader = postResponse.headers.get("set-cookie");
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			query: {
 				RelayState: "http://localhost:3000/dashboard",
@@ -3306,7 +3625,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		});
 
 		const getResponse = await auth.api
-			.callbackSSOSAML({
+			.acsEndpoint({
 				method: "GET",
 				params: {
 					providerId: "test-provider",
@@ -3330,15 +3649,15 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(redirectLocation).toContain("error=invalid_request");
 	});
 
-	it("should prevent redirect loop when callbackUrl points to callback route", async () => {
+	it("should redirect to baseURL after ACS, not back to the ACS route", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
 
 		const callbackRouteUrl =
-			"http://localhost:3000/api/auth/sso/saml2/callback/loop-test-provider";
+			"http://localhost:3000/api/auth/sso/saml2/sp/acs/loop-test-provider";
 
 		await auth.api.registerSSOProvider({
 			body: {
@@ -3351,7 +3670,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: callbackRouteUrl,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3384,7 +3702,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3404,7 +3722,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 
 	it("should handle GET request with RelayState in query", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -3420,7 +3738,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3453,11 +3770,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
-				RelayState: "http://localhost:3000/custom-path",
 			},
 			params: {
 				providerId: "relaystate-provider",
@@ -3466,7 +3782,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		});
 
 		const cookieHeader = postResponse.headers.get("set-cookie");
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			query: {
 				RelayState: "http://localhost:3000/custom-path",
@@ -3486,13 +3802,13 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 
 	it("should handle GET request when POST redirects to callback URL (original issue scenario)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
 
 		const callbackRouteUrl =
-			"http://localhost:3000/api/auth/sso/saml2/callback/issue-6615-provider";
+			"http://localhost:3000/api/auth/sso/saml2/sp/acs/issue-6615-provider";
 
 		await auth.api.registerSSOProvider({
 			body: {
@@ -3505,7 +3821,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3538,11 +3853,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
-				RelayState: callbackRouteUrl,
 			},
 			params: {
 				providerId: "issue-6615-provider",
@@ -3554,10 +3868,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse.status).toBe(302);
 		const postRedirectLocation = postResponse.headers.get("location");
 		expect(postRedirectLocation).not.toBe(callbackRouteUrl);
-		expect(postRedirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(postRedirectLocation).toBe("http://localhost:3000");
 
 		const cookieHeader = postResponse.headers.get("set-cookie");
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			params: {
 				providerId: "issue-6615-provider",
@@ -3574,7 +3888,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 
 	it("should prevent open redirect with malicious RelayState URL", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -3590,7 +3904,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3623,9 +3936,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		// Test POST with malicious RelayState - raw RelayState is not trusted
-		// Falls back to parsedSamlConfig.callbackUrl
-		const postResponse = await auth.api.callbackSSOSAML({
+		// Test POST with malicious RelayState - a supplied RelayState must be a
+		// valid signed state, so a raw value is rejected outright.
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3639,16 +3952,15 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
-		const postRedirectLocation = postResponse.headers.get("location");
-		// Should NOT redirect to evil.com - raw RelayState is ignored
+		const postRedirectLocation = postResponse.headers.get("location") || "";
+		// Should NOT redirect to evil.com - the invalid RelayState is rejected
 		expect(postRedirectLocation).not.toContain("evil.com");
-		// Falls back to samlConfig.callbackUrl
-		expect(postRedirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(postRedirectLocation).toContain("error=invalid_state");
 	});
 
 	it("should prevent open redirect via GET with malicious RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -3664,7 +3976,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3698,7 +4009,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		}
 
 		// First do POST to establish session
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3712,7 +4023,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		const cookieHeader = postResponse.headers.get("set-cookie");
 
 		// Test GET with malicious RelayState in query params
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			query: {
 				RelayState: "https://evil.com/steal-cookies",
@@ -3732,9 +4043,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(getRedirectLocation).toBe("http://localhost:3000");
 	});
 
-	it("should allow relative path redirects", async () => {
+	it("should reject a raw relative-path RelayState instead of trusting it", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -3750,7 +4061,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3783,7 +4093,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3797,13 +4107,13 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
-		const redirectLocation = postResponse.headers.get("location");
-		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+		const redirectLocation = postResponse.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=invalid_state");
 	});
 
 	it("should block protocol-relative URL attacks (//evil.com)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -3819,7 +4129,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3852,9 +4161,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		// Test POST with protocol-relative URL - raw RelayState is not trusted
-		// Falls back to parsedSamlConfig.callbackUrl
-		const postResponse = await auth.api.callbackSSOSAML({
+		// Test POST with protocol-relative URL - a supplied RelayState must be a
+		// valid signed state, so a raw value is rejected outright.
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3868,11 +4177,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
-		const redirectLocation = postResponse.headers.get("location");
-		// Should NOT redirect to evil.com - raw RelayState is ignored
+		const redirectLocation = postResponse.headers.get("location") || "";
+		// Should NOT redirect to evil.com - the invalid RelayState is rejected
 		expect(redirectLocation).not.toContain("evil.com");
-		// Falls back to samlConfig.callbackUrl
-		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(redirectLocation).toContain("error=invalid_state");
 	});
 });
 
@@ -4109,7 +4417,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 	describe("Positive: SAML endpoints allow external IdP origins", () => {
 		it("should allow SAML callback POST from external IdP origin", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
-				plugins: [sso()],
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 			});
 			const { headers } = await signInWithTestUser();
 
@@ -4122,7 +4430,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4138,7 +4446,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 			// Origin check should be bypassed for SAML callback endpoints
 			const callbackRes = await auth.handler(
 				new Request(
-					"http://localhost:8081/api/auth/sso/saml2/callback/origin-bypass-callback",
+					"http://localhost:8081/api/auth/sso/saml2/sp/acs/origin-bypass-callback",
 					{
 						method: "POST",
 						headers: {
@@ -4163,7 +4471,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 
 		it("should allow ACS endpoint POST from external IdP origin", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
-				plugins: [sso()],
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 			});
 			const { headers } = await signInWithTestUser();
 
@@ -4176,7 +4484,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/sp/acs",
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4216,7 +4524,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 	describe("Negative: Non-SAML endpoints remain protected", () => {
 		it("should block POST to sign-up with untrusted origin when origin check is enabled", async () => {
 			const { auth } = await getTestInstance({
-				plugins: [sso()],
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 				advanced: {
 					disableCSRFCheck: false,
 					disableOriginCheck: false,
@@ -4277,7 +4585,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4292,7 +4600,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 			// Even with origin bypass, malicious RelayState should be rejected
 			const callbackRes = await auth.handler(
 				new Request(
-					"http://localhost:8081/api/auth/sso/saml2/callback/relay-security-test",
+					"http://localhost:8081/api/auth/sso/saml2/sp/acs/relay-security-test",
 					{
 						method: "POST",
 						headers: {
@@ -4333,7 +4641,7 @@ describe("SAML Response Security", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4357,7 +4665,7 @@ describe("SAML Response Security", () => {
 
 		const callbackRes = await auth.handler(
 			new Request(
-				"http://localhost:8081/api/auth/sso/saml2/callback/security-test-provider",
+				"http://localhost:8081/api/auth/sso/saml2/sp/acs/security-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4371,9 +4679,9 @@ describe("SAML Response Security", () => {
 			),
 		);
 
-		expect(callbackRes.status).toBe(400);
-		const body = await callbackRes.json();
-		expect(body.message).toBe("Invalid SAML response");
+		expect(callbackRes.status).toBe(302);
+		const location = callbackRes.headers.get("location") || "";
+		expect(location).toContain("error=");
 	});
 
 	it("should reject SAML response with tampered nameID", async () => {
@@ -4390,7 +4698,7 @@ describe("SAML Response Security", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4409,7 +4717,7 @@ describe("SAML Response Security", () => {
 
 		const callbackRes = await auth.handler(
 			new Request(
-				"http://localhost:8081/api/auth/sso/saml2/callback/tamper-test-provider",
+				"http://localhost:8081/api/auth/sso/saml2/sp/acs/tamper-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4423,7 +4731,9 @@ describe("SAML Response Security", () => {
 			),
 		);
 
-		expect(callbackRes.status).toBe(400);
+		expect(callbackRes.status).toBe(302);
+		const location = callbackRes.headers.get("location") || "";
+		expect(location).toContain("error=");
 	});
 });
 
@@ -4440,7 +4750,7 @@ describe("SAML SSO - Size Limit Validation", () => {
 describe("SAML SSO - Assertion Replay Protection", () => {
 	it("should reject replayed SAML assertion (same assertion submitted twice)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -4453,7 +4763,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4479,7 +4788,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		const firstResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/replay-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4487,7 +4796,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -4499,7 +4807,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		const replayResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/replay-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4507,7 +4815,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -4520,7 +4827,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 	it("should reject replayed SAML assertion on ACS endpoint", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -4533,7 +4840,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4567,7 +4873,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -4587,7 +4892,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -4600,7 +4904,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 	it("should reject cross-endpoint replay (callback → ACS)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -4613,7 +4917,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4639,7 +4942,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		const callbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/cross-endpoint-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/cross-endpoint-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4647,7 +4950,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -4666,7 +4968,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -4692,7 +4993,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4709,23 +5009,35 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			headers,
 		});
 
-		// SP-initiated: signInSSO stores an AuthnRequest keyed by the request ID,
-		// and the mock IdP echoes it back as the response's InResponseTo.
-		const signInRes = await auth.api.signInSSO({
-			body: {
+		const ctx = await auth.$context;
+		const { AUTHN_REQUEST_KEY_PREFIX } = await import("./constants");
+		const provider = await findSAMLProvider(
+			"concurrent-replay-provider",
+			undefined,
+			ctx.adapter,
+		);
+		expect(provider).not.toBeNull();
+		const providerReference = await computeSSOProviderReference(provider!);
+
+		// The mock IdP echoes a fixed `InResponseTo`, so seed the matching
+		// AuthnRequest record directly. Both concurrent submissions then race to
+		// consume this single stored request; atomic consumption must let exactly
+		// one through and leave the other with no request to match.
+		const inResponseTo = "null";
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: `${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+			value: JSON.stringify({
+				id: inResponseTo,
 				providerId: "concurrent-replay-provider",
-				callbackURL: "http://localhost:3000/dashboard",
-			},
-			returnHeaders: true,
+				providerReference,
+				createdAt: Date.now(),
+				expiresAt: Date.now() + 5 * 60 * 1000,
+			}),
+			expiresAt: new Date(Date.now() + 5 * 60 * 1000),
 		});
 
-		const signInUrl = signInRes.response?.url;
-		expect(signInUrl).toBeTruthy();
-
-		const relayState = new URL(signInUrl!).searchParams.get("RelayState");
-
 		let samlResponse: any;
-		await betterFetch(signInUrl!, {
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
 				samlResponse = await context.data;
 			},
@@ -4739,19 +5051,14 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 						method: "POST",
 						headers: {
 							"Content-Type": "application/x-www-form-urlencoded",
-							Cookie: signInRes.headers.get("set-cookie") ?? "",
 						},
 						body: new URLSearchParams({
 							SAMLResponse: samlResponse.samlResponse,
-							RelayState: relayState!,
 						}),
 					},
 				),
 			);
 
-		// Both submissions race on the single stored AuthnRequest. Atomic
-		// consumption must let exactly one through; the other finds no request
-		// to match and is rejected.
 		const [first, second] = await Promise.all([submit(), submit()]);
 
 		// Both must redirect; a non-redirect failure leaves an empty location
@@ -4762,18 +5069,16 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const locations = [first, second].map(
 			(res) => res.headers.get("location") || "",
 		);
-		const succeeded = locations.filter(
-			(loc) => loc.includes("dashboard") && !loc.includes("error"),
-		);
+		const succeeded = locations.filter((loc) => !loc.includes("error"));
 		const failed = locations.filter((loc) => loc.includes("error"));
 
 		expect(succeeded).toHaveLength(1);
 		expect(failed).toHaveLength(1);
 	});
 
-	it("should issue only one session when the same IdP-initiated assertion is submitted concurrently", async () => {
+	it("should issue only one session when the same assertion is submitted concurrently without InResponseTo validation", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -4786,7 +5091,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4803,10 +5107,9 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			headers,
 		});
 
-		// IdP-initiated: no AuthnRequest is stored, so the InResponseTo gate is
-		// not in play. The assertion-replay tombstone is the only thing that can
-		// stop a duplicate submission, which makes this the direct regression for
-		// the non-atomic read-then-create.
+		// The shared mock IdP emits a literal `InResponseTo="null"` value. Disable
+		// that gate here so the assertion-replay tombstone is the only duplicate
+		// guard under test.
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -4825,7 +5128,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 						},
 						body: new URLSearchParams({
 							SAMLResponse: samlResponse.samlResponse,
-							RelayState: "http://localhost:3000/dashboard",
 						}),
 					},
 				),
@@ -4839,9 +5141,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const locations = [first, second].map(
 			(res) => res.headers.get("location") || "",
 		);
-		const succeeded = locations.filter(
-			(loc) => loc.includes("dashboard") && !loc.includes("error"),
-		);
+		const succeeded = locations.filter((loc) => loc && !loc.includes("error"));
 		const replayed = locations.filter((loc) =>
 			loc.includes("error=replay_detected"),
 		);
@@ -4854,7 +5154,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 describe("SAML SSO - Single Assertion Validation", () => {
 	it("should reject SAML response with multiple assertions on callback endpoint", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -4867,7 +5167,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4909,26 +5208,25 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			"base64",
 		);
 
-		await expect(
-			auth.api.callbackSSOSAML({
-				body: {
-					SAMLResponse: encodedResponse,
-					RelayState: "http://localhost:3000/dashboard",
-				},
-				params: {
-					providerId: "multi-assertion-callback-provider",
-				},
-			}),
-		).rejects.toMatchObject({
+		const response = await auth.api.acsEndpoint({
 			body: {
-				code: "SAML_MULTIPLE_ASSERTIONS",
+				SAMLResponse: encodedResponse,
+				RelayState: "http://localhost:3000/dashboard",
 			},
+			params: {
+				providerId: "multi-assertion-callback-provider",
+			},
+			asResponse: true,
 		});
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=saml_multiple_assertions");
 	});
 
 	it("should reject SAML response with multiple assertions on ACS endpoint", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -4941,7 +5239,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5002,7 +5299,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		// ACS endpoint translates structural errors into browser-friendly redirects
 		expect(response.status).toBe(302);
 		const location = response.headers.get("location") || "";
-		expect(location).toContain("error=multiple_assertions");
+		expect(location).toContain("error=saml_multiple_assertions");
 	});
 
 	it("should reject SAML response with no assertions", async () => {
@@ -5020,7 +5317,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5048,21 +5344,20 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const encodedResponse = Buffer.from(noAssertionResponse).toString("base64");
 
-		await expect(
-			auth.api.callbackSSOSAML({
-				body: {
-					SAMLResponse: encodedResponse,
-					RelayState: "http://localhost:3000/dashboard",
-				},
-				params: {
-					providerId: "no-assertion-provider",
-				},
-			}),
-		).rejects.toMatchObject({
+		const response = await auth.api.acsEndpoint({
 			body: {
-				code: "SAML_NO_ASSERTION",
+				SAMLResponse: encodedResponse,
+				RelayState: "http://localhost:3000/dashboard",
 			},
+			params: {
+				providerId: "no-assertion-provider",
+			},
+			asResponse: true,
 		});
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=saml_no_assertion");
 	});
 
 	it("should reject SAML response with XSW-style assertion injection in Extensions", async () => {
@@ -5080,7 +5375,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5123,26 +5417,25 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		const encodedResponse =
 			Buffer.from(xswInjectionResponse).toString("base64");
 
-		await expect(
-			auth.api.callbackSSOSAML({
-				body: {
-					SAMLResponse: encodedResponse,
-					RelayState: "http://localhost:3000/dashboard",
-				},
-				params: {
-					providerId: "xsw-injection-provider",
-				},
-			}),
-		).rejects.toMatchObject({
+		const response = await auth.api.acsEndpoint({
 			body: {
-				code: "SAML_MULTIPLE_ASSERTIONS",
+				SAMLResponse: encodedResponse,
+				RelayState: "http://localhost:3000/dashboard",
 			},
+			params: {
+				providerId: "xsw-injection-provider",
+			},
+			asResponse: true,
 		});
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=saml_multiple_assertions");
 	});
 
 	it("should accept valid SAML response with exactly one assertion", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -5155,7 +5448,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5181,7 +5473,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/single-assertion-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/single-assertion-provider",
 				{
 					method: "POST",
 					headers: {
@@ -5189,7 +5481,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -5201,7 +5492,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 	it("should normalize email to lowercase in SAML authentication to prevent duplicate creation", async () => {
 		const { auth, client, signInWithTestUser, db } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -5214,7 +5505,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5227,7 +5517,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 					identifierFormat:
 						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 					mapping: {
-						id: "nameID",
 						email: "nameID",
 						name: "displayName",
 					},
@@ -5250,7 +5539,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const firstCallbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/email-case-provider",
 				{
 					method: "POST",
 					headers: {
@@ -5258,16 +5547,12 @@ describe("SAML SSO - Single Assertion Validation", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse1!.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
 		);
 
 		expect(firstCallbackResponse.status).toBe(302);
-		expect(firstCallbackResponse.headers.get("location")).toContain(
-			"dashboard",
-		);
 		expect(firstCallbackResponse.headers.get("location")).not.toContain(
 			"error",
 		);
@@ -5304,7 +5589,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const secondCallbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/email-case-provider",
 				{
 					method: "POST",
 					headers: {
@@ -5312,16 +5597,12 @@ describe("SAML SSO - Single Assertion Validation", () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse2!.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
 		);
 
 		expect(secondCallbackResponse.status).toBe(302);
-		expect(secondCallbackResponse.headers.get("location")).toContain(
-			"dashboard",
-		);
 		expect(secondCallbackResponse.headers.get("location")).not.toContain(
 			"error",
 		);
@@ -5387,7 +5668,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5469,7 +5750,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5520,7 +5801,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5558,7 +5839,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5597,7 +5878,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5649,7 +5930,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5712,7 +5992,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5796,7 +6075,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5880,7 +6158,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5944,10 +6221,19 @@ describe("SAML Single Logout (SLO)", () => {
  */
 describe("SAML provisionUser should only be called for new users", async () => {
 	const provisionUserFn = vi.fn();
+	const validateUserInfoFn = vi.fn();
 	const { auth, signInWithTestUser } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.method === "sso-saml") {
+					validateUserInfoFn(source);
+				}
+			},
+		},
 		plugins: [
 			sso({
 				provisionUser: provisionUserFn,
+				saml: { enableInResponseToValidation: false },
 			}),
 		],
 	});
@@ -5962,7 +6248,6 @@ describe("SAML provisionUser should only be called for new users", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5980,6 +6265,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		provisionUserFn.mockClear();
+		validateUserInfoFn.mockClear();
 
 		// First sign-in: new user -> provisionUser should be called
 		const response1 = await auth.api.signInSSO({
@@ -5998,7 +6284,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		const samlRedirectUrl1 = new URL(response1.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -6014,6 +6300,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn.mock.calls[0]?.[0]).toMatchObject({
+			action: "create-user",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[0]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[0]?.[0].oauth).toBeUndefined();
 
 		provisionUserFn.mockClear();
 
@@ -6034,7 +6330,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		const samlRedirectUrl2 = new URL(response2.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse2.samlResponse,
@@ -6050,6 +6346,16 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(0);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(2);
+		expect(validateUserInfoFn.mock.calls[1]?.[0]).toMatchObject({
+			action: "sign-in",
+			method: "sso-saml",
+			sso: {
+				providerId: "saml-provision-test",
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[1]?.[0].sso?.profile).toBeDefined();
+		expect(validateUserInfoFn.mock.calls[1]?.[0].oauth).toBeUndefined();
 	});
 });
 
@@ -6063,6 +6369,7 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 			sso({
 				provisionUser: provisionUserFn,
 				provisionUserOnEveryLogin: true,
+				saml: { enableInResponseToValidation: false },
 			}),
 		],
 	});
@@ -6077,7 +6384,6 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -6113,7 +6419,7 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 		});
 
 		const samlRedirectUrl1 = new URL(response1.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -6149,7 +6455,7 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 		});
 
 		const samlRedirectUrl2 = new URL(response2.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse2.samlResponse,
@@ -6169,25 +6475,1385 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 });
 
 /**
+ * End-to-end SP-initiated SAML SSO flow.
+ *
+ * Validates the complete lifecycle through the actual better-auth stack:
+ * provider registration, AuthnRequest generation, IdP response, SAML pipeline
+ * processing, user creation, session creation, and post-auth redirect.
+ */
+describe("SAML E2E: SP-initiated flow", () => {
+	it("should complete the full flow: register, sign-in, ACS, user + session created", async () => {
+		const { auth, signInWithTestUser, db } = await getTestInstance({
+			trustedProviders: ["e2e-saml"],
+			plugins: [
+				sso({
+					saml: { enableInResponseToValidation: false },
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		// 1. Register a SAML provider
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "e2e-saml",
+				issuer: "https://sp.example.com/saml/e2e",
+				domain: "e2e.example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: extractSigningCertificateFromMetadata(idpMetadata),
+					idpMetadata: {
+						entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// 2. Initiate sign-in (generates AuthnRequest, returns IdP redirect URL)
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "e2e-saml",
+				callbackURL: "/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		expect(signInResponse.response.url).toContain("http://localhost:8081");
+		expect(signInResponse.response.redirect).toBe(true);
+
+		// 3. Mock IdP generates a signed SAML response
+		let samlResponse: any;
+		await betterFetch(signInResponse.response.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+		expect(samlResponse?.samlResponse).toBeDefined();
+
+		// 4. POST the SAML response to the ACS endpoint (through the real pipeline)
+		const samlRedirectUrl = new URL(signInResponse.response.url);
+		const acsResponse = (await auth.api.acsEndpoint({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: samlRedirectUrl.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: signInResponse.headers.get("set-cookie") ?? "",
+			},
+			params: { providerId: "e2e-saml" },
+			asResponse: true,
+		})) as unknown as Response;
+
+		// 5. Verify redirect to the requested callbackURL (no error params)
+		expect(acsResponse.status).toBe(302);
+		const location = acsResponse.headers.get("location") || "";
+		expect(location).not.toContain("error=");
+		expect(location).toContain("/dashboard");
+
+		// 6. Verify an account was linked to the SSO provider
+		const accounts = await db.findMany({ model: "account" });
+		const ssoAccount = accounts.find((a: any) => a.providerId === "e2e-saml") as
+			| Record<string, any>
+			| undefined;
+		expect(ssoAccount).toBeDefined();
+		expect(ssoAccount!.issuer).toBe(
+			"http://localhost:8081/api/sso/saml2/idp/metadata",
+		);
+		expect(ssoAccount!.accountId).toBe("test@email.com");
+
+		// 7. Verify the user exists and is linked
+		const users = await db.findMany({ model: "user" });
+		const ssoUser = users.find((u: any) => u.id === ssoAccount!.userId) as
+			| Record<string, any>
+			| undefined;
+		expect(ssoUser).toBeDefined();
+		expect(ssoUser!.email).toBe("test@email.com");
+
+		// 8. Verify a session was created for the SSO user
+		const sessions = await db.findMany({ model: "session" });
+		const ssoSession = sessions.find((s: any) => s.userId === ssoUser!.id) as
+			| Record<string, any>
+			| undefined;
+		expect(ssoSession).toBeDefined();
+		expect(ssoSession!.expiresAt).toBeDefined();
+	});
+});
+
+describe("SAML user resolution HTTP", () => {
+	type CookieJar = Map<string, string>;
+	const deferredCleanups: Array<() => Promise<void>> = [];
+
+	afterEach(async () => {
+		for (const cleanup of deferredCleanups.splice(0).reverse()) {
+			await cleanup();
+		}
+	});
+
+	function storeResponseCookies(response: Response, cookies: CookieJar): void {
+		for (const setCookie of response.headers.getSetCookie()) {
+			const separatorIndex = setCookie.indexOf(";");
+			const cookie =
+				separatorIndex < 0 ? setCookie : setCookie.slice(0, separatorIndex);
+			const equalsIndex = cookie.indexOf("=");
+			if (equalsIndex < 1) continue;
+			const name = cookie.slice(0, equalsIndex);
+			const value = cookie.slice(equalsIndex + 1);
+			if (value) cookies.set(name, value);
+			else cookies.delete(name);
+		}
+	}
+
+	function cookieHeader(cookies: CookieJar): string {
+		return [...cookies].map(([name, value]) => `${name}=${value}`).join("; ");
+	}
+
+	async function fetchJSON<ResponseBody>(
+		url: string,
+		init: RequestInit,
+		cookies?: CookieJar,
+	): Promise<{ response: Response; body: ResponseBody }> {
+		const headers = new Headers(init.headers);
+		if (cookies?.size) headers.set("cookie", cookieHeader(cookies));
+		const response = await fetch(url, { ...init, headers });
+		if (cookies) storeResponseCookies(response, cookies);
+		return { response, body: (await response.json()) as ResponseBody };
+	}
+
+	function persistedSAMLConfiguration() {
+		return {
+			issuer: "https://service.example.com/saml",
+			entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
+			cert: extractSigningCertificateFromMetadata(idpMetadata),
+			idpMetadata: {
+				entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
+			},
+			spMetadata: {
+				metadata: spMetadata,
+			},
+			identifierFormat:
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		} satisfies NonNullable<
+			NonNullable<SSOOptions["defaultSSO"]>[number]["samlConfig"]
+		>;
+	}
+
+	async function createSAMLUserResolutionInstance(
+		options: SSOOptions,
+		authOptions: Record<string, unknown> = {},
+		samlConfiguration = persistedSAMLConfiguration(),
+	) {
+		const sqlite = new DatabaseSync(":memory:");
+		const database = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+		deferredCleanups.push(async () => {
+			await database.destroy();
+		});
+		const instance = await getHttpTestInstance(
+			{
+				...authOptions,
+				database: {
+					db: database,
+					type: "sqlite",
+					transaction: true,
+				},
+				plugins: [
+					sso({
+						...options,
+						saml: options.saml,
+					}),
+				],
+				trustedOrigins: ["http://localhost:8081"],
+			},
+			{ disableTestUser: true, testWith: "sqlite" },
+		);
+		deferredCleanups.push(() => instance.server.close());
+		const migrations = await getMigrations(instance.auth.options);
+		await migrations.runMigrations();
+
+		const context = await instance.auth.$context;
+		const providerOwner = await context.adapter.create<User>({
+			model: "user",
+			data: {
+				email: `provider-owner-${randomUUID()}@example.com`,
+				emailVerified: true,
+				name: "Provider Owner",
+				image: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const providerRecord = await context.adapter.create<{ id: string }>({
+			model: "ssoProvider",
+			data: {
+				issuer: "https://service.example.com/saml",
+				domain: "example.com",
+				oidcConfig: null,
+				samlConfig: JSON.stringify(samlConfiguration),
+				userId: providerOwner.id,
+				providerId: "workforce-saml",
+				organizationId: null,
+			},
+		});
+
+		return Object.assign(instance, {
+			database,
+			providerOwner,
+			providerRecord,
+			sqlite,
+		});
+	}
+
+	async function replacePersistedSAMLConfiguration(
+		instance: Awaited<ReturnType<typeof createSAMLUserResolutionInstance>>,
+		samlConfiguration: ReturnType<typeof persistedSAMLConfiguration>,
+	) {
+		const context = await instance.auth.$context;
+		await context.adapter.update({
+			model: "ssoProvider",
+			where: [{ field: "id", value: instance.providerRecord.id }],
+			update: { samlConfig: JSON.stringify(samlConfiguration) },
+		});
+	}
+
+	async function initiateSAMLSignIn(baseURL: string) {
+		const cookies: CookieJar = new Map();
+		const signIn = await fetchJSON<{ url: string; redirect: boolean }>(
+			`${baseURL}/api/auth/sign-in/sso`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/json", origin: baseURL },
+				body: JSON.stringify({
+					providerId: "workforce-saml",
+					callbackURL: `${baseURL}/employee`,
+				}),
+			},
+			cookies,
+		);
+		expect(signIn.response.status).toBe(200);
+		const identityProviderResponse = await fetchJSON<MockSAMLResponse>(
+			signIn.body.url,
+			{},
+		);
+		expect(identityProviderResponse.response.status).toBe(200);
+		return {
+			cookies,
+			identityProviderResponse: identityProviderResponse.body,
+			relayState: new URL(signIn.body.url).searchParams.get("RelayState") ?? "",
+		};
+	}
+
+	async function submitSAMLResponse(
+		baseURL: string,
+		signIn: Awaited<ReturnType<typeof initiateSAMLSignIn>>,
+		options: {
+			relayState?: string | null;
+		} = {},
+	) {
+		const body = new URLSearchParams({
+			SAMLResponse: signIn.identityProviderResponse.samlResponse,
+		});
+		if (options.relayState !== null) {
+			body.set("RelayState", options.relayState ?? signIn.relayState);
+		}
+		const callback = await fetch(
+			`${baseURL}/api/auth/sso/saml2/sp/acs/workforce-saml`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					cookie: cookieHeader(signIn.cookies),
+				},
+				body,
+				redirect: "manual",
+			},
+		);
+		storeResponseCookies(callback, signIn.cookies);
+		return callback;
+	}
+
+	async function completeSAMLSignIn(baseURL: string) {
+		const signIn = await initiateSAMLSignIn(baseURL);
+		const callback = await submitSAMLResponse(baseURL, signIn);
+		return {
+			callback,
+			cookies: signIn.cookies,
+			identityProviderResponse: signIn.identityProviderResponse,
+		};
+	}
+
+	function removeResponseSignature(xml: string): string {
+		return xml.replace(/<ds:Signature\b[\s\S]*?<\/ds:Signature>/, "");
+	}
+
+	function signSAMLContent(xml: string, assertion: boolean): string {
+		const signed = saml.SamlLib.constructSAMLSignature({
+			rawSamlMessage: xml,
+			referenceTagXPath: assertion
+				? "/*[local-name(.)='Response']/*[local-name(.)='Assertion']"
+				: undefined,
+			privateKey: idPk,
+			privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			signingCert: saml.Utility.normalizeCerString(
+				extractSigningCertificateFromMetadata(idpMetadata),
+			),
+			isBase64Output: false,
+			isMessageSigned: !assertion,
+			signatureConfig: {
+				prefix: "ds",
+				location: {
+					reference: assertion
+						? "/*[local-name(.)='Response']/*[local-name(.)='Assertion']/*[local-name(.)='Issuer']"
+						: "/*[local-name(.)='Response']/*[local-name(.)='Issuer']",
+					action: "after",
+				},
+			},
+		});
+		return Buffer.from(signed).toString("base64");
+	}
+
+	function withSAMLResponse(
+		signIn: Awaited<ReturnType<typeof initiateSAMLSignIn>>,
+		samlResponse: string,
+	) {
+		return {
+			...signIn,
+			identityProviderResponse: {
+				...signIn.identityProviderResponse,
+				samlResponse,
+			},
+		};
+	}
+
+	function strictAssertionSigningConfiguration(encrypted = false) {
+		const encryptionCertificate = certificate
+			.replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----/g, "")
+			.replace(/\s+/g, "");
+		const serviceProviderMetadata = (
+			encrypted
+				? spMetadata.replace(
+						/<ds:X509Certificate>[^<]+<\/ds:X509Certificate>/g,
+						`<ds:X509Certificate>${encryptionCertificate}</ds:X509Certificate>`,
+					)
+				: spMetadata
+		).replace('WantAssertionsSigned="false"', 'WantAssertionsSigned="true"');
+		return {
+			...persistedSAMLConfiguration(),
+			idpMetadata: {
+				...persistedSAMLConfiguration().idpMetadata,
+				isAssertionEncrypted: encrypted,
+			},
+			spMetadata: {
+				...persistedSAMLConfiguration().spMetadata,
+				metadata: serviceProviderMetadata,
+				isAssertionEncrypted: encrypted,
+				encPrivateKey: encrypted ? idpPrivateKey : undefined,
+				encPrivateKeyPass: encrypted
+					? "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW"
+					: undefined,
+			},
+			wantAssertionsSigned: true,
+		};
+	}
+
+	function metadataRequiredAssertionSigningConfiguration() {
+		return {
+			...strictAssertionSigningConfiguration(),
+			wantAssertionsSigned: false,
+		};
+	}
+
+	function numericAssertionSigningConfiguration(value: "1" | "0") {
+		const configuration = persistedSAMLConfiguration();
+		return {
+			...configuration,
+			spMetadata: {
+				...configuration.spMetadata,
+				metadata: configuration.spMetadata.metadata.replace(
+					'WantAssertionsSigned="false"',
+					`WantAssertionsSigned="${value}"`,
+				),
+			},
+			wantAssertionsSigned: false,
+		};
+	}
+
+	async function encryptSAMLContent(xml: string): Promise<string> {
+		const encryptionCertificate = certificate
+			.replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----/g, "")
+			.replace(/\s+/g, "");
+		const encryptedServiceProviderMetadata = spMetadata.replace(
+			/<ds:X509Certificate>[^<]+<\/ds:X509Certificate>/g,
+			`<ds:X509Certificate>${encryptionCertificate}</ds:X509Certificate>`,
+		);
+		const identityProvider = saml.IdentityProvider({
+			metadata: idpMetadata,
+			privateKey: idPk,
+			privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			isAssertionEncrypted: true,
+		});
+		const serviceProvider = saml.ServiceProvider({
+			metadata: encryptedServiceProviderMetadata,
+		});
+		return saml.SamlLib.encryptAssertion(
+			identityProvider,
+			serviceProvider,
+			xml,
+		);
+	}
+
+	async function expectNoAuthenticationWrites(
+		instance: Awaited<ReturnType<typeof createSAMLUserResolutionInstance>>,
+	) {
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+	}
+
+	it("accepts a response-only signature when the effective SP policy is false", async () => {
+		const instance = await createSAMLUserResolutionInstance({});
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const xml = Buffer.from(
+			signIn.identityProviderResponse.samlResponse,
+			"base64",
+		).toString("utf8");
+		const assertionIndex = xml.indexOf("<saml:Assertion");
+		expect(xml.indexOf("<ds:Signature")).toBeLessThan(assertionIndex);
+		expect(xml.slice(assertionIndex)).not.toContain("<ds:Signature");
+
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+		expect(callback.status).toBe(302);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("rejects a response-only signature when the effective SP policy requires signed assertions", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("rejects a response-only signature when custom metadata requires signed assertions", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			metadataRequiredAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("rejects a response-only signature when custom metadata uses XML Schema numeric true", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			numericAssertionSigningConfiguration("1"),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("accepts a response-only signature when custom metadata uses XML Schema numeric false", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			numericAssertionSigningConfiguration("0"),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it.each([
+		[
+			"an invalid WantAssertionsSigned lexical value",
+			(metadata: string): string =>
+				metadata.replace(
+					'WantAssertionsSigned="false"',
+					'WantAssertionsSigned="TRUE"',
+				),
+		],
+		[
+			"an unqualified metadata tree",
+			(_metadata: string): string => `
+				<EntityDescriptor entityID="https://service.example.com/saml">
+					<SPSSODescriptor WantAssertionsSigned="false">
+						<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</SPSSODescriptor>
+				</EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign root around a metadata namespace decoy",
+			(_metadata: string): string => `
+				<foreign:EntityDescriptor xmlns:foreign="urn:example:foreign" xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://service.example.com/saml">
+					<md:EntityDescriptor entityID="https://service.example.com/saml">
+						<md:SPSSODescriptor WantAssertionsSigned="false">
+							<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+						</md:SPSSODescriptor>
+					</md:EntityDescriptor>
+				</foreign:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign service-provider descriptor",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<foreign:SPSSODescriptor WantAssertionsSigned="false">
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</foreign:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign POST endpoint namespace decoy",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<foreign:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a valid descriptor followed by a foreign descriptor",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+					<foreign:SPSSODescriptor WantAssertionsSigned="true">
+						<foreign:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://attacker.example.com/saml/acs" />
+					</foreign:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign POST endpoint before a valid endpoint",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<foreign:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://attacker.example.com/saml/acs" />
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign NameID format before a valid format",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<foreign:NameIDFormat>urn:example:attacker</foreign:NameIDFormat>
+						<md:NameIDFormat>urn:example:valid</md:NameIDFormat>
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+	] as const)("rejects an ACS request after persisted SP metadata changes to %s", async (_description, replaceMetadata) => {
+		const instance = await createSAMLUserResolutionInstance({});
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const configuration = persistedSAMLConfiguration();
+		await replacePersistedSAMLConfiguration(instance, {
+			...configuration,
+			spMetadata: {
+				...configuration.spMetadata,
+				metadata: replaceMetadata(configuration.spMetadata.metadata),
+			},
+		});
+
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		const location = new URL(callback.headers.get("location")!);
+		expect(location.origin).toBe(new URL(instance.baseURL).origin);
+		expect(location.pathname).toBe("/");
+		expect(location.searchParams.get("error")).toBe("saml_invalid_sp_metadata");
+		expect(location.searchParams.get("error_description")).toBe(
+			"Invalid SAML service provider metadata",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("accepts a cryptographically signed assertion through the HTTP ACS", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, signSAMLContent(unsigned, true)),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("accepts a signed assertion when custom metadata supplies the effective policy", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			metadataRequiredAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, signSAMLContent(unsigned, true)),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("accepts valid response and assertion signatures through the strict HTTP ACS", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const assertionSigned = Buffer.from(
+			signSAMLContent(unsigned, true),
+			"base64",
+		).toString("utf8");
+		const responseAndAssertionSigned = signSAMLContent(assertionSigned, false);
+		const signedXml = Buffer.from(
+			responseAndAssertionSigned,
+			"base64",
+		).toString("utf8");
+		expect(signedXml.match(/<ds:Signature\b/g)).toHaveLength(2);
+
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, responseAndAssertionSigned),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("rejects a valid response signature with a bogus assertion signature", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		).replace(
+			/<saml:Assertion\b([^>]*)>/,
+			'<saml:Assertion$1><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" />',
+		);
+		const responseSigned = signSAMLContent(unsigned, false);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, responseSigned),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("rejects an encrypted unsigned assertion protected only by a response signature", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(true),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const encrypted = await encryptSAMLContent(unsigned);
+		const encryptedXml = Buffer.from(encrypted, "base64").toString("utf8");
+		const responseSigned = signSAMLContent(encryptedXml, false);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, responseSigned),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("accepts a signed and encrypted assertion through the HTTP ACS", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(true),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const assertionSigned = Buffer.from(
+			signSAMLContent(unsigned, true),
+			"base64",
+		).toString("utf8");
+		const encrypted = await encryptSAMLContent(assertionSigned);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, encrypted),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("links the signed NameID to the exact selected user without email fallback", async () => {
+		let selectedUserId = "";
+		const inputs: SSOUserResolutionInput[] = [];
+		const databases: DBTransactionAdapter[] = [];
+		const instance = await createSAMLUserResolutionInstance(
+			{
+				disableImplicitSignUp: true,
+				resolveUser(input, context) {
+					inputs.push(input);
+					databases.push(context.database);
+					return {
+						action: "link",
+						userId: selectedUserId,
+						profile: "preserve",
+					};
+				},
+			},
+			{ account: { storeAccountCookie: true } },
+		);
+		const context = await instance.auth.$context;
+		const selectedUser = await context.adapter.create<User>({
+			model: "user",
+			data: {
+				email: "directory-user@example.com",
+				emailVerified: false,
+				name: "Directory User",
+				image: "https://directory.example.com/avatar.png",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		selectedUserId = selectedUser.id;
+
+		const signIn = await completeSAMLSignIn(instance.baseURL);
+		expect(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		).toMatch(/InResponseTo="_[^"]+"/);
+
+		expect(signIn.callback.status).toBe(302);
+		expect(signIn.callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(signIn.callback.headers.getSetCookie().join(";")).toContain(
+			"account_data=",
+		);
+		expect(signIn.callback.headers.getSetCookie().join(";")).toContain(
+			"session_token=",
+		);
+		expect(inputs).toHaveLength(1);
+		expect(inputs[0]).toMatchObject({
+			protocol: "saml",
+			providerId: "workforce-saml",
+			accountKey: {
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+				accountId: "test@email.com",
+			},
+			providerUser: {
+				email: "test@email.com",
+			},
+			providerAttributes: {
+				firstName: "Test",
+				lastName: "User",
+				email: "test@email.com",
+			},
+			providerReference: {
+				providerId: "workforce-saml",
+				source: {
+					type: "persisted",
+					recordId: instance.providerRecord.id,
+				},
+				authenticationConfigurationFingerprint: expect.any(String),
+			},
+		});
+		expect(databases).toHaveLength(1);
+
+		const users = await instance.db.findMany<User>({
+			model: "user",
+			where: [],
+		});
+		expect(users).toHaveLength(2);
+		expect(users).not.toContainEqual(
+			expect.objectContaining({ email: "test@email.com" }),
+		);
+		expect(users).toContainEqual(
+			expect.objectContaining({
+				id: selectedUser.id,
+				email: "directory-user@example.com",
+				name: "Directory User",
+			}),
+		);
+		const accounts = await instance.db.findMany<Account>({
+			model: "account",
+			where: [],
+		});
+		expect(accounts).toEqual([
+			expect.objectContaining({
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+				accountId: "test@email.com",
+				providerId: "workforce-saml",
+				userId: selectedUser.id,
+			}),
+		]);
+		expect(
+			await instance.db.count({
+				model: "session",
+				where: [{ field: "userId", value: selectedUser.id }],
+			}),
+		).toBe(1);
+	});
+
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("keeps the verified SAML issuer in resolution hooks under explicit %s identity", async (identityStrategy) => {
+		const inputs: SSOUserResolutionInput[] = [];
+		const instance = await createSAMLUserResolutionInstance(
+			{
+				resolveUser(input) {
+					inputs.push(input);
+					return { action: "continue" };
+				},
+			},
+			{ account: { identityStrategy } },
+		);
+
+		const signIn = await completeSAMLSignIn(instance.baseURL);
+
+		expect(signIn.callback.status).toBe(302);
+		expect(inputs).toHaveLength(1);
+		expect(inputs[0]).toMatchObject({
+			protocol: "saml",
+			providerId: "workforce-saml",
+			accountKey: {
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+				accountId: "test@email.com",
+			},
+		});
+		await expect(
+			instance.db.findOne<Account>({ model: "account", where: [] }),
+		).resolves.toMatchObject({
+			issuer:
+				identityStrategy === "provider-id"
+					? "local:oauth:workforce-saml"
+					: "http://localhost:8081/api/sso/saml2/idp/metadata",
+			accountId: "test@email.com",
+			providerId: "workforce-saml",
+		});
+	});
+
+	it.each([
+		"reject",
+		"throw",
+		"account",
+	] as const)("rolls back resolver and authentication writes on %s failure", async (failure) => {
+		let markerUserId = "";
+		const instance = await createSAMLUserResolutionInstance(
+			{
+				resolveUser: async (_input, context) => {
+					await context.database.update({
+						model: "user",
+						where: [{ field: "id", value: markerUserId }],
+						update: { name: "must roll back" },
+					});
+					if (failure === "reject") {
+						return {
+							action: "reject",
+							code: "directory_access_denied",
+							message: "Directory access denied",
+						};
+					}
+					if (failure === "throw") {
+						throw new Error("resolver unavailable");
+					}
+					return { action: "continue" };
+				},
+			},
+			{
+				account: { storeAccountCookie: true },
+				databaseHooks:
+					failure === "account"
+						? {
+								account: {
+									create: {
+										before: () => false,
+									},
+								},
+							}
+						: undefined,
+			},
+		);
+		const context = await instance.auth.$context;
+		const marker = await context.adapter.create<User>({
+			model: "user",
+			data: {
+				email: `marker-${failure}@example.com`,
+				emailVerified: true,
+				name: "marker",
+				image: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		markerUserId = marker.id;
+
+		const signIn = await completeSAMLSignIn(instance.baseURL);
+		const redirect = new URL(
+			signIn.callback.headers.get("location")!,
+			instance.baseURL,
+		);
+		const expectedError = {
+			reject: "directory_access_denied",
+			throw: "SSO_USER_RESOLUTION_FAILED",
+			account: "unable_to_create_user",
+		}[failure];
+		expect(redirect.searchParams.get("error")).toBe(expectedError);
+		expect(signIn.callback.headers.getSetCookie().join(";")).not.toContain(
+			"account_data=",
+		);
+		expect(signIn.callback.headers.getSetCookie().join(";")).not.toContain(
+			"session_token=",
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+		expect(
+			await instance.db.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: marker.id }],
+			}),
+		).toMatchObject({ name: "marker" });
+		expect(await instance.db.count({ model: "user", where: [] })).toBe(2);
+	});
+
+	it.each([
+		"record",
+		"configuration",
+	] as const)("rejects a persisted provider %s change between sign-in and ACS", async (change) => {
+		let resolverCalls = 0;
+		const instance = await createSAMLUserResolutionInstance({
+			resolveUser: () => {
+				resolverCalls += 1;
+				return { action: "continue" };
+			},
+		});
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+
+		if (change === "record") {
+			instance.sqlite
+				.prepare('UPDATE "ssoProvider" SET "id" = ? WHERE "providerId" = ?')
+				.run("replacement-provider-row", "workforce-saml");
+		} else {
+			const configuration = {
+				...persistedSAMLConfiguration(),
+				callbackUrl: `${instance.baseURL}/changed-callback`,
+			};
+			instance.sqlite
+				.prepare(
+					'UPDATE "ssoProvider" SET "samlConfig" = ? WHERE "providerId" = ?',
+				)
+				.run(JSON.stringify(configuration), "workforce-saml");
+		}
+
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+		const redirect = new URL(
+			callback.headers.get("location")!,
+			instance.baseURL,
+		);
+		expect(redirect.searchParams.get("error")).toBe("invalid_state");
+		expect(resolverCalls).toBe(0);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+	});
+
+	it("preserves the signed SAML sign-in behavior when no resolver is configured", async () => {
+		const instance = await createSAMLUserResolutionInstance({});
+
+		const signIn = await completeSAMLSignIn(instance.baseURL);
+
+		expect(signIn.callback.status).toBe(302);
+		expect(signIn.callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		const accounts = await instance.db.findMany<Account>({
+			model: "account",
+			where: [],
+		});
+		expect(accounts).toEqual([
+			expect.objectContaining({
+				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+				accountId: "test@email.com",
+				providerId: "workforce-saml",
+			}),
+		]);
+		expect(
+			await instance.db.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: accounts[0]!.userId }],
+			}),
+		).toMatchObject({ email: "test@email.com" });
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it.each([
+		"missing",
+		"corrupted",
+		"legacy",
+	] as const)("rejects an SP-initiated response with %s RelayState after the provider configuration changes", async (relayStateCase) => {
+		let resolverCalls = 0;
+		const instance = await createSAMLUserResolutionInstance({
+			resolveUser: () => {
+				resolverCalls += 1;
+				return { action: "continue" };
+			},
+		});
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+
+		if (relayStateCase === "legacy") {
+			const context = await instance.auth.$context;
+			const verification = await context.internalAdapter.findVerificationValue(
+				signIn.relayState,
+			);
+			expect(verification).not.toBeNull();
+			const storedState = JSON.parse(verification!.value) as Record<
+				string,
+				unknown
+			>;
+			const legacyState = Object.fromEntries(
+				Object.entries(storedState).filter(([key]) => key !== "serverContext"),
+			);
+			await context.adapter.update({
+				model: "verification",
+				where: [{ field: "id", value: verification!.id }],
+				update: { value: JSON.stringify(legacyState) },
+			});
+		}
+
+		const changedConfiguration = {
+			...persistedSAMLConfiguration(),
+			callbackUrl: `${instance.baseURL}/changed-callback`,
+		};
+		instance.sqlite
+			.prepare(
+				'UPDATE "ssoProvider" SET "samlConfig" = ? WHERE "providerId" = ?',
+			)
+			.run(JSON.stringify(changedConfiguration), "workforce-saml");
+
+		const callback = await submitSAMLResponse(instance.baseURL, signIn, {
+			relayState:
+				relayStateCase === "missing"
+					? null
+					: relayStateCase === "corrupted"
+						? "corrupted-relay-state"
+						: signIn.relayState,
+		});
+		const redirect = new URL(
+			callback.headers.get("location")!,
+			instance.baseURL,
+		);
+		expect(redirect.searchParams.get("error")).toBe("invalid_state");
+		expect(resolverCalls).toBe(0);
+		expect(callback.headers.getSetCookie().join(";")).not.toContain(
+			"account_data=",
+		);
+		expect(callback.headers.getSetCookie().join(";")).not.toContain(
+			"session_token=",
+		);
+		expect(
+			[...signIn.cookies.keys()].some(
+				(name) =>
+					name.includes("account_data") || name.includes("session_token"),
+			),
+		).toBe(false);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+	});
+
+	it("accepts a true explicitly allowed IdP-initiated response without RelayState or InResponseTo", async () => {
+		let resolverCalls = 0;
+		const instance = await createSAMLUserResolutionInstance({
+			resolveUser: () => {
+				resolverCalls += 1;
+				return { action: "continue" };
+			},
+			saml: {
+				allowIdpInitiated: true,
+				idpInitiatedCallbackUrl: "/employee",
+			},
+		});
+		const identityProviderResponse = await fetchJSON<MockSAMLResponse>(
+			"http://localhost:8081/api/sso/saml2/idp/post?idpInitiated=true",
+			{},
+		);
+		expect(identityProviderResponse.response.status).toBe(200);
+		const cookies: CookieJar = new Map();
+		const callback = await fetch(
+			`${instance.baseURL}/api/auth/sso/saml2/sp/acs/workforce-saml`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: identityProviderResponse.body.samlResponse,
+				}),
+				redirect: "manual",
+			},
+		);
+		storeResponseCookies(callback, cookies);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe("/employee");
+		expect(resolverCalls).toBe(1);
+		expect(callback.headers.getSetCookie().join(";")).toContain(
+			"session_token=",
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("rejects an explicitly allowed IdP-initiated response with malformed RelayState", async () => {
+		let resolverCalls = 0;
+		const instance = await createSAMLUserResolutionInstance({
+			resolveUser: () => {
+				resolverCalls += 1;
+				return { action: "continue" };
+			},
+			saml: {
+				allowIdpInitiated: true,
+				idpInitiatedCallbackUrl: "/employee",
+			},
+		});
+		const identityProviderResponse = await fetchJSON<MockSAMLResponse>(
+			"http://localhost:8081/api/sso/saml2/idp/post?idpInitiated=true",
+			{},
+		);
+		expect(identityProviderResponse.response.status).toBe(200);
+		const cookies: CookieJar = new Map();
+		const callback = await fetch(
+			`${instance.baseURL}/api/auth/sso/saml2/sp/acs/workforce-saml`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: identityProviderResponse.body.samlResponse,
+					RelayState: "malformed-relay-state",
+				}),
+				redirect: "manual",
+			},
+		);
+		storeResponseCookies(callback, cookies);
+
+		expect(callback.status).toBe(302);
+		const redirect = new URL(
+			callback.headers.get("location")!,
+			instance.baseURL,
+		);
+		expect(redirect.searchParams.get("error")).toBe("invalid_state");
+		expect(resolverCalls).toBe(0);
+		expect(callback.headers.getSetCookie().join(";")).not.toContain(
+			"account_data=",
+		);
+		expect(callback.headers.getSetCookie().join(";")).not.toContain(
+			"session_token=",
+		);
+		expect(
+			[...cookies.keys()].some(
+				(name) =>
+					name.includes("account_data") || name.includes("session_token"),
+			),
+		).toBe(false);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+	});
+});
+
+describe("PEM normalization", () => {
+	it("should complete full SAML flow with whitespace-indented keys", async () => {
+		// Indent every line of every PEM to simulate keys from indented configs
+		const indent = (pem: string) =>
+			pem
+				.split("\n")
+				.map((line) => `    ${line}`)
+				.join("\n");
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "indent-test",
+				issuer: "http://localhost:8081",
+				domain: "indent.example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: indent(certificate),
+					idpMetadata: {
+						metadata: idpMetadata,
+						privateKey: indent(idpPrivateKey),
+						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						privateKey: indent(spPrivateKey),
+						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// Step 1: initiate sign-in (constructs SP/IdP from indented keys)
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "indent-test",
+				callbackURL: "/dashboard",
+			},
+		});
+		expect(signInResponse.url).toContain("http://localhost:8081");
+
+		// Step 2: get SAML response from mock IdP
+		let samlResponse: any;
+		await betterFetch(signInResponse.url as string, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+		expect(samlResponse?.samlResponse).toBeDefined();
+
+		// Step 3: post to ACS and verify session is created
+		const acsResponse = (await auth.api.acsEndpoint({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+			},
+			params: { providerId: "indent-test" },
+			asResponse: true,
+		})) as unknown as Response;
+
+		expect(acsResponse.status).toBe(302);
+	});
+});
+
+/**
  * @see https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
  * @see https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf
  */
 describe("SAML SSO Hardening", () => {
 	/**
-	 * RFC: SAML 2.0 Core §2.3.3 - ACS URL in SP metadata MUST match the ACS URL
-	 * in AuthnRequests. When callbackUrl is omitted, both should derive the same
-	 * ACS from baseURL + providerId.
+	 * SAML 2.0 Core §2.3.3: ACS URL in SP metadata MUST match the ACS URL
+	 * in AuthnRequests. Both derive from baseURL + providerId.
 	 */
 	describe("ACS URL consistency (provider.id vs providerId)", () => {
-		// When callbackUrl is split from ACS URL, SP metadata should
-		// always derive the ACS from baseURL + providerId regardless of callbackUrl.
-		it.todo("should use providerId (not internal row ID) in SP metadata ACS URL when callbackUrl is an app destination", async () => {
+		it("should use providerId (not internal row ID) in SP metadata ACS URL", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [sso()],
 			});
 			const { headers } = await signInWithTestUser();
 
-			// Register with callbackUrl pointing to app destination (not an ACS route).
 			// When spMetadata.metadata is absent, the SP metadata endpoint should
 			// generate an ACS URL from baseURL + providerId, not from provider.id (row UUID).
 			await auth.api.registerSSOProvider({
@@ -6198,7 +7864,7 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/dashboard",
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {},
 					},
 				},
@@ -6210,15 +7876,11 @@ describe("SAML SSO Hardening", () => {
 			});
 			const xml = await spMetadataRes.text();
 
-			// When callbackUrl is an app destination (not an ACS URL), the SP metadata
-			// generator should still use a proper ACS URL with the providerId.
 			// The generated metadata should contain the providerId, not the row UUID.
 			expect(xml).toContain("acs-consistency-test");
 		});
 
-		// When callbackUrl is split from ACS URL, both SP metadata
-		// and AuthnRequest should derive ACS from the same source.
-		it.todo("should produce matching ACS URLs in SP metadata and AuthnRequest", async () => {
+		it("should produce matching ACS URLs in SP metadata and AuthnRequest", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [sso()],
 			});
@@ -6232,7 +7894,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/dashboard",
 						idpMetadata: {
 							metadata: idpMetadata,
 						},
@@ -6284,7 +7945,10 @@ describe("SAML SSO Hardening", () => {
 									issuer: "http://localhost:8081",
 									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 									cert: certificate,
-									callbackUrl: "http://localhost:3000/dashboard",
+									idpMetadata: {
+										entityID:
+											"http://localhost:8081/api/sso/saml2/idp/metadata",
+									},
 									spMetadata: { metadata: spMetadata },
 								},
 							},
@@ -6303,7 +7967,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/dashboard",
 						spMetadata: { metadata: spMetadata },
 						idpMetadata: { metadata: idpMetadata },
 					},
@@ -6346,7 +8009,10 @@ describe("SAML SSO Hardening", () => {
 									issuer: "http://localhost:8081",
 									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 									cert: certificate,
-									callbackUrl: "http://localhost:3000/dashboard",
+									idpMetadata: {
+										entityID:
+											"http://localhost:8081/api/sso/saml2/idp/metadata",
+									},
 									spMetadata: { metadata: spMetadata },
 								},
 							},
@@ -6381,6 +8047,70 @@ describe("SAML SSO Hardening", () => {
 	 * errors early rather than failing silently at sign-in time.
 	 */
 	describe("Registration-time config validation", () => {
+		it("should reject SAML mappings that attempt to replace the NameID identity", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+			const requestHeaders = new Headers(headers);
+			requestHeaders.set("Content-Type", "application/json");
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sso/register", {
+					method: "POST",
+					headers: requestHeaders,
+					body: JSON.stringify({
+						providerId: "mapped-saml-identity",
+						issuer: "https://sp.example.com/saml",
+						domain: "example.com",
+						samlConfig: {
+							entryPoint: "https://idp.example.com/sso",
+							cert: "placeholder",
+							idpMetadata: { entityID: "https://idp.example.com" },
+							mapping: {
+								id: "employee_id",
+								email: "email",
+								name: "displayName",
+							},
+						},
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+		});
+
+		it("should reject manual IdP configuration without an explicit entity ID", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+			const requestHeaders = new Headers(headers);
+			requestHeaders.set("Content-Type", "application/json");
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sso/register", {
+					method: "POST",
+					headers: requestHeaders,
+					body: JSON.stringify({
+						providerId: "ambiguous-idp-authority",
+						issuer: "https://sp.example.com/saml",
+						domain: "example.com",
+						samlConfig: {
+							entryPoint: "https://idp.example.com/sso",
+							cert: "placeholder",
+							spMetadata: {},
+						},
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				message: expect.stringContaining("idpMetadata.entityID"),
+			});
+		});
+
 		it("should reject registration with empty entryPoint and no idpMetadata.metadata", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [sso()],
@@ -6400,7 +8130,6 @@ describe("SAML SSO Hardening", () => {
 						samlConfig: {
 							entryPoint: "not-a-url",
 							cert: "placeholder",
-							callbackUrl: "http://localhost:3000/dashboard",
 							spMetadata: {},
 						},
 					},
@@ -6417,12 +8146,12 @@ describe("SAML SSO Hardening", () => {
 	/**
 	 * SAML 2.0 Bindings §3.5.3 - RelayState is an opaque reference to state
 	 * maintained at the SP. The SP MUST use it to determine where to redirect
-	 * the user after authentication. Config-level callbackUrl is a fallback.
+	 * the user after authentication.
 	 */
-	describe("RelayState priority over callbackUrl", () => {
-		it("should redirect to RelayState callbackURL, not config callbackUrl", async () => {
+	describe("RelayState controls post-auth redirect", () => {
+		it("should redirect to RelayState callbackURL after authentication", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
-				plugins: [sso()],
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 			});
 			const { headers } = await signInWithTestUser();
 
@@ -6434,7 +8163,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/from-config",
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
 					},
@@ -6463,7 +8191,7 @@ describe("SAML SSO Hardening", () => {
 			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
 
 			// POST to callback with RelayState
-			const callbackResponse = (await auth.api.callbackSSOSAML({
+			const callbackResponse = (await auth.api.acsEndpoint({
 				method: "POST",
 				body: {
 					SAMLResponse: samlResponse.samlResponse,
@@ -6475,9 +8203,598 @@ describe("SAML SSO Hardening", () => {
 
 			const location = callbackResponse.headers.get("location") || "";
 
-			// MUST redirect to the RelayState callbackURL, not config's callbackUrl
+			// MUST redirect to the RelayState callbackURL
 			expect(location).toContain("/from-relay-state");
 			expect(location).not.toContain("/from-config");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10329
+	 */
+	describe("IdP-initiated SAML login with split origin redirect", () => {
+		const frontendOrigin = "https://frontend.example.com";
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should allow a trusted cross-origin redirect with the ACS pathname", () => {
+			const appOrigin = "http://localhost:3000";
+			const callbackPath = `${appOrigin}/api/auth/sso/saml2/sp/acs/shared-path-provider`;
+			const frontendCallback = `${frontendOrigin}/api/auth/sso/saml2/sp/acs/shared-path-provider`;
+
+			expect(
+				getSafeRedirectUrl(
+					[frontendCallback],
+					callbackPath,
+					appOrigin,
+					() => true,
+				),
+			).toBe(frontendCallback);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it.each([
+			"/\\evil.example.com",
+			"/%2fevil.example.com",
+			"/%5cevil.example.com",
+		])("should skip unsafe relative redirect candidate %s", (candidate) => {
+			const appOrigin = "http://localhost:3000";
+			const callbackPath = `${appOrigin}/api/auth/sso/saml2/sp/acs/provider`;
+
+			expect(
+				getSafeRedirectUrl(
+					[candidate, "/dashboard"],
+					callbackPath,
+					appOrigin,
+					() => true,
+				),
+			).toBe("/dashboard");
+		});
+
+		async function getIdPInitiatedSAMLResponse(): Promise<string> {
+			let response: MockSAMLResponse | undefined;
+			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+				onSuccess: async (context) => {
+					response = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!response) throw new Error("Mock IdP did not return a SAML response");
+			return response.samlResponse;
+		}
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should redirect to provider-level idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated)", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// Provider with provider-level idpInitiatedCallbackUrl
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "split-origin-provider",
+					issuer: "http://localhost:8081",
+					domain: "split.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/split-origin-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const samlResponse = await getIdPInitiatedSAMLResponse();
+
+			const callbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse,
+				},
+				params: { providerId: "split-origin-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(callbackResponse.status).toBe(302);
+			expect(callbackResponse.headers.get("location")).toBe(
+				`${frontendOrigin}/provider-idp-redirect`,
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should redirect to global idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated fallback)", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// Provider without provider-level idpInitiatedCallbackUrl (should fall back to global plugin option)
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "global-fallback-provider",
+					issuer: "http://localhost:8081",
+					domain: "fallback.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/global-fallback-provider",
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const samlResponse = await getIdPInitiatedSAMLResponse();
+
+			const fallbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse,
+				},
+				params: { providerId: "global-fallback-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(fallbackResponse.status).toBe(302);
+			expect(fallbackResponse.headers.get("location")).toBe(
+				`${frontendOrigin}/global-idp-redirect`,
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should prioritize SP-initiated RelayState over idpInitiatedCallbackUrl", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "priority-test-provider",
+					issuer: "http://localhost:8081",
+					domain: "priority.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/priority-test-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			// Sign in with SP-initiated flow requesting a specific callbackURL
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "priority-test-provider",
+					callbackURL: "/from-relay-state",
+				},
+			});
+
+			let samlResponse: MockSAMLResponse | undefined;
+			await betterFetch(signInResponse.url as string, {
+				onSuccess: async (context) => {
+					samlResponse = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!samlResponse)
+				throw new Error("Mock IdP did not return a SAML response");
+
+			const signInUrl = new URL(signInResponse.url as string);
+			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
+
+			const callbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: relayState,
+				},
+				params: { providerId: "priority-test-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(callbackResponse.status).toBe(302);
+			const location = callbackResponse.headers.get("location") || "";
+			expect(location).toContain("/from-relay-state");
+			expect(location).not.toContain("/provider-idp-redirect");
+			expect(location).not.toContain("/global-idp-redirect");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should preserve the signed RelayState error callback on validation errors", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-relay-state-provider",
+					issuer: "http://localhost:8081",
+					domain: "error-relay-state.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-relay-state-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "error-relay-state-provider",
+					callbackURL: `${frontendOrigin}/success`,
+					errorCallbackURL: `${frontendOrigin}/saml-error#details`,
+				},
+			});
+			const signInUrl = new URL(signInResponse.url as string);
+			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-relay-state-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "invalid-saml-response-garbage",
+							RelayState: relayState,
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/saml-error");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"saml_invalid_encoding",
+			);
+			expect(redirectUrl.hash).toBe("#details");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should preserve the signed error callback on binding validation errors", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "binding-error-relay-state-provider",
+					issuer: "http://localhost:8081",
+					domain: "binding-error.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/sp/acs/binding-error-relay-state-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "binding-error-relay-state-provider",
+					callbackURL: `${frontendOrigin}/success`,
+					errorCallbackURL: `${frontendOrigin}/binding-error#details`,
+				},
+			});
+			const idpResponseUrl = new URL(signInResponse.url as string);
+			idpResponseUrl.searchParams.set(
+				"audience",
+				"https://unexpected.example.com/saml/metadata",
+			);
+
+			let samlResponse: MockSAMLResponse | undefined;
+			await betterFetch(idpResponseUrl.toString(), {
+				onSuccess: async (context) => {
+					samlResponse = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!samlResponse)
+				throw new Error("Mock IdP did not return a SAML response");
+
+			const relayState = idpResponseUrl.searchParams.get("RelayState") ?? "";
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/binding-error-relay-state-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: relayState,
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/binding-error");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"invalid_saml_response",
+			);
+			expect(redirectUrl.hash).toBe("#details");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should prevent open redirect attacks on idpInitiatedCallbackUrl", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+							idpInitiatedCallbackUrl: "http://attacker.com/malicious",
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "unsafe-provider",
+					issuer: "http://localhost:8081",
+					domain: "unsafe.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const samlResponse = await getIdPInitiatedSAMLResponse();
+
+			const callbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse,
+				},
+				params: { providerId: "unsafe-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(callbackResponse.status).toBe(302);
+			const location = callbackResponse.headers.get("location") || "";
+			// Should fall back to appOrigin because http://attacker.com/malicious is not a trusted origin
+			expect(location).not.toContain("attacker.com");
+			expect(location).toBe("http://localhost:3000"); // appOrigin
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should redirect to idpInitiatedCallbackUrl on SAML validation error", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-provider",
+					issuer: "http://localhost:8081",
+					domain: "error.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect#saml`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "invalid-saml-response-garbage",
+							RelayState:
+								"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-provider",
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const location = callbackResponse.headers.get("location") || "";
+			const redirectUrl = new URL(location);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/provider-idp-redirect");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"saml_invalid_encoding",
+			);
+			expect(redirectUrl.hash).toBe("#saml");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should use the global fallback when provider lookup fails before error redirect resolution", async () => {
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+			};
+			const memory = memoryAdapter(data);
+			let failProviderLookup = false;
+			const database: typeof memory = (options) => {
+				const adapter = memory(options);
+				const findOne: typeof adapter.findOne = async (query) => {
+					if (failProviderLookup && query.model === "ssoProvider") {
+						throw new Error("provider lookup unavailable");
+					}
+					return adapter.findOne(query);
+				};
+				return { ...adapter, findOne };
+			};
+			const { auth, signInWithTestUser } = await getTestInstance({
+				database,
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+							maxResponseSize: 16,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-lookup-provider",
+					issuer: "http://localhost:8081",
+					domain: "error-lookup.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-lookup-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			failProviderLookup = true;
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-lookup-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "response-exceeds-size-limit",
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
+			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
 		});
 	});
 });

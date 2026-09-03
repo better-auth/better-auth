@@ -1,6 +1,13 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
+import {
+	getDatabaseIndexStringLength,
+	getPortableDatabaseIdentifierKey,
+	resolveDatabaseSchemaIndexes,
+} from "@better-auth/core/db/internal";
+import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
@@ -8,6 +15,91 @@ import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function parsePrismaStringLiteral(value: unknown) {
+	if (typeof value !== "string") return undefined;
+	try {
+		const parsed = JSON.parse(value);
+		return typeof parsed === "string" ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+interface PrismaIndexDefinition {
+	columns: readonly string[];
+	mappedName: string | undefined;
+	setMappedName: (name: string) => void;
+	unique: boolean;
+	validFullColumns: boolean;
+}
+
+function getPrismaIndexDefinition(
+	property: unknown,
+): PrismaIndexDefinition | undefined {
+	if (
+		!isRecord(property) ||
+		property.type !== "attribute" ||
+		property.kind !== "object" ||
+		(property.name !== "index" && property.name !== "unique") ||
+		!Array.isArray(property.args)
+	) {
+		return undefined;
+	}
+	const propertyArgs = property.args;
+
+	let columns: readonly string[] | undefined;
+	let mappedName: string | undefined;
+	let validFullColumns = false;
+	for (const argument of propertyArgs) {
+		if (!isRecord(argument) || !isRecord(argument.value)) continue;
+		const value = argument.value;
+		if (
+			value.type === "array" &&
+			Array.isArray(value.args) &&
+			value.args.every((column) => typeof column === "string")
+		) {
+			columns = value.args.map((column) => String(column));
+			validFullColumns = true;
+		} else if (value.type === "keyValue" && value.key === "map") {
+			mappedName = parsePrismaStringLiteral(value.value);
+		}
+	}
+	return {
+		columns: columns ?? [],
+		mappedName,
+		setMappedName(name) {
+			propertyArgs.push({
+				type: "attributeArgument",
+				value: {
+					type: "keyValue",
+					key: "map",
+					value: JSON.stringify(name),
+				},
+			});
+		},
+		unique: property.name === "unique",
+		validFullColumns,
+	};
+}
+
+function prismaIndexMatches(
+	existing: PrismaIndexDefinition,
+	configured: ResolvedDBTableIndex,
+) {
+	return (
+		existing.validFullColumns &&
+		existing.unique === (configured.unique ?? false) &&
+		existing.columns.length === configured.columns.length &&
+		existing.columns.every(
+			(column, position) => column === configured.columns[position],
+		)
+	);
+}
 
 export const generatePrismaSchema: SchemaGenerator = async ({
 	adapter,
@@ -34,6 +126,31 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
+	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
+		Object.keys(tables)
+			.filter((tableKey) => !isMigrationDisabled(tableKey))
+			.map((tableKey) => {
+				const customModelName = tables[tableKey]?.modelName || tableKey;
+				return {
+					fields: tables[tableKey]!.fields,
+					indexes: tables[tableKey]!.indexes,
+					tableName: getModelName(customModelName),
+				};
+			}),
+	);
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -75,11 +192,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const manyToManyRelations = new Map();
 
 	for (const table in tables) {
+		if (isMigrationDisabled(table)) {
+			continue;
+		}
 		const fields = tables[table]?.fields;
 		for (const field in fields) {
 			const attr = fields[field]!;
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
+				if (isMigrationDisabled(referencedOriginalModel)) {
+					continue;
+				}
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
@@ -120,13 +243,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
-			if (tables[table]?.disableMigrations) {
+			if (isMigrationDisabled(table)) {
 				continue;
 			}
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
 			const modelName = capitalizeFirstLetter(getModelName(customModelName));
 			const fields = tables[table]?.fields;
+			const resolvedTableIndexes =
+				resolvedIndexesByTable.get(getModelName(customModelName)) ?? [];
 			function getType({
 				isBigint,
 				isOptional,
@@ -137,6 +262,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				isBigint: boolean;
 			}) {
 				if (type === "string") {
+					return isOptional ? "String?" : "String";
+				}
+				if (Array.isArray(type)) {
 					return isOptional ? "String?" : "String";
 				}
 				if (type === "number" && isBigint) {
@@ -267,6 +395,28 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								isAlreadyExist.array = fieldTypeParts.isArray || undefined;
 							}
 						}
+						if (
+							provider === "mysql" &&
+							(attr.type === "string" || Array.isArray(attr.type)) &&
+							typeof isAlreadyExist.fieldType === "string" &&
+							getFieldTypeParts(isAlreadyExist.fieldType).fieldType === "String"
+						) {
+							const tableIndexStringLength = getDatabaseIndexStringLength({
+								columnName: fieldName,
+								dialect: "mysql",
+								fields: fields ?? {},
+								indexes: resolvedTableIndexes,
+							});
+							if (tableIndexStringLength) {
+								isAlreadyExist.attributes = isAlreadyExist.attributes?.filter(
+									(attribute) => attribute.group !== "db",
+								);
+								builder
+									.model(modelName)
+									.field(fieldName)
+									.attribute(`db.VarChar(${tableIndexStringLength})`);
+							}
+						}
 						continue;
 					}
 				}
@@ -377,6 +527,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
+					if (
+						isMigrationDisabled(referencedOriginalModelName) ||
+						isMigrationDisabled(attr.references.model)
+					) {
+						continue;
+					}
 					if (
 						useUUIDs &&
 						provider === "postgresql" &&
@@ -385,9 +544,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
 
-					const referencedOriginalModelName = getModelName(
-						attr.references.model,
-					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;
@@ -410,13 +566,62 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(relationField);
 				}
 				if (
-					!attr.unique &&
-					!attr.references &&
 					provider === "mysql" &&
-					attr.type === "string"
+					(attr.type === "string" || Array.isArray(attr.type))
 				) {
-					builder.model(modelName).field(fieldName).attribute("db.Text");
+					const tableIndexStringLength = getDatabaseIndexStringLength({
+						columnName: fieldName,
+						dialect: "mysql",
+						fields: fields ?? {},
+						indexes: resolvedTableIndexes,
+					});
+					const nativeType = tableIndexStringLength
+						? `db.VarChar(${tableIndexStringLength})`
+						: !attr.unique && !attr.references
+							? "db.Text"
+							: undefined;
+					if (nativeType) {
+						builder.model(modelName).field(fieldName).attribute(nativeType);
+					}
 				}
+			}
+
+			for (const tableIndex of resolvedTableIndexes) {
+				const attributeName = tableIndex.unique ? "unique" : "index";
+				const existingIndexes =
+					prismaModel?.properties
+						.map(getPrismaIndexDefinition)
+						.filter(
+							(index): index is PrismaIndexDefinition => index !== undefined,
+						) ?? [];
+				const existingMappedIndex = existingIndexes.find(
+					(index) =>
+						index.mappedName !== undefined &&
+						getPortableDatabaseIdentifierKey(index.mappedName) ===
+							getPortableDatabaseIdentifierKey(tableIndex.name),
+				);
+				if (existingMappedIndex) {
+					if (!prismaIndexMatches(existingMappedIndex, tableIndex)) {
+						throw new BetterAuthError(
+							`Prisma index "${tableIndex.name}" on model "${modelName}" does not match the configured fields and uniqueness. Rename or replace the existing index, then generate the schema again.`,
+						);
+					}
+					continue;
+				}
+				const existingUnmappedIndex = existingIndexes.find(
+					(index) =>
+						index.mappedName === undefined &&
+						prismaIndexMatches(index, tableIndex),
+				);
+				if (existingUnmappedIndex) {
+					existingUnmappedIndex.setMappedName(tableIndex.name);
+					continue;
+				}
+				builder
+					.model(modelName)
+					.blockAttribute(
+						`${attributeName}([${tableIndex.columns.join(", ")}], map: ${JSON.stringify(tableIndex.name)})`,
+					);
 			}
 
 			// Add many-to-many fields

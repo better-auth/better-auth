@@ -5,8 +5,8 @@ import type {
 	User,
 	Verification,
 } from "@better-auth/core/db";
-import { getAuthTables } from "@better-auth/core/db";
-import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import {
 	createAdapterFactory,
 	deepmerge,
@@ -17,6 +17,8 @@ import { generateId } from "@better-auth/core/utils/id";
 import type { Auth } from "better-auth";
 import { betterAuth } from "better-auth";
 import { test } from "vitest";
+import type { RowsByModel } from "./cleanup";
+import { cleanupRows } from "./cleanup";
 import type { Logger } from "./test-adapter";
 
 /**
@@ -121,6 +123,10 @@ type Failure<E> = {
 };
 
 type Result<T, E = Error> = Success<T> | Failure<E>;
+
+type CreatedRow = {
+	id: Where["value"];
+};
 
 async function tryCatch<T, E = Error>(
 	promise: Promise<T>,
@@ -251,7 +257,7 @@ export const createTestSuite = <
 			customIdGenerator?: () => any | Promise<any> | undefined;
 			transformIdOutput?: (id: any) => string | undefined;
 		}) => {
-			const createdRows: Record<string, any[]> = {};
+			let createdRows: RowsByModel<CreatedRow> = {};
 
 			let adapter = await helpers.adapter();
 			const wrapperAdapter = (
@@ -271,16 +277,25 @@ export const createTestSuite = <
 					disableTransformInput: true,
 					disableTransformJoin: true,
 				};
+				// Snapshot the real adapter's transaction here so the wrapper always
+				// delegates to it, even when subsequent helper calls reassign
+				// `adapter` (e.g. `adapter = await helpers.adapter()` inside the
+				// proxied methods below). Previously this code mutated
+				// `adapter.transaction = undefined`, which left later
+				// `wrapperAdapter()` invocations with a snapshot of `undefined` and
+				// silently degraded `wrapper.transaction(cb)` to the no-op
+				// `createAsIsTransaction` path — breaking real rollback semantics
+				// for adapters that opt into `transaction: true`.
+				const adapterTransaction = adapter.transaction;
 				const adapterCreator = (
 					options: BetterAuthOptions,
 				): DBAdapter<BetterAuthOptions> =>
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
-							transaction: adapter.transaction,
+							transaction: adapterTransaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
-							adapter.transaction = undefined as any;
 							return {
 								count: async (args: any) => {
 									adapter = await helpers.adapter();
@@ -343,7 +358,7 @@ export const createTestSuite = <
 										select,
 										forceAllowId: true,
 									});
-									createdRows[model] = [...(createdRows[model] || []), res];
+									(createdRows[model] ??= []).push({ id: res.id });
 									return res as any;
 								},
 								options: adapter.options,
@@ -365,34 +380,28 @@ export const createTestSuite = <
 			};
 
 			const cleanupCreatedRows = async () => {
+				if (Object.keys(createdRows).length === 0) return;
+
 				adapter = await helpers.adapter();
-				for (const model of Object.keys(createdRows)) {
-					for (const row of createdRows[model]!) {
-						const schema = getAuthTables(helpers.getBetterAuthOptions());
-						const getDefaultModelName = initGetDefaultModelName({
-							schema,
-							usePlural: adapter.options?.adapterConfig.usePlural,
-						});
-						let defaultModelName: string;
-						try {
-							defaultModelName = getDefaultModelName(model);
-						} catch {
-							continue;
-						}
-						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it
-						try {
-							await adapter.delete({
-								model,
-								where: [{ field: "id", value: row.id }],
-							});
-						} catch {
-							// We ignore any failed attempts to delete the created rows.
-						}
-						if (createdRows[model]!.length === 1) {
-							delete createdRows[model];
-						}
+				const schema = getAuthTables(helpers.getBetterAuthOptions());
+				const getDefaultModelName = initGetDefaultModelName({
+					schema,
+					usePlural: adapter.options?.adapterConfig.usePlural,
+				});
+				createdRows = await cleanupRows(createdRows, async (model, row) => {
+					let defaultModelName: string;
+					try {
+						defaultModelName = getDefaultModelName(model);
+					} catch {
+						return "retry";
 					}
-				}
+					if (!schema[defaultModelName]) return "retry";
+					await adapter.delete({
+						model,
+						where: [{ field: "id", value: row.id }],
+					});
+					return "complete";
+				});
 			};
 
 			// Track current applied BetterAuth options state
@@ -513,6 +522,7 @@ export const createTestSuite = <
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
+						issuer: createLocalAccountIssuer("test"),
 						accountId: generateId(),
 						providerId: "test",
 						userId: generateId(),

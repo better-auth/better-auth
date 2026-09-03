@@ -1,6 +1,10 @@
 // cspell:ignore AQAB
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { jwtVerify } from "jose";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { oneTapClient } from "./client";
 import { oneTap } from "./index";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
@@ -49,6 +53,10 @@ vi.mock("jose", async (importOriginal) => {
 			protectedHeader: { alg: "RS256" },
 		})),
 	};
+});
+
+afterEach(() => {
+	vi.mocked(jwtVerify).mockClear();
 });
 
 describe("one-tap implicit linking gate", async () => {
@@ -140,6 +148,53 @@ describe("one-tap implicit linking gate", async () => {
 		expect(accounts.length).toBeGreaterThanOrEqual(1);
 	});
 
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("stores the account identity under explicit %s strategy", async (identityStrategy) => {
+		verifiedPayload.email = "provider-scoped-one-tap@example.com";
+		verifiedPayload.sub = "provider-scoped-one-tap-subject";
+		const { auth, client } = await getTestInstance(
+			{
+				account: { identityStrategy },
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						enabled: true,
+					},
+				},
+				plugins: [oneTap()],
+			},
+			{ disableTestUser: true },
+		);
+
+		const response = await client.$fetch("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(response.error).toBeFalsy();
+		const context = await auth.$context;
+		await expect(
+			context.adapter.findOne<{
+				accountId: string;
+				issuer: string;
+				providerId: string;
+			}>({
+				model: "account",
+				where: [{ field: "providerId", value: "google" }],
+			}),
+		).resolves.toMatchObject({
+			accountId: verifiedPayload.sub,
+			issuer:
+				identityStrategy === "provider-id"
+					? "local:oauth:google"
+					: "https://accounts.google.com",
+			providerId: "google",
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
 	 */
@@ -189,6 +244,39 @@ describe("one-tap implicit linking gate", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9486
+	 */
+	it("returns 403 EMAIL_NOT_VERIFIED when the provider requires a verified email", async () => {
+		verifiedPayload.email = "one-tap-unverified@example.com";
+		verifiedPayload.email_verified = false;
+		verifiedPayload.sub = "one_tap_unverified_sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		// 403 distinguishes the mapped EMAIL_NOT_VERIFIED gate from the generic
+		// 401 the unverified-linking path returns.
+		expect(res.error?.status).toBe(403);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9502
 	 */
 	it("links Google One Tap when another provider has the same account ID", async () => {
@@ -212,13 +300,17 @@ describe("one-tap implicit linking gate", async () => {
 		});
 
 		const ctx = await auth.$context;
-		const otherUser = await ctx.internalAdapter.createUser({
-			name: "Other Provider User",
-			email: "one-tap-other-provider@example.com",
-		});
+		const otherUser = await ctx.internalAdapter.createUser(
+			{
+				name: "Other Provider User",
+				email: "one-tap-other-provider@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
+			issuer: "local:github",
 			accountId: verifiedPayload.sub,
 		});
 
@@ -241,6 +333,7 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
+				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -285,6 +378,7 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
+				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -315,19 +409,26 @@ describe("one-tap implicit linking gate", async () => {
 		});
 		const ctx = await auth.$context;
 
-		const userA = await ctx.internalAdapter.createUser({
-			name: "Sub Owner A",
-			email: "one-tap-sub-owner-a@example.com",
-		});
+		const userA = await ctx.internalAdapter.createUser(
+			{
+				name: "Sub Owner A",
+				email: "one-tap-sub-owner-a@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: userA.id,
 			providerId: "google",
+			issuer: "https://accounts.google.com",
 			accountId: sharedSub,
 		});
-		const userB = await ctx.internalAdapter.createUser({
-			name: "Email Match B",
-			email: verifiedPayload.email,
-		});
+		const userB = await ctx.internalAdapter.createUser(
+			{
+				name: "Email Match B",
+				email: verifiedPayload.email,
+			},
+			{ method: "test" },
+		);
 
 		const res = await client.$fetch<{ user?: { id: string } }>(
 			"/one-tap/callback",
@@ -444,6 +545,10 @@ describe("one-tap callbackURL origin validation", async () => {
 });
 
 describe("one-tap audience enforcement", async () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
 	it("rejects the callback when no Google client ID is configured", async () => {
 		// No `socialProviders.google` and no `oneTap({ clientId })`, so there is no
 		// expected audience. Without one, jose would verify Google's signature but
@@ -466,6 +571,7 @@ describe("one-tap audience enforcement", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.message).toContain("Google client ID is required");
+		expect(jwtVerify).not.toHaveBeenCalled();
 	});
 
 	it("accepts the oneTap-level clientId as the audience without a Google provider", async () => {
@@ -487,6 +593,33 @@ describe("one-tap audience enforcement", async () => {
 		expect(res.error?.message ?? "").not.toContain(
 			"Google client ID is required",
 		);
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Object),
+			expect.objectContaining({
+				audience: "explicit-one-tap-client",
+			}),
+		);
+	});
+
+	it("rejects the callback when the verified token has no email", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {},
+			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
+		});
+
+		verifiedPayload.email = "";
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number; message?: string } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("Email not available in token");
 	});
 });
 
@@ -635,5 +768,105 @@ describe("one-tap hosted domain (hd)", async () => {
 
 		expect(res.error).toBeFalsy();
 		expect(res.data?.token).toBeTruthy();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10478
+ */
+describe("one-tap disableSignUp", () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
+	it("rejects provider-disabled sign-up without creating a user", async () => {
+		verifiedPayload.email = "one-tap-disable-signup@example.com";
+		verifiedPayload.sub = "one-tap-disable-signup-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
+		});
+
+		const ctx = await auth.$context;
+		const users = await ctx.adapter.findMany<{ email: string }>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: verifiedPayload.email,
+				},
+			],
+		});
+		expect(users).toHaveLength(0);
+	});
+
+	it("keeps provider sign-up disabled when One Tap enables it", async () => {
+		verifiedPayload.email = "one-tap-signup-override@example.com";
+		verifiedPayload.sub = "one-tap-signup-override-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap({ disableSignup: false })],
+		});
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
+		});
+	});
+});
+
+/**
+ * Declaration emit previously left `getActions`'s `$fetch` parameter
+ * un-annotated. With no import of `BetterFetch` in the file, emit had no
+ * name to reference and inlined `import("@better-fetch/fetch").BetterFetch`
+ * instead, which is not assignable to `BetterAuthClientPlugin`'s
+ * `getActions`. As a result, the client lost the `oneTap` action.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10583
+ */
+describe("oneTapClient types", () => {
+	it("should be assignable to BetterAuthClientPlugin", () => {
+		const plugin: BetterAuthClientPlugin = oneTapClient({
+			clientId: "test-client",
+		});
+		expect(plugin.id).toBe("one-tap");
+	});
+
+	it("should preserve the oneTap client action", () => {
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client" })],
+		});
+		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });

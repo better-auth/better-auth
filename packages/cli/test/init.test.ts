@@ -11,8 +11,7 @@ import { getPackageInfo, hasDependency } from "../src/utils/get-package-info";
 import { installDependencies } from "../src/utils/install-dependencies";
 import { testWithTmpDir } from "./test-utils";
 
-// Mock src/index.ts to prevent it from executing during tests
-vi.mock("../src/index.ts", () => ({
+vi.mock(import("../src/version"), () => ({
 	cliVersion: "1.0.0",
 }));
 
@@ -792,6 +791,7 @@ describe("initAction", () => {
 
 				expect(authConfigContent).toContain(db.expectedPool);
 				expect(authConfigContent).toContain("database: database");
+				expect(authConfigContent).toContain('identityStrategy: "provider-id"');
 				expect(authConfigContent).not.toContain("const dialect");
 				expect(authConfigContent).not.toContain("database: {");
 				expect(authConfigContent).not.toContain(db.legacyType);
