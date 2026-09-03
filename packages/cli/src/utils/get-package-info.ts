@@ -19,7 +19,7 @@ export function getPackageInfo(cwd?: string) {
 
 function readPackageVersion(
 	packageJsonPath: string,
-	packageName: string,
+	expectedPackageName: string,
 ): string | null {
 	if (!existsSync(packageJsonPath)) {
 		return null;
@@ -28,7 +28,7 @@ function readPackageVersion(
 		const result = packageManifestSchema.safeParse(
 			JSON.parse(readFileSync(packageJsonPath, "utf-8")),
 		);
-		return result.success && result.data.name === packageName
+		return result.success && result.data.name === expectedPackageName
 			? result.data.version
 			: null;
 	} catch {
