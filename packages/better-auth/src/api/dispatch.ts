@@ -39,6 +39,7 @@ export type DispatchContext = Partial<
 type InternalContext = DispatchContext & {
 	path?: string | undefined;
 	asResponse?: boolean | undefined;
+	method?: string | undefined;
 };
 
 const defuReplaceArrays = createDefu((obj, key, value) => {
@@ -343,6 +344,7 @@ export async function dispatchAuthEndpoint(
 			session: input.context.session ?? null,
 		},
 		path: endpoint.path,
+		method: methodName,
 		headers: input.headers ? new Headers(input.headers) : undefined,
 	};
 
