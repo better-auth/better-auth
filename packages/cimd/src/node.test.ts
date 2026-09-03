@@ -226,4 +226,60 @@ describe("Node CIMD metadata transport", () => {
 		};
 		expect(options.servername).toBeUndefined();
 	});
+
+	it("answers the lookup callback in array form when invoked with { all: true }", async () => {
+		// https.request's Happy Eyeballs path (lookupAndConnectMultiple) invokes
+		// the custom `lookup` with `{ all: true }` and expects an array-style
+		// `(err, addresses[])` callback instead of the legacy `(err, address,
+		// family)` form. Every other test here calls `lookup` with `{}`, which
+		// never exercises this branch.
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		let received: unknown;
+		mocks.request.mockImplementationOnce(
+			(
+				_url: URL,
+				requestOptions: {
+					lookup: (
+						hostname: string,
+						options: { all: boolean },
+						callback: (
+							error: Error | null,
+							addresses: { address: string; family: number }[],
+						) => void,
+					) => void;
+				},
+				onResponse: (response: Readable) => void,
+			) => {
+				const request = new EventEmitter() as EventEmitter & {
+					end: () => void;
+					destroy: (error?: Error) => void;
+				};
+				request.end = () => {
+					requestOptions.lookup(
+						"client.example.com",
+						{ all: true },
+						(_error, addresses) => {
+							received = addresses;
+							const response = Readable.from([
+								Buffer.from("ok"),
+							]) as Readable & {
+								headers: Record<string, string>;
+								statusCode: number;
+								statusMessage: string;
+							};
+							response.headers = { "content-type": "text/plain" };
+							response.statusCode = 200;
+							response.statusMessage = "OK";
+							onResponse(response);
+						},
+					);
+				};
+				request.destroy = () => {};
+				return request;
+			},
+		);
+
+		await fetchClientMetadataResource("https://client.example.com/client.json");
+		expect(received).toEqual([{ address: "93.184.216.34", family: 4 }]);
+	});
 });

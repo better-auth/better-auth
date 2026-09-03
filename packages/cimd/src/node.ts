@@ -77,8 +77,12 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 						? url.hostname
 						: undefined,
 				signal,
-				lookup: (_hostname, _options, callback) => {
-					callback(null, pinnedAddress.address, pinnedAddress.family);
+				lookup: (_hostname, options, callback) => {
+					if (options.all) {
+						callback(null, [pinnedAddress]);
+					} else {
+						callback(null, pinnedAddress.address, pinnedAddress.family);
+					}
 				},
 			},
 			(response) => {
