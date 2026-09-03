@@ -1,33 +1,13 @@
 ---
 icon: integrationsNuxt
 sidebarTitle: "Nuxt"
-title: Nuxt
-description: Add authentication with Better Auth.
+title: Nuxt Integration
+description: Integrate Better Auth with Nuxt.
 ---
 
-## Install the module
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
-[`@nuxtjs/better-auth`](https://better-auth.nuxt.dev) is the recommended integration. It mounts the auth handler and provides session composables for SSR and the browser.
-
-<Callout type="info">
-  The Nuxt Modules team maintains this integration outside the Better Auth repository. Report module-specific issues in [`nuxt-modules/better-auth`](https://github.com/nuxt-modules/better-auth/issues).
-</Callout>
-
-{/* cspell:ignore nuxi */}
-
-```package-install title="Terminal"
-npx nuxi module add @nuxtjs/better-auth
-```
-
-The command adds the module to `nuxt.config.ts` and creates `server/auth.config.ts` and `<srcDir>/auth.config.ts`, usually `app/auth.config.ts`. Continue with the [configuration guide](https://better-auth.nuxt.dev/getting-started/configuration) to set up your secret, authentication methods, and database.
-
-## Manual setup
-
-<Accordions>
-  <Accordion id="manual-setup-details" title="View manual setup">
-    Use this setup if you don't want to install the Nuxt module. Before you start, configure a Better Auth instance by following the [installation guide](/docs/installation).
-
-### Mount the handler
+## Mount the handler
 
 Mount the Better Auth handler to a catch-all Nitro route. Create a file at `server/api/auth/[...all].ts`:
 
@@ -43,7 +23,7 @@ export default defineEventHandler((event) => {
   You can change the mount path in your Better Auth configuration, but keeping it as `/api/auth/[...all]` is recommended.
 </Callout>
 
-### Create a client
+## Create a client
 
 Create an auth client using `better-auth/vue` so `useSession` returns Vue refs:
 
@@ -54,7 +34,7 @@ export const authClient = createAuthClient();
 export const { signIn, signUp, signOut, useSession } = authClient;
 ```
 
-### Use the session
+## Use the session
 
 Use `authClient.useSession(useFetch)` inside a page `setup()` to load the session on the server and hydrate it on the client. Pass Nuxt's `useFetch` so the request is made with the incoming cookies and the payload is reused during hydration:
 
@@ -78,7 +58,7 @@ const { data: session } = await authClient.useSession(useFetch);
 
 For client-only widgets like popovers or menus, call `authClient.useSession()` without an argument. It returns a reactive ref that updates on sign-in and sign-out.
 
-### Protect pages
+## Protect pages
 
 Create a named route middleware and opt pages into it with `definePageMeta`:
 
@@ -101,7 +81,7 @@ definePageMeta({ middleware: "auth" });
 
 Rename the file to `app/middleware/auth.global.ts` to run it on every route. Always `return` the `navigateTo(...)` call, since calling it without `return` is a no-op.
 
-### Protect server routes
+## Protect server routes
 
 Call `auth.api.getSession` with the incoming `event.headers` and guard the route with `createError`:
 
@@ -119,7 +99,7 @@ export default defineEventHandler(async (event) => {
 
 If you need to reuse this across many routes, factor the check into your own `server/utils/` helper.
 
-### Use the client during SSR
+## Use the client during SSR
 
 Aside from `useSession(useFetch)`, `authClient` actions don't forward cookies during SSR by default, so they return as unauthenticated. Two ways to handle this:
 
@@ -161,7 +141,7 @@ const { data: accounts } = await useAsyncData("accounts", () =>
 </script>
 ```
 
-### Reuse with a Nuxt layer
+## Reuse with a Nuxt layer
 
 When you want to reuse the same auth setup across multiple Nuxt apps (for example a marketing site and a dashboard), extract `lib/auth.ts`, `server/`, `app/middleware/`, and `app/composables/` into a [Nuxt layer](https://nuxt.com/docs/4.x/getting-started/layers) and extend it from each app:
 
@@ -170,9 +150,6 @@ export default defineNuxtConfig({
 	extends: ["./layers/auth"],
 });
 ```
-
-  </Accordion>
-</Accordions>
 
 ## Resources & examples
 
