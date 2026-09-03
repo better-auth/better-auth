@@ -77,11 +77,16 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 						? url.hostname
 						: undefined,
 				signal,
-				// Since Node 20, `net.autoSelectFamily` defaults to true and the
-				// socket asks `lookup` with `all: true`, expecting an address
-				// list back. The legacy three-argument answer to that question
-				// fails the connection with ERR_INVALID_IP_ADDRESS before it
-				// opens.
+				/**
+				 * Node requests all lookup results when automatic address-family
+				 * selection is enabled. The callback must receive an address array for
+				 * `all: true`, and the legacy address and family arguments otherwise.
+				 * Both forms return only the previously validated address to preserve
+				 * connection pinning.
+				 *
+				 * @see https://nodejs.org/api/net.html#socketconnectoptions-connectlistener
+				 * @see https://nodejs.org/api/dns.html#dnslookuphostname-options-callback
+				 */
 				lookup: (_hostname, options, callback) => {
 					if (options.all) {
 						callback(null, [pinnedAddress]);
