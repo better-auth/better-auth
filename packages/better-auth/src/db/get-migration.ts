@@ -204,19 +204,19 @@ export interface RequiredColumnConstraintBlocker {
 	table: string;
 }
 
-export interface AccountIdentityStrategyMismatchBlocker {
+export interface AccountIdentityScopeMismatchBlocker {
 	accountCount: number;
 	affectedProviders: string[];
-	code: "account-identity-strategy-mismatch";
-	configuredStrategy: "provider-id" | "issuer";
-	detectedStrategy: "provider-id" | "issuer" | "mixed";
+	code: "account-identity-scope-mismatch";
+	configuredScope: "provider" | "issuer";
+	storedScope: "provider" | "issuer" | "mixed";
 	hasMixedIdentityNamespaces: boolean;
 	malformedNamespaces: number;
 	table: string;
 }
 
 export type MigrationBlocker =
-	| AccountIdentityStrategyMismatchBlocker
+	| AccountIdentityScopeMismatchBlocker
 	| IndexColumnBoundsBlocker
 	| RequiredColumnBackfillBlocker
 	| RequiredColumnConstraintBlocker
@@ -237,7 +237,7 @@ function isAccountIdentitySchemaBlocker(
 			blocker.index.columns[1] === accountIdColumn
 		);
 	}
-	if (blocker.code === "account-identity-strategy-mismatch") {
+	if (blocker.code === "account-identity-scope-mismatch") {
 		return false;
 	}
 	return (
@@ -282,7 +282,7 @@ function createMigrationBlockerError(blocker: MigrationBlocker) {
 	if (blocker.code === "index-column-bounds") {
 		return new BetterAuthError(blocker.message);
 	}
-	if (blocker.code === "account-identity-strategy-mismatch") {
+	if (blocker.code === "account-identity-scope-mismatch") {
 		const scope = `${blocker.accountCount} account${blocker.accountCount === 1 ? "" : "s"} across providers ${blocker.affectedProviders.map((providerId) => `"${providerId}"`).join(", ") || "(unknown)"}`;
 		if (blocker.malformedNamespaces > 0) {
 			if (blocker.hasMixedIdentityNamespaces) {
@@ -291,7 +291,7 @@ function createMigrationBlockerError(blocker: MigrationBlocker) {
 				);
 			}
 			return new BetterAuthError(
-				`Migration blocked: table "${blocker.table}" contains ${blocker.malformedNamespaces} malformed persisted account namespace${blocker.malformedNamespaces === 1 ? "" : "s"} in ${scope}. Repair the namespaces for the configured strategy before applying the migration.`,
+				`Migration blocked: table "${blocker.table}" contains ${blocker.malformedNamespaces} malformed persisted account namespace${blocker.malformedNamespaces === 1 ? "" : "s"} in ${scope}. Repair the namespaces for the configured scope before applying the migration.`,
 			);
 		}
 		if (blocker.hasMixedIdentityNamespaces) {
@@ -300,15 +300,15 @@ function createMigrationBlockerError(blocker: MigrationBlocker) {
 			);
 		}
 		if (
-			blocker.configuredStrategy === "issuer" &&
-			blocker.detectedStrategy === "provider-id"
+			blocker.configuredScope === "issuer" &&
+			blocker.storedScope === "provider"
 		) {
 			return new BetterAuthError(
-				`Migration blocked: table "${blocker.table}" already uses provider-id account identity for ${scope}, but account.identityStrategy is "issuer". Set account: { identityStrategy: "provider-id" } to preserve the existing identity, or perform a separate reviewed re-key migration.`,
+				`Migration blocked: table "${blocker.table}" already uses provider-scoped account identity for ${scope}, but account.identityScope is "issuer". Set account: { identityScope: "provider" } to preserve the existing identity, or perform a separate reviewed re-key migration.`,
 			);
 		}
 		return new BetterAuthError(
-			`Migration blocked: table "${blocker.table}" already uses ${blocker.detectedStrategy} account identity for ${scope}, but account.identityStrategy is "${blocker.configuredStrategy}". Changing strategy for populated v1.7 data requires a separate reviewed re-key migration.`,
+			`Migration blocked: table "${blocker.table}" already uses ${blocker.storedScope} account identity for ${scope}, but account.identityScope is "${blocker.configuredScope}". Changing scope for populated v1.7 data requires a separate reviewed re-key migration.`,
 		);
 	}
 	if (blocker.code === "table-data-move") {
@@ -763,7 +763,7 @@ function describeExistingTableIndexMisfit({
 }
 
 const columnBackfillGuideUrl =
-	"https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy";
+	"https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-scope";
 
 /**
  * Thrown when a migration plan refuses to run or compile because it would
@@ -1059,14 +1059,14 @@ async function getMigrationsWithDatabase(
 	const migrationBlockers: MigrationBlocker[] = [];
 	if (
 		accountIdentity.requiresRekey &&
-		accountIdentity.detectedStrategy !== "empty"
+		accountIdentity.storedScope !== "empty"
 	) {
 		migrationBlockers.push({
 			accountCount: accountIdentity.totalAccounts ?? 0,
 			affectedProviders: accountIdentity.affectedProviders ?? [],
-			code: "account-identity-strategy-mismatch",
-			configuredStrategy: accountIdentity.selectedStrategy,
-			detectedStrategy: accountIdentity.detectedStrategy,
+			code: "account-identity-scope-mismatch",
+			configuredScope: accountIdentity.effectiveScope,
+			storedScope: accountIdentity.storedScope,
 			hasMixedIdentityNamespaces: accountIdentity.hasMixedIdentityNamespaces,
 			malformedNamespaces: accountIdentity.malformedNamespaces ?? 0,
 			table:

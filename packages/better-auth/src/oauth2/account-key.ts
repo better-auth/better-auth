@@ -8,9 +8,9 @@ import {
 } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 
-type AccountIdentityStrategy = NonNullable<
+type AccountIdentityScope = NonNullable<
 	BetterAuthOptions["account"]
->["identityStrategy"];
+>["identityScope"];
 
 /**
  * Exposes a provider-declared profile as the raw claim record used by
@@ -41,7 +41,7 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
-	identityStrategy?: AccountIdentityStrategy,
+	identityScope?: AccountIdentityScope,
 ): Promise<AccountKey> {
 	const accountKeyContext = { tokens, profile };
 	const accountSubject = provider.accountSubject;
@@ -59,7 +59,7 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 
 	const accountIssuer = provider.accountIssuer;
 	const issuer =
-		identityStrategy === "provider-id"
+		identityScope === "provider"
 			? createOAuthAccountIssuer(provider.id)
 			: typeof accountIssuer === "function"
 				? await accountIssuer(accountKeyContext)
@@ -87,14 +87,14 @@ export async function resolveOAuthAccountKeyForAPI<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
-	identityStrategy?: AccountIdentityStrategy,
+	identityScope?: AccountIdentityScope,
 ): Promise<AccountKey> {
 	try {
 		return await resolveOAuthAccountKey(
 			provider,
 			tokens,
 			profile,
-			identityStrategy,
+			identityScope,
 		);
 	} catch {
 		throw APIError.from(

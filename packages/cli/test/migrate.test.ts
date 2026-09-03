@@ -339,8 +339,8 @@ describe("migration plan status", () => {
 	it("reports pending release work when the schema is already current", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
-				selectedStrategy: "provider-id",
-				detectedStrategy: "provider-id",
+				effectiveScope: "provider",
+				storedScope: "provider",
 				hasMixedIdentityNamespaces: false,
 				migrationRequired: false,
 				requiresRekey: false,
@@ -363,8 +363,8 @@ describe("migration plan status", () => {
 	it("prints blocker details and remediation in the human plan", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
-				selectedStrategy: "issuer",
-				detectedStrategy: "provider-id",
+				effectiveScope: "issuer",
+				storedScope: "provider",
 				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: false,
@@ -418,7 +418,7 @@ describe("migrate published 1.6.30 account data", () => {
 		});
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			plugins: [
@@ -507,7 +507,7 @@ describe("migrate published 1.6.30 account data", () => {
 		expect(sourceAccounts).toHaveLength(2);
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {
@@ -638,7 +638,7 @@ describe("migrate published 1.6.30 account data", () => {
 			},
 		});
 		const auth17 = betterAuth({
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {
@@ -697,11 +697,11 @@ describe("migrate published 1.6.30 account data", () => {
 async function createReleaseDecisionFixture(
 	db: Database.Database,
 	{
-		identityStrategy = "provider-id",
+		identityScope = "provider",
 		sourceClientSecretStorage = "plain",
 		targetClientSecretStorage = "hashed",
 	}: {
-		identityStrategy?: "issuer" | "provider-id" | "unset";
+		identityScope?: "issuer" | "provider" | "unset";
 		sourceClientSecretStorage?: "encrypted" | "hashed" | "plain";
 		targetClientSecretStorage?: "encrypted" | "hashed";
 	} = {},
@@ -780,7 +780,7 @@ async function createReleaseDecisionFixture(
 	});
 
 	const options17: BetterAuthOptions = {
-		...(identityStrategy !== "unset" && { account: { identityStrategy } }),
+		...(identityScope !== "unset" && { account: { identityScope } }),
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -1142,10 +1142,10 @@ describe("migrate command modes", () => {
 });
 
 describe("plan every unresolved 1.6.30 release decision", () => {
-	it("reports the provider-id issuer backfill and an unknown SCIM inventory accurately", async () => {
+	it("reports the provider-scoped issuer backfill and an unknown SCIM inventory accurately", async () => {
 		const db = new Database(":memory:");
 		await createReleaseDecisionFixture(db, {
-			identityStrategy: "provider-id",
+			identityScope: "provider",
 		});
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -1176,7 +1176,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 	it("reports the consent strategy and SCIM inventory in one run", async () => {
 		const db = new Database(":memory:");
 		const { scimAccountId } = await createReleaseDecisionFixture(db, {
-			identityStrategy: "unset",
+			identityScope: "unset",
 		});
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
@@ -1210,12 +1210,12 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 			expect(jsonPlan.blockers).toEqual([
 				{
 					accountCount: 2,
-					code: "account-identity-strategy-required",
+					code: "account-identity-scope-required",
 					providerIds: ["credential", "workforce-fixture"],
 					remediation: {
-						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy",
+						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-scope",
 						summary:
-							'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, then run the plan again.',
+							'Set account: { identityScope: "provider" } to preserve 1.6 account identity, then run the plan again.',
 					},
 					table: "account",
 				},
@@ -1492,7 +1492,7 @@ async function createResolvableAccountFixture(db: Database.Database) {
 	};
 	await auth1630.api.signUpEmail({ body: credentials });
 	const options17: BetterAuthOptions = {
-		account: { identityStrategy: "provider-id" },
+		account: { identityScope: "provider" },
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -1767,7 +1767,7 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 			issuer: "local:credential",
 		});
 		const auth17 = betterAuth({
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: { enabled: true },
@@ -2034,7 +2034,7 @@ async function createRenamedLegacyClientFixture(db: Database.Database) {
 		},
 	});
 	const options17: BetterAuthOptions = {
-		account: { identityStrategy: "provider-id" },
+		account: { identityScope: "provider" },
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -2379,7 +2379,7 @@ describe("migrate published 1.6.30 organization team data", () => {
 			},
 		};
 		const auth17 = betterAuth({
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			baseURL: "http://localhost:3000",
 			database: db,
 			emailAndPassword: {

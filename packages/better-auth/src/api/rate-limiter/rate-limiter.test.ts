@@ -622,7 +622,7 @@ describe("missing client IP warning", () => {
 		);
 		const log = vi.fn();
 		const { client } = await getTestInstanceReloaded({
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			rateLimit: {
 				enabled: true,
 				window: 10,

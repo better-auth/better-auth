@@ -92,7 +92,7 @@ describe("resolveOAuthAccountKey", () => {
 				createProvider({ accountIssuer }),
 				tokens,
 				result.data,
-				"provider-id",
+				"provider",
 			),
 		).resolves.toEqual({
 			issuer: "local:oauth:company-oauth",

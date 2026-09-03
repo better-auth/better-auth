@@ -1665,7 +1665,7 @@ async function handleOIDCCallback(
 		accountId: userInfoId,
 	};
 	const persistedIssuer =
-		ctx.context.options.account?.identityStrategy === "provider-id"
+		ctx.context.options.account?.identityScope === "provider"
 			? createOAuthAccountIssuer(provider.providerId)
 			: accountKey.issuer;
 	const isTrustedProvider =

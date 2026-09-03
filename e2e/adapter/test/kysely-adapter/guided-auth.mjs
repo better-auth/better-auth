@@ -12,7 +12,7 @@ const scimUserId = process.env.BETTER_AUTH_MIGRATION_SCIM_USER_ID;
 const identityProviderIssuer = process.env.BETTER_AUTH_MIGRATION_IDP_ISSUER;
 
 export const auth = betterAuth({
-	account: { identityStrategy: "provider-id" },
+	account: { identityScope: "provider" },
 	baseURL: "http://localhost:3000",
 	database: new DatabaseSync(databasePath),
 	emailAndPassword: { enabled: true },

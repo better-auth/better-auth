@@ -6,8 +6,8 @@ describe("createMigrationPlan", () => {
 	it("reports the configured account identity path and mismatch remediation", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
-				selectedStrategy: "provider-id",
-				detectedStrategy: "issuer",
+				effectiveScope: "provider",
+				storedScope: "issuer",
 				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: true,
@@ -17,9 +17,9 @@ describe("createMigrationPlan", () => {
 				{
 					accountCount: 3,
 					affectedProviders: ["google"],
-					code: "account-identity-strategy-mismatch",
-					configuredStrategy: "provider-id",
-					detectedStrategy: "issuer",
+					code: "account-identity-scope-mismatch",
+					configuredScope: "provider",
+					storedScope: "issuer",
 					hasMixedIdentityNamespaces: false,
 					malformedNamespaces: 0,
 					table: "account",
@@ -32,12 +32,12 @@ describe("createMigrationPlan", () => {
 		});
 
 		expect(plan.status).toBe("blocked");
-		expect(plan.accountIdentity.selectedStrategy).toBe("provider-id");
+		expect(plan.accountIdentity.effectiveScope).toBe("provider");
 		expect(plan.blockers[0]).toMatchObject({
-			code: "account-identity-strategy-mismatch",
+			code: "account-identity-scope-mismatch",
 			remediation: {
 				summary:
-					'Keep account.identityStrategy as "issuer", or perform a separate reviewed re-key migration before changing strategy.',
+					'Keep account.identityScope as "issuer", or perform a separate reviewed re-key migration before changing scope.',
 			},
 		});
 	});
@@ -64,8 +64,8 @@ describe("createMigrationPlan", () => {
 	] as const)("reports complete remediation for %s", (_, hasMixedIdentityNamespaces, malformedNamespaces, expectedSummary) => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
-				selectedStrategy: "issuer",
-				detectedStrategy: "mixed",
+				effectiveScope: "issuer",
+				storedScope: "mixed",
 				hasMixedIdentityNamespaces,
 				migrationRequired: true,
 				requiresRekey: true,
@@ -75,9 +75,9 @@ describe("createMigrationPlan", () => {
 				{
 					accountCount: 3,
 					affectedProviders: ["github", "google"],
-					code: "account-identity-strategy-mismatch",
-					configuredStrategy: "issuer",
-					detectedStrategy: "mixed",
+					code: "account-identity-scope-mismatch",
+					configuredScope: "issuer",
+					storedScope: "mixed",
 					hasMixedIdentityNamespaces,
 					malformedNamespaces,
 					table: "account",
@@ -90,7 +90,7 @@ describe("createMigrationPlan", () => {
 		});
 
 		expect(plan.blockers[0]).toMatchObject({
-			code: "account-identity-strategy-mismatch",
+			code: "account-identity-scope-mismatch",
 			remediation: {
 				summary: expectedSummary,
 			},
@@ -100,8 +100,8 @@ describe("createMigrationPlan", () => {
 	it("requires an explicit identity choice for populated 1.6 accounts", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
-				selectedStrategy: "issuer",
-				detectedStrategy: "provider-id",
+				effectiveScope: "issuer",
+				storedScope: "provider",
 				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: false,
@@ -112,7 +112,7 @@ describe("createMigrationPlan", () => {
 			releaseMigrationBlockers: [
 				{
 					accountCount: 3,
-					code: "account-identity-strategy-required",
+					code: "account-identity-scope-required",
 					providerIds: ["credential", "github", "google"],
 					table: "account",
 				},
@@ -124,10 +124,10 @@ describe("createMigrationPlan", () => {
 
 		expect(plan.status).toBe("blocked");
 		expect(plan.blockers[0]).toMatchObject({
-			code: "account-identity-strategy-required",
+			code: "account-identity-scope-required",
 			remediation: {
 				summary:
-					'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, then run the plan again.',
+					'Set account: { identityScope: "provider" } to preserve 1.6 account identity, then run the plan again.',
 			},
 		});
 	});
@@ -135,8 +135,8 @@ describe("createMigrationPlan", () => {
 	it("names providers in collision remediation", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
-				selectedStrategy: "provider-id",
-				detectedStrategy: "provider-id",
+				effectiveScope: "provider",
+				storedScope: "provider",
 				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: false,
@@ -170,8 +170,8 @@ describe("createMigrationPlan", () => {
 	it("reports account readiness counts and compatibility warnings", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
-				selectedStrategy: "issuer",
-				detectedStrategy: "issuer",
+				effectiveScope: "issuer",
+				storedScope: "issuer",
 				hasMixedIdentityNamespaces: false,
 				migrationRequired: false,
 				requiresRekey: false,
@@ -195,7 +195,7 @@ describe("createMigrationPlan", () => {
 			const output = log.mock.calls
 				.map((parts) => parts.map(String).join(" "))
 				.join("\n");
-			expect(output).toContain("Account identity strategy: issuer");
+			expect(output).toContain("Account identity scope: issuer");
 			expect(output).toContain("Accounts: 4 total, 3 external");
 			expect(output).toContain("Automatic namespace resolution: 3/3");
 			expect(output).toContain("Projected collisions: 0");

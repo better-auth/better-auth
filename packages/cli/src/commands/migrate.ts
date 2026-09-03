@@ -196,7 +196,7 @@ export function printHumanMigrationPlan(
 	);
 	console.log(`Status: ${migrationPlan.status}`);
 	console.log(
-		`Account identity strategy: ${migrationPlan.accountIdentity.selectedStrategy} (database: ${migrationPlan.accountIdentity.detectedStrategy})`,
+		`Account identity scope: ${migrationPlan.accountIdentity.effectiveScope} (database: ${migrationPlan.accountIdentity.storedScope})`,
 	);
 	console.log(
 		`Accounts: ${migrationPlan.accountIdentity.totalAccounts ?? 0} total, ${migrationPlan.accountIdentity.externalAccounts ?? 0} external`,
@@ -212,7 +212,7 @@ export function printHumanMigrationPlan(
 	console.log(
 		`Projected collisions: ${migrationPlan.accountIdentity.projectedCollisions ?? 0}`,
 	);
-	if (migrationPlan.accountIdentity.selectedStrategy === "issuer") {
+	if (migrationPlan.accountIdentity.effectiveScope === "issuer") {
 		console.log("Persisted namespace: verified issuer authority");
 	} else {
 		console.log("Persisted namespace: deterministic provider namespace");

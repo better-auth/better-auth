@@ -1090,12 +1090,12 @@ describe("updateAccountOnSignIn", async () => {
 
 it.each([
 	"issuer",
-	"provider-id",
-] as const)("uses explicit %s identity through the OAuth redirect callback", async (identityStrategy) => {
+	"provider",
+] as const)("uses explicit %s identity through the OAuth redirect callback", async (identityScope) => {
 	const headers = new Headers();
 	const { client, cookieSetter } = await getTestInstance(
 		{
-			account: { identityStrategy },
+			account: { identityScope },
 			socialProviders: {
 				google: {
 					clientId: "test",
@@ -1127,7 +1127,7 @@ it.each([
 		expect.objectContaining({
 			accountId: "1234567890",
 			issuer:
-				identityStrategy === "provider-id"
+				identityScope === "provider"
 					? "local:oauth:google"
 					: "https://accounts.google.com",
 			providerId: "google",
@@ -1203,13 +1203,13 @@ describe("Google Provider — multiple client IDs", async () => {
 
 	it.each([
 		"issuer",
-		"provider-id",
-	] as const)("uses the configured identity strategy for ID-token sign-in (%s)", async (identityStrategy) => {
+		"provider",
+	] as const)("uses the configured identity scope for ID-token sign-in (%s)", async (identityScope) => {
 		const idToken = await signIdToken(webClientId);
 		const headers = new Headers();
 		const { client, cookieSetter } = await getTestInstance(
 			{
-				account: { identityStrategy },
+				account: { identityScope },
 				socialProviders: {
 					google: {
 						clientId: webClientId,
@@ -1233,7 +1233,7 @@ describe("Google Provider — multiple client IDs", async () => {
 				providerId: "google",
 				accountId: "google-sub-999",
 				issuer:
-					identityStrategy === "provider-id"
+					identityScope === "provider"
 						? "local:oauth:google"
 						: "https://accounts.google.com",
 			}),

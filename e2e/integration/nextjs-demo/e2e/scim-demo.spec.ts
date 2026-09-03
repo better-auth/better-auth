@@ -26,7 +26,7 @@ interface NextDemoRuntime {
 }
 
 interface NextDemoRuntimeOptions {
-	accountIdentityStrategy?: "issuer" | "provider-id";
+	accountIdentityScope?: "issuer" | "provider";
 	prepareDatabase?: (databasePath: string) => Promise<void>;
 }
 
@@ -76,7 +76,7 @@ async function startNextDemoRuntime(
 		...process.env,
 		BETTER_AUTH_SECRET: demoAuthSecret,
 		BETTER_AUTH_URL: baseURL,
-		DEMO_ACCOUNT_IDENTITY_STRATEGY: options.accountIdentityStrategy,
+		DEMO_ACCOUNT_IDENTITY_SCOPE: options.accountIdentityScope,
 		DEMO_SQLITE_PATH: databasePath,
 		NO_COLOR: "1",
 		SCIM_DEMO_CREDENTIAL_PEPPER:
@@ -1025,7 +1025,7 @@ test.describe("Next.js SCIM and SSO demo on a migrated published 1.6 database", 
 
 	test.beforeAll(async () => {
 		runtime = await startNextDemoRuntime({
-			accountIdentityStrategy: "provider-id",
+			accountIdentityScope: "provider",
 			prepareDatabase: async (databasePath) => {
 				migration = await prepareMigratedPublished16Database(
 					databasePath,

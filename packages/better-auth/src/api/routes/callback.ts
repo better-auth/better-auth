@@ -245,7 +245,7 @@ export const callbackOAuth = createAuthEndpoint(
 				provider,
 				tokens,
 				providerResult.data,
-				c.context.options.account?.identityStrategy,
+				c.context.options.account?.identityScope,
 			);
 		} catch (error) {
 			c.context.logger.error("Unable to derive provider account identity", {

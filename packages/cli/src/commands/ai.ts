@@ -551,7 +551,7 @@ const openapi = createFromOpenAPI(spec, {
 
 export const auth = betterAuth({
 \taccount: {
-\t\tidentityStrategy: "provider-id",
+\t\tidentityScope: "provider",
 \t},
 \tplugins: [
 \t\tagentAuth({
@@ -569,7 +569,7 @@ import { agentAuth } from "${AGENT_PLUGIN_PKG}";
 
 export const auth = betterAuth({
 \taccount: {
-\t\tidentityStrategy: "provider-id",
+\t\tidentityScope: "provider",
 \t},
 \tplugins: [
 \t\tagentAuth({
@@ -586,7 +586,7 @@ import { agentAuth } from "${AGENT_PLUGIN_PKG}";
 
 export const auth = betterAuth({
 \taccount: {
-\t\tidentityStrategy: "provider-id",
+\t\tidentityScope: "provider",
 \t},
 \tplugins: [
 \t\tagentAuth({

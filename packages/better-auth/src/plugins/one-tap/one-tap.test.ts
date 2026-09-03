@@ -150,13 +150,13 @@ describe("one-tap implicit linking gate", async () => {
 
 	it.each([
 		"issuer",
-		"provider-id",
-	] as const)("stores the account identity under explicit %s strategy", async (identityStrategy) => {
+		"provider",
+	] as const)("stores the account identity under explicit %s scope", async (identityScope) => {
 		verifiedPayload.email = "provider-scoped-one-tap@example.com";
 		verifiedPayload.sub = "provider-scoped-one-tap-subject";
 		const { auth, client } = await getTestInstance(
 			{
-				account: { identityStrategy },
+				account: { identityScope },
 				socialProviders: {
 					google: {
 						clientId: "test-client",
@@ -188,7 +188,7 @@ describe("one-tap implicit linking gate", async () => {
 		).resolves.toMatchObject({
 			accountId: verifiedPayload.sub,
 			issuer:
-				identityStrategy === "provider-id"
+				identityScope === "provider"
 					? "local:oauth:google"
 					: "https://accounts.google.com",
 			providerId: "google",

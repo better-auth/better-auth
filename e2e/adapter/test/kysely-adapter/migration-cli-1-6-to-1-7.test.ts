@@ -194,7 +194,7 @@ import { jwt } from "better-auth/plugins";
 import { Pool } from "pg";
 
 export const auth = betterAuth({
-	account: { identityStrategy: "provider-id" },
+	account: { identityScope: "provider" },
 	baseURL: "http://localhost:3000",
 	database: new Pool({ connectionString: ${JSON.stringify(connectionString)} }),
 	emailAndPassword: { enabled: true },
@@ -300,7 +300,7 @@ it("guides a populated 1.6.30 PostgreSQL database through the CLI decisions file
 		expect(applyRun.stdout).toContain("migration was completed successfully!");
 
 		const auth17 = betterAuth({
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			baseURL: "http://localhost:3000",
 			database: pool,
 			emailAndPassword: { enabled: true },
@@ -536,7 +536,7 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 		const readyPlan = JSON.parse(readyPlanRun.stdout) as {
 			accountIdentity: {
 				migrationRequired: boolean;
-				selectedStrategy: string;
+				effectiveScope: string;
 			};
 			blockers: unknown[];
 			changes: { addIndexes: Array<{ columns: string[] }> };
@@ -545,7 +545,7 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 		expect(readyPlan).toMatchObject({
 			accountIdentity: {
 				migrationRequired: true,
-				selectedStrategy: "provider-id",
+				effectiveScope: "provider",
 			},
 			blockers: [],
 			status: "ready",
@@ -650,7 +650,7 @@ it("migrates populated published 1.6 OAuth, SCIM, and SSO workflows through the 
 	}
 });
 
-it("keeps a populated published 1.7 issuer database unchanged when the strategy is omitted", {
+it("keeps a populated published 1.7 issuer database unchanged when the scope is omitted", {
 	timeout: 180_000,
 }, async () => {
 	const fixtureDirectory = import.meta.dirname;
@@ -727,9 +727,9 @@ it("keeps a populated published 1.7 issuer database unchanged when the strategy 
 		expect(planRun.exitCode, formatCommandOutput(planRun)).toBe(0);
 		const plan = JSON.parse(planRun.stdout) as {
 			accountIdentity: {
-				detectedStrategy: string;
+				storedScope: string;
 				migrationRequired: boolean;
-				selectedStrategy: string;
+				effectiveScope: string;
 			};
 			changes: {
 				addColumns: Array<{ columns: string[]; table: string }>;
@@ -738,9 +738,9 @@ it("keeps a populated published 1.7 issuer database unchanged when the strategy 
 			status: string;
 		};
 		expect(plan.accountIdentity).toMatchObject({
-			detectedStrategy: "issuer",
+			storedScope: "issuer",
 			migrationRequired: false,
-			selectedStrategy: "issuer",
+			effectiveScope: "issuer",
 		});
 		expect(
 			plan.changes.addColumns.filter(({ table }) => table === "account"),

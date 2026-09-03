@@ -19,7 +19,7 @@ it("migrates published 1.6.30 accounts and OAuth records through the Drizzle ada
 		});
 
 		const currentOptions = {
-			account: { identityStrategy: "provider-id" as const },
+			account: { identityScope: "provider" as const },
 			baseURL: "http://localhost:3000",
 			emailAndPassword: { enabled: true },
 			plugins: [
@@ -95,7 +95,7 @@ it("migrates published 1.6.30 accounts and OAuth records through the Drizzle ada
 	}
 });
 
-it("plans an explicit provider-id upgrade against Drizzle snake_case columns", async () => {
+it("plans an explicit provider-scoped upgrade against Drizzle snake_case columns", async () => {
 	const sqlite = new Database(":memory:");
 	try {
 		sqlite.exec(`
@@ -124,7 +124,7 @@ it("plans an explicit provider-id upgrade against Drizzle snake_case columns", a
 		`);
 
 		const currentOptions = {
-			account: { identityStrategy: "provider-id" as const },
+			account: { identityScope: "provider" as const },
 			baseURL: "http://localhost:3000",
 			emailAndPassword: { enabled: true },
 		};
@@ -143,12 +143,12 @@ it("plans an explicit provider-id upgrade against Drizzle snake_case columns", a
 		);
 
 		expect(inspection.accountIdentity).toMatchObject({
-			selectedStrategy: "provider-id",
-			detectedStrategy: "provider-id",
+			effectiveScope: "provider",
+			storedScope: "provider",
 		});
 		expect(inspection.migrationBlockers).not.toContainEqual(
 			expect.objectContaining({
-				code: "account-identity-strategy-mismatch",
+				code: "account-identity-scope-mismatch",
 			}),
 		);
 		const accountFields = Object.keys(

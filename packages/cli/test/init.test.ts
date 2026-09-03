@@ -791,7 +791,7 @@ describe("initAction", () => {
 
 				expect(authConfigContent).toContain(db.expectedPool);
 				expect(authConfigContent).toContain("database: database");
-				expect(authConfigContent).toContain('identityStrategy: "provider-id"');
+				expect(authConfigContent).toContain('identityScope: "provider"');
 				expect(authConfigContent).not.toContain("const dialect");
 				expect(authConfigContent).not.toContain("database: {");
 				expect(authConfigContent).not.toContain(db.legacyType);

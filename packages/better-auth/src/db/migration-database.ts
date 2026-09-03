@@ -62,7 +62,7 @@ function getInspectionAuthTables(config: BetterAuthOptions) {
 		...config,
 		account: {
 			...config.account,
-			identityStrategy: "issuer",
+			identityScope: "issuer",
 		},
 	});
 }

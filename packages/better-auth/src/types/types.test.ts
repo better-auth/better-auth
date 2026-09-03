@@ -58,22 +58,20 @@ declare module "@better-auth/core" {
 }
 
 describe("general types", async () => {
-	it("accepts the provider-scoped account identity strategy", () => {
+	it("accepts the provider-scoped account identity scope", () => {
 		const options = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 		} satisfies BetterAuthOptions;
 
-		expectTypeOf(
-			options.account.identityStrategy,
-		).toEqualTypeOf<"provider-id">();
+		expectTypeOf(options.account.identityScope).toEqualTypeOf<"provider">();
 	});
 
-	it("requires issuer for every account identity strategy", () => {
+	it("requires issuer for every account identity scope", () => {
 		type DefaultAccount = Account<{}>;
-		type ProviderIdAccount = Account<{ identityStrategy: "provider-id" }>;
+		type ProviderScopedAccount = Account<{ identityScope: "provider" }>;
 
 		expectTypeOf<DefaultAccount["issuer"]>().toEqualTypeOf<string>();
-		expectTypeOf<ProviderIdAccount["issuer"]>().toEqualTypeOf<string>();
+		expectTypeOf<ProviderScopedAccount["issuer"]>().toEqualTypeOf<string>();
 	});
 
 	it("should infer base session", async () => {

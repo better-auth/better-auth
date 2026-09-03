@@ -1061,7 +1061,7 @@ describe("change-email rejects confirmation-only config for verified users", asy
 describe("credential identity across email changes", async () => {
 	const { client, db, sessionSetter } = await getTestInstance(
 		{
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			user: {
 				changeEmail: {
 					enabled: true,
@@ -1128,9 +1128,9 @@ describe("credential identity across email changes", async () => {
 		});
 	});
 
-	it("stores the credential identity under provider-id strategy", async () => {
+	it("stores the credential identity under provider scope", async () => {
 		const { client, db } = await getTestInstance(
-			{ account: { identityStrategy: "provider-id" } },
+			{ account: { identityScope: "provider" } },
 			{ disableTestUser: true },
 		);
 		const signUp = await client.signUp.email({

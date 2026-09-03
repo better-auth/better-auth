@@ -479,11 +479,11 @@ describe("siwe", async () => {
 
 	it.each([
 		"issuer",
-		"provider-id",
-	] as const)("accepts verification with email under explicit %s identity strategy", async (identityStrategy) => {
+		"provider",
+	] as const)("accepts verification with email under explicit %s identity scope", async (identityScope) => {
 		const { auth, client } = await getTestInstance(
 			{
-				account: { identityStrategy },
+				account: { identityScope },
 				plugins: [
 					siwe({
 						domain,

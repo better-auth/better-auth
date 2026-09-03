@@ -539,7 +539,7 @@ describe("get-migration: compound indexes on SQLite", () => {
 });
 
 const backfillGuide =
-	"https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy";
+	"https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-scope";
 
 // A 1.6-shape account table. `issuer` is either absent (the 1.7 column has not
 // been added yet) or present as a nullable column (added by hand without the
@@ -673,11 +673,11 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 	});
 
 	/**
-	 * @see https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy
+	 * @see https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-scope
 	 */
 	it("refuses to add the account issuer column to a populated account table, pointing at the upgrade guide", async () => {
 		const { runMigrations, unsafeChanges } = await getMigrations({
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: createAccountDb({}),
 		});
 		const failure = await captureFailure(runMigrations());
@@ -693,7 +693,7 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 		const { unsafeChanges } = await getMigrations({
 			database: createAccountDb({ issuerColumn: "identity_issuer" }),
 			account: {
-				identityStrategy: "issuer",
+				identityScope: "issuer",
 				fields: { issuer: "identity_issuer" },
 			},
 		});
@@ -706,7 +706,7 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 
 	it("plans a required column without a default when the table is empty", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: createAccountDb({ seeded: false }),
 		});
 
@@ -770,7 +770,7 @@ describe("get-migration: nullable columns for required fields", () => {
 		const warnings: string[] = [];
 
 		const { runMigrations, toBeCreated } = await getMigrations({
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: db,
 			...tierField,
 			logger: warnLogger(warnings),
@@ -805,7 +805,7 @@ describe("get-migration: nullable columns for required fields", () => {
 
 	it("accepts a required field whose live column is not null", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: createAccountDb({ issuer: "notNull" }),
 		});
 
@@ -819,7 +819,7 @@ describe("get-migration: nullable columns for required fields", () => {
 		const warnings: string[] = [];
 
 		await getMigrations({
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: createAccountDb({ issuer: "nullable" }),
 			logger: warnLogger(warnings),
 		});
@@ -876,7 +876,7 @@ describe("get-migration: inspecting a migration that cannot be applied", () => {
 	it("reports the unsafe column change and still compiles the statements", async () => {
 		const { compileMigrations, unsafeChanges } = await getMigrations(
 			{
-				account: { identityStrategy: "issuer" },
+				account: { identityScope: "issuer" },
 				database: createAccountDb({}),
 			},
 			{ throwOnUnsafe: false },
@@ -1093,7 +1093,7 @@ describe("get-migration: 1.6 release preflight", () => {
 		);
 		createLegacyConsentTable(db, "oauthConsent");
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: db,
 			plugins: [consentPlugin],
 		};
@@ -1101,7 +1101,7 @@ describe("get-migration: 1.6 release preflight", () => {
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
 			{
 				accountCount: 2,
-				code: "account-identity-strategy-unsupported",
+				code: "account-identity-scope-unsupported",
 				providerIds: ["credential", "github"],
 				table: "account",
 			},
@@ -1286,7 +1286,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		google: { clientId: "google-client", clientSecret: "google-secret" },
 	};
 
-	it("requires an explicit strategy for a populated 1.6 account table", async () => {
+	it("requires an explicit scope for a populated 1.6 account table", async () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
 		const config: BetterAuthOptions = {
@@ -1297,13 +1297,13 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
 			{
 				accountCount: 3,
-				code: "account-identity-strategy-required",
+				code: "account-identity-scope-required",
 				providerIds: ["credential", "github", "google"],
 				table: "account",
 			},
 		]);
 		await expect(migrateFrom16(config, {})).rejects.toThrow(
-			'account: { identityStrategy: "provider-id" }',
+			'account: { identityScope: "provider" }',
 		);
 		expect(
 			db
@@ -1317,7 +1317,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: db,
 			socialProviders: socialConfig,
 		};
@@ -1325,12 +1325,12 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
 			expect.objectContaining({
 				accountCount: 3,
-				code: "account-identity-strategy-unsupported",
+				code: "account-identity-scope-unsupported",
 				providerIds: ["credential", "github", "google"],
 			}),
 		]);
 		await expect(migrateFrom16(config, {})).rejects.toThrow(
-			'account: { identityStrategy: "provider-id" }',
+			'account: { identityScope: "provider" }',
 		);
 	});
 
@@ -1342,7 +1342,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			 VALUES ('a4', '108451', 'google', 'u4', '2020-01-01', '2020-01-01')`,
 		);
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			database: db,
 			socialProviders: socialConfig,
 		};
@@ -1381,7 +1381,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				('a2', 'g-2', 'https://accounts.google.com', 'google', 'u2', '2020-01-01', '2020-01-01')`,
 		);
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			database: db,
 			socialProviders: socialConfig,
 		};
@@ -1389,8 +1389,8 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const migration = await getMigrations(config, { throwOnUnsafe: false });
 		expect(migration.migrationBlockers).toContainEqual(
 			expect.objectContaining({
-				code: "account-identity-strategy-mismatch",
-				detectedStrategy: "mixed",
+				code: "account-identity-scope-mismatch",
+				storedScope: "mixed",
 			}),
 		);
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
@@ -1409,8 +1409,8 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const migration = await getMigrations(config, { throwOnUnsafe: false });
 
 		expect(migration.accountIdentity).toMatchObject({
-			selectedStrategy: "issuer",
-			detectedStrategy: "provider-id",
+			effectiveScope: "issuer",
+			storedScope: "provider",
 			migrationRequired: true,
 		});
 		expect(
@@ -1425,9 +1425,9 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 	});
 
 	it.each([
-		"provider-id",
+		"provider",
 		"issuer",
-	] as const)("keeps an empty account table ready for an explicit %s strategy", async (identityStrategy) => {
+	] as const)("keeps an empty account table ready for an explicit %s scope", async (identityScope) => {
 		const db = new DatabaseSync(":memory:");
 		db.exec(
 			`CREATE TABLE "account" (
@@ -1440,13 +1440,13 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				)`,
 		);
 		const migration = await getMigrations(
-			{ account: { identityStrategy }, database: db },
+			{ account: { identityScope }, database: db },
 			{ throwOnUnsafe: false },
 		);
 
 		expect(migration.accountIdentity).toMatchObject({
-			selectedStrategy: identityStrategy,
-			detectedStrategy: "empty",
+			effectiveScope: identityScope,
+			storedScope: "empty",
 			migrationRequired: false,
 			totalAccounts: 0,
 		});
@@ -1472,12 +1472,12 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		);
 
 		expect(migration.accountIdentity).toMatchObject({
-			selectedStrategy: "issuer",
-			detectedStrategy: "empty",
+			effectiveScope: "issuer",
+			storedScope: "empty",
 			migrationRequired: false,
 			totalAccounts: 0,
 			compatibilityWarning:
-				'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.',
+				'account.identityScope is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityScope: "issuer" } to make this behavior explicit. For a new database, use account: { identityScope: "provider" } instead. Run auth migrate plan before changing populated account data.',
 		});
 		expect(migration.migrationBlockers).toEqual([]);
 	});
@@ -1485,7 +1485,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 	it("keeps an already-migrated v1.7 issuer database unchanged by default", async () => {
 		const db = new DatabaseSync(":memory:");
 		const publishedV17Config: BetterAuthOptions = {
-			account: { identityStrategy: "issuer" },
+			account: { identityScope: "issuer" },
 			database: db,
 			socialProviders: { google: socialConfig.google },
 		};
@@ -1507,14 +1507,14 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const migration = await getMigrations(config, { throwOnUnsafe: false });
 
 		expect(migration.accountIdentity).toMatchObject({
-			selectedStrategy: "issuer",
-			detectedStrategy: "issuer",
+			effectiveScope: "issuer",
+			storedScope: "issuer",
 			migrationRequired: false,
 			compatibilityWarning:
-				'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.',
+				'account.identityScope is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityScope: "issuer" } to make this behavior explicit. For a new database, use account: { identityScope: "provider" } instead. Run auth migrate plan before changing populated account data.',
 		});
 		expect(migration.migrationBlockers).not.toContainEqual(
-			expect.objectContaining({ code: "account-identity-strategy-mismatch" }),
+			expect.objectContaining({ code: "account-identity-scope-mismatch" }),
 		);
 		expect(
 			migration.toBeAdded.find(({ table }) => table === "account"),
@@ -1525,10 +1525,10 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
 	});
 
-	it("refuses omitted strategy when v1.7 data uses provider-id namespaces", async () => {
+	it("refuses an omitted scope when v1.7 data uses provider namespaces", async () => {
 		const db = new DatabaseSync(":memory:");
 		const providerConfig: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			database: db,
 			socialProviders: { google: socialConfig.google },
 		};
@@ -1550,8 +1550,8 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 
 		expect(migration.migrationBlockers).toContainEqual(
 			expect.objectContaining({
-				code: "account-identity-strategy-mismatch",
-				detectedStrategy: "provider-id",
+				code: "account-identity-scope-mismatch",
+				storedScope: "provider",
 			}),
 		);
 		const strictMigration = await getMigrations({
@@ -1559,14 +1559,14 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			socialProviders: { google: socialConfig.google },
 		});
 		await expect(strictMigration.runMigrations()).rejects.toThrow(
-			'account: { identityStrategy: "provider-id" }',
+			'account: { identityScope: "provider" }',
 		);
 	});
 
 	it("refuses malformed provider namespaces with counts and providers", async () => {
 		const db = new DatabaseSync(":memory:");
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			database: db,
 			socialProviders: { google: socialConfig.google },
 		};
@@ -1585,7 +1585,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 
 		expect(migration.accountIdentity).toMatchObject({
 			affectedProviders: ["google"],
-			detectedStrategy: "mixed",
+			storedScope: "mixed",
 			hasMixedIdentityNamespaces: false,
 			malformedNamespaces: 1,
 			requiresRekey: true,
@@ -1595,7 +1595,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			expect.objectContaining({
 				accountCount: 1,
 				affectedProviders: ["google"],
-				code: "account-identity-strategy-mismatch",
+				code: "account-identity-scope-mismatch",
 				malformedNamespaces: 1,
 			}),
 		);
@@ -1608,7 +1608,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 	it("reports malformed and mixed identity namespaces together", async () => {
 		const db = new DatabaseSync(":memory:");
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			database: db,
 			socialProviders: { google: socialConfig.google },
 		};
@@ -1628,14 +1628,14 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const migration = await getMigrations(config, { throwOnUnsafe: false });
 
 		expect(migration.accountIdentity).toMatchObject({
-			detectedStrategy: "mixed",
+			storedScope: "mixed",
 			hasMixedIdentityNamespaces: true,
 			malformedNamespaces: 1,
 			requiresRekey: true,
 		});
 		expect(migration.migrationBlockers).toContainEqual(
 			expect.objectContaining({
-				code: "account-identity-strategy-mismatch",
+				code: "account-identity-scope-mismatch",
 				hasMixedIdentityNamespaces: true,
 				malformedNamespaces: 1,
 			}),
@@ -1650,7 +1650,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			database: db,
 			socialProviders: socialConfig,
 		};
@@ -1691,7 +1691,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
 		const config: BetterAuthOptions = {
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			database: db,
 		};
 

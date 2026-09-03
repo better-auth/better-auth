@@ -38,7 +38,7 @@ export const ALL: APIRoute = async (ctx) => {
 
 export const auth = betterAuth({
     account: {
-        identityStrategy: "provider-id",
+        identityScope: "provider",
     },
     database: {
         provider: "postgres", //change this to your database provider
@@ -61,7 +61,7 @@ export const auth = betterAuth({
 
 export const auth = betterAuth({
     account: {
-        identityStrategy: "provider-id",
+        identityScope: "provider",
     },
     database: {
         provider: "postgres", //change this to your database provider

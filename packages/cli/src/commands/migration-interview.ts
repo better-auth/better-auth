@@ -164,7 +164,7 @@ export function describeIrreversibleReleaseActions(
 	}
 	if (
 		accountIdentity.migrationRequired &&
-		accountIdentity.detectedStrategy !== "empty"
+		accountIdentity.storedScope !== "empty"
 	) {
 		actions.push(
 			"write the 1.7 account identity onto every existing account row",

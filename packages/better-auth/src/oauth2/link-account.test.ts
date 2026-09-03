@@ -1738,7 +1738,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 			enabled: true,
 		},
 		account: {
-			identityStrategy: "issuer",
+			identityScope: "issuer",
 			accountLinking: {
 				enabled: true,
 				trustedProviders: ["google", "github"],
@@ -1886,11 +1886,11 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		expect(googleAccount?.userId).toBe(userAId);
 	});
 
-	it("persists the provider namespace when linking under provider-id identity", async () => {
+	it("persists the provider namespace when linking under provider-scoped identity", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance(
 			{
 				account: {
-					identityStrategy: "provider-id",
+					identityScope: "provider",
 					accountLinking: {
 						enabled: true,
 						trustedProviders: ["github"],

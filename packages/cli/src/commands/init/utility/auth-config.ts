@@ -18,7 +18,7 @@ type GenerateAuthConfigStringOptions = {
 	) => Awaitable<unknown>;
 };
 
-const getAccountCode = () => `{ identityStrategy: "provider-id" }`;
+const getAccountCode = () => `{ identityScope: "provider" }`;
 
 export const generateInnerAuthConfigCode = async ({
 	database,

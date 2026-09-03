@@ -685,7 +685,7 @@ export async function initAction(opts: any) {
 
 export const auth = betterAuth({
 	account: {
-		identityStrategy: "provider-id",
+		identityScope: "provider",
 	},
 });
 `;

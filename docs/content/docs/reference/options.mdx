@@ -473,7 +473,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	account: {
 		modelName: "accounts",
-		identityStrategy: "provider-id", // Preserve Better Auth 1.6 provider-scoped identity
+		identityScope: "provider", // Preserve Better Auth 1.6 provider-scoped identity
 		fields: {
 			userId: "user_id"
 		},
@@ -492,17 +492,17 @@ export const auth = betterAuth({
 * `modelName`: The model name for the account
 * `fields`: Map fields to different column names
 
-### `identityStrategy`
+### `identityScope`
 
-Controls the namespace Better Auth persists in the required `issuer` field when recognizing an external account. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy.
+Controls the namespace stored in `issuer` and paired with `accountId` to identify an external account.
 
-The `auth init` command generates `account: { identityStrategy: "provider-id" }` so a new project has an explicit identity policy. In v1.7.x, omitting `identityStrategy` remains a compatibility mode that uses `"issuer"`; Better Auth emits this warning once per auth instance:
+The `"issuer"` scope stores the verified authority. When a provider has no trusted issuer, Better Auth uses a deterministic provider namespace. The `"provider"` scope always stores a deterministic namespace such as `local:oauth:google`.
 
-> `account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.`
+The `auth init` command generates `account: { identityScope: "provider" }`. Omitting this option continues to use issuer scope and logs a warning during auth initialization.
 
-Set it to `"provider-id"` when migrating populated 1.6 data and you need to preserve logical `(providerId, accountId)` recognition. Better Auth then persists `local:oauth:<encoded providerId>` as the issuer namespace after the provider response has been verified. This option does not change the Account schema: `issuer` and `accountId` remain required and uniquely indexed together under both strategies.
+Use `"provider"` when migrating populated 1.6 data to preserve `(providerId, accountId)` identity. Both scopes use the same Account schema and unique `(issuer, accountId)` index.
 
-Changing this option on populated v1.7 data requires a separate, reviewed account re-key migration. It is not a configuration-only toggle.
+Switching scopes on a populated v1.7 database requires a reviewed account re-key migration.
 
 ### `encryptOAuthTokens`
 

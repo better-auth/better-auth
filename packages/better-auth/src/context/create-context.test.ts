@@ -10,8 +10,8 @@ import { createAuthContext } from "./create-context";
 import { getAwaitableValue } from "./helpers";
 
 describe("base context creation", () => {
-	const omittedIdentityStrategyWarning =
-		'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.';
+	const omittedIdentityScopeWarning =
+		'account.identityScope is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityScope: "issuer" } to make this behavior explicit. For a new database, use account: { identityScope: "provider" } instead. Run auth migrate plan before changing populated account data.';
 
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
 		const opts: BetterAuthOptions = {
@@ -36,7 +36,7 @@ describe("base context creation", () => {
 		vi.unstubAllEnvs();
 	});
 
-	it("warns once when account.identityStrategy is omitted", async () => {
+	it("warns once when account.identityScope is omitted", async () => {
 		const log = vi.fn();
 		const baseOptions = {
 			baseURL: "http://localhost:3000",
@@ -55,20 +55,20 @@ describe("base context creation", () => {
 		await auth.$context;
 
 		expect(log).toHaveBeenCalledTimes(1);
-		expect(log).toHaveBeenCalledWith("warn", omittedIdentityStrategyWarning);
+		expect(log).toHaveBeenCalledWith("warn", omittedIdentityScopeWarning);
 		expect(findOne).not.toHaveBeenCalled();
 		expect(findMany).not.toHaveBeenCalled();
 	});
 
 	it.each([
 		"issuer",
-		"provider-id",
-	] as const)("does not warn when account.identityStrategy is explicitly %s", async (identityStrategy) => {
+		"provider",
+	] as const)("does not warn when account.identityScope is explicitly %s", async (identityScope) => {
 		const log = vi.fn();
 		const options = {
 			baseURL: "http://localhost:3000",
 			logger: { level: "warn", log },
-			account: { identityStrategy },
+			account: { identityScope },
 		} satisfies BetterAuthOptions;
 		const adapter = await getAdapter(options);
 		const auth = betterAuth({
@@ -77,10 +77,7 @@ describe("base context creation", () => {
 		});
 		await auth.$context;
 
-		expect(log).not.toHaveBeenCalledWith(
-			"warn",
-			omittedIdentityStrategyWarning,
-		);
+		expect(log).not.toHaveBeenCalledWith("warn", omittedIdentityScopeWarning);
 	});
 
 	it("should respect base path", async () => {

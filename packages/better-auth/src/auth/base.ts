@@ -16,9 +16,9 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
-	if (options.account?.identityStrategy === undefined) {
+	if (options.account?.identityScope === undefined) {
 		createLogger(options.logger).warn(
-			'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.',
+			'account.identityScope is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityScope: "issuer" } to make this behavior explicit. For a new database, use account: { identityScope: "provider" } instead. Run auth migrate plan before changing populated account data.',
 		);
 	}
 	const authContext = initFn(options);

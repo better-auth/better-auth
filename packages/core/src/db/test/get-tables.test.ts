@@ -19,10 +19,10 @@ describe("getAuthTables", () => {
 	it.each([
 		undefined,
 		"issuer",
-		"provider-id",
-	] as const)("keeps the required issuer schema for the %s identity strategy", (identityStrategy) => {
+		"provider",
+	] as const)("keeps the required issuer schema for the %s identity scope", (identityScope) => {
 		const tables = getAuthTables({
-			...(identityStrategy && { account: { identityStrategy } }),
+			...(identityScope && { account: { identityScope } }),
 		});
 
 		expect(tables.account?.fields.issuer).toMatchObject({ required: true });

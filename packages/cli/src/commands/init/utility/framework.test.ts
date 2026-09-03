@@ -350,7 +350,7 @@ describe("Init CLI - framework utility", () => {
 		);
 
 		testWithTmpDir(
-			"should make the generated Remix auth identity strategy explicit",
+			"should make the generated Remix auth identity scope explicit",
 			async ({ tmp }) => {
 				const result = await detectFramework(tmp, {
 					dependencies: {
@@ -359,13 +359,13 @@ describe("Init CLI - framework utility", () => {
 				});
 
 				expect(result?.routeHandler?.code).toContain(
-					'identityStrategy: "provider-id"',
+					'identityScope: "provider"',
 				);
 			},
 		);
 
 		testWithTmpDir(
-			"should make the generated React Router auth identity strategy explicit",
+			"should make the generated React Router auth identity scope explicit",
 			async ({ tmp }) => {
 				const result = await detectFramework(tmp, {
 					dependencies: {
@@ -374,7 +374,7 @@ describe("Init CLI - framework utility", () => {
 				});
 
 				expect(result?.routeHandler?.code).toContain(
-					'identityStrategy: "provider-id"',
+					'identityScope: "provider"',
 				);
 			},
 		);

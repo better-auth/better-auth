@@ -42,8 +42,8 @@ async function runCli(args: string[], cwd: string) {
 const projects: string[] = [];
 
 // A pre-1.7 SQLite database whose populated account table requires an explicit
-// logical identity strategy before the 1.7 physical schema can be applied.
-function createProject(identityStrategy?: "provider-id" | "issuer") {
+// logical identity scope before the 1.7 physical schema can be applied.
+function createProject(identityScope?: "provider" | "issuer") {
 	const cacheDir = path.join(
 		process.cwd(),
 		"node_modules",
@@ -60,7 +60,7 @@ function createProject(identityStrategy?: "provider-id" | "issuer") {
 import Database from "better-sqlite3";
 
 export const auth = betterAuth({
-	${identityStrategy ? `account: { identityStrategy: ${JSON.stringify(identityStrategy)} },` : ""}
+	${identityScope ? `account: { identityScope: ${JSON.stringify(identityScope)} },` : ""}
 	database: new Database(${JSON.stringify(databasePath)}),
 	secret: "a-secret-long-enough-to-keep-the-cli-quiet",
 	baseURL: "http://localhost:3000",
@@ -117,7 +117,7 @@ async function createPublished16Project() {
 import Database from "better-sqlite3";
 
 export const auth = betterAuth({
-	account: { identityStrategy: "provider-id" },
+	account: { identityScope: "provider" },
 	database: new Database(${JSON.stringify(databasePath)}),
 	secret: ${JSON.stringify(secret)},
 	baseURL: ${JSON.stringify(baseURL)},
@@ -155,7 +155,7 @@ afterEach(() => {
 });
 
 describe("auth migrate: requiring the 1.6 account identity decision", () => {
-	it("blocks a populated 1.6 account table when the strategy is omitted", async () => {
+	it("blocks a populated 1.6 account table when the scope is omitted", async () => {
 		const { cwd, databasePath } = createProject();
 		const { exitCode, output, stdout } = await runCli(
 			["migrate", "plan", "--config", "auth.ts", "--json"],
@@ -165,13 +165,13 @@ describe("auth migrate: requiring the 1.6 account identity decision", () => {
 		expect(exitCode).toBe(1);
 		expect(JSON.parse(stdout)).toMatchObject({
 			accountIdentity: {
-				detectedStrategy: "provider-id",
-				selectedStrategy: "issuer",
+				storedScope: "provider",
+				effectiveScope: "issuer",
 			},
 			blockers: [
 				{
 					accountCount: 1,
-					code: "account-identity-strategy-required",
+					code: "account-identity-scope-required",
 					providerIds: ["google"],
 				},
 			],
@@ -211,8 +211,8 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 		expect(planned.exitCode).toBe(0);
 		expect(JSON.parse(planned.stdout)).toMatchObject({
 			accountIdentity: {
-				selectedStrategy: "provider-id",
-				detectedStrategy: "provider-id",
+				effectiveScope: "provider",
+				storedScope: "provider",
 			},
 			blockers: [],
 			changes: {
@@ -270,7 +270,7 @@ describe("auth migrate: upgrading a published 1.6.30 database", () => {
 			}),
 		]);
 		const auth17 = betterAuth({
-			account: { identityStrategy: "provider-id" },
+			account: { identityScope: "provider" },
 			baseURL,
 			database: migratedDatabase,
 			emailAndPassword: { enabled: true },

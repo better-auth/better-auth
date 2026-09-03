@@ -79,10 +79,10 @@ export interface ReleaseMigrationPlan {
 /** One actionable sentence naming the blocked table and the work it needs. */
 export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
-		case "account-identity-strategy-mismatch":
+		case "account-identity-scope-mismatch":
 			return blocker.malformedNamespaces > 0
 				? `${blocker.table}: ${blocker.malformedNamespaces} of ${blocker.accountCount} account namespaces are malformed across providers ${blocker.affectedProviders.join(", ") || "(unknown)"}.`
-				: `${blocker.table}: ${blocker.accountCount} accounts across providers ${blocker.affectedProviders.join(", ") || "(unknown)"} use ${blocker.detectedStrategy} account identity, but the configured strategy is ${blocker.configuredStrategy}.`;
+				: `${blocker.table}: ${blocker.accountCount} accounts across providers ${blocker.affectedProviders.join(", ") || "(unknown)"} use ${blocker.storedScope} account identity, but the configured scope is ${blocker.configuredScope}.`;
 		case "index-column-bounds":
 		case "release-migration-error":
 			return blocker.message;
@@ -105,26 +105,26 @@ export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 
 function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
-		case "account-identity-strategy-mismatch": {
+		case "account-identity-scope-mismatch": {
 			if (blocker.malformedNamespaces > 0) {
 				return blocker.hasMixedIdentityNamespaces
 					? `Repair every malformed namespace in "${blocker.table}", then resolve the remaining mixed account identities with a separately reviewed re-key migration.`
-					: `Repair every malformed namespace in "${blocker.table}" for the configured strategy, then run the plan again.`;
+					: `Repair every malformed namespace in "${blocker.table}" for the configured scope, then run the plan again.`;
 			}
 			if (
 				blocker.hasMixedIdentityNamespaces ||
-				blocker.detectedStrategy === "mixed"
+				blocker.storedScope === "mixed"
 			) {
 				return "Resolve the mixed account identities with a separately reviewed re-key migration, then run the plan again.";
 			}
-			return `Keep account.identityStrategy as "${blocker.detectedStrategy}", or perform a separate reviewed re-key migration before changing strategy.`;
+			return `Keep account.identityScope as "${blocker.storedScope}", or perform a separate reviewed re-key migration before changing scope.`;
 		}
 		case "account-identity-collision":
 			return `Merge or remove the duplicate rows for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")} in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
-		case "account-identity-strategy-required":
-			return 'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, then run the plan again.';
-		case "account-identity-strategy-unsupported":
-			return 'Set account: { identityStrategy: "provider-id" } to preserve 1.6 account identity, or perform a separately reviewed issuer re-key migration.';
+		case "account-identity-scope-required":
+			return 'Set account: { identityScope: "provider" } to preserve 1.6 account identity, then run the plan again.';
+		case "account-identity-scope-unsupported":
+			return 'Set account: { identityScope: "provider" } to preserve 1.6 account identity, or perform a separately reviewed issuer re-key migration.';
 		case "account-issuer-conflict":
 			return `Repair account "${blocker.accountId}" so its issuer is "${blocker.requestedIssuer}", or use a separately reviewed re-key migration.`;
 		case "backup-table-conflict":
@@ -171,13 +171,13 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 
 function resolveMigrationGuideAnchor(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
-		case "account-identity-strategy-mismatch":
-		case "account-identity-strategy-required":
-		case "account-identity-strategy-unsupported":
-			return "choose-account-identity-strategy";
+		case "account-identity-scope-mismatch":
+		case "account-identity-scope-required":
+		case "account-identity-scope-unsupported":
+			return "choose-account-identity-scope";
 		case "account-identity-collision":
 		case "account-issuer-conflict":
-			return "choose-account-identity-strategy";
+			return "choose-account-identity-scope";
 		case "reprovision-data":
 		case "scim-decision-required":
 		case "scim-inventory-mismatch":

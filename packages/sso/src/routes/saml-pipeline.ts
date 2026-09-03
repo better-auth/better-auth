@@ -675,7 +675,7 @@ export async function processSAMLResponse(
 		accountId: userInfo.id as string,
 	};
 	const persistedIssuer =
-		ctx.context.options.account?.identityStrategy === "provider-id"
+		ctx.context.options.account?.identityScope === "provider"
 			? createOAuthAccountIssuer(provider.providerId)
 			: accountKey.issuer;
 

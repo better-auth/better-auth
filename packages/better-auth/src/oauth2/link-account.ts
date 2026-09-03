@@ -52,7 +52,7 @@ export async function handleOAuthUserInfo(
 	const account = {
 		...inputAccount,
 		issuer:
-			c.context.options.account?.identityStrategy === "provider-id"
+			c.context.options.account?.identityScope === "provider"
 				? createOAuthAccountIssuer(inputAccount.providerId)
 				: inputAccount.issuer,
 	};

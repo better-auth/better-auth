@@ -231,17 +231,17 @@ export async function prepareMigratedPublished16Database(
 	);
 	requireSuccessfulCommand(plan, "Guided Better Auth 1.7 migration plan");
 	const parsedPlan = JSON.parse(plan.stdout) as {
-		accountIdentity?: { selectedStrategy?: string };
+		accountIdentity?: { effectiveScope?: string };
 		blockers?: unknown[];
 		status?: string;
 	};
 	if (
 		parsedPlan.status !== "ready" ||
 		parsedPlan.blockers?.length !== 0 ||
-		parsedPlan.accountIdentity?.selectedStrategy !== "provider-id"
+		parsedPlan.accountIdentity?.effectiveScope !== "provider"
 	) {
 		throw new Error(
-			`Guided migration did not produce a ready provider-id plan: ${plan.stdout}`,
+			`Guided migration did not produce a ready provider-scope plan: ${plan.stdout}`,
 		);
 	}
 

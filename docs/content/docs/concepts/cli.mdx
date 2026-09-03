@@ -76,7 +76,7 @@ npx auth@latest migrate plan
 npx auth@latest migrate plan --json > better-auth-migration-plan.json
 ```
 
-The JSON plan includes the adapter, dialect, selected and detected account identity strategies, sorted schema changes, blockers, and any release migration actions. A blocked plan exits with status `1`.
+The JSON plan includes the adapter, dialect, effective and stored account identity scopes, sorted schema changes, blockers, and any release migration actions. A blocked plan exits with status `1`.
 
 ### Apply a migration
 
@@ -133,7 +133,7 @@ npx auth@latest init
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
 
-The generated `auth.ts` includes `account: { identityStrategy: "provider-id" }` so new projects choose their account identity namespace explicitly. Existing configurations that omit this option remain in v1.7 compatibility mode with issuer identity and receive a one-time warning; set `"issuer"` explicitly when that is the intended policy.
+The generated `auth.ts` includes `account: { identityScope: "provider" }`. Existing configurations that omit this option continue to use issuer scope and log a warning during auth initialization.
 
 ## Upgrade
 

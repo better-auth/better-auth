@@ -121,13 +121,13 @@ export type MigrationDecisionBlocker =
 	  }
 	| {
 			accountCount: number;
-			code: "account-identity-strategy-required";
+			code: "account-identity-scope-required";
 			providerIds: string[];
 			table: string;
 	  }
 	| {
 			accountCount: number;
-			code: "account-identity-strategy-unsupported";
+			code: "account-identity-scope-unsupported";
 			providerIds: string[];
 			table: string;
 	  }
@@ -219,10 +219,10 @@ export function describeMigrationDecisionBlocker(
 	switch (blocker.code) {
 		case "account-identity-collision":
 			return `The 1.6 account migration found duplicate issuer and provider-account identities for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}: issuer "${blocker.issuer}" with provider account id "${blocker.providerAccountId}".`;
-		case "account-identity-strategy-required":
-			return `The 1.6 account migration found ${blocker.accountCount} populated accounts without an issuer for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}, but account.identityStrategy is not set. Set account: { identityStrategy: "provider-id" } to preserve 1.6 identity semantics.`;
-		case "account-identity-strategy-unsupported":
-			return `The 1.6 account migration cannot automatically adopt issuer-scoped identity for ${blocker.accountCount} accounts from providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}. Set account: { identityStrategy: "provider-id" } to preserve 1.6 identity semantics, or use a separately reviewed re-key migration.`;
+		case "account-identity-scope-required":
+			return `The 1.6 account migration found ${blocker.accountCount} populated accounts without an issuer for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}, but account.identityScope is not set. Set account: { identityScope: "provider" } to preserve 1.6 identity semantics.`;
+		case "account-identity-scope-unsupported":
+			return `The 1.6 account migration cannot automatically adopt issuer-scoped identity for ${blocker.accountCount} accounts from providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}. Set account: { identityScope: "provider" } to preserve 1.6 identity semantics, or use a separately reviewed re-key migration.`;
 		case "account-issuer-conflict":
 			return `Account "${blocker.accountId}" already stores issuer "${blocker.storedIssuer}", which conflicts with the reviewed issuer "${blocker.requestedIssuer}".`;
 		case "backup-table-conflict":
@@ -377,7 +377,7 @@ interface ConfiguredIssuerState extends ConfiguredAccountIssuers {
 
 async function resolveConfiguredIssuerState(
 	config: BetterAuthOptions,
-	identityStrategy = config.account?.identityStrategy,
+	identityScope = config.account?.identityScope,
 ): Promise<ConfiguredIssuerState> {
 	const resolutions = new Map<string, ProviderIssuerResolution>();
 	for (const [providerId, providerConfig] of Object.entries(
@@ -408,7 +408,7 @@ async function resolveConfiguredIssuerState(
 	const unresolvedProviders: Record<string, UnresolvedIssuerReason> = {};
 	for (const [providerId, resolution] of resolutions) {
 		providerKinds[providerId] = resolution.identityKind;
-		if (identityStrategy === "provider-id") {
+		if (identityScope === "provider") {
 			issuers[providerId] = createProviderScopedMigrationIssuer(
 				providerId,
 				resolution.identityKind,
@@ -511,8 +511,8 @@ interface LegacyAccountIdentityRow {
 }
 
 export interface AccountIdentityMigrationAssessment {
-	selectedStrategy: "provider-id" | "issuer";
-	detectedStrategy: "empty" | "provider-id" | "issuer" | "mixed";
+	effectiveScope: "provider" | "issuer";
+	storedScope: "empty" | "provider" | "issuer" | "mixed";
 	hasMixedIdentityNamespaces: boolean;
 	affectedProviders?: string[] | undefined;
 	physicalSchema?:
@@ -541,19 +541,17 @@ export async function inspectAccountIdentityMigration(
 	existingTables: readonly TableMetadata[],
 ): Promise<AccountIdentityMigrationAssessment> {
 	const accountSchema = database.inspectionAuthTables.account;
-	const selectedStrategy: AccountIdentityMigrationAssessment["selectedStrategy"] =
-		config.account?.identityStrategy === "provider-id"
-			? "provider-id"
-			: "issuer";
-	const omittedStrategyWarning =
-		config.account?.identityStrategy === undefined
-			? 'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.'
+	const effectiveScope: AccountIdentityMigrationAssessment["effectiveScope"] =
+		config.account?.identityScope === "provider" ? "provider" : "issuer";
+	const omittedScopeWarning =
+		config.account?.identityScope === undefined
+			? 'account.identityScope is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityScope: "issuer" } to make this behavior explicit. For a new database, use account: { identityScope: "provider" } instead. Run auth migrate plan before changing populated account data.'
 			: undefined;
 	const createEmptyAssessment = (
 		physicalSchema?: AccountIdentityMigrationAssessment["physicalSchema"],
 	): AccountIdentityMigrationAssessment => ({
-		selectedStrategy,
-		detectedStrategy: "empty",
+		effectiveScope,
+		storedScope: "empty",
 		hasMixedIdentityNamespaces: false,
 		physicalSchema,
 		migrationRequired: false,
@@ -561,7 +559,7 @@ export async function inspectAccountIdentityMigration(
 		totalAccounts: 0,
 		externalAccounts: 0,
 		projectedCollisions: 0,
-		compatibilityWarning: omittedStrategyWarning,
+		compatibilityWarning: omittedScopeWarning,
 	});
 	if (!accountSchema) return createEmptyAssessment();
 	const physicalSchema = {
@@ -612,14 +610,14 @@ export async function inspectAccountIdentityMigration(
 	const affectedProviders = new Set<string>();
 	let malformedNamespaces = 0;
 	let hasMixedIdentityNamespaces = false;
-	let detectedStrategy: AccountIdentityMigrationAssessment["detectedStrategy"];
+	let storedScope: AccountIdentityMigrationAssessment["storedScope"];
 	if (!physicalSchemaComplete) {
-		detectedStrategy = accountsWithIssuer === 0 ? "provider-id" : "mixed";
-		if (detectedStrategy === "mixed") {
+		storedScope = accountsWithIssuer === 0 ? "provider" : "mixed";
+		if (storedScope === "mixed") {
 			for (const account of accounts) affectedProviders.add(account.providerId);
 		}
 	} else {
-		if (selectedStrategy === "issuer") {
+		if (effectiveScope === "issuer") {
 			configured = await resolveConfiguredIssuerState(config, "issuer");
 		}
 		let providerScopedEvidence = false;
@@ -656,21 +654,21 @@ export async function inspectAccountIdentityMigration(
 			}
 		}
 		hasMixedIdentityNamespaces = providerScopedEvidence && issuerScopedEvidence;
-		detectedStrategy =
+		storedScope =
 			malformedNamespaces > 0 || hasMixedIdentityNamespaces
 				? "mixed"
 				: providerScopedEvidence
-					? "provider-id"
+					? "provider"
 					: issuerScopedEvidence
 						? "issuer"
-						: selectedStrategy;
+						: effectiveScope;
 	}
 	// Mixed rows are never safe to infer. A complete issuer column can be
-	// compared with the configured strategy to recognize an already-migrated
+	// compared with the configured scope to recognize an already-migrated
 	// v1.7 database that would require a reviewed re-key.
 	const requiresRekey =
-		detectedStrategy === "mixed" ||
-		(physicalSchemaComplete && detectedStrategy !== selectedStrategy);
+		storedScope === "mixed" ||
+		(physicalSchemaComplete && storedScope !== effectiveScope);
 	if (requiresRekey && affectedProviders.size === 0) {
 		for (const account of accounts) affectedProviders.add(account.providerId);
 	}
@@ -683,7 +681,7 @@ export async function inspectAccountIdentityMigration(
 		(account) => resolveProviderKind(account.providerId) === "external",
 	);
 	const resolveProjectedNamespace = (account: (typeof accounts)[number]) => {
-		if (selectedStrategy === "provider-id") {
+		if (effectiveScope === "provider") {
 			return createProviderScopedMigrationIssuer(
 				account.providerId,
 				resolveProviderKind(account.providerId),
@@ -709,13 +707,12 @@ export async function inspectAccountIdentityMigration(
 		}
 	}
 	const compatibilityWarning =
-		config.account?.identityStrategy === undefined &&
-		detectedStrategy === "issuer"
-			? omittedStrategyWarning
+		config.account?.identityScope === undefined && storedScope === "issuer"
+			? omittedScopeWarning
 			: undefined;
 	return {
-		selectedStrategy,
-		detectedStrategy,
+		effectiveScope,
+		storedScope,
 		hasMixedIdentityNamespaces,
 		affectedProviders: [...affectedProviders].sort(),
 		physicalSchema,
@@ -1912,10 +1909,10 @@ async function inspectAccountIdentityFrom16(
 	// A fully populated issuer column is already a 1.7 database. The release
 	// migration owns only the 1.6 account shape, where every row lacks issuer.
 	if (accountsWithoutIssuer.length === 0) return undefined;
-	if (config.account?.identityStrategy === undefined) {
+	if (config.account?.identityScope === undefined) {
 		reportMigrationDecisionBlocker(blockers, {
 			accountCount: accountsWithoutIssuer.length,
-			code: "account-identity-strategy-required",
+			code: "account-identity-scope-required",
 			providerIds: [
 				...new Set(accountsWithoutIssuer.map((account) => account.providerId)),
 			].sort(),
@@ -1923,10 +1920,10 @@ async function inspectAccountIdentityFrom16(
 		});
 		return undefined;
 	}
-	if (config.account.identityStrategy === "issuer") {
+	if (config.account.identityScope === "issuer") {
 		reportMigrationDecisionBlocker(blockers, {
 			accountCount: accountsWithoutIssuer.length,
-			code: "account-identity-strategy-unsupported",
+			code: "account-identity-scope-unsupported",
 			providerIds: [
 				...new Set(accountsWithoutIssuer.map((account) => account.providerId)),
 			].sort(),
