@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { User } from "better-auth/types";
@@ -26,6 +27,9 @@ export interface SIWXPluginOptions {
 		| ((args: NameLookupArgs) => Promise<NameLookupResult>)
 		| undefined;
 }
+
+const PROVIDER_ID = "siwx";
+const ACCOUNT_ISSUER = createLocalAccountIssuer(PROVIDER_ID);
 
 const DEFAULT_CHAIN_IDS: Record<ChainType, string> = {
 	evm: "1",
@@ -256,10 +260,10 @@ export const siwx = (options: SIWXPluginOptions) => {
 
 						// Check if there's an account record for this exact chainType:chainId:address combination
 						const existingAccount =
-							await ctx.context.internalAdapter.findAccountByProviderId(
+							await ctx.context.internalAdapter.findAccountByKey({
+								issuer: ACCOUNT_ISSUER,
 								accountId,
-								"siwx",
-							);
+							});
 
 						if (existingAccount) {
 							// Get the user associated with this account
@@ -277,7 +281,7 @@ export const siwx = (options: SIWXPluginOptions) => {
 							}>({
 								model: "account",
 								where: [
-									{ field: "providerId", operator: "eq", value: "siwx" },
+									{ field: "providerId", operator: "eq", value: PROVIDER_ID },
 									{
 										field: "accountId",
 										operator: "ends_with",
@@ -309,17 +313,21 @@ export const siwx = (options: SIWXPluginOptions) => {
 										chainId,
 									})) ?? {};
 
-								user = await ctx.context.internalAdapter.createUser({
-									name: name ?? normalizedAddress,
-									email: userEmail,
-									image: avatar ?? "",
-								});
+								user = await ctx.context.internalAdapter.createUser(
+									{
+										name: name ?? normalizedAddress,
+										email: userEmail,
+										image: avatar ?? "",
+									},
+									{ method: PROVIDER_ID },
+								);
 							}
 
 							// Create account record for this chainType:chainId:address combination
 							await ctx.context.internalAdapter.createAccount({
 								userId: user.id,
-								providerId: "siwx",
+								providerId: PROVIDER_ID,
+								issuer: ACCOUNT_ISSUER,
 								accountId,
 								createdAt: new Date(),
 								updatedAt: new Date(),
