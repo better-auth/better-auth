@@ -365,7 +365,7 @@ describe("siwx", async (it) => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/pull/7238#discussion_r3927843781
+	 * @see https://github.com/better-auth/better-auth/issues/6738
 	 */
 	it("should not leak internal error details to the client", async () => {
 		const secret = "constraint account_provider_id_unique on table account";
