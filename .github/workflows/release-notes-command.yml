@@ -146,11 +146,13 @@ jobs:
             exit 1
           fi
 
-          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
-          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
-          echo "merged=$MERGED" >> "$GITHUB_OUTPUT"
+          {
+            echo "pr_number=$PR_NUMBER"
+            echo "base_ref=$BASE_REF"
+            echo "head_sha=$HEAD_SHA"
+            echo "head_ref=$HEAD_REF"
+            echo "merged=$MERGED"
+          } >> "$GITHUB_OUTPUT"
 
       # issue_comment runs from the default branch. Execute that trusted code
       # and read the release head only as git data.
