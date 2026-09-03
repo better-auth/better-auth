@@ -1,8 +1,10 @@
 export type RowsByModel<Row> = Record<string, Row[]>;
 
+export type CleanupResult = "complete" | "retry";
+
 export async function cleanupRows<Row>(
 	trackedRows: Readonly<Record<string, readonly Row[]>>,
-	deleteRow: (model: string, row: Row) => Promise<void>,
+	cleanupRow: (model: string, row: Row) => Promise<CleanupResult>,
 ): Promise<RowsByModel<Row>> {
 	const rowsToRetry: RowsByModel<Row> = {};
 
@@ -10,7 +12,10 @@ export async function cleanupRows<Row>(
 		const failedRows: Row[] = [];
 		for (const row of rows) {
 			try {
-				await deleteRow(model, row);
+				const result = await cleanupRow(model, row);
+				if (result === "retry") {
+					failedRows.push(row);
+				}
 			} catch {
 				failedRows.push(row);
 			}

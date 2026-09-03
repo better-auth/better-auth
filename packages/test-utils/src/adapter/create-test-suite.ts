@@ -393,13 +393,14 @@ export const createTestSuite = <
 					try {
 						defaultModelName = getDefaultModelName(model);
 					} catch {
-						return;
+						return "retry";
 					}
-					if (!schema[defaultModelName]) return;
+					if (!schema[defaultModelName]) return "retry";
 					await adapter.delete({
 						model,
 						where: [{ field: "id", value: row.id }],
 					});
+					return "complete";
 				});
 			};
 
