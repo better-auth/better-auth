@@ -108,7 +108,9 @@ function getOpenApiTypeFromZodType(zodType: z.ZodType<unknown>) {
 }
 
 export type FieldSchema = {
-	type: DBFieldType;
+	type: DBFieldType | "array";
+	/** Element schema for `type: "array"` (JSON Schema / OpenAPI array shape). */
+	items?: { type: string };
 	default?: DBFieldAttributeConfig["defaultValue"] | undefined;
 	readOnly?: boolean | undefined;
 	format?: string;
@@ -121,10 +123,20 @@ export type OpenAPIModelSchema = {
 };
 
 function getFieldSchema(field: DBFieldAttribute) {
-	const schema: FieldSchema = {
-		type: field.type === "date" ? "string" : field.type,
-		...(field.type === "date" && { format: "date-time" }),
-	};
+	// Array DB field types ("string[]"/"number[]") map to a JSON Schema array,
+	// not the literal type string (which is not a valid OpenAPI type keyword).
+	// TODO: the enum form (Array<LiteralString>) is not yet translated to an
+	// OpenAPI `enum`; no core field uses it today.
+	const arrayMatch =
+		typeof field.type === "string"
+			? /^(string|number)\[\]$/.exec(field.type)
+			: null;
+	const schema: FieldSchema = arrayMatch
+		? { type: "array", items: { type: arrayMatch[1]! } }
+		: {
+				type: field.type === "date" ? "string" : field.type,
+				...(field.type === "date" && { format: "date-time" }),
+			};
 
 	if (field.defaultValue !== undefined) {
 		if (typeof field.defaultValue !== "function") {
@@ -268,6 +280,8 @@ function schemaAcceptsUndefined(zodType: z.ZodType<unknown>): boolean {
 		zodType instanceof z.ZodDefault ||
 		zodType instanceof z.ZodPrefault ||
 		zodType instanceof z.ZodCatch ||
+		zodType instanceof z.ZodAny ||
+		zodType instanceof z.ZodUnknown ||
 		zodType instanceof z.ZodUndefined ||
 		zodType instanceof z.ZodVoid
 	) {
@@ -296,6 +310,29 @@ function schemaAcceptsUndefined(zodType: z.ZodType<unknown>): boolean {
 		);
 	}
 	return false;
+}
+
+/**
+ * Resolve input optionality exactly as Zod's JSON Schema emitter does.
+ *
+ * @see https://github.com/colinhacks/zod/blob/v4.5.4/packages/zod/src/v4/core/json-schema-processors.ts#L294-L308
+ */
+function getZodInputOptionality(
+	zodType: z.ZodType<unknown>,
+): "optional" | "defaulted" | undefined {
+	const def = zodType._zod.def;
+	if (def.type === "pipe") {
+		const pipeDef = def as z.core.$ZodPipeDef;
+		if (pipeDef.in._zod.traits.has("$ZodTransform")) {
+			return getZodInputOptionality(pipeDef.out as z.ZodType<unknown>);
+		}
+	}
+	if (def.type === "catch") {
+		const catchDef = def as z.core.$ZodCatchDef;
+		return getZodInputOptionality(catchDef.innerType as z.ZodType<unknown>);
+	}
+	// cspell:disable-next-line
+	return zodType._zod.optin;
 }
 
 function isUndefinedOnlySchema(zodType: z.ZodType<unknown>) {
@@ -426,7 +463,7 @@ function dbFieldToRequestBodyProperty(field: DBFieldAttribute): OpenAPISchema {
 		return { type: "string", format: "date-time" };
 	}
 	if (field.type === "json") {
-		return { type: "object", additionalProperties: true };
+		return {};
 	}
 	if (field.type === "string[]") {
 		return { type: "array", items: { type: "string" } };
@@ -547,7 +584,7 @@ function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 	) {
 		return toOpenApiSchema(unwrapZodSchema(zodType));
 	}
-	if (zodType instanceof z.ZodAny) {
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
 		return withDescription({}, zodType);
 	}
 	if (zodType instanceof z.ZodObject) {
@@ -558,7 +595,9 @@ function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 			Object.entries(shape).forEach(([key, value]) => {
 				if (value instanceof z.ZodType) {
 					properties[key] = toOpenApiSchema(value as z.ZodType<unknown>);
-					if (!schemaAcceptsUndefined(value as z.ZodType<unknown>)) {
+					if (
+						getZodInputOptionality(value as z.ZodType<unknown>) === undefined
+					) {
 						required.push(key);
 					}
 				}

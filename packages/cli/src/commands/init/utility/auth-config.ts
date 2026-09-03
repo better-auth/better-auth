@@ -18,6 +18,8 @@ type GenerateAuthConfigStringOptions = {
 	) => Awaitable<unknown>;
 };
 
+const getAccountCode = () => `{ identityStrategy: "provider-id" }`;
+
 export const generateInnerAuthConfigCode = async ({
 	database,
 	plugins,
@@ -30,6 +32,7 @@ export const generateInnerAuthConfigCode = async ({
 }: GenerateAuthConfigStringOptions) => {
 	const code: Record<string, string | undefined> = {
 		database: getDatabaseCode(database),
+		account: getAccountCode(),
 		appName: getAppNameCode(appName),
 		baseURL: getBaseURLCode(baseURL),
 		emailAndPassword: getEmailAndPasswordCode(emailAndPassword),

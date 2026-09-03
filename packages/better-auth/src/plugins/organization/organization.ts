@@ -43,6 +43,7 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
+	getOrganization,
 	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
@@ -142,6 +143,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	updateOrganization: ReturnType<typeof updateOrganization<O>>;
 	deleteOrganization: ReturnType<typeof deleteOrganization<O>>;
 	setActiveOrganization: ReturnType<typeof setActiveOrganization<O>>;
+	getOrganization: ReturnType<typeof getOrganization<O>>;
 	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
 	listOrganizations: ReturnType<typeof listOrganizations<O>>;
 	createInvitation: ReturnType<typeof createInvitation<O>>;
@@ -508,6 +510,22 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
 		 */
 		setActiveOrganization: setActiveOrganization(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-organization`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getOrganization`
+		 *
+		 * **client:**
+		 * `authClient.organization.getOrganization`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-organization)
+		 */
+		getOrganization: getOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -948,6 +966,14 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							required: true,
 							fieldName: opts.schema?.team?.fields?.name,
 						},
+						memberCount: {
+							type: "number",
+							required: true,
+							defaultValue: 0,
+							input: false,
+							returned: false,
+							fieldName: opts.schema?.team?.fields?.memberCount,
+						},
 						organizationId: {
 							type: "string",
 							required: true,
@@ -994,6 +1020,14 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							},
 							fieldName: opts.schema?.teamMember?.fields?.userId,
 							index: true,
+						},
+						membershipKey: {
+							type: "string",
+							required: false,
+							unique: true,
+							input: false,
+							returned: false,
+							fieldName: opts.schema?.teamMember?.fields?.membershipKey,
 						},
 						createdAt: {
 							type: "date",

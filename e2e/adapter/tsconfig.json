@@ -4,6 +4,11 @@
     "lib": ["esnext", "dom", "dom.iterable"],
     "types": ["node", "bun"]
   },
+  "include": [
+    "test/**/*.ts",
+    "test/prisma-adapter/.tmp/prisma-client-base/**/*.ts",
+    "test/prisma-adapter/.tmp/prisma-client-migration-mapped/**/*.ts"
+  ],
   "references": [
     {
       "path": "../../packages/better-auth/tsconfig.json"
@@ -25,6 +30,9 @@
     },
     {
       "path": "../../packages/prisma-adapter/tsconfig.json"
+    },
+    {
+      "path": "../../packages/scim/tsconfig.json"
     }
   ]
 }
