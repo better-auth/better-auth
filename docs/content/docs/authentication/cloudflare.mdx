@@ -1,4 +1,6 @@
 ---
+icon: authenticationCloudflare
+sidebarBadge: "New"
 title: Cloudflare
 description: Cloudflare provider setup and usage.
 ---
@@ -51,15 +53,12 @@ description: Cloudflare provider setup and usage.
 
 To sign in with Cloudflare, use the `signIn.social` function provided by the client. The `provider` should be set to `cloudflare`.
 
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-const authClient = createAuthClient()
+```ts
+import { authClient } from "@/lib/auth-client"
 
-const signIn = async () => {
-    const data = await authClient.signIn.social({
-        provider: "cloudflare"
-    })
-}
+const { data, error } = await authClient.signIn.social({
+    provider: "cloudflare"
+})
 ```
 
 ## Options
@@ -84,8 +83,8 @@ export const auth = betterAuth({
         cloudflare: {
             clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
             clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
-            scope: [
-                "workers-platform.read",
+            scope: [ // [!code highlight]
+                "workers-platform.read", // [!code highlight]
             ], // [!code highlight]
         },
     },
