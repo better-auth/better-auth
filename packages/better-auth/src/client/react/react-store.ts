@@ -1,11 +1,20 @@
 import type { Store, StoreValue } from "nanostores";
 import { listenKeys } from "nanostores";
 import type { DependencyList } from "react";
-import { useCallback, useRef, useSyncExternalStore } from "react";
+import { use, useCallback, useRef, useSyncExternalStore } from "react";
+import type { AuthQueryAtom, AuthQueryState } from "../query";
+import { isAuthQueryAtom, kAuthQueryResource } from "../query";
 
 type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	? K
 	: never;
+
+const queryStateCache = new WeakMap<object, object>();
+
+export type ReactStoreValue<SomeStore extends Store> =
+	SomeStore extends AuthQueryAtom<infer Data>
+		? Omit<AuthQueryState<Data>, "isPending">
+		: StoreValue<SomeStore>;
 
 export interface UseStoreOptions<SomeStore> {
 	/**
@@ -70,4 +79,34 @@ export function useStore<SomeStore extends Store>(
 	const get = () => snapshotRef.current as StoreValue<SomeStore>;
 
 	return useSyncExternalStore(subscribe, get, get);
+}
+
+function omitPending<T>(
+	state: AuthQueryState<T>,
+): Omit<AuthQueryState<T>, "isPending"> {
+	const cached = queryStateCache.get(state);
+	if (cached) {
+		return cached as Omit<AuthQueryState<T>, "isPending">;
+	}
+	const { isPending: _, ...result } = state;
+	queryStateCache.set(state, result);
+	return result;
+}
+
+export function useAuthStore<SomeStore extends Store>(
+	store: SomeStore,
+): ReactStoreValue<SomeStore> {
+	const value = useStore(store);
+
+	if (!isAuthQueryAtom(store)) {
+		return value as ReactStoreValue<SomeStore>;
+	}
+
+	const state = value as AuthQueryState<unknown>;
+	const resolvedState =
+		typeof window !== "undefined" && store[kAuthQueryResource].shouldSuspend()
+			? use(store[kAuthQueryResource].getPromise())
+			: state;
+
+	return omitPending(resolvedState) as ReactStoreValue<SomeStore>;
 }

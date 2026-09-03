@@ -6,7 +6,7 @@ import { act, createElement, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalFocusManager } from "./focus-manager";
-import { useAuthQuery } from "./query";
+import { kAuthQueryResource, useAuthQuery } from "./query";
 import { createAuthClient as createReactAuthClient } from "./react";
 import { getSessionAtom } from "./session-atom";
 import { createAuthClient } from "./solid";
@@ -303,6 +303,80 @@ describe("useAuthQuery - error handling", () => {
 		expect(queryAtom.get()).toBe(equalState);
 	});
 
+	it("should reuse a render-started query promise and skip a duplicate first mount fetch", async () => {
+		let fetchCount = 0;
+		let resolveInitialFetch: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Promise<Response>((resolve) => {
+					resolveInitialFetch = resolve;
+				});
+			},
+		});
+		const queryAtom = useAuthQuery<{ data: string }>(
+			atom(false),
+			"/test",
+			$fetch,
+			{ method: "GET" },
+		);
+
+		const promise = queryAtom[kAuthQueryResource].getPromise();
+		expect(queryAtom[kAuthQueryResource].getPromise()).toBe(promise);
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		expect(fetchCount).toBe(1);
+
+		const resolveRequest = resolveInitialFetch;
+		if (!resolveRequest) throw new Error("Initial fetch did not start");
+		resolveRequest(new Response(JSON.stringify({ data: "ready" })));
+		await promise;
+
+		const unsubscribe = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+		expect(queryAtom.get().data).toEqual({ data: "ready" });
+		unsubscribe();
+	});
+
+	it("should reuse a render-started session promise after its temporary mount expires", async () => {
+		let fetchCount = 0;
+		let resolveInitialFetch: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Promise<Response>((resolve) => {
+					resolveInitialFetch = resolve;
+				});
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const promise = session[kAuthQueryResource].getPromise();
+		expect(session[kAuthQueryResource].getPromise()).toBe(promise);
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		expect(fetchCount).toBe(1);
+
+		const resolveRequest = resolveInitialFetch;
+		if (!resolveRequest) throw new Error("Initial fetch did not start");
+		resolveRequest(
+			new Response(
+				JSON.stringify({
+					user: { id: "user-1", email: "user@example.com" },
+					session: { id: "session-1" },
+				}),
+			),
+		);
+		await promise;
+
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+		expect(session.get().data?.user.email).toBe("user@example.com");
+		unsubscribe();
+	});
+
 	it("should preserve stale data on 500 server error", async () => {
 		let returnServerError = false;
 
@@ -506,8 +580,6 @@ describe("useAuthQuery - error handling", () => {
 	 */
 	it("should deduplicate the initial session request across Suspense retries", async () => {
 		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-		let suspended = true;
-		let resumeRender: (() => void) | undefined;
 		const requests: Array<{
 			resolve: (response: Response) => void;
 			signal: AbortSignal | null;
@@ -524,11 +596,6 @@ describe("useAuthQuery - error handling", () => {
 		});
 		const SessionWatcher = () => {
 			client.useSession();
-			if (suspended) {
-				throw new Promise<void>((resolve) => {
-					resumeRender = resolve;
-				});
-			}
 			return null;
 		};
 		const root = createRoot(document.createElement("div"));
@@ -547,27 +614,19 @@ describe("useAuthQuery - error handling", () => {
 			await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
 		});
 
-		const retry = resumeRender;
-		if (!retry) throw new Error("Suspense retry was not scheduled");
-		suspended = false;
-		await act(async () => retry());
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.signal?.aborted).toBe(false);
+		const initialRequest = requests[0];
+		if (!initialRequest) throw new Error("Session request did not start");
 		await act(async () => {
+			initialRequest.resolve(
+				new Response(JSON.stringify({ session: null, user: null })),
+			);
 			await vi.advanceTimersByTimeAsync(0);
 		});
 
-		const observedRequests = requests.map(({ signal }) => ({
-			aborted: signal?.aborted ?? false,
-		}));
-		await act(async () => {
-			root.unmount();
-			for (const request of requests) {
-				request.resolve(
-					new Response(JSON.stringify({ session: null, user: null })),
-				);
-			}
-			await Promise.resolve();
-		});
-		expect(observedRequests).toEqual([{ aborted: false }]);
+		expect(requests).toHaveLength(1);
+		await act(async () => root.unmount());
 	});
 
 	it("should not refetch a settled session request on a Suspense retry", async () => {

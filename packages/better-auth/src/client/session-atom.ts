@@ -4,6 +4,7 @@ import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
+import { kAuthQueryResource } from "./query";
 import { createSessionRefreshManager } from "./session-refresh";
 import type { SessionQueryParams } from "./types";
 
@@ -113,14 +114,29 @@ export function getSessionAtom(
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => fetchSession(queryParams);
 
-	const session: SessionAtom = atom<AuthQueryState<SessionData>>({
+	const session = atom<AuthQueryState<SessionData>>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
 		refetch,
-	});
+	}) as SessionAtom;
 	withEquality(session, isSessionAtomEqual);
+
+	let hasSettledInitialFetch = false;
+	let resolveInitialFetch:
+		| ((state: AuthQueryState<SessionData>) => void)
+		| undefined;
+	const suspensePromise = new Promise<AuthQueryState<SessionData>>(
+		(resolve) => {
+			resolveInitialFetch = resolve;
+		},
+	);
+	const settleInitialFetch = () => {
+		if (hasSettledInitialFetch) return;
+		hasSettledInitialFetch = true;
+		resolveInitialFetch?.(session.value);
+	};
 
 	const executeSessionFetch = async (
 		signal: AbortSignal,
@@ -177,6 +193,7 @@ export function getSessionAtom(
 					isRefetching: false,
 					refetch,
 				});
+				settleInitialFetch();
 				return "failed";
 			}
 
@@ -195,6 +212,7 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			settleInitialFetch();
 			return outcome;
 		} catch (fetchError) {
 			if (signal.aborted) {
@@ -208,6 +226,7 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			settleInitialFetch();
 			return "failed";
 		}
 	};
@@ -258,6 +277,19 @@ export function getSessionAtom(
 		}
 		if (Date.now() < freshUntil) return Promise.resolve();
 		return fetchSession();
+	};
+
+	session[kAuthQueryResource] = {
+		getPromise() {
+			void fetchSessionOnMount();
+			return suspensePromise;
+		},
+		shouldSuspend() {
+			if (!hasSettledInitialFetch && !session.value.isPending) {
+				settleInitialFetch();
+			}
+			return !hasSettledInitialFetch;
+		},
 	};
 
 	let broadcastSessionUpdate: (

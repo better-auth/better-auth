@@ -99,18 +99,26 @@ In addition to the standard methods, the client provides hooks to easily access 
   <Tab value="React">
     ```tsx title="user.tsx"
     //make sure you're using the react client
+    import { Suspense } from "react"
     import { createAuthClient } from "better-auth/react"
     const { useSession } = createAuthClient() // [!code highlight]
 
-    export function User() {
+    function User() {
         const {
             data: session,
-            isPending, //loading state
             error, //error object 
             refetch //refetch the session
         } = useSession()
         return (
             //...
+        )
+    }
+
+    export function UserWithFallback() {
+        return (
+            <Suspense fallback={<div>Loading...</div>}>
+                <User />
+            </Suspense>
         )
     }
     ```
@@ -202,6 +210,11 @@ In addition to the standard methods, the client provides hooks to easily access 
     ```
   </Tab>
 </Tabs>
+
+<Callout type="info">
+  Suspense-enabled React hooks require React 19 or newer. In a Server Component,
+  await `auth.api.getSession` instead of using the React client hook.
+</Callout>
 
 ### Fetch Options
 
@@ -407,14 +420,26 @@ await authClient.signIn.email({
 })
 ```
 
-Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return an `isPending` property to indicate if the request is still pending.
+React hooks like `useSession` suspend while their initial request is pending. Wrap the component that calls the hook in a [`Suspense`](https://react.dev/reference/react/Suspense) boundary to provide its loading UI. Other framework clients continue to expose `isPending`.
 
-```ts
+```tsx
+import { Suspense } from "react"
 import { useSession } from "@/lib/auth-client"
 
-const { data, error, isPending } = useSession()
-if (error) {
-    //handle error
+function User() {
+    const { data, error } = useSession()
+    if (error) {
+        //handle error
+    }
+    //...
+}
+
+export function UserWithFallback() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <User />
+        </Suspense>
+    )
 }
 ```
 

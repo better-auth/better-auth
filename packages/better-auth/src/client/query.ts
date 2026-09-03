@@ -1,6 +1,6 @@
 import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
-import type { PreinitializedWritableAtom } from "nanostores";
+import type { PreinitializedWritableAtom, Store } from "nanostores";
 import { atom, onMount } from "nanostores";
 import { isJsonEqual, withEquality } from "./equality";
 import type { SessionQueryParams } from "./types";
@@ -18,7 +18,20 @@ export type AuthQueryState<T> = {
 	) => Promise<void>;
 };
 
-export type AuthQueryAtom<T> = PreinitializedWritableAtom<AuthQueryState<T>>;
+export const kAuthQueryResource = Symbol.for("better-auth.auth-query-resource");
+
+export type AuthQueryResource<T> = {
+	getPromise: () => Promise<AuthQueryState<T>>;
+	shouldSuspend: () => boolean;
+};
+
+export type AuthQueryAtom<T> = PreinitializedWritableAtom<AuthQueryState<T>> & {
+	[kAuthQueryResource]: AuthQueryResource<T>;
+};
+
+export function isAuthQueryAtom(store: Store): store is AuthQueryAtom<unknown> {
+	return kAuthQueryResource in store;
+}
 
 function isAuthQueryStateEqual<T>(
 	a: AuthQueryState<T>,
@@ -50,19 +63,33 @@ export const useAuthQuery = <T>(
 		  )
 		| undefined,
 ) => {
-	const value: AuthQueryAtom<T> = atom({
+	const value = atom({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
-		refetch: (queryParams) => fn(queryParams),
-	});
+		refetch: (queryParams?: { query?: SessionQueryParams } | undefined) =>
+			fn(queryParams),
+	}) as AuthQueryAtom<T>;
 	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
+
+	let hasSettledInitialFetch = false;
+	let initialRequestPromise: Promise<void> | undefined;
+	let resolveInitialFetch: ((state: AuthQueryState<T>) => void) | undefined;
+	let didRequestSuspensePromise = false;
+	const suspensePromise = new Promise<AuthQueryState<T>>((resolve) => {
+		resolveInitialFetch = resolve;
+	});
+	const settleInitialFetch = () => {
+		if (hasSettledInitialFetch) return;
+		hasSettledInitialFetch = true;
+		resolveInitialFetch?.(value.value);
+	};
 
 	const fn = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	) => {
-		return new Promise<void>((resolve) => {
+		const request = new Promise<void>((resolve) => {
 			const opts =
 				typeof options === "function"
 					? options({
@@ -140,12 +167,36 @@ export const useAuthQuery = <T>(
 					resolve(void 0);
 				});
 		});
+
+		if (!hasSettledInitialFetch && initialRequestPromise === undefined) {
+			initialRequestPromise = request;
+		}
+		void request.finally(settleInitialFetch);
+		return request;
 	};
+
+	value[kAuthQueryResource] = {
+		getPromise() {
+			didRequestSuspensePromise = true;
+			if (initialRequestPromise === undefined) {
+				void fn();
+			}
+			return suspensePromise;
+		},
+		shouldSuspend() {
+			if (!hasSettledInitialFetch && !value.value.isPending) {
+				settleInitialFetch();
+			}
+			return !hasSettledInitialFetch;
+		},
+	};
+
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
 	let isMountFetchPending = false;
 	let isMounted = false;
+	let shouldRevalidateOnMount = false;
 	let shouldRefetchAfterPending = false;
 
 	const fetchOnMount = () => {
@@ -154,7 +205,13 @@ export const useAuthQuery = <T>(
 			return;
 		}
 		isMountFetchPending = true;
-		void fn().finally(() => {
+		const request =
+			!hasSettledInitialFetch &&
+			didRequestSuspensePromise &&
+			initialRequestPromise !== undefined
+				? initialRequestPromise
+				: fn();
+		void request.finally(() => {
 			isMountFetchPending = false;
 			const shouldRefetch = shouldRefetchAfterPending && isMounted;
 			shouldRefetchAfterPending = false;
@@ -169,6 +226,8 @@ export const useAuthQuery = <T>(
 		}
 
 		isMounted = true;
+		const shouldRevalidate = shouldRevalidateOnMount;
+		shouldRevalidateOnMount = false;
 		let isInitialized = false;
 		let timeoutId: ReturnType<typeof setTimeout>;
 		const cleanups = initializedAtom.map((initAtom) =>
@@ -184,11 +243,16 @@ export const useAuthQuery = <T>(
 		);
 		timeoutId = setTimeout(() => {
 			isInitialized = true;
-			fetchOnMount();
+			if (shouldRevalidate || !didRequestSuspensePromise) {
+				fetchOnMount();
+			}
 		}, 0);
 
 		return () => {
 			isMounted = false;
+			if (hasSettledInitialFetch || !didRequestSuspensePromise) {
+				shouldRevalidateOnMount = true;
+			}
 			for (const cleanup of cleanups) cleanup();
 			clearTimeout(timeoutId);
 		};

@@ -171,7 +171,7 @@ However, if you're starting a new project or facing challenges with your current
 
         import { authClient } from "@/lib/auth-client";
 
-        const { data, error, refetch, isPending, isRefetching } = authClient.useSession()
+        const { data, error, refetch, isRefetching } = authClient.useSession()
         ```
       </Tab>
     </Tabs>
@@ -264,18 +264,16 @@ However, if you're starting a new project or facing challenges with your current
 
     <Tabs items={["Client-side", "Server-side"]}>
       <Tab value="Client-side">
-        ```ts title="app/dashboard/page.tsx"
+        ```tsx title="app/dashboard/page.tsx"
         "use client";
 
+        import { Suspense } from "react";
         import { authClient } from "@/lib/auth-client";
         import { redirect } from "next/navigation";
 
-        const DashboardPage = () => {
-          const { data, error, isPending } = authClient.useSession();
+        const Dashboard = () => {
+          const { data, error } = authClient.useSession();
 
-          if (isPending) {
-            return <div>Pending</div>;
-          }
           if (!data || error) {
             redirect("/sign-in");
           }
@@ -286,6 +284,12 @@ However, if you're starting a new project or facing challenges with your current
             </div>
           );
         };
+
+        const DashboardPage = () => (
+          <Suspense fallback={<div>Pending</div>}>
+            <Dashboard />
+          </Suspense>
+        );
 
         export default DashboardPage;
         ```

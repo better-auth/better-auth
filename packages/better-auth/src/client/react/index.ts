@@ -5,6 +5,7 @@ import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
+import type { Store } from "nanostores";
 import type { UnionToIntersection } from "../../types/helper";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
@@ -15,7 +16,8 @@ import type {
 	IsSignal,
 	SessionQueryParams,
 } from "../types";
-import { useStore } from "./react-store";
+import type { ReactStoreValue } from "./react-store";
+import { useAuthStore, useStore } from "./react-store";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -35,7 +37,9 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 									? never
 									: key extends string
 										? `use${Capitalize<key>}`
-										: never]: () => ReturnType<Atoms[key]["get"]>;
+										: never]: () => Atoms[key] extends Store
+									? ReactStoreValue<Atoms[key]>
+									: ReturnType<Atoms[key]["get"]>;
 							}
 						: {}
 					: {}
@@ -63,7 +67,6 @@ export type ReactAuthClient<Option extends BetterAuthClientOptions> =
 			hydrateSession(session: NonNullable<ClientSession<Option>> | null): void;
 			useSession: () => {
 				data: ClientSession<Option>;
-				isPending: boolean;
 				isRefetching: boolean;
 				error: BetterFetchError | null;
 				refetch: (
@@ -92,7 +95,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	} = getClientConfig(options);
 	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[getAtomKey(key)] = () => useStore(value);
+		resolvedHooks[getAtomKey(key)] = () => useAuthStore(value);
 	}
 
 	const routes = {
