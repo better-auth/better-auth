@@ -2821,7 +2821,15 @@ describe("Microsoft Provider", async () => {
 	});
 });
 
-describe("Cloudflare Provider", async () => {
+describe("Cloudflare Provider", () => {
+	let userInfoRequestCount = 0;
+
+	const handleUserInfoRequest = () => {
+		userInfoRequestCount += 1;
+
+		return HttpResponse.json({ sub: "cloudflare_user_123" });
+	};
+
 	beforeAll(() => {
 		mswServer.use(
 			http.post(
@@ -2862,6 +2870,10 @@ describe("Cloudflare Provider", async () => {
 						} satisfies CloudflareProfile,
 					});
 				},
+			),
+			http.get(
+				"https://dash.cloudflare.com/oauth2/userinfo",
+				handleUserInfoRequest,
 			),
 		);
 	});
@@ -3051,6 +3063,7 @@ describe("Cloudflare Provider", async () => {
 						expires_in: 3600,
 					});
 				},
+				{ once: true },
 			),
 		);
 
@@ -3114,6 +3127,7 @@ describe("Cloudflare Provider", async () => {
 						expires_in: 3600,
 					});
 				},
+				{ once: true },
 			),
 		);
 
@@ -3163,40 +3177,28 @@ describe("Cloudflare Provider", async () => {
 	 * provider must read the profile (email, name) from the Cloudflare API
 	 * `/user` endpoint. This guards against regressing back to `userinfo`, which
 	 * cannot produce an email and breaks sign-in.
-	 *
-	 * Kept last in this block: it overrides the shared `/user` handler, and the
-	 * suite does not reset handlers between tests.
-	 *
 	 * @see https://github.com/better-auth/better-auth/pull/9908
 	 */
 	it("derives the profile from the Cloudflare API /user endpoint, not the OIDC userinfo endpoint", async () => {
+		userInfoRequestCount = 0;
 		mswServer.use(
-			// Re-register the token handler: earlier tests in this block override
-			// it (and the suite does not reset handlers), so pin it for this test.
-			http.post("https://dash.cloudflare.com/oauth2/token", async () => {
-				return HttpResponse.json({
-					access_token: "cloudflare_access_token",
-					token_type: "Bearer",
-					expires_in: 3600,
-				});
-			}),
-			http.get("https://dash.cloudflare.com/oauth2/userinfo", async () => {
-				// Real Cloudflare userinfo only returns `sub` — no email/name.
-				return HttpResponse.json({ sub: "cloudflare_user_123" });
-			}),
-			http.get("https://api.cloudflare.com/client/v4/user", async () => {
-				return HttpResponse.json({
-					success: true,
-					errors: [],
-					messages: [],
-					result: {
-						id: "cloudflare_user_123",
-						email: "first-only@test.com",
-						first_name: "First",
-						// no last_name
-					} satisfies CloudflareProfile,
-				});
-			}),
+			http.get(
+				"https://api.cloudflare.com/client/v4/user",
+				async () => {
+					return HttpResponse.json({
+						success: true,
+						errors: [],
+						messages: [],
+						result: {
+							id: "cloudflare_user_123",
+							email: "first-only@test.com",
+							first_name: "First",
+							// no last_name
+						} satisfies CloudflareProfile,
+					});
+				},
+				{ once: true },
+			),
 		);
 
 		const { client, cookieSetter } = await getTestInstance(
@@ -3240,6 +3242,7 @@ describe("Cloudflare Provider", async () => {
 		expect(session.data?.user.email).toBe("first-only@test.com");
 		// Name is composed from first_name/last_name; only first_name is present.
 		expect(session.data?.user.name).toBe("First");
+		expect(userInfoRequestCount).toBe(0);
 	});
 });
 
