@@ -526,14 +526,12 @@ export const info = new Command("info")
 		}
 
 		console.log(chalk.bold.white("\n🔐 Better Auth:"));
+		console.log(`  ${chalk.cyan("Version")}: ${betterAuthInfo.version}`);
 		if (betterAuthInfo.error) {
 			console.log(`  ${chalk.red("Error:")} ${betterAuthInfo.error}`);
-		} else {
-			console.log(`  ${chalk.cyan("Version")}: ${betterAuthInfo.version}`);
-			if (betterAuthInfo.config) {
-				console.log(`  ${chalk.cyan("Configuration")}:`);
-				console.log(formatOutput(betterAuthInfo.config, 4));
-			}
+		} else if (betterAuthInfo.config) {
+			console.log(`  ${chalk.cyan("Configuration")}:`);
+			console.log(formatOutput(betterAuthInfo.config, 4));
 		}
 
 		console.log(chalk.gray("\n" + "=".repeat(50)));

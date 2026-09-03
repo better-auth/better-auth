@@ -19,9 +19,26 @@ describe("getInstalledPackageVersion", () => {
 	});
 
 	test.for([
-		{ packageName: "example-package", version: "1.2.3" },
-		{ packageName: "@example/package", version: "4.5.6" },
-	])("resolves $packageName from an ancestor node_modules directory", async ({
+		{
+			exports: { "./package.json": "./package.json" },
+			packageName: "example-package",
+			resolution: "its package manifest",
+			version: "1.2.3",
+		},
+		{
+			exports: "./index.js",
+			packageName: "@example/package",
+			resolution: "its package entry point",
+			version: "4.5.6",
+		},
+		{
+			exports: { ".": { import: "./index.js" } },
+			packageName: "esm-only-package",
+			resolution: "an import-only entry point",
+			version: "7.8.9",
+		},
+	])("resolves $packageName through $resolution", async ({
+		exports,
 		packageName,
 		version,
 	}) => {
@@ -42,7 +59,7 @@ describe("getInstalledPackageVersion", () => {
 			JSON.stringify({
 				name: packageName,
 				version,
-				exports: "./index.js",
+				exports,
 			}),
 		);
 		await fs.writeFile(path.join(packageDirectory, "index.js"), "");

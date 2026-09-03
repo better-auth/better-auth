@@ -15,6 +15,12 @@ const runInfoCommand = (args: string[] = []) => {
 	});
 };
 
+const runInfoTextCommand = (args: string[] = []) => {
+	return execFileAsync(process.execPath, [cliPath, "info", ...args], {
+		cwd: tmpDir,
+	});
+};
+
 const writeInstalledPackage = async (name: string, version: string) => {
 	const packageDirectory = path.join(
 		tmpDir,
@@ -119,6 +125,28 @@ describe("info command", () => {
 			name: "drizzle",
 			version: "0.45.1",
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11126#discussion_r3920527164
+	 */
+	it("reports the installed version when config loading fails", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				dependencies: { "better-auth": "catalog:" },
+			}),
+		);
+		await writeInstalledPackage("better-auth", "1.7.2");
+
+		const { stdout } = await runInfoTextCommand([
+			"--config",
+			"missing-auth.ts",
+		]);
+
+		expect(stdout).toContain("Version: 1.7.2");
+		expect(stdout).toContain("Error:");
 	});
 
 	it("should load and sanitize auth configuration", async () => {

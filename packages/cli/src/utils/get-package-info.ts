@@ -58,6 +58,34 @@ function findPackageVersion(
 	}
 }
 
+function findPackageVersionInNodeModules(
+	packageName: string,
+	projectDirectory: string,
+): string | null {
+	let currentDirectory = path.resolve(projectDirectory);
+	const rootDirectory = path.parse(currentDirectory).root;
+	const packagePath = packageName.split("/");
+
+	while (true) {
+		const version = readPackageVersion(
+			path.join(
+				currentDirectory,
+				"node_modules",
+				...packagePath,
+				"package.json",
+			),
+			packageName,
+		);
+		if (version) {
+			return version;
+		}
+		if (currentDirectory === rootDirectory) {
+			return null;
+		}
+		currentDirectory = path.dirname(currentDirectory);
+	}
+}
+
 export function getInstalledPackageVersion(
 	packageName: string,
 	projectDirectory: string,
@@ -74,7 +102,7 @@ export function getInstalledPackageVersion(
 			}
 		} catch {}
 	}
-	return null;
+	return findPackageVersionInNodeModules(packageName, projectDirectory);
 }
 
 export function getPrismaVersion(cwd?: string): number | null {
