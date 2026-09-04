@@ -77,7 +77,6 @@ describe("SCIM User active ingress helper", () => {
 		"0",
 		1,
 		0,
-		null,
 		[],
 		[true],
 		{},
@@ -295,7 +294,6 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 		"0",
 		1,
 		0,
-		null,
 		[],
 		{},
 	] as const)("leaves the rejected near-miss primary value unchanged at POST and PUT boundaries", (value) => {
@@ -310,6 +308,110 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 				body,
 			);
 		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11015
+	 */
+	it("strips null optional object properties on POST and PUT without touching the input", () => {
+		for (const method of ["POST", "PUT"] as const) {
+			const body = {
+				schemas: [SCIM_USER_SCHEMA],
+				userName: "null-address@example.com",
+				title: null,
+				name: {
+					formatted: null,
+					givenName: "Ada",
+					familyName: null,
+				},
+				addresses: [
+					{
+						type: "work",
+						streetAddress: "44 Montgomery St",
+						locality: "San Francisco",
+						region: "CA",
+						postalCode: "94104",
+						formatted: null,
+						country: null,
+					},
+				],
+			};
+			const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
+				method,
+				body,
+			);
+
+			expect(normalized).not.toBe(body);
+			expect(normalized).toEqual({
+				schemas: [SCIM_USER_SCHEMA],
+				userName: "null-address@example.com",
+				name: { givenName: "Ada" },
+				addresses: [
+					{
+						type: "work",
+						streetAddress: "44 Montgomery St",
+						locality: "San Francisco",
+						region: "CA",
+						postalCode: "94104",
+					},
+				],
+			});
+			expect(body.title).toBeNull();
+			expect(body.addresses[0]?.formatted).toBeNull();
+			expect(body.addresses[0]?.country).toBeNull();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11015
+	 */
+	it("strips nulls from nested PATCH object values but preserves scalar value null", () => {
+		const scalarNullOperation = {
+			op: "replace",
+			path: "active",
+			value: null,
+		};
+		const body = {
+			schemas: [SCIM_PATCH_SCHEMA],
+			Operations: [
+				scalarNullOperation,
+				{
+					op: "replace",
+					path: 'addresses[type eq "work"]',
+					value: {
+						type: "work",
+						streetAddress: "44 Montgomery St",
+						formatted: null,
+						country: null,
+					},
+				},
+				{
+					op: "replace",
+					value: {
+						title: null,
+						name: { givenName: "Ada", familyName: null },
+					},
+				},
+			],
+		};
+		const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
+			"PATCH",
+			body,
+		) as typeof body;
+
+		expect(normalized).not.toBe(body);
+		expect(normalized.Operations[0]).toBe(scalarNullOperation);
+		expect(normalized.Operations[0]?.value).toBeNull();
+		expect(normalized.Operations[1]?.value).toEqual({
+			type: "work",
+			streetAddress: "44 Montgomery St",
+		});
+		expect(normalized.Operations[2]?.value).toEqual({
+			name: { givenName: "Ada" },
+		});
+		expect(
+			(body.Operations[1]?.value as { formatted: null }).formatted,
+		).toBeNull();
 	});
 
 	it("copies only the multi-valued entries whose primary value changes", () => {
