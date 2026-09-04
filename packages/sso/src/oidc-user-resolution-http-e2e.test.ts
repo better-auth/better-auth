@@ -244,6 +244,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 			protocol: "oidc",
 			providerId: "workforce",
 			accountKey: {
+				issuer: identityProvider.issuer.url,
 				accountId: subject,
 			},
 			providerUser: { email: firstProviderEmail },
