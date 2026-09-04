@@ -8,6 +8,7 @@ import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
+	HOST_COOKIE_PREFIX,
 	parseCookies,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -397,6 +398,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 												.replace(
 													SECURE_COOKIE_PREFIX.toLowerCase(),
 													SECURE_COOKIE_PREFIX,
+												)
+												.replace(
+													HOST_COOKIE_PREFIX.toLowerCase(),
+													HOST_COOKIE_PREFIX,
 												),
 											attributes:
 												ctx.context.authCookies.sessionToken.attributes,

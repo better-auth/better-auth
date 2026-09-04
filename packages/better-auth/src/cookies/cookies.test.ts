@@ -4,6 +4,8 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { createLogger } from "@better-auth/core/env";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import type { MemoryDB } from "@better-auth/memory-adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeCookie } from "better-call";
@@ -38,6 +40,7 @@ import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	setRequestCookie,
+	splitSetCookieHeader,
 	stripSecureCookiePrefix,
 	toCookieOptions,
 } from "./cookie-utils";
@@ -2479,5 +2482,186 @@ describe("getCookieCache expiry (compact strategy)", () => {
 		);
 		const cache = await getCookieCache(requestWith(cookie), { secret: SECRET });
 		expect(cache).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11061
+ * @see https://github.com/better-auth/better-auth/issues/10806
+ */
+describe("useHostCookiePrefix", () => {
+	it("emits __Host- cookies that meet the prefix requirements and reads them back", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			advanced: { useHostCookiePrefix: true },
+		});
+		const headers = new Headers();
+		let setCookie = "";
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{
+				onSuccess(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+		const sessionCookie = splitSetCookieHeader(setCookie).find((c) =>
+			c.includes("session_token"),
+		);
+		expect(sessionCookie).toBeDefined();
+		expect(
+			sessionCookie!.startsWith(
+				`${HOST_COOKIE_PREFIX}better-auth.session_token=`,
+			),
+		).toBe(true);
+		expect(sessionCookie).toContain("Secure");
+		expect(sessionCookie).toContain("Path=/");
+		expect(sessionCookie).not.toContain("Domain=");
+		expect(setCookie).not.toContain(SECURE_COOKIE_PREFIX);
+
+		const { data } = await client.getSession({ fetchOptions: { headers } });
+		expect(data?.user.email).toBe(testUser.email);
+	});
+
+	it("rejects crossSubDomainCookies", () => {
+		expect(() =>
+			getCookies({
+				baseURL: "https://example.com",
+				advanced: {
+					useHostCookiePrefix: true,
+					crossSubDomainCookies: { enabled: true },
+				},
+			}),
+		).toThrow(/crossSubDomainCookies/);
+	});
+
+	it("rejects a Path other than /", () => {
+		expect(() =>
+			getCookies({
+				advanced: {
+					useHostCookiePrefix: true,
+					defaultCookieAttributes: { path: "/api" },
+				},
+			}),
+		).toThrow(/Path/);
+	});
+
+	it("rejects useSecureCookies: false", () => {
+		expect(() =>
+			getCookies({
+				advanced: { useHostCookiePrefix: true, useSecureCookies: false },
+			}),
+		).toThrow(/secure/i);
+	});
+
+	it("getSessionCookie prefers the __Host- cookie", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=stale; __Host-better-auth.session_token=current",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBe("current");
+	});
+
+	it("getCookieCache reads the __Host- session_data cookie", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: { cookieCache: { enabled: true } },
+			advanced: { useHostCookiePrefix: true },
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(headers.get("cookie")).toContain(
+			`${HOST_COOKIE_PREFIX}better-auth.session_data`,
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+
+	describe("migration from __Secure- cookies", () => {
+		async function signInLegacy() {
+			const database: MemoryDB = {
+				user: [],
+				account: [],
+				session: [],
+				verification: [],
+			};
+			const legacy = await getTestInstance({
+				database: memoryAdapter(database),
+				advanced: { useSecureCookies: true },
+			});
+			const headers = new Headers();
+			await legacy.client.signIn.email(
+				{ email: legacy.testUser.email, password: legacy.testUser.password },
+				{ onSuccess: legacy.cookieSetter(headers) },
+			);
+			expect(headers.get("cookie")).toContain(
+				`${SECURE_COOKIE_PREFIX}better-auth.session_token`,
+			);
+			return { database, headers, email: legacy.testUser.email };
+		}
+
+		it("keeps a __Secure- session alive and re-issues it as __Host- when migrateSecureCookies is on", async () => {
+			const { database, headers, email } = await signInLegacy();
+			const { auth } = await getTestInstance(
+				{
+					database: memoryAdapter(database),
+					advanced: {
+						useHostCookiePrefix: { enabled: true, migrateSecureCookies: true },
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const res = await auth.api.getSession({ headers, returnHeaders: true });
+			expect(res.response?.user.email).toBe(email);
+
+			const setCookies = splitSetCookieHeader(
+				res.headers.get("set-cookie") ?? "",
+			);
+			const reissued = setCookies.find((c) =>
+				c.startsWith(`${HOST_COOKIE_PREFIX}better-auth.session_token=`),
+			);
+			expect(reissued).toBeDefined();
+			expect(reissued).not.toContain("Max-Age=0");
+			const expired = setCookies.find((c) =>
+				c.startsWith(`${SECURE_COOKIE_PREFIX}better-auth.session_token=`),
+			);
+			expect(expired).toContain("Max-Age=0");
+
+			// The migrated cookies work on their own, without the legacy one.
+			const migrated = new Headers();
+			// A browser drops the expired cookies, so only keep the live ones.
+			applySetCookies(
+				migrated,
+				setCookies.filter((c) => !c.includes("Max-Age=0")),
+			);
+			expect(migrated.get("cookie")).not.toContain(SECURE_COOKIE_PREFIX);
+			const again = await auth.api.getSession({ headers: migrated });
+			expect(again?.user.email).toBe(email);
+		});
+
+		it("does not read __Secure- sessions by default", async () => {
+			const { database, headers } = await signInLegacy();
+			const { auth } = await getTestInstance(
+				{
+					database: memoryAdapter(database),
+					advanced: { useHostCookiePrefix: true },
+				},
+				{ disableTestUser: true },
+			);
+			expect(await auth.api.getSession({ headers })).toBeNull();
+		});
 	});
 });

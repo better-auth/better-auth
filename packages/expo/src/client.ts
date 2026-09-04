@@ -6,6 +6,7 @@ import type {
 import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import {
+	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	stripSecureCookiePrefix,
@@ -138,6 +139,7 @@ function getOAuthStateValue(
 	for (const prefix of prefixes) {
 		// cookie strategy uses: <prefix>.oauth_state
 		const candidates = [
+			`${HOST_COOKIE_PREFIX}${prefix}.oauth_state`,
 			`${SECURE_COOKIE_PREFIX}${prefix}.oauth_state`,
 			`${prefix}.oauth_state`,
 		];

@@ -626,6 +626,7 @@ export const auth = betterAuth({
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
+		useHostCookiePrefix: false,
 		disableCSRFCheck: false,
 		disableOriginCheck: false,
 		crossSubDomainCookies: {
@@ -675,6 +676,7 @@ export const auth = betterAuth({
   * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
   * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
+* `useHostCookiePrefix`: Name cookies with the `__Host-` prefix instead of `__Secure-`. Implies secure cookies and cannot be combined with `crossSubDomainCookies` or a custom cookie `path`. Enabling it alone renames the cookies, so existing sessions sign in again once; pass `{ enabled: true, migrateSecureCookies: true }` to keep accepting `__Secure-` cookies and re-issue them as `__Host-`, then remove it after `session.expiresIn`.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
 * `crossSubDomainCookies`: Configure cookies to be shared across subdomains

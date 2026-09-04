@@ -9,7 +9,12 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
 import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
-import { createCookieGetter, getCookies } from "../cookies";
+import {
+	createCookieGetter,
+	getCookies,
+	shouldMigrateSecureCookies,
+} from "../cookies";
+import { secureCookieMigration } from "../cookies/migrate-secure-cookies";
 import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
 import {
@@ -101,6 +106,9 @@ export function getInternalPlugins(options: BetterAuthOptions) {
 	const plugins: BetterAuthPlugin[] = [];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
 		// TODO: add internal plugin
+	}
+	if (shouldMigrateSecureCookies(options)) {
+		plugins.push(secureCookieMigration());
 	}
 	return plugins;
 }
