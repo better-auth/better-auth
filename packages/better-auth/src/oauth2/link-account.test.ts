@@ -1919,7 +1919,6 @@ describe("oauth2 - orphaned account identity", () => {
 				model: "account",
 				data: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId,
 					userId: "missing-account-owner",
 					createdAt: new Date(),

@@ -7384,7 +7384,6 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 				userId: selectedUser.id,
@@ -7536,7 +7535,6 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 			}),
