@@ -7,6 +7,8 @@ import { oauthProvider } from "./oauth";
 
 const authServerBaseURL = "http://localhost:3000";
 const registeredLocalhostRedirect = "http://localhost/callback?source=cli";
+const registeredPortfulLocalhostRedirect =
+	"http://localhost:8080/portful-callback";
 const registeredIPv4Redirect = "http://127.0.0.1/callback";
 type RedirectError = "invalid_redirect" | "invalid_request";
 
@@ -39,6 +41,31 @@ const rejectedRedirects = [
 	{
 		component: "userinfo",
 		redirectUri: "http://user:password@localhost:51234/callback?source=cli",
+		error: "invalid_redirect",
+	},
+	{
+		component: "scheme casing",
+		redirectUri: "HTTP://localhost:51234/callback?source=cli",
+		error: "invalid_redirect",
+	},
+	{
+		component: "hostname casing",
+		redirectUri: "http://LOCALHOST:51234/callback?source=cli",
+		error: "invalid_redirect",
+	},
+	{
+		component: "dot path segment",
+		redirectUri: "http://localhost:51234/path/../callback?source=cli",
+		error: "invalid_redirect",
+	},
+	{
+		component: "empty query marker",
+		redirectUri: "http://127.0.0.1:51234/callback?",
+		error: "invalid_redirect",
+	},
+	{
+		component: "IPv4 shorthand",
+		redirectUri: "http://127.1:51234/callback",
 		error: "invalid_redirect",
 	},
 ] satisfies {
@@ -92,7 +119,11 @@ async function setupAuthorizationFixture() {
 	const oauthClient = await auth.api.adminCreateOAuthClient({
 		headers,
 		body: {
-			redirect_uris: [registeredLocalhostRedirect, registeredIPv4Redirect],
+			redirect_uris: [
+				registeredLocalhostRedirect,
+				registeredPortfulLocalhostRedirect,
+				registeredIPv4Redirect,
+			],
 			application_type: "native",
 			skip_consent: true,
 		},
@@ -144,6 +175,14 @@ describe("oauth authorize loopback port variance", () => {
 
 	it("accepts an ephemeral port for localhost", async () => {
 		const requestedRedirect = "http://localhost:51234/callback?source=cli";
+
+		const location = await authorizeRedirect(requestedRedirect);
+
+		expectAuthorizationCodeRedirect(location, requestedRedirect);
+	});
+
+	it("accepts a different port for a portful localhost registration", async () => {
+		const requestedRedirect = "http://localhost:51234/portful-callback";
 
 		const location = await authorizeRedirect(requestedRedirect);
 

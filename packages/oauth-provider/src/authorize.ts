@@ -242,15 +242,70 @@ function getErrorURL(
 }
 
 /**
- * Finds the matching entry in a client's registered redirect_uris for a
- * requested redirect_uri. Honors RFC 8252 §7.3 loopback port variance for
- * the full 127.0.0.0/8 range, [::1], and the `localhost` hostname, matching
- * on scheme+host+path+query and ignoring port. §8.3 prefers loopback IP
- * literals over `localhost` as *client guidance*, but registration
- * (`validateClientRedirectUri`) accepts `http://localhost` for native clients —
- * so the matcher must accept it too, or such clients (e.g. CIMD documents
- * registering port-less `http://localhost/callback`) can never complete an
- * authorization from an ephemeral port.
+ * Based on the loopback port matching approach in node-oidc-provider.
+ *
+ * @see https://github.com/panva/node-oidc-provider/blob/ea1456f987de7750b6af8a89a1881e70c70827fe/lib/models/client.js#L36-L76
+ */
+function stripLoopbackRedirectPort(uri: string): string | undefined {
+	let parsed: URL;
+	try {
+		parsed = new URL(uri);
+	} catch {
+		return undefined;
+	}
+
+	const isLoopback =
+		isLoopbackIP(parsed.hostname) || parsed.hostname === "localhost";
+	const hasUserinfo = parsed.username.length > 0 || parsed.password.length > 0;
+
+	if (parsed.protocol !== "http:" || !isLoopback) {
+		return undefined;
+	}
+	if (parsed.hash || hasUserinfo) {
+		return undefined;
+	}
+
+	const schemeSeparatorIndex = uri.indexOf("://");
+	if (schemeSeparatorIndex < 0) return undefined;
+
+	const authorityStart = schemeSeparatorIndex + 3;
+	const authorityEndOffset = uri.slice(authorityStart).search(/[/?#]/u);
+	let authorityEnd = uri.length;
+	if (authorityEndOffset >= 0) {
+		authorityEnd = authorityStart + authorityEndOffset;
+	}
+	const authority = uri.slice(authorityStart, authorityEnd);
+
+	let portStart: number;
+	if (authority.startsWith("[")) {
+		const closingBracket = authority.indexOf("]");
+		if (closingBracket < 0) return undefined;
+		if (authority[closingBracket + 1] !== ":") return uri;
+
+		portStart = closingBracket + 1;
+	} else {
+		portStart = authority.lastIndexOf(":");
+		if (portStart < 0) return uri;
+	}
+
+	const port = authority.slice(portStart + 1);
+	if (!/^\d*$/u.test(port)) {
+		return undefined;
+	}
+
+	const portStartInUri = authorityStart + portStart;
+	return `${uri.slice(0, portStartInUri)}${uri.slice(authorityEnd)}`;
+}
+
+/**
+ * Finds the matching entry in a client's registered redirect URIs.
+ *
+ * Registration limits loopback redirects to native-compatible HTTP forms.
+ * Within that boundary, only the port may vary; every other character must
+ * match the registered URI.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9700.html#section-4.1.3
+ * @see https://www.rfc-editor.org/rfc/rfc8252.html#section-8.3
  */
 function findRegisteredRedirectUri(
 	registered: readonly string[] | undefined,
@@ -258,31 +313,21 @@ function findRegisteredRedirectUri(
 ): string | undefined {
 	if (!registered || !requested) return undefined;
 
-	let req: URL | undefined;
+	let requestedUrl: URL;
 	try {
-		req = new URL(requested);
+		requestedUrl = new URL(requested);
 	} catch {
-		// malformed requested — only exact-match branch can succeed below
+		return undefined;
 	}
+	if (requestedUrl.hash || requestedUrl.username || requestedUrl.password) {
+		return undefined;
+	}
+	const requestedWithoutPort = stripLoopbackRedirectPort(requested);
 
 	return registered.find((url) => {
 		if (url === requested) return true;
-		if (!req) return false;
-		// RFC 6749 §3.1.2 forbids fragments in redirect URIs and registration
-		// rejects userinfo; never let either ride in via port variance.
-		if (req.hash || req.username || req.password) return false;
-		try {
-			const reg = new URL(url);
-			return (
-				(isLoopbackIP(reg.hostname) || reg.hostname === "localhost") &&
-				reg.hostname === req.hostname &&
-				reg.pathname === req.pathname &&
-				reg.protocol === req.protocol &&
-				reg.search === req.search
-			);
-		} catch {
-			return false;
-		}
+		if (!requestedWithoutPort) return false;
+		return stripLoopbackRedirectPort(url) === requestedWithoutPort;
 	});
 }
 
