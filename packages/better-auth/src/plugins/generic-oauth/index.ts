@@ -222,12 +222,6 @@ export const genericOAuth = <const ID extends string>(
 						return null;
 					});
 					if (discovered) {
-						if (!discovered.issuer && !c.accountIssuer) {
-							ctx.logger.error(
-								`Provider "${c.providerId}": discovery did not return an issuer. Provider skipped to keep its account issuer stable.`,
-							);
-							continue;
-						}
 						authorizationUrl ??= discovered.authorization_endpoint;
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
@@ -253,11 +247,6 @@ export const genericOAuth = <const ID extends string>(
 								algorithms: isOidc ? signingAlgs : undefined,
 							};
 						}
-					} else if (!c.accountIssuer) {
-						ctx.logger.error(
-							`Provider "${c.providerId}": discovery returned no valid data. Provider skipped to keep its account issuer stable.`,
-						);
-						continue;
 					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
 							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
@@ -306,7 +295,6 @@ export const genericOAuth = <const ID extends string>(
 				}
 
 				const accountSubject = c.accountSubject;
-				const accountIssuer = c.accountIssuer;
 				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
@@ -322,14 +310,6 @@ export const genericOAuth = <const ID extends string>(
 							? (genericProfile.sub ?? "")
 							: (genericProfile.id ?? "");
 					},
-					accountIssuer:
-						typeof accountIssuer === "function"
-							? ({ tokens, profile }) =>
-									accountIssuer({
-										tokens,
-										profile: profile as GenericOAuthUserInfo,
-									})
-							: (accountIssuer ?? issuer),
 					idToken: idTokenConfig,
 					requiresIdTokenNonce:
 						idTokenConfig !== undefined &&

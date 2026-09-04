@@ -309,7 +309,6 @@ describe("oauth", async () => {
 								accountSubject:
 									config?.accountSubject ??
 									(({ profile }) => profile.sub ?? ""),
-								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -736,7 +735,6 @@ describe("oauth", async () => {
 						{
 							scopes: ["openid", "profile", "email"],
 							accountSubject: ({ profile }) => profile.sub ?? "",
-							accountIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -834,7 +832,6 @@ describe("oauth", async () => {
 						{
 							scopes: ["openid", "profile", "email"],
 							accountSubject: ({ profile }) => profile.sub ?? "",
-							accountIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1182,7 +1179,6 @@ describe("oauth - prompt", async () => {
 								accountSubject:
 									config?.accountSubject ??
 									(({ profile }) => profile.sub ?? ""),
-								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -1390,7 +1386,6 @@ describe("oauth - prompt", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								accountSubject: ({ profile }) => profile.sub ?? "",
-								accountIssuer: authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -2887,7 +2882,6 @@ describe("oauth - config", () => {
 								accountSubject:
 									config?.accountSubject ??
 									(({ profile }) => profile.sub ?? ""),
-								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl

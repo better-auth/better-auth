@@ -1,6 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import * as z from "zod";
 import { APIError } from "../../api";
@@ -386,7 +385,6 @@ export const siwe = (options: SIWEPluginOptions) => {
 							await ctx.context.internalAdapter.createAccount({
 								userId: user.id,
 								providerId: "siwe",
-								issuer: createLocalAccountIssuer("siwe"),
 								accountId: `${walletAddress}:${chainId}`,
 								createdAt: new Date(),
 								updatedAt: new Date(),
@@ -410,7 +408,6 @@ export const siwe = (options: SIWEPluginOptions) => {
 								await ctx.context.internalAdapter.createAccount({
 									userId: user.id,
 									providerId: "siwe",
-									issuer: createLocalAccountIssuer("siwe"),
 									accountId: `${walletAddress}:${chainId}`,
 									createdAt: new Date(),
 									updatedAt: new Date(),

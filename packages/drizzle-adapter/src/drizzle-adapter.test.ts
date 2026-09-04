@@ -14,7 +14,7 @@ describe("drizzle-adapter", () => {
 	it("resolves physical table and column names for migrations", async () => {
 		const account = pgTable("auth_account", {
 			accountId: text("account_id").notNull(),
-			issuer: text("identity_issuer").notNull(),
+			scope: text("token_scope").notNull(),
 			providerId: text("provider_id").notNull(),
 		});
 		const options = {};
@@ -28,7 +28,7 @@ describe("drizzle-adapter", () => {
 			fields: {
 				accountId: { type: "string", fieldName: "accountId" },
 				providerId: { type: "string", fieldName: "providerId" },
-				issuer: { type: "string", fieldName: "issuer" },
+				scope: { type: "string", fieldName: "scope" },
 			},
 		} satisfies BetterAuthDBSchema[string];
 		const resolved =
@@ -39,7 +39,7 @@ describe("drizzle-adapter", () => {
 		expect(resolved?.account?.modelName).toBe("auth_account");
 		expect(resolved?.account?.fields.accountId?.fieldName).toBe("account_id");
 		expect(resolved?.account?.fields.providerId?.fieldName).toBe("provider_id");
-		expect(resolved?.account?.fields.issuer?.fieldName).toBe("identity_issuer");
+		expect(resolved?.account?.fields.scope?.fieldName).toBe("token_scope");
 	});
 
 	it("resolves a customized model through its schema key", async () => {
@@ -84,12 +84,12 @@ describe("drizzle-adapter", () => {
 					modelName: "account",
 					fields: {
 						accountId: { type: "string", fieldName: "accountId" },
-						issuer: { type: "string", fieldName: "issuer" },
+						scope: { type: "string", fieldName: "scope" },
 					},
 				},
 			}),
 		).rejects.toThrow(
-			'Drizzle migration schema could not resolve field "issuer" on model "account".',
+			'Drizzle migration schema could not resolve field "scope" on model "account".',
 		);
 		await expect(
 			migrationConnection?.resolvePhysicalSchema?.({
@@ -154,8 +154,8 @@ describe("drizzle-adapter", () => {
 		).toBe(true);
 		await expect(
 			migrationConnection?.execute({
-				parameters: ["local:credential"],
-				sql: "UPDATE account SET issuer = ?",
+				parameters: ["openid"],
+				sql: "UPDATE account SET scope = ?",
 			}),
 		).resolves.toEqual({
 			numAffectedRows: 2n,
@@ -191,11 +191,11 @@ describe("drizzle-adapter", () => {
 
 		await expect(
 			adapter.options?.adapterConfig.migrationConnection?.execute({
-				parameters: ["local:credential"],
+				parameters: ["openid"],
 				sql:
 					provider === "pg"
-						? "UPDATE account SET issuer = $1"
-						: "UPDATE account SET issuer = ?",
+						? "UPDATE account SET scope = $1"
+						: "UPDATE account SET scope = ?",
 			}),
 		).resolves.toEqual({ numAffectedRows: 2n, rows: [] });
 	});
@@ -262,14 +262,14 @@ describe("drizzle-adapter", () => {
 		await migrationConnection?.transaction?.(async (connection) => {
 			await connection.execute({
 				parameters: [],
-				sql: "UPDATE account SET issuer = 'local:credential'",
+				sql: "UPDATE account SET scope = 'openid'",
 			});
 		});
 
 		expect(statements).toEqual([
 			"SELECT 1",
 			"BEGIN IMMEDIATE",
-			"UPDATE account SET issuer = 'local:credential'",
+			"UPDATE account SET scope = 'openid'",
 			"COMMIT",
 		]);
 	});
@@ -298,7 +298,7 @@ describe("drizzle-adapter", () => {
 			async (connection) => {
 				await connection.execute({
 					parameters: [],
-					sql: "UPDATE account SET issuer = 'local:credential'",
+					sql: "UPDATE account SET scope = 'openid'",
 				});
 			},
 		);
@@ -531,12 +531,12 @@ describe("drizzle-adapter", () => {
 				adapter.findOne({
 					model: "account",
 					where: [
-						{ field: "issuer", value: "https://issuer.example" },
+						{ field: "providerId", value: "workforce" },
 						{ field: "accountId", value: "subject" },
 					],
 				}),
 			).rejects.toThrow(
-				'The field "issuer" does not exist in the schema for the model "account"',
+				'The field "providerId" does not exist in the schema for the model "account"',
 			);
 			expect(select).not.toHaveBeenCalled();
 		});
@@ -551,16 +551,13 @@ describe("drizzle-adapter", () => {
 				{ provider: "pg", schema: { account } },
 			)({
 				secret: "test-secret-that-is-at-least-32-chars-long!!",
-				account: { fields: { issuer: "constructor" } },
+				account: { fields: { accountId: "constructor" } },
 			});
 
 			await expect(
 				adapter.findOne({
 					model: "account",
-					where: [
-						{ field: "issuer", value: "https://issuer.example" },
-						{ field: "accountId", value: "subject" },
-					],
+					where: [{ field: "accountId", value: "subject" }],
 				}),
 			).rejects.toThrow(
 				'The field "constructor" does not exist in the schema for the model "account"',

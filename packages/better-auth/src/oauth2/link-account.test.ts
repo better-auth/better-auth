@@ -1712,12 +1712,12 @@ describe("oauth2 - sign-up account creation rollback", async () => {
  * @see https://github.com/better-auth/better-auth/issues/8906
  *
  * Regression: linkSocial callback looked up the provider subject without its
- * issuer namespace. When two different issuers share the same numeric subject,
+ * provider id. When two different providers share the same numeric subject,
  * the wrong account could be matched, causing a
  * spurious "account_already_linked_to_different_user" error or silently
  * updating the wrong account record.
  */
-describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
+describe("oauth2 - link-social uses provider-scoped account lookup", async () => {
 	// Shared numeric ID used by both Google and GitHub to trigger the bug
 	const SHARED_ACCOUNT_ID = "99999";
 
@@ -1738,7 +1738,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 			enabled: true,
 		},
 		account: {
-			identityStrategy: "issuer",
 			accountLinking: {
 				enabled: true,
 				trustedProviders: ["google", "github"],
@@ -1784,7 +1783,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		);
 	}
 
-	it("does not match a different issuer with the same provider account id", async () => {
+	it("does not match a different provider with the same provider account id", async () => {
 		// User A signs up through Google with a shared provider account ID.
 		const userAEmail = "user-a@example.com";
 		mockGoogleToken(userAEmail, SHARED_ACCOUNT_ID);
@@ -1825,7 +1824,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		);
 
 		// User B tries to link GitHub — GitHub returns the same provider account ID
-		// as User A's Google account. Without the issuer-scoped key, the lookup
+		// as User A's Google account. Without the provider-scoped key, the lookup
 		// would find User A's Google account and return "account_already_linked_to_different_user".
 		mockGithubToken("user-b-gh", Number(SHARED_ACCOUNT_ID), userBEmail);
 
@@ -1859,7 +1858,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 
 		const accountsB = await ctx.adapter.findMany<{
 			providerId: string;
-			issuer: string;
 			accountId: string;
 			userId: string;
 		}>({
@@ -1869,7 +1867,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.issuer).toBe("local:oauth:github");
 		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 
@@ -1884,67 +1881,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
-	});
-
-	it("persists the provider namespace when linking under provider-id identity", async () => {
-		const { auth, client, cookieSetter } = await getTestInstance(
-			{
-				account: {
-					identityStrategy: "provider-id",
-					accountLinking: {
-						enabled: true,
-						trustedProviders: ["github"],
-					},
-				},
-				emailAndPassword: { enabled: true },
-				socialProviders: {
-					github: {
-						clientId: "test",
-						clientSecret: "test",
-						enabled: true,
-					},
-				},
-			},
-			{ disableTestUser: true },
-		);
-		const headers = new Headers();
-		const signUp = await client.signUp.email(
-			{
-				email: "provider-id-link@example.com",
-				password: "password123",
-				name: "Provider ID Link",
-			},
-			{ onSuccess: cookieSetter(headers) },
-		);
-		expect(signUp.error).toBeNull();
-
-		mockGithubToken(
-			"provider-id-link",
-			Number(SHARED_ACCOUNT_ID),
-			"provider-id-link@example.com",
-		);
-		const link = await client.linkSocial(
-			{ provider: "github", callbackURL: "/settings" },
-			{ headers, onSuccess: cookieSetter(headers) },
-		);
-		const state = new URL(link.data!.url!).searchParams.get("state") || "";
-		await client.$fetch("/callback/github", {
-			query: { state, code: "test_code" },
-			method: "GET",
-			headers,
-		});
-
-		const context = await auth.$context;
-		const user = (await client.getSession({ fetchOptions: { headers } })).data!
-			.user;
-		const accounts = await context.internalAdapter.findAccounts(user.id);
-		expect(accounts).toContainEqual(
-			expect.objectContaining({
-				providerId: "github",
-				accountId: SHARED_ACCOUNT_ID,
-				issuer: "local:oauth:github",
-			}),
-		);
 	});
 });
 
@@ -1982,7 +1918,6 @@ describe("oauth2 - orphaned account identity", () => {
 				model: "account",
 				data: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId,
 					userId: "missing-account-owner",
 					createdAt: new Date(),

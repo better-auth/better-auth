@@ -203,7 +203,6 @@ describe("account", async () => {
 		const storedAccount = await isolatedContext.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "local-account-selector-subject",
 			accessToken: "local-account-selector-token",
 		});
@@ -215,7 +214,6 @@ describe("account", async () => {
 			(account) => account.id === storedAccount.id,
 		);
 		assert(googleAccount, "google account should be listed");
-		expect(googleAccount.issuer).toBe("https://accounts.google.com");
 		expect(googleAccount.accountId).toBe("local-account-selector-subject");
 		expect(googleAccount.id).not.toBe(googleAccount.accountId);
 
@@ -258,7 +256,6 @@ describe("account", async () => {
 		const storedAccount = await testCtx.internalAdapter.createAccount({
 			userId: session.data!.user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId,
 			accessToken: "access-token",
 			scope: "",
@@ -311,7 +308,6 @@ describe("account", async () => {
 		const googleAccount = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "provider-subject",
 			accessToken: "provider-access-token",
 		});
@@ -328,7 +324,6 @@ describe("account", async () => {
 				account: {
 					id: googleAccount.id,
 					providerId: googleAccount.providerId,
-					issuer: googleAccount.issuer,
 					accountId: googleAccount.accountId,
 				},
 				data: expect.any(Object),
@@ -355,7 +350,6 @@ describe("account", async () => {
 		const googleAccount = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "unavailable-provider-subject",
 			accessToken: "provider-access-token",
 		});
@@ -395,7 +389,6 @@ describe("account", async () => {
 		const googleAccount = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "server-side-provider-subject",
 			accessToken: "server-side-access-token",
 		});
@@ -426,7 +419,6 @@ describe("account", async () => {
 			account: {
 				id: googleAccount.id,
 				providerId: googleAccount.providerId,
-				issuer: googleAccount.issuer,
 				accountId: googleAccount.accountId,
 			},
 			data: expect.any(Object),
@@ -470,7 +462,6 @@ describe("account", async () => {
 		const otherUserAccount = await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "other-user-google-subject",
 			accessToken: "other-access-token",
 		});
@@ -490,7 +481,7 @@ describe("account", async () => {
 		});
 	});
 
-	it("should select a local row when provider subjects collide across issuers", async () => {
+	it("should select a local row when provider subjects collide across providers", async () => {
 		const { auth, signInWithTestUser, client } = await getTestInstance({
 			socialProviders: {
 				google: {
@@ -519,14 +510,12 @@ describe("account", async () => {
 		await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: sharedProviderAccountId,
 			accessToken: "google-access-token",
 		});
 		const githubAccount = await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "github",
-			issuer: "local:oauth:github",
 			accountId: sharedProviderAccountId,
 			accessToken: "github-access-token",
 		});
@@ -585,7 +574,6 @@ describe("account", async () => {
 		const otherUserAccount = await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
-			issuer: "local:oauth:github",
 			accountId: "other-server-side-subject",
 			accessToken: "github-access-token",
 		});
@@ -913,117 +901,6 @@ describe("account", async () => {
 		});
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10214
-	 */
-	it("should reuse an issuer subject across provider aliases without allowing cross-user linking", async () => {
-		const verifyIdToken = vi.fn(async () => true);
-		const {
-			auth,
-			client: isolatedClient,
-			signInWithTestUser: signInIsolatedTestUser,
-			cookieSetter,
-		} = await getTestInstance({
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					verifyIdToken,
-				},
-			},
-			account: {
-				accountLinking: {
-					allowDifferentEmails: true,
-				},
-			},
-		});
-		const isolatedContext = await auth.$context;
-		const googleProvider = isolatedContext.socialProviders.find(
-			(provider) => provider.id === "google",
-		);
-		assert(googleProvider, "google provider should be configured");
-		const accountId = "shared-direct-link-subject";
-		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
-			user: {
-				name: "Shared Social User",
-				email: "shared-social@example.com",
-				emailVerified: true,
-			},
-			data: { sub: accountId },
-		});
-		isolatedContext.socialProviders.push({
-			...googleProvider,
-			id: "google-mobile",
-			name: "Google Mobile",
-		});
-
-		const firstUserSession = await signInIsolatedTestUser();
-		const linkBody = {
-			idToken: { token: "verified-id-token" },
-		};
-		const firstLink = await isolatedClient.$fetch("/link-social", {
-			method: "POST",
-			body: { ...linkBody, provider: "google" },
-			headers: firstUserSession.headers,
-		});
-		expect(firstLink.error).toBeNull();
-
-		const aliasLink = await isolatedClient.$fetch("/link-social", {
-			method: "POST",
-			body: { ...linkBody, provider: "google-mobile" },
-			headers: firstUserSession.headers,
-		});
-		expect(aliasLink.error).toBeNull();
-		expect(aliasLink.data).toMatchObject({ status: true, redirect: false });
-
-		const firstUserAccounts =
-			await isolatedContext.internalAdapter.findAccounts(
-				firstUserSession.user.id,
-			);
-		expect(
-			firstUserAccounts.filter(
-				(account) =>
-					account.issuer === "https://accounts.google.com" &&
-					account.accountId === accountId,
-			),
-		).toHaveLength(1);
-
-		const secondUserHeaders = new Headers();
-		await isolatedClient.signUp.email(
-			{
-				name: "Second User",
-				email: "second-direct-link@example.com",
-				password: "password123456",
-			},
-			{ onSuccess: cookieSetter(secondUserHeaders) },
-		);
-		const secondUserSession = await auth.api.getSession({
-			headers: secondUserHeaders,
-		});
-		assert(secondUserSession, "second user should be signed in");
-
-		const conflictingLink = await isolatedClient.$fetch("/link-social", {
-			method: "POST",
-			body: { ...linkBody, provider: "google-mobile" },
-			headers: secondUserHeaders,
-		});
-		expect(conflictingLink.error?.status).toBe(409);
-		expect(conflictingLink.error?.message).toBe(
-			BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED.message,
-		);
-		const secondUserAccounts =
-			await isolatedContext.internalAdapter.findAccounts(
-				secondUserSession.user.id,
-			);
-		expect(
-			secondUserAccounts.some(
-				(account) =>
-					account.issuer === "https://accounts.google.com" &&
-					account.accountId === accountId,
-			),
-		).toBe(false);
-	});
-
 	it("should unlink account", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {
@@ -1101,7 +978,6 @@ describe("account", async () => {
 			model: "account",
 			data: {
 				providerId: "google",
-				issuer: "https://accounts.google.com",
 				accountId: "123",
 				userId: user.id,
 				createdAt: new Date(),
@@ -1113,7 +989,6 @@ describe("account", async () => {
 			model: "account",
 			data: {
 				providerId: "google",
-				issuer: "https://accounts.google.com",
 				accountId: "345",
 				userId: user.id,
 				createdAt: new Date(),
@@ -1447,7 +1322,6 @@ describe("account", async () => {
 		const secondUserAccount = await testCtx.internalAdapter.createAccount({
 			userId: session.user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "second-google-sub",
 			accessToken: "second-access-token",
 			refreshToken: "second-refresh-token",
@@ -2651,7 +2525,6 @@ describe("account selector validation", async () => {
 		const account = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "stale-google-subject",
 			accessToken: "stale-access-token",
 		});
@@ -2905,7 +2778,6 @@ describe("account resolution in stateless mode", async () => {
 
 		assert(info, "expected accountInfo to resolve from the account cookie");
 		expect(info.account).toMatchObject({
-			issuer: IDP,
 			accountId: "shared-idp-user",
 			providerId: "idp",
 		});

@@ -13,7 +13,6 @@ import {
 	runWithTransaction,
 	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
@@ -1000,14 +999,20 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findAccountOwnerByKey: async ({ issuer, accountId }) => {
+		findAccountOwnerByKey: async ({ providerId, accountId }) => {
 			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
 				model: "account",
 				where: [
-					{ field: "issuer", value: issuer },
-					{ field: "accountId", value: accountId },
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "accountId",
+						value: accountId,
+					},
 				],
 				join: {
 					user: true,
@@ -1140,12 +1145,14 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
-					{ field: "providerId", value: "credential" },
 					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
+						field: "providerId",
+						value: "credential",
 					},
-					{ field: "accountId", value: userId },
+					{
+						field: "accountId",
+						value: userId,
+					},
 				],
 				"account",
 				undefined,
@@ -1171,21 +1178,23 @@ export const createInternalAdapter = (
 				where: [
 					{ field: "userId", value: userId },
 					{ field: "providerId", value: "credential" },
-					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
-					},
 					{ field: "accountId", value: userId },
 				],
 			});
 		},
-		findAccountByKey: async ({ issuer, accountId }) => {
+		findAccountByKey: async ({ providerId, accountId }) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
 					model: "account",
 					where: [
-						{ field: "issuer", value: issuer },
-						{ field: "accountId", value: accountId },
+						{
+							field: "providerId",
+							value: providerId,
+						},
+						{
+							field: "accountId",
+							value: accountId,
+						},
 					],
 				},
 			);
