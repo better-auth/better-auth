@@ -496,6 +496,104 @@ describe("one-tap implicit linking gate", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10926
+ */
+describe("one-tap nonce binding", async () => {
+	afterEach(() => {
+		(verifiedPayload as Record<string, unknown>).nonce = undefined;
+	});
+
+	const googleOptions = {
+		socialProviders: {
+			google: {
+				clientId: "test-client",
+				clientSecret: "test-secret",
+				enabled: true,
+			},
+		},
+		plugins: [oneTap()],
+	};
+
+	type CallbackResponse = {
+		data: { token: string } | null;
+		error: { status: number; message?: string } | null;
+	};
+
+	it("issues a nonce and accepts a token bound to it exactly once", async () => {
+		const { client } = await getTestInstance(googleOptions);
+		const issued = await client.$fetch<{ nonce: string }>("/one-tap/nonce", {
+			method: "POST",
+		});
+		expect(issued.data?.nonce).toBeTypeOf("string");
+		const nonce = issued.data!.nonce;
+		Object.assign(verifiedPayload, { nonce });
+
+		const first = await client.$fetch<CallbackResponse>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", nonce },
+		});
+		expect(first.error).toBeNull();
+
+		// Replaying the same token and nonce must fail: the nonce is single-use.
+		const replay = await client.$fetch<CallbackResponse>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", nonce },
+		});
+		expect(replay.error?.status).toBe(400);
+		expect(replay.error?.message).toBe("invalid or expired nonce");
+	});
+
+	it("rejects a nonce the server never issued", async () => {
+		const { client } = await getTestInstance(googleOptions);
+		Object.assign(verifiedPayload, { nonce: "attacker-chosen" });
+
+		const res = await client.$fetch<CallbackResponse>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", nonce: "attacker-chosen" },
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("invalid or expired nonce");
+	});
+
+	it("rejects a token whose nonce claim differs from the presented nonce", async () => {
+		const { client } = await getTestInstance(googleOptions);
+		const issued = await client.$fetch<{ nonce: string }>("/one-tap/nonce", {
+			method: "POST",
+		});
+		Object.assign(verifiedPayload, { nonce: "some-other-nonce" });
+
+		const res = await client.$fetch<CallbackResponse>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", nonce: issued.data!.nonce },
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("invalid id token");
+	});
+
+	it("rejects a token minted with a nonce when the callback omits it", async () => {
+		const { client } = await getTestInstance(googleOptions);
+		Object.assign(verifiedPayload, { nonce: "minted-with-nonce" });
+
+		const res = await client.$fetch<CallbackResponse>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("invalid id token");
+	});
+
+	it("still accepts a token without a nonce claim when none is presented", async () => {
+		const { client } = await getTestInstance(googleOptions);
+
+		const res = await client.$fetch<CallbackResponse>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+		expect(res.error).toBeNull();
+	});
+});
+
 describe("one-tap callbackURL origin validation", async () => {
 	const googleProvider = {
 		clientId: "test-client",
