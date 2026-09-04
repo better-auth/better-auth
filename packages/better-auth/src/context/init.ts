@@ -1,19 +1,12 @@
-import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getKyselyDatabaseType } from "@better-auth/kysely-adapter";
 import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
-import { withLegacyAccountIssuer } from "../db/legacy-account-issuer";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
 
 export const init = async (options: BetterAuthOptions) => {
-	const adapter = withLegacyAccountIssuer(
-		await getAdapter(options),
-		() => getAdapter(options),
-		options,
-		createLogger(options.logger),
-	);
+	const adapter = await getAdapter(options);
 
 	// Get database type using Kysely's dialect detection
 	const getDatabaseType = (database: BetterAuthOptions["database"]) =>
