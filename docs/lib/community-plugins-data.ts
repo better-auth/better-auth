@@ -375,4 +375,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/qamarq.png",
 		},
 	},
+	{
+		name: "@wraps.dev/better-auth",
+		url: "https://github.com/wraps-team/better-auth-wraps",
+		description:
+			"Transactional auth email through your own AWS SES account — verification, password reset, magic link, OTP, and organization invites. Optionally syncs new signups to Wraps contacts to trigger onboarding workflows.",
+		author: {
+			name: "stewartjarod",
+			github: "stewartjarod",
+			avatar: "https://github.com/stewartjarod.png",
+		},
+	},
 ];
