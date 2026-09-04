@@ -653,8 +653,12 @@ export interface CustomAdapter {
 	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the
 	 * strongest race-safety guarantee. Implementations must delete at most
 	 * one matching row.
+	 *
+	 * Optional. When omitted, the factory falls back to `findOne` followed by a
+	 * `deleteMany` guarded on the row id, and treats the caller as the winner
+	 * only when exactly one row was deleted.
 	 */
-	consumeOne: <T>(data: {
+	consumeOne?: <T>(data: {
 		model: string;
 		where: CleanedWhere[];
 	}) => Promise<T | null>;
@@ -668,8 +672,12 @@ export interface CustomAdapter {
 	 * Implementing this natively (e.g. `UPDATE ... SET n = n + $delta WHERE ...
 	 * RETURNING *`) gives one round trip and the strongest race-safety
 	 * guarantee.
+	 *
+	 * Optional. When omitted, the factory falls back to a compare-and-swap
+	 * loop: `findOne`, then `updateMany` guarded on the row id and the current
+	 * counter values, retried when a concurrent writer changed the row first.
 	 */
-	incrementOne: <T>(data: {
+	incrementOne?: <T>(data: {
 		model: string;
 		where: CleanedWhere[];
 		increment: Record<string, number>;

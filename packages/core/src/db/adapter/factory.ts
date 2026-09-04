@@ -1366,18 +1366,47 @@ export const createAdapterFactory =
 					{ model, where },
 				);
 
-				if (typeof adapterInstance.consumeOne !== "function") {
-					throw new BetterAuthError(
-						`Adapter "${config.adapterId}" must implement consumeOne for atomic single-use credential consumption.`,
-					);
-				}
+				const nativeConsumeOne = adapterInstance.consumeOne;
 				const res = await withSpan(
 					`db consumeOne ${model}`,
 					{
 						[ATTR_DB_OPERATION_NAME]: "consumeOne",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.consumeOne<T>({ model, where }),
+					async () => {
+						if (typeof nativeConsumeOne === "function") {
+							return nativeConsumeOne<T>({ model, where });
+						}
+						// Fallback for adapters without a native consumeOne: read the
+						// candidate, then delete it guarded on its id. A single-row
+						// DELETE is atomic on every supported store, so exactly one of
+						// several concurrent callers sees a deleted count of 1.
+						const idField = getFieldName({ model: unsafeModel, field: "id" });
+						const target = await adapterInstance.findOne<Record<string, any>>({
+							model,
+							where,
+						});
+						if (!target) return null;
+						const deleted = await adapterInstance.deleteMany({
+							model,
+							where: [
+								...where,
+								{
+									field: idField,
+									value: target[idField],
+									operator: "eq",
+									connector: "AND",
+									mode: "sensitive",
+								},
+							],
+						});
+						if (typeof deleted !== "number" || !Number.isFinite(deleted)) {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" returned a non-numeric value from deleteMany during the consumeOne fallback. Return the number of deleted rows, or implement a native consumeOne.`,
+							);
+						}
+						return deleted > 0 ? (target as T) : null;
+					},
 				);
 
 				debugLog(
@@ -1440,11 +1469,6 @@ export const createAdapterFactory =
 					{ model, where, increment: unsafeIncrement, set: unsafeSet },
 				);
 
-				if (typeof adapterInstance.incrementOne !== "function") {
-					throw new BetterAuthError(
-						`Adapter "${config.adapterId}" must implement incrementOne for atomic guarded counter updates.`,
-					);
-				}
 				const mappedKeys = config.mapKeysTransformInput ?? {};
 				const increment: Record<string, number> = {};
 				for (const [field, delta] of Object.entries(unsafeIncrement)) {
@@ -1466,19 +1490,69 @@ export const createAdapterFactory =
 						"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
 					);
 				}
+				const nativeIncrementOne = adapterInstance.incrementOne;
 				const res = await withSpan(
 					`db incrementOne ${model}`,
 					{
 						[ATTR_DB_OPERATION_NAME]: "incrementOne",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() =>
-						adapterInstance.incrementOne<T>({
-							model,
-							where,
-							increment,
-							set,
-						}),
+					async () => {
+						if (typeof nativeIncrementOne === "function") {
+							return nativeIncrementOne<T>({ model, where, increment, set });
+						}
+						// Fallback for adapters without a native incrementOne: a
+						// compare-and-swap loop. Read the row, then update it guarded on
+						// its id and the counter values just read. A lost race returns
+						// an affected count of 0 while the selector still matches, so
+						// retry; a selector that no longer matches returns null.
+						const idField = getFieldName({ model: unsafeModel, field: "id" });
+						// Bounded retries: adapters under heavy contention should implement
+						// incrementOne natively instead of relying on this loop.
+						for (let attempt = 0; attempt < 5; attempt++) {
+							const current = await adapterInstance.findOne<
+								Record<string, any>
+							>({ model, where });
+							if (!current) return null;
+							const idWhere: CleanedWhere = {
+								field: idField,
+								value: current[idField],
+								operator: "eq",
+								connector: "AND",
+								mode: "sensitive",
+							};
+							const guard: CleanedWhere[] = [...where, idWhere];
+							const update: Record<string, unknown> = { ...(set ?? {}) };
+							for (const [field, delta] of Object.entries(increment)) {
+								const previous = current[field];
+								update[field] =
+									(typeof previous === "number" ? previous : 0) + delta;
+								if (typeof previous === "number") {
+									guard.push({
+										field,
+										value: previous,
+										operator: "eq",
+										connector: "AND",
+										mode: "sensitive",
+									});
+								}
+							}
+							const updated = await adapterInstance.updateMany({
+								model,
+								where: guard,
+								update,
+							});
+							if (typeof updated !== "number" || !Number.isFinite(updated)) {
+								throw new BetterAuthError(
+									`Adapter "${config.adapterId}" returned a non-numeric value from updateMany during the incrementOne fallback. Return the number of updated rows, or implement a native incrementOne.`,
+								);
+							}
+							if (updated > 0) {
+								return adapterInstance.findOne<T>({ model, where: [idWhere] });
+							}
+						}
+						return null;
+					},
 				);
 
 				debugLog(
