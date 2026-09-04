@@ -75,9 +75,6 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
-											issuer: {
-												type: "string",
-											},
 											accountId: {
 												type: "string",
 											},
@@ -96,7 +93,6 @@ export const listUserAccounts = createAuthEndpoint(
 											"providerId",
 											"createdAt",
 											"updatedAt",
-											"issuer",
 											"accountId",
 											"userId",
 											"scopes",
@@ -396,7 +392,6 @@ export const linkSocialAccount = createAuthEndpoint(
 			try {
 				await c.context.internalAdapter.createAccount({
 					userId: session.user.id,
-					providerId: provider.id,
 					...accountKey,
 					accessToken: await setTokenUtil(
 						c.body.idToken.accessToken,
@@ -998,7 +993,7 @@ export const accountInfo = createAuthEndpoint(
 												issuer: { type: "string" },
 												accountId: { type: "string" },
 											},
-											required: ["id", "providerId", "issuer", "accountId"],
+											required: ["id", "providerId", "accountId"],
 											additionalProperties: false,
 										},
 										data: {
@@ -1062,7 +1057,6 @@ export const accountInfo = createAuthEndpoint(
 			account: {
 				id: account.id,
 				providerId: account.providerId,
-				issuer: account.issuer,
 				accountId: account.accountId,
 			},
 		});

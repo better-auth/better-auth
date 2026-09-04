@@ -440,19 +440,16 @@ describe("get-migration: compound indexes on SQLite", () => {
 	});
 });
 
-const backfillGuide =
-	"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer";
-
-// A 1.6-shape account table. `issuer` is either absent (the 1.7 column has not
-// been added yet) or present as a nullable column (added by hand without the
-// documented NOT NULL step).
+// An account table whose required `plan` additional field is either absent
+// (the column has not been added yet) or present as a nullable column (added
+// by hand without the NOT NULL step).
 function createAccountDb({
-	issuer,
-	issuerColumn = "issuer",
+	plan,
+	planColumn = "plan",
 	seeded = true,
 }: {
-	issuer?: "nullable" | "notNull";
-	issuerColumn?: string;
+	plan?: "nullable" | "notNull";
+	planColumn?: string;
 	seeded?: boolean;
 }) {
 	const db = new DatabaseSync(":memory:");
@@ -467,16 +464,16 @@ function createAccountDb({
 			"updatedAt" date not null
 		)`,
 	);
-	const issuerDefinition =
-		issuer === "nullable"
-			? `"${issuerColumn}" text,`
-			: issuer === "notNull"
-				? `"${issuerColumn}" text not null,`
+	const planDefinition =
+		plan === "nullable"
+			? `"${planColumn}" text,`
+			: plan === "notNull"
+				? `"${planColumn}" text not null,`
 				: "";
 	db.exec(
 		`CREATE TABLE "account" (
 			"id" text primary key not null,
-			${issuerDefinition}
+			${planDefinition}
 			"accountId" text not null,
 			"providerId" text not null,
 			"userId" text not null references "user" ("id"),
@@ -496,11 +493,11 @@ function createAccountDb({
 		`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
 		 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
 	);
-	const issuerValue = issuer ? `, 'https://accounts.google.com'` : "";
-	const issuerTarget = issuer ? `, "${issuerColumn}"` : "";
+	const planValue = plan ? `, 'free'` : "";
+	const planTarget = plan ? `, "${planColumn}"` : "";
 	db.exec(
-		`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt"${issuerTarget})
-		 VALUES ('a1', '10769150350006150715113082367', 'google', 'u1', '2020-01-01', '2020-01-01'${issuerValue})`,
+		`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt"${planTarget})
+		 VALUES ('a1', '10769150350006150715113082367', 'google', 'u1', '2020-01-01', '2020-01-01'${planValue})`,
 	);
 	return db;
 }
@@ -515,6 +512,10 @@ function addNullableTierColumn(db: DatabaseSync) {
 
 const tierField = {
 	user: { additionalFields: { tier: { type: "string", required: true } } },
+} satisfies BetterAuthOptions;
+
+const accountPlanField = {
+	account: { additionalFields: { plan: { type: "string", required: true } } },
 } satisfies BetterAuthOptions;
 
 function captureFailure(promise: Promise<unknown>) {
@@ -572,48 +573,47 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 		);
 		expect(String(failure)).toContain("MySQL");
 		expect(String(failure)).toContain("empty string");
-		expect(String(failure)).not.toContain(backfillGuide);
 	});
 
-	/**
-	 * @see https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer
-	 */
-	it("refuses to add the account issuer column to a populated account table, pointing at the upgrade guide", async () => {
+	it("refuses to add a required additional field to a populated account table", async () => {
 		const failure = await captureFailure(
-			getMigrations({ database: createAccountDb({}) }),
+			getMigrations({ database: createAccountDb({}), ...accountPlanField }),
 		);
 
 		expect(failure).toBeInstanceOf(BetterAuthError);
 		expect(String(failure)).toContain(
-			'Cannot add required column "issuer" to populated table "account"',
+			'Cannot add required column "plan" to populated table "account"',
 		);
-		expect(String(failure)).toContain(backfillGuide);
 	});
 
-	it("points at the upgrade guide through a renamed issuer column", async () => {
+	it("reports the physical column name of a renamed required field", async () => {
 		const failure = await captureFailure(
 			getMigrations({
-				database: createAccountDb({ issuerColumn: "identity_issuer" }),
-				account: { fields: { issuer: "identity_issuer" } },
+				database: createAccountDb({}),
+				account: {
+					additionalFields: {
+						plan: { type: "string", required: true, fieldName: "account_plan" },
+					},
+				},
 			}),
 		);
 
 		expect(String(failure)).toContain(
-			'Cannot add required column "identity_issuer" to populated table "account"',
+			'Cannot add required column "account_plan" to populated table "account"',
 		);
-		expect(String(failure)).toContain(backfillGuide);
 	});
 
 	it("plans a required column without a default when the table is empty", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
 			database: createAccountDb({ seeded: false }),
+			...accountPlanField,
 		});
 
 		expect(toBeAdded.find((t) => t.table === "account")?.fields).toHaveProperty(
-			"issuer",
+			"plan",
 		);
 		expect((await compileMigrations()).toLowerCase()).toContain(
-			'add column "issuer" text not null',
+			'add column "plan" text not null',
 		);
 	});
 
@@ -665,7 +665,7 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 
 describe("get-migration: nullable columns for required fields", () => {
 	it("warns and proceeds when a required field's live column is nullable", async () => {
-		const db = addNullableTierColumn(createAccountDb({ issuer: "notNull" }));
+		const db = addNullableTierColumn(createAccountDb({}));
 		const warnings: string[] = [];
 
 		const { runMigrations, toBeCreated } = await getMigrations({
@@ -704,26 +704,28 @@ describe("get-migration: nullable columns for required fields", () => {
 
 	it("accepts a required field whose live column is not null", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
-			database: createAccountDb({ issuer: "notNull" }),
+			database: createAccountDb({ plan: "notNull" }),
+			...accountPlanField,
 		});
 
 		expect(toBeAdded.find((t) => t.table === "account")).toBeUndefined();
-		expect(await compileMigrations()).toContain(
-			'create unique index "account_issuer_accountId_uidx"',
+		expect((await compileMigrations()).toLowerCase()).not.toContain(
+			'alter table "account"',
 		);
 	});
 
-	it("warns with the real field and table name for the account issuer column", async () => {
+	it("warns with the real field and table name for a nullable account column", async () => {
 		const warnings: string[] = [];
 
 		await getMigrations({
-			database: createAccountDb({ issuer: "nullable" }),
+			database: createAccountDb({ plan: "nullable" }),
+			...accountPlanField,
 			logger: warnLogger(warnings),
 		});
 
 		expect(
 			warnings.some((warning) =>
-				warning.includes('Column "issuer" on table "account"'),
+				warning.includes('Column "plan" on table "account"'),
 			),
 		).toBe(true);
 	});
@@ -772,16 +774,16 @@ describe("get-migration: nullable columns for required fields", () => {
 describe("get-migration: inspecting a migration that cannot be applied", () => {
 	it("reports the unsafe column change and still compiles the statements", async () => {
 		const { compileMigrations, unsafeChanges } = await getMigrations(
-			{ database: createAccountDb({}) },
+			{ database: createAccountDb({}), ...accountPlanField },
 			{ throwOnUnsafe: false },
 		);
 
 		expect(unsafeChanges).toHaveLength(1);
 		expect(unsafeChanges[0]).toContain(
-			'Cannot add required column "issuer" to populated table "account"',
+			'Cannot add required column "plan" to populated table "account"',
 		);
 		expect((await compileMigrations()).toLowerCase()).toContain(
-			'alter table "account" add column "issuer" text not null',
+			'alter table "account" add column "plan" text not null',
 		);
 	});
 

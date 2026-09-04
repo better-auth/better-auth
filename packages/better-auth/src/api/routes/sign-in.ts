@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	additionalAuthorizationParamsSchema,
@@ -335,7 +334,6 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						emailVerified: userInfo.user.emailVerified || false,
 					},
 					account: {
-						providerId: provider.id,
 						...accountKey,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
@@ -529,11 +527,9 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				email.toLowerCase(),
 				{ includeAccounts: true },
 			);
-			const credentialIssuer = createLocalAccountIssuer("credential");
 			const credentialAccount = userRecord?.accounts.find(
 				(account) =>
 					account.providerId === "credential" &&
-					account.issuer === credentialIssuer &&
 					account.accountId === userRecord.user.id,
 			);
 

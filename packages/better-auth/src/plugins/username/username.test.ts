@@ -82,14 +82,12 @@ describe("username", async () => {
 		await context.internalAdapter.createAccount({
 			userId,
 			providerId: "credential",
-			issuer: "local:decoy-credential",
 			accountId: "decoy-subject",
 			password: await context.password.hash("decoy-password"),
 		});
 		await context.internalAdapter.createAccount({
 			userId,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 			password: canonicalAccount.password,
 		});

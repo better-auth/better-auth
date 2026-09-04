@@ -517,7 +517,6 @@ describe("siwe", async () => {
 		expect(accounts).toContainEqual(
 			expect.objectContaining({
 				providerId: "siwe",
-				issuer: "local:siwe",
 				accountId: `${walletAddress}:${chainId}`,
 			}),
 		);

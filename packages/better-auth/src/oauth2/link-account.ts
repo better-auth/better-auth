@@ -52,7 +52,7 @@ export async function handleOAuthUserInfo(
 	let pendingAccountCookie: Account | null = null;
 	const accountOwner = await c.context.internalAdapter
 		.findAccountOwnerByKey({
-			issuer: account.issuer,
+			providerId: account.providerId,
 			accountId: account.accountId,
 		})
 		.catch((e) => {
@@ -83,15 +83,6 @@ export async function handleOAuthUserInfo(
 				throw new APIError("CONFLICT", {
 					code: "account_ownership_conflict",
 					message: "Account is already linked to another user",
-				});
-			}
-			if (
-				requireExactAccountBinding &&
-				accountOwner.account.providerId !== account.providerId
-			) {
-				throw new APIError("CONFLICT", {
-					code: "account_provider_conflict",
-					message: "Account is already linked through another provider",
 				});
 			}
 			return {
@@ -145,7 +136,8 @@ export async function handleOAuthUserInfo(
 			dbUser.linkedAccount ??
 			dbUser.accounts.find(
 				(acc) =>
-					acc.issuer === account.issuer && acc.accountId === account.accountId,
+					acc.providerId === account.providerId &&
+					acc.accountId === account.accountId,
 			);
 		if (!linkedAccount) {
 			const accountLinking = c.context.options.account?.accountLinking;
@@ -186,7 +178,6 @@ export async function handleOAuthUserInfo(
 				});
 				const createdAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
-					issuer: account.issuer,
 					accountId: account.accountId,
 					userId: dbUser.user.id,
 					accessToken: await setTokenUtil(account.accessToken, c.context),
@@ -204,8 +195,7 @@ export async function handleOAuthUserInfo(
 				}
 				if (
 					requireExactAccountBinding &&
-					(createdAccount.issuer !== account.issuer ||
-						createdAccount.accountId !== account.accountId ||
+					(createdAccount.accountId !== account.accountId ||
 						createdAccount.providerId !== account.providerId ||
 						createdAccount.userId !== dbUser.user.id)
 				) {
@@ -305,8 +295,7 @@ export async function handleOAuthUserInfo(
 				}
 				if (
 					requireExactAccountBinding &&
-					(updatedAccount.issuer !== account.issuer ||
-						updatedAccount.accountId !== account.accountId ||
+					(updatedAccount.accountId !== account.accountId ||
 						updatedAccount.providerId !== account.providerId ||
 						updatedAccount.userId !== dbUser.user.id)
 				) {
@@ -410,7 +399,6 @@ export async function handleOAuthUserInfo(
 				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 				scope: account.scope,
 				providerId: account.providerId,
-				issuer: account.issuer,
 				accountId: account.accountId,
 			};
 			const { createdUser, createdAccount } = await runWithTransaction(
@@ -435,8 +423,7 @@ export async function handleOAuthUserInfo(
 			);
 			if (
 				requireExactAccountBinding &&
-				(createdAccount.issuer !== account.issuer ||
-					createdAccount.accountId !== account.accountId ||
+				(createdAccount.accountId !== account.accountId ||
 					createdAccount.providerId !== account.providerId ||
 					createdAccount.userId !== createdUser.id)
 			) {

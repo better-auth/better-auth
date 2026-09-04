@@ -573,7 +573,6 @@ describe("oauth-proxy", async () => {
 			expect(payload.userInfo.email).toBe("user@email.com");
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
-			expect(payload.account.issuer).toBe("https://accounts.google.com");
 			expect(payload.account.accountId).toBe("1234567890");
 			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
@@ -1023,7 +1022,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},
@@ -1075,7 +1073,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},
@@ -1199,7 +1196,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},
@@ -1346,7 +1342,6 @@ describe("oauth-proxy", async () => {
 			expect(accounts).toContainEqual(
 				expect.objectContaining({
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "1234567890",
 				}),
 			);
@@ -1394,7 +1389,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "google-user-id",
 					accessToken: "test123",
 				},
@@ -1562,7 +1556,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},

@@ -491,9 +491,6 @@ function assertExistingTableIndexFits({
 	}
 }
 
-const columnBackfillGuideUrl =
-	"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer";
-
 /**
  * Thrown when {@link getMigrations} refuses to add a required column with no
  * default value to a populated table. Distinct from the plain
@@ -623,12 +620,6 @@ export async function getMigrations(
 ) {
 	const betterAuthSchema = getSchema(config);
 	const authTables = getAuthTables(config);
-	const accountIssuer = authTables.account && {
-		table: authTables.account.modelName,
-		column: authTables.account.fields.issuer?.fieldName || "issuer",
-	};
-	const isAccountIssuerColumn = (table: string, column: string) =>
-		table === accountIssuer?.table && column === accountIssuer.column;
 	const logger = createLogger(config.logger);
 	const unsafeChanges: string[] = [];
 	const reportUnsafeChange = (message: string) => {
@@ -1065,11 +1056,8 @@ export async function getMigrations(
 							field.type === "string"
 								? " For a text column, every existing row ends up with the same empty string."
 								: "";
-						const guideLink = isAccountIssuerColumn(table.table, fieldName)
-							? ` See ${columnBackfillGuideUrl}`
-							: "";
 						reportUnsafeChange(
-							`Cannot add required column "${fieldName}" to populated table "${table.table}": the schema declares no default value, so existing rows have no value to backfill. MySQL accepts this statement instead of rejecting it and fills every existing row with an implicit default for the column type, reporting a successful migration over corrupted data.${textDetail} Add the column as nullable, backfill a correct value for every row, then make it NOT NULL.${guideLink}`,
+							`Cannot add required column "${fieldName}" to populated table "${table.table}": the schema declares no default value, so existing rows have no value to backfill. MySQL accepts this statement instead of rejecting it and fills every existing row with an implicit default for the column type, reporting a successful migration over corrupted data.${textDetail} Add the column as nullable, backfill a correct value for every row, then make it NOT NULL.`,
 						);
 					}
 				}
