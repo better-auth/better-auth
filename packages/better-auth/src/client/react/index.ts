@@ -92,7 +92,14 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	} = getClientConfig(options);
 	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[getAtomKey(key)] = () => useStore(value);
+		// Nothing mounts an atom during SSR, so the server rendered its initial
+		// value. Hand React that same value while hydrating; the live value may
+		// already have resolved. Computed stores have no `init` and keep the
+		// live value.
+		const getServerSnapshot =
+			value.init === undefined ? undefined : () => value.init;
+		resolvedHooks[getAtomKey(key)] = () =>
+			useStore(value, { getServerSnapshot });
 	}
 
 	const routes = {
