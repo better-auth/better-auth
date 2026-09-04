@@ -1,5 +1,13 @@
 # @better-auth/oauth-provider
 
+## 1.7.2
+
+### Patch Changes
+
+- [#11010](https://github.com/better-auth/better-auth/pull/11010) [`bb8d7c4`](https://github.com/better-auth/better-auth/commit/bb8d7c4541992baedd53325761e19a919a805fc7) Thanks [@bytaesu](https://github.com/bytaesu)! - Client ID Metadata Document clients that declare a grant the server does not offer (such as Claude's enterprise `jwt-bearer` grant) can now register. Only documents sharing no grant with the server are refused.
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
 ## 1.7.1
 
 ## 1.7.0

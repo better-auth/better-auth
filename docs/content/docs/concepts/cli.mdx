@@ -1,4 +1,5 @@
 ---
+icon: conceptsCLI
 title: CLI
 description: Learn about the Better Auth CLI commands for generating and migrating database schemas, creating initial admins, initializing projects, generating secret keys, and gathering diagnostic info.
 ---
@@ -53,16 +54,40 @@ If `--adapter` is omitted, the CLI uses the adapter configured in your Better Au
 
 ## Migrate
 
-The migrate command applies the Better Auth schema directly to your database. This is available if you're using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
+The `migrate` command can inspect or apply the Better Auth schema directly to your database. It supports the built-in SQL database configuration and SQL-backed Drizzle or Prisma adapters. Use `generate` and your own migration tooling for other adapters.
 
 ```package-install title="Terminal"
-npx auth@latest migrate
+npx auth@latest migrate plan
+npx auth@latest migrate apply
 ```
 
 ### Options
 
 * `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
-* `--yes` - Skip the confirmation prompt and apply the schema directly.
+* `--json` - Print one deterministic JSON document instead of human-readable output.
+* `--yes` - Skip the confirmation prompt for `migrate apply`.
+
+### Inspect before applying
+
+`migrate plan` only reads the database. Add `--json` in CI or when sharing the plan with a coding agent:
+
+```package-install title="Terminal"
+npx auth@latest migrate plan
+npx auth@latest migrate plan --json > better-auth-migration-plan.json
+```
+
+The JSON plan includes the adapter, dialect, selected and detected account identity strategies, sorted schema changes, blockers, and any release migration actions. A blocked plan exits with status `1`.
+
+### Apply a migration
+
+`migrate apply` confirms and applies the planned data and schema changes together. When a release migration needs decisions that the CLI cannot derive, it saves them to `better-auth-migration.json`; the file identifies the release transition and pins configuration-derived values so another run can review and replay the same choices. Pass the file positionally to either action:
+
+```package-install title="Terminal"
+npx auth@latest migrate plan better-auth-migration.json
+npx auth@latest migrate apply better-auth-migration.json
+```
+
+For non-interactive JSON application, also pass `--yes`; otherwise the command exits without changing the database. Running plain `npx auth@latest migrate` invokes `migrate apply` and prints a deprecation warning. For the current release migration procedure, including Drizzle and Prisma preparation, see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#migrate-from-16-to-17).
 
 <Callout type="info">
   **Using PostgreSQL with a non-default schema?**
@@ -107,6 +132,8 @@ npx auth@latest init
 * `--plugins` - The plugins you want to use. You can specify multiple plugins by separating them with a comma.
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
+
+The generated `auth.ts` includes `account: { identityStrategy: "provider-id" }` so new projects choose their account identity namespace explicitly. Existing configurations that omit this option remain in v1.7 compatibility mode with issuer identity and receive a one-time warning; set `"issuer"` explicitly when that is the intended policy.
 
 ## Upgrade
 

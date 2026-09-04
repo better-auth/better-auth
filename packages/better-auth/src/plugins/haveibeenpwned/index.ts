@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getCurrentAuthContext } from "@better-auth/core/context";
+import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
@@ -20,18 +20,44 @@ const ERROR_CODES = defineErrorCodes({
 		"The password you entered has been compromised. Please choose a different password.",
 });
 
-async function checkPasswordCompromise(
-	password: string,
-	customMessage?: string | undefined,
-) {
-	if (!password) return;
+function getPasswordCompromiseCount(response: string, hashSuffix: string) {
+	const matchingEntryPrefix = `${hashSuffix.toUpperCase()}:`;
 
-	const sha1Hash = (
-		await createHash("SHA-1", "hex").digest(password)
-	).toUpperCase();
-	const prefix = sha1Hash.substring(0, 5);
-	const suffix = sha1Hash.substring(5);
+	for (const line of response.split(/\r?\n/)) {
+		const entryPrefix = line.slice(0, matchingEntryPrefix.length).toUpperCase();
+		if (entryPrefix !== matchingEntryPrefix) continue;
+
+		const compromiseCountText = line.slice(matchingEntryPrefix.length);
+		const compromiseCount = Number(compromiseCountText);
+		const validCompromiseCount =
+			Number.isSafeInteger(compromiseCount) &&
+			compromiseCount >= 0 &&
+			String(compromiseCount) === compromiseCountText;
+		if (!validCompromiseCount) {
+			throw new Error("Invalid password compromise count");
+		}
+		return compromiseCount;
+	}
+
+	return 0;
+}
+
+/**
+ * Checks whether a password appears in the Have I Been Pwned password corpus.
+ * Only the first five characters of its SHA-1 hash are sent to the service.
+ *
+ * @returns Whether the password has been compromised.
+ * @throws {APIError} When the password could not be checked.
+ */
+export async function isPasswordCompromised(
+	password: string,
+): Promise<boolean> {
 	try {
+		const sha1Hash = (
+			await createHash("SHA-1", "hex").digest(password)
+		).toUpperCase();
+		const prefix = sha1Hash.substring(0, 5);
+		const suffix = sha1Hash.substring(5);
 		const { data, error } = await betterFetch<string>(
 			`https://api.pwnedpasswords.com/range/${prefix}`,
 			{
@@ -47,21 +73,25 @@ async function checkPasswordCompromise(
 				message: `Failed to check password. Status: ${error.status}`,
 			});
 		}
-		const lines = data.split("\n");
-		const found = lines.some(
-			(line) => line.split(":")[0]!.toUpperCase() === suffix.toUpperCase(),
-		);
-
-		if (found) {
-			throw APIError.from("BAD_REQUEST", {
-				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
-				code: ERROR_CODES.PASSWORD_COMPROMISED.code,
-			});
-		}
+		const compromiseCount = getPasswordCompromiseCount(data, suffix);
+		return compromiseCount > 0;
 	} catch (error) {
 		if (isAPIError(error)) throw error;
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message: "Failed to check password. Please try again later.",
+		});
+	}
+}
+
+async function rejectCompromisedPassword(
+	password: string,
+	customMessage?: string | undefined,
+) {
+	const compromised = await isPasswordCompromised(password);
+	if (compromised) {
+		throw APIError.from("BAD_REQUEST", {
+			message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
+			code: ERROR_CODES.PASSWORD_COMPROMISED.code,
 		});
 	}
 }
@@ -108,11 +138,11 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 						async hash(password) {
 							if (options?.enabled === false) return originalHash(password);
 
-							const c = await getCurrentAuthContext();
+							const c = getCurrentAuthEndpointContext();
 							if (!c.path || !paths.includes(c.path)) {
 								return originalHash(password);
 							}
-							await checkPasswordCompromise(
+							await rejectCompromisedPassword(
 								password,
 								options?.customPasswordCompromisedMessage,
 							);

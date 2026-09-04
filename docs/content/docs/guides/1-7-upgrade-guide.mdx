@@ -1,4 +1,7 @@
 ---
+icon: guidesV17UpgradeGuide
+sidebarTitle: "1.7 Upgrade Guide"
+sidebarBadge: "New"
 title: Upgrading to Better Auth 1.7
 description: Upgrade Better Auth from 1.6 to 1.7, including Expo, OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and custom adapter changes.
 ---
@@ -29,33 +32,77 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 
 ## Before you upgrade
 
-The upgrade command handles package updates. The database needs more care because some 1.7 features change tables or require a manual data step. The `auth` CLI requires Node.js 22.12 or newer.
+The upgrade command handles package updates. The database needs a separate migration because some 1.7 features change tables or require a data decision. Run the `auth` CLI with Node.js 22.12 or newer, using the same Better Auth version that you will deploy.
 
-These features change the schema:
+### Migrate from 1.6 to 1.7
 
-| Feature                    | What it adds                                                                                                            | Manual preparation?                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Protected resources        | New resource tables and key columns                                                                                     | No                                                        |
-| Resource-bound tokens      | Resource columns on the token tables                                                                                    | No                                                        |
-| DPoP                       | A token-binding column                                                                                                  | No                                                        |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                       | No                                                        |
-| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                                                        |
-| Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                                                        |
-| Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                                                        |
-| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **Yes, backfill**                                         |
-| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**                                      |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                                                        |
-| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data**                                 |
-| Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`       | **Yes, deduplicate; MySQL/SQL Server also bound strings** |
+The supported path for a populated 1.6 database keeps existing accounts linked to the same users by preserving provider-scoped account identity. Prepare the v1.7 configuration with `provider-id` explicitly selected:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  account: { identityStrategy: "provider-id" },
+  // Your existing configuration
+});
+```
+
+Run the read-only plan before applying a generated schema or changing the database:
+
+```bash title="Terminal"
+npx auth migrate plan
+```
+
+`migrate plan` reports `ready`, `blocked`, or `up-to-date`. Continue to the rehearsal and cutover when the plan is ready. A blocked plan leaves the database unchanged and gives the configuration or data correction required before you continue. Follow only the linked sections for the blockers it reports; do not run `apply` until the plan is ready.
 
 <Callout type="warn">
-  Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
+  Never apply the 1.7 account schema directly over a populated 1.6 `account` table. A plain schema migration cannot preserve account identity or resolve collisions because the 1.6 rows have no `issuer` value.
 </Callout>
 
-Use this order:
+Before the production cutover, restore a recent database backup into an isolated environment and rehearse this workflow. Run `auth migrate apply` on the copy, verify the sign-in and provisioning paths your application uses, then run `plan` again and confirm it reports `up-to-date`. This rehearsal confirms that the backup is restorable and that the migration choices, application configuration, and database work together.
 
-1. Complete the manual preparation in [Account identity](#account-identity-is-scoped-by-issuer), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
-2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth generate`, review the output, and apply it with your migration tooling.
+During the production cutover, stop every v1.6 process that can write authentication data, including application instances, background jobs, and provisioning workers that handle credentials, OAuth, SSO, or SCIM. Do not run v1.6 and v1.7 writers against the same database at the same time. Take a final restorable backup, retain it for the rollback window, and apply the ready plan:
+
+```bash title="Terminal"
+npx auth migrate apply
+```
+
+`migrate apply` reruns the same preflight and refuses to change the database unless the plan remains ready. After it succeeds, deploy the same v1.7 packages and configuration to every instance, run the cutover smoke tests, and then reopen application writes.
+
+Keep the final backup and any renamed v1.6 tables until the rollback window closes. If you must roll back before reopening application writes, stop every v1.7 process, restore the complete backup, and redeploy v1.6 together. Do not restore selected authentication tables or reactivate legacy OAuth token tables individually, because a partial restore can combine incompatible schemas and token revocation states. After reopening application writes, restoring the backup would discard new accounts, sessions, and provisioning changes; use a forward fix or a separately reviewed data reconciliation instead.
+
+#### Resolve additional migration work
+
+Most applications do not need every migration branch below. Continue only when `migrate plan` reports one of these changes or when your database adapter requires the matching workflow.
+
+| Feature                    | What changes                                                                                                      | Additional preparation                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Protected resources        | New resource tables and key columns                                                                               | None                                                       |
+| Resource-bound tokens      | Resource columns on the token tables                                                                              | None                                                       |
+| DPoP                       | A token-binding column                                                                                            | None                                                       |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                 | None                                                       |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                      | None                                                       |
+| Back-channel logout        | Logout-URL and revoked columns                                                                                    | None                                                       |
+| Requested user-info claims | A requested-claims column on the token and consent tables                                                         | None                                                       |
+| Account identity           | Required `issuer` and `accountId`, with a unique compound index across them                                       | Populated 1.6 account tables                               |
+| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, that replace the legacy SCIM models        | Retire, then reprovision                                   |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                         | None                                                       |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                   | Guided or manual client move                               |
+| Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources` | Deduplicate; MySQL and SQL Server also need bounded values |
+
+When `apply` asks about release decisions that it cannot make, it saves the reviewed answers to `better-auth-migration.json`. The file identifies the `1.6-to-1.7` transition, so you can inspect and replay the same choices in another environment:
+
+```bash title="Terminal"
+npx auth migrate plan better-auth-migration.json
+npx auth migrate apply better-auth-migration.json --yes
+```
+
+With Drizzle or Prisma, run `npx auth generate` first and point the adapter at the generated 1.7 schema, but do not apply that schema to the database: the CLI migrates the 1.6 data and schema together. The plan resolves the physical table and column names from the configured Drizzle schema or Prisma model metadata, including snake\_case names and Prisma `@map` declarations. For a Drizzle SQLite or PostgreSQL migration, set the adapter's `transaction` option to `true` so the release migration can run atomically. MySQL databases with populated legacy SCIM accounts also require a transaction-capable migration connection so account retirement can roll back independently of MySQL's non-transactional schema changes. Record the cutover in your ORM migration history afterwards, so a later deployment does not apply the same changes twice.
+
+An adapter with no SQL migration connection needs the manual path instead:
+
+1. Complete the manual preparation in [Account identity](#choose-account-identity-strategy), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
+2. Apply the 1.7 schema with `npx auth generate` and your own migration tooling.
 3. Deploy the 1.7 packages and configuration changes together.
 4. Complete any post-deployment work, including SCIM reprovisioning.
 
@@ -65,9 +112,54 @@ Use this order:
 
 This covers email and password, social login, the generic OAuth plugin, One Tap, and consuming SSO.
 
-### Account identity is scoped by issuer
+### Choose account identity strategy
 
-Better Auth now recognizes an external account by the unique pair of `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider. The account schema adds the required `issuer` field and creates a unique compound index across both identity fields without renaming `accountId`.
+providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy.
+
+Every generated 1.7 schema has the same physical identity fields: required `issuer`, required `accountId`, and a unique compound index on `(issuer, accountId)`. `account.identityStrategy` selects what the `issuer` value means. Newly generated configurations explicitly select `"provider-id"`. Omitting the option is a deprecated v1.7 compatibility mode that continues using issuer identity and warns once per auth instance. Explicit `"issuer"` and explicit `"provider-id"` are both valid and warning-free.
+
+#### Populated 1.6: preserve provider-scoped account identity
+
+`"provider-id"` keeps the provider-scoped behavior configured in the migration path above. `auth migrate plan` inventories duplicate `(providerId, accountId)` identities and plans the required issuer backfill and `(issuer, accountId)` index. `auth migrate apply` stores deterministic namespaces such as `local:oauth:google` for external connections, preserves local namespaces such as `local:credential`, makes `issuer` required, and creates the compound index. Returning sign-ins continue to recognize the same logical `(providerId, accountId)` identity.
+
+The synthetic namespace is storage identity, not protocol trust. OAuth, OpenID Connect, One Tap, OAuth Proxy, OIDC SSO, and SAML SSO still verify the provider's trusted issuer or equivalent protocol authority before storing the provider namespace. Keep this option identical on every instance that reads or writes the database. Renaming a provider changes its account namespace, and 2 provider aliases for the same authority remain separate identities, matching the provider-scoped behavior of 1.6.
+
+The plan blocks on duplicate `(providerId, accountId)` rows because they project to the same synthetic issuer identity. Resolve those collisions before applying.
+
+#### Populated 1.6: issuer identity requires a separate re-key
+
+Do not set `account.identityStrategy` to `"issuer"` and expect the guided 1.6 migration to infer authorities:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  account: {
+    identityStrategy: "issuer",
+  },
+  // ...
+});
+```
+
+`auth migrate plan` hard-fails this choice. A 1.6 row records the configured connection but does not reliably record the verified protocol authority needed to adopt issuer identity. The change can also merge provider aliases that share an authority. Use provider-id for the supported 1.6 upgrade, or prepare a separately reviewed re-key migration that establishes every trusted authority and resolves collisions before the 1.7 constraint is enforced.
+
+#### Already migrated v1.7: keep issuer identity
+
+Set `account.identityStrategy` explicitly to `"issuer"` to keep the database unchanged without a warning. If the option is omitted, `auth migrate plan` still detects the complete issuer data and index and reports no account identity schema or data actions, while runtime uses v1.7 issuer compatibility mode and warns once per auth instance. In both cases, `auth migrate apply` is a no-op for account identity.
+
+Use this one-line configuration to make the existing behavior explicit:
+
+```ts title="auth.ts"
+account: { identityStrategy: "issuer" }
+```
+
+#### Already migrated provider-id data: keep provider identity
+
+Set `account.identityStrategy` explicitly to `"provider-id"`. The plan detects deterministic namespaces such as `local:oauth:google`, and apply is a no-op. Omitting the strategy or selecting `"issuer"` is blocked and instructs you to restore `account: { identityStrategy: "provider-id" }`.
+
+<Callout type="warn">
+  Changing `account.identityStrategy` on populated v1.7 data is a re-key migration, not a configuration-only toggle. Setting `"provider-id"` against an issuer-keyed database is blocked; keep `"issuer"` until a separate reviewed migration rewrites every namespace and resolves collisions. Runtime behavior never selects a strategy by introspecting the database.
+</Callout>
 
 <Callout type="warn">
   Use a maintenance window and stop authentication writes, including background jobs and admin APIs that insert into `account` directly, before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
@@ -99,17 +191,17 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 
 1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
 2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column.
-3. Populate both fields according to the account type:
+3. Populate both fields according to the selected strategy and account type:
 
-   | Account type                          | `issuer`                                  | `accountId`                            |
-   | -------------------------------------- | ------------------------------------------ | ---------------------------------------- |
-   | Credential                             | `local:credential`                        | Stable `id` from the linked `user` row |
-   | SIWE wallet, `providerId` `siwe`       | `local:siwe`                              | Existing `<address>:<chainId>` value   |
-   | Google One Tap, `providerId` `google`  | `https://accounts.google.com`             | Existing Google `sub`                  |
-   | Provider with an issuer                | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | OAuth provider without an issuer       | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | Account type                          | `issuer` strategy                         | `provider-id` strategy             | `accountId`                            |
+   | ------------------------------------- | ----------------------------------------- | ---------------------------------- | -------------------------------------- |
+   | Email/password credential             | `local:credential`                        | `local:credential`                 | Stable `id` from the linked `user` row |
+   | SIWE wallet, `providerId` `siwe`      | `local:siwe`                              | `local:siwe`                       | Existing `<address>:<chainId>` value   |
+   | Google One Tap, `providerId` `google` | `https://accounts.google.com`             | `local:oauth:google`               | Existing Google `sub`                  |
+   | Provider with an issuer               | Exact trusted issuer used by the provider | `local:oauth:<encoded providerId>` | Existing provider account identifier   |
+   | OAuth provider without an issuer      | `local:oauth:<encoded providerId>`        | `local:oauth:<encoded providerId>` | Existing provider account identifier   |
 
-   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint. SIWE and Google One Tap are not OAuth providers, so the synthetic `local:oauth:` namespace never applies to them.
+   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-namespace map for the selected strategy. Under the `"issuer"` strategy, multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Under the `"provider-id"` strategy, every external connection keeps a distinct synthetic namespace. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
 
    ```sql title="Identity collision check"
@@ -121,7 +213,7 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
    ```
 
    If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
-5. Confirm that every row has both identity fields, then make `issuer` non-nullable and add the unique compound index on `issuer` and `accountId`. `auth migrate` never emits a statement that makes an existing nullable column non-nullable; run this DDL yourself.
+5. Confirm that every row has both identity fields, then make `issuer` non-nullable and add the unique compound index on `issuer` and `accountId`. A generated schema migration never emits a statement that makes an existing nullable column non-nullable; run this DDL yourself.
 
    ```sql title="Postgres"
    ALTER TABLE account ALTER COLUMN issuer SET NOT NULL;
@@ -162,10 +254,10 @@ Review every custom OAuth provider's account subject. OpenID Connect discovery p
 
 #### Migrate Microsoft account identifiers
 
-Microsoft accounts now use the stable directory `oid` claim instead of the pairwise, app-specific `sub` claim. Complete this during step 3 of the account identity backfill, before checking for collisions or adding the compound account index:
+Microsoft accounts now use the stable directory `oid` claim instead of the pairwise, app-specific `sub` claim. Under issuer-scoped identity, complete this during step 3 of the account identity backfill, before checking for collisions or adding the compound account index. Under the explicit provider-id strategy, update the same account identifiers as a separate data migration before accepting production traffic on 1.7:
 
 1. Inventory rows with `providerId: "microsoft"` for the built-in provider and `providerId: "microsoft-entra-id"` for the Generic OAuth helper.
-2. Assign each row its trusted issuer as part of the account identity backfill, and replace its old `sub`-based `accountId` with the verified `oid` for that directory user.
+2. Set each row's namespace according to the selected strategy: use the trusted Microsoft authority for `"issuer"`, or `local:oauth:<encoded providerId>` for `"provider-id"`. Replace the old `sub`-based `accountId` with the verified `oid` for that directory user.
 3. When stored Microsoft ID tokens are available, verify each token and copy its `oid` claim. `mapProfileToUser` cannot override this provider-owned account identifier.
 4. When stored ID tokens are unavailable, pause Microsoft sign-in and account linking during the cutover and obtain the mapping from a trusted Microsoft Entra export. Better Auth cannot derive `oid` from the old account row alone; accepting traffic before the migration can create duplicate accounts.
 
@@ -263,7 +355,9 @@ This covers `@better-auth/oauth-provider`.
 
 ### Migrate OAuth client records
 
-If you use the 1.6 in-core `oidcProvider` or MCP plugin, copy or re-register each `oauthApplication` as an `oauthClient`. Map `redirectUrls` to `redirectUris`, convert `metadata` to JSON, and set the client's grant types and token-endpoint authentication method. Expire the old access tokens, then drop or rename the legacy `oauthAccessToken` table before creating the 1.7 token tables. The CLI does not copy these records or rename `oauthAccessToken.accessToken` to `token`.
+`auth migrate apply` moves these records for the adapters it supports, asking how the 1.6 client secrets are stored and whether stored consents move or users grant them again. Follow the steps below when you use another adapter.
+
+If you use the 1.6 in-core `oidcProvider` or MCP plugin, copy or re-register each `oauthApplication` as an `oauthClient`. Map `redirectUrls` to `redirectUris`, convert `metadata` to JSON, and set the client's grant types and token-endpoint authentication method. Expire the old access tokens, then drop or rename the legacy `oauthAccessToken` table before creating the 1.7 token tables.
 
 If you already use `@better-auth/oauth-provider`, migrate existing `oauthClient` rows as follows:
 
@@ -468,9 +562,9 @@ OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based clients find 
 
 OIDC SSO now uses the verified `sub` claim as the account subject, and SAML uses the signed `NameID`. Profile mappings can still select email, name, image, and additional fields, but `oidcConfig.mapping.id` and `samlConfig.mapping.id` are removed. Manual SAML configurations that do not provide `idpMetadata.metadata` must set `idpMetadata.entityID`; `samlConfig.issuer` identifies the service provider and no longer acts as an IdP fallback.
 
-**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. During the account-identity backfill, use the exact OIDC issuer and subject or the exact SAML IdP entity ID and `NameID`. Provider aliases with the same OIDC issuer and subject deduplicate one external identity, but this change does not introduce independent grant or provider lifecycle records for those aliases.
+**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. During the account-identity backfill, keep that protocol-defined subject and store either the exact OIDC issuer or SAML IdP entity ID under the `"issuer"` strategy, or the deterministic provider namespace under `"provider-id"`. Provider aliases with the same authority and subject deduplicate one external identity only under issuer strategy; this change does not introduce independent grant or provider lifecycle records for those aliases.
 
-If a previous mapping used `mapping.id`, prepare its replacement before the maintenance window. Build a trusted mapping from every old account subject to the protocol-defined identity, then rewrite those account rows before adding the compound index: OIDC needs the exact issuer and verified `sub`; SAML needs the actual IdP metadata entity ID and signed `NameID`. Obtain this mapping from the identity provider, not email or a mutable profile attribute. Do not deploy a runtime fallback for the old mapping.
+If a previous mapping used `mapping.id`, prepare its replacement before the maintenance window. Build a trusted mapping from every old account subject to the protocol-defined identity, then rewrite those account rows before adding the compound index. Under issuer strategy, use the exact OIDC issuer and verified `sub`, or the actual SAML IdP metadata entity ID and signed `NameID`. Under provider-id strategy, keep the verified subject or signed `NameID` but store the deterministic provider namespace. Obtain the subject mapping from the identity provider, not email or a mutable profile attribute. Do not deploy a runtime fallback for the old mapping.
 
 ### IdP-initiated SAML is off by default
 
@@ -540,7 +634,7 @@ scim({
 
 ### SCIM requires full reprovisioning
 
-The new SCIM models do not read or convert the 1.6 SCIM tables, so this change cannot use an in-place generated migration.
+The new SCIM models do not read or convert the 1.6 SCIM tables, so provisioned state cannot carry over. `auth migrate apply` retires the legacy providers and their accounts once you confirm the exact inventory, but every directory user must still be provisioned again afterwards.
 
 <Callout type="warn">
   Use a maintenance window. Pause provisioning and stop every application instance that runs the old SCIM plugin before changing the schema.

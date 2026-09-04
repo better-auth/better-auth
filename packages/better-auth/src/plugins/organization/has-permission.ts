@@ -7,6 +7,8 @@ import type { HasPermissionBaseInput } from "./permission";
 import { cacheAllRoles, hasPermissionFn } from "./permission";
 import type { OrganizationRole } from "./schema";
 
+const rolePermissionsSchema = z.record(z.string(), z.array(z.string()));
+
 export const hasPermission = async (
 	input: {
 		organizationId: string;
@@ -46,16 +48,13 @@ export const hasPermission = async (
 		});
 
 		for (const { role, permission: permissionsString } of roles) {
-			const result = z
-				.record(z.string(), z.array(z.string()))
-				.safeParse(JSON.parse(permissionsString));
+			const permissions: unknown = JSON.parse(permissionsString);
+			const result = rolePermissionsSchema.safeParse(permissions);
 
 			if (!result.success) {
 				ctx.context.logger.error(
 					"[hasPermission] Invalid permissions for role " + role,
-					{
-						permissions: JSON.parse(permissionsString),
-					},
+					{ permissions },
 				);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: "Invalid permissions for role " + role,

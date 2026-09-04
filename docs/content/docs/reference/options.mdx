@@ -1,4 +1,5 @@
 ---
+icon: referenceOptions
 title: Options
 description: Better Auth configuration options reference.
 ---
@@ -472,6 +473,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	account: {
 		modelName: "accounts",
+		identityStrategy: "provider-id", // Preserve Better Auth 1.6 provider-scoped identity
 		fields: {
 			userId: "user_id"
 		},
@@ -489,6 +491,18 @@ export const auth = betterAuth({
 
 * `modelName`: The model name for the account
 * `fields`: Map fields to different column names
+
+### `identityStrategy`
+
+Controls the namespace Better Auth persists in the required `issuer` field when recognizing an external account. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy.
+
+The `auth init` command generates `account: { identityStrategy: "provider-id" }` so a new project has an explicit identity policy. In v1.7.x, omitting `identityStrategy` remains a compatibility mode that uses `"issuer"`; Better Auth emits this warning once per auth instance:
+
+> `account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.`
+
+Set it to `"provider-id"` when migrating populated 1.6 data and you need to preserve logical `(providerId, accountId)` recognition. Better Auth then persists `local:oauth:<encoded providerId>` as the issuer namespace after the provider response has been verified. This option does not change the Account schema: `issuer` and `accountId` remain required and uniquely indexed together under both strategies.
+
+Changing this option on populated v1.7 data requires a separate, reviewed account re-key migration. It is not a configuration-only toggle.
 
 ### `encryptOAuthTokens`
 
