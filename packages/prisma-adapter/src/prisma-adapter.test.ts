@@ -4,8 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import { prismaAdapter } from "./prisma-adapter";
 
 describe("prisma-adapter", () => {
+	// Partial fake models: skip the construction-time schema check.
+	const skipValidation = {
+		advanced: { database: { validateSchema: false } },
+	} satisfies BetterAuthOptions;
+
 	it("resolves Prisma model and field mappings for migrations", async () => {
-		const options = {};
+		const options = skipValidation;
 		const adapter = prismaAdapter(
 			{
 				$transaction: vi.fn(),
@@ -58,7 +63,7 @@ describe("prisma-adapter", () => {
 				},
 			} as never,
 			{ provider: "sqlite" },
-		)({});
+		)(skipValidation);
 
 		const resolved =
 			await adapter.options?.adapterConfig.migrationConnection?.resolvePhysicalSchema?.(

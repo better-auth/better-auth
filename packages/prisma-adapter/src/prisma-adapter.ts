@@ -1,4 +1,6 @@
 import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
@@ -11,6 +13,15 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import type {
+	ExpectedSchema,
+	IntrospectedTable,
+} from "@better-auth/core/db/internal";
+import {
+	diffSchema,
+	formatSchemaFindings,
+	SchemaMismatchError,
+} from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 
 /** Controls the Prisma interactive transaction used by release migrations. */
@@ -110,18 +121,89 @@ type PrismaClientInternal = {
 	};
 };
 
-type PrismaRuntimeDataModel = {
-	models: Record<
-		string,
-		{
-			dbName?: string | null | undefined;
-			fields: Array<{
-				dbName?: string | null | undefined;
-				name: string;
-			}>;
-		}
-	>;
+type PrismaRuntimeField = {
+	dbName?: string | null | undefined;
+	name: string;
+	/** "scalar" | "object" | "enum" | "unsupported" */
+	kind?: string | undefined;
+	isRequired?: boolean | undefined;
+	isList?: boolean | undefined;
+	isId?: boolean | undefined;
+	hasDefaultValue?: boolean | undefined;
+	isUpdatedAt?: boolean | undefined;
+	isGenerated?: boolean | undefined;
 };
+
+type PrismaRuntimeModel = {
+	dbName?: string | null | undefined;
+	fields: PrismaRuntimeField[];
+};
+
+type PrismaRuntimeDataModel = {
+	models: Record<string, PrismaRuntimeModel>;
+};
+
+function findPrismaModel(
+	runtimeDataModel: PrismaRuntimeDataModel,
+	modelName: string,
+): [string, PrismaRuntimeModel] | undefined {
+	return Object.entries(runtimeDataModel.models).find(
+		([name, model]) =>
+			name === modelName ||
+			name.toLowerCase() === modelName.toLowerCase() ||
+			model.dbName === modelName,
+	);
+}
+
+/**
+ * Compares the Prisma client's model metadata with the models Better Auth
+ * writes, at the Prisma field level since the adapter addresses Prisma by
+ * field name. Runs once when the adapter is created so a stale Prisma schema
+ * fails the build instead of the first insert.
+ *
+ * @throws {SchemaMismatchError} listing every missing model or field and
+ * every required field Better Auth never fills.
+ */
+function validatePrismaSchema(
+	runtimeDataModel: PrismaRuntimeDataModel,
+	schema: BetterAuthDBSchema,
+): void {
+	const expected: ExpectedSchema = {};
+	const actual: IntrospectedTable[] = [];
+	for (const table of Object.values(schema)) {
+		const modelEntry = findPrismaModel(runtimeDataModel, table.modelName);
+		const name = modelEntry?.[0] ?? table.modelName;
+		expected[name] = {
+			fields: Object.fromEntries(
+				Object.entries(table.fields).map(([key, field]) => [
+					field.fieldName || key,
+					field,
+				]),
+			),
+		};
+		if (!modelEntry) continue;
+		actual.push({
+			name,
+			columns: modelEntry[1].fields
+				.filter((field) => field.kind !== "object")
+				.map((field) => ({
+					name: field.name,
+					nullable: !field.isRequired || field.isList === true,
+					hasDefault:
+						field.hasDefaultValue === true ||
+						field.isUpdatedAt === true ||
+						field.isGenerated === true ||
+						field.isId === true,
+				})),
+		});
+	}
+	const findings = diffSchema(expected, actual);
+	if (findings.length === 0) return;
+	throw new SchemaMismatchError(
+		formatSchemaFindings(findings, "prisma"),
+		findings,
+	);
+}
 
 const defaultMigrationTransaction = {
 	maxWait: 60_000,
@@ -171,12 +253,7 @@ function createPrismaMigrationConnection(
 			}
 			return Object.fromEntries(
 				Object.entries(schema).map(([schemaKey, table]) => {
-					const modelEntry = Object.entries(runtimeDataModel.models).find(
-						([modelName, model]) =>
-							modelName === table.modelName ||
-							modelName.toLowerCase() === table.modelName.toLowerCase() ||
-							model.dbName === table.modelName,
-					);
+					const modelEntry = findPrismaModel(runtimeDataModel, table.modelName);
 					if (!modelEntry) return [schemaKey, table];
 					const [modelName, model] = modelEntry;
 					const fields = Object.fromEntries(
@@ -1011,6 +1088,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		const created = adapter(options);
+		const runtimeDataModel = (prisma as PrismaClientInternal)._runtimeDataModel;
+		if (
+			runtimeDataModel &&
+			options.advanced?.database?.validateSchema !== false
+		) {
+			validatePrismaSchema(runtimeDataModel, getAuthTables(options));
+		}
+		return created;
 	};
 };

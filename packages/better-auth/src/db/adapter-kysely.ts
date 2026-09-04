@@ -14,7 +14,7 @@ export async function getAdapter(
 			throw new BetterAuthError("Failed to initialize database adapter");
 		}
 		const { kyselyAdapter } = await import("../adapters/kysely-adapter");
-		return kyselyAdapter(kysely, {
+		const adapter = kyselyAdapter(kysely, {
 			type: databaseType || "sqlite",
 			debugLogs:
 				opts.database && "debugLogs" in opts.database
@@ -22,5 +22,14 @@ export async function getAdapter(
 					: false,
 			transaction: transaction,
 		})(opts);
+		if (opts.advanced?.database?.validateSchema === false) return adapter;
+		const { validateDatabaseSchema, withSchemaValidation } = await import(
+			"./validate-schema"
+		);
+		const { getSchema } = await import("./get-schema");
+		const expected = getSchema(opts);
+		return withSchemaValidation(adapter, () =>
+			validateDatabaseSchema(kysely, databaseType || "sqlite", expected),
+		);
 	});
 }

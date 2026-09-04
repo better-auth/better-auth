@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
@@ -11,6 +12,15 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import type {
+	ExpectedSchema,
+	IntrospectedTable,
+} from "@better-auth/core/db/internal";
+import {
+	diffSchema,
+	formatSchemaFindings,
+	SchemaMismatchError,
+} from "@better-auth/core/db/internal";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { SQL } from "drizzle-orm";
@@ -21,6 +31,7 @@ import {
 	count,
 	desc,
 	eq,
+	getTableColumns,
 	getTableName,
 	gt,
 	gte,
@@ -28,6 +39,7 @@ import {
 	is,
 	isNotNull,
 	isNull,
+	isTable,
 	like,
 	lt,
 	lte,
@@ -491,6 +503,52 @@ function createDrizzleMigrationConnection(
 		);
 	};
 	return connection;
+}
+
+/**
+ * Compares the Drizzle schema object with the tables Better Auth writes, keyed
+ * the way the adapter looks them up at query time: `schema[modelName]` (with
+ * the `usePlural` suffix) and `table[fieldName]`. Runs once when the adapter
+ * is constructed, so a stale schema fails the build instead of the first insert.
+ *
+ * @throws {SchemaMismatchError} listing every missing table or column and
+ * every required column Better Auth never fills.
+ */
+function validateDrizzleSchema(
+	drizzleSchema: Record<string, unknown>,
+	options: BetterAuthOptions,
+	usePlural: boolean,
+) {
+	const expected: ExpectedSchema = {};
+	for (const table of Object.values(getAuthTables(options))) {
+		const key = usePlural ? `${table.modelName}s` : table.modelName;
+		const fields = (expected[key] ??= { fields: {} }).fields;
+		for (const [fieldKey, field] of Object.entries(table.fields)) {
+			fields[field.fieldName || fieldKey] = field;
+		}
+	}
+	const actual: IntrospectedTable[] = [];
+	for (const [name, table] of Object.entries(drizzleSchema)) {
+		if (!isTable(table)) continue;
+		actual.push({
+			name,
+			columns: Object.entries(getTableColumns(table)).map(([key, column]) => ({
+				name: key,
+				nullable: !column.notNull,
+				hasDefault:
+					column.hasDefault ||
+					column.primary ||
+					column.generated !== undefined ||
+					column.generatedIdentity !== undefined,
+			})),
+		});
+	}
+	const findings = diffSchema(expected, actual);
+	if (findings.length === 0) return;
+	throw new SchemaMismatchError(
+		formatSchemaFindings(findings, "drizzle"),
+		findings,
+	);
 }
 
 export interface DrizzleAdapterConfig {
@@ -1585,6 +1643,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
+		const drizzleSchema = config.schema || db._?.fullSchema;
+		if (drizzleSchema && options.advanced?.database?.validateSchema !== false) {
+			validateDrizzleSchema(drizzleSchema, options, config.usePlural ?? false);
+		}
 		return adapter(options);
 	};
 };

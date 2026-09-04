@@ -648,6 +648,7 @@ export const auth = betterAuth({
 			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
 			joins: false,
+			validateSchema: true,
 		},
 		backgroundTasks: {
 			handler: (promise) => { /* e.g. waitUntil(promise) */ }
@@ -680,6 +681,7 @@ Set custom strategies for ID generation, findMany queries, and database joins.
 * `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
 * `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
 * `joins`: Enable database joins for adapters that support them. When disabled (default), related data is fetched via separate queries. See the [Database documentation](/docs/concepts/database#joins) for more info. (default: `false`)
+* `validateSchema`: Check the database schema against the configuration and fail with the list of required changes instead of failing on the first insert. Drizzle and Prisma check their schema definition when the adapter is created; the built-in database runs one introspection query before the first database call. See the [Database documentation](/docs/concepts/database#schema-validation) for more info. (default: `true`)
 
 ```ts
 import { betterAuth } from "better-auth";
