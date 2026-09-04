@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Ignore retired session cache cookies when cookie caching is disabled so database-backed sessions can still be read.
+Prevent `getSession` from failing when cookie caching is disabled while clients still have cached session cookies.

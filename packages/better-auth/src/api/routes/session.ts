@@ -93,14 +93,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					return null;
 				}
 
-				const cookieCache = ctx.context.options.session?.cookieCache;
+				const cookieCacheEnabled =
+					ctx.context.options.session?.cookieCache?.enabled === true;
 				const shouldUseCookieCache =
-					cookieCache?.enabled && !ctx.query?.disableCookieCache;
+					cookieCacheEnabled && !ctx.query?.disableCookieCache;
 				const sessionDataCookie = getChunkedCookie(
 					ctx,
 					ctx.context.authCookies.sessionData.name,
 				);
-				if (sessionDataCookie && !cookieCache?.enabled) {
+				if (sessionDataCookie && !cookieCacheEnabled) {
 					const sessionStore = createSessionStore(
 						ctx.context.authCookies.sessionData.name,
 						ctx.context.authCookies.sessionData.attributes,
@@ -125,7 +126,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				/**
 				 * If session data is present in the cookie, check if it should be used or refreshed
 				 */
-				if (sessionDataPayload?.session && shouldUseCookieCache) {
+				if (sessionDataPayload?.session) {
 					const session = sessionDataPayload.session;
 
 					let shouldExpireCookieCache =
