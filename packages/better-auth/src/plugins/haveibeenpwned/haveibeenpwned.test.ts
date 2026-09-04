@@ -348,11 +348,10 @@ describe("isPasswordCompromised", () => {
 		await expect(isPasswordCompromised(password)).resolves.toBe(true);
 	});
 
-	it("should not query the service for an empty password", async () => {
-		const fetch = vi.spyOn(globalThis, "fetch");
+	it("should check an empty password", async () => {
+		await mockBreached("");
 
-		await expect(isPasswordCompromised("")).resolves.toBe(false);
-		expect(fetch).not.toHaveBeenCalled();
+		await expect(isPasswordCompromised("")).resolves.toBe(true);
 	});
 
 	it("should throw an API error when the service cannot complete the check", async () => {

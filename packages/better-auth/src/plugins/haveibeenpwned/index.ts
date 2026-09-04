@@ -52,7 +52,6 @@ function getPasswordCompromiseCount(response: string, hashSuffix: string) {
 export async function isPasswordCompromised(
 	password: string,
 ): Promise<boolean> {
-	if (!password) return false;
 	try {
 		const sha1Hash = (
 			await createHash("SHA-1", "hex").digest(password)
