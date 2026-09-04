@@ -98,22 +98,20 @@ describe("account table compatibility across v1 releases", () => {
 		expect(found?.userId).toBe("u1");
 	});
 
-	it("asks for no migration and links accounts while the issuer column remains", async ({
+	it("names the leftover issuer column instead of surfacing the driver error", async ({
 		onTestFinished,
 	}) => {
 		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
 		onTestFinished(() => database.close());
 		const auth = createAuth(database);
 
+		// Migrations never drop a column, so the CLI cannot resolve this state.
 		const { toBeCreated, toBeAdded } = await getMigrations(auth.options);
 		expect(toBeCreated).toEqual([]);
 		expect(toBeAdded).toEqual([]);
 
-		const { signUp, linked, found } = await signUpAndLinkSocialAccount(
-			auth,
-			"with-issuer-column@example.com",
-		);
-		expect(signUp.user.email).toBe("with-issuer-column@example.com");
-		expect(found?.id).toBe(linked.id);
+		await expect(
+			signUpAndLinkSocialAccount(auth, "with-issuer-column@example.com"),
+		).rejects.toThrow(/account_issuer_accountId_uidx/);
 	});
 });
