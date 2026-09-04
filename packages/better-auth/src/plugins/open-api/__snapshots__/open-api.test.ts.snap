@@ -227,9 +227,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "id": {
                           "type": "string",
                         },
-                        "issuer": {
-                          "type": "string",
-                        },
                         "providerId": {
                           "type": "string",
                         },
