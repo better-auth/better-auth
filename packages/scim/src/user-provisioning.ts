@@ -23,7 +23,10 @@ import {
 	throwConcurrentSCIMGroupMutation,
 } from "./group-state";
 import type { SCIMIdentityCoordinator } from "./identity";
-import { runIdentityMutationTransaction } from "./identity";
+import {
+	concurrentIdentityMutation,
+	runIdentityMutationTransaction,
+} from "./identity";
 import type {
 	SCIMGroup,
 	SCIMGroupMember,
@@ -320,7 +323,7 @@ async function restoreInactiveSCIMUserByExternalId(input: {
 			},
 		});
 		if (!restoredSource) {
-			return null;
+			concurrentIdentityMutation();
 		}
 
 		await projection.reconcileUser({
