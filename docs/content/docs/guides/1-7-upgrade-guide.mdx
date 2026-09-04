@@ -74,7 +74,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
 **Upgrading from 1.6 changes nothing.** The account schema is the same one 1.6 shipped, so there is no column to add and no data to migrate.
 
 <Callout type="warn">
-  Only databases that ran 1.7.0 through 1.7.2 need the steps below. Better Auth keeps working on them: the first account write detects the leftover `NOT NULL` `issuer` column, keeps filling it, and logs one warning naming this section. That fallback is a temporary bridge and will be removed in a later release, so relax the column now.
+  Only databases that ran 1.7.0 through 1.7.2 need the steps below. New rows no longer write `issuer`, so a `NOT NULL` column rejects every sign-up and account link until you relax it.
 </Callout>
 
 <Steps>
@@ -85,7 +85,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
     SELECT * FROM account LIMIT 0;
     ```
 
-    If the result has no `issuer` column, you are done. A 1.6 database whose `account` table already had rows could not take the column, because a `NOT NULL` column with no default cannot be added to a populated table. If the column is there, your logs already carry the warning from the first account write.
+    If the result has no `issuer` column, you are done. A 1.6 database whose `account` table already had rows could not take the column, because a `NOT NULL` column with no default cannot be added to a populated table.
   </Step>
 
   <Step>
@@ -97,7 +97,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
       Drop the index before the column. MySQL keeps an index whose column disappears and rebuilds it on the remaining ones, turning the compound unique index into a unique constraint on `accountId` alone. That rejects a user who holds the same account ID at two providers.
     </Callout>
 
-    <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle", "MongoDB"]}>
+    <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle"]}>
       <Tab value="Postgres">
         ```sql
         ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL;
@@ -130,23 +130,15 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
         npx @better-auth/cli@latest generate
         ```
       </Tab>
-
-      <Tab value="MongoDB">
-        MongoDB has no `NOT NULL`, so inserts keep working and no warning is logged. Drop the unique index if it exists: with `issuer` no longer written, it would treat every new account as sharing one issuer and reject two providers that use the same account ID. The index was created lazily on first use, so a collection that already held duplicate account IDs never received it.
-
-        ```js
-        db.account.dropIndex("account_issuer_accountId_uidx");
-        ```
-      </Tab>
     </Tabs>
 
-    The generated index name is `account_issuer_accountId_uidx`. Adjust it if your own migration used another name, and use your column name if you renamed the column through `account.fields.issuer` on 1.7; the fallback follows that setting as well.
+    The generated index name is `account_issuer_accountId_uidx`. Adjust it if your own migration used another name.
   </Step>
 
   <Step>
     #### Confirm
 
-    Restart the application and sign up a new user: the warning no longer appears. Existing sessions and sign-ins were never affected, and neither were sign-ups before this step. Accounts are found by `providerId` and `accountId`, which every row already carries.
+    Sign up a new user. Existing sessions and sign-ins were never affected: accounts are found by `providerId` and `accountId`, which every row already carries.
   </Step>
 </Steps>
 
