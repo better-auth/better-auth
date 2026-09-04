@@ -1,4 +1,4 @@
-import type { D1Database } from "@cloudflare/workers-types";
+import type { D1Database } from "@better-auth/core";
 import type {
 	CompiledQuery,
 	DatabaseConnection,

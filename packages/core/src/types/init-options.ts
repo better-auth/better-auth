@@ -1,6 +1,5 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -32,6 +31,26 @@ import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
+
+interface D1Result<T = unknown> {
+	meta: {
+		changes?: number | undefined;
+		last_row_id?: number | undefined;
+	};
+	results: T[];
+}
+
+interface D1PreparedStatement {
+	bind(...values: unknown[]): D1PreparedStatement;
+	all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+}
+
+export interface D1Database {
+	prepare(query: string): D1PreparedStatement;
+	batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+	exec(query: string): Promise<unknown>;
+}
+
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };

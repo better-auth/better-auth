@@ -23,6 +23,7 @@ export type {
 	BetterAuthRateLimitOptions,
 	BetterAuthRateLimitRule,
 	BetterAuthRateLimitStorage,
+	D1Database,
 	DynamicBaseURLConfig,
 	GenerateIdFn,
 	StoreIdentifierOption,
