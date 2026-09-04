@@ -990,7 +990,6 @@ export const accountInfo = createAuthEndpoint(
 											properties: {
 												id: { type: "string" },
 												providerId: { type: "string" },
-												issuer: { type: "string" },
 												accountId: { type: "string" },
 											},
 											required: ["id", "providerId", "accountId"],
