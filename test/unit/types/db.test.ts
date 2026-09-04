@@ -142,7 +142,6 @@ test("Account with additionalFields", () => {
 	>();
 	expectTypeOf<FinalAccount["isVerified"]>().toEqualTypeOf<boolean>();
 	expectTypeOf<FinalAccount["providerId"]>().toEqualTypeOf<string>();
-	expectTypeOf<FinalAccount["issuer"]>().toEqualTypeOf<string>();
 	expectTypeOf<FinalAccount["accountId"]>().toEqualTypeOf<string>();
 	expectTypeOf<FinalAccount>().not.toHaveProperty("providerAccountId");
 });
