@@ -286,6 +286,33 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							data: { ...totpData, userId: user.id },
 						});
 					}
+					// `userId` is not unique, so concurrent enrollments can both pass the
+					// findOne above and both insert. Converge on one row that every racer
+					// picks identically (verified first, then lowest id) so a later findOne
+					// cannot return a factor the user never scanned. A racer whose row
+					// lost returned a URI that will fail verification; re-enabling
+					// updates the surviving unverified row.
+					const rows = await ctx.context.adapter.findMany<TwoFactorTable>({
+						model: opts.twoFactorTable,
+						where: [{ field: "userId", value: user.id }],
+					});
+					if (rows.length > 1) {
+						const [, ...duplicates] = rows.sort(
+							(a, b) =>
+								Number(b.verified !== false) - Number(a.verified !== false) ||
+								(String(a.id) < String(b.id) ? -1 : 1),
+						);
+						await ctx.context.adapter.deleteMany({
+							model: opts.twoFactorTable,
+							where: [
+								{
+									field: "id",
+									operator: "in",
+									value: duplicates.map((row) => row.id),
+								},
+							],
+						});
+					}
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,

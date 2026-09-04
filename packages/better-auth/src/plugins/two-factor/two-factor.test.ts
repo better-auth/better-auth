@@ -2713,3 +2713,65 @@ describe("backup codes storage configurations", () => {
 		});
 	}
 });
+
+describe("two factor enable concurrency", async () => {
+	const { auth, db, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [twoFactor()],
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10561
+	 */
+	it("should keep a single usable factor when enable is called concurrently", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		// Park every twoFactor insert until both requests have passed their
+		// findOne, so both observe "no existing factor" and both insert.
+		let arrived = 0;
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "twoFactor") {
+				arrived++;
+				if (arrived === 2) release();
+				await gate;
+			}
+			return create(input);
+		});
+
+		const results = await Promise.all([
+			auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+			}),
+			auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+			}),
+		]);
+		vi.restoreAllMocks();
+
+		const rows = await db.findMany<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(rows).toHaveLength(1);
+		const storedSecret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: rows[0]!.secret,
+		});
+		const secretParam = (uri: string) =>
+			new URL(uri).searchParams.get("secret");
+		const returnedSecrets = results.map((res) => {
+			if (res.method !== "totp") throw new Error("expected totp");
+			return secretParam(res.totpURI);
+		});
+		expect(returnedSecrets).toContain(
+			secretParam(createOTP(storedSecret).url("test", user.email)),
+		);
+	});
+});
