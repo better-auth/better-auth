@@ -228,12 +228,12 @@ describe("drizzle-adapter", () => {
 				adapter.findOne({
 					model: "account",
 					where: [
-						{ field: "issuer", value: "https://issuer.example" },
+						{ field: "providerId", value: "google" },
 						{ field: "accountId", value: "subject" },
 					],
 				}),
 			).rejects.toThrow(
-				'The field "issuer" does not exist in the schema for the model "account"',
+				'The field "providerId" does not exist in the schema for the model "account"',
 			);
 			expect(select).not.toHaveBeenCalled();
 		});
@@ -248,14 +248,14 @@ describe("drizzle-adapter", () => {
 				{ provider: "pg", schema: { account } },
 			)({
 				secret: "test-secret-that-is-at-least-32-chars-long!!",
-				account: { fields: { issuer: "constructor" } },
+				account: { fields: { providerId: "constructor" } },
 			});
 
 			await expect(
 				adapter.findOne({
 					model: "account",
 					where: [
-						{ field: "issuer", value: "https://issuer.example" },
+						{ field: "providerId", value: "google" },
 						{ field: "accountId", value: "subject" },
 					],
 				}),
