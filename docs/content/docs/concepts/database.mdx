@@ -414,7 +414,7 @@ export const sessionTableFields = [
 
 Table Name: `account`
 
-An account represents one authentication method linked to a user. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
+An account represents one authentication method linked to a user. Better Auth recognizes the provider-side identity by the pair of `providerId` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
 
 export const accountTableFields = [
 	{
@@ -432,15 +432,9 @@ export const accountTableFields = [
 		references: { model: "user", field: "id", onDelete: "cascade" },
 	},
 	{
-		name: "issuer",
-		type: "string",
-		description:
-			"The trusted authority that issued the provider account identifier",
-	},
-	{
 		name: "accountId",
 		type: "string",
-		description: "The stable account identifier within the issuer namespace",
+		description: "The stable account identifier assigned by the provider",
 	},
 	{
 		name: "providerId",
@@ -504,7 +498,7 @@ export const accountTableFields = [
 
 <DatabaseTable name="account" fields={accountTableFields} />
 
-The database enforces a unique compound index on `issuer` and `accountId`. Providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. OAuth providers without an issuer use the synthetic `local:oauth:<encoded providerId>` namespace, with the provider ID segment percent-encoded. Credential accounts use `local:credential` and the linked user's stable `id`.
+Credential accounts use the `credential` provider ID and the linked user's stable `id` as `accountId`.
 
 ### Verification
 
