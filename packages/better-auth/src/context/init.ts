@@ -10,7 +10,7 @@ import { createAuthContext } from "./create-context";
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = withLegacyAccountIssuer(
 		await getAdapter(options),
-		(probeOptions) => getAdapter(probeOptions),
+		() => getAdapter(options),
 		options,
 		createLogger(options.logger),
 	);

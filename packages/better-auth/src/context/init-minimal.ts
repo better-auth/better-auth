@@ -6,8 +6,8 @@ import { withLegacyAccountIssuer } from "../db/legacy-account-issuer";
 import { createAuthContext } from "./create-context";
 
 export const initMinimal = async (options: BetterAuthOptions) => {
-	const buildAdapter = (adapterOptions: BetterAuthOptions = options) =>
-		getBaseAdapter(adapterOptions, async () => {
+	const buildAdapter = () =>
+		getBaseAdapter(options, async () => {
 			throw new BetterAuthError(
 				"Direct database connection requires Kysely. Please use `better-auth` instead of `better-auth/minimal`, or provide an adapter (drizzleAdapter, prismaAdapter, etc.)",
 			);

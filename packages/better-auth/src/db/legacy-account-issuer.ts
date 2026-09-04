@@ -6,12 +6,11 @@
  * writes that column and its NOT NULL constraint rejects every account insert.
  * The adapter builds each insert from its schema, and a transaction rebuilds
  * that schema from the options, so the column has to be known before the first
- * write. Before the first transaction this shim builds a candidate adapter
- * from a copy of the options that declares the column, and selects the column
- * through it. The database answers once: the candidate becomes the adapter and
- * every account insert carries the value 1.7 used, or the candidate is dropped
- * and the database is never asked again. The application's options object is
- * never modified.
+ * write. Before the first transaction this shim declares the column on the
+ * options, builds a candidate adapter from them, and selects the column through
+ * it. The database answers once: the candidate becomes the adapter and every
+ * account insert carries the value 1.7 used, or the declaration is withdrawn
+ * and the database is never asked again.
  *
  * Delete this file, its two `init` call sites, and its use in
  * `internal-adapter.ts` to remove the shim. Nothing else depends on it.
@@ -83,9 +82,7 @@ export function getLegacyAccountIssuer(
 
 export function withLegacyAccountIssuer(
 	adapter: DBAdapter<BetterAuthOptions>,
-	rebuild: (
-		options: BetterAuthOptions,
-	) => Promise<DBAdapter<BetterAuthOptions>>,
+	rebuild: () => Promise<DBAdapter<BetterAuthOptions>>,
 	options: BetterAuthOptions,
 	logger: InternalLogger,
 ): DBAdapter<BetterAuthOptions> {
@@ -96,14 +93,17 @@ export function withLegacyAccountIssuer(
 
 	async function reconcile(): Promise<void> {
 		if (SCHEMALESS_ADAPTERS.has(adapter.id)) return;
+		const account = (options.account ??= {});
+		const additionalFields = (account.additionalFields ??= {});
 		// A field the application declared itself is the application's to fill.
-		if (options.account?.additionalFields?.[LEGACY_COLUMN]) return;
+		if (additionalFields[LEGACY_COLUMN]) return;
 
 		// The adapter resolves field names from its schema before it talks to the
 		// database, so only an adapter that already declares the column can ask
-		// the database whether the column exists. 1.7 let `account.fields.issuer`
-		// rename the column; a configuration that still carries it names the
-		// physical column exactly as 1.7 did.
+		// the database whether the column exists.
+		// 1.7 let `account.fields.issuer` rename the column. The option no longer
+		// exists in the types, but a configuration that still carries it names
+		// the physical column exactly as 1.7 did.
 		const fields = options.account?.fields as
 			| Record<string, string | undefined>
 			| undefined;
@@ -113,16 +113,8 @@ export function withLegacyAccountIssuer(
 			returned: false,
 			fieldName: fields?.[LEGACY_COLUMN],
 		};
-		const candidate = await rebuild({
-			...options,
-			account: {
-				...options.account,
-				additionalFields: {
-					...options.account?.additionalFields,
-					[LEGACY_COLUMN]: attribute,
-				},
-			},
-		});
+		additionalFields[LEGACY_COLUMN] = attribute;
+		const candidate = await rebuild();
 		try {
 			await candidate.findMany({
 				model: "account",
@@ -134,6 +126,7 @@ export function withLegacyAccountIssuer(
 			// Either way this instance must not write it. A shim never fails a
 			// write on its own: an unreachable database surfaces through the write
 			// itself, and `rearm` asks again afterwards.
+			delete additionalFields[LEGACY_COLUMN];
 			return;
 		}
 		declared = attribute;
