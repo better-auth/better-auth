@@ -206,6 +206,139 @@ async function findSCIMUser(
 	return scimUser;
 }
 
+async function findSCIMUserByExternalIdKey(
+	adapter: Pick<DBAdapter, "findOne">,
+	connection: SCIMConnection,
+	externalIdKey: string,
+) {
+	const scimUser = await adapter.findOne<SCIMUser>({
+		model: "scimUser",
+		where: [
+			{ field: "connectionId", value: connection.id },
+			{ field: "externalIdKey", value: externalIdKey },
+		],
+	});
+	if (
+		scimUser &&
+		scimUser.provisioningDomainId !== connection.provisioningDomainId
+	) {
+		throw createSCIMError("CONFLICT", {
+			detail:
+				"The connection provisioningDomainId changed after resources were created",
+		});
+	}
+	return scimUser;
+}
+
+async function restoreInactiveSCIMUserByExternalId(input: {
+	adapter: DBAdapter;
+	auth: AuthContext;
+	connection: SCIMConnection;
+	identity: SCIMIdentityCoordinator;
+	projection: SCIMProjectionCoordinator;
+	profile: ReturnType<typeof createCanonicalSCIMUserProfile>;
+	userNameKey: string;
+	externalIdKey: string;
+	externalId: string | undefined;
+	active: boolean;
+}): Promise<SCIMUser | null> {
+	const {
+		adapter,
+		auth,
+		connection,
+		identity,
+		projection,
+		profile,
+		userNameKey,
+		externalIdKey,
+		externalId,
+		active,
+	} = input;
+
+	return runIdentityMutationTransaction(adapter, async (trx) => {
+		const currentSource = await findSCIMUserByExternalIdKey(
+			trx,
+			connection,
+			externalIdKey,
+		);
+		if (!currentSource) {
+			return null;
+		}
+		if (currentSource.active) {
+			throw createSCIMError("CONFLICT", {
+				detail: "SCIM User externalId already exists",
+				scimType: "uniqueness",
+			});
+		}
+
+		await assertSCIMUserKeysAvailable(trx, {
+			connectionId: connection.id,
+			userNameKey,
+			externalIdKey,
+			excludeSCIMUserId: currentSource.id,
+		});
+
+		const updatedAt = new Date();
+		const subject = await identity.acquireSubject(
+			trx,
+			currentSource.userId,
+			updatedAt,
+		);
+		if (subject.profileSourceId === currentSource.id) {
+			await updateManagedBetterAuthUser(trx, auth.internalAdapter, {
+				userId: currentSource.userId,
+				email: profile.primaryEmail,
+				name: profile.displayName,
+				updatedAt,
+			});
+		}
+
+		const restoredSource = await trx.update<SCIMUser>({
+			model: "scimUser",
+			where: [
+				{ field: "id", value: currentSource.id },
+				{ field: "connectionId", value: connection.id },
+				{ field: "externalIdKey", value: externalIdKey },
+				{ field: "active", value: false },
+			],
+			update: {
+				userName: profile.userName,
+				userNameKey,
+				primaryEmail: profile.primaryEmail,
+				workEmailValueIndex: createSCIMEmailValueIndex(profile.emails, "work"),
+				emailValueIndex: createSCIMEmailValueIndex(profile.emails),
+				displayName: profile.displayName,
+				formattedName: profile.formattedName,
+				givenName: profile.name.givenName ?? null,
+				familyName: profile.name.familyName ?? null,
+				serializedEmails: serializeSCIMEmails(profile.emails),
+				serializedAttributes: serializeSCIMUserAttributes(profile.attributes),
+				externalId: externalId ?? null,
+				externalIdKey,
+				active,
+				updatedAt,
+			},
+		});
+		if (!restoredSource) {
+			return null;
+		}
+
+		await projection.reconcileUser({
+			database: trx,
+			auth,
+			provisioningDomainId: connection.provisioningDomainId,
+			scimUserId: restoredSource.id,
+		});
+		await identity.reconcileUser({
+			database: trx,
+			auth,
+			subject,
+		});
+		await fenceActiveSCIMConnection(trx, connection.id);
+		return restoredSource;
+	});
+}
+
 async function requireSCIMSubject(
 	adapter: Pick<DBAdapter, "findOne">,
 	userId: string,
@@ -376,6 +509,11 @@ export function createSCIMUser(
 				openapi: {
 					summary: "Create SCIM User",
 					responses: {
+						"200": {
+							description:
+								"Restored inactive SCIM User matched by connection-scoped externalId",
+							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
+						},
 						"201": {
 							description: "SCIM User resource",
 							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
@@ -403,6 +541,43 @@ export function createSCIMUser(
 				ctx.body.externalId,
 			);
 			await assertUserConnectionDomainStable(adapter, connection);
+
+			if (externalIdKey) {
+				const existingByExternalId = await findSCIMUserByExternalIdKey(
+					adapter,
+					connection,
+					externalIdKey,
+				);
+				if (existingByExternalId && existingByExternalId.active === false) {
+					const restoredSCIMUser = await restoreInactiveSCIMUserByExternalId({
+						adapter,
+						auth: ctx.context,
+						connection,
+						identity,
+						projection,
+						profile,
+						userNameKey,
+						externalIdKey,
+						externalId: ctx.body.externalId,
+						active,
+					});
+					if (restoredSCIMUser) {
+						const completeResource = createUserResource(
+							ctx.context.baseURL,
+							restoredSCIMUser,
+						);
+						const resource = projectSCIMResourceAttributes(
+							completeResource,
+							attributeProjection,
+						);
+						ctx.setStatus(200);
+						ctx.setHeader("location", completeResource.meta.location);
+						ctx.setHeader("content-location", completeResource.meta.location);
+						return ctx.json(resource);
+					}
+				}
+			}
+
 			await assertSCIMUserKeysAvailable(adapter, {
 				connectionId: connection.id,
 				userNameKey,
