@@ -93,6 +93,10 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
 
     Dropping the constraint is enough, and it is reversible. Dropping the column is separate cleanup you can do whenever.
 
+    <Callout type="warn">
+      Drop the index before the column. MySQL keeps an index whose column disappears and rebuilds it on the remaining ones, turning the compound unique index into a unique constraint on `accountId` alone. That rejects a user who holds the same account ID at two providers.
+    </Callout>
+
     <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle"]}>
       <Tab value="Postgres">
         ```sql
