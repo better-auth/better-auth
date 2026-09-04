@@ -6563,9 +6563,6 @@ describe("SAML E2E: SP-initiated flow", () => {
 			| Record<string, any>
 			| undefined;
 		expect(ssoAccount).toBeDefined();
-		expect(ssoAccount!.issuer).toBe(
-			"http://localhost:8081/api/sso/saml2/idp/metadata",
-		);
 		expect(ssoAccount!.accountId).toBe("test@email.com");
 
 		// 7. Verify the user exists and is linked

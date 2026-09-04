@@ -748,7 +748,6 @@ export async function processSAMLResponse(
 					},
 					account: {
 						providerId,
-						issuer: accountKey.issuer,
 						accountId: accountKey.accountId,
 						accessToken: "",
 						refreshToken: "",

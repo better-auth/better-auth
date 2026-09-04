@@ -244,7 +244,6 @@ describe("SSO OIDC user resolution HTTP", () => {
 			protocol: "oidc",
 			providerId: "workforce",
 			accountKey: {
-				issuer: identityProvider.issuer.url,
 				accountId: subject,
 			},
 			providerUser: { email: firstProviderEmail },
@@ -279,7 +278,6 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
-			issuer: identityProvider.issuer.url,
 			accountId: subject,
 			providerId: "workforce",
 			userId: selectedUser.id,
@@ -536,34 +534,6 @@ describe("SSO OIDC user resolution HTTP", () => {
 			`${instance.baseURL}/employee`,
 		);
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
-	});
-
-	it("rejects another provider alias for an existing subject even on default resolution", async ({
-		onTestFinished,
-	}) => {
-		subject = "provider-conflict-user";
-		email = "provider-conflict@example.com";
-		const instance = await createInstance(
-			{ resolveUser: () => ({ action: "continue" }) },
-			onTestFinished,
-			{},
-			[provider("workforce"), provider("another-workforce")],
-		);
-		expect(
-			(await completeSignIn(instance.baseURL)).callback.headers.get("location"),
-		).toBe(`${instance.baseURL}/employee`);
-		const conflict = await completeSignIn(
-			instance.baseURL,
-			"another-workforce",
-		);
-		const redirect = new URL(
-			conflict.callback.headers.get("location")!,
-			instance.baseURL,
-		);
-		expect(redirect.searchParams.get("error")).toBe(
-			"account_provider_conflict",
-		);
-		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
 	});
 
 	it("keeps case-distinct OIDC subjects as different account keys", async ({
