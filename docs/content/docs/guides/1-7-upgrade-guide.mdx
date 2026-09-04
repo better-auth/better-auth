@@ -97,7 +97,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
       Drop the index before the column. MySQL keeps an index whose column disappears and rebuilds it on the remaining ones, turning the compound unique index into a unique constraint on `accountId` alone. That rejects a user who holds the same account ID at two providers.
     </Callout>
 
-    <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle"]}>
+    <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle", "MongoDB"]}>
       <Tab value="Postgres">
         ```sql
         ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL;
@@ -130,9 +130,17 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
         npx @better-auth/cli@latest generate
         ```
       </Tab>
+
+      <Tab value="MongoDB">
+        MongoDB has no `NOT NULL`, so inserts keep working. Drop the unique index if it exists: with `issuer` no longer written, it would treat every new account as sharing one issuer and reject two providers that use the same account ID. The index was created lazily on first use, so a collection that already held duplicate account IDs never received it.
+
+        ```js
+        db.account.dropIndex("account_issuer_accountId_uidx");
+        ```
+      </Tab>
     </Tabs>
 
-    The generated index name is `account_issuer_accountId_uidx`. Adjust it if your own migration used another name.
+    The generated index name is `account_issuer_accountId_uidx`. Adjust it if your own migration used another name, and use your column name if you renamed the column through `account.fields.issuer` on 1.7.
   </Step>
 
   <Step>
