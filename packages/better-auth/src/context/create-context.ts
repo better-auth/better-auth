@@ -290,6 +290,7 @@ Most of the features of Better Auth will not work correctly.`,
 				options.account?.storeStateStrategy ||
 				(isStateful ? "database" : "cookie"),
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
+			stateExpiresIn: options.account?.stateExpiresIn ?? 10 * 60,
 		},
 		tables,
 		trustedOrigins,

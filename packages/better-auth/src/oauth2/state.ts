@@ -63,7 +63,7 @@ export async function generateState(
 		// Assigned after the client-controlled `additionalData` spread so a client
 		// cannot smuggle a `serverContext` of its own through the request body.
 		serverContext,
-		expiresAt: Date.now() + 10 * 60 * 1000,
+		expiresAt: Date.now() + c.context.oauthConfig.stateExpiresIn * 1000,
 		requestSignUp: c.body?.requestSignUp,
 		idTokenNonce: options?.idTokenNonce,
 	};
