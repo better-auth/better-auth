@@ -1314,6 +1314,15 @@ export type BetterAuthOptions = {
 				 */
 				storeStateStrategy?: "database" | "cookie";
 				/**
+				 * How long an OAuth flow may take between the redirect to the provider
+				 * and the callback, in seconds. Drives the state payload expiry, the
+				 * verification record TTL and the state cookie `Max-Age` together so
+				 * the cookie can never expire before the state it protects.
+				 *
+				 * @default 600 (10 minutes)
+				 */
+				stateExpiresIn?: number;
+				/**
 				 * Store provider account data after an OAuth flow in an encrypted
 				 * cookie. This includes OAuth token material such as access tokens,
 				 * refresh tokens, ID tokens, scopes, and token expiry.

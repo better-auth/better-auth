@@ -383,6 +383,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy: "database" | "cookie";
+				/**
+				 * OAuth state lifetime in seconds. Resolved from `account.stateExpiresIn`.
+				 */
+				stateExpiresIn: number;
 			};
 			/**
 			 * New session that will be set after the request

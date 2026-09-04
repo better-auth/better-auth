@@ -34,7 +34,8 @@ provider was used to look up a verification record in the database, but no match
 
 ### Common causes
 
-1. **The user took too long on the provider's login page.** The verification record expires after 10 minutes.
+1. **The user took too long on the provider's login page.** The verification record expires after 10 minutes
+   by default (`account.stateExpiresIn`).
    Once expired, any other `findVerificationValue` call (from OTP checks, magic links, 2FA, etc.) triggers
    a background cleanup that deletes all expired records - including this one.
 
@@ -97,7 +98,7 @@ cookie was not present on the callback request.
 ## `state_mismatch` - request expired
 
 The state data was successfully retrieved (from either the database or cookie), but its embedded
-`expiresAt` timestamp has passed. The state payload is valid for 10 minutes from creation.
+`expiresAt` timestamp has passed. The state payload is valid for 10 minutes from creation by default.
 
 ### Common causes
 
@@ -108,7 +109,7 @@ The state data was successfully retrieved (from either the database or cookie), 
 
 * Ensure **NTP is enabled** on all server instances so clocks stay synchronized.
 * If your users regularly need more than 10 minutes (e.g. enterprise SSO with approval workflows),
-  this timeout is currently not configurable - consider opening a feature request.
+  raise `account.stateExpiresIn` (in seconds). The state cookie and verification record follow the same window.
 
 ***
 

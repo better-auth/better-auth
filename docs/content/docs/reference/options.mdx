@@ -479,6 +479,7 @@ export const auth = betterAuth({
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
 		storeStateStrategy: "database", // Store OAuth state payload in verification storage
+		stateExpiresIn: 10 * 60, // How long (seconds) an OAuth flow may take before its state expires
 		storeAccountCookie: true, // Store provider account data after OAuth flow in an encrypted cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
@@ -521,6 +522,12 @@ Controls where OAuth state data is stored during the authentication flow.
 * `"database"`: Store the state payload in the verification storage/table, set a signed state cookie when starting the flow, and validate the stored state against the signed cookie sent by the browser on the OAuth callback request.
 
 Defaults to `"database"` when a database or `secondaryStorage` is configured, and to `"cookie"` only when neither is set (a fully stateless setup). With `secondaryStorage`, OAuth state is stored there automatically; you no longer need to set this manually.
+
+### `stateExpiresIn`
+
+How long, in seconds, an OAuth flow may take between the redirect to the provider and the callback. One value drives the state payload expiry, the verification record TTL (database strategy) and the state cookie `Max-Age`, so the cookie can never expire before the state it protects. Raise it for providers where users routinely spend a long time on the provider side (MFA prompts, enterprise approval flows).
+
+Defaults to `600` (10 minutes).
 
 ### `storeAccountCookie`
 
@@ -684,7 +691,7 @@ export const auth = betterAuth({
 * `database`: Database configuration options
 * `backgroundTasks`: Configure background task handling for deferred operations
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
-* OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+* OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`, `stateExpiresIn`) are now part of the `account` option
 
 <h3 id="advanced-database"><code>database</code></h3>
 
