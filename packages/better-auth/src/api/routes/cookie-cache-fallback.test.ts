@@ -4,6 +4,86 @@ import { symmetricEncodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/11119
+ */
+describe("disabled cookie cache fallback", () => {
+	const secret = "better-auth-retired-cookie-cache-test-secret";
+	const cacheMaxAge = 5 * 60;
+
+	it.each([
+		{
+			mode: "in configuration",
+			cacheEnabled: false,
+			query: undefined,
+			expectedSessionDataMaxAge: 0,
+		},
+		{
+			mode: "for the request",
+			cacheEnabled: true,
+			query: { disableCookieCache: true },
+			expectedSessionDataMaxAge: cacheMaxAge,
+		},
+	])("ignores retired session_data when caching is disabled $mode", async ({
+		cacheEnabled,
+		query,
+		expectedSessionDataMaxAge,
+	}) => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret,
+			advanced: {
+				cookies: {
+					session_token: { name: "custom.session_token" },
+					session_data: { name: "custom.session" },
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: cacheEnabled,
+					strategy: "compact",
+					maxAge: cacheMaxAge,
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const retiredCache = await symmetricEncodeJWT(
+			{ retired: true },
+			secret,
+			"better-auth-session",
+		);
+		headers.set(
+			"cookie",
+			`${headers.get("cookie")}; custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks`,
+		);
+
+		let setCookieHeader = "";
+		const session = await client.getSession({
+			query,
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+		expect(session.data?.user.email).toBe(testUser.email);
+
+		const responseCookies = parseSetCookieHeader(setCookieHeader);
+		expect(responseCookies.get("custom.session")?.["max-age"]).toBe(
+			expectedSessionDataMaxAge,
+		);
+		for (const name of ["custom.session.0", "custom.session.1"]) {
+			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
+		}
+		expect(responseCookies.has("custom.session_token")).toBe(false);
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/9233
  *
  * When `crossSubDomainCookies` is enabled for the first time on a live deployment,
@@ -19,63 +99,6 @@ import { getTestInstance } from "../../test-utils/test-instance";
 describe("cookieCache HMAC verification failure fallback", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
-	});
-
-	it.each([
-		{ mode: "in configuration", enabled: false, query: undefined },
-		{
-			mode: "for the request",
-			enabled: true,
-			query: { disableCookieCache: true },
-		},
-	])("ignores retired session_data when caching is disabled $mode", async (test) => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
-			advanced: {
-				cookies: {
-					session_token: { name: "custom.session_token" },
-					session_data: { name: "custom.session" },
-				},
-			},
-			session: {
-				cookieCache: { enabled: test.enabled, strategy: "compact" },
-			},
-		});
-		const headers = new Headers();
-		await client.signIn.email(
-			{ email: testUser.email, password: testUser.password },
-			{ onSuccess: cookieSetter(headers) },
-		);
-
-		const retiredCache = await symmetricEncodeJWT(
-			{ retired: true },
-			"better-auth-secret-that-is-long-enough-for-validation-test",
-			"better-auth-session",
-		);
-		headers.set(
-			"cookie",
-			`${headers.get("cookie")}; custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks`,
-		);
-
-		let setCookieHeader = "";
-		const session = await client.getSession({
-			query: test.query,
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					setCookieHeader = context.response.headers.get("set-cookie") || "";
-				},
-			},
-		});
-		expect(session.data?.user.email).toBe(testUser.email);
-
-		const responseCookies = parseSetCookieHeader(setCookieHeader);
-		expect(responseCookies.get("custom.session")?.["max-age"]).toBe(
-			test.enabled ? 300 : 0,
-		);
-		for (const name of ["custom.session.0", "custom.session.1"]) {
-			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
-		}
-		expect(responseCookies.has("custom.session_token")).toBe(false);
 	});
 
 	it("should fall through to session_token DB validation when session_data HMAC fails", async () => {
