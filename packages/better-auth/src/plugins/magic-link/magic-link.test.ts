@@ -926,3 +926,67 @@ describe("magic link send origin/CSRF protection", async () => {
 		expect(sendMagicLink).toHaveBeenCalledTimes(1);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10916
+ */
+describe("magic link callback URL encoding", async () => {
+	let sent: VerificationEmail = { email: "", token: "", url: "" };
+	const { auth, testUser } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					sent = data;
+				},
+			}),
+		],
+	});
+	const signIn = (body: Record<string, string>) =>
+		auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/magic-link", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+	const verifyAndGetLocation = async (url: string) => {
+		const res = await auth.handler(new Request(url));
+		expect(res.status).toBe(302);
+		return new URL(res.headers.get("location")!);
+	};
+
+	it("should not double-decode callbackURL on verify", async () => {
+		await signIn({
+			email: testUser.email,
+			callbackURL: "http://localhost:3000/cb?sig=a%2Bb",
+		});
+		const location = await verifyAndGetLocation(sent.url);
+		expect(location.pathname).toBe("/cb");
+		expect(location.searchParams.get("sig")).toBe("a+b");
+	});
+
+	it("should not double-decode newUserCallbackURL on verify", async () => {
+		await signIn({
+			email: "new-user-10916@email.com",
+			callbackURL: "http://localhost:3000/cb",
+			newUserCallbackURL: "http://localhost:3000/welcome?sig=a%2Bb",
+		});
+		const location = await verifyAndGetLocation(sent.url);
+		expect(location.pathname).toBe("/welcome");
+		expect(location.searchParams.get("sig")).toBe("a+b");
+	});
+
+	it("should not double-decode errorCallbackURL on verify", async () => {
+		await signIn({
+			email: testUser.email,
+			callbackURL: "http://localhost:3000/cb",
+			errorCallbackURL: "http://localhost:3000/error?sig=a%2Bb",
+		});
+		const url = new URL(sent.url);
+		url.searchParams.set("token", "invalid-token");
+		const location = await verifyAndGetLocation(url.toString());
+		expect(location.pathname).toBe("/error");
+		expect(location.searchParams.get("sig")).toBe("a+b");
+		expect(location.searchParams.get("error")).toBe("INVALID_TOKEN");
+	});
+});
