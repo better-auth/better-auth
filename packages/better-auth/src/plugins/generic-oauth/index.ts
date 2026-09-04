@@ -247,9 +247,9 @@ export const genericOAuth = <const ID extends string>(
 								algorithms: isOidc ? signingAlgs : undefined,
 							};
 						}
-					} else {
+					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
-							`Provider "${c.providerId}": discovery returned no valid data. Provider skipped.`,
+							`Provider "${c.providerId}": discovery returned no valid data and no explicit endpoints are configured. Provider skipped.`,
 						);
 						continue;
 					}
