@@ -39,6 +39,11 @@ const rejectedRedirects = [
 		error: "invalid_request",
 	},
 	{
+		component: "empty fragment",
+		redirectUri: "http://localhost:51234/callback?source=cli#",
+		error: "invalid_request",
+	},
+	{
 		component: "userinfo",
 		redirectUri: "http://user:password@localhost:51234/callback?source=cli",
 		error: "invalid_redirect",

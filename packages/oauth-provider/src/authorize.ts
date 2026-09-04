@@ -256,12 +256,8 @@ function stripLoopbackRedirectPort(uri: string): string | undefined {
 
 	const isLoopback =
 		isLoopbackIP(parsed.hostname) || parsed.hostname === "localhost";
-	const hasUserinfo = parsed.username.length > 0 || parsed.password.length > 0;
 
 	if (parsed.protocol !== "http:" || !isLoopback) {
-		return undefined;
-	}
-	if (parsed.hash || hasUserinfo) {
 		return undefined;
 	}
 
@@ -319,7 +315,15 @@ function findRegisteredRedirectUri(
 	} catch {
 		return undefined;
 	}
-	if (requestedUrl.hash || requestedUrl.username || requestedUrl.password) {
+
+	/**
+	 * A trailing `#` yields an empty `URL.hash` but still defines a fragment.
+	 */
+	const hasFragment = requested.includes("#");
+	const hasUserinfo =
+		requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
+
+	if (hasFragment || hasUserinfo) {
 		return undefined;
 	}
 	const requestedWithoutPort = stripLoopbackRedirectPort(requested);
