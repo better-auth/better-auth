@@ -8,6 +8,8 @@ import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normali
 import type { SCIMProjectedUserState } from "./configuration";
 
 const SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
+const SCIM_ENTERPRISE_USER_SCHEMA =
+	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const SCIM_MEDIA_TYPE = "application/scim+json";
 const SCIM_TOKEN = "active-normalization-token";
@@ -77,6 +79,7 @@ describe("SCIM User active ingress helper", () => {
 		"0",
 		1,
 		0,
+		null,
 		[],
 		[true],
 		{},
@@ -313,68 +316,66 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11015
 	 */
-	it("strips null optional object properties on POST and PUT without touching the input", () => {
-		for (const method of ["POST", "PUT"] as const) {
-			const body = {
-				schemas: [SCIM_USER_SCHEMA],
-				userName: "null-address@example.com",
-				title: null,
-				name: {
+	it("omits null optional complex subattributes without touching top-level scalars", () => {
+		const body = {
+			schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
+			userName: "null-address@example.com",
+			active: null,
+			name: { formatted: null, givenName: "Ada", familyName: null },
+			addresses: [
+				{
+					type: "work",
+					streetAddress: "44 Montgomery St",
 					formatted: null,
-					givenName: "Ada",
-					familyName: null,
+					country: null,
 				},
-				addresses: [
-					{
-						type: "work",
-						streetAddress: "44 Montgomery St",
-						locality: "San Francisco",
-						region: "CA",
-						postalCode: "94104",
-						formatted: null,
-						country: null,
-					},
-				],
-			};
-			const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
-				method,
-				body,
-			);
+			],
+			[SCIM_ENTERPRISE_USER_SCHEMA]: {
+				department: "Engineering",
+				employeeNumber: null,
+				manager: {
+					value: "manager-1",
+					displayName: null,
+					$ref: null,
+				},
+			},
+		};
+		const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
+			"POST",
+			body,
+		);
 
-			expect(normalized).not.toBe(body);
-			expect(normalized).toEqual({
-				schemas: [SCIM_USER_SCHEMA],
-				userName: "null-address@example.com",
-				name: { givenName: "Ada" },
-				addresses: [
-					{
-						type: "work",
-						streetAddress: "44 Montgomery St",
-						locality: "San Francisco",
-						region: "CA",
-						postalCode: "94104",
-					},
-				],
-			});
-			expect(body.title).toBeNull();
-			expect(body.addresses[0]?.formatted).toBeNull();
-			expect(body.addresses[0]?.country).toBeNull();
-		}
+		expect(normalized).toEqual({
+			schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
+			userName: "null-address@example.com",
+			active: null,
+			name: { givenName: "Ada" },
+			addresses: [{ type: "work", streetAddress: "44 Montgomery St" }],
+			[SCIM_ENTERPRISE_USER_SCHEMA]: {
+				department: "Engineering",
+				manager: { value: "manager-1" },
+			},
+		});
+		expect(body.active).toBeNull();
+		expect(body.addresses[0]?.country).toBeNull();
+		expect(
+			(
+				body[SCIM_ENTERPRISE_USER_SCHEMA] as {
+					manager: { displayName: null };
+				}
+			).manager.displayName,
+		).toBeNull();
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11015
 	 */
-	it("strips nulls from nested PATCH object values but preserves scalar value null", () => {
-		const scalarNullOperation = {
-			op: "replace",
-			path: "active",
-			value: null,
-		};
-		const body = {
+	it("omits nulls from complex PATCH values and leaves scalar value null intact", () => {
+		const activeNull = { op: "replace", path: "active", value: null };
+		const normalized = normalizeSCIMUserEntraCompatibilityRequestBody("PATCH", {
 			schemas: [SCIM_PATCH_SCHEMA],
 			Operations: [
-				scalarNullOperation,
+				activeNull,
 				{
 					op: "replace",
 					path: 'addresses[type eq "work"]',
@@ -387,31 +388,20 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 				},
 				{
 					op: "replace",
-					value: {
-						title: null,
-						name: { givenName: "Ada", familyName: null },
-					},
+					path: `${SCIM_ENTERPRISE_USER_SCHEMA}:manager`,
+					value: { value: "manager-1", displayName: null, $ref: null },
 				},
 			],
+		}) as {
+			Operations: { value: unknown }[];
 		};
-		const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
-			"PATCH",
-			body,
-		) as typeof body;
 
-		expect(normalized).not.toBe(body);
-		expect(normalized.Operations[0]).toBe(scalarNullOperation);
-		expect(normalized.Operations[0]?.value).toBeNull();
+		expect(normalized.Operations[0]).toBe(activeNull);
 		expect(normalized.Operations[1]?.value).toEqual({
 			type: "work",
 			streetAddress: "44 Montgomery St",
 		});
-		expect(normalized.Operations[2]?.value).toEqual({
-			name: { givenName: "Ada" },
-		});
-		expect(
-			(body.Operations[1]?.value as { formatted: null }).formatted,
-		).toBeNull();
+		expect(normalized.Operations[2]?.value).toEqual({ value: "manager-1" });
 	});
 
 	it("copies only the multi-valued entries whose primary value changes", () => {
@@ -1078,9 +1068,6 @@ describe("SCIM User active HTTP normalization", () => {
 		}
 	});
 });
-
-const SCIM_ENTERPRISE_USER_SCHEMA =
-	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
 
 interface SCIMPrimaryNormalizationUserResponse {
 	id: string;

@@ -1,27 +1,19 @@
 import { stripSCIMCoreAttributePrefix } from "./resource-schema-registry";
+import { SCIM_ENTERPRISE_USER_SCHEMA } from "./user-schemas";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
- * Drop JSON `null` object properties recursively. Microsoft Entra serializes
- * unassigned optional complex subattributes as `null`; Zod optional strings
- * reject that form. Arrays and scalar roots (including PATCH `value: null`)
- * are preserved so clearing semantics stay distinguishable.
+ * Omit JSON `null` properties from a complex SCIM object (and nested objects
+ * such as enterprise `manager`). Microsoft Entra serializes unassigned optional
+ * complex subattributes as `null`; Zod optional strings reject that form.
+ * Top-level User scalars are not passed through here.
  */
-function stripNullProperties(value: unknown): unknown {
-	if (Array.isArray(value)) {
-		let changed = false;
-		const normalized = value.map((entry) => {
-			const result = stripNullProperties(entry);
-			if (result !== entry) changed = true;
-			return result;
-		});
-		return changed ? normalized : value;
-	}
-	if (!isRecord(value)) return value;
-
+function omitNullProperties(
+	value: Record<string, unknown>,
+): Record<string, unknown> {
 	let changed = false;
 	const normalized: Record<string, unknown> = {};
 	for (const [key, entry] of Object.entries(value)) {
@@ -29,9 +21,13 @@ function stripNullProperties(value: unknown): unknown {
 			changed = true;
 			continue;
 		}
-		const result = stripNullProperties(entry);
-		if (result !== entry) changed = true;
-		normalized[key] = result;
+		if (isRecord(entry)) {
+			const nested = omitNullProperties(entry);
+			if (nested !== entry) changed = true;
+			normalized[key] = nested;
+			continue;
+		}
+		normalized[key] = entry;
 	}
 	return changed ? normalized : value;
 }
@@ -62,9 +58,13 @@ const SCIM_MULTI_VALUED_PRIMARY_ATTRIBUTES = [
 ] as const;
 
 function normalizeMultiValuedPrimaryEntry(entry: unknown): unknown {
-	if (!isRecord(entry) || !Object.hasOwn(entry, "primary")) return entry;
-	const primary = normalizeSCIMStringBooleanValue(entry.primary);
-	return primary === entry.primary ? entry : { ...entry, primary };
+	if (!isRecord(entry)) return entry;
+	const withoutNulls = omitNullProperties(entry);
+	if (!Object.hasOwn(withoutNulls, "primary")) return withoutNulls;
+	const primary = normalizeSCIMStringBooleanValue(withoutNulls.primary);
+	return primary === withoutNulls.primary
+		? withoutNulls
+		: { ...withoutNulls, primary };
 }
 
 function normalizeMultiValuedPrimaryValue(value: unknown): unknown {
@@ -93,8 +93,20 @@ function normalizeResourceMultiValuedPrimaries(
 function normalizeUserResourceEntraCompatibility(
 	value: Record<string, unknown>,
 ): Record<string, unknown> {
-	const withoutNulls = stripNullProperties(value);
-	const resource = isRecord(withoutNulls) ? withoutNulls : value;
+	const updates: Record<string, unknown> = {};
+	if (isRecord(value.name)) {
+		const name = omitNullProperties(value.name);
+		if (name !== value.name) updates.name = name;
+	}
+	const enterpriseExtension = value[SCIM_ENTERPRISE_USER_SCHEMA];
+	if (isRecord(enterpriseExtension)) {
+		const enterprise = omitNullProperties(enterpriseExtension);
+		if (enterprise !== enterpriseExtension) {
+			updates[SCIM_ENTERPRISE_USER_SCHEMA] = enterprise;
+		}
+	}
+	const resource =
+		Object.keys(updates).length === 0 ? value : { ...value, ...updates };
 	return normalizeResourceMultiValuedPrimaries(
 		normalizeActiveProperty(resource),
 	);
@@ -133,45 +145,46 @@ function isPathless(path: unknown): boolean {
 	);
 }
 
-function normalizePatchOperationValue(value: unknown): unknown {
-	// Scalar roots (including `value: null`) stay intact so PATCH clearing
-	// remains distinguishable from an omitted optional property.
-	if (Array.isArray(value) || isRecord(value)) {
-		return stripNullProperties(value);
-	}
-	return value;
+function isEnterpriseComplexPath(path: unknown): boolean {
+	if (typeof path !== "string") return false;
+	const trimmed = path.trim();
+	return (
+		trimmed === SCIM_ENTERPRISE_USER_SCHEMA ||
+		trimmed
+			.toLowerCase()
+			.startsWith(`${SCIM_ENTERPRISE_USER_SCHEMA.toLowerCase()}:`)
+	);
 }
 
 function normalizePatchOperation(operation: unknown): unknown {
 	if (!isRecord(operation)) return operation;
-	let next: Record<string, unknown> = operation;
-	if (Object.hasOwn(operation, "value")) {
-		const value = normalizePatchOperationValue(operation.value);
-		if (value !== operation.value) next = { ...operation, value };
+	if (isActivePath(operation.path)) {
+		const value = normalizeSCIMStringBooleanValue(operation.value);
+		return value === operation.value ? operation : { ...operation, value };
 	}
-	if (isActivePath(next.path)) {
-		const value = normalizeSCIMStringBooleanValue(next.value);
-		return value === next.value ? next : { ...next, value };
-	}
-	const primaryMatch = matchMultiValuedPrimaryPath(next.path);
+	const primaryMatch = matchMultiValuedPrimaryPath(operation.path);
 	if (primaryMatch) {
 		const value = primaryMatch.targetsPrimary
-			? normalizeSCIMStringBooleanValue(next.value)
-			: normalizeMultiValuedPrimaryValue(next.value);
-		return value === next.value ? next : { ...next, value };
+			? normalizeSCIMStringBooleanValue(operation.value)
+			: normalizeMultiValuedPrimaryValue(operation.value);
+		return value === operation.value ? operation : { ...operation, value };
 	}
-	if (isPathless(next.path) && isRecord(next.value)) {
-		const value = normalizeUserResourceEntraCompatibility(next.value);
-		return value === next.value ? next : { ...next, value };
+	if (isEnterpriseComplexPath(operation.path) && isRecord(operation.value)) {
+		const value = omitNullProperties(operation.value);
+		return value === operation.value ? operation : { ...operation, value };
 	}
-	return next;
+	if (isPathless(operation.path) && isRecord(operation.value)) {
+		const value = normalizeUserResourceEntraCompatibility(operation.value);
+		return value === operation.value ? operation : { ...operation, value };
+	}
+	return operation;
 }
 
 /**
  * Normalize provider-compatible User request shapes from Microsoft Entra:
  * string Boolean `active` / multi-valued `primary` values, and JSON `null`
- * optional object properties. Does not widen endpoint schemas or mutate the
- * caller's request body object.
+ * optional complex subattributes. Does not widen endpoint schemas or mutate
+ * the caller's request body object.
  */
 export function normalizeSCIMUserEntraCompatibilityRequestBody(
 	method: string,
