@@ -549,6 +549,10 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		inFlightResolutionByClientId.set(clientId, resolution);
 		try {
 			return await resolution;
+		} catch (error) {
+			lastFetchStartAtMsByClientId.delete(clientId);
+			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			throw error;
 		} finally {
 			if (inFlightResolutionByClientId.get(clientId) === resolution) {
 				inFlightResolutionByClientId.delete(clientId);

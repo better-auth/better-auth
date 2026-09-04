@@ -198,6 +198,29 @@ describe("CIMD metadata fetch governor", () => {
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11136
+	 */
+	it("starts failed-fetch pacing when the failure settles", async () => {
+		let now = 1_800_000_000_000;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const harness = await createGovernorHarness({
+			minimumFetchInterval: 10,
+		});
+		const clientId = "https://slow-failure.example/client.json";
+		harness.responders.set(clientId, () => {
+			now += 5_000;
+			throw new Error("network failed");
+		});
+
+		expect((await harness.authorize(clientId)).status).not.toBe(429);
+		now += 5_000;
+		expect((await harness.authorize(clientId)).status).toBe(429);
+		now += 5_000;
+		expect((await harness.authorize(clientId)).status).not.toBe(429);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+	});
+
 	it("fully disables per-client pacing when the interval is zero", async () => {
 		let now = 1_800_000_000_000;
 		vi.spyOn(Date, "now").mockImplementation(() => now);
