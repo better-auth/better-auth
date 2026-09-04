@@ -471,6 +471,18 @@ export type BetterAuthAdvancedOptions = {
 				 * @default false
 				 */
 				joins?: boolean;
+				/**
+				 * Check the database schema against this configuration and fail
+				 * with the list of changes needed instead of failing on the first
+				 * insert.
+				 *
+				 * Drizzle and Prisma adapters check their schema definition when the
+				 * adapter is created. The built-in database runs one introspection
+				 * query before the first database call.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**

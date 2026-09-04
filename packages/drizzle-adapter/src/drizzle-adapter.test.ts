@@ -17,7 +17,7 @@ describe("drizzle-adapter", () => {
 			scope: text("token_scope").notNull(),
 			providerId: text("provider_id").notNull(),
 		});
-		const options = {};
+		const options = { advanced: { database: { validateSchema: false } } };
 		const adapter = drizzleAdapter(
 			{ _: { fullSchema: { account } } } as never,
 			{ provider: "pg" },
@@ -49,7 +49,7 @@ describe("drizzle-adapter", () => {
 		const adapter = drizzleAdapter(
 			{ _: { fullSchema: { account } } } as never,
 			{ provider: "pg" },
-		)({});
+		)({ advanced: { database: { validateSchema: false } } });
 
 		const resolved =
 			await adapter.options?.adapterConfig.migrationConnection?.resolvePhysicalSchema?.(
@@ -74,7 +74,7 @@ describe("drizzle-adapter", () => {
 		const adapter = drizzleAdapter(
 			{ _: { fullSchema: { account } } } as never,
 			{ provider: "pg" },
-		)({});
+		)({ advanced: { database: { validateSchema: false } } });
 		const migrationConnection =
 			adapter.options?.adapterConfig.migrationConnection;
 
@@ -128,7 +128,10 @@ describe("drizzle-adapter", () => {
 				run,
 			} as never,
 			{ provider: "sqlite" },
-		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+		)({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: { database: { validateSchema: false } },
+		});
 		const migrationConnection =
 			adapter.options?.adapterConfig.migrationConnection;
 
@@ -187,7 +190,10 @@ describe("drizzle-adapter", () => {
 				execute: vi.fn().mockResolvedValue(result),
 			} as never,
 			{ provider },
-		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+		)({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: { database: { validateSchema: false } },
+		});
 
 		await expect(
 			adapter.options?.adapterConfig.migrationConnection?.execute({
@@ -221,7 +227,10 @@ describe("drizzle-adapter", () => {
 				execute: vi.fn().mockResolvedValue(rows),
 			} as never,
 			{ provider },
-		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+		)({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: { database: { validateSchema: false } },
+		});
 
 		await expect(
 			adapter.options?.adapterConfig.migrationConnection?.execute({
@@ -255,7 +264,10 @@ describe("drizzle-adapter", () => {
 				run,
 			} as never,
 			{ provider: "sqlite", transaction: true },
-		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+		)({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: { database: { validateSchema: false } },
+		});
 		const migrationConnection =
 			adapter.options?.adapterConfig.migrationConnection;
 
@@ -292,7 +304,10 @@ describe("drizzle-adapter", () => {
 				transaction,
 			} as never,
 			{ provider: "sqlite", transaction: true },
-		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+		)({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: { database: { validateSchema: false } },
+		});
 
 		await adapter.options?.adapterConfig.migrationConnection?.transaction?.(
 			async (connection) => {
@@ -319,7 +334,10 @@ describe("drizzle-adapter", () => {
 				run: vi.fn(),
 			} as never,
 			{ provider: "sqlite", transaction: false },
-		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+		)({
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			advanced: { database: { validateSchema: false } },
+		});
 
 		expect(
 			adapter.options?.adapterConfig.migrationConnection?.transaction,
@@ -383,6 +401,7 @@ describe("drizzle-adapter", () => {
 			advanced: {
 				database: {
 					generateId: false,
+					validateSchema: false,
 				},
 			},
 		});
@@ -425,7 +444,10 @@ describe("drizzle-adapter", () => {
 			};
 			const db = createMockDb({ user: userTable });
 			const factory = drizzleAdapter(db, { provider: "sqlite" });
-			const adapter = factory({ secret: defaultSecret });
+			const adapter = factory({
+				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
+			});
 
 			await expect(
 				adapter.create({
@@ -452,6 +474,7 @@ describe("drizzle-adapter", () => {
 			const factory = drizzleAdapter(db, { provider: "sqlite" });
 			const adapter = factory({
 				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
 				user: {
 					fields: {
 						emailVerified: "email_verified",
@@ -481,7 +504,10 @@ describe("drizzle-adapter", () => {
 			};
 			const db = createMockDb({ user: userTable });
 			const factory = drizzleAdapter(db, { provider: "sqlite" });
-			const adapter = factory({ secret: defaultSecret });
+			const adapter = factory({
+				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
+			});
 
 			await expect(
 				adapter.create({
@@ -505,7 +531,10 @@ describe("drizzle-adapter", () => {
 				provider: "sqlite",
 				schema: undefined,
 			});
-			const adapter = factory({ secret: defaultSecret });
+			const adapter = factory({
+				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
+			});
 
 			await expect(
 				adapter.create({
@@ -525,7 +554,10 @@ describe("drizzle-adapter", () => {
 			const adapter = drizzleAdapter(
 				{ _: { fullSchema: { account } }, select },
 				{ provider: "pg", schema: { account } },
-			)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+			)({
+				secret: "test-secret-that-is-at-least-32-chars-long!!",
+				advanced: { database: { validateSchema: false } },
+			});
 
 			await expect(
 				adapter.findOne({
@@ -551,6 +583,7 @@ describe("drizzle-adapter", () => {
 				{ provider: "pg", schema: { account } },
 			)({
 				secret: "test-secret-that-is-at-least-32-chars-long!!",
+				advanced: { database: { validateSchema: false } },
 				account: { fields: { accountId: "constructor" } },
 			});
 
@@ -632,6 +665,7 @@ describe("drizzle-adapter", () => {
 			const db = createUpdateDb(result);
 			const adapter = drizzleAdapter(db, { provider })({
 				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
 			});
 
 			const count = await adapter.updateMany({
@@ -654,6 +688,7 @@ describe("drizzle-adapter", () => {
 			const db = createUpdateDb(result);
 			const adapter = drizzleAdapter(db, { provider })({
 				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
 			});
 
 			await expect(
@@ -713,6 +748,7 @@ describe("drizzle-adapter", () => {
 			const { db } = createMysqlConsumeDb([{ affectedRows: 1 }]);
 			const adapter = drizzleAdapter(db, { provider: "mysql" })({
 				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
 			});
 
 			const result = await adapter.consumeOne({
@@ -728,6 +764,7 @@ describe("drizzle-adapter", () => {
 			const { db } = createMysqlConsumeDb([{ affectedRows: 0 }]);
 			const adapter = drizzleAdapter(db, { provider: "mysql" })({
 				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
 			});
 
 			const result = await adapter.consumeOne({
@@ -793,6 +830,7 @@ describe("drizzle-adapter", () => {
 		function createAdapter(db: any) {
 			return drizzleAdapter(db, { provider: "sqlite" })({
 				secret: defaultSecret,
+				advanced: { database: { validateSchema: false } },
 				user: {
 					additionalFields: {
 						attempts: { type: "number", required: false },

@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getBaseAdapter } from "./adapter-base";
 
@@ -14,7 +15,7 @@ export async function getAdapter(
 			throw new BetterAuthError("Failed to initialize database adapter");
 		}
 		const { kyselyAdapter } = await import("../adapters/kysely-adapter");
-		return kyselyAdapter(kysely, {
+		const adapter = kyselyAdapter(kysely, {
 			type: databaseType || "sqlite",
 			debugLogs:
 				opts.database && "debugLogs" in opts.database
@@ -22,5 +23,26 @@ export async function getAdapter(
 					: false,
 			transaction: transaction,
 		})(opts);
+		if (opts.advanced?.database?.validateSchema === false) return adapter;
+		const { validateDatabaseSchema, withSchemaValidation } = await import(
+			"./validate-schema"
+		);
+		const { getSchema } = await import("./get-schema");
+		const expected = {
+			all: getSchema(opts),
+			core: getSchema({ ...opts, plugins: [] }),
+		};
+		const logger = createLogger(opts.logger);
+		return withSchemaValidation(
+			adapter,
+			() =>
+				validateDatabaseSchema(
+					kysely,
+					databaseType || "sqlite",
+					expected,
+					(m) => logger.warn(m),
+				),
+			logger,
+		);
 	});
 }

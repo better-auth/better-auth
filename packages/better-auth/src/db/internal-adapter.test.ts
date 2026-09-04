@@ -155,7 +155,7 @@ describe("internal adapter test", async () => {
 		],
 	} satisfies BetterAuthOptions;
 	beforeAll(async () => {
-		(await getMigrations(opts)).runMigrations();
+		await (await getMigrations(opts)).runMigrations();
 	});
 	afterEach(async () => {
 		vi.clearAllMocks();

@@ -297,18 +297,23 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	if (!newSchema) {
 		return schema;
 	}
+	// Plugins pass module-level schema constants, so return copies of the
+	// tables that change instead of mutating what every other instance shares.
+	const merged = { ...schema };
 	for (const table in newSchema) {
-		const newModelName = newSchema[table]?.modelName;
-		if (newModelName) {
-			schema[table]!.modelName = newModelName;
-		}
-		for (const field in schema[table]!.fields) {
+		const current = merged[table];
+		if (!current) continue;
+		const fields = { ...current.fields };
+		for (const field in fields) {
 			const newField = newSchema[table]?.fields?.[field];
-			if (!newField) {
-				continue;
-			}
-			schema[table]!.fields[field]!.fieldName = newField;
+			if (!newField) continue;
+			fields[field] = { ...fields[field]!, fieldName: newField };
 		}
+		merged[table] = {
+			...current,
+			modelName: newSchema[table]?.modelName ?? current.modelName,
+			fields,
+		};
 	}
-	return schema;
+	return merged;
 }

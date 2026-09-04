@@ -10,3 +10,16 @@ export {
 	resolveDatabaseTableIndexes,
 } from "./database-index";
 export { getAuthTablesWithResolvedIndexes } from "./get-tables";
+export {
+	diffSchema,
+	type ExpectedSchema,
+	formatSchemaFinding,
+	formatSchemaFindings,
+	type IntrospectedColumn,
+	type IntrospectedTable,
+	reportSchemaFindings,
+	type SchemaFinding,
+	SchemaMismatchError,
+	type SchemaSource,
+	splitSchemaFindings,
+} from "./schema-diff";

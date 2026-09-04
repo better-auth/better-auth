@@ -779,3 +779,33 @@ describe("get-migration: inspecting a migration that cannot be applied", () => {
 		expect(unsafeChanges[0]).not.toContain("empty string");
 	});
 });
+
+describe("get-migration: schema problems the migration cannot fix", () => {
+	it("reports required columns Better Auth never writes", async () => {
+		const plan = await getMigrations({
+			database: createAccountDb({ tier: "notNull" }),
+		});
+
+		expect(plan.schemaProblems).toHaveLength(1);
+		expect(plan.schemaProblems[0]?.core).toBe(true);
+		expect(plan.schemaProblems[0]?.message).toContain(
+			'Column "tier" on table "user" is required but Better Auth never writes it',
+		);
+		expect(plan.toBeAdded).toEqual([]);
+	});
+
+	it("reports nothing for a nullable or configured extra column", async () => {
+		const nullable = await getMigrations({
+			database: createAccountDb({ tier: "nullable" }),
+		});
+		expect(nullable.schemaProblems).toEqual([]);
+
+		const configured = await getMigrations({
+			database: createAccountDb({ tier: "notNull" }),
+			user: {
+				additionalFields: { tier: { type: "string", required: true } },
+			},
+		});
+		expect(configured.schemaProblems).toEqual([]);
+	});
+});

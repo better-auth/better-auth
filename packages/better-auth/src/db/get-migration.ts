@@ -7,9 +7,12 @@ import {
 } from "@better-auth/core/db/adapter";
 import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
 import {
+	diffSchema,
+	formatSchemaFinding,
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
+	splitSchemaFindings,
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -30,6 +33,7 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import { getSchema } from "./get-schema";
+import { toIntrospectedTables } from "./introspect";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -562,7 +566,7 @@ export function matchType(
  * Get the current PostgreSQL schema (search_path) for the database connection
  * Returns the first schema in the search_path, defaulting to 'public' if not found
  */
-async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
+export async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	try {
 		const result = await sql<{
 			search_path?: string;
@@ -589,7 +593,7 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
-async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
+export async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
 	try {
 		const result = await sql<{ schemaName?: string }>`
 			SELECT SCHEMA_NAME() AS "schemaName"
@@ -736,6 +740,22 @@ export async function getMigrations(
 			(table) => table.schema === currentSchema,
 		);
 	}
+	// Columns the migration cannot fix: required, no default, and never written
+	// by Better Auth. `core` marks the ones on tables Better Auth itself writes,
+	// which the CLI refuses to migrate past; plugin ones only warn.
+	const strayColumns = diffSchema(
+		betterAuthSchema,
+		toIntrospectedTables(tableMetadata),
+	).filter((finding) => finding.kind === "unexpected-required-column");
+	const coreStrayColumns = new Set(
+		splitSchemaFindings(strayColumns, getSchema({ ...config, plugins: [] }))
+			.core,
+	);
+	const schemaProblems = strayColumns.map((finding) => ({
+		message: formatSchemaFinding(finding, "database"),
+		core: coreStrayColumns.has(finding),
+	}));
+
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
@@ -1246,6 +1266,7 @@ export async function getMigrations(
 		toBeAdded,
 		toBeAddedIndexes,
 		unsafeChanges,
+		schemaProblems,
 		runMigrations,
 		compileMigrations,
 	};

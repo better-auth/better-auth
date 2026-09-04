@@ -215,6 +215,18 @@ async function generateAction(opts: any) {
 			),
 		);
 	}
+	if (schema.schemaProblems?.length) {
+		console.error(
+			chalk.red.bold(
+				`⚠ ${schema.schemaProblems.length} ${schema.schemaProblems.length === 1 ? "column rejects" : "columns reject"} every Better Auth insert. No generated statement fixes this.`,
+			),
+		);
+		for (const problem of schema.schemaProblems) {
+			console.error(
+				(problem.core ? chalk.red : chalk.yellow)(`-> ${problem.message}`),
+			);
+		}
+	}
 	if (!schema.code) {
 		await removeGeneratedStub();
 		console.log("Your schema is already up to date.");
