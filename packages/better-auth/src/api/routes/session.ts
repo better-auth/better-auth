@@ -84,19 +84,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			}
 
 			try {
+				const cookieCacheEnabled =
+					ctx.context.options.session?.cookieCache?.enabled === true;
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
 				);
 
-				if (!sessionCookieToken) {
+				if (!sessionCookieToken && cookieCacheEnabled) {
 					return null;
 				}
 
-				const cookieCacheEnabled =
-					ctx.context.options.session?.cookieCache?.enabled === true;
-				const shouldUseCookieCache =
-					cookieCacheEnabled && !ctx.query?.disableCookieCache;
 				const sessionDataCookie = getChunkedCookie(
 					ctx,
 					ctx.context.authCookies.sessionData.name,
@@ -109,7 +107,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					);
 					sessionStore.setCookies(sessionStore.clean());
 				}
+				if (!sessionCookieToken) {
+					return null;
+				}
 
+				const shouldUseCookieCache =
+					cookieCacheEnabled && !ctx.query?.disableCookieCache;
 				const sessionDataPayload =
 					shouldUseCookieCache && sessionDataCookie
 						? await decodeCookieCache(ctx, sessionDataCookie)

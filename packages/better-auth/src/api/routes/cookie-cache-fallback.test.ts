@@ -81,6 +81,59 @@ describe("disabled cookie cache fallback", () => {
 		}
 		expect(responseCookies.has("custom.session_token")).toBe(false);
 	});
+
+	it.each([
+		{ state: "missing", sessionTokenCookie: "" },
+		{
+			state: "invalid",
+			sessionTokenCookie: "; custom.session_token=invalid",
+		},
+	])("clears retired session_data when session_token is $state", async ({
+		sessionTokenCookie,
+	}) => {
+		const { client } = await getTestInstance({
+			secret,
+			advanced: {
+				cookies: {
+					session_token: { name: "custom.session_token" },
+					session_data: { name: "custom.session" },
+				},
+			},
+			session: {
+				cookieCache: { enabled: false },
+			},
+		});
+		const retiredCache = await symmetricEncodeJWT(
+			{ retired: true },
+			secret,
+			"better-auth-session",
+		);
+		const headers = new Headers({
+			cookie:
+				`custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks` +
+				sessionTokenCookie,
+		});
+
+		let setCookieHeader = "";
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(session.data).toBeNull();
+		const responseCookies = parseSetCookieHeader(setCookieHeader);
+		for (const name of [
+			"custom.session",
+			"custom.session.0",
+			"custom.session.1",
+		]) {
+			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
+		}
+	});
 });
 
 /**
