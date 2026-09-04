@@ -316,12 +316,13 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11015
 	 */
-	it("omits null optional complex subattributes without touching top-level scalars", () => {
+	it("strips null optional attributes generally while preserving top-level active null", () => {
 		const body = {
 			schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
 			userName: "null-address@example.com",
 			active: null,
-			name: { formatted: null, givenName: "Ada", familyName: null },
+			title: null,
+			name: null as string | null,
 			addresses: [
 				{
 					type: "work",
@@ -333,11 +334,13 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 			[SCIM_ENTERPRISE_USER_SCHEMA]: {
 				department: "Engineering",
 				employeeNumber: null,
-				manager: {
-					value: "manager-1",
-					displayName: null,
-					$ref: null,
-				},
+				manager: [
+					{
+						value: "manager-1",
+						displayName: null,
+						$ref: null,
+					},
+				],
 			},
 		};
 		const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
@@ -349,59 +352,61 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 			schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
 			userName: "null-address@example.com",
 			active: null,
-			name: { givenName: "Ada" },
 			addresses: [{ type: "work", streetAddress: "44 Montgomery St" }],
 			[SCIM_ENTERPRISE_USER_SCHEMA]: {
 				department: "Engineering",
-				manager: { value: "manager-1" },
+				manager: [{ value: "manager-1" }],
 			},
 		});
 		expect(body.active).toBeNull();
+		expect(body.title).toBeNull();
+		expect(body.name).toBeNull();
 		expect(body.addresses[0]?.country).toBeNull();
-		expect(
-			(
-				body[SCIM_ENTERPRISE_USER_SCHEMA] as {
-					manager: { displayName: null };
-				}
-			).manager.displayName,
-		).toBeNull();
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11015
 	 */
-	it("omits nulls from complex PATCH values and leaves scalar value null intact", () => {
+	it("strips nulls from any object PATCH value and leaves scalar value null intact", () => {
 		const activeNull = { op: "replace", path: "active", value: null };
-		const normalized = normalizeSCIMUserEntraCompatibilityRequestBody("PATCH", {
+		const addressValue = {
+			type: "work",
+			streetAddress: "44 Montgomery St",
+			formatted: null,
+			country: null,
+		};
+		const nameValue = { givenName: "Ada", familyName: null, formatted: null };
+		const body = {
 			schemas: [SCIM_PATCH_SCHEMA],
 			Operations: [
 				activeNull,
 				{
 					op: "replace",
 					path: 'addresses[type eq "work"]',
-					value: {
-						type: "work",
-						streetAddress: "44 Montgomery St",
-						formatted: null,
-						country: null,
-					},
+					value: addressValue,
 				},
+				{ op: "replace", path: "name", value: nameValue },
 				{
 					op: "replace",
-					path: `${SCIM_ENTERPRISE_USER_SCHEMA}:manager`,
-					value: { value: "manager-1", displayName: null, $ref: null },
+					path: "manager",
+					value: { value: "manager-1", displayName: null },
 				},
 			],
-		}) as {
-			Operations: { value: unknown }[];
 		};
+		const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
+			"PATCH",
+			body,
+		) as typeof body;
 
 		expect(normalized.Operations[0]).toBe(activeNull);
 		expect(normalized.Operations[1]?.value).toEqual({
 			type: "work",
 			streetAddress: "44 Montgomery St",
 		});
-		expect(normalized.Operations[2]?.value).toEqual({ value: "manager-1" });
+		expect(normalized.Operations[2]?.value).toEqual({ givenName: "Ada" });
+		expect(normalized.Operations[3]?.value).toEqual({ value: "manager-1" });
+		expect(addressValue.formatted).toBeNull();
+		expect(nameValue.familyName).toBeNull();
 	});
 
 	it("copies only the multi-valued entries whose primary value changes", () => {

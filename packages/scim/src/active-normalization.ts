@@ -1,33 +1,60 @@
 import { stripSCIMCoreAttributePrefix } from "./resource-schema-registry";
-import { SCIM_ENTERPRISE_USER_SCHEMA } from "./user-schemas";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Depth bound so attacker-controlled nesting cannot stack-overflow this middleware. */
+const SCIM_NULL_STRIP_MAX_DEPTH = 64;
+
 /**
- * Omit JSON `null` properties from a complex SCIM object (and nested objects
- * such as enterprise `manager`). Microsoft Entra serializes unassigned optional
- * complex subattributes as `null`; Zod optional strings reject that form.
- * Top-level User scalars are not passed through here.
+ * Keys whose JSON `null` must stay on a User resource root so invalid lifecycle
+ * values still fail validation instead of being omitted and defaulted.
  */
-function omitNullProperties(
-	value: Record<string, unknown>,
-): Record<string, unknown> {
+const SCIM_PRESERVED_RESOURCE_NULL_KEYS = new Set(["active"]);
+
+/**
+ * Drop JSON `null` object properties recursively. Microsoft Entra serializes
+ * unassigned optional attributes as `null`; Zod optional strings reject that
+ * form. Arrays are walked; scalar roots (including PATCH `value: null`) are
+ * left intact by callers. Optional `preserveNullKeys` keeps selected root
+ * nulls (e.g. `active`) distinguishable for validation.
+ */
+function stripNullProperties(
+	value: unknown,
+	options: {
+		depth?: number;
+		preserveNullKeys?: ReadonlySet<string>;
+	} = {},
+): unknown {
+	const depth = options.depth ?? 0;
+	if (depth > SCIM_NULL_STRIP_MAX_DEPTH) return value;
+
+	if (Array.isArray(value)) {
+		let changed = false;
+		const normalized = value.map((entry) => {
+			const result = stripNullProperties(entry, { depth: depth + 1 });
+			if (result !== entry) changed = true;
+			return result;
+		});
+		return changed ? normalized : value;
+	}
+	if (!isRecord(value)) return value;
+
 	let changed = false;
 	const normalized: Record<string, unknown> = {};
 	for (const [key, entry] of Object.entries(value)) {
 		if (entry === null) {
+			if (options.preserveNullKeys?.has(key)) {
+				normalized[key] = null;
+				continue;
+			}
 			changed = true;
 			continue;
 		}
-		if (isRecord(entry)) {
-			const nested = omitNullProperties(entry);
-			if (nested !== entry) changed = true;
-			normalized[key] = nested;
-			continue;
-		}
-		normalized[key] = entry;
+		const result = stripNullProperties(entry, { depth: depth + 1 });
+		if (result !== entry) changed = true;
+		normalized[key] = result;
 	}
 	return changed ? normalized : value;
 }
@@ -58,13 +85,9 @@ const SCIM_MULTI_VALUED_PRIMARY_ATTRIBUTES = [
 ] as const;
 
 function normalizeMultiValuedPrimaryEntry(entry: unknown): unknown {
-	if (!isRecord(entry)) return entry;
-	const withoutNulls = omitNullProperties(entry);
-	if (!Object.hasOwn(withoutNulls, "primary")) return withoutNulls;
-	const primary = normalizeSCIMStringBooleanValue(withoutNulls.primary);
-	return primary === withoutNulls.primary
-		? withoutNulls
-		: { ...withoutNulls, primary };
+	if (!isRecord(entry) || !Object.hasOwn(entry, "primary")) return entry;
+	const primary = normalizeSCIMStringBooleanValue(entry.primary);
+	return primary === entry.primary ? entry : { ...entry, primary };
 }
 
 function normalizeMultiValuedPrimaryValue(value: unknown): unknown {
@@ -93,20 +116,10 @@ function normalizeResourceMultiValuedPrimaries(
 function normalizeUserResourceEntraCompatibility(
 	value: Record<string, unknown>,
 ): Record<string, unknown> {
-	const updates: Record<string, unknown> = {};
-	if (isRecord(value.name)) {
-		const name = omitNullProperties(value.name);
-		if (name !== value.name) updates.name = name;
-	}
-	const enterpriseExtension = value[SCIM_ENTERPRISE_USER_SCHEMA];
-	if (isRecord(enterpriseExtension)) {
-		const enterprise = omitNullProperties(enterpriseExtension);
-		if (enterprise !== enterpriseExtension) {
-			updates[SCIM_ENTERPRISE_USER_SCHEMA] = enterprise;
-		}
-	}
-	const resource =
-		Object.keys(updates).length === 0 ? value : { ...value, ...updates };
+	const stripped = stripNullProperties(value, {
+		preserveNullKeys: SCIM_PRESERVED_RESOURCE_NULL_KEYS,
+	});
+	const resource = isRecord(stripped) ? stripped : value;
 	return normalizeResourceMultiValuedPrimaries(
 		normalizeActiveProperty(resource),
 	);
@@ -145,17 +158,6 @@ function isPathless(path: unknown): boolean {
 	);
 }
 
-function isEnterpriseComplexPath(path: unknown): boolean {
-	if (typeof path !== "string") return false;
-	const trimmed = path.trim();
-	return (
-		trimmed === SCIM_ENTERPRISE_USER_SCHEMA ||
-		trimmed
-			.toLowerCase()
-			.startsWith(`${SCIM_ENTERPRISE_USER_SCHEMA.toLowerCase()}:`)
-	);
-}
-
 function normalizePatchOperation(operation: unknown): unknown {
 	if (!isRecord(operation)) return operation;
 	if (isActivePath(operation.path)) {
@@ -164,17 +166,21 @@ function normalizePatchOperation(operation: unknown): unknown {
 	}
 	const primaryMatch = matchMultiValuedPrimaryPath(operation.path);
 	if (primaryMatch) {
-		const value = primaryMatch.targetsPrimary
-			? normalizeSCIMStringBooleanValue(operation.value)
-			: normalizeMultiValuedPrimaryValue(operation.value);
-		return value === operation.value ? operation : { ...operation, value };
-	}
-	if (isEnterpriseComplexPath(operation.path) && isRecord(operation.value)) {
-		const value = omitNullProperties(operation.value);
+		if (primaryMatch.targetsPrimary) {
+			const value = normalizeSCIMStringBooleanValue(operation.value);
+			return value === operation.value ? operation : { ...operation, value };
+		}
+		const withoutNulls = stripNullProperties(operation.value);
+		const value = normalizeMultiValuedPrimaryValue(withoutNulls);
 		return value === operation.value ? operation : { ...operation, value };
 	}
 	if (isPathless(operation.path) && isRecord(operation.value)) {
 		const value = normalizeUserResourceEntraCompatibility(operation.value);
+		return value === operation.value ? operation : { ...operation, value };
+	}
+	// Any other object/array PATCH value (name, enterprise, manager, …).
+	if (Array.isArray(operation.value) || isRecord(operation.value)) {
+		const value = stripNullProperties(operation.value);
 		return value === operation.value ? operation : { ...operation, value };
 	}
 	return operation;
@@ -183,8 +189,8 @@ function normalizePatchOperation(operation: unknown): unknown {
 /**
  * Normalize provider-compatible User request shapes from Microsoft Entra:
  * string Boolean `active` / multi-valued `primary` values, and JSON `null`
- * optional complex subattributes. Does not widen endpoint schemas or mutate
- * the caller's request body object.
+ * optional attributes. Does not widen endpoint schemas or mutate the caller's
+ * request body object.
  */
 export function normalizeSCIMUserEntraCompatibilityRequestBody(
 	method: string,
