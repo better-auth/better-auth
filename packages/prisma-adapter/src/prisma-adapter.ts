@@ -19,9 +19,9 @@ import type {
 } from "@better-auth/core/db/internal";
 import {
 	diffSchema,
-	formatSchemaFindings,
-	SchemaMismatchError,
+	reportSchemaFindings,
 } from "@better-auth/core/db/internal";
+import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 
 /** Controls the Prisma interactive transaction used by release migrations. */
@@ -166,22 +166,30 @@ function findPrismaModel(
  */
 function validatePrismaSchema(
 	runtimeDataModel: PrismaRuntimeDataModel,
-	schema: BetterAuthDBSchema,
+	options: BetterAuthOptions,
 ): void {
-	const expected: ExpectedSchema = {};
+	const toExpected = (tables: BetterAuthDBSchema) => {
+		const expected: ExpectedSchema = {};
+		for (const table of Object.values(tables)) {
+			const modelEntry = findPrismaModel(runtimeDataModel, table.modelName);
+			expected[modelEntry?.[0] ?? table.modelName] = {
+				fields: Object.fromEntries(
+					Object.entries(table.fields).map(([key, field]) => [
+						field.fieldName || key,
+						field,
+					]),
+				),
+			};
+		}
+		return expected;
+	};
+	const schema = getAuthTables(options);
+	const expected = toExpected(schema);
 	const actual: IntrospectedTable[] = [];
 	for (const table of Object.values(schema)) {
 		const modelEntry = findPrismaModel(runtimeDataModel, table.modelName);
-		const name = modelEntry?.[0] ?? table.modelName;
-		expected[name] = {
-			fields: Object.fromEntries(
-				Object.entries(table.fields).map(([key, field]) => [
-					field.fieldName || key,
-					field,
-				]),
-			),
-		};
 		if (!modelEntry) continue;
+		const name = modelEntry[0];
 		actual.push({
 			name,
 			columns: modelEntry[1].fields
@@ -197,12 +205,12 @@ function validatePrismaSchema(
 				})),
 		});
 	}
-	const findings = diffSchema(expected, actual);
-	if (findings.length === 0) return;
-	throw new SchemaMismatchError(
-		formatSchemaFindings(findings, "prisma"),
-		findings,
-	);
+	reportSchemaFindings({
+		findings: diffSchema(expected, actual),
+		core: toExpected(getAuthTables({ ...options, plugins: [] })),
+		source: "prisma",
+		warn: (message) => createLogger(options.logger).warn(message),
+	});
 }
 
 const defaultMigrationTransaction = {
@@ -1094,7 +1102,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			runtimeDataModel &&
 			options.advanced?.database?.validateSchema !== false
 		) {
-			validatePrismaSchema(runtimeDataModel, getAuthTables(options));
+			validatePrismaSchema(runtimeDataModel, options);
 		}
 		return created;
 	};

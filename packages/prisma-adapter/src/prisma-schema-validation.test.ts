@@ -114,6 +114,32 @@ describe("prisma schema validation", () => {
 		expect(() => create({ models: models() })).not.toThrow();
 	});
 
+	it("warns instead of failing when only a plugin model is missing", () => {
+		const log = vi.fn();
+		expect(() =>
+			create(
+				{ models: models() },
+				{
+					logger: { log },
+					plugins: [
+						{
+							id: "widgets",
+							schema: {
+								widget: {
+									fields: { name: { type: "string", required: true } },
+								},
+							},
+						},
+					],
+				},
+			),
+		).not.toThrow();
+		expect(log).toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining('Table "widget" is missing'),
+		);
+	});
+
 	it("reports a field missing from a Prisma model", () => {
 		const m = models();
 		m.Account.fields = m.Account.fields.filter((f) => f.name !== "scope");

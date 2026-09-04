@@ -125,10 +125,12 @@ await runMigrations();
 
 ### Schema Validation
 
-Better Auth checks that the database can hold what it writes and fails with the full list of problems instead of failing on the first insert.
+Better Auth checks that the database can hold what it writes and reports every problem at once, with the change that fixes it, instead of failing on the first insert.
 
 * Every table and column Better Auth writes must exist.
 * A column Better Auth does not write must be nullable or have a default. A required column without one rejects every insert into that table.
+
+Problems on the core tables (`user`, `session`, `account`, `verification`) throw a `SchemaMismatchError`. Problems on tables or columns a plugin contributes are logged as a warning, so a plugin whose table is missing fails its own requests with a clear error while sign-in keeps working.
 
 With the Drizzle and Prisma adapters the check runs against the schema definition when `betterAuth()` is called, so a stale schema file fails the build. With the built-in database it runs one introspection query before the first database call, so a build that never touches the database is unaffected and the first real request reports the problem.
 
@@ -140,6 +142,8 @@ Set `advanced.database.validateSchema: false` to skip this check.
 ```
 
 `npx auth migrate` and `npx auth generate` report the same problems, so they surface during deployment as well.
+
+The built-in check trusts what the database reports. Columns filled by a trigger, and generated columns on MySQL, look required with no default and are reported even though inserts succeed. On serverless platforms the introspection query runs once per cold start.
 
 To skip the check, for example when a required column is filled by a database trigger, disable it:
 

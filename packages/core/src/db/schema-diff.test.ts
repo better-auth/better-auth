@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { IntrospectedTable } from "./schema-diff";
-import { diffSchema, formatSchemaFindings } from "./schema-diff";
+import {
+	diffSchema,
+	formatSchemaFindings,
+	splitSchemaFindings,
+} from "./schema-diff";
 
 const expected = {
 	account: {
@@ -87,5 +91,34 @@ describe("formatSchemaFindings", () => {
 		expect(formatSchemaFindings(findings, "prisma")).toContain(
 			"prisma migrate",
 		);
+	});
+});
+
+describe("splitSchemaFindings", () => {
+	it("keeps core tables and their own columns as core, everything else as plugin", () => {
+		const core = {
+			user: { fields: { email: { type: "string" } } },
+			account: { fields: {} },
+		} as const;
+		const split = splitSchemaFindings(
+			[
+				{ kind: "missing-column", table: "user", column: "email" },
+				{ kind: "missing-column", table: "user", column: "twoFactorEnabled" },
+				{
+					kind: "unexpected-required-column",
+					table: "account",
+					column: "issuer",
+				},
+				{ kind: "missing-table", table: "twoFactor" },
+				{ kind: "unexpected-required-column", table: "passkey", column: "x" },
+			],
+			core,
+		);
+		expect(split.core.map((f) => f.table)).toEqual(["user", "account"]);
+		expect(split.plugin.map((f) => f.table)).toEqual([
+			"user",
+			"twoFactor",
+			"passkey",
+		]);
 	});
 });

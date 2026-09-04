@@ -1,9 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
 import { SchemaMismatchError } from "@better-auth/core/db/internal";
-import { describe, expect, it } from "vitest";
+import type { TableMetadata } from "kysely";
+import { describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
+import { twoFactor } from "../plugins/two-factor";
 import type { BetterAuthOptions } from "../types";
 import { getMigrations } from "./get-migration";
+import { selectVisibleTables, withSchemaValidation } from "./validate-schema";
 
 const legacyAccountTable = `
 	DROP TABLE account;
@@ -92,6 +95,29 @@ describe("database schema validation", () => {
 		).rejects.toBeInstanceOf(SchemaMismatchError);
 	});
 
+	it("warns instead of failing when only a plugin table is wrong", async () => {
+		const database = new DatabaseSync(":memory:");
+		const log = vi.fn();
+		const options = {
+			...baseOptions,
+			database,
+			logger: { log },
+			plugins: [twoFactor()],
+		} satisfies BetterAuthOptions;
+		await createMigratedDatabase(options);
+		database.exec("DROP TABLE twoFactor");
+		const auth = betterAuth(options);
+
+		const result = await auth.api.signUpEmail({
+			body: { email: "p@example.com", password: "password123", name: "P" },
+		});
+		expect(result.user.email).toBe("p@example.com");
+		expect(log).toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining('Table "twoFactor" is missing'),
+		);
+	});
+
 	it("can be disabled", async () => {
 		const database = new DatabaseSync(":memory:");
 		const options = {
@@ -111,5 +137,77 @@ describe("database schema validation", () => {
 
 		expect(failure).not.toBeInstanceOf(SchemaMismatchError);
 		expect(String((failure as Error).message)).toMatch(/issuer/);
+	});
+});
+
+describe("withSchemaValidation", () => {
+	const makeAdapter = () => {
+		const findOne = vi.fn(async () => "row");
+		return {
+			adapter: { findOne } as unknown as Parameters<
+				typeof withSchemaValidation
+			>[0],
+			findOne,
+		};
+	};
+
+	it("keeps a schema mismatch without querying the database again", async () => {
+		const { adapter } = makeAdapter();
+		const validate = vi.fn(async () => {
+			throw new SchemaMismatchError("mismatch", []);
+		});
+		const guarded = withSchemaValidation(adapter, validate, { warn: vi.fn() });
+
+		await expect(guarded.findOne({ model: "user", where: [] })).rejects.toBe(
+			await validate.mock.results[0]?.value.catch((error: unknown) => error),
+		);
+		await expect(
+			guarded.findOne({ model: "user", where: [] }),
+		).rejects.toBeInstanceOf(SchemaMismatchError);
+		expect(validate).toHaveBeenCalledTimes(1);
+	});
+
+	it("continues with a warning when the schema cannot be read", async () => {
+		const { adapter, findOne } = makeAdapter();
+		const validate = vi.fn(async () => {
+			throw new Error("introspection unsupported");
+		});
+		const warn = vi.fn();
+		const guarded = withSchemaValidation(adapter, validate, { warn });
+
+		await expect(guarded.findOne({ model: "user", where: [] })).resolves.toBe(
+			"row",
+		);
+		await guarded.findOne({ model: "user", where: [] });
+		expect(findOne).toHaveBeenCalledTimes(2);
+		expect(validate).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("selectVisibleTables", () => {
+	const table = (schema: string, name: string): TableMetadata => ({
+		schema,
+		name,
+		isView: false,
+		columns: [],
+	});
+
+	it("prefers the current schema and falls back to other schemas on the search path", () => {
+		const selected = selectVisibleTables(
+			[
+				table("public", "user"),
+				table("auth", "user"),
+				table("auth", "session"),
+				table("archive", "session"),
+				table("archive", "account"),
+			],
+			"public",
+		);
+		expect(selected.map((t) => `${t.schema}.${t.name}`)).toEqual([
+			"public.user",
+			"auth.session",
+			"archive.account",
+		]);
 	});
 });

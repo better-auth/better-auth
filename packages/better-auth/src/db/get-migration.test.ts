@@ -787,7 +787,8 @@ describe("get-migration: schema problems the migration cannot fix", () => {
 		});
 
 		expect(plan.schemaProblems).toHaveLength(1);
-		expect(plan.schemaProblems[0]).toContain(
+		expect(plan.schemaProblems[0]?.core).toBe(true);
+		expect(plan.schemaProblems[0]?.message).toContain(
 			'Column "tier" on table "user" is required but Better Auth never writes it',
 		);
 		expect(plan.toBeAdded).toEqual([]);

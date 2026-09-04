@@ -12,6 +12,7 @@ import {
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
+	splitSchemaFindings,
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -740,13 +741,20 @@ export async function getMigrations(
 		);
 	}
 	// Columns the migration cannot fix: required, no default, and never written
-	// by Better Auth. Reported so the CLI can stop before an insert would fail.
-	const schemaProblems = diffSchema(
+	// by Better Auth. `core` marks the ones on tables Better Auth itself writes,
+	// which the CLI refuses to migrate past; plugin ones only warn.
+	const strayColumns = diffSchema(
 		betterAuthSchema,
 		toIntrospectedTables(tableMetadata),
-	)
-		.filter((finding) => finding.kind === "unexpected-required-column")
-		.map((finding) => formatSchemaFinding(finding, "database"));
+	).filter((finding) => finding.kind === "unexpected-required-column");
+	const coreStrayColumns = new Set(
+		splitSchemaFindings(strayColumns, getSchema({ ...config, plugins: [] }))
+			.core,
+	);
+	const schemaProblems = strayColumns.map((finding) => ({
+		message: formatSchemaFinding(finding, "database"),
+		core: coreStrayColumns.has(finding),
+	}));
 
 	const toBeCreated: {
 		table: string;

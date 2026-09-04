@@ -222,7 +222,9 @@ async function generateAction(opts: any) {
 			),
 		);
 		for (const problem of schema.schemaProblems) {
-			console.error(chalk.red(`-> ${problem}`));
+			console.error(
+				(problem.core ? chalk.red : chalk.yellow)(`-> ${problem.message}`),
+			);
 		}
 	}
 	if (!schema.code) {

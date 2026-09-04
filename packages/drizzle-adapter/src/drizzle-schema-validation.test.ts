@@ -1,7 +1,7 @@
 import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
 const user = pgTable("user", {
@@ -98,6 +98,31 @@ describe("drizzle schema validation", () => {
 			tenant: text("tenant").notNull().default("x"),
 		});
 		expect(build(account)).not.toThrow();
+	});
+
+	it("warns instead of failing when only a plugin table is wrong", () => {
+		const account = pgTable("account", {
+			...accountColumns,
+			scope: text("scope"),
+		});
+		const log = vi.fn();
+		expect(
+			build(account, {
+				logger: { log },
+				plugins: [
+					{
+						id: "widgets",
+						schema: {
+							widget: { fields: { name: { type: "string", required: true } } },
+						},
+					},
+				],
+			}),
+		).not.toThrow();
+		expect(log).toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining('Table "widget" is missing'),
+		);
 	});
 
 	it("skips the check when validateSchema is false", () => {

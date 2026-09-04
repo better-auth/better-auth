@@ -15,7 +15,7 @@ export interface SchemaGeneratorResult {
 	 * Columns the database already has that Better Auth never writes and that
 	 * reject inserts. No generated statement fixes them.
 	 */
-	schemaProblems?: string[];
+	schemaProblems?: { message: string; core: boolean }[];
 }
 
 export interface SchemaGenerator {

@@ -125,15 +125,24 @@ export async function migrateAction(opts: any) {
 		} catch {}
 		process.exit(1);
 	}
-	if (plan.schemaProblems.length) {
+	const coreProblems = plan.schemaProblems.filter((problem) => problem.core);
+	const pluginProblems = plan.schemaProblems.filter((problem) => !problem.core);
+	if (pluginProblems.length) {
+		spinner.stop();
+		for (const problem of pluginProblems) {
+			console.warn(chalk.yellow(`⚠ ${problem.message}`));
+		}
+		spinner.start();
+	}
+	if (coreProblems.length) {
 		spinner.stop();
 		console.error(
 			chalk.red.bold(
-				`The database has ${plan.schemaProblems.length} ${plan.schemaProblems.length === 1 ? "column" : "columns"} Better Auth cannot write to. Nothing ran.`,
+				`The database has ${coreProblems.length} ${coreProblems.length === 1 ? "column" : "columns"} Better Auth cannot write to. Nothing ran.`,
 			),
 		);
-		for (const problem of plan.schemaProblems) {
-			console.error(chalk.red(`-> ${problem}`));
+		for (const problem of coreProblems) {
+			console.error(chalk.red(`-> ${problem.message}`));
 		}
 		process.exit(1);
 	}

@@ -17,7 +17,9 @@ export {
 	formatSchemaFindings,
 	type IntrospectedColumn,
 	type IntrospectedTable,
+	reportSchemaFindings,
 	type SchemaFinding,
 	SchemaMismatchError,
 	type SchemaSource,
+	splitSchemaFindings,
 } from "./schema-diff";

@@ -124,3 +124,53 @@ export function formatSchemaFindings(
 		"Set `advanced.database.validateSchema: false` to skip this check.",
 	].join("\n");
 }
+
+/**
+ * Separates findings on what Better Auth itself writes from findings on what
+ * plugins contribute. `core` is the expected schema computed without plugins.
+ * A required column Better Auth never writes on a core table counts as core,
+ * because it blocks core inserts.
+ */
+export function splitSchemaFindings(
+	findings: readonly SchemaFinding[],
+	core: ExpectedSchema,
+): { core: SchemaFinding[]; plugin: SchemaFinding[] } {
+	const split = { core: [] as SchemaFinding[], plugin: [] as SchemaFinding[] };
+	for (const finding of findings) {
+		const coreTable = core[finding.table];
+		const isCore =
+			coreTable !== undefined &&
+			(finding.kind !== "missing-column" ||
+				finding.column === "id" ||
+				finding.column in coreTable.fields);
+		split[isCore ? "core" : "plugin"].push(finding);
+	}
+	return split;
+}
+
+/**
+ * Applies the shared policy: throw when a core table or column is wrong,
+ * otherwise warn so a plugin whose table is missing only fails its own
+ * requests with a clear error.
+ *
+ * @throws {SchemaMismatchError} when any finding concerns core tables.
+ */
+export function reportSchemaFindings({
+	findings,
+	core,
+	source,
+	warn,
+}: {
+	findings: readonly SchemaFinding[];
+	core: ExpectedSchema;
+	source: SchemaSource;
+	warn: (message: string) => void;
+}): void {
+	if (findings.length === 0) return;
+	const split = splitSchemaFindings(findings, core);
+	const message = formatSchemaFindings(findings, source);
+	if (split.core.length > 0) {
+		throw new SchemaMismatchError(message, findings);
+	}
+	warn(message);
+}

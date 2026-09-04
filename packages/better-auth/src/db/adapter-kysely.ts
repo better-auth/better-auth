@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getBaseAdapter } from "./adapter-base";
 
@@ -27,9 +28,21 @@ export async function getAdapter(
 			"./validate-schema"
 		);
 		const { getSchema } = await import("./get-schema");
-		const expected = getSchema(opts);
-		return withSchemaValidation(adapter, () =>
-			validateDatabaseSchema(kysely, databaseType || "sqlite", expected),
+		const expected = {
+			all: getSchema(opts),
+			core: getSchema({ ...opts, plugins: [] }),
+		};
+		const logger = createLogger(opts.logger);
+		return withSchemaValidation(
+			adapter,
+			() =>
+				validateDatabaseSchema(
+					kysely,
+					databaseType || "sqlite",
+					expected,
+					(m) => logger.warn(m),
+				),
+			logger,
 		);
 	});
 }

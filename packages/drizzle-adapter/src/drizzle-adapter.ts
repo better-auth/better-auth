@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import { getAuthTables } from "@better-auth/core/db";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
@@ -18,10 +19,9 @@ import type {
 } from "@better-auth/core/db/internal";
 import {
 	diffSchema,
-	formatSchemaFindings,
-	SchemaMismatchError,
+	reportSchemaFindings,
 } from "@better-auth/core/db/internal";
-import { logger } from "@better-auth/core/env";
+import { createLogger, logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { SQL } from "drizzle-orm";
 import {
@@ -511,7 +511,7 @@ function createDrizzleMigrationConnection(
  * the `usePlural` suffix) and `table[fieldName]`. Runs once when the adapter
  * is constructed, so a stale schema fails the build instead of the first insert.
  *
- * @throws {SchemaMismatchError} listing every missing table or column and
+ * @throws {SchemaMismatchError} when a core table or column is wrong. Plugin
  * every required column Better Auth never fills.
  */
 function validateDrizzleSchema(
@@ -519,14 +519,18 @@ function validateDrizzleSchema(
 	options: BetterAuthOptions,
 	usePlural: boolean,
 ) {
-	const expected: ExpectedSchema = {};
-	for (const table of Object.values(getAuthTables(options))) {
-		const key = usePlural ? `${table.modelName}s` : table.modelName;
-		const fields = (expected[key] ??= { fields: {} }).fields;
-		for (const [fieldKey, field] of Object.entries(table.fields)) {
-			fields[field.fieldName || fieldKey] = field;
+	const toExpected = (tables: BetterAuthDBSchema) => {
+		const expected: ExpectedSchema = {};
+		for (const table of Object.values(tables)) {
+			const key = usePlural ? `${table.modelName}s` : table.modelName;
+			const fields = (expected[key] ??= { fields: {} }).fields;
+			for (const [fieldKey, field] of Object.entries(table.fields)) {
+				fields[field.fieldName || fieldKey] = field;
+			}
 		}
-	}
+		return expected;
+	};
+	const expected = toExpected(getAuthTables(options));
 	const actual: IntrospectedTable[] = [];
 	for (const [name, table] of Object.entries(drizzleSchema)) {
 		if (!isTable(table)) continue;
@@ -543,12 +547,12 @@ function validateDrizzleSchema(
 			})),
 		});
 	}
-	const findings = diffSchema(expected, actual);
-	if (findings.length === 0) return;
-	throw new SchemaMismatchError(
-		formatSchemaFindings(findings, "drizzle"),
-		findings,
-	);
+	reportSchemaFindings({
+		findings: diffSchema(expected, actual),
+		core: toExpected(getAuthTables({ ...options, plugins: [] })),
+		source: "drizzle",
+		warn: (message) => createLogger(options.logger).warn(message),
+	});
 }
 
 export interface DrizzleAdapterConfig {
