@@ -37,9 +37,6 @@ export const ALL: APIRoute = async (ctx) => {
 			code: `import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-    account: {
-        identityStrategy: "provider-id",
-    },
     database: {
         provider: "postgres", //change this to your database provider
         url: process.env.DATABASE_URL, // path to your database or connection string
@@ -60,9 +57,6 @@ export const auth = betterAuth({
 			code: `import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-    account: {
-        identityStrategy: "provider-id",
-    },
     database: {
         provider: "postgres", //change this to your database provider
         url: process.env.DATABASE_URL, // path to your database or connection string

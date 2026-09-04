@@ -684,9 +684,7 @@ export async function initAction(opts: any) {
 		const boilerplateCode = `import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-	account: {
-		identityStrategy: "provider-id",
-	},
+	// Configuration will be added here
 });
 `;
 

@@ -3862,7 +3862,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3893,7 +3892,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3939,7 +3937,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3968,7 +3965,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3991,7 +3987,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [

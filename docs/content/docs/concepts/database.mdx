@@ -414,7 +414,7 @@ export const sessionTableFields = [
 
 Table Name: `account`
 
-An account represents one authentication method linked to a user. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy. Under issuer strategy, a provider without a trusted authority uses the deterministic `local:oauth:<encoded providerId>` fallback namespace. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
+An account represents one authentication method linked to a user. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
 
 export const accountTableFields = [
 	{
@@ -435,7 +435,7 @@ export const accountTableFields = [
 		name: "issuer",
 		type: "string",
 		description:
-			"The persisted identity namespace: a verified authority or deterministic provider namespace",
+			"The trusted authority that issued the provider account identifier",
 	},
 	{
 		name: "accountId",
@@ -504,7 +504,7 @@ export const accountTableFields = [
 
 <DatabaseTable name="account" fields={accountTableFields} />
 
-Every generated 1.7 schema requires `issuer` and enforces a unique compound index on `issuer` and `accountId`, regardless of `account.identityStrategy`. Under `"issuer"`, providers with a trusted authority persist it, including the verified issuer for OpenID Connect; providers without one use `local:oauth:<encoded providerId>`. Under `"provider-id"`, every external provider persists the deterministic `local:oauth:<encoded providerId>` namespace. The provider ID segment is percent-encoded. Credential accounts use `local:credential` and the linked user's stable `id`.
+The database enforces a unique compound index on `issuer` and `accountId`. Providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. OAuth providers without an issuer use the synthetic `local:oauth:<encoded providerId>` namespace, with the provider ID segment percent-encoded. Credential accounts use `local:credential` and the linked user's stable `id`.
 
 ### Verification
 

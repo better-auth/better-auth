@@ -6,7 +6,6 @@ import {
 	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
 import { createEmailVerificationToken } from "../api";
@@ -42,20 +41,8 @@ export async function handleOAuthUserInfo(
 		requireExactAccountBinding?: boolean | undefined;
 	},
 ) {
-	const {
-		userInfo,
-		account: inputAccount,
-		callbackURL,
-		disableSignUp,
-		overrideUserInfo,
-	} = opts;
-	const account = {
-		...inputAccount,
-		issuer:
-			c.context.options.account?.identityStrategy === "provider-id"
-				? createOAuthAccountIssuer(inputAccount.providerId)
-				: inputAccount.issuer,
-	};
+	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
+		opts;
 	const source = opts.source ?? {
 		method: "oauth",
 		oauth: { providerId: account.providerId },

@@ -550,9 +550,6 @@ const openapi = createFromOpenAPI(spec, {
 });
 
 export const auth = betterAuth({
-\taccount: {
-\t\tidentityStrategy: "provider-id",
-\t},
 \tplugins: [
 \t\tagentAuth({
 \t\t\tproviderName: ${JSON.stringify(name)},${descLine}
@@ -568,9 +565,6 @@ export const auth = betterAuth({
 import { agentAuth } from "${AGENT_PLUGIN_PKG}";
 
 export const auth = betterAuth({
-\taccount: {
-\t\tidentityStrategy: "provider-id",
-\t},
 \tplugins: [
 \t\tagentAuth({
 \t\t\tproviderName: ${JSON.stringify(name)},${descLine}
@@ -585,9 +579,6 @@ export const auth = betterAuth({
 import { agentAuth } from "${AGENT_PLUGIN_PKG}";
 
 export const auth = betterAuth({
-\taccount: {
-\t\tidentityStrategy: "provider-id",
-\t},
 \tplugins: [
 \t\tagentAuth({
 \t\t\tproviderName: ${JSON.stringify(name)},${descLine}

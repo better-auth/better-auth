@@ -109,8 +109,6 @@ npx auth@latest init
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
 
-The generated `auth.ts` includes `account: { identityStrategy: "provider-id" }` so new projects choose their account identity namespace explicitly. Existing configurations that omit this option remain in v1.7 compatibility mode with issuer identity and receive a one-time warning; set `"issuer"` explicitly when that is the intended policy.
-
 ## Upgrade
 
 The `upgrade` command updates older `better-auth` dependencies and official `@better-auth/*` packages that participate in the synchronized release train to the version of the CLI being run. It compares the minimum version allowed by each `package.json` specifier; specifiers whose minimum is the same or newer are left unchanged. Independently versioned packages, such as `@better-auth/utils`, are not changed.

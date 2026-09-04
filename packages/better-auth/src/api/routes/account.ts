@@ -327,7 +327,6 @@ export const linkSocialAccount = createAuthEndpoint(
 					refreshToken: c.body.idToken.refreshToken,
 				},
 				linkingUserInfo.data,
-				c.context.options.account?.identityStrategy,
 			);
 
 			const linkedAccount =
