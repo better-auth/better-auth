@@ -537,7 +537,13 @@ describe("oauth register", async () => {
 					},
 					{ registrationSource: "clientMetadataDocument" },
 				),
-			).resolves.toBeUndefined();
+			).resolves.toEqual({
+				grant_types: [
+					"authorization_code",
+					"refresh_token",
+					"urn:ietf:params:oauth:grant-type:jwt-bearer",
+				],
+			});
 		});
 
 		it("rejects a client metadata document sharing no grant with the server", async () => {
@@ -563,12 +569,92 @@ describe("oauth register", async () => {
 				},
 			});
 		});
+	});
 
-		it("still rejects a dynamic registration declaring an unsupported grant", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11081
+	 */
+	describe("dynamic registration grant narrowing", () => {
+		it("registers a client declaring a supported grant next to an unsupported one", async () => {
+			const response = await serverClient.oauth2.register({
+				redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+				token_endpoint_auth_method: "none",
+				grant_types: [
+					"authorization_code",
+					"refresh_token",
+					"urn:ietf:params:oauth:grant-type:jwt-bearer",
+				],
+				response_types: ["code"],
+			});
+			expect(response.error).toBeNull();
+			expect(response.data?.grant_types).toEqual([
+				"authorization_code",
+				"refresh_token",
+			]);
+			const context = await auth.$context;
+			const stored = await context.adapter.findOne<{ grantTypes: string[] }>({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: response.data!.client_id }],
+			});
+			expect(stored?.grantTypes).toEqual([
+				"authorization_code",
+				"refresh_token",
+			]);
+		});
+
+		it("rejects a dynamic registration sharing no grant with the server", async () => {
 			await expect(
 				checkOAuthClient(
 					{
 						client_id: "dcr-client",
+						redirect_uris: [],
+						grant_types: ["urn:ietf:params:oauth:grant-type:jwt-bearer"],
+						response_types: [],
+						token_endpoint_auth_method: "none",
+					},
+					{
+						loginPage: "/login",
+						consentPage: "/consent",
+					},
+					{ registrationSource: "dynamic" },
+				),
+			).rejects.toMatchObject({
+				body: {
+					error_description: expect.stringContaining("no mutually supported"),
+				},
+			});
+		});
+
+		it("checks response_types against the narrowed grants", async () => {
+			await expect(
+				checkOAuthClient(
+					{
+						client_id: "dcr-client",
+						redirect_uris: [redirectUri],
+						grant_types: ["authorization_code", "client_credentials"],
+						response_types: ["code"],
+					},
+					{
+						loginPage: "/login",
+						consentPage: "/consent",
+						grantTypes: ["client_credentials"],
+					},
+					{ registrationSource: "dynamic" },
+				),
+			).rejects.toMatchObject({
+				body: {
+					error_description: expect.stringContaining(
+						"'authorization_code' grant type must be included",
+					),
+				},
+			});
+		});
+
+		it("keeps managed registration strict about unsupported grants", async () => {
+			await expect(
+				checkOAuthClient(
+					{
+						client_id: "managed-client",
 						redirect_uris: [redirectUri],
 						grant_types: [
 							"authorization_code",
@@ -580,7 +666,7 @@ describe("oauth register", async () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 					},
-					{ registrationSource: "dynamic" },
+					{ registrationSource: "managed" },
 				),
 			).rejects.toMatchObject({
 				body: {
