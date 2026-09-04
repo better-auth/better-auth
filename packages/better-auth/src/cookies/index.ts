@@ -29,6 +29,7 @@ import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
 import { parseCompactCookieCache, parseCookieCachePayload } from "./cache";
 import {
+	HOST_COOKIE_PREFIX,
 	parseCookies,
 	SECURE_COOKIE_PREFIX,
 	splitSetCookieHeader,
@@ -40,6 +41,27 @@ import {
 	getAccountCookie,
 	setAccountCookie,
 } from "./session-store";
+
+/**
+ * Whether cookies are named with the `__Host-` prefix.
+ */
+function isHostCookiePrefixEnabled(options: BetterAuthOptions) {
+	const setting = options.advanced?.useHostCookiePrefix;
+	return typeof setting === "object" ? !!setting.enabled : !!setting;
+}
+
+/**
+ * Whether legacy `__Secure-` cookies are still accepted and re-issued as
+ * `__Host-` while the prefix is enabled. Off unless explicitly requested.
+ */
+export function shouldMigrateSecureCookies(options: BetterAuthOptions) {
+	const setting = options.advanced?.useHostCookiePrefix;
+	return (
+		typeof setting === "object" &&
+		!!setting.enabled &&
+		setting.migrateSecureCookies === true
+	);
+}
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const baseURLString =
@@ -62,8 +84,15 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	 * protocol depends on each incoming request and is unknown at init time,
 	 * so we fall back to step 4.
 	 */
+	const useHostPrefix = isHostCookiePrefixEnabled(options);
+	if (useHostPrefix && options.advanced?.useSecureCookies === false) {
+		throw new BetterAuthError(
+			"useHostCookiePrefix requires secure cookies. Remove `useSecureCookies: false`.",
+		);
+	}
 	const secure =
-		options.advanced?.useSecureCookies !== undefined
+		useHostPrefix ||
+		(options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
 			: dynamicProtocol === "https"
 				? true
@@ -71,10 +100,19 @@ export function createCookieGetter(options: BetterAuthOptions) {
 					? false
 					: baseURLString
 						? baseURLString.startsWith("https://")
-						: isProduction;
-	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
+						: isProduction);
+	const secureCookiePrefix = useHostPrefix
+		? HOST_COOKIE_PREFIX
+		: secure
+			? SECURE_COOKIE_PREFIX
+			: "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
+	if (useHostPrefix && crossSubdomainEnabled) {
+		throw new BetterAuthError(
+			"useHostCookiePrefix cannot be combined with crossSubDomainCookies: `__Host-` cookies must not carry a Domain attribute.",
+		);
+	}
 	const domain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
 			(baseURLString ? new URL(baseURLString).hostname : undefined)
@@ -99,7 +137,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		const attributes =
 			options.advanced?.cookies?.[cookieName]?.attributes ?? {};
 
-		return {
+		const cookie = {
 			name: `${secureCookiePrefix}${name}`,
 			attributes: {
 				secure: !!secureCookiePrefix,
@@ -112,6 +150,15 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				...attributes,
 			},
 		} satisfies BetterAuthCookie;
+		if (
+			useHostPrefix &&
+			(cookie.attributes.domain || cookie.attributes.path !== "/")
+		) {
+			throw new BetterAuthError(
+				`Cookie "${cookie.name}" cannot use the __Host- prefix with a Domain attribute or a Path other than "/".`,
+			);
+		}
+		return cookie;
 	}
 	return createCookie;
 }
@@ -576,8 +623,9 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
 	const parsedCookie = parseCookies(cookies);
-	// Prefer __Secure- (HTTPS-only) over a non-secure leftover.
+	// Prefer __Host-, then __Secure- (HTTPS-only), over a non-secure leftover.
 	const getCookie = (name: string) =>
+		parsedCookie.get(`${HOST_COOKIE_PREFIX}${name}`) ??
 		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`) ??
 		parsedCookie.get(name);
 
@@ -632,20 +680,21 @@ export const getCookieCache = async <
 	}
 	const { cookieName = "session_data", cookiePrefix = "better-auth" } =
 		config || {};
+	const baseName = `${cookiePrefix}.${cookieName}`;
 	const name =
 		config?.isSecure !== undefined
 			? config.isSecure
-				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${baseName}`
+				: baseName
 			: isProduction
-				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`;
+				? `${SECURE_COOKIE_PREFIX}${baseName}`
+				: baseName;
 	const parsedCookie = parseCookies(cookies);
 
-	// Check for chunked cookies
-	let sessionData = parsedCookie.get(name);
-	if (!sessionData) {
-		// Try to reconstruct from chunks
+	// Read a cookie, reconstructing it from `<name>.<index>` chunks if needed.
+	const readCookie = (name: string) => {
+		const value = parsedCookie.get(name);
+		if (value) return value;
 		const chunks: Array<{ index: number; value: string }> = [];
 		for (const [cookieName, value] of parsedCookie.entries()) {
 			if (cookieName.startsWith(name + ".")) {
@@ -657,13 +706,15 @@ export const getCookieCache = async <
 				}
 			}
 		}
+		if (chunks.length === 0) return undefined;
+		chunks.sort((a, b) => a.index - b.index);
+		return chunks.map((c) => c.value).join("");
+	};
 
-		if (chunks.length > 0) {
-			// Sort by index and join
-			chunks.sort((a, b) => a.index - b.index);
-			sessionData = chunks.map((c) => c.value).join("");
-		}
-	}
+	// A __Host- cookie is only ever written by a server configured with
+	// `useHostCookiePrefix`, so prefer it over the legacy name.
+	const sessionData =
+		readCookie(`${HOST_COOKIE_PREFIX}${baseName}`) ?? readCookie(name);
 
 	if (sessionData) {
 		const strategy = config?.strategy || "compact";
