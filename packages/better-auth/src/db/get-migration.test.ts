@@ -1586,6 +1586,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		expect(migration.accountIdentity).toMatchObject({
 			affectedProviders: ["google"],
 			detectedStrategy: "mixed",
+			hasMixedIdentityNamespaces: false,
 			malformedNamespaces: 1,
 			requiresRekey: true,
 			totalAccounts: 1,
@@ -1601,6 +1602,47 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const strictMigration = await getMigrations(config);
 		await expect(strictMigration.runMigrations()).rejects.toThrow(
 			"contains 1 malformed persisted account namespace",
+		);
+	});
+
+	it("reports malformed and mixed identity namespaces together", async () => {
+		const db = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "provider-id" },
+			database: db,
+			socialProviders: { google: socialConfig.google },
+		};
+		const initialMigration = await getMigrations(config);
+		await initialMigration.runMigrations();
+		db.exec(
+			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt") VALUES
+			 ('a1', 'provider-subject', 'local:oauth:google', 'google', 'u1', '2020-01-01', '2020-01-01'),
+			 ('a2', 'issuer-subject', 'https://accounts.google.com', 'google', 'u1', '2020-01-01', '2020-01-01'),
+			 ('a3', 'malformed-subject', 'local:oauth:github', 'google', 'u1', '2020-01-01', '2020-01-01')`,
+		);
+
+		const migration = await getMigrations(config, { throwOnUnsafe: false });
+
+		expect(migration.accountIdentity).toMatchObject({
+			detectedStrategy: "mixed",
+			hasMixedIdentityNamespaces: true,
+			malformedNamespaces: 1,
+			requiresRekey: true,
+		});
+		expect(migration.migrationBlockers).toContainEqual(
+			expect.objectContaining({
+				code: "account-identity-strategy-mismatch",
+				hasMixedIdentityNamespaces: true,
+				malformedNamespaces: 1,
+			}),
+		);
+		const strictMigration = await getMigrations(config);
+		await expect(strictMigration.runMigrations()).rejects.toThrow(
+			"then resolve the remaining provider- and issuer-scoped identities",
 		);
 	});
 

@@ -341,6 +341,7 @@ describe("migration plan status", () => {
 			accountIdentity: {
 				selectedStrategy: "provider-id",
 				detectedStrategy: "provider-id",
+				hasMixedIdentityNamespaces: false,
 				migrationRequired: false,
 				requiresRekey: false,
 			},
@@ -364,6 +365,7 @@ describe("migration plan status", () => {
 			accountIdentity: {
 				selectedStrategy: "issuer",
 				detectedStrategy: "provider-id",
+				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: false,
 			},

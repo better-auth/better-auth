@@ -8,6 +8,7 @@ describe("createMigrationPlan", () => {
 			accountIdentity: {
 				selectedStrategy: "provider-id",
 				detectedStrategy: "issuer",
+				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: true,
 			},
@@ -19,6 +20,7 @@ describe("createMigrationPlan", () => {
 					code: "account-identity-strategy-mismatch",
 					configuredStrategy: "provider-id",
 					detectedStrategy: "issuer",
+					hasMixedIdentityNamespaces: false,
 					malformedNamespaces: 0,
 					table: "account",
 				},
@@ -40,11 +42,67 @@ describe("createMigrationPlan", () => {
 		});
 	});
 
+	it.each([
+		[
+			"mixed account identities",
+			true,
+			0,
+			"Resolve the mixed account identities with a separately reviewed re-key migration, then run the plan again.",
+		],
+		[
+			"an incomplete mixed identity layout",
+			false,
+			0,
+			"Resolve the mixed account identities with a separately reviewed re-key migration, then run the plan again.",
+		],
+		[
+			"mixed account identities with malformed namespaces",
+			true,
+			1,
+			'Repair every malformed namespace in "account", then resolve the remaining mixed account identities with a separately reviewed re-key migration.',
+		],
+	] as const)("reports complete remediation for %s", (_, hasMixedIdentityNamespaces, malformedNamespaces, expectedSummary) => {
+		const plan = createMigrationPlan({
+			accountIdentity: {
+				selectedStrategy: "issuer",
+				detectedStrategy: "mixed",
+				hasMixedIdentityNamespaces,
+				migrationRequired: true,
+				requiresRekey: true,
+			},
+			hasChanges: false,
+			migrationBlockers: [
+				{
+					accountCount: 3,
+					affectedProviders: ["github", "google"],
+					code: "account-identity-strategy-mismatch",
+					configuredStrategy: "issuer",
+					detectedStrategy: "mixed",
+					hasMixedIdentityNamespaces,
+					malformedNamespaces,
+					table: "account",
+				},
+			],
+			migrationTarget: { adapter: "drizzle", dialect: "postgres" },
+			toBeAdded: [],
+			toBeAddedIndexes: [],
+			toBeCreated: [],
+		});
+
+		expect(plan.blockers[0]).toMatchObject({
+			code: "account-identity-strategy-mismatch",
+			remediation: {
+				summary: expectedSummary,
+			},
+		});
+	});
+
 	it("requires an explicit identity choice for populated 1.6 accounts", () => {
 		const plan = createMigrationPlan({
 			accountIdentity: {
 				selectedStrategy: "issuer",
 				detectedStrategy: "provider-id",
+				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: false,
 			},
@@ -79,6 +137,7 @@ describe("createMigrationPlan", () => {
 			accountIdentity: {
 				selectedStrategy: "provider-id",
 				detectedStrategy: "provider-id",
+				hasMixedIdentityNamespaces: false,
 				migrationRequired: true,
 				requiresRekey: false,
 			},
@@ -113,6 +172,7 @@ describe("createMigrationPlan", () => {
 			accountIdentity: {
 				selectedStrategy: "issuer",
 				detectedStrategy: "issuer",
+				hasMixedIdentityNamespaces: false,
 				migrationRequired: false,
 				requiresRekey: false,
 				totalAccounts: 4,

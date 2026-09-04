@@ -513,6 +513,7 @@ interface LegacyAccountIdentityRow {
 export interface AccountIdentityMigrationAssessment {
 	selectedStrategy: "provider-id" | "issuer";
 	detectedStrategy: "empty" | "provider-id" | "issuer" | "mixed";
+	hasMixedIdentityNamespaces: boolean;
 	affectedProviders?: string[] | undefined;
 	physicalSchema?:
 		| {
@@ -553,6 +554,7 @@ export async function inspectAccountIdentityMigration(
 	): AccountIdentityMigrationAssessment => ({
 		selectedStrategy,
 		detectedStrategy: "empty",
+		hasMixedIdentityNamespaces: false,
 		physicalSchema,
 		migrationRequired: false,
 		requiresRekey: false,
@@ -609,6 +611,7 @@ export async function inspectAccountIdentityMigration(
 	};
 	const affectedProviders = new Set<string>();
 	let malformedNamespaces = 0;
+	let hasMixedIdentityNamespaces = false;
 	let detectedStrategy: AccountIdentityMigrationAssessment["detectedStrategy"];
 	if (!physicalSchemaComplete) {
 		detectedStrategy = accountsWithIssuer === 0 ? "provider-id" : "mixed";
@@ -652,9 +655,9 @@ export async function inspectAccountIdentityMigration(
 				issuerScopedEvidence = true;
 			}
 		}
+		hasMixedIdentityNamespaces = providerScopedEvidence && issuerScopedEvidence;
 		detectedStrategy =
-			malformedNamespaces > 0 ||
-			(providerScopedEvidence && issuerScopedEvidence)
+			malformedNamespaces > 0 || hasMixedIdentityNamespaces
 				? "mixed"
 				: providerScopedEvidence
 					? "provider-id"
@@ -713,6 +716,7 @@ export async function inspectAccountIdentityMigration(
 	return {
 		selectedStrategy,
 		detectedStrategy,
+		hasMixedIdentityNamespaces,
 		affectedProviders: [...affectedProviders].sort(),
 		physicalSchema,
 		migrationRequired: !physicalSchemaComplete || requiresRekey,

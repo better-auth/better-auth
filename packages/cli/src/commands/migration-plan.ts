@@ -105,10 +105,20 @@ export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
 
 function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
-		case "account-identity-strategy-mismatch":
-			return blocker.malformedNamespaces > 0
-				? `Repair every malformed namespace in "${blocker.table}" for the configured strategy, then run the plan again.`
-				: `Keep account.identityStrategy as "${blocker.detectedStrategy === "provider-id" ? "provider-id" : "issuer"}", or perform a separate reviewed re-key migration before changing strategy.`;
+		case "account-identity-strategy-mismatch": {
+			if (blocker.malformedNamespaces > 0) {
+				return blocker.hasMixedIdentityNamespaces
+					? `Repair every malformed namespace in "${blocker.table}", then resolve the remaining mixed account identities with a separately reviewed re-key migration.`
+					: `Repair every malformed namespace in "${blocker.table}" for the configured strategy, then run the plan again.`;
+			}
+			if (
+				blocker.hasMixedIdentityNamespaces ||
+				blocker.detectedStrategy === "mixed"
+			) {
+				return "Resolve the mixed account identities with a separately reviewed re-key migration, then run the plan again.";
+			}
+			return `Keep account.identityStrategy as "${blocker.detectedStrategy}", or perform a separate reviewed re-key migration before changing strategy.`;
+		}
 		case "account-identity-collision":
 			return `Merge or remove the duplicate rows for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")} in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
 		case "account-identity-strategy-required":

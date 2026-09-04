@@ -210,6 +210,7 @@ export interface AccountIdentityStrategyMismatchBlocker {
 	code: "account-identity-strategy-mismatch";
 	configuredStrategy: "provider-id" | "issuer";
 	detectedStrategy: "provider-id" | "issuer" | "mixed";
+	hasMixedIdentityNamespaces: boolean;
 	malformedNamespaces: number;
 	table: string;
 }
@@ -284,8 +285,18 @@ function createMigrationBlockerError(blocker: MigrationBlocker) {
 	if (blocker.code === "account-identity-strategy-mismatch") {
 		const scope = `${blocker.accountCount} account${blocker.accountCount === 1 ? "" : "s"} across providers ${blocker.affectedProviders.map((providerId) => `"${providerId}"`).join(", ") || "(unknown)"}`;
 		if (blocker.malformedNamespaces > 0) {
+			if (blocker.hasMixedIdentityNamespaces) {
+				return new BetterAuthError(
+					`Migration blocked: table "${blocker.table}" contains ${blocker.malformedNamespaces} malformed persisted account namespace${blocker.malformedNamespaces === 1 ? "" : "s"} in ${scope}. Repair the malformed namespaces, then resolve the remaining provider- and issuer-scoped identities with a separately reviewed re-key migration.`,
+				);
+			}
 			return new BetterAuthError(
 				`Migration blocked: table "${blocker.table}" contains ${blocker.malformedNamespaces} malformed persisted account namespace${blocker.malformedNamespaces === 1 ? "" : "s"} in ${scope}. Repair the namespaces for the configured strategy before applying the migration.`,
+			);
+		}
+		if (blocker.hasMixedIdentityNamespaces) {
+			return new BetterAuthError(
+				`Migration blocked: table "${blocker.table}" contains both provider- and issuer-scoped account identities for ${scope}. Resolve them with a separately reviewed re-key migration.`,
 			);
 		}
 		if (
@@ -1056,6 +1067,7 @@ async function getMigrationsWithDatabase(
 			code: "account-identity-strategy-mismatch",
 			configuredStrategy: accountIdentity.selectedStrategy,
 			detectedStrategy: accountIdentity.detectedStrategy,
+			hasMixedIdentityNamespaces: accountIdentity.hasMixedIdentityNamespaces,
 			malformedNamespaces: accountIdentity.malformedNamespaces ?? 0,
 			table:
 				migrationDatabase.inspectionAuthTables.account?.modelName || "account",
