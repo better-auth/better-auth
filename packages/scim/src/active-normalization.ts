@@ -4,6 +4,61 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Depth bound so attacker-controlled nesting cannot stack-overflow this middleware. */
+const SCIM_NULL_STRIP_MAX_DEPTH = 64;
+
+/**
+ * Keys whose JSON `null` must stay on a User resource root so invalid lifecycle
+ * values still fail validation instead of being omitted and defaulted.
+ */
+const SCIM_PRESERVED_RESOURCE_NULL_KEYS = new Set(["active"]);
+
+/**
+ * Drop JSON `null` object properties recursively. Microsoft Entra serializes
+ * unassigned optional attributes as `null`; Zod optional strings reject that
+ * form. Arrays are walked; scalar roots (including PATCH `value: null`) are
+ * left intact by callers. Optional `preserveNullKeys` keeps selected root
+ * nulls (e.g. `active`) distinguishable for validation.
+ */
+function stripNullProperties(
+	value: unknown,
+	options: {
+		depth?: number;
+		preserveNullKeys?: ReadonlySet<string>;
+	} = {},
+): unknown {
+	const depth = options.depth ?? 0;
+	if (depth > SCIM_NULL_STRIP_MAX_DEPTH) return value;
+
+	if (Array.isArray(value)) {
+		let changed = false;
+		const normalized = value.map((entry) => {
+			const result = stripNullProperties(entry, { depth: depth + 1 });
+			if (result !== entry) changed = true;
+			return result;
+		});
+		return changed ? normalized : value;
+	}
+	if (!isRecord(value)) return value;
+
+	let changed = false;
+	const normalized: Record<string, unknown> = {};
+	for (const [key, entry] of Object.entries(value)) {
+		if (entry === null) {
+			if (options.preserveNullKeys?.has(key)) {
+				normalized[key] = null;
+				continue;
+			}
+			changed = true;
+			continue;
+		}
+		const result = stripNullProperties(entry, { depth: depth + 1 });
+		if (result !== entry) changed = true;
+		normalized[key] = result;
+	}
+	return changed ? normalized : value;
+}
+
 /** Normalize the exact string Boolean forms accepted from SCIM providers. */
 function normalizeSCIMStringBooleanValue(value: unknown): unknown {
 	if (typeof value !== "string") return value;
@@ -61,7 +116,13 @@ function normalizeResourceMultiValuedPrimaries(
 function normalizeUserResourceEntraCompatibility(
 	value: Record<string, unknown>,
 ): Record<string, unknown> {
-	return normalizeResourceMultiValuedPrimaries(normalizeActiveProperty(value));
+	const stripped = stripNullProperties(value, {
+		preserveNullKeys: SCIM_PRESERVED_RESOURCE_NULL_KEYS,
+	});
+	const resource = isRecord(stripped) ? stripped : value;
+	return normalizeResourceMultiValuedPrimaries(
+		normalizeActiveProperty(resource),
+	);
 }
 
 function isActivePath(path: unknown): boolean {
@@ -105,22 +166,31 @@ function normalizePatchOperation(operation: unknown): unknown {
 	}
 	const primaryMatch = matchMultiValuedPrimaryPath(operation.path);
 	if (primaryMatch) {
-		const value = primaryMatch.targetsPrimary
-			? normalizeSCIMStringBooleanValue(operation.value)
-			: normalizeMultiValuedPrimaryValue(operation.value);
+		if (primaryMatch.targetsPrimary) {
+			const value = normalizeSCIMStringBooleanValue(operation.value);
+			return value === operation.value ? operation : { ...operation, value };
+		}
+		const withoutNulls = stripNullProperties(operation.value);
+		const value = normalizeMultiValuedPrimaryValue(withoutNulls);
 		return value === operation.value ? operation : { ...operation, value };
 	}
 	if (isPathless(operation.path) && isRecord(operation.value)) {
 		const value = normalizeUserResourceEntraCompatibility(operation.value);
 		return value === operation.value ? operation : { ...operation, value };
 	}
+	// Any other object/array PATCH value (name, enterprise, manager, …).
+	if (Array.isArray(operation.value) || isRecord(operation.value)) {
+		const value = stripNullProperties(operation.value);
+		return value === operation.value ? operation : { ...operation, value };
+	}
 	return operation;
 }
 
 /**
- * Normalize provider-compatible User `active` and multi-valued `primary`
- * string Boolean values (Microsoft Entra) without widening the endpoint
- * schemas or mutating the parsed request body.
+ * Normalize provider-compatible User request shapes from Microsoft Entra:
+ * string Boolean `active` / multi-valued `primary` values, and JSON `null`
+ * optional attributes. Does not widen endpoint schemas or mutate the caller's
+ * request body object.
  */
 export function normalizeSCIMUserEntraCompatibilityRequestBody(
 	method: string,
