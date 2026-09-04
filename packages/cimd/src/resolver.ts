@@ -541,6 +541,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			} else {
 				metadataCache.delete(clientId);
 			}
+			// Successful fetches are governed by HTTP freshness and origin/global
+			// budgets. Keep the per-client interval only as failed-fetch backoff.
+			lastFetchStartAtMsByClientId.delete(clientId);
 			return storedClient;
 		})();
 		inFlightResolutionByClientId.set(clientId, resolution);

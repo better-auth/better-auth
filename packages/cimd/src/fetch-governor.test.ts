@@ -139,35 +139,62 @@ describe("CIMD metadata fetch governor", () => {
 		).toThrow(BetterAuthError);
 	});
 
-	it("defaults the per-client minimum fetch interval to one second", async () => {
+	it("defaults failed-fetch pacing to one second", async () => {
 		let now = 1_800_000_000_000;
 		vi.spyOn(Date, "now").mockImplementation(() => now);
 		const harness = await createGovernorHarness();
 		const clientId = "https://default-pacing.example/client.json";
-		harness.responders.set(clientId, () => noStoreMetadata(clientId));
+		harness.responders.set(clientId, () => {
+			throw new Error("network failed");
+		});
 
 		await harness.authorize(clientId);
 		now += 999;
 		expect((await harness.authorize(clientId)).status).toBe(429);
 		now += 1;
-		expect((await harness.authorize(clientId)).location).toContain("/consent");
+		expect((await harness.authorize(clientId)).status).not.toBe(429);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 	});
 
-	it("paces repeated no-store requests without reusing metadata", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11136
+	 */
+	it.each([
+		["private", "private, max-age=0, must-revalidate"],
+		["no-store", "no-store"],
+		["no-cache", "no-cache"],
+		["immediately stale", "max-age=0, must-revalidate"],
+	])("does not pace successful %s metadata fetches", async (_, cacheControl) => {
+		const harness = await createGovernorHarness();
+		const clientId = "https://connect.example/client.json";
+		harness.responders.set(clientId, () =>
+			Response.json(metadata(clientId), {
+				headers: { "cache-control": cacheControl },
+			}),
+		);
+
+		expect((await harness.authorize(clientId)).location).toContain("/consent");
+		expect((await harness.authorize(clientId)).location).toContain("/consent");
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+	});
+
+	it("paces repeated failed metadata fetches", async () => {
 		let now = 1_800_000_000_000;
 		vi.spyOn(Date, "now").mockImplementation(() => now);
 		const harness = await createGovernorHarness({
 			minimumFetchInterval: 10,
 		});
 		const clientId = "https://paced.example/client.json";
-		harness.responders.set(clientId, () => noStoreMetadata(clientId));
+		harness.responders.set(clientId, () => {
+			throw new Error("network failed");
+		});
 
-		expect((await harness.authorize(clientId)).location).toContain("/consent");
+		expect((await harness.authorize(clientId)).status).not.toBe(429);
 		expect((await harness.authorize(clientId)).status).toBe(429);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1);
 
 		now += 10_000;
-		expect((await harness.authorize(clientId)).location).toContain("/consent");
+		expect((await harness.authorize(clientId)).status).not.toBe(429);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 	});
 
@@ -309,7 +336,9 @@ describe("CIMD metadata fetch governor", () => {
 			"https://bounded.example/c.json",
 		];
 		for (const clientId of clients) {
-			harness.responders.set(clientId, () => noStoreMetadata(clientId));
+			harness.responders.set(clientId, () => {
+				throw new Error("network failed");
+			});
 		}
 
 		await harness.authorize(clients[0] as string);
@@ -319,8 +348,8 @@ describe("CIMD metadata fetch governor", () => {
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 
 		now += 60_000;
-		expect((await harness.authorize(clients[2] as string)).location).toContain(
-			"/consent",
+		expect((await harness.authorize(clients[2] as string)).status).not.toBe(
+			429,
 		);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(3);
 	});
