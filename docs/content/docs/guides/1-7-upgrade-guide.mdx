@@ -69,21 +69,74 @@ This covers email and password, social login, the generic OAuth plugin, One Tap,
 
 ### Account identity keeps the provider key
 
-Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account` table and a unique index on `issuer` and `accountId`. Better Auth 1.7.3 removes that requirement. Accounts are recognized by `providerId` and `accountId`, as in 1.6, and upgrading from 1.6 does not change the account schema.
+Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account` table and a unique index on `issuer` and `accountId`. Better Auth 1.7.3 removes that requirement. Accounts are recognized by `providerId` and `accountId`, as in 1.6.
 
-If you added the `issuer` column while on 1.7.0 through 1.7.2, drop the unique index and the column before deploying 1.7.3. New rows no longer write `issuer`, so a `NOT NULL` column rejects every sign-up and account link. The generated index name is `account_issuer_accountId_uidx`; adjust it if your migration used another name.
+**Upgrading from 1.6 changes nothing.** The account schema is the same one 1.6 shipped, so there is no column to add and no data to migrate.
 
-```sql title="Postgres and SQLite"
-DROP INDEX account_issuer_accountId_uidx;
-ALTER TABLE account DROP COLUMN issuer;
-```
+<Callout type="warn">
+  Only databases that ran 1.7.0 through 1.7.2 need the steps below. New rows no longer write `issuer`, so a `NOT NULL` column rejects every sign-up and account link until you relax it.
+</Callout>
 
-```sql title="MySQL and SQL Server"
-DROP INDEX account_issuer_accountId_uidx ON account;
-ALTER TABLE account DROP COLUMN issuer;
-```
+<Steps>
+  <Step>
+    #### Check whether the column is there
 
-With Drizzle or Prisma, remove the `issuer` column and the compound unique index from your schema and generate the migration with your usual tooling. If you would rather keep the column, make it nullable and drop the unique index; Better Auth ignores it.
+    ```sql
+    SELECT * FROM account LIMIT 0;
+    ```
+
+    If the result has no `issuer` column, you are done. A 1.6 database whose `account` table already had rows could not take the column, because a `NOT NULL` column with no default cannot be added to a populated table.
+  </Step>
+
+  <Step>
+    #### Relax the constraint
+
+    Dropping the constraint is enough, and it is reversible. Dropping the column is separate cleanup you can do whenever.
+
+    <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle"]}>
+      <Tab value="Postgres">
+        ```sql
+        ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL;
+        DROP INDEX account_issuer_accountId_uidx;
+        ```
+      </Tab>
+
+      <Tab value="MySQL and SQL Server">
+        ```sql
+        ALTER TABLE account MODIFY issuer VARCHAR(255) NULL;
+        DROP INDEX account_issuer_accountId_uidx ON account;
+        ```
+
+        Outside strict mode MySQL never rejected the insert. It filled `issuer` with an empty string, so sign-ups kept working and the unique index quietly became a constraint on `accountId` alone. Relax the column there too.
+      </Tab>
+
+      <Tab value="SQLite">
+        SQLite has no `ALTER COLUMN`, so drop the column instead.
+
+        ```sql
+        DROP INDEX account_issuer_accountId_uidx;
+        ALTER TABLE account DROP COLUMN issuer;
+        ```
+      </Tab>
+
+      <Tab value="Prisma and Drizzle">
+        Regenerate instead of writing SQL. The generated `account` model drops both the field and the compound unique index, and your own tooling produces the migration.
+
+        ```bash
+        npx @better-auth/cli@latest generate
+        ```
+      </Tab>
+    </Tabs>
+
+    The generated index name is `account_issuer_accountId_uidx`. Adjust it if your own migration used another name.
+  </Step>
+
+  <Step>
+    #### Confirm
+
+    Sign up a new user. Existing sessions and sign-ins were never affected: accounts are found by `providerId` and `accountId`, which every row already carries.
+  </Step>
+</Steps>
 
 Provider configurations that shared one account issuer on 1.7.0 through 1.7.2 no longer collapse into a single account row. Each provider ID keeps its own row again, as in 1.6.
 
