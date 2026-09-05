@@ -50,22 +50,32 @@ async function resolveOTP(
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
 	const storedOTP = await storeOTP(ctx, opts, otp);
 
-	await ctx.context.internalAdapter
-		.createVerificationValue({
+	try {
+		await ctx.context.internalAdapter.createVerificationValue({
 			value: `${storedOTP}:0`,
 			identifier,
 			expiresAt: getDate(opts.expiresIn, "sec"),
-		})
-		.catch(async () => {
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				identifier,
-			);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
 		});
+	} catch {
+		// On databases that enforce a unique identifier, the insert fails when a
+		// row already exists. That row may belong to a concurrent request that is
+		// about to email its code, so prefer delivering that same code (regardless
+		// of `resendStrategy`) over replacing it: replacing would silently
+		// invalidate the code the user is about to receive. Fall back to replacing
+		// only when the existing code cannot be reused (unrecoverable storage,
+		// expired, or attempts exhausted).
+		const existing = await tryReuseOTP(ctx, opts, identifier);
+		if (existing) return existing;
+
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			identifier,
+		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: `${storedOTP}:0`,
+			identifier,
+			expiresAt: getDate(opts.expiresIn, "sec"),
+		});
+	}
 
 	return otp;
 }
