@@ -165,6 +165,8 @@ describe("oauth2", async () => {
 			return new Response(
 				JSON.stringify({
 					issuer: "https://idp.example.com",
+					authorization_endpoint: "https://idp.example.com/authorize",
+					token_endpoint: "https://idp.example.com/token",
 					end_session_endpoint: "https://idp.example.com/logout",
 				}),
 				{
@@ -5168,6 +5170,90 @@ describe("oauth2", async () => {
 				);
 			}
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 */
+	it.each([
+		"authorization",
+		"token",
+		"both",
+	])("skips discovery missing %s endpoints", async (missing) => {
+		const discoveryUrl =
+			"https://incomplete-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: "https://incomplete-idp.test",
+					...(missing === "token"
+						? {
+								authorization_endpoint: "https://incomplete-idp.test/authorize",
+							}
+						: {}),
+					...(missing === "authorization"
+						? { token_endpoint: "https://incomplete-idp.test/token" }
+						: {}),
+				}),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "incomplete",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).not.toContain("incomplete");
+	});
+
+	it.each([
+		false,
+		true,
+	])("keeps explicit token exchange with incomplete discovery (custom=%s)", async (custom) => {
+		const discoveryUrl =
+			"https://incomplete-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({ issuer: "https://incomplete-idp.test" }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "explicit",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								authorizationUrl: "https://incomplete-idp.test/authorize",
+								...(custom
+									? { getToken: async () => ({ accessToken: "custom-token" }) }
+									: { tokenUrl: "https://incomplete-idp.test/token" }),
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).toContain("explicit");
 	});
 
 	/**
