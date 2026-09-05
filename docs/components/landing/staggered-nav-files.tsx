@@ -320,6 +320,18 @@ const mobileMenuSections: MobileMenuSection[] = [
 	{ name: "enterprise", href: "/enterprise" },
 ];
 
+function closeOnBlurOutside(close: () => void) {
+	return (event: React.FocusEvent<HTMLElement>) => {
+		if (!event.currentTarget.contains(event.relatedTarget)) close();
+	};
+}
+
+function closeOnEscape(close: () => void) {
+	return (event: React.KeyboardEvent<HTMLElement>) => {
+		if (event.key === "Escape") close();
+	};
+}
+
 export function StaggeredNavFiles() {
 	const pathname = usePathname() || "/";
 	const mobileNavigationView = useMobileNavigationView();
@@ -579,9 +591,14 @@ export function StaggeredNavFiles() {
 						className="relative flex-1"
 						onMouseEnter={openProducts}
 						onMouseLeave={closeProducts}
+						onFocus={openProducts}
+						onBlur={closeOnBlurOutside(() => setProductsOpen(false))}
+						onKeyDown={closeOnEscape(() => setProductsOpen(false))}
 					>
-						<div
-							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
+						<button
+							type="button"
+							aria-expanded={productsOpen}
+							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
 								isProductsPage
 									? `bg-background border-b-2 ${activeTabBorderClass}`
 									: productsOpen
@@ -606,6 +623,7 @@ export function StaggeredNavFiles() {
 								}`}
 								viewBox="0 0 10 6"
 								fill="none"
+								aria-hidden="true"
 							>
 								<path
 									d="M1 1L5 5L9 1"
@@ -613,7 +631,7 @@ export function StaggeredNavFiles() {
 									strokeWidth="1.2"
 								/>
 							</svg>
-						</div>
+						</button>
 
 						<AnimatePresence>
 							{productsOpen && (
@@ -703,9 +721,14 @@ export function StaggeredNavFiles() {
 						className="relative flex-1"
 						onMouseEnter={openResources}
 						onMouseLeave={closeResources}
+						onFocus={openResources}
+						onBlur={closeOnBlurOutside(() => setResourcesOpen(false))}
+						onKeyDown={closeOnEscape(() => setResourcesOpen(false))}
 					>
-						<div
-							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer transition-colors duration-150 ${
+						<button
+							type="button"
+							aria-expanded={resourcesOpen}
+							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer transition-colors duration-150 ${
 								isResourcePage
 									? `bg-background border-b-2 ${activeTabBorderClass}`
 									: resourcesOpen
@@ -730,6 +753,7 @@ export function StaggeredNavFiles() {
 								}`}
 								viewBox="0 0 10 6"
 								fill="none"
+								aria-hidden="true"
 							>
 								<path
 									d="M1 1L5 5L9 1"
@@ -737,7 +761,7 @@ export function StaggeredNavFiles() {
 									strokeWidth="1.2"
 								/>
 							</svg>
-						</div>
+						</button>
 
 						<AnimatePresence>
 							{resourcesOpen && (
