@@ -1389,6 +1389,12 @@ export const stopImpersonating = () =>
 			}
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
 			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
+			if (!dontRememberMeCookie) {
+				// impersonate-user sets the don't-remember-me cookie to keep the impersonated
+				// session from being refreshed. Left behind, the next impersonation reads it back
+				// as the admin's own preference and restores a session cookie without `max-age`.
+				expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+			}
 			expireCookie(ctx, adminSessionCookie);
 			return ctx.json({
 				session: parseSessionOutput(ctx.context.options, adminSession.session),
