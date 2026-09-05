@@ -808,6 +808,88 @@ describe("captcha", async () => {
 		});
 	});
 
+	describe("vercel-botid", async () => {
+		const { client: badBotClient } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "vercel-botid",
+					checkBotIdOptions: { developmentOptions: { bypass: "BAD-BOT" } },
+				}),
+			],
+		});
+
+		const { client: humanClient, testUser } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "vercel-botid",
+					checkBotIdOptions: { developmentOptions: { bypass: "HUMAN" } },
+				}),
+			],
+		});
+
+		it("should reject the request when BotID reports a bot", async () => {
+			const res = await badBotClient.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("should allow the request when BotID reports a human", async () => {
+			const res = await humanClient.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+
+			expect(res.error).toBeNull();
+			expect(res.data?.user).toBeDefined();
+		});
+
+		it("should use a custom validateRequest function when provided", async () => {
+			const { client } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "vercel-botid",
+						checkBotIdOptions: { developmentOptions: { bypass: "HUMAN" } },
+						validateRequest: () => false,
+					}),
+				],
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("fails closed when the BotID verification call never resolves", async () => {
+			vi.useFakeTimers();
+			vi.doMock("botid/server", () => ({
+				checkBotId: () => new Promise(() => {}),
+			}));
+
+			try {
+				const { vercelBotId } = await import("./verify-handlers/vercel-botid");
+				const resultPromise = vercelBotId({
+					request: new Request("http://localhost/sign-in/email"),
+				});
+				// Attach the rejection assertion before advancing timers so the
+				// rejection is handled synchronously and doesn't surface as unhandled.
+				const assertion = expect(resultPromise).rejects.toThrow();
+
+				await vi.advanceTimersByTimeAsync(CAPTCHA_VERIFY_TIMEOUT_MS);
+
+				await assertion;
+			} finally {
+				vi.useRealTimers();
+				vi.doUnmock("botid/server");
+			}
+		});
+	});
+
 	describe("action and hostname binding", async () => {
 		it("rejects a Turnstile token whose action does not match expectedAction", async () => {
 			const { client } = await getTestInstance({
