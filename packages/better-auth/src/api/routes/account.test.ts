@@ -335,7 +335,85 @@ describe("account", async () => {
 			});
 		});
 	});
+	it("should get account info using the account cookie", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
 
+		const headers = new Headers();
+		email = "account-info-cookie@test.com";
+
+		const context = await auth.$context;
+		const googleProvider = context.socialProviders.find(
+			(provider) => provider.id === "google",
+		)!;
+
+		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+			user: {
+				name: "Cookie User",
+				email,
+				emailVerified: true,
+			},
+			data: {
+				sub: "account-info-cookie-subject",
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const info = await client.accountInfo({
+			query: {
+				useAccountCookie: true,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(info.error).toBeNull();
+		expect(info.data).toMatchObject({
+			user: {
+				email,
+			},
+			account: {
+				providerId: "google",
+				accountId: "account-info-cookie-subject",
+			},
+		});
+	});
 	it("returns an authentication error when the provider cannot resolve account info", async () => {
 		const {
 			auth,
