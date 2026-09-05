@@ -111,6 +111,20 @@ export interface OrganizationOptions {
 		 */
 		enabled: boolean;
 		/**
+		 * Custom permissions for team roles.
+		 */
+		roles?:
+			| {
+					[key in string]?: Role<any>;
+			  }
+			| undefined;
+		/**
+		 * Default role(s) for a team member
+		 *
+		 * @default "member"
+		 */
+		defaultRole?: string | string[];
+		/**
 		 * Default team configuration
 		 */
 		defaultTeam?: {

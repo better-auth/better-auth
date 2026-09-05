@@ -13,7 +13,8 @@ import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
+import { hasPermission, checkIfMemberHasPermission } from "../has-permission";
+import { parseRoles } from "../utils";
 import type { TeamMember } from "../schema";
 import { teamSchema } from "../schema";
 import type { OrganizationOptions } from "../types";
@@ -1115,6 +1116,11 @@ const addTeamMemberBodySchema = z.object({
 			"The user Id which represents the user to be added as a member.",
 	}),
 
+	role: z.union([z.string(), z.array(z.string())]).optional().meta({
+		description:
+			"The role or roles to assign to the user in the team.",
+	}),
+
 	organizationId: z
 		.string()
 		.meta({
@@ -1259,12 +1265,70 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const currentTeamMember = await adapter.findTeamMember({
+				userId: session.user.id,
+				teamId: ctx.body.teamId,
+			});
+
+			const roleToSet = parseRoles(
+				ctx.body.role,
+				ctx.context.orgOptions.teams?.defaultRole,
+			);
+
+			// Grant Ceiling enforcement
+			const { cacheAllRoles } = await import("../permission");
+			let acRoles = cacheAllRoles.get(organizationId);
+			if (!acRoles) {
+				await hasPermission(
+					{
+						organizationId,
+						role: currentMember.role,
+						options: ctx.context.orgOptions,
+						permissions: {},
+					},
+					ctx,
+				);
+				acRoles = cacheAllRoles.get(organizationId)!;
+			}
+
+			const rolesArray = roleToSet.split(",").map((r) => r.trim());
+			for (const r of rolesArray) {
+				const targetRole = acRoles[r];
+				if (!targetRole) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					);
+				}
+
+				if (targetRole.scope === "organization") {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					);
+				}
+
+				const targetPermissions = targetRole.statements;
+				await checkIfMemberHasPermission({
+					ctx,
+					permissionRequired: targetPermissions as Record<string, string[]>,
+					options: ctx.context.orgOptions,
+					organizationId,
+					teamId: ctx.body.teamId,
+					member: currentMember,
+					teamMember: currentTeamMember,
+					user: session.user,
+					action: "create",
+				});
+			}
+
 			// Run beforeAddTeamMember hook
 			if (options?.organizationHooks?.beforeAddTeamMember) {
 				const response = await options?.organizationHooks.beforeAddTeamMember({
 					teamMember: {
 						teamId: ctx.body.teamId,
 						userId: ctx.body.userId,
+						role: roleToSet,
 					},
 					team,
 					user: userBeingAdded,
@@ -1292,6 +1356,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				const result = await adapter.addTeamMemberWithLimit({
 					teamId: ctx.body.teamId,
 					userId: ctx.body.userId,
+					role: roleToSet,
 					maximumMembersPerTeam,
 				});
 				if (result.status === "limitReached") {
@@ -1305,6 +1370,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				teamMember = await adapter.findOrCreateTeamMember({
 					teamId: ctx.body.teamId,
 					userId: ctx.body.userId,
+					role: roleToSet,
 				});
 			}
 
@@ -1401,35 +1467,103 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const canDeleteMember = await hasPermission(
-				{
-					role: currentMember.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						member: ["delete"],
-					},
-					organizationId: organizationId,
-				},
-				ctx,
-			);
+			const currentTeamMember = await adapter.findTeamMember({
+				userId: session.user.id,
+				teamId: ctx.body.teamId,
+			});
 
-			if (!canDeleteMember) {
+			const { checkIfMemberHasPermission } = await import("../has-permission");
+			
+			// Basic permission check
+			const canDeleteTeamMember = await checkIfMemberHasPermission({
+				ctx,
+				permissionRequired: { teamMember: ["delete"] },
+				options: ctx.context.orgOptions,
+				organizationId,
+				teamId: ctx.body.teamId,
+				member: currentMember,
+				teamMember: currentTeamMember,
+				user: session.user,
+				action: "delete",
+			}).catch(() => false);
+
+			if (!canDeleteTeamMember) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER,
 				);
 			}
 
-			const toBeAddedMember = await adapter.findMemberByOrgId({
+			const toBeRemovedMember = await adapter.findMemberByOrgId({
 				userId: ctx.body.userId,
 				organizationId: organizationId,
 			});
 
-			if (!toBeAddedMember) {
+			if (!toBeRemovedMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
+			}
+
+			const targetTeamMember = await adapter.findTeamMember({
+				teamId: ctx.body.teamId,
+				userId: ctx.body.userId,
+			});
+
+			if (!targetTeamMember) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				);
+			}
+
+			// Enforce Grant Ceiling for removal: You can only remove someone if you have permission to assign their current team roles
+			const { cacheAllRoles } = await import("../permission");
+			let acRoles = cacheAllRoles.get(organizationId);
+			if (!acRoles) {
+				await hasPermission(
+					{
+						organizationId,
+						role: currentMember.role,
+						options: ctx.context.orgOptions,
+						permissions: {},
+					},
+					ctx,
+				);
+				acRoles = cacheAllRoles.get(organizationId)!;
+			}
+
+			const targetRolesArray = (targetTeamMember.role || "member").split(",").map((r) => r.trim());
+			for (const r of targetRolesArray) {
+				const targetRole = acRoles[r];
+				if (targetRole) {
+					const targetPermissions = targetRole.statements;
+					await checkIfMemberHasPermission({
+						ctx,
+						permissionRequired: targetPermissions as Record<string, string[]>,
+						options: ctx.context.orgOptions,
+						organizationId,
+						teamId: ctx.body.teamId,
+						member: currentMember,
+						teamMember: currentTeamMember,
+						user: session.user,
+						action: "delete",
+					});
+				}
+			}
+
+			// No org owner removal via team unless the actor is also an org owner
+			const targetOrgRoles = toBeRemovedMember.role.split(",").map(r => r.trim());
+			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
+			if (targetOrgRoles.includes(creatorRole)) {
+				const actorOrgRoles = currentMember.role.split(",").map(r => r.trim());
+				if (!actorOrgRoles.includes(creatorRole)) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER,
+					);
+				}
 			}
 
 			const team = await adapter.findTeamById({
@@ -1461,17 +1595,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const teamMember = await adapter.findTeamMember({
-				teamId: ctx.body.teamId,
-				userId: ctx.body.userId,
-			});
-
-			if (!teamMember) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
-				);
-			}
+			const teamMember = targetTeamMember;
 
 			// Run beforeRemoveTeamMember hook
 			if (options?.organizationHooks?.beforeRemoveTeamMember) {
@@ -1499,5 +1623,194 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			return ctx.json({ message: "Team member removed successfully." });
+		},
+	);
+
+const updateTeamMemberRoleBodySchema = z.object({
+	memberId: z.string().meta({
+		description: "The ID of the team member to update.",
+	}),
+	teamId: z.string().meta({
+		description: "The team the user is a member of.",
+	}),
+	role: z.union([z.string(), z.array(z.string())]).meta({
+		description: "The role or roles to assign to the user in the team.",
+	}),
+	organizationId: z.string().optional().meta({
+		description:
+			"The organization ID which the team falls under. If not provided, it will default to the user's active organization.",
+	}),
+});
+
+export const updateTeamMemberRole = <O extends OrganizationOptions>(
+	options: O,
+) =>
+	createAuthEndpoint(
+		"/organization/update-team-member-role",
+		{
+			method: "POST",
+			body: updateTeamMemberRoleBodySchema,
+			metadata: {
+				openapi: {
+					description: "Update the role of a team member",
+					responses: {
+						"200": {
+							description: "Team member updated successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											member: {
+												type: "object",
+												properties: {
+													id: { type: "string" },
+													userId: { type: "string" },
+													teamId: { type: "string" },
+													role: { type: "string" },
+												},
+												required: ["id", "userId", "teamId", "role"],
+											},
+										},
+										required: ["member"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+
+			if (!organizationId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
+			}
+
+			if (!ctx.body.role) {
+				throw APIError.fromStatus("BAD_REQUEST");
+			}
+
+			const currentMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: organizationId,
+			});
+
+			if (!currentMember) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+
+			const team = await adapter.findTeamById({
+				teamId: ctx.body.teamId,
+				organizationId: organizationId,
+			});
+
+			if (!team) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				);
+			}
+
+			const currentTeamMember = await adapter.findTeamMember({
+				userId: session.user.id,
+				teamId: ctx.body.teamId,
+			});
+
+			const roleToSet = parseRoles(ctx.body.role, "");
+			if (!roleToSet) {
+				throw APIError.fromStatus("BAD_REQUEST");
+			}
+
+			const { cacheAllRoles } = await import("../permission");
+			let acRoles = cacheAllRoles.get(organizationId);
+			if (!acRoles) {
+				await hasPermission(
+					{
+						organizationId,
+						role: currentMember.role,
+						options: ctx.context.orgOptions,
+						permissions: {},
+					},
+					ctx,
+				);
+				acRoles = cacheAllRoles.get(organizationId)!;
+			}
+
+			const rolesArray = roleToSet.split(",").map((r) => r.trim());
+			for (const r of rolesArray) {
+				const targetRole = acRoles[r];
+				if (!targetRole) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					);
+				}
+
+				if (targetRole.scope === "organization") {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					);
+				}
+
+				const targetPermissions = targetRole.statements;
+				await checkIfMemberHasPermission({
+					ctx,
+					permissionRequired: targetPermissions as Record<string, string[]>,
+					options: ctx.context.orgOptions,
+					organizationId,
+					teamId: ctx.body.teamId,
+					member: currentMember,
+					teamMember: currentTeamMember,
+					user: session.user,
+					action: "update",
+				});
+			}
+
+			const targetTeamMember = await ctx.context.adapter.findOne<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "id",
+						value: ctx.body.memberId,
+					},
+				],
+			});
+
+			if (!targetTeamMember || targetTeamMember.teamId !== ctx.body.teamId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
+			}
+
+			const updatedTeamMember = await ctx.context.adapter.update({
+				model: "teamMember",
+				where: [
+					{
+						field: "id",
+						value: ctx.body.memberId,
+					},
+				],
+				update: {
+					role: roleToSet,
+				},
+			});
+
+			return ctx.json({ member: updatedTeamMember });
 		},
 	);
