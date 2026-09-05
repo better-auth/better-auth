@@ -775,6 +775,13 @@ description: "Timestamp of when the verification request was updated",
       If you are migrating users with passwords (including for the Phone Number plugin), you **must** create a record in the `account` table for each user with `providerId: "credential"`, `issuer: "local:credential"`, and `accountId` set to the Better Auth user `id`. Without this record, password-based sign-ins will fail.
     </Callout>
 
+    <Callout type="warn">
+      **Critical for OAuth Migration:**
+      Auth.js has no `issuer` column, so the migration has to supply one, and the correct value differs by provider. For a provider that declares no issuer of its own, such as GitHub or Discord, Better Auth builds a local one from the provider id (`local:oauth:github`), which is what `createOAuthAccountIssuer()` returns. OpenID Connect providers declare their own and it must be used instead: `https://accounts.google.com` for Google, `https://appleid.apple.com` for Apple, `https://www.facebook.com` for Facebook, `https://access.line.me` for LINE. For Cognito and Microsoft Entra ID it depends on your own configuration or on the `iss` claim, and Slack depends on which integration you used: the built-in social provider declares none and takes the local form, while the `genericOAuth` helper sets `https://slack.com`. The authoritative value for any built-in provider is its `accountIssuer`.
+
+      Writing the local form for an OIDC provider produces no error. Sign-in resolves an account by the `(issuer, accountId)` pair with no fallback on `providerId`, so the row is never found. Linking by email would normally cover that, but `accountLinking.requireLocalEmailVerified` defaults to `true` and Auth.js leaves `emailVerified` null for most accounts created through OAuth, so linking is refused too and those users get `account not linked`.
+    </Callout>
+
     Table: <strong className="underline italic">VerificationToken -> Verification</strong>
 
     * Better Auth uses `Verification` table instead of `VerificationToken`
