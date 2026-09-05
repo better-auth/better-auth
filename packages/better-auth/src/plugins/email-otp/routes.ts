@@ -159,9 +159,9 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				return ctx.json({ success: true });
 			}
 
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
-			);
+			// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors, and a
+			// failed send must not be reported as `success: true` (see #11107).
+			await opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx);
 			return ctx.json({ success: true });
 		},
 	);
@@ -778,15 +778,13 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					success: true,
 				});
 			}
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: "forget-password",
-					},
-					ctx,
-				),
+			await opts.sendVerificationOTP(
+				{
+					email,
+					otp,
+					type: "forget-password",
+				},
+				ctx,
 			);
 			return ctx.json({
 				success: true,
@@ -870,15 +868,13 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 					success: true,
 				});
 			}
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: "forget-password",
-					},
-					ctx,
-				),
+			await opts.sendVerificationOTP(
+				{
+					email,
+					otp,
+					type: "forget-password",
+				},
+				ctx,
 			);
 			return ctx.json({
 				success: true,
@@ -1131,15 +1127,13 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email: newEmail,
-						otp,
-						type: "change-email",
-					},
-					ctx,
-				),
+			await opts.sendVerificationOTP(
+				{
+					email: newEmail,
+					otp,
+					type: "change-email",
+				},
+				ctx,
 			);
 			return ctx.json({
 				success: true,
