@@ -471,6 +471,21 @@ export type BetterAuthAdvancedOptions = {
 				 * @default false
 				 */
 				joins?: boolean;
+				/**
+				 * Compare the schema with the tables this configuration writes
+				 * before the first request, and report every problem with its
+				 * fix instead of failing on the first insert. The built-in
+				 * database is introspected once per process. The Drizzle adapter
+				 * reads the schema object it was given and the Prisma adapter
+				 * reads the generated client's data model, so neither sends a
+				 * query. The verdict is kept for the life of the process.
+				 *
+				 * On outside production unless set. Production deployments run
+				 * `auth migrate`, which reports the same problems.
+				 *
+				 * @default process.env.NODE_ENV !== "production"
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
