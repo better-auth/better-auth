@@ -934,6 +934,35 @@ describe("internal adapter test", async () => {
 		expect(foundAccount).toBeNull();
 	});
 
+	it.each([
+		false,
+		true,
+	])("rejects ambiguous account keys with joins=%s", async (joins) => {
+		const { auth } = await getTestInstance(
+			{ advanced: { database: { joins } } },
+			{ disableTestUser: true },
+		);
+		const { internalAdapter: accounts } = await auth.$context;
+		for (const name of ["first", "second"]) {
+			const user = await accounts.createUser(
+				{ name, email: `${name}@ambiguous-account.test` },
+				{ method: "test" },
+			);
+			await accounts.createAccount({
+				userId: user.id,
+				providerId: "tenant",
+				accountId: "shared-subject",
+			});
+		}
+		const key = { providerId: "tenant", accountId: "shared-subject" };
+		await expect(accounts.findAccountByKey(key)).rejects.toThrow(
+			"Multiple accounts match",
+		);
+		await expect(accounts.findAccountOwnerByKey(key)).rejects.toThrow(
+			"Multiple accounts match",
+		);
+	});
+
 	it("finds an account owner by the exact account key", async () => {
 		const firstUser = await internalAdapter.createUser(
 			{

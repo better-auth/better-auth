@@ -1006,9 +1006,9 @@ export const createInternalAdapter = (
 			);
 		},
 		findAccountOwnerByKey: async ({ providerId, accountId }) => {
-			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
-				Account & { user: User | null }
-			>({
+			const accountsWithUsers = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account & { user: User | null }>({
 				model: "account",
 				where: [
 					{
@@ -1020,10 +1020,17 @@ export const createInternalAdapter = (
 						value: accountId,
 					},
 				],
+				limit: 2,
 				join: {
 					user: true,
 				},
 			});
+			if (accountsWithUsers.length > 1) {
+				throw new BetterAuthError(
+					"Multiple accounts match the same providerId and accountId. Resolve duplicate account identities before continuing.",
+				);
+			}
+			const accountWithUser = accountsWithUsers[0];
 			if (!accountWithUser) return null;
 			const { user, ...account } = accountWithUser;
 			return user
@@ -1191,22 +1198,28 @@ export const createInternalAdapter = (
 			});
 		},
 		findAccountByKey: async ({ providerId, accountId }) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{
-							field: "providerId",
-							value: providerId,
-						},
-						{
-							field: "accountId",
-							value: accountId,
-						},
-					],
-				},
-			);
-			return account;
+			const accounts = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account>({
+				model: "account",
+				limit: 2,
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "accountId",
+						value: accountId,
+					},
+				],
+			});
+			if (accounts.length > 1) {
+				throw new BetterAuthError(
+					"Multiple accounts match the same providerId and accountId. Resolve duplicate account identities before continuing.",
+				);
+			}
+			return accounts[0] ?? null;
 		},
 		findAccountByUserId: async (userId: string) => {
 			const account = await (

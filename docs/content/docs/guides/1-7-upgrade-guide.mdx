@@ -77,6 +77,8 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
   Only databases that ran 1.7.0 through 1.7.2 need the steps below. New rows no longer write `issuer`, so a `NOT NULL` column rejects every sign-up and account link until you relax it.
 </Callout>
 
+Before removing `issuer`, check for duplicate `(providerId, accountId)` pairs. If different issuers share a provider ID and use the same account IDs, give each issuer its own provider ID and update the matching account rows before upgrading. Keep different users separate. Better Auth rejects account lookups when more than one row matches the key.
+
 <Steps>
   <Step>
     #### Check whether the column is there
@@ -146,7 +148,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
   <Step>
     #### Confirm
 
-    Sign up a new user. Existing sessions and sign-ins were never affected: accounts are found by `providerId` and `accountId`, which every row already carries.
+    Sign up a new user and sign in with an existing account.
   </Step>
 </Steps>
 
