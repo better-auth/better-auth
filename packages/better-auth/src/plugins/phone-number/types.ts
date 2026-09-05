@@ -63,6 +63,26 @@ export interface PhoneNumberOptions {
 	 */
 	expiresIn?: number | undefined;
 	/**
+	 * Store the OTP in your database in a secure way
+	 *
+	 * Note: This will not affect the OTP sent to the user, it will only affect
+	 * the OTP stored in your database.
+	 *
+	 * @default "plain"
+	 */
+	storeOTP?:
+		| (
+				| "hashed"
+				| "plain"
+				| "encrypted"
+				| { hash: (otp: string) => Promise<string> }
+				| {
+						encrypt: (otp: string) => Promise<string>;
+						decrypt: (otp: string) => Promise<string>;
+				  }
+		  )
+		| undefined;
+	/**
 	 * Function to validate phone number
 	 *
 	 * by default any string is accepted
