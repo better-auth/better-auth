@@ -8,6 +8,7 @@ import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
 import { getAuthTables } from "../get-tables";
+import { consumeOneFallback, incrementOneFallback } from "./atomic-fallback";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { initGetFieldAttributes } from "./get-field-attributes";
@@ -1366,18 +1367,24 @@ export const createAdapterFactory =
 					{ model, where },
 				);
 
-				if (typeof adapterInstance.consumeOne !== "function") {
-					throw new BetterAuthError(
-						`Adapter "${config.adapterId}" must implement consumeOne for atomic single-use credential consumption.`,
-					);
-				}
 				const res = await withSpan(
 					`db consumeOne ${model}`,
 					{
 						[ATTR_DB_OPERATION_NAME]: "consumeOne",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.consumeOne<T>({ model, where }),
+					() =>
+						adapterInstance.consumeOne
+							? adapterInstance.consumeOne<T>({ model, where })
+							: consumeOneFallback({
+									adapter: adapterInstance,
+									adapterId: config.adapterId,
+									model,
+									where,
+									idField:
+										config.mapKeysTransformInput?.id ||
+										getFieldName({ model: unsafeModel, field: "id" }),
+								}),
 				);
 
 				debugLog(
@@ -1440,11 +1447,6 @@ export const createAdapterFactory =
 					{ model, where, increment: unsafeIncrement, set: unsafeSet },
 				);
 
-				if (typeof adapterInstance.incrementOne !== "function") {
-					throw new BetterAuthError(
-						`Adapter "${config.adapterId}" must implement incrementOne for atomic guarded counter updates.`,
-					);
-				}
 				const mappedKeys = config.mapKeysTransformInput ?? {};
 				const increment: Record<string, number> = {};
 				for (const [field, delta] of Object.entries(unsafeIncrement)) {
@@ -1473,12 +1475,24 @@ export const createAdapterFactory =
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
 					() =>
-						adapterInstance.incrementOne<T>({
-							model,
-							where,
-							increment,
-							set,
-						}),
+						adapterInstance.incrementOne
+							? adapterInstance.incrementOne<T>({
+									model,
+									where,
+									increment,
+									set,
+								})
+							: incrementOneFallback({
+									adapter: adapterInstance,
+									adapterId: config.adapterId,
+									model,
+									where,
+									increment,
+									set,
+									idField:
+										config.mapKeysTransformInput?.id ||
+										getFieldName({ model: unsafeModel, field: "id" }),
+								}),
 				);
 
 				debugLog(

@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
@@ -209,37 +210,6 @@ describe("createAdapterFactory atomic primitives", () => {
 		).rejects.toThrow(/resolved to an empty update/);
 	});
 
-	it("throws a clear error when consumeOne is missing at runtime", async () => {
-		const adapter = createTestAdapter({
-			adapter: createCustomAdapter({
-				consumeOne: undefined as unknown as CustomAdapter["consumeOne"],
-			}),
-		});
-
-		await expect(
-			adapter.consumeOne({
-				model: "verification",
-				where: [{ field: "identifier", value: "token" }],
-			}),
-		).rejects.toThrow(/must implement consumeOne/);
-	});
-
-	it("throws a clear error when incrementOne is missing at runtime", async () => {
-		const adapter = createTestAdapter({
-			adapter: createCustomAdapter({
-				incrementOne: undefined as unknown as CustomAdapter["incrementOne"],
-			}),
-		});
-
-		await expect(
-			adapter.incrementOne({
-				model: "verification",
-				where: [{ field: "identifier", value: "token" }],
-				increment: { attempts: 1 },
-			}),
-		).rejects.toThrow(/must implement incrementOne/);
-	});
-
 	it("throws a clear error when updateMany does not return a finite count", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
@@ -332,5 +302,424 @@ describe("createAdapterFactory where value coercion", () => {
 				},
 			],
 		]);
+	});
+});
+
+/**
+ * @see https://cwe.mitre.org/data/definitions/367.html
+ */
+describe("legacy adapter atomic fallbacks", () => {
+	function setup(
+		onTestFinished: (fn: () => void) => void,
+		disableTransformInput = false,
+	) {
+		const db = new DatabaseSync(":memory:");
+		onTestFinished(() => db.close());
+		db.exec(
+			"CREATE TABLE verification (_id TEXT PRIMARY KEY, identifier TEXT, value TEXT, counter REAL, updatedAt TEXT)",
+		);
+		db.exec(
+			"INSERT INTO verification VALUES ('a', 'token', 'secret', NULL, NULL)",
+		);
+		const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+		function condition(where: CleanedWhere[]) {
+			return (
+				where
+					.map(({ field, value, operator, connector }, index) => {
+						if (operator !== "eq" && operator !== "gt")
+							throw new Error("Unsupported test predicate");
+						return `${index ? connector + " " : ""}${quote(field)} ${value === null ? "IS NULL" : operator === "gt" ? "> ?" : "= ?"}`;
+					})
+					.join(" ") || "1=1"
+			);
+		}
+		function values(where: CleanedWhere[]) {
+			return where
+				.filter(({ value }) => value !== null)
+				.map(({ value }) => {
+					if (typeof value !== "string" && typeof value !== "number")
+						throw new Error("Unsupported test value");
+					return value;
+				});
+		}
+		const raw = {
+			...createCustomAdapter(),
+			consumeOne: undefined,
+			incrementOne: undefined,
+			findOne: async <T>({ where }: { where: CleanedWhere[] }) =>
+				(db
+					.prepare(
+						`SELECT * FROM verification WHERE ${condition(where)} LIMIT 1`,
+					)
+					.get(...values(where)) ?? null) as T | null,
+			deleteMany: async ({ where }: { where: CleanedWhere[] }) =>
+				Number(
+					db
+						.prepare(`DELETE FROM verification WHERE ${condition(where)}`)
+						.run(...values(where)).changes,
+				),
+			updateMany: async ({
+				where,
+				update,
+			}: {
+				where: CleanedWhere[];
+				update: Record<string, unknown>;
+			}) => {
+				const entries = Object.entries(update);
+				const params = entries.map(([, value]) => {
+					if (
+						value === null ||
+						typeof value === "string" ||
+						typeof value === "number"
+					)
+						return value;
+					throw new Error("Unsupported test update");
+				});
+				return Number(
+					db
+						.prepare(
+							`UPDATE verification SET ${entries.map(([field]) => `${quote(field)} = ?`).join(", ")} WHERE ${condition(where)}`,
+						)
+						.run(...params, ...values(where)).changes,
+				);
+			},
+		};
+		const factory = createAdapterFactory({
+			config: {
+				adapterId: "legacy",
+				disableTransformInput,
+				mapKeysTransformInput: { id: "_id" },
+				mapKeysTransformOutput: { _id: "id" },
+			},
+			adapter: () => raw,
+		});
+		const options = {
+			verification: {
+				additionalFields: {
+					attempts: {
+						type: "number" as const,
+						required: false,
+						fieldName: "counter",
+					},
+				},
+			},
+		};
+		return { db, raw, first: factory(options), second: factory(options) };
+	}
+	const request = {
+		model: "verification",
+		where: [{ field: "identifier", value: "token" }],
+	};
+	it("lets only one independent adapter consume a credential", async ({
+		onTestFinished,
+	}) => {
+		const { db, first, second } = setup(onTestFinished);
+		const results = await Promise.all([
+			first.consumeOne(request),
+			second.consumeOne(request),
+		]);
+		expect(results.filter(Boolean)).toHaveLength(1);
+		expect(results.find(Boolean)).toMatchObject({ id: "a", value: "secret" });
+		expect(
+			db.prepare("SELECT count(*) AS count FROM verification").get(),
+		).toMatchObject({ count: 0 });
+	});
+	it("does not lose concurrent increments starting from null", async ({
+		onTestFinished,
+	}) => {
+		const { db, first, second } = setup(onTestFinished);
+		const results = await Promise.all(
+			[first, second, first].map((adapter) =>
+				adapter.incrementOne<{ attempts: number }>({
+					...request,
+					increment: { attempts: 1 },
+				}),
+			),
+		);
+		expect(results.map((row) => row?.attempts).sort()).toEqual([1, 2, 3]);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: 3,
+		});
+	});
+	it("returns the row produced by its own update", async ({
+		onTestFinished,
+	}) => {
+		const { db, raw, first } = setup(onTestFinished);
+		const update = raw.updateMany;
+		raw.updateMany = async (args) => {
+			const result = await update(args);
+			db.exec("UPDATE verification SET counter = 99");
+			return result;
+		};
+		expect(
+			await first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).toMatchObject({ attempts: 1 });
+	});
+	it("does not return a credential replaced between read and delete", async ({
+		onTestFinished,
+	}) => {
+		const { db, raw, first } = setup(onTestFinished);
+		const remove = raw.deleteMany;
+		raw.deleteMany = async (args) => {
+			db.exec("UPDATE verification SET value = 'replacement'");
+			return remove(args);
+		};
+		expect(await first.consumeOne(request)).toBeNull();
+		expect(db.prepare("SELECT value FROM verification").get()).toMatchObject({
+			value: "replacement",
+		});
+	});
+	it("keeps OR selectors from widening the guarded deletion", async ({
+		onTestFinished,
+	}) => {
+		const { db, first } = setup(onTestFinished);
+		db.exec(
+			"INSERT INTO verification VALUES ('b', 'other', 'other-secret', 0, NULL)",
+		);
+		await first.consumeOne({
+			model: "verification",
+			where: [
+				{ field: "identifier", value: "token" },
+				{ field: "identifier", value: "other", connector: "OR" },
+			],
+		});
+		expect(
+			db.prepare("SELECT count(*) AS count FROM verification").get(),
+		).toMatchObject({ count: 1 });
+	});
+	it("rejects contention exhaustion instead of reporting a missing row", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first } = setup(onTestFinished);
+		raw.updateMany = async () => 0;
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).rejects.toThrow(/contention/);
+	});
+	it.for([
+		2,
+		-1,
+		0.5,
+		Number.NaN,
+	])("rejects invalid affected counts (%s)", async (count, {
+		onTestFinished,
+	}) => {
+		const { raw, first } = setup(onTestFinished);
+		raw.deleteMany = async () => count;
+		raw.updateMany = async () => count;
+		await expect(first.consumeOne(request)).rejects.toThrow(/affected/);
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).rejects.toThrow(/affected/);
+	});
+	it("rejects invalid counters before writing", async ({ onTestFinished }) => {
+		const { db, first } = setup(onTestFinished);
+		db.exec("UPDATE verification SET counter = 'invalid'");
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).rejects.toThrow(/counter/);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: "invalid",
+		});
+	});
+	it("handles an absent nullable counter with the null guard", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first, second, db } = setup(onTestFinished);
+		const find = raw.findOne;
+		raw.findOne = async <T>(args: { where: CleanedWhere[] }) => {
+			const row = await find<Record<string, unknown>>(args);
+			if (row?.counter === null) {
+				const { counter: _counter, ...withoutCounter } = row;
+				return withoutCounter as T;
+			}
+			return row as T | null;
+		};
+		await Promise.all(
+			[first, second].map((adapter) =>
+				adapter.incrementOne({ ...request, increment: { attempts: 1 } }),
+			),
+		);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: 2,
+		});
+	});
+	it("honors a counter guard after losing a race", async ({
+		onTestFinished,
+	}) => {
+		const { db, first, second } = setup(onTestFinished);
+		db.exec("UPDATE verification SET counter = 1");
+		const guarded = {
+			model: "verification",
+			where: [{ field: "attempts", value: 0, operator: "gt" as const }],
+			increment: { attempts: -1 },
+		};
+		const results = await Promise.all([
+			first.incrementOne(guarded),
+			second.incrementOne(guarded),
+		]);
+		expect(results.filter(Boolean)).toHaveLength(1);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: 0,
+		});
+	});
+	it("completes a no-op without relying on changed-row counts", async ({
+		onTestFinished,
+	}) => {
+		const { db, raw, first } = setup(onTestFinished);
+		db.exec("UPDATE verification SET counter = 1");
+		raw.updateMany = async () => {
+			throw new Error("A no-op should not write");
+		};
+		expect(
+			await first.incrementOne({ ...request, increment: { attempts: 0 } }),
+		).toMatchObject({ attempts: 1 });
+	});
+	it("compares date values when a set-only update is a no-op", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first } = setup(onTestFinished);
+		const find = raw.findOne;
+		const time = new Date("2026-01-01T00:00:00Z");
+		raw.findOne = async <T>(args: { where: CleanedWhere[] }) => {
+			const row = await find<Record<string, unknown>>(args);
+			return row ? ({ ...row, updatedAt: new Date(time) } as T) : null;
+		};
+		raw.updateMany = async () => {
+			throw new Error("A date no-op should not write");
+		};
+		expect(
+			await first.incrementOne({
+				...request,
+				increment: {},
+				set: { updatedAt: time },
+			}),
+		).toMatchObject({ updatedAt: time });
+	});
+
+	it("fails before writing when the row id is missing", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first, db } = setup(onTestFinished);
+		raw.findOne = async <T>() =>
+			({ identifier: "token", value: "secret" }) as T;
+		await expect(first.consumeOne(request)).rejects.toThrow(/row id/);
+		expect(
+			db.prepare("SELECT count(*) AS count FROM verification").get(),
+		).toMatchObject({ count: 1 });
+	});
+	it("requires a native method for non-scalar snapshots", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first, db } = setup(onTestFinished);
+		raw.findOne = async <T>() =>
+			({ _id: "a", identifier: "token", value: { secret: true } }) as T;
+		await expect(first.consumeOne(request)).rejects.toThrow(/non-scalar/);
+		expect(
+			db.prepare("SELECT count(*) AS count FROM verification").get(),
+		).toMatchObject({ count: 1 });
+	});
+
+	it("rejects malformed reads instead of treating them as missing", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first, db } = setup(onTestFinished);
+		raw.findOne = async <T>() => false as T;
+		await expect(first.consumeOne(request)).rejects.toThrow(/snapshot or null/);
+		expect(
+			db.prepare("SELECT count(*) AS count FROM verification").get(),
+		).toMatchObject({ count: 1 });
+	});
+	it("rejects non-scalar assignments without exposing their values", async ({
+		onTestFinished,
+	}) => {
+		const { first, db } = setup(onTestFinished);
+		const result = await first
+			.incrementOne({
+				...request,
+				increment: {},
+				set: { value: { secret: "must-not-leak" } },
+			})
+			.catch((error: unknown) => error);
+		expect(result).toBeInstanceOf(Error);
+		expect(String(result)).not.toContain("must-not-leak");
+		expect(db.prepare("SELECT value FROM verification").get()).toMatchObject({
+			value: "secret",
+		});
+	});
+	it("rejects increments that cannot change a large counter", async ({
+		onTestFinished,
+	}) => {
+		const { first, db } = setup(onTestFinished);
+		db.prepare("UPDATE verification SET counter = ?").run(2 ** 53);
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).rejects.toThrow(/safely/);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: 2 ** 53,
+		});
+	});
+
+	it("omits undefined assignments even when input transformation is disabled", async ({
+		onTestFinished,
+	}) => {
+		const { first, raw, db } = setup(onTestFinished, true);
+		const write = raw.updateMany;
+		raw.updateMany = async (args) => {
+			expect(args.update).not.toHaveProperty("value");
+			return write(args);
+		};
+		expect(
+			await first.incrementOne({
+				...request,
+				increment: { attempts: 1 },
+				set: { value: undefined },
+			}),
+		).toMatchObject({ value: "secret", attempts: 1 });
+		expect(
+			db.prepare("SELECT value, counter FROM verification").get(),
+		).toMatchObject({ value: "secret", counter: 1 });
+	});
+	it("preserves explicit null assignments", async ({ onTestFinished }) => {
+		const { first, db } = setup(onTestFinished, true);
+		expect(
+			await first.incrementOne({
+				...request,
+				increment: {},
+				set: { value: null },
+			}),
+		).toMatchObject({ value: null });
+		expect(db.prepare("SELECT value FROM verification").get()).toMatchObject({
+			value: null,
+		});
+	});
+	it("treats undefined-only assignments as a no-op", async ({
+		onTestFinished,
+	}) => {
+		const { first, raw } = setup(onTestFinished, true);
+		raw.updateMany = async () => {
+			throw new Error("Undefined assignments must not write");
+		};
+		expect(
+			await first.incrementOne({
+				...request,
+				increment: {},
+				set: { value: undefined },
+			}),
+		).toMatchObject({ value: "secret" });
+	});
+
+	it("returns null when the selector does not match", async ({
+		onTestFinished,
+	}) => {
+		const { first } = setup(onTestFinished);
+		const missing = {
+			...request,
+			where: [{ field: "identifier", value: "missing" }],
+		};
+		expect(await first.consumeOne(missing)).toBeNull();
+		expect(
+			await first.incrementOne({ ...missing, increment: { attempts: 1 } }),
+		).toBeNull();
 	});
 });

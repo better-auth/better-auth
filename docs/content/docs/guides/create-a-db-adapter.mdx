@@ -272,7 +272,7 @@ consumeOne: async ({ model, where }) => {
 ```
 
 <Callout type="warn">
-  `consumeOne` is required. Better Auth does not provide a `findMany` plus `deleteMany` fallback because that shape cannot guarantee single-use semantics across adapters without a native atomic delete-and-return operation.
+  `consumeOne` is optional. Without it, Better Auth reads a candidate and conditionally deletes it only if its ID and stored values still match. It returns the candidate only when exactly one row was deleted.
 </Callout>
 
 ### `incrementOne` method
@@ -303,8 +303,12 @@ incrementOne: async ({ model, where, increment, set }) => {
 ```
 
 <Callout type="warn">
-  `incrementOne` is required. Better Auth uses it as a compare-and-swap primitive: the `where` clause is part of the guard, so concurrent requests cannot all update a stale snapshot.
+  `incrementOne` is optional. Without it, Better Auth reads a candidate and updates it only if its stored values still match. It retries a lost race up to five attempts, then throws on contention instead of silently dropping the increment. Null or absent counters start at zero and remain part of the write condition. An `undefined` value in `set` leaves the field unchanged, while `null` explicitly clears it.
 </Callout>
+
+Both fallbacks require `findOne` to return a complete, detached snapshot of the stored row with its mapped ID. `deleteMany` and `updateMany` must check all conditions and perform each row mutation atomically, with accurate numeric affected-row counts. Equality against `null` must also match an absent nullable field. Splitting the condition check and mutation into separate operations is not safe, even inside an application-level lock.
+
+Fallbacks validate and compare scalar values (strings, finite numbers, booleans, dates, and null). Implement the native methods for rows or assignments containing structured values, or for adapter-specific ID objects. Native methods are also preferable under contention or when database triggers change the returned values. The increment fallback returns the values it wrote without a second read that could observe another caller's update.
 
 ### `findOne` method
 
