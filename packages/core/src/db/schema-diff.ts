@@ -126,7 +126,7 @@ export function formatSchemaFinding(
 		case "unexpected-required-column": {
 			const issuer =
 				finding.column === "issuer"
-					? ' Better Auth 1.7.0 through 1.7.2 created this column; drop the "account_issuer_accountId_uidx" index before the column.'
+					? ` Better Auth 1.7.0 through 1.7.2 created this column on the account table; drop the "${finding.table}_issuer_accountId_uidx" index before the column.`
 					: "";
 			return `Column "${finding.column}" on table "${finding.table}" is required but Better Auth never writes it, so every insert into "${finding.table}" fails. Drop the column, make it nullable, or give it a database default.${issuer}`;
 		}
