@@ -112,7 +112,9 @@ export const drizzleResolver = (options: DrizzleResolverOptions): Resolver => {
 				table.push(`\t${field.fieldName}: ${value},`);
 			}
 
-			const indexes = filterNonUniqueIndexes(ctx.schema);
+			const indexes = filterNonUniqueIndexes(ctx.schema).filter(
+				(field) => !field.references,
+			);
 			if (indexes.length > 0) {
 				table.push("}, (table) => [");
 				for (const field of indexes) {
