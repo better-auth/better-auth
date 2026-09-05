@@ -5,8 +5,6 @@
 "better-auth": patch
 ---
 
-Identify accounts by `(providerId, accountId)` again, as in 1.6, and drop the `issuer` column added in 1.7.0. Upgrading a 1.6 database no longer needs an account schema migration.
+Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
 
-Account lookups reject duplicate keys. A unique index remains a separate schema decision.
-
-If you already applied the 1.7.0 through 1.7.2 account schema, relax the column before upgrading. Better Auth no longer writes `account.issuer` and the column was created `NOT NULL`, so sign-ups and account links fail until the constraint is gone. Drop the `NOT NULL` constraint and the `account_issuer_accountId_uidx` index. Dropping the column itself is optional cleanup. `auth migrate` does not do this for you.
+If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
