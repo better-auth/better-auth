@@ -32,7 +32,7 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import { getSchema } from "./get-schema";
-import { toIntrospectedTables } from "./introspect";
+import { toIntrospectedTables, toPhysicalSchema } from "./introspect";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -742,7 +742,7 @@ export async function getMigrations(
 	// Columns the migration cannot fix: required, without a default, and never
 	// written by Better Auth. Reported so the CLI stops before an insert fails.
 	const schemaProblems = diffSchema(
-		betterAuthSchema,
+		toPhysicalSchema(db, betterAuthSchema),
 		toIntrospectedTables(tableMetadata),
 	)
 		.filter((finding) => finding.kind === "unexpected-required-column")
