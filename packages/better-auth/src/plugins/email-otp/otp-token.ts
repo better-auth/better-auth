@@ -102,18 +102,16 @@ export function isPendingOTP(
 }
 
 /**
- * Tries to reuse an existing unexpired OTP.
+ * Tries to reuse the stored OTP row the caller has read.
  * Returns the plain-text OTP if reusable, `null` otherwise.
  */
 export async function tryReuseOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,
 	identifier: string,
-	existing?: Verification | null,
+	existing: Verification,
 ): Promise<string | null> {
-	existing ??=
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (!existing || !isPendingOTP(opts, existing)) return null;
+	if (!isPendingOTP(opts, existing)) return null;
 
 	const [storedOtpValue] = splitAtLastColon(existing.value);
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
