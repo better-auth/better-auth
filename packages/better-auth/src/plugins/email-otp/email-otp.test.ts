@@ -2650,6 +2650,56 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		expect(res.data?.token).toBeDefined();
 	});
 
+	it("should email the same code to both requests when the generator returns equal codes", async () => {
+		const otps: string[] = [];
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					uniqueVerificationIdentifier,
+					emailOTP({
+						generateOTP: () => "424242",
+						async sendVerificationOTP({ otp }) {
+							otps.push(otp);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const email = "concurrent-send-equal-codes@example.com";
+		const identifier = `sign-in-otp-${email}`;
+
+		// Both requests store the same value, so the loser must recognize the
+		// winner's row as somebody else's and reuse it rather than mistake it for
+		// its own insert.
+		const context = await auth.$context;
+		const internalAdapter = context.internalAdapter;
+		let lookups = 0;
+		context.internalAdapter = {
+			...internalAdapter,
+			async findVerificationValue(id) {
+				if (id === identifier && lookups++ < 2) return null;
+				return internalAdapter.findVerificationValue(id);
+			},
+		};
+
+		const results = await Promise.all([
+			client.emailOtp.sendVerificationOtp({ email, type: "sign-in" }),
+			client.emailOtp.sendVerificationOtp({ email, type: "sign-in" }),
+		]);
+		for (const result of results) {
+			expect(result.error).toBeNull();
+		}
+
+		expect(otps).toEqual(["424242", "424242"]);
+		const res = await client.signIn.emailOtp({ email, otp: "424242" });
+		expect(res.data?.token).toBeDefined();
+	});
+
 	it("should fail the request when the insert succeeded but a create hook failed", async () => {
 		const otps: string[] = [];
 		const { client } = await getTestInstance(

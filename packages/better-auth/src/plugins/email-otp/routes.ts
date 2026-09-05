@@ -57,7 +57,13 @@ async function resolveOTP(
 
 	const otp =
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
+	// Choose the row's id here so that the row this request inserted can be told
+	// apart from one a concurrent request inserted, which may hold the same code
+	// (`generateOTP` can be deterministic). Databases that assign ids themselves
+	// ignore it; there the stored value has to do.
+	const id = ctx.context.generateId({ model: "verification" });
 	const verification = {
+		...(id ? { id } : {}),
 		value: `${await storeOTP(ctx, opts, otp)}:0`,
 		identifier,
 		expiresAt: getDate(opts.expiresIn, "sec"),
@@ -86,7 +92,10 @@ async function resolveOTP(
 			// The insert itself succeeded and something after it failed (such as a
 			// `verification.create.after` hook), which is not a conflict to recover
 			// from.
-			if (current?.value === verification.value) throw error;
+			const inserted = id
+				? current?.id === id
+				: current?.value === verification.value;
+			if (inserted) throw error;
 			if (current && current.id !== seen?.id) {
 				const concurrent = await tryReuseOTP(ctx, opts, identifier, current);
 				if (concurrent) return concurrent;
