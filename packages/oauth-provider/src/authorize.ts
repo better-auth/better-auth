@@ -404,6 +404,7 @@ export function authorizeRedirectOnError(
 export type AuthorizeEndpointSettings = {
 	isAuthorize?: boolean;
 	postLogin?: boolean;
+	isPostLoginContinue?: boolean;
 };
 
 export async function authorizeEndpoint(
@@ -838,6 +839,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
+			isContinue: settings?.isPostLoginContinue ?? false,
 		});
 		if (postLoginRedirect) {
 			if (promptNone) {
