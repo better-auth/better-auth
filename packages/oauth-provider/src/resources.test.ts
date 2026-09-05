@@ -260,6 +260,97 @@ describe("seedResources (integration via plugin init)", () => {
 			allowedScopes: null, // cleared
 		});
 	});
+
+	/**
+	 * `drizzle-orm` throws an `Error` whose `message` is the failed SQL and
+	 * whose `cause` carries the Postgres SQLSTATE. Reported as
+	 * better-auth#11034.
+	 */
+	const drizzleUniqueViolation = () =>
+		Object.assign(
+			new Error(
+				'Failed query: insert into "oauthResource" ("id", "identifier") values ($1, $2) returning "id"',
+			),
+			{
+				cause: Object.assign(
+					new Error(
+						'duplicate key value violates unique constraint "oauthResource_identifier_unique"',
+					),
+					{ code: "23505", constraint: "oauthResource_identifier_unique" },
+				),
+			},
+		);
+
+	it("treats a Drizzle-wrapped unique violation as a lost insert race", async () => {
+		const identifier = "https://api.example.com/wrapped-race";
+		const instance = await bootWithResourcesOption({});
+		const ctx = (await instance.auth.$context) as unknown as AuthContext;
+		const debugSpy = vi
+			.spyOn(logger, "debug")
+			.mockImplementation(() => undefined);
+		const createSpy = vi
+			.spyOn(ctx.adapter, "create")
+			.mockRejectedValue(drizzleUniqueViolation());
+
+		try {
+			await expect(
+				seedResources(ctx, {
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [{ identifier }],
+				} as OAuthOptions<Scope[]>),
+			).resolves.toBeUndefined();
+			expect(createSpy).toHaveBeenCalledTimes(1);
+			expect(
+				debugSpy.mock.calls.map((call: unknown[]) => String(call[0] ?? "")).join("\n"),
+			).toContain("already inserted by a concurrent process");
+		} finally {
+			createSpy.mockRestore();
+			debugSpy.mockRestore();
+		}
+	});
+
+	it("still rethrows an unrelated wrapped adapter failure", async () => {
+		const instance = await bootWithResourcesOption({});
+		const ctx = (await instance.auth.$context) as unknown as AuthContext;
+		const wrapped = Object.assign(new Error("Failed query: insert into \"oauthResource\""), {
+			cause: Object.assign(new Error("deadlock detected"), { code: "40P01" }),
+		});
+		const createSpy = vi.spyOn(ctx.adapter, "create").mockRejectedValue(wrapped);
+
+		try {
+			await expect(
+				seedResources(ctx, {
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [{ identifier: "https://api.example.com/wrapped-deadlock" }],
+				} as OAuthOptions<Scope[]>),
+			).rejects.toBe(wrapped);
+		} finally {
+			createSpy.mockRestore();
+		}
+	});
+
+	it("defers seeding when a wrapped error reports the table is missing", async () => {
+		const instance = await bootWithResourcesOption({});
+		const ctx = (await instance.auth.$context) as unknown as AuthContext;
+		const wrapped = Object.assign(new Error('Failed query: select from "oauthResource"'), {
+			cause: new Error('relation "oauthResource" does not exist'),
+		});
+		const findOneSpy = vi.spyOn(ctx.adapter, "findOne").mockRejectedValue(wrapped);
+
+		try {
+			await expect(
+				seedResources(ctx, {
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [{ identifier: "https://api.example.com/wrapped-missing-table" }],
+				} as OAuthOptions<Scope[]>),
+			).resolves.toBeUndefined();
+		} finally {
+			findOneSpy.mockRestore();
+		}
+	});
 });
 
 describe("getResource + cache", () => {
@@ -322,5 +413,55 @@ describe("getResource + cache", () => {
 			identifier,
 		);
 		expect(third?.name).toBe("Mutated externally");
+	});
+});
+
+describe("oauthProvider init resilience to a lost seed race", () => {
+	let debugSpy: ReturnType<typeof vi.spyOn>;
+	let infoSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => undefined);
+		infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+	});
+
+	afterEach(() => {
+		debugSpy.mockRestore();
+		infoSpy.mockRestore();
+	});
+
+	/**
+	 * Minimal AuthContext stand-in reproducing production ordering: the table
+	 * exists, `findOne` finds nothing, and `create` loses the race with a
+	 * concurrent boot. `disableJwtPlugin` keeps init off the issuer-validation
+	 * branch, which needs a full plugin registry.
+	 */
+	const stubContext = (createError: unknown) =>
+		({
+			options: {},
+			baseURL: "http://localhost:3000",
+			adapter: {
+				findOne: async () => null,
+				create: async () => {
+					throw createError;
+				},
+			},
+		}) as unknown as AuthContext;
+
+	it("returns the session databaseHooks when the seed insert loses the race", async () => {
+		const plugin = oauthProvider({
+			loginPage: "/login",
+			consentPage: "/consent",
+			disableJwtPlugin: true,
+			resources: ["https://api.example.com/init-race"],
+		} as OAuthOptions<Scope[]>);
+		const wrapped = Object.assign(
+			new Error('Failed query: insert into "oauthResource" ("id", "identifier") values ($1, $2)'),
+			{ cause: Object.assign(new Error("duplicate key value"), { code: "23505" }) },
+		);
+
+		const result = await plugin.init?.(stubContext(wrapped));
+
+		expect(result?.options?.databaseHooks?.session?.delete).toBeDefined();
 	});
 });
