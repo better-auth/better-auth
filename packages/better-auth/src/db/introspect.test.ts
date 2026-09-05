@@ -53,6 +53,17 @@ describe("toPhysicalSchema", () => {
 		});
 	});
 
+	it("carries the schema a plugin qualifies tables with", () => {
+		const physical = toPhysicalSchema(
+			connection().withSchema("auth"),
+			expected,
+		);
+		expect(physical.twoFactor?.schema).toBe("auth");
+		expect(
+			toPhysicalSchema(connection(), expected).twoFactor?.schema,
+		).toBeUndefined();
+	});
+
 	it("follows the plugin options rather than a fixed rule", () => {
 		expect(
 			toPhysicalSchema(

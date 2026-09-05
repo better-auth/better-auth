@@ -72,6 +72,20 @@ describe("diffSchema", () => {
 		expect(diffSchema(expected, actual)).toEqual([]);
 	});
 
+	it("matches a schema-qualified table only in that schema", () => {
+		const columns = [column("id"), column("accountId"), column("providerId")];
+		const qualified = { account: { ...expected.account, schema: "auth" } };
+		expect(
+			diffSchema(qualified, [{ name: "account", schema: "public", columns }]),
+		).toEqual([{ kind: "missing-table", table: "account" }]);
+		expect(
+			diffSchema(qualified, [{ name: "account", schema: "auth", columns }]),
+		).toEqual([]);
+		expect(
+			diffSchema(expected, [{ name: "account", schema: "auth", columns }]),
+		).toEqual([]);
+	});
+
 	it("skips a table that manages its own storage", () => {
 		const own = { ...expected, jwks: { fields: {}, disableMigrations: true } };
 		const actual = [

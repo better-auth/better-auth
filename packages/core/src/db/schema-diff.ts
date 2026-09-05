@@ -18,6 +18,10 @@ export interface IntrospectedColumn {
  */
 export interface IntrospectedTable {
 	name: string;
+	/**
+	 * The schema the table lives in, when the store has schemas.
+	 */
+	schema?: string | undefined;
 	columns: IntrospectedColumn[];
 }
 
@@ -31,6 +35,11 @@ export type ExpectedSchema = Record<
 	{
 		fields: Record<string, DBFieldAttribute>;
 		disableMigrations?: boolean | undefined;
+		/**
+		 * The schema the table is addressed in. Unset when the store has no
+		 * schemas or the table is found by name alone.
+		 */
+		schema?: string | undefined;
 	}
 >;
 
@@ -60,7 +69,9 @@ export function diffSchema(
 	for (const [tableName, table] of Object.entries(expected)) {
 		if (table.disableMigrations) continue;
 		const actualTable = actual.find(
-			(candidate) => candidate.name === tableName,
+			(candidate) =>
+				candidate.name === tableName &&
+				(table.schema === undefined || candidate.schema === table.schema),
 		);
 		if (!actualTable) {
 			findings.push({ kind: "missing-table", table: tableName });
