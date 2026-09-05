@@ -130,10 +130,32 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@alexasomba/better-auth-paystack",
+		name: "better-auth-paystack",
 		url: "https://github.com/alexasomba/better-auth-paystack",
 		description:
-			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+			"Production-ready Paystack billing plugin for Better Auth with native and locally managed subscriptions, one-time payments, organization billing, trials, secure webhooks, automated limits, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-flutterwave",
+		url: "https://github.com/alexasomba/better-auth-flutterwave",
+		description:
+			"Flutterwave plugin for Better Auth — integrates Flutterwave payments, subscriptions, organization billing, marketplace split payments, webhooks, refunds, reconciliation, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-solana-payments",
+		url: "https://github.com/alexasomba/better-auth-solana-payments",
+		description:
+			"One-time Solana payment integration for Better Auth with Solana Pay checkout, server-side transfer verification, payment tracking, organization payments, and more.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
