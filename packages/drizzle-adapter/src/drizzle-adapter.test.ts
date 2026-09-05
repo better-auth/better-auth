@@ -7,6 +7,12 @@ import {
 	text,
 	timestamp,
 } from "drizzle-orm/pg-core";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import {
+	integer as sqliteInteger,
+	sqliteTable,
+	text as sqliteText,
+} from "drizzle-orm/sqlite-core";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
@@ -897,6 +903,169 @@ describe("drizzle-adapter", () => {
 			});
 
 			expect(result).toBeNull();
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10816
+	 */
+	describe("supportsDates", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const expiresAt = new Date("2026-08-14T21:35:53.000Z");
+
+		// Mirrors the SQLite schema the Better Auth CLI generates. Drizzle's
+		// timestamp column converts a `Date` itself, so the adapter must keep
+		// handing it a `Date`.
+		const timestampVerification = sqliteTable("verification", {
+			id: sqliteText("id").primaryKey(),
+			identifier: sqliteText("identifier").notNull(),
+			value: sqliteText("value").notNull(),
+			expiresAt: sqliteInteger("expires_at", {
+				mode: "timestamp_ms",
+			}).notNull(),
+			createdAt: sqliteInteger("created_at", {
+				mode: "timestamp_ms",
+			}).notNull(),
+			updatedAt: sqliteInteger("updated_at", {
+				mode: "timestamp_ms",
+			}).notNull(),
+		});
+
+		// The schema from the report. A `text()` column has no conversion of its
+		// own, so whatever the adapter hands over reaches the driver unchanged.
+		const textVerification = sqliteTable("verification", {
+			id: sqliteText("id").primaryKey(),
+			identifier: sqliteText("identifier").notNull(),
+			value: sqliteText("value").notNull(),
+			expiresAt: sqliteText("expires_at").notNull(),
+			createdAt: sqliteText("created_at").notNull(),
+			updatedAt: sqliteText("updated_at").notNull(),
+		});
+
+		function createDb(verification: SQLiteTable) {
+			const calls: {
+				inserted?: Record<string, unknown>;
+				whereArgs?: unknown[];
+			} = {};
+			const db = {
+				_: { fullSchema: { verification } },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn((row: Record<string, unknown>) => {
+						calls.inserted = row;
+						return { returning: vi.fn().mockResolvedValue([row]) };
+					}),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn((...args: unknown[]) => {
+							calls.whereArgs = args;
+							return Promise.resolve([]);
+						}),
+					}),
+				}),
+			} as any;
+			return { db, calls };
+		}
+
+		function createVerification(db: any, supportsDates?: boolean) {
+			const adapter = drizzleAdapter(db, {
+				provider: "sqlite",
+				...(supportsDates === undefined ? {} : { supportsDates }),
+			})({ secret: defaultSecret });
+			return adapter.create({
+				model: "verification",
+				data: {
+					identifier: "email-verification",
+					value: "token",
+					expiresAt,
+					createdAt: expiresAt,
+					updatedAt: expiresAt,
+				},
+			});
+		}
+
+		it("hands Drizzle a Date by default so its own conversion still runs", async () => {
+			const { db, calls } = createDb(timestampVerification);
+
+			await createVerification(db);
+
+			// A timestamp column calls `value.getTime()`, which only a Date has.
+			// Serialising here would break every generated SQLite schema.
+			expect(calls.inserted?.expiresAt).toBeInstanceOf(Date);
+			expect(calls.inserted?.expiresAt).toEqual(expiresAt);
+		});
+
+		it("keeps the Date when supportsDates is set to true explicitly", async () => {
+			const { db, calls } = createDb(timestampVerification);
+
+			await createVerification(db, true);
+
+			expect(calls.inserted?.expiresAt).toBeInstanceOf(Date);
+		});
+
+		it("writes an ISO string when supportsDates is false", async () => {
+			const { db, calls } = createDb(textVerification);
+
+			await createVerification(db, false);
+
+			// A `text()` column passes the value straight to the driver, which
+			// rejects a Date. An ISO string is what such a column expects.
+			expect(calls.inserted?.expiresAt).toBe("2026-08-14T21:35:53.000Z");
+			expect(calls.inserted?.createdAt).toBe("2026-08-14T21:35:53.000Z");
+		});
+
+		it("reads an ISO string back as a Date when supportsDates is false", async () => {
+			const { db } = createDb(textVerification);
+
+			const created = await createVerification(db, false);
+
+			// The stored string must not leak into application code.
+			expect((created as { expiresAt: Date }).expiresAt).toBeInstanceOf(Date);
+			expect((created as { expiresAt: Date }).expiresAt).toEqual(expiresAt);
+		});
+
+		it("serialises a Date in a range comparison when supportsDates is false", async () => {
+			const { db, calls } = createDb(textVerification);
+			const adapter = drizzleAdapter(db, {
+				provider: "sqlite",
+				supportsDates: false,
+			})({ secret: defaultSecret });
+
+			await adapter.findOne({
+				model: "verification",
+				where: [{ field: "expiresAt", value: expiresAt, operator: "lt" }],
+			});
+
+			const clause = calls.whereArgs?.[0];
+			expect(is(clause, SQL)).toBe(true);
+			const params = (clause as SQL).queryChunks.filter((chunk) =>
+				is(chunk, Param),
+			);
+			// `WHERE expires_at < ?` binds the same ISO string the column stores,
+			// so the comparison matches instead of failing on a Date operand.
+			expect(params.map((param) => (param as Param).value)).toContain(
+				"2026-08-14T21:35:53.000Z",
+			);
+		});
+
+		it("leaves a Date in a range comparison by default", async () => {
+			const { db, calls } = createDb(timestampVerification);
+			const adapter = drizzleAdapter(db, { provider: "sqlite" })({
+				secret: defaultSecret,
+			});
+
+			await adapter.findOne({
+				model: "verification",
+				where: [{ field: "expiresAt", value: expiresAt, operator: "lt" }],
+			});
+
+			const clause = calls.whereArgs?.[0];
+			const params = (clause as SQL).queryChunks.filter((chunk) =>
+				is(chunk, Param),
+			);
+			expect(params.map((param) => (param as Param).value)).toContainEqual(
+				expiresAt,
+			);
 		});
 	});
 });

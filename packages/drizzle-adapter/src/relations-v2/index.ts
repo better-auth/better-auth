@@ -248,6 +248,25 @@ export interface DrizzleAdapterConfig {
 	 */
 	transaction?: boolean | undefined;
 	/**
+	 * Whether the Drizzle columns backing `date` fields accept a JavaScript
+	 * `Date` value.
+	 *
+	 * Drizzle normally converts `Date` values itself, so the default is `true`
+	 * for every provider. That covers the schema the Better Auth CLI generates:
+	 * `timestamp` on PostgreSQL, `timestamp` on MySQL and
+	 * `integer({ mode: "timestamp_ms" })` on SQLite all convert a `Date` before
+	 * it reaches the driver.
+	 *
+	 * Set this to `false` when your date columns are declared as `text()`
+	 * instead. A `text()` column passes the value straight through, so the raw
+	 * `Date` reaches the driver and strict drivers such as Cloudflare D1 reject
+	 * it. With `false`, Better Auth writes an ISO 8601 string and parses it back
+	 * into a `Date` on read.
+	 *
+	 * @default true
+	 */
+	supportsDates?: boolean | undefined;
+	/**
 	 * Database schema namespace, used during the Better Auth CLI to generate the schema.
 	 *
 	 * Only applies to PostgreSQL. It will generate something like this:
@@ -1108,6 +1127,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			// cause double-stringification). For PostgreSQL, native arrays are used.
 			// See: https://github.com/better-auth/better-auth/issues/7440
 			supportsArrays: true,
+			// Drizzle converts `Date` values in its own column layer, so the
+			// adapter defers to it by default on every provider. Users whose date
+			// columns are `text()` have no such conversion and opt out here.
+			supportsDates: config.supportsDates ?? true,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
