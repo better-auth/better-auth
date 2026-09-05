@@ -417,6 +417,14 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				"enabled" | "window" | "max" | "storage"
 			>;
 			adapter: DBAdapter<Options>;
+			/**
+			 * Confirms the database can hold what this configuration writes.
+			 *
+			 * Runs once per process before the first endpoint executes and keeps
+			 * its verdict; returns nothing once the schema is known to be clean.
+			 * Absent when the check is disabled or the adapter registers none.
+			 */
+			checkSchema?: (() => Promise<void> | undefined) | undefined;
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;

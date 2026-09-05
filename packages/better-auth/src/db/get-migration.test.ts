@@ -823,3 +823,29 @@ describe("get-migration: inspecting a migration that cannot be applied", () => {
 		expect(unsafeChanges[0]).not.toContain("empty string");
 	});
 });
+
+describe("get-migration: schema problems the migration cannot fix", () => {
+	it("reports a required column Better Auth never writes", async () => {
+		const plan = await getMigrations({
+			database: createAccountDb({ plan: "notNull" }),
+		});
+		expect(plan.schemaProblems).toHaveLength(1);
+		expect(plan.schemaProblems[0]).toContain(
+			'Column "plan" on table "account" is required but Better Auth never writes it',
+		);
+		expect(plan.toBeAdded).toEqual([]);
+	});
+
+	it("reports nothing for a nullable or a configured extra column", async () => {
+		const nullable = await getMigrations({
+			database: createAccountDb({ plan: "nullable" }),
+		});
+		expect(nullable.schemaProblems).toEqual([]);
+
+		const configured = await getMigrations({
+			database: createAccountDb({ plan: "notNull" }),
+			...accountPlanField,
+		});
+		expect(configured.schemaProblems).toEqual([]);
+	});
+});

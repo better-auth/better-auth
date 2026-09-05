@@ -125,6 +125,18 @@ export async function migrateAction(opts: any) {
 		} catch {}
 		process.exit(1);
 	}
+	if (plan.schemaProblems.length) {
+		spinner.stop();
+		console.error(
+			chalk.red.bold(
+				`The database has ${plan.schemaProblems.length} ${plan.schemaProblems.length === 1 ? "column" : "columns"} Better Auth cannot write to. Nothing ran.`,
+			),
+		);
+		for (const problem of plan.schemaProblems) {
+			console.error(chalk.red(`-> ${problem}`));
+		}
+		process.exit(1);
+	}
 	const { toBeAdded, toBeAddedIndexes, toBeCreated, runMigrations } = plan;
 
 	if (!toBeAdded.length && !toBeAddedIndexes.length && !toBeCreated.length) {
