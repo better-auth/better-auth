@@ -165,6 +165,37 @@ function unwrapZodSchema(
 	return asZodSchema(zodType.unwrap());
 }
 
+/**
+ * Strip the wrappers that can sit between an endpoint's `query` option and the object whose shape
+ * describes its parameters.
+ *
+ * A query declared as `z.optional(z.object({ ... }))` is a ZodOptional *wrapping* a ZodObject, so an
+ * `instanceof z.ZodObject` check alone is false, the shape walk never runs, and the endpoint
+ * publishes no query parameters at all. The wrapper only says how the query object as a whole may be
+ * supplied — the parameters inside it are the same either way, so every one of these unwraps to the
+ * object underneath.
+ *
+ * Loops rather than unwrapping once, since the wrappers compose — `z.optional(z.nullable(...))`, or
+ * `.optional().nonoptional()`, whose inner type is itself a wrapper.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10750
+ */
+function unwrapQuerySchema(query: unknown): unknown {
+	let current = query;
+	while (
+		current instanceof z.ZodOptional ||
+		current instanceof z.ZodNullable ||
+		current instanceof z.ZodDefault ||
+		current instanceof z.ZodPrefault ||
+		current instanceof z.ZodNonOptional ||
+		current instanceof z.ZodCatch ||
+		current instanceof z.ZodReadonly
+	) {
+		current = unwrapZodSchema(current);
+	}
+	return current;
+}
+
 function getZodDef<T extends object>(zodType: z.ZodType<unknown>) {
 	return (zodType as z.ZodType<unknown> & ZodDef<T>)._def;
 }
@@ -227,11 +258,12 @@ function getParameters(options: EndpointOptions) {
 	if (options.metadata?.openapi?.parameters) {
 		parameters.push(...options.metadata.openapi.parameters);
 	}
+	const querySchema = unwrapQuerySchema(options.query);
 	if (
 		!options.metadata?.openapi?.parameters &&
-		options.query instanceof z.ZodObject
+		querySchema instanceof z.ZodObject
 	) {
-		Object.entries(options.query.shape).forEach(([key, value]) => {
+		Object.entries(querySchema.shape).forEach(([key, value]) => {
 			if (value instanceof z.ZodType) {
 				const parameterSchema = toOpenApiSchema(value as z.ZodType<unknown>);
 				parameters.push({
