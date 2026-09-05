@@ -1,5 +1,46 @@
 # better-auth
 
+## 1.7.3
+
+### Patch Changes
+
+- [#11060](https://github.com/better-auth/better-auth/pull/11060) [`3660f06`](https://github.com/better-auth/better-auth/commit/3660f062d6e7a9b02e3fc8eee5b99482117ebba0) Thanks [@bytaesu](https://github.com/bytaesu)! - Handle malformed custom-scheme callback URLs without excessive processing.
+
+- [#11037](https://github.com/better-auth/better-auth/pull/11037) [`5bd7096`](https://github.com/better-auth/better-auth/commit/5bd709640a14e03972420bbfe778e3c732df80d5) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent repeated TOTP enrollment from replacing an active authenticator and its backup codes.
+
+- [#11084](https://github.com/better-auth/better-auth/pull/11084) [`2d5c63d`](https://github.com/better-auth/better-auth/commit/2d5c63d512164d4e18c5e67b79a9c7d19b27b669) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent duplicate session requests and hydration mismatches when using the Vue client with Nuxt `useFetch`.
+
+- [#11147](https://github.com/better-auth/better-auth/pull/11147) [`a9d8c12`](https://github.com/better-auth/better-auth/commit/a9d8c12d14b99a2df35ae2fba98ad4e4bc512ad5) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `isPasswordCompromised` for checking passwords against Have I Been Pwned in custom server-side flows, while ignoring padded response entries with zero occurrences.
+
+- [#10575](https://github.com/better-auth/better-auth/pull/10575) [`2430e3f`](https://github.com/better-auth/better-auth/commit/2430e3ff1feeae41f936133a97b6d4206b71e2ef) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `auth migrate plan` now reports schema changes, release actions, and blockers without changing the database. `auth migrate apply` confirms and performs the reviewed data and schema changes together, while `--json` provides deterministic output for automation. Plain `auth migrate` remains available as a deprecated alias for `migrate apply`.
+
+  When upgrading a populated Better Auth 1.6 SQL database, the CLI now requires `account: { identityStrategy: "provider-id" }` before it backfills the required issuer namespace with deterministic provider namespaces and enforces the 1.7 `(issuer, accountId)` index. Selecting issuer identity for populated 1.6 data is blocked because adopting verified authorities is a re-key migration that requires separate review. Already-migrated v1.7 databases remain unchanged when their configured strategy matches the stored namespaces. The same migration can move OAuth clients and eligible consents, revoke legacy provider tokens, and retire legacy SCIM state before reprovisioning. Decisions that require review are saved in `better-auth-migration.json` with the `1.6-to-1.7` transition, so the same choices can be inspected and replayed without silently changing under another configuration. The migration also repairs accounts left with empty MySQL issuers and keeps indexed identity fields within MySQL and SQL Server limits.
+
+  `getMigrations` results now expose unsafe changes and migration blockers for inspection, while running or compiling an unsafe migration still fails before changing data. The guided migration uses each adapter's physical table and column names, including Drizzle schema names and Prisma `@map` declarations. Custom Kysely dialects must declare `database.type` so the CLI emits the correct SQL.
+
+- [#10988](https://github.com/better-auth/better-auth/pull/10988) [`9fc7498`](https://github.com/better-auth/better-auth/commit/9fc749867592536b6e472381581cee8f00f6b59b) Thanks [@bytaesu](https://github.com/bytaesu)! - Run callback hooks after proxied OAuth sign-ins and preserve server state when callback cookies are unavailable. The legacy `/oauth-proxy-callback` endpoint is deprecated and will be removed in the next minor release.
+
+- [#10969](https://github.com/better-auth/better-auth/pull/10969) [`6a0a7cb`](https://github.com/better-auth/better-auth/commit/6a0a7cbcb18c9801c1570eab9cc1c6c729bb4c14) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The CLI now generates new Better Auth configurations with `account: { identityStrategy: "provider-id" }`. Configurations that omit `account.identityStrategy` remain compatible with Better Auth v1.7 by using issuer identity and emit a one-time warning with migration guidance. `providerId` remains the configured connection, `accountId` remains the provider subject, and the required `issuer` field stores either the verified authority under `"issuer"` or a deterministic provider namespace under `"provider-id"`; both strategies retain the unique `(issuer, accountId)` index.
+
+- [#11069](https://github.com/better-auth/better-auth/pull/11069) [`0bb0dbf`](https://github.com/better-auth/better-auth/commit/0bb0dbf6f38ab53a0c1f2fb639acd7bd602e2a24) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve dynamic organization role permission check performance.
+
+- [#10978](https://github.com/better-auth/better-auth/pull/10978) [`5fe5bc2`](https://github.com/better-auth/better-auth/commit/5fe5bc21d1bf699655054192f4f833bcc33d0ba4) Thanks [@BetterAndBetterII](https://github.com/BetterAndBetterII)! - Skip a generic OAuth provider when discovery fails instead of taking down the rest of the auth API.
+
+- [#10963](https://github.com/better-auth/better-auth/pull/10963) [`74a7369`](https://github.com/better-auth/better-auth/commit/74a7369179cc6ab9fc2a9f13a67b33e8c00aa9ac) Thanks [@thisismert](https://github.com/thisismert)! - Track email OTP sign-ins in the last login method plugin.
+
+- [#11085](https://github.com/better-auth/better-auth/pull/11085) [`e16b40a`](https://github.com/better-auth/better-auth/commit/e16b40aeadde4203c883f121e7e5f7a2ec04d6b2) Thanks [@bytaesu](https://github.com/bytaesu)! - Provide type-safe Nuxt `useFetch` integration for the Vue client's `useSession` hook.
+
+- [#11066](https://github.com/better-auth/better-auth/pull/11066) [`c0444dc`](https://github.com/better-auth/better-auth/commit/c0444dc97928f46978c42083083d3b8642b89493) Thanks [@bytaesu](https://github.com/bytaesu)! - Upgrade the packaged Zod dependency to 4.5. Generated OpenAPI schemas now mark required request fields consistently with runtime validation, including passkey registration responses.
+
+- Updated dependencies [[`3e9e197`](https://github.com/better-auth/better-auth/commit/3e9e19746e609004da31bea3356c0059611d9ed4), [`157ec8d`](https://github.com/better-auth/better-auth/commit/157ec8d8799ddda642f2fe40120fc364660a8864), [`baa08f4`](https://github.com/better-auth/better-auth/commit/baa08f4ee674f5cc39624063847c89f1bea73186), [`9e36635`](https://github.com/better-auth/better-auth/commit/9e36635eb2fbf27d58c70d3361724335ba9a9951), [`6a0a7cb`](https://github.com/better-auth/better-auth/commit/6a0a7cbcb18c9801c1570eab9cc1c6c729bb4c14), [`ba4840f`](https://github.com/better-auth/better-auth/commit/ba4840fbdf24cbc16bf9bef0cf3aab0a5fd8cfc9), [`a2bae0c`](https://github.com/better-auth/better-auth/commit/a2bae0cad04ccc23c40555c77f86b0da1ba40ebc)]:
+  - @better-auth/core@1.7.3
+  - @better-auth/drizzle-adapter@1.7.3
+  - @better-auth/prisma-adapter@1.7.3
+  - @better-auth/kysely-adapter@1.7.3
+  - @better-auth/memory-adapter@1.7.3
+  - @better-auth/mongo-adapter@1.7.3
+  - @better-auth/telemetry@1.7.3
+
 ## 1.7.2
 
 ### Patch Changes

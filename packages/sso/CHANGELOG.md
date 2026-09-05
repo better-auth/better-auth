@@ -1,5 +1,11 @@
 # @better-auth/sso
 
+## 1.7.3
+
+### Patch Changes
+
+- [#10969](https://github.com/better-auth/better-auth/pull/10969) [`6a0a7cb`](https://github.com/better-auth/better-auth/commit/6a0a7cbcb18c9801c1570eab9cc1c6c729bb4c14) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The CLI now generates new Better Auth configurations with `account: { identityStrategy: "provider-id" }`. Configurations that omit `account.identityStrategy` remain compatible with Better Auth v1.7 by using issuer identity and emit a one-time warning with migration guidance. `providerId` remains the configured connection, `accountId` remains the provider subject, and the required `issuer` field stores either the verified authority under `"issuer"` or a deterministic provider namespace under `"provider-id"`; both strategies retain the unique `(issuer, accountId)` index.
+
 ## 1.7.2
 
 ### Patch Changes

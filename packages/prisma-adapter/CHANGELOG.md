@@ -1,5 +1,11 @@
 # @better-auth/prisma-adapter
 
+## 1.7.3
+
+### Patch Changes
+
+- [#10966](https://github.com/better-auth/better-auth/pull/10966) [`ba4840f`](https://github.com/better-auth/better-auth/commit/ba4840fbdf24cbc16bf9bef0cf3aab0a5fd8cfc9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SQL migration tooling can now inspect and apply migrations through Drizzle and Prisma adapters. Migration queries share the adapter's configured dialect and transaction boundary, and schema inspection respects physical table and column names from Drizzle metadata and Prisma `@map` declarations.
+
 ## 1.7.2
 
 ## 1.7.1

@@ -1,5 +1,11 @@
 # @better-auth/test-utils
 
+## 1.7.3
+
+### Patch Changes
+
+- [#10762](https://github.com/better-auth/better-auth/pull/10762) [`b7aeed8`](https://github.com/better-auth/better-auth/commit/b7aeed84ce9b8dbec22fc5fc97995b75d8063d9c) Thanks [@starslingdev](https://github.com/apps/starslingdev)! - Adapter test suites now run significantly faster. Cleanup between tests no longer re-deletes rows it has already removed, so suites spend far less time waiting on redundant database round trips.
+
 ## 1.7.2
 
 ## 1.7.1
