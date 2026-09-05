@@ -173,7 +173,7 @@ export async function getTestInstance<
 		},
 	} satisfies BetterAuthOptions;
 
-	const auth = betterAuth({
+	const authOptions = {
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
@@ -183,7 +183,17 @@ export async function getTestInstance<
 			password: options?.emailAndPassword?.password ?? testPassword,
 		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as unknown as O);
+	} as unknown as O;
+
+	if (testWith !== "mongodb") {
+		const { runMigrations } = await getMigrations({
+			...authOptions,
+			database: opts.database,
+		});
+		await runMigrations();
+	}
+
+	const auth = betterAuth(authOptions);
 
 	const testUser = {
 		email: "test@test.com",
@@ -216,14 +226,6 @@ export async function getTestInstance<
 			body: testUser,
 			headers,
 		});
-	}
-
-	if (testWith !== "mongodb") {
-		const { runMigrations } = await getMigrations({
-			...auth.options,
-			database: opts.database,
-		});
-		await runMigrations();
 	}
 
 	await createTestUser();

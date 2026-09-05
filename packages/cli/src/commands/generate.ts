@@ -200,6 +200,16 @@ async function generateAction(opts: any) {
 	});
 
 	spinner.stop();
+	if (schema.schemaProblems?.length) {
+		console.warn(
+			chalk.red.bold(
+				`⚠ ${schema.schemaProblems.length} ${schema.schemaProblems.length === 1 ? "column rejects" : "columns reject"} every insert Better Auth makes. No migration fixes this.`,
+			),
+		);
+		for (const problem of schema.schemaProblems) {
+			console.warn(chalk.red(`-> ${problem}`));
+		}
+	}
 	if (schema.unsafeChanges?.length) {
 		console.warn(
 			chalk.red.bold(

@@ -27,7 +27,6 @@ import {
 	assertValidUserInfo,
 	assertValidUserInfoSource,
 } from "../utils/validate-user-info";
-import { createLegacyAccountIssuerGuard } from "./legacy-account-issuer";
 import {
 	getSessionDefaultFields,
 	parseSessionOutput,
@@ -64,7 +63,6 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
-	const guardAccountInsert = createLegacyAccountIssuerGuard(logger);
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -250,18 +248,16 @@ export const createInternalAdapter = (
 						message: "Failed to create user",
 					});
 				}
-				const createdAccount = await guardAccountInsert(() =>
-					createWithHooks(
-						{
-							...account,
-							userId: createdUser.id,
-							// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-						"account",
-						undefined,
-					),
+				const createdAccount = await createWithHooks(
+					{
+						...account,
+						userId: createdUser.id,
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					"account",
+					undefined,
 				);
 				return {
 					user: createdUser,
@@ -318,17 +314,15 @@ export const createInternalAdapter = (
 				Partial<Account> &
 				T,
 		) => {
-			const createdAccount = await guardAccountInsert(() =>
-				createWithHooks(
-					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...account,
-					},
-					"account",
-					undefined,
-				),
+			const createdAccount = await createWithHooks(
+				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...account,
+				},
+				"account",
+				undefined,
 			);
 			return createdAccount as T & Account;
 		},
@@ -1080,17 +1074,15 @@ export const createInternalAdapter = (
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
-			const _account = await guardAccountInsert(() =>
-				createWithHooks(
-					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						...account,
-					},
-					"account",
-					undefined,
-				),
+			const _account = await createWithHooks(
+				{
+					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...account,
+				},
+				"account",
+				undefined,
 			);
 			return _account;
 		},

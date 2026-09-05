@@ -7,9 +7,12 @@ import {
 } from "@better-auth/core/db/adapter";
 import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
 import {
+	diffSchema,
+	formatSchemaFinding,
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
+	invalidateSchemaChecks,
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -19,7 +22,13 @@ import type {
 	DatabaseIndexMetadata,
 	KyselyDatabaseType,
 } from "@better-auth/kysely-adapter";
-import { createKyselyAdapter } from "@better-auth/kysely-adapter";
+import {
+	createKyselyAdapter,
+	getMssqlSchema,
+	getPostgresSchema,
+	toIntrospectedTables,
+	toPhysicalSchema,
+} from "@better-auth/kysely-adapter";
 import type {
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
@@ -559,48 +568,6 @@ export function matchType(
 }
 
 /**
- * Get the current PostgreSQL schema (search_path) for the database connection
- * Returns the first schema in the search_path, defaulting to 'public' if not found
- */
-async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{
-			search_path?: string;
-			searchPath?: string;
-		}>`SHOW search_path`.execute(db);
-		const searchPath =
-			result.rows[0]?.search_path ?? result.rows[0]?.searchPath;
-		if (searchPath) {
-			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
-			// Supabase may return escaped format like '"\$user", public'
-			// We want the first non-variable schema
-			const schemas = searchPath
-				.split(",")
-				.map((s) => s.trim())
-				// Remove quotes and filter out variables like $user
-				.map((s) => s.replace(/^["']|["']$/g, ""))
-				// Filter out variable references like $user, \$user (escaped)
-				.filter((s) => !s.startsWith("$") && !s.startsWith("\\$"));
-			return schemas[0] || "public";
-		}
-	} catch {
-		// If query fails, fall back to public schema
-	}
-	return "public";
-}
-
-async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{ schemaName?: string }>`
-			SELECT SCHEMA_NAME() AS "schemaName"
-		`.execute(db);
-		return result.rows[0]?.schemaName || "dbo";
-	} catch {
-		return "dbo";
-	}
-}
-
-/**
  * Build the migration plan that `auth migrate` executes and `auth generate`
  * prints for the Kysely adapter.
  *
@@ -736,6 +703,15 @@ export async function getMigrations(
 			(table) => table.schema === currentSchema,
 		);
 	}
+	// Columns the migration cannot fix: required, without a default, and never
+	// written by Better Auth. Reported so the CLI stops before an insert fails.
+	const schemaProblems = diffSchema(
+		toPhysicalSchema(db, betterAuthSchema),
+		toIntrospectedTables(tableMetadata),
+	)
+		.filter((finding) => finding.kind === "unexpected-required-column")
+		.map((finding) => formatSchemaFinding(finding, "database"));
+
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
@@ -1233,8 +1209,14 @@ export async function getMigrations(
 	}
 
 	async function runMigrations() {
-		for (const migration of migrations) {
-			await migration.execute();
+		try {
+			for (const migration of migrations) {
+				await migration.execute();
+			}
+		} finally {
+			if (migrations.length && config.database) {
+				invalidateSchemaChecks(config.database);
+			}
 		}
 	}
 	async function compileMigrations() {
@@ -1246,6 +1228,7 @@ export async function getMigrations(
 		toBeAdded,
 		toBeAddedIndexes,
 		unsafeChanges,
+		schemaProblems,
 		runMigrations,
 		compileMigrations,
 	};
