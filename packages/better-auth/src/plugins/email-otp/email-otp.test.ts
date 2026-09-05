@@ -2566,6 +2566,40 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		expect(res.data?.token).toBeDefined();
 	});
 
+	it("should still rotate a pending code on a sequential resend", async () => {
+		const otps: string[] = [];
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					uniqueVerificationIdentifier,
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							otps.push(otp);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const email = "sequential-resend@example.com";
+
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		expect(otps).toHaveLength(2);
+		expect(otps[1]).not.toBe(otps[0]);
+
+		const stale = await client.signIn.emailOtp({ email, otp: otps[0]! });
+		expect(stale.error?.code).toBe("INVALID_OTP");
+
+		const res = await client.signIn.emailOtp({ email, otp: otps[1]! });
+		expect(res.data?.token).toBeDefined();
+	});
+
 	it("should keep the last emailed code valid when the stored code cannot be recovered", async () => {
 		const otps: string[] = [];
 		const { client } = await getTestInstance(

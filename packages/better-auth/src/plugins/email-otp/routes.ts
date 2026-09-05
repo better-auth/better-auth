@@ -50,6 +50,14 @@ async function resolveOTP(
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
 	const storedOTP = await storeOTP(ctx, opts, otp);
 
+	// Remember whether a code was already pending before this insert: on databases
+	// that enforce a unique identifier the insert below fails in both cases, but a
+	// pending code must be rotated while a code that appeared in the meantime
+	// belongs to a concurrent request and must be delivered as-is (see below).
+	const hadPendingCode = Boolean(
+		await ctx.context.internalAdapter.findVerificationValue(identifier),
+	);
+
 	try {
 		await ctx.context.internalAdapter.createVerificationValue({
 			value: `${storedOTP}:0`,
@@ -57,15 +65,16 @@ async function resolveOTP(
 			expiresAt: getDate(opts.expiresIn, "sec"),
 		});
 	} catch {
-		// On databases that enforce a unique identifier, the insert fails when a
-		// row already exists. That row may belong to a concurrent request that is
-		// about to email its code, so prefer delivering that same code (regardless
-		// of `resendStrategy`) over replacing it: replacing would silently
-		// invalidate the code the user is about to receive. Fall back to replacing
-		// only when the existing code cannot be reused (unrecoverable storage,
-		// expired, or attempts exhausted).
-		const existing = await tryReuseOTP(ctx, opts, identifier);
-		if (existing) return existing;
+		// No code was pending a moment ago, so the insert can only have lost to a
+		// concurrent request that is about to email its own code. Deliver that same
+		// code (regardless of `resendStrategy`) instead of replacing it: replacing
+		// would silently invalidate the code the user is about to receive. Replace
+		// it only when it cannot be reused (unrecoverable storage, expired, or
+		// attempts exhausted).
+		if (!hadPendingCode) {
+			const concurrent = await tryReuseOTP(ctx, opts, identifier);
+			if (concurrent) return concurrent;
+		}
 
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 			identifier,
