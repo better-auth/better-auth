@@ -822,6 +822,7 @@ export const tempPluginsConfig = {
 						{ value: "cloudflare-turnstile", label: "Cloudflare Turnstile" },
 						{ value: "hcaptcha", label: "hCaptcha" },
 						{ value: "captchafox", label: "CaptchaFox" },
+						{ value: "yandex-smart-captcha", label: "Yandex SmartCaptcha" },
 					],
 					argument: {
 						index: 0,
@@ -831,6 +832,7 @@ export const tempPluginsConfig = {
 							"cloudflare-turnstile",
 							"hcaptcha",
 							"captchafox",
+							"yandex-smart-captcha",
 						]),
 					},
 				},
