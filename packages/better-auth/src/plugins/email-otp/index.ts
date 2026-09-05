@@ -56,18 +56,19 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				options: {
 					emailVerification: {
 						async sendVerificationEmail(data, request) {
-							await ctx.runInBackgroundOrAwait(
-								sendVerificationOTPAction({
-									context: ctx,
-									request: request,
-									body: {
-										email: data.user.email,
-										type: "email-verification",
-									},
-									//@ts-expect-error
-									ctx,
-								}),
-							);
+							// Await directly so that a failed send surfaces to the caller, matching
+							// the default `sendVerificationEmail` behavior. Callers that must not
+							// fail on a send error (e.g. sign-up) already wrap this themselves.
+							await sendVerificationOTPAction({
+								context: ctx,
+								request: request,
+								body: {
+									email: data.user.email,
+									type: "email-verification",
+								},
+								//@ts-expect-error
+								ctx,
+							});
 						},
 					},
 				},

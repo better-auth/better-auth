@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { APIError } from "../../api";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
@@ -2503,6 +2504,84 @@ describe("email-otp-resendStrategy", async () => {
 		const secondOtp = otps[1];
 		expect(secondOtp).toBeDefined();
 		expect(secondOtp).not.toBe(firstOtp);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11107
+ */
+describe("email-otp send failures", async () => {
+	const sendError = APIError.from("TOO_MANY_REQUESTS", {
+		code: "RATE_LIMIT_EXCEEDED",
+		message: "Too many requests. Please try again later.",
+	});
+	let shouldFail = false;
+	const { client, auth, testUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP() {
+						if (shouldFail) {
+							throw sendError;
+						}
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	afterEach(() => {
+		shouldFail = false;
+	});
+
+	it("should return the error thrown by sendVerificationOTP instead of success", async () => {
+		shouldFail = true;
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+		expect(res.data).toBeNull();
+		expect(res.error?.status).toBe(429);
+		expect(res.error?.code).toBe("RATE_LIMIT_EXCEEDED");
+	});
+
+	it("should keep the APIError status and body on the server API", async () => {
+		shouldFail = true;
+		try {
+			await auth.api.sendVerificationOTP({
+				body: { email: testUser.email, type: "sign-in" },
+			});
+			expect.fail("Expected sendVerificationOTP to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("TOO_MANY_REQUESTS");
+				expect(error.body?.code).toBe("RATE_LIMIT_EXCEEDED");
+			}
+		}
+	});
+
+	it("should return the send error from the password reset request", async () => {
+		shouldFail = true;
+		const res = await client.emailOtp.requestPasswordReset({
+			email: testUser.email,
+		});
+		expect(res.data).toBeNull();
+		expect(res.error?.status).toBe(429);
+		expect(res.error?.code).toBe("RATE_LIMIT_EXCEEDED");
+	});
+
+	it("should still succeed when sendVerificationOTP resolves", async () => {
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+		expect(res.data?.success).toBe(true);
 	});
 });
 
