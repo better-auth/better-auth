@@ -601,6 +601,93 @@ describe("SSO", async () => {
 		}
 	});
 
+	it("should use the email from the ID token when the UserInfo endpoint response omits it", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "id-token-email.com",
+				providerId: "id-token-email-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					userInfoEndpoint: `${server.issuer.url}/userinfo`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers,
+		});
+
+		const originalUserinfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+
+		const idTokenEmail = "id-token-authoritative@test.com";
+
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			// Note that no email is included here.
+			userInfoResponse.body = {
+				sub: "id-token-email-user",
+				name: "ID Token Email User",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "id-token-email-user";
+			token.payload.email = idTokenEmail;
+			token.payload.email_verified = true;
+			token.payload.name = "ID Token Email User";
+			token.payload.picture = "https://test.com/picture.png";
+		});
+
+		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "id-token-email-provider",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.url,
+				signInHeaders,
+			);
+			expect(callbackURL).toContain("/dashboard");
+
+			const session = await authClient.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe(idTokenEmail);
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserinfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
+
 	it("should normalize email to lowercase in OIDC authentication", async () => {
 		const { headers } = await signInWithTestUser();
 
