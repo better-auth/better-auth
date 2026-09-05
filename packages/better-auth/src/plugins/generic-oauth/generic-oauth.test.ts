@@ -2983,7 +2983,7 @@ describe("oauth2", async () => {
 			expect(msConfig.disableImplicitSignUp).toBe(true);
 		});
 
-		it("fails initialization when Microsoft discovery is unavailable", async () => {
+		it("skips the Microsoft provider when discovery is unavailable", async () => {
 			mswServer.use(
 				http.get(
 					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
@@ -3007,8 +3007,9 @@ describe("oauth2", async () => {
 				{ disableTestUser: true },
 			);
 
-			await expect(auth.$context).rejects.toThrow(
-				"discovery returned no valid data",
+			const ctx = await auth.$context;
+			expect(ctx.socialProviders.map((provider) => provider.id)).not.toContain(
+				"microsoft-entra-id",
 			);
 		});
 
@@ -3118,11 +3119,45 @@ describe("oauth2", async () => {
 				sub: "token-pairwise-sub",
 				oid: "token-stable-oid",
 				tid: "token-tenant-id",
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
 				emailVerified: false,
 			});
-			expect(userInfo?.email).toBeUndefined();
 			expect(userInfo?.name).toBeUndefined();
 			expect(userInfo?.image).toBeUndefined();
+		});
+
+		it("keeps the placeholder unverified for an unexpected null Graph email claim", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+						name: "Graph User",
+						email: null,
+						email_verified: true,
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				name: "Graph User",
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
+				emailVerified: false,
+			});
 		});
 
 		it("should normalize personal Microsoft account givenname and familyname claims", async () => {
@@ -3827,6 +3862,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3857,6 +3893,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3902,6 +3939,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3930,6 +3968,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3952,6 +3991,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -5042,7 +5082,7 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("fails provider initialization when discovery cannot establish an account issuer", async () => {
+		it("skips a provider when discovery cannot establish an account issuer", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5074,9 +5114,10 @@ describe("oauth2", async () => {
 					{ disableTestUser: true },
 				);
 
-				await expect(auth.$context).rejects.toThrow(
-					"discovery did not return an issuer",
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("issuerless-discovery");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((error) => (error ? reject(error) : resolve())),
@@ -5084,7 +5125,7 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("fails provider initialization when required ID token verification metadata is unavailable", async () => {
+		it("skips a provider when required ID token verification metadata is unavailable", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5120,9 +5161,10 @@ describe("oauth2", async () => {
 					{ disableTestUser: true },
 				);
 
-				await expect(auth.$context).rejects.toThrow(
-					"requires verified ID tokens",
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("verified-id-token-required");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((error) => (error ? reject(error) : resolve())),
@@ -5130,7 +5172,7 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("fails provider initialization when discovery returns a malformed jwks_uri", async () => {
+		it("skips a provider when discovery returns a malformed jwks_uri", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5165,15 +5207,66 @@ describe("oauth2", async () => {
 					},
 					{ disableTestUser: true },
 				);
-				await expect(auth.$context).rejects.toThrow(
-					'invalid jwks_uri "http://[malformed"',
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("malformed-jwks");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
 				);
 			}
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 */
+	it("does not take down the auth API when one provider's discovery is unreachable", async () => {
+		mswServer.use(
+			http.get(
+				"https://broken-idp.test/.well-known/openid-configuration",
+				() => new HttpResponse(null, { status: 503 }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "broken-idp",
+								clientId: "client",
+								clientSecret: "secret",
+								discoveryUrl:
+									"https://broken-idp.test/.well-known/openid-configuration",
+							},
+							{
+								providerId: "healthy-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const ctx = await auth.$context;
+		const providerIds = ctx.socialProviders.map((provider) => provider.id);
+		expect(providerIds).toContain("healthy-idp");
+		expect(providerIds).not.toContain("broken-idp");
+
+		const signUp = await auth.api.signUpEmail({
+			body: {
+				email: "isolated@example.test",
+				password: "correct-horse-battery-staple",
+				name: "Repro",
+			},
+		});
+		expect(signUp.token).toEqual(expect.any(String));
 	});
 });
 

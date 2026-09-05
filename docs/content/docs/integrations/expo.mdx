@@ -1,4 +1,6 @@
 ---
+icon: integrationsExpo
+sidebarTitle: "Expo"
 title: Expo Integration
 description: Integrate Better Auth with Expo.
 ---
@@ -483,7 +485,7 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ### Expo Client
 
-**storage**: the SecureStore-compatible storage used to cache session data and cookies.
+**storage**: the SecureStore-compatible storage used to cache session data and cookies. Write coordination is scoped to the provided object, so reuse it when configuring multiple clients that access the same stored data.
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";

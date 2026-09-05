@@ -71,7 +71,7 @@
     "jose": "^6.2.3",
     "kysely": "0.28.17",
     "lucide-react": "^0.575.0",
-    "mysql2": "^3.18.2",
+    "mysql2": "^3.24.2",
     "next": "^16.3.0",
     "next-themes": "^0.4.6",
     "react": "^19.2.4",
@@ -87,7 +87,7 @@
     "tailwind-merge": "^3.5.0",
     "ua-parser-js": "^2.0.10",
     "vaul": "^1.1.2",
-    "zod": "^4.3.6"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

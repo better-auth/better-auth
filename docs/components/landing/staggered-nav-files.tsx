@@ -1,30 +1,23 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import {
-	ChevronDownIcon,
-	History,
-	Palette,
-	PencilLine,
-	Scale,
-	Search,
-} from "lucide-react";
+import { History, Palette, PencilLine, Scale, Search } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { getVersionFromPathname, versionedDocsHref } from "@/lib/docs-versions";
+import {
+	setMobileNavigationView,
+	useMobileNavigationView,
+} from "@/lib/mobile-navigation";
 import { cn } from "@/lib/utils";
 import { Icons } from "../icons";
-import { BetterAuthWordmark } from "../icons/logo";
-import { contents } from "../sidebar-content";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "../ui/accordion";
-import { Badge } from "../ui/badge";
 import LogoContextMenu from "./logo-context-menu";
 
 interface NavFileItem {
@@ -329,28 +322,34 @@ const mobileMenuSections: MobileMenuSection[] = [
 
 export function StaggeredNavFiles() {
 	const pathname = usePathname() || "/";
-	const currentVersion = getVersionFromPathname(pathname);
-	const prefixHref = (href: string) => versionedDocsHref(href, currentVersion);
+	const mobileNavigationView = useMobileNavigationView();
 	const [resourcesOpen, setResourcesOpen] = useState(false);
 	const [productsOpen, setProductsOpen] = useState(false);
-	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-	const [mobileView, setMobileView] = useState<"docs" | "nav">("docs");
-	const [mobileDocSection, setMobileDocSection] = useState(-1);
 	const resourcesTimeout = useRef<NodeJS.Timeout>(undefined);
 	const productsTimeout = useRef<NodeJS.Timeout>(undefined);
 
 	useEffect(() => {
-		document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+		document.body.style.overflow =
+			mobileNavigationView === "closed" ? "" : "hidden";
+		function onKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") setMobileNavigationView("closed");
+		}
+		document.addEventListener("keydown", onKeyDown);
 		return () => {
 			document.body.style.overflow = "";
+			document.removeEventListener("keydown", onKeyDown);
 		};
-	}, [mobileMenuOpen]);
+	}, [mobileNavigationView]);
+
+	useEffect(() => {
+		setMobileNavigationView("closed");
+	}, [pathname]);
 
 	useEffect(() => {
 		const mql = window.matchMedia("(min-width: 1024px)");
 		const handler = () => {
 			if (mql.matches) {
-				setMobileMenuOpen(false);
+				setMobileNavigationView("closed");
 			}
 		};
 		mql.addEventListener("change", handler);
@@ -410,7 +409,6 @@ export function StaggeredNavFiles() {
 	const dropdownBorderClass = isNarrowLeft
 		? "border-foreground/6"
 		: "border-foreground/[0.08]";
-	const _router = useRouter();
 	return (
 		<>
 			<div className="fixed top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
@@ -427,7 +425,7 @@ export function StaggeredNavFiles() {
 					>
 						<div className="flex flex-col gap-2 w-full">
 							<LogoContextMenu
-								logo={<BetterAuthWordmark className="w-35 h-auto" />}
+								logo={<Icons.betterAuthWordmark className="w-35 h-auto" />}
 							/>
 						</div>
 					</Link>
@@ -444,7 +442,7 @@ export function StaggeredNavFiles() {
 						href="/"
 						className="flex h-full items-center gap-1 px-4 transition-colors duration-150"
 					>
-						<BetterAuthWordmark className="w-35 h-auto" />
+						<Icons.betterAuthWordmark className="w-35 h-auto" />
 					</Link>
 					<div className="flex items-center gap-1 pr-2">
 						{isDocs && (
@@ -470,35 +468,22 @@ export function StaggeredNavFiles() {
 						</div>
 						<button
 							type="button"
+							data-mobile-navigation-trigger=""
+							aria-label={
+								mobileNavigationView === "closed" ? "Open menu" : "Close menu"
+							}
 							onClick={() => {
-								const opening = !mobileMenuOpen;
-								setMobileMenuOpen(opening);
-								if (opening) {
-									setMobileView(isDocs ? "docs" : "nav");
-									if (isDocs) {
-										const idx = contents.findIndex((s) => {
-											const prefix = s.expandSectionForPathPrefix;
-											if (
-												prefix &&
-												(pathname === prefix ||
-													pathname.startsWith(`${prefix}/`))
-											) {
-												return true;
-											}
-											return s.list.some(
-												(l) =>
-													l.href === pathname ||
-													(l.subpages?.length &&
-														pathname.startsWith(`${l.href}/`)),
-											);
-										});
-										setMobileDocSection(idx === -1 ? 0 : idx);
-									}
-								}
+								setMobileNavigationView(
+									mobileNavigationView === "closed"
+										? isDocs
+											? "docs"
+											: "site"
+										: "closed",
+								);
 							}}
 							className="flex items-center justify-center size-8 text-foreground/75 dark:text-foreground/60 hover:text-foreground/85 transition-colors"
 						>
-							{mobileMenuOpen ? (
+							{mobileNavigationView !== "closed" ? (
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="18"
@@ -541,7 +526,7 @@ export function StaggeredNavFiles() {
 							className={`flex h-full items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
 						>
 							<LogoContextMenu
-								logo={<BetterAuthWordmark className="w-35 h-auto" />}
+								logo={<Icons.betterAuthWordmark className="w-35 h-auto" />}
 							/>
 						</Link>
 					)}
@@ -938,8 +923,11 @@ export function StaggeredNavFiles() {
 
 			{/* Mobile menu overlay */}
 			<AnimatePresence>
-				{mobileMenuOpen && (
+				{mobileNavigationView === "site" ? (
 					<motion.div
+						role="dialog"
+						aria-modal="true"
+						aria-label="Site navigation"
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
@@ -948,319 +936,127 @@ export function StaggeredNavFiles() {
 					>
 						<div className="flex h-full flex-col pt-(--landing-topbar-height)">
 							<div className="flex-1 min-h-0 overflow-y-auto">
-								{isDocs && mobileView === "docs" ? (
-									<>
-										{/* Subtle back to nav button */}
-										<button
-											type="button"
-											onClick={() => setMobileView("nav")}
-											className="flex items-center gap-2 w-full px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/6"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="12"
-												height="12"
-												viewBox="0 0 24 24"
-											>
-												<path
-													fill="currentColor"
-													d="M3 18h18v-2H3zm0-5h18v-2H3zm0-7v2h18V6z"
-												/>
-											</svg>
-											<span className="font-mono text-[10px] uppercase tracking-wider">
-												Menu
-											</span>
-										</button>
-
-										{/* Doc sidebar sections */}
-
-										<div className="flex flex-col">
-											{contents.map((section, index) => (
-												<div key={section.title}>
-													<button
-														type="button"
-														className={cn(
-															"border-b border-foreground/6 w-full text-left flex gap-2 items-center px-5 py-3 transition-colors",
-															"font-medium text-sm tracking-wider",
-															mobileDocSection === index
-																? "text-foreground bg-foreground/3"
-																: "text-foreground/70 hover:text-foreground hover:bg-foreground/3",
-														)}
-														onClick={() =>
-															setMobileDocSection((prev) =>
-																prev === index ? -1 : index,
-															)
-														}
-													>
-														<section.Icon className="size-4.5" />
-														<span className="grow">{section.title}</span>
-														<ChevronDownIcon
-															className={cn(
-																"h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
-																mobileDocSection === index ? "rotate-180" : "",
-															)}
-														/>
-													</button>
-													{mobileDocSection === index && (
-														<div className="relative overflow-hidden">
-															<div className="text-sm pt-0 pb-1">
-																{section.href && (
-																	<Link
-																		href={prefixHref(section.href)}
-																		onClick={() => setMobileMenuOpen(false)}
-																		data-active={
-																			pathname === section.href || undefined
-																		}
-																		className={cn(
-																			"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
-																			pathname === section.href
-																				? "text-foreground bg-foreground/6"
-																				: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
-																		)}
-																	>
-																		<span className="truncate">Overview</span>
-																	</Link>
-																)}
-																{section.list.map((item, i) => {
-																	if (item.separator || item.group) {
-																		return (
-																			<div
-																				key={`sep-${item.title}-${i}`}
-																				className="flex flex-row items-center gap-2 mx-5 my-2"
-																			>
-																				<p className="text-[10px] text-foreground/65 dark:text-foreground/45 uppercase tracking-wider">
-																					{item.title}
-																				</p>
-																				<div className="grow h-px bg-border" />
-																			</div>
-																		);
-																	}
-																	if (item.external && item.href) {
-																		return (
-																			<Link
-																				key={item.href}
-																				href={item.href}
-																				onClick={() => setMobileMenuOpen(false)}
-																				className={cn(
-																					"relative flex w-full items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
-																					"text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
-																				)}
-																			>
-																				<span className="text-foreground/75 transition-colors duration-150 dark:text-foreground/60">
-																					<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
-																						<item.icon className="text-foreground/75" />
-																					</span>
-																				</span>
-																				<span className="min-w-0 grow truncate">
-																					{item.title}
-																				</span>
-																				{item.isNew && (
-																					<Badge
-																						className="pointer-events-none border-dashed rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border-foreground/25"
-																						variant="outline"
-																					>
-																						New
-																					</Badge>
-																				)}
-																			</Link>
-																		);
-																	}
-																	if (!item.href) return null;
-																	const active =
-																		pathname === item.href ||
-																		(!!item.subpages?.length &&
-																			pathname.startsWith(`${item.href}/`));
-																	return (
-																		<Link
-																			key={item.href}
-																			href={prefixHref(item.href)}
-																			onClick={() => setMobileMenuOpen(false)}
-																			data-active={active || undefined}
-																			className={cn(
-																				"relative flex w-full items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
-																				active
-																					? "text-foreground bg-foreground/6"
-																					: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
-																			)}
-																		>
-																			<span
-																				className={cn(
-																					"transition-colors duration-150",
-																					active
-																						? "text-foreground"
-																						: "text-foreground/75 dark:text-foreground/60",
-																				)}
-																			>
-																				<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
-																					<item.icon className="text-foreground/75" />
-																				</span>
-																			</span>
-																			<span className="min-w-0 grow truncate">
-																				{item.title}
-																			</span>
-																			{item.isNew && (
-																				<Badge
-																					className={cn(
-																						"pointer-events-none border-dashed rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider",
-																						active
-																							? "border-solid bg-foreground/10 text-foreground"
-																							: "text-foreground/70 dark:text-foreground/55 border-foreground/25",
-																					)}
-																					variant="outline"
-																				>
-																					New
-																				</Badge>
-																			)}
-																		</Link>
-																	);
-																})}
-															</div>
-														</div>
-													)}
-												</div>
-											))}
-										</div>
-									</>
-								) : (
-									<>
-										{/* Back to docs button (when on docs page and switched to nav view) */}
-										{isDocs && mobileView === "nav" && (
-											<button
-												type="button"
-												onClick={() => setMobileView("docs")}
-												className="flex items-center gap-2 w-full px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/6"
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="12"
-													height="12"
-													viewBox="0 0 24 24"
-												>
-													<path
-														fill="currentColor"
-														d="M20 11H7.83l5.59-5.59L12 4l-8 8l8 8l1.41-1.41L7.83 13H20z"
-													/>
-												</svg>
-												<span className="font-mono text-[10px] uppercase tracking-wider">
-													Docs
-												</span>
-											</button>
-										)}
-
-										{/* Nav items */}
-										{navFiles.map((item) => (
-											<Link
-												key={item.name}
-												href={item.href}
-												onClick={() => setMobileMenuOpen(false)}
-												className={cn(
-													"flex items-center gap-2.5 px-5 py-3.5 border-b border-foreground/6 transition-colors font-mono text-base uppercase tracking-wider",
-													isActive(item.path || item.href) ||
-														(item.href === "/docs" && isDocs)
-														? "text-foreground bg-foreground/4"
-														: "text-foreground/75 dark:text-foreground/60 hover:bg-foreground/3",
-												)}
-											>
-												{item.name}
-											</Link>
-										))}
-
-										{/* Accordion groups */}
-										<Accordion
-											type="multiple"
-											defaultValue={[
-												...mobileMenuSections
-													.filter((s) =>
-														s.children?.some((item) =>
-															isActivePrefix(item.path || item.href),
-														),
-													)
-													.map((s) => s.name),
-											]}
-											className="w-full"
-										>
-											{mobileMenuSections.map((section) => (
-												<AccordionItem
-													key={section.name}
-													value={section.name}
-													className="border-foreground/6"
-												>
-													{section.children ? (
-														<>
-															<AccordionTrigger className="px-5 py-3.5 font-mono text-base uppercase tracking-wider text-foreground/75 dark:text-foreground/60 hover:text-foreground hover:no-underline">
-																{section.name}
-															</AccordionTrigger>
-															<AccordionContent className="pb-0">
-																{section.children.map((item) => (
-																	<Link
-																		key={item.name}
-																		href={item.href}
-																		target={
-																			item.external ? "_blank" : undefined
-																		}
-																		rel={
-																			item.external ? "noreferrer" : undefined
-																		}
-																		onClick={() => setMobileMenuOpen(false)}
-																		className={cn(
-																			"flex items-center gap-2.5 pl-9 pr-5 py-2.5 transition-colors font-mono text-sm uppercase tracking-wider",
-																			isActivePrefix(item.path || item.href)
-																				? "text-foreground bg-foreground/4"
-																				: "text-foreground/60 dark:text-foreground/45 hover:text-foreground hover:bg-foreground/3",
-																		)}
-																	>
-																		{item.name}
-																	</Link>
-																))}
-															</AccordionContent>
-														</>
-													) : (
-														<Link
-															href={section.href!}
-															onClick={() => setMobileMenuOpen(false)}
-															className={cn(
-																"flex items-center gap-2.5 px-5 py-3.5 transition-colors font-mono text-base uppercase tracking-wider",
-																isActive(section.href!)
-																	? "text-foreground bg-foreground/4"
-																	: "text-foreground/75 dark:text-foreground/60 hover:text-foreground",
-															)}
-														>
-															{section.name}
-														</Link>
-													)}
-												</AccordionItem>
-											))}
-										</Accordion>
-									</>
-								)}
-							</div>
-
-							{/* Sticky footer with sign-in CTA */}
-							{!(isDocs && mobileView === "docs") && (
-								<div className="shrink-0 border-t border-foreground/[0.06] bg-background px-5 py-4">
-									<a
-										href="https://dash.better-auth.com/sign-in"
-										onClick={() => setMobileMenuOpen(false)}
-										className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
+								{isDocs ? (
+									<button
+										type="button"
+										onClick={() => setMobileNavigationView("docs")}
+										className="flex items-center gap-2 w-full px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/6"
 									>
-										sign-in
-										<svg
-											className="h-2.5 w-2.5 opacity-50"
-											viewBox="0 0 10 10"
-											fill="none"
-										>
+										<svg width="12" height="12" viewBox="0 0 24 24">
 											<path
-												d="M1 9L9 1M9 1H3M9 1V7"
-												stroke="currentColor"
-												strokeWidth="1.2"
+												fill="currentColor"
+												d="M20 11H7.83l5.59-5.59L12 4l-8 8l8 8l1.41-1.41L7.83 13H20z"
 											/>
 										</svg>
-									</a>
-								</div>
-							)}
+										<span className="font-mono text-[10px] uppercase tracking-wider">
+											Docs
+										</span>
+									</button>
+								) : null}
+
+								{navFiles.map((item) => (
+									<Link
+										key={item.name}
+										href={item.href}
+										onClick={() => setMobileNavigationView("closed")}
+										className={cn(
+											"flex items-center gap-2.5 px-5 py-3.5 border-b border-foreground/6 transition-colors font-mono text-base uppercase tracking-wider",
+											isActive(item.path || item.href) ||
+												(item.href === "/docs" && isDocs)
+												? "text-foreground bg-foreground/4"
+												: "text-foreground/75 dark:text-foreground/60 hover:bg-foreground/3",
+										)}
+									>
+										{item.name}
+									</Link>
+								))}
+
+								<Accordion
+									type="multiple"
+									defaultValue={mobileMenuSections
+										.filter((section) =>
+											section.children?.some((item) =>
+												isActivePrefix(item.path || item.href),
+											),
+										)
+										.map((section) => section.name)}
+									className="w-full"
+								>
+									{mobileMenuSections.map((section) => (
+										<AccordionItem
+											key={section.name}
+											value={section.name}
+											className="border-foreground/6"
+										>
+											{section.children ? (
+												<>
+													<AccordionTrigger className="px-5 py-3.5 font-mono text-base uppercase tracking-wider text-foreground/75 dark:text-foreground/60 hover:text-foreground hover:no-underline">
+														{section.name}
+													</AccordionTrigger>
+													<AccordionContent className="pb-0">
+														{section.children.map((item) => (
+															<Link
+																key={item.name}
+																href={item.href}
+																target={item.external ? "_blank" : undefined}
+																rel={item.external ? "noreferrer" : undefined}
+																onClick={() =>
+																	setMobileNavigationView("closed")
+																}
+																className={cn(
+																	"flex items-center gap-2.5 pl-9 pr-5 py-2.5 transition-colors font-mono text-sm uppercase tracking-wider",
+																	isActivePrefix(item.path || item.href)
+																		? "text-foreground bg-foreground/4"
+																		: "text-foreground/60 dark:text-foreground/45 hover:text-foreground hover:bg-foreground/3",
+																)}
+															>
+																{item.name}
+															</Link>
+														))}
+													</AccordionContent>
+												</>
+											) : (
+												<Link
+													href={section.href!}
+													onClick={() => setMobileNavigationView("closed")}
+													className={cn(
+														"flex items-center gap-2.5 px-5 py-3.5 transition-colors font-mono text-base uppercase tracking-wider",
+														isActive(section.href!)
+															? "text-foreground bg-foreground/4"
+															: "text-foreground/75 dark:text-foreground/60 hover:text-foreground",
+													)}
+												>
+													{section.name}
+												</Link>
+											)}
+										</AccordionItem>
+									))}
+								</Accordion>
+							</div>
+
+							<div className="shrink-0 border-t border-foreground/[0.06] bg-background px-5 py-4">
+								<a
+									href="https://dash.better-auth.com/sign-in"
+									onClick={() => setMobileNavigationView("closed")}
+									className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
+								>
+									sign-in
+									<svg
+										className="h-2.5 w-2.5 opacity-50"
+										viewBox="0 0 10 10"
+										fill="none"
+									>
+										<path
+											d="M1 9L9 1M9 1H3M9 1V7"
+											stroke="currentColor"
+											strokeWidth="1.2"
+										/>
+									</svg>
+								</a>
+							</div>
 						</div>
 					</motion.div>
-				)}
+				) : null}
 			</AnimatePresence>
 		</>
 	);

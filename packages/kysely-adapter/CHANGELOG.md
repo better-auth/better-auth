@@ -1,5 +1,13 @@
 # @better-auth/kysely-adapter
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10875](https://github.com/better-auth/better-auth/pull/10875) [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix programmatic migrations failing on Cloudflare D1 while preserving existing-index validation across supported databases.
+
+## 1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

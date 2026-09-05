@@ -82,6 +82,25 @@ describe("resolveOAuthAccountKey", () => {
 		});
 	});
 
+	it("uses a synthetic provider namespace without evaluating a dynamic issuer", async () => {
+		const accountIssuer = vi.fn(() => {
+			throw new Error("issuer should not be evaluated");
+		});
+
+		await expect(
+			resolveOAuthAccountKey(
+				createProvider({ accountIssuer }),
+				tokens,
+				result.data,
+				"provider-id",
+			),
+		).resolves.toEqual({
+			issuer: "local:oauth:company-oauth",
+			accountId: "provider-subject",
+		});
+		expect(accountIssuer).not.toHaveBeenCalled();
+	});
+
 	it("produces the same identity key for provider aliases of one issuer", async () => {
 		const web = createProvider({
 			id: "company-web",

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.7.0",
+  "version": "1.7.2",
   "description": "Testing utilities for Better Auth adapter development",
   "type": "module",
   "license": "MIT",
@@ -22,7 +22,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsdown",
-    "dev": "tsdown --watch"
+    "dev": "tsdown --watch",
+    "test": "vitest"
   },
   "files": [
     "dist"

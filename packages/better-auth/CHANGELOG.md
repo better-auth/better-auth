@@ -1,5 +1,61 @@
 # better-auth
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10875](https://github.com/better-auth/better-auth/pull/10875) [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix programmatic migrations failing on Cloudflare D1 while preserving existing-index validation across supported databases.
+
+- [#10982](https://github.com/better-auth/better-auth/pull/10982) [`b4ad5a1`](https://github.com/better-auth/better-auth/commit/b4ad5a110ca4f2e043c0f23a8e5f87e0b31c3fc6) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in placeholder emails now consistently use the namespaced `{identifier}@{namespace}.placeholder.invalid` format.
+
+- [#10934](https://github.com/better-auth/better-auth/pull/10934) [`c7a5c1a`](https://github.com/better-auth/better-auth/commit/c7a5c1a7ed65a5169e98bd347df91b16bb394692) Thanks [@bytaesu](https://github.com/bytaesu)! - Cookie-cache reads now warn when signed session data is invalid instead of silently appearing as a signed-out session.
+
+- [#10879](https://github.com/better-auth/better-auth/pull/10879) [`78f0c39`](https://github.com/better-auth/better-auth/commit/78f0c3922c273de29bd0b77213fbc37cc3b5917e) Thanks [@starslingdev](https://github.com/apps/starslingdev)! - Test suites using `getTestInstance` now run faster because the shared fixture avoids production password-hashing costs by default. Custom `emailAndPassword.password` implementations continue to take precedence.
+
+- [#10823](https://github.com/better-auth/better-auth/pull/10823) [`ce8a3ab`](https://github.com/better-auth/better-auth/commit/ce8a3ab5442fdd388f3b1346b71292cf617c3146) Thanks [@sosyz](https://github.com/sosyz)! - Ensure permanently banning a user clears any expiration from a previous temporary ban.
+
+- [#10907](https://github.com/better-auth/better-auth/pull/10907) [`a021eaf`](https://github.com/better-auth/better-auth/commit/a021eafaf235dd08c0835d91ee714aca24c4605e) Thanks [@heliohm](https://github.com/heliohm)! - A client created with more plugins is again assignable to a client type declaring fewer plugins, as in 1.6.
+
+- [#10959](https://github.com/better-auth/better-auth/pull/10959) [`c8dcfa5`](https://github.com/better-auth/better-auth/commit/c8dcfa57e11e22325dbb2a0cc1af6775f41b1315) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow same-origin form submissions from pages using `Referrer-Policy: no-referrer` while continuing to reject untrusted request origins.
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
+- [#10041](https://github.com/better-auth/better-auth/pull/10041) [`f6891a2`](https://github.com/better-auth/better-auth/commit/f6891a2d2d4f7ead7e9b13e65316a0cbd88f3fe4) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Allow `~` in relative callback URLs validated by trusted origin checks.
+
+- [#10877](https://github.com/better-auth/better-auth/pull/10877) [`649818a`](https://github.com/better-auth/better-auth/commit/649818a2969594e58147a2cc08157812ea0b75ef) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent disabled MyISAM indexes from satisfying migration index checks.
+
+- Updated dependencies [[`557e19b`](https://github.com/better-auth/better-auth/commit/557e19bfad0f2d2842903ddb1e768a0506aceaea), [`64da15b`](https://github.com/better-auth/better-auth/commit/64da15b0b1ca078d80f115ee0a5bd9ad4ca4d64e), [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e), [`b4ad5a1`](https://github.com/better-auth/better-auth/commit/b4ad5a110ca4f2e043c0f23a8e5f87e0b31c3fc6), [`ea77118`](https://github.com/better-auth/better-auth/commit/ea77118d4e00f69ddffed4fb42dfedc08594ea9e), [`5aea9f7`](https://github.com/better-auth/better-auth/commit/5aea9f77284dfb7b187e8e7bec0cebd4b8834123), [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1), [`e1d4011`](https://github.com/better-auth/better-auth/commit/e1d40116e2b6a797372ac82b9feea39f57285632)]:
+  - @better-auth/core@1.7.2
+  - @better-auth/kysely-adapter@1.7.2
+  - @better-auth/drizzle-adapter@1.7.2
+  - @better-auth/memory-adapter@1.7.2
+  - @better-auth/mongo-adapter@1.7.2
+  - @better-auth/prisma-adapter@1.7.2
+  - @better-auth/telemetry@1.7.2
+
+## 1.7.1
+
+### Patch Changes
+
+- [#10863](https://github.com/better-auth/better-auth/pull/10863) [`845bbd1`](https://github.com/better-auth/better-auth/commit/845bbd1de682ab87e03ce925f85087da81249a4e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `auth migrate` no longer attempts to add a required column with no default value to a table that already has rows. It stops with an error naming the column and the backfill to run first. Previously the generated statement failed on SQLite, Postgres, and SQL Server; on MySQL it filled the new column with an empty string for every existing row and reported success. If `auth migrate` already ran against a MySQL database on 1.7, run the check in the upgrade guide's account identity section.
+
+  `getMigrations` throws the new `UnsafeMigrationError` (exported from `better-auth/db/migration`) for this refusal, so callers can distinguish it from other migration errors such as an index-definition conflict.
+
+  `auth generate` still emits the statements for external migration tooling, with a comment banner naming any column that needs a manual backfill first.
+
+  A required field whose database column is still nullable logs a warning instead of blocking the migration.
+
+  A CLI command that fails now prints its error and exits with a non-zero code instead of an unhandled promise rejection.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.1
+  - @better-auth/drizzle-adapter@1.7.1
+  - @better-auth/kysely-adapter@1.7.1
+  - @better-auth/memory-adapter@1.7.1
+  - @better-auth/mongo-adapter@1.7.1
+  - @better-auth/prisma-adapter@1.7.1
+  - @better-auth/telemetry@1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

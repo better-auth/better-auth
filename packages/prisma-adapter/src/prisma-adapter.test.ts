@@ -1,8 +1,89 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import { describe, expect, it, vi } from "vitest";
 import { prismaAdapter } from "./prisma-adapter";
 
 describe("prisma-adapter", () => {
+	it("resolves Prisma model and field mappings for migrations", async () => {
+		const options = {};
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				_runtimeDataModel: {
+					models: {
+						Account: {
+							dbName: "auth_account",
+							fields: [
+								{ name: "accountId", dbName: "account_id" },
+								{ name: "providerId", dbName: "provider_id" },
+								{ name: "issuer", dbName: "identity_issuer" },
+							],
+						},
+					},
+				},
+			} as never,
+			{ provider: "sqlite" },
+		)(options);
+
+		const accountSchema = {
+			modelName: "account",
+			fields: {
+				accountId: { type: "string", fieldName: "accountId" },
+				providerId: { type: "string", fieldName: "providerId" },
+				issuer: { type: "string", fieldName: "issuer" },
+			},
+		} satisfies BetterAuthDBSchema[string];
+		const resolved =
+			await adapter.options?.adapterConfig.migrationConnection?.resolvePhysicalSchema?.(
+				{ account: accountSchema },
+			);
+
+		expect(resolved?.account?.modelName).toBe("auth_account");
+		expect(resolved?.account?.fields.accountId?.fieldName).toBe("account_id");
+		expect(resolved?.account?.fields.providerId?.fieldName).toBe("provider_id");
+		expect(resolved?.account?.fields.issuer?.fieldName).toBe("identity_issuer");
+	});
+
+	it("keeps declared names for schema additions missing from the Prisma model", async () => {
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				_runtimeDataModel: {
+					models: {
+						Account: {
+							dbName: "auth_account",
+							fields: [{ name: "id", dbName: "account_id" }],
+						},
+					},
+				},
+			} as never,
+			{ provider: "sqlite" },
+		)({});
+
+		const resolved =
+			await adapter.options?.adapterConfig.migrationConnection?.resolvePhysicalSchema?.(
+				{
+					account: {
+						modelName: "account",
+						fields: {
+							id: { type: "string", fieldName: "id" },
+							issuer: { type: "string", fieldName: "issuer" },
+						},
+					},
+					jwks: {
+						modelName: "jwks",
+						fields: { id: { type: "string", fieldName: "id" } },
+					},
+				},
+			);
+
+		expect(resolved?.account?.modelName).toBe("auth_account");
+		expect(resolved?.account?.fields.id?.fieldName).toBe("account_id");
+		expect(resolved?.account?.fields.issuer?.fieldName).toBe("issuer");
+		expect(resolved?.jwks?.modelName).toBe("jwks");
+		expect(resolved?.jwks?.fields.id?.fieldName).toBe("id");
+	});
+
 	const createTestAdapter = (prisma: Record<string, unknown>) =>
 		prismaAdapter(prisma as never, {
 			provider: "sqlite",
@@ -30,6 +111,116 @@ describe("prisma-adapter", () => {
 			provider: "sqlite",
 		});
 		expect(adapter).toBeDefined();
+	});
+
+	it("exposes a parameterized migration connection", async () => {
+		const queryRaw = vi
+			.fn()
+			.mockResolvedValue([{ providerId: "credential", count: 2 }]);
+		const executeRaw = vi.fn().mockResolvedValue(2);
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: executeRaw,
+			$queryRawUnsafe: queryRaw,
+			$transaction: vi.fn(),
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		expect(migrationConnection?.dialect).toBe("sqlite");
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["credential"],
+				sql: "SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			}),
+		).resolves.toEqual({
+			rows: [{ providerId: "credential", count: 2 }],
+		});
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["issuer"],
+				sql: "UPDATE account SET issuer = ?",
+			}),
+		).resolves.toEqual({
+			numAffectedRows: 2n,
+			rows: [],
+		});
+		expect(queryRaw).toHaveBeenCalledWith(
+			"SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			"credential",
+		);
+		expect(executeRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"issuer",
+		);
+	});
+
+	it("uses Prisma's transaction-scoped client for migration queries", async () => {
+		const rootExecuteRaw = vi.fn();
+		const transactionExecuteRaw = vi.fn().mockResolvedValue(1);
+		const transactionClient = {
+			$executeRawUnsafe: transactionExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: rootExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+			$transaction: transaction,
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		await migrationConnection?.transaction?.(async (connection) => {
+			await connection.execute({
+				parameters: ["local:credential"],
+				sql: "UPDATE account SET issuer = ?",
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+			maxWait: 60_000,
+			timeout: 600_000,
+		});
+		expect(transactionExecuteRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"local:credential",
+		);
+		expect(rootExecuteRaw).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10575#pullrequestreview-4970996114
+	 */
+	it("passes migration transaction timeouts to Prisma", async () => {
+		const transactionClient = {
+			$executeRawUnsafe: vi.fn(),
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = prismaAdapter(
+			{
+				$executeRawUnsafe: vi.fn(),
+				$queryRawUnsafe: vi.fn(),
+				$transaction: transaction,
+			} as never,
+			{
+				migrationTransaction: { maxWait: 12_000, timeout: 420_000 },
+				provider: "sqlite",
+			},
+		)({} as BetterAuthOptions);
+
+		await adapter.options?.adapterConfig.migrationConnection?.transaction?.(
+			async () => undefined,
+		);
+
+		expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+			maxWait: 12_000,
+			timeout: 420_000,
+		});
 	});
 
 	/**

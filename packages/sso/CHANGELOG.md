@@ -1,5 +1,13 @@
 # @better-auth/sso
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
+## 1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

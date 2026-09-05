@@ -7,11 +7,15 @@ import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import type { MigratedPublished16Database } from "../published-1-6-migration";
+import { prepareMigratedPublished16Database } from "../published-1-6-migration";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const demoDirectory = resolve(process.cwd(), "../../demo/nextjs");
+const demoAuthSecret =
+	"better-auth-scim-demo-e2e-secret-at-least-thirty-two-characters";
 
 interface NextDemoRuntime {
 	baseURL: string;
@@ -19,6 +23,11 @@ interface NextDemoRuntime {
 	process: ChildProcessWithoutNullStreams;
 	readOutput: () => string;
 	temporaryDirectory: string;
+}
+
+interface NextDemoRuntimeOptions {
+	accountIdentityStrategy?: "issuer" | "provider-id";
+	prepareDatabase?: (databasePath: string) => Promise<void>;
 }
 
 async function getAvailablePort(): Promise<number> {
@@ -48,18 +57,26 @@ async function stopProcess(
 	await terminate(child.pid);
 }
 
-async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
+async function startNextDemoRuntime(
+	options: NextDemoRuntimeOptions = {},
+): Promise<NextDemoRuntime> {
 	const temporaryDirectory = await mkdtemp(
 		join(tmpdir(), "better-auth-scim-managed-demo-"),
 	);
 	const port = await getAvailablePort();
 	const baseURL = `http://127.0.0.1:${port}`;
 	const databasePath = join(temporaryDirectory, "demo.sqlite");
+	try {
+		await options.prepareDatabase?.(databasePath);
+	} catch (error) {
+		await rm(temporaryDirectory, { force: true, recursive: true });
+		throw error;
+	}
 	const environment: NodeJS.ProcessEnv = {
 		...process.env,
-		BETTER_AUTH_SECRET:
-			"better-auth-scim-demo-e2e-secret-at-least-thirty-two-characters",
+		BETTER_AUTH_SECRET: demoAuthSecret,
 		BETTER_AUTH_URL: baseURL,
+		DEMO_ACCOUNT_IDENTITY_STRATEGY: options.accountIdentityStrategy,
 		DEMO_SQLITE_PATH: databasePath,
 		NO_COLOR: "1",
 		SCIM_DEMO_CREDENTIAL_PEPPER:
@@ -167,6 +184,23 @@ async function signUp(
 	expect(response.ok(), await response.text()).toBe(true);
 }
 
+async function signIn(
+	context: BrowserContext,
+	baseURL: string,
+	email: string,
+): Promise<void> {
+	const response = await context.request.post(
+		`${baseURL}/api/auth/sign-in/email`,
+		{
+			data: {
+				email,
+				password: "correct-horse-battery-staple",
+			},
+		},
+	);
+	expect(response.ok(), await response.text()).toBe(true);
+}
+
 async function createOrganization(
 	request: APIRequestContext,
 	baseURL: string,
@@ -197,6 +231,32 @@ async function createOrganization(
 
 function managementURL(baseURL: string, organizationId: string): string {
 	return `${baseURL}/api/scim-demo/organizations/${organizationId}/connections`;
+}
+
+async function createEmployeeLink(
+	request: APIRequestContext,
+	baseURL: string,
+	organizationId: string,
+	scimUserId: string,
+): Promise<string> {
+	const response = await request.post(
+		`${managementURL(baseURL, organizationId)}/employee-links`,
+		{
+			headers: { origin: baseURL },
+			data: { organizationId, scimUserId },
+		},
+	);
+	expect(response.status(), await response.text()).toBe(201);
+	const body: unknown = await response.json();
+	if (
+		typeof body !== "object" ||
+		body === null ||
+		!("url" in body) ||
+		typeof body.url !== "string"
+	) {
+		throw new Error("Employee link response did not return a URL");
+	}
+	return body.url;
 }
 
 async function readIssuedCredential(response: {
@@ -328,10 +388,19 @@ async function completeEmployeeSignIn(page: Page): Promise<void> {
 		page.getByRole("heading", { name: "Sign in with Acme Identity" }),
 	).toBeVisible();
 	await page.getByRole("button", { name: "Continue as Maya" }).click();
-	await expect(
-		page.getByRole("heading", { name: "You’re signed in" }),
-	).toBeVisible();
+	try {
+		await expect(
+			page.getByRole("heading", { name: "You’re signed in" }),
+		).toBeVisible();
+	} catch (error) {
+		throw new Error(
+			`Employee SSO did not complete at ${page.url()}:\n${await page.locator("body").innerText()}`,
+			{ cause: error },
+		);
+	}
 }
+
+test.describe.configure({ mode: "serial" });
 
 test.describe("Next.js managed SCIM catalog demo", () => {
 	test.describe.configure({ mode: "serial" });
@@ -898,33 +967,16 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 			database.close();
 		}
 
-		const employeeLinkResponse = await page.request.post(
-			`${managementURL(runtime.baseURL, organizationId)}/employee-links`,
-			{
-				headers: { origin: runtime.baseURL },
-				data: {
-					organizationId,
-					scimUserId: maya.id,
-				},
-			},
+		const employeeLinkURL = await createEmployeeLink(
+			page.request,
+			runtime.baseURL,
+			organizationId,
+			String(maya.id),
 		);
-		expect(
-			employeeLinkResponse.status(),
-			await employeeLinkResponse.text(),
-		).toBe(201);
-		const employeeLinkBody: unknown = await employeeLinkResponse.json();
-		if (
-			typeof employeeLinkBody !== "object" ||
-			employeeLinkBody === null ||
-			!("url" in employeeLinkBody) ||
-			typeof employeeLinkBody.url !== "string"
-		) {
-			throw new Error("Employee link response did not return a URL");
-		}
 		const employeeContext = await browser.newContext();
 		try {
 			const employeePage = await employeeContext.newPage();
-			await employeePage.goto(employeeLinkBody.url);
+			await employeePage.goto(employeeLinkURL);
 			await completeEmployeeSignIn(employeePage);
 		} finally {
 			await employeeContext.close();
@@ -936,13 +988,14 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		try {
 			const accounts = accountDatabase
 				.prepare(
-					`SELECT "providerId", "accountId", "userId"
+					`SELECT "issuer", "providerId", "accountId", "userId"
 					 FROM "account"
 					 WHERE "providerId" = 'scim-demo-sso'`,
 				)
 				.all();
 			expect(accounts).toEqual([
 				{
+					issuer: `${runtime.baseURL}/api/scim-demo/idp`,
 					providerId: "scim-demo-sso",
 					accountId: maya.externalId,
 					userId: maya.userId,
@@ -960,5 +1013,254 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		} finally {
 			accountDatabase.close();
 		}
+	});
+});
+
+test.describe("Next.js SCIM and SSO demo on a migrated published 1.6 database", () => {
+	test.describe.configure({ mode: "serial" });
+	test.setTimeout(180_000);
+
+	let migration: MigratedPublished16Database | undefined;
+	let runtime: NextDemoRuntime | undefined;
+
+	test.beforeAll(async () => {
+		runtime = await startNextDemoRuntime({
+			accountIdentityStrategy: "provider-id",
+			prepareDatabase: async (databasePath) => {
+				migration = await prepareMigratedPublished16Database(
+					databasePath,
+					demoAuthSecret,
+				);
+			},
+		});
+	});
+
+	test.afterAll(async () => {
+		await stopProcess(runtime?.process);
+		if (runtime) {
+			await rm(runtime.temporaryDirectory, {
+				recursive: true,
+				force: true,
+			});
+		}
+	});
+
+	test("runs the real SCIM lifecycle and repeated OIDC SSO sign-in without re-keying migrated identities", async ({
+		browser,
+		page,
+	}) => {
+		if (!runtime || !migration) {
+			throw new Error("The migrated Next.js demo runtime was not prepared");
+		}
+
+		await signIn(
+			page.context(),
+			runtime.baseURL,
+			"administrator@migration.example.com",
+		);
+		const organizationId = await createOrganization(
+			page.request,
+			runtime.baseURL,
+			"Migrated SCIM Demo",
+		);
+		const provisioningDomainId = `scim-demo-org:${organizationId}`;
+
+		await page.goto(`${runtime.baseURL}/dashboard/scim`);
+		const createResponsePromise = page.waitForResponse(
+			(response) =>
+				response.url() === managementURL(runtime.baseURL, organizationId) &&
+				response.request().method() === "POST",
+		);
+		await page.getByRole("button", { name: "Create SCIM connection" }).click();
+		const createResponse = await createResponsePromise;
+		expect(createResponse.status()).toBe(201);
+		const originalCredential = await readIssuedCredential(createResponse);
+
+		await page.getByRole("button", { name: "Run local recipe" }).click();
+		await expect(
+			page.getByRole("heading", { name: "Recipe complete" }),
+		).toBeVisible();
+		await expect(
+			page
+				.getByTestId("entra-local-recipe-steps")
+				.locator('[data-step-status="passed"]'),
+		).toHaveCount(10);
+		await expect(
+			page.getByRole("heading", { name: "Users (2)" }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("heading", { name: "Groups (1)" }),
+		).toBeVisible();
+
+		const database = new DatabaseSync(runtime.databasePath, {
+			readOnly: true,
+		});
+		let demoEmployee: {
+			externalId: string;
+			id: string;
+			userId: string;
+		};
+		try {
+			const employee = database
+				.prepare(
+					`SELECT "id", "userId", "externalId"
+					 FROM "scimUser"
+					 WHERE "provisioningDomainId" = ?
+					   AND "serializedAttributes" LIKE '%Finance Director%'`,
+				)
+				.get(provisioningDomainId);
+			if (
+				typeof employee?.id !== "string" ||
+				typeof employee.userId !== "string" ||
+				typeof employee.externalId !== "string"
+			) {
+				throw new Error("The migrated demo did not provision its SSO employee");
+			}
+			demoEmployee = {
+				externalId: employee.externalId,
+				id: employee.id,
+				userId: employee.userId,
+			};
+			expect(
+				database
+					.prepare(
+						`SELECT COUNT(*) AS "count"
+						 FROM "account"
+						 WHERE "providerId" = 'scim-demo-sso'`,
+					)
+					.get(),
+			).toEqual({ count: 0 });
+		} finally {
+			database.close();
+		}
+
+		for (let signInAttempt = 0; signInAttempt < 2; signInAttempt += 1) {
+			const employeeLink = await createEmployeeLink(
+				page.request,
+				runtime.baseURL,
+				organizationId,
+				demoEmployee.id,
+			);
+			const employeeContext = await browser.newContext();
+			try {
+				const employeePage = await employeeContext.newPage();
+				await employeePage.goto(employeeLink);
+				await completeEmployeeSignIn(employeePage);
+			} finally {
+				await employeeContext.close();
+			}
+		}
+
+		const migratedDatabase = new DatabaseSync(runtime.databasePath, {
+			readOnly: true,
+		});
+		try {
+			const accounts = migratedDatabase
+				.prepare(
+					`SELECT "issuer", "providerId", "accountId", "userId"
+					 FROM "account"
+					 WHERE "providerId" IN (
+					   'credential',
+					   'scim-demo-sso',
+					   'workforce-scim',
+					   'workforce-sso'
+					 )
+					 ORDER BY "providerId", "accountId"`,
+				)
+				.all();
+			expect(accounts).toEqual([
+				expect.objectContaining({
+					issuer: "local:credential",
+					providerId: "credential",
+					userId: migration.source.administratorUserId,
+				}),
+				{
+					issuer: "local:oauth:scim-demo-sso",
+					providerId: "scim-demo-sso",
+					accountId: demoEmployee.externalId,
+					userId: demoEmployee.userId,
+				},
+				{
+					issuer: "local:oauth:workforce-sso",
+					providerId: "workforce-sso",
+					accountId: migration.source.directorySubject,
+					userId: migration.verified.ssoUserId,
+				},
+			]);
+			expect(
+				migratedDatabase
+					.prepare(
+						`SELECT "userId"
+						 FROM "scimUser"
+						 WHERE "id" = ?`,
+					)
+					.get(migration.verified.reprovisionedSCIMUserId),
+			).toEqual({ userId: migration.verified.scimUserId });
+		} finally {
+			migratedDatabase.close();
+		}
+
+		const rotateResponsePromise = page.waitForResponse(
+			(response) =>
+				response.url() ===
+					`${managementURL(runtime.baseURL, organizationId)}/rotate` &&
+				response.request().method() === "POST",
+		);
+		await page.getByRole("button", { name: "Rotate credential" }).click();
+		const rotateResponse = await rotateResponsePromise;
+		expect(rotateResponse.status()).toBe(201);
+		const rotatedCredential = await readIssuedCredential(rotateResponse);
+		expect(rotatedCredential.token).not.toBe(originalCredential.token);
+
+		const revokeResponsePromise = page.waitForResponse(
+			(response) =>
+				response.url() ===
+					`${managementURL(
+						runtime.baseURL,
+						organizationId,
+					)}/credentials/${originalCredential.id}/revoke` &&
+				response.request().method() === "POST",
+		);
+		await page
+			.getByRole("button", {
+				name: `Revoke credential ${originalCredential.id}`,
+			})
+			.click();
+		expect((await revokeResponsePromise).status()).toBe(200);
+		expect(
+			(
+				await scimRequest(
+					page.request,
+					runtime.baseURL,
+					originalCredential.token,
+					{ method: "GET", path: "/Users" },
+				)
+			).status(),
+		).toBe(401);
+		expect(
+			(
+				await scimRequest(
+					page.request,
+					runtime.baseURL,
+					rotatedCredential.token,
+					{ method: "GET", path: "/Users" },
+				)
+			).status(),
+		).toBe(200);
+
+		const decommissionResponsePromise = page.waitForResponse(
+			(response) =>
+				response.url() ===
+					`${managementURL(runtime.baseURL, organizationId)}/decommission` &&
+				response.request().method() === "POST",
+		);
+		await page.getByRole("button", { name: "Decommission connection" }).click();
+		await page
+			.getByRole("button", { name: "Decommission permanently" })
+			.click();
+		expect((await decommissionResponsePromise).status()).toBe(200);
+		await expect(
+			page.getByText("Connection permanently decommissioned"),
+		).toBeVisible();
 	});
 });

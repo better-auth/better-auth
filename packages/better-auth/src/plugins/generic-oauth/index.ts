@@ -223,9 +223,10 @@ export const genericOAuth = <const ID extends string>(
 					});
 					if (discovered) {
 						if (!discovered.issuer && !c.accountIssuer) {
-							throw new Error(
-								`Provider "${c.providerId}": discovery did not return an issuer. Configure accountIssuer explicitly to establish a stable account namespace.`,
+							ctx.logger.error(
+								`Provider "${c.providerId}": discovery did not return an issuer. Provider skipped to keep its account issuer stable.`,
 							);
+							continue;
 						}
 						authorizationUrl ??= discovered.authorization_endpoint;
 						tokenUrl ??= discovered.token_endpoint;
@@ -240,9 +241,10 @@ export const genericOAuth = <const ID extends string>(
 							try {
 								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
 							} catch {
-								throw new Error(
-									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document.`,
+								ctx.logger.error(
+									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document. Provider skipped.`,
 								);
+								continue;
 							}
 							idTokenConfig = {
 								jwks: createRemoteJWKSet(jwksUrl),
@@ -252,9 +254,10 @@ export const genericOAuth = <const ID extends string>(
 							};
 						}
 					} else if (!c.accountIssuer) {
-						throw new Error(
-							`Provider "${c.providerId}": discovery returned no valid data. Provider initialization stopped to keep its account issuer stable.`,
+						ctx.logger.error(
+							`Provider "${c.providerId}": discovery returned no valid data. Provider skipped to keep its account issuer stable.`,
 						);
+						continue;
 					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
 							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
@@ -262,6 +265,12 @@ export const genericOAuth = <const ID extends string>(
 					}
 				}
 				if (c.requireIdTokenVerification && !idTokenConfig) {
+					if (c.discoveryUrl) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri. Provider skipped.`,
+						);
+						continue;
+					}
 					throw new Error(
 						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
 					);

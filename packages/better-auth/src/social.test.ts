@@ -319,13 +319,14 @@ describe("Social Providers", async (c) => {
 	 * state-cookie check fails, and it was already origin-validated at sign-in.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/5467
+	 * @see https://github.com/better-auth/better-auth/issues/10022
 	 */
 	it("redirects to the per-flow errorCallbackURL when state validation fails", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/callback",
-			errorCallbackURL: "/oauth-error",
+			errorCallbackURL: "/oauth-error?source=oauth#retry",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
 			},
@@ -343,8 +344,9 @@ describe("Social Providers", async (c) => {
 			onError(context) {
 				expect(context.response.status).toBe(302);
 				const location = context.response.headers.get("location") ?? "";
-				expect(location).toContain("/oauth-error");
-				expect(location).toContain("error=state_mismatch");
+				expect(location).toContain(
+					"/oauth-error?source=oauth&error=state_mismatch#retry",
+				);
 				expect(location).not.toContain("/api/auth/error");
 			},
 		});
@@ -1086,6 +1088,53 @@ describe("updateAccountOnSignIn", async () => {
 	});
 });
 
+it.each([
+	"issuer",
+	"provider-id",
+] as const)("uses explicit %s identity through the OAuth redirect callback", async (identityStrategy) => {
+	const headers = new Headers();
+	const { client, cookieSetter } = await getTestInstance(
+		{
+			account: { identityStrategy },
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+	const authorization = await client.signIn.social({
+		provider: "google",
+		callbackURL: "/callback",
+		fetchOptions: { onSuccess: cookieSetter(headers) },
+	});
+	const state =
+		new URL(authorization.data!.url!).searchParams.get("state") ?? "";
+
+	await client.$fetch("/callback/google", {
+		query: { state, code: "test" },
+		headers,
+		method: "GET",
+		onError(context) {
+			cookieSetter(headers)({ response: context.response });
+		},
+	});
+
+	const accounts = await client.listAccounts({ fetchOptions: { headers } });
+	expect(accounts.data).toContainEqual(
+		expect.objectContaining({
+			accountId: "1234567890",
+			issuer:
+				identityStrategy === "provider-id"
+					? "local:oauth:google"
+					: "https://accounts.google.com",
+			providerId: "google",
+		}),
+	);
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/4498
  */
@@ -1150,6 +1199,67 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(res.data!.redirect).toBe(false);
 		const data = res.data as { user: { email: string } };
 		expect(data.user.email).toBe("mobile-user@example.com");
+	});
+
+	it.each([
+		"issuer",
+		"provider-id",
+	] as const)("uses the configured identity strategy for ID-token sign-in (%s)", async (identityStrategy) => {
+		const idToken = await signIdToken(webClientId);
+		const headers = new Headers();
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				account: { identityStrategy },
+				socialProviders: {
+					google: {
+						clientId: webClientId,
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		expect(res.error).toBeNull();
+		const accounts = await client.listAccounts({ fetchOptions: { headers } });
+		expect(accounts.data).toContainEqual(
+			expect.objectContaining({
+				providerId: "google",
+				accountId: "google-sub-999",
+				issuer:
+					identityStrategy === "provider-id"
+						? "local:oauth:google"
+						: "https://accounts.google.com",
+			}),
+		);
+
+		const returningHeaders = new Headers();
+		const returning = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+			fetchOptions: { onSuccess: cookieSetter(returningHeaders) },
+		});
+		if (!res.data || !("user" in res.data)) {
+			throw new Error("Expected the first sign-in to return a user");
+		}
+		if (!returning.data || !("user" in returning.data)) {
+			throw new Error("Expected the returning sign-in to return a user");
+		}
+		expect(returning.data.user.id).toBe(res.data.user.id);
+		const returningAccounts = await client.listAccounts({
+			fetchOptions: { headers: returningHeaders },
+		});
+		expect(
+			returningAccounts.data?.filter(
+				(account) => account.providerId === "google",
+			),
+		).toHaveLength(1);
 	});
 
 	it("rejects an id token whose audience is not configured", async () => {
@@ -3424,10 +3534,12 @@ describe("Reddit Provider — profile email mapping", async () => {
 		} as any);
 
 		// Without a mapped email the provider derives a unique, per-user
-		// synthetic email from the Reddit user id rather than falling back to
+		// placeholder email from the Reddit user id rather than falling back to
 		// the shared oauth_client_id, so users can never collide on one address.
 		// The non-routable `.invalid` domain keeps it from matching a real mailbox.
-		expect(result?.user.email).toBe("reddit-user-123@reddit.invalid");
+		expect(result?.user.email).toBe(
+			"reddit-user-123@reddit.placeholder.invalid",
+		);
 		expect(result?.user.email).not.toBe(profile.oauth_client_id);
 		expect(result?.user.emailVerified).toBe(false);
 	});

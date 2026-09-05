@@ -1,0 +1,13 @@
+{
+  "title": "Infrastructure",
+  "icon": "infrastructure",
+  "pages": [
+    "introduction",
+    "getting-started",
+    "---Plugins---",
+    "...plugins",
+    "---Services---",
+    "...services",
+    "..."
+  ]
+}

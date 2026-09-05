@@ -1,5 +1,21 @@
 # @better-auth/core
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10938](https://github.com/better-auth/better-auth/pull/10938) [`557e19b`](https://github.com/better-auth/better-auth/commit/557e19bfad0f2d2842903ddb1e768a0506aceaea) Thanks [@bytaesu](https://github.com/bytaesu)! - Added synchronous auth endpoint context access with `getCurrentAuthEndpointContext` and optional access with `tryGetCurrentAuthEndpointContext`. The existing `getCurrentAuthContext` and `getCurrentAuthContextAsyncLocalStorage` functions remain available as deprecated compatibility APIs.
+
+- [#10855](https://github.com/better-auth/better-auth/pull/10855) [`64da15b`](https://github.com/better-auth/better-auth/commit/64da15b0b1ca078d80f115ee0a5bd9ad4ca4d64e) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent async context loss in Cloudflare Workers bundles that enable multiple runtime conditions.
+
+- [#10982](https://github.com/better-auth/better-auth/pull/10982) [`b4ad5a1`](https://github.com/better-auth/better-auth/commit/b4ad5a110ca4f2e043c0f23a8e5f87e0b31c3fc6) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in placeholder emails now consistently use the namespaced `{identifier}@{namespace}.placeholder.invalid` format.
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
+- [#10939](https://github.com/better-auth/better-auth/pull/10939) [`e1d4011`](https://github.com/better-auth/better-auth/commit/e1d40116e2b6a797372ac82b9feea39f57285632) Thanks [@bytaesu](https://github.com/bytaesu)! - Logs emitted while handling auth requests now respect the configured custom logger, log level, and disabled setting.
+
+## 1.7.1
+
 ## 1.7.0
 
 ### Minor Changes
