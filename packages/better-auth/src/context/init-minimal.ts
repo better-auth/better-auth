@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { schemaCheckFor } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getBaseAdapter } from "../db/adapter-base";
 import { createAuthContext } from "./create-context";
@@ -16,6 +17,7 @@ export const initMinimal = async (options: BetterAuthOptions) => {
 
 	// Use base context creation
 	const ctx = await createAuthContext(adapter, options, getDatabaseType);
+	ctx.checkSchema = schemaCheckFor(adapter);
 
 	// Add runMigrations that throws error (migrations require Kysely)
 	ctx.runMigrations = async function () {
