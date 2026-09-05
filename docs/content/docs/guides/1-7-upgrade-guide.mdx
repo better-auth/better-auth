@@ -707,11 +707,11 @@ Two OAuth-provider behaviors read the incoming request origin. Behind a custom s
 
 The atomic-state work introduces required methods. If you use only the built-in adapters and storage, you can skip this.
 
-### Database adapters must implement `incrementOne` and `consumeOne`
+### Database adapters can implement `incrementOne` and `consumeOne`
 
-`incrementOne` updates one row's counter atomically and returns the row, or null when the guard did not match. `consumeOne` reads and deletes a row in one step for single-use credentials. Both are now required, and the old fallback is gone.
+`incrementOne` updates one row's counter atomically and returns the row, or null when the guard did not match. `consumeOne` reads and deletes a row in one step for single-use credentials. Both are optional. When a custom adapter omits them, Better Auth falls back to `findOne` plus an id-guarded `deleteMany` or a compare-and-swap `updateMany`, which stay atomic across processes because each is a single guarded statement.
 
-**What to do:** implement both `incrementOne` and `consumeOne` in any custom adapter. A missing `consumeOne` throws at runtime. All built-in adapters already do.
+**What to do:** nothing is required. Implement both natively in a custom adapter to save a round trip on hot paths. All built-in adapters already do.
 
 ### Secondary storage must implement `increment` and `getAndDelete`
 

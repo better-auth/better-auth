@@ -209,10 +209,55 @@ describe("createAdapterFactory atomic primitives", () => {
 		).rejects.toThrow(/resolved to an empty update/);
 	});
 
-	it("throws a clear error when consumeOne is missing at runtime", async () => {
+	it("falls back to findOne plus id-guarded deleteMany when consumeOne is missing", async () => {
+		const deleteCalls: CleanedWhere[][] = [];
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
-				consumeOne: undefined as unknown as CustomAdapter["consumeOne"],
+				consumeOne: undefined,
+				findOne: async <T>() =>
+					({ id: "verification-id", identifier_text: "stored-token" }) as T,
+				deleteMany: async ({ where }) => {
+					deleteCalls.push(where);
+					return 1;
+				},
+			}),
+		});
+
+		const result = await adapter.consumeOne<{ id: string; identifier: string }>(
+			{
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+			},
+		);
+
+		expect(result).toEqual({
+			id: "verification-id",
+			identifier: "stored-token:output",
+		});
+		expect(deleteCalls[0]).toEqual([
+			{
+				field: "identifier_text",
+				value: "token:consumeOne",
+				operator: "eq",
+				connector: "AND",
+				mode: "sensitive",
+			},
+			{
+				field: "id",
+				value: "verification-id",
+				operator: "eq",
+				connector: "AND",
+				mode: "sensitive",
+			},
+		]);
+	});
+
+	it("returns null from the consumeOne fallback when another caller deleted the row first", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				consumeOne: undefined,
+				findOne: async <T>() => ({ id: "verification-id" }) as T,
+				deleteMany: async () => 0,
 			}),
 		});
 
@@ -221,13 +266,100 @@ describe("createAdapterFactory atomic primitives", () => {
 				model: "verification",
 				where: [{ field: "identifier", value: "token" }],
 			}),
-		).rejects.toThrow(/must implement consumeOne/);
+		).resolves.toBeNull();
 	});
 
-	it("throws a clear error when incrementOne is missing at runtime", async () => {
+	it("falls back to a compare-and-swap updateMany when incrementOne is missing", async () => {
+		const updateCalls: {
+			where: CleanedWhere[];
+			update: Record<string, any>;
+		}[] = [];
+		let attemptCount = 2;
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
-				incrementOne: undefined as unknown as CustomAdapter["incrementOne"],
+				incrementOne: undefined,
+				findOne: async <T>() =>
+					({ id: "verification-id", attempt_count: attemptCount }) as T,
+				updateMany: async ({ where, update }) => {
+					updateCalls.push({ where, update });
+					attemptCount = update.attempt_count;
+					return 1;
+				},
+			}),
+		});
+
+		const result = await adapter.incrementOne<{ id: string; attempts: number }>(
+			{
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+				increment: { attempts: 1 },
+			},
+		);
+
+		expect(result).toEqual({ id: "verification-id", attempts: 3 });
+		expect(updateCalls).toHaveLength(1);
+		expect(updateCalls[0]!.update).toEqual({ attempt_count: 3 });
+		expect(updateCalls[0]!.where).toEqual([
+			{
+				field: "identifier_text",
+				value: "token:incrementOne",
+				operator: "eq",
+				connector: "AND",
+				mode: "sensitive",
+			},
+			{
+				field: "id",
+				value: "verification-id",
+				operator: "eq",
+				connector: "AND",
+				mode: "sensitive",
+			},
+			{
+				field: "attempt_count",
+				value: 2,
+				operator: "eq",
+				connector: "AND",
+				mode: "sensitive",
+			},
+		]);
+	});
+
+	it("retries the incrementOne fallback after losing a compare-and-swap race", async () => {
+		let stored = 2;
+		let updateCalls = 0;
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				incrementOne: undefined,
+				findOne: async <T>() =>
+					({ id: "verification-id", attempt_count: stored }) as T,
+				updateMany: async ({ update }) => {
+					updateCalls++;
+					if (updateCalls === 1) {
+						// A concurrent writer bumped the counter between read and write.
+						stored = 3;
+						return 0;
+					}
+					stored = update.attempt_count;
+					return 1;
+				},
+			}),
+		});
+
+		const result = await adapter.incrementOne<{ attempts: number }>({
+			model: "verification",
+			where: [{ field: "identifier", value: "token" }],
+			increment: { attempts: 1 },
+		});
+
+		expect(updateCalls).toBe(2);
+		expect(result?.attempts).toBe(4);
+	});
+
+	it("returns null from the incrementOne fallback when the guard matches no row", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				incrementOne: undefined,
+				findOne: async () => null,
 			}),
 		});
 
@@ -237,7 +369,7 @@ describe("createAdapterFactory atomic primitives", () => {
 				where: [{ field: "identifier", value: "token" }],
 				increment: { attempts: 1 },
 			}),
-		).rejects.toThrow(/must implement incrementOne/);
+		).resolves.toBeNull();
 	});
 
 	it("throws a clear error when updateMany does not return a finite count", async () => {

@@ -271,8 +271,8 @@ consumeOne: async ({ model, where }) => {
 };
 ```
 
-<Callout type="warn">
-  `consumeOne` is required. Better Auth does not provide a `findMany` plus `deleteMany` fallback because that shape cannot guarantee single-use semantics across adapters without a native atomic delete-and-return operation.
+<Callout type="info">
+  `consumeOne` is optional. When it is missing, Better Auth falls back to `findOne` followed by a `deleteMany` guarded on the row id, and treats the caller as the winner only when exactly one row was deleted. Implement it natively to save a round trip.
 </Callout>
 
 ### `incrementOne` method
@@ -302,8 +302,8 @@ incrementOne: async ({ model, where, increment, set }) => {
 };
 ```
 
-<Callout type="warn">
-  `incrementOne` is required. Better Auth uses it as a compare-and-swap primitive: the `where` clause is part of the guard, so concurrent requests cannot all update a stale snapshot.
+<Callout type="info">
+  `incrementOne` is optional. When it is missing, Better Auth falls back to a compare-and-swap loop: `findOne`, then `updateMany` guarded on the row id and the counter values it just read, retried when a concurrent writer got there first. Implement it natively for one round trip under contention.
 </Callout>
 
 ### `findOne` method
