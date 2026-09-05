@@ -2573,6 +2573,7 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 				plugins: [
 					uniqueVerificationIdentifier,
 					emailOTP({
+						generateOTP: () => String(100000 + otps.length),
 						async sendVerificationOTP({ otp }) {
 							otps.push(otp);
 						},
@@ -2590,8 +2591,7 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 
-		expect(otps).toHaveLength(2);
-		expect(otps[1]).not.toBe(otps[0]);
+		expect(otps).toEqual(["100000", "100001"]);
 
 		const stale = await client.signIn.emailOtp({ email, otp: otps[0]! });
 		expect(stale.error?.code).toBe("INVALID_OTP");
@@ -2600,9 +2600,9 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		expect(res.data?.token).toBeDefined();
 	});
 
-	it("should keep the last emailed code valid when the stored code cannot be recovered", async () => {
+	it("should send nothing from the losing request when the stored code cannot be recovered", async () => {
 		const otps: string[] = [];
-		const { client } = await getTestInstance(
+		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
 					uniqueVerificationIdentifier,
@@ -2621,6 +2621,21 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 			},
 		);
 		const email = "concurrent-send-hashed@example.com";
+		const identifier = `sign-in-otp-${email}`;
+
+		// Both requests look the identifier up before either stores a row, so the
+		// loser finds a code it cannot read back and must leave the delivery to
+		// the winner instead of replacing the winner's code with its own.
+		const context = await auth.$context;
+		const internalAdapter = context.internalAdapter;
+		let lookups = 0;
+		context.internalAdapter = {
+			...internalAdapter,
+			async findVerificationValue(id) {
+				if (id === identifier && lookups++ < 2) return null;
+				return internalAdapter.findVerificationValue(id);
+			},
+		};
 
 		const results = await Promise.all([
 			client.emailOtp.sendVerificationOtp({ email, type: "sign-in" }),
@@ -2630,9 +2645,47 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 			expect(result.error).toBeNull();
 		}
 
-		expect(otps).toHaveLength(2);
-		const res = await client.signIn.emailOtp({ email, otp: otps[1]! });
+		expect(otps).toHaveLength(1);
+		const res = await client.signIn.emailOtp({ email, otp: otps[0]! });
 		expect(res.data?.token).toBeDefined();
+	});
+
+	it("should fail the request when the insert succeeded but a create hook failed", async () => {
+		const otps: string[] = [];
+		const { client } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						create: {
+							after: async () => {
+								throw new Error("audit log unavailable");
+							},
+						},
+					},
+				},
+				plugins: [
+					uniqueVerificationIdentifier,
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							otps.push(otp);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const email = "create-hook-failure@example.com";
+
+		const result = await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		expect(result.error).not.toBeNull();
+		expect(otps).toHaveLength(0);
 	});
 
 	it("should deliver the code a concurrent request stored while replacing a pending one", async () => {
@@ -2732,8 +2785,9 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		// The first request looked the identifier up before the pending row
 		// appeared, so its insert loses to that row and it sets out to deliver the
 		// pending code. Before it extends that row, a resend that had seen the row
-		// rotates it; the first request must then deliver the rotated code rather
-		// than the code it read, which the rotation has just invalidated.
+		// rotates it; the first request must then leave the delivery to the resend
+		// rather than email the code it read, which the rotation has just
+		// invalidated.
 		const internalAdapter = context.internalAdapter;
 		let lookups = 0;
 		context.internalAdapter = {
@@ -2766,8 +2820,7 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		});
 		expect(result.error).toBeNull();
 
-		expect(otps).toHaveLength(2);
-		expect(otps[1]).toBe(otps[0]);
+		expect(otps).toHaveLength(1);
 		expect(otps[0]).not.toBe("000000");
 
 		const rows = await adapter.findMany({

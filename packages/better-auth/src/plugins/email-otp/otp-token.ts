@@ -88,6 +88,20 @@ async function retrieveOTP(
 }
 
 /**
+ * Whether a stored OTP can still be verified: not expired and not out of
+ * attempts.
+ */
+export function isPendingOTP(
+	opts: RequiredEmailOTPOptions,
+	existing: Verification,
+): boolean {
+	if (existing.expiresAt < new Date()) return false;
+	const [, attempts] = splitAtLastColon(existing.value);
+	const allowedAttempts = opts.allowedAttempts || 3;
+	return !attempts || parseInt(attempts) < allowedAttempts;
+}
+
+/**
  * Tries to reuse an existing unexpired OTP.
  * Returns the plain-text OTP if reusable, `null` otherwise.
  */
@@ -99,12 +113,9 @@ export async function tryReuseOTP(
 ): Promise<string | null> {
 	existing ??=
 		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (!existing || existing.expiresAt < new Date()) return null;
+	if (!existing || !isPendingOTP(opts, existing)) return null;
 
-	const [storedOtpValue, attempts] = splitAtLastColon(existing.value);
-	const allowedAttempts = opts.allowedAttempts || 3;
-	if (attempts && parseInt(attempts) >= allowedAttempts) return null;
-
+	const [storedOtpValue] = splitAtLastColon(existing.value);
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
 
