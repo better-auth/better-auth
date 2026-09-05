@@ -5,9 +5,9 @@ import { SchemaMismatchError } from "./schema-diff";
 
 /**
  * Whether the schema is compared with this configuration before the first
- * request. On outside production unless the option decides either way, so
- * drift is caught in development and by `auth migrate`, not by the first
- * failed insert in production.
+ * request. On by default outside production, and the option decides
+ * otherwise, so drift is caught in development and by `auth migrate`, not
+ * by the first failed insert in production.
  */
 export function checksSchema(options: BetterAuthOptions): boolean {
 	return options.advanced?.database?.validateSchema ?? !isProduction;
