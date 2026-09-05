@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { sessionMiddleware } from "../../api";
+import { sensitiveSessionMiddleware } from "../../api";
 import type { Session, User } from "../../types";
 import type { Role } from "../access";
 import type { defaultRoles } from "./access/statement";
@@ -23,12 +23,12 @@ export const orgMiddleware = createAuthMiddleware(async () => {
 });
 
 /**
- * The middleware forces the endpoint to require a valid session by utilizing the `sessionMiddleware`.
+ * The middleware forces the endpoint to require a valid authoritative session.
  * It also appends additional types to the session type regarding organizations.
  */
 export const orgSessionMiddleware = createAuthMiddleware(
 	{
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session as {

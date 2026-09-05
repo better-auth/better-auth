@@ -117,6 +117,49 @@ describe("runWithTransaction", () => {
 		expect(hookRuns).toBe(0);
 	});
 
+	it("does not run hooks queued by nested calls when the outer transaction rolls back", async () => {
+		const { adapter, getTransactionCalls } = createTransactionHarness();
+		const transactionError = new Error("transaction failed");
+		let hookRuns = 0;
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await runWithTransaction(adapter, async () => {
+					await queueAfterTransactionHook(async () => {
+						hookRuns += 1;
+					});
+				});
+
+				throw transactionError;
+			}),
+		).rejects.toBe(transactionError);
+
+		expect(getTransactionCalls()).toBe(1);
+		expect(hookRuns).toBe(0);
+	});
+
+	it("does not run hooks when committing the transaction fails", async () => {
+		const commitError = new Error("commit failed");
+		let hookRuns = 0;
+		const { adapter, transactionAdapter } = createTransactionHarness();
+		adapter.transaction = async <R>(
+			callback: (trx: DBTransactionAdapter) => Promise<R>,
+		) => {
+			await callback(transactionAdapter);
+			throw commitError;
+		};
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(async () => {
+					hookRuns += 1;
+				});
+			}),
+		).rejects.toBe(commitError);
+
+		expect(hookRuns).toBe(0);
+	});
+
 	it("reports a handled after-commit hook failure without rejecting committed work", async () => {
 		const { adapter } = createTransactionHarness();
 		const onError = vi.fn();
@@ -165,17 +208,31 @@ describe("runWithTransaction", () => {
 		expect(events).toEqual(["later hook"]);
 	});
 
-	it("keeps legacy after-commit failures rejecting when no handler is provided", async () => {
-		const { adapter } = createTransactionHarness();
+	it("fails fast when an unhandled after-commit hook rejects", async () => {
+		const hookError = new Error("hook failed");
+		const events: string[] = [];
+		const { adapter, transactionAdapter } = createTransactionHarness();
+		adapter.transaction = async <R>(
+			callback: (trx: DBTransactionAdapter) => Promise<R>,
+		) => {
+			const result = await callback(transactionAdapter);
+			events.push("committed");
+			return result;
+		};
 
 		await expect(
 			runWithTransaction(adapter, async () => {
 				await queueAfterTransactionHook(async () => {
-					throw new Error("legacy hook failure");
+					events.push("first hook");
+					throw hookError;
 				});
-				return "committed";
+				await queueAfterTransactionHook(async () => {
+					events.push("second hook");
+				});
 			}),
-		).rejects.toThrow("legacy hook failure");
+		).rejects.toBe(hookError);
+
+		expect(events).toEqual(["committed", "first hook"]);
 	});
 
 	it("does not retry an immediately executed hook when it fails", async () => {
