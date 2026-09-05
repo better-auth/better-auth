@@ -599,9 +599,43 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const c = await builder.returning();
 					return c[0];
 				}
-				await builder.execute();
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
+
+				// Serial auto-increment inserts read the generated id from the
+				// driver's response to the INSERT itself (Drizzle `$returningId()`).
+				// `LAST_INSERT_ID()` must not be used for this: it is connection
+				// scoped, and drivers without connection affinity (for example
+				// `@planetscale/database`, which opens a new connection for each
+				// request and for each transaction) return `0` for it. PlanetScale
+				// returns that `0` as the string `"0"`, which is truthy and used to
+				// short-circuit the safe fallbacks below with `WHERE id = '0'`.
+				if (
+					!where?.length &&
+					options.advanced?.database?.generateId === "serial" &&
+					schemaModel.id &&
+					typeof builder.$returningId === "function"
+				) {
+					const returned: { id?: unknown }[] = await builder.$returningId();
+					const insertedId = returned[0]?.id;
+					// Drivers that do not report `insertId` yield `0` or `undefined`.
+					// Check numerically: `"0"` is truthy.
+					if (
+						Number.isSafeInteger(Number(insertedId)) &&
+						Number(insertedId) > 0
+					) {
+						const res = await db
+							.select()
+							.from(schemaModel)
+							.where(eq(schemaModel.id, insertedId))
+							.limit(1)
+							.execute();
+						return res[0] ?? null;
+					}
+				} else {
+					await builder.execute();
+				}
+
 				if (where?.length) {
 					const updatedWhere = where.map((w) => {
 						if (data[w.field] !== undefined) {
@@ -642,29 +676,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return res[0] ?? null;
 					}
 
-					// 3. Serial auto-increment: LAST_INSERT_ID() is connection-scoped
-					if (
-						options.advanced?.database?.generateId === "serial" &&
-						schemaModel.id
-					) {
-						const lastInsertId = await tx
-							.select({ id: sql`LAST_INSERT_ID()` })
-							.from(schemaModel)
-							.limit(1)
-							.execute();
-						const lastId = lastInsertId[0]?.id;
-						if (lastId) {
-							const res = await tx
-								.select()
-								.from(schemaModel)
-								.where(eq(schemaModel.id, lastId))
-								.limit(1)
-								.execute();
-							return res[0] ?? null;
-						}
-					}
-
-					// 4. Unique column lookup via Better Auth schema
+					// 3. Unique column lookup via Better Auth schema
 					const modelSchema = baSchema[getDefaultModelName(model)]?.fields;
 					if (modelSchema) {
 						for (const [fieldKey, fieldAttr] of Object.entries(modelSchema)) {
@@ -686,7 +698,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 
-					// 5. Full-field match (last resort) — LIMIT 2 to detect ambiguity
+					// 4. Full-field match (last resort) — LIMIT 2 to detect ambiguity
 					const conditions: SQL<unknown>[] = [];
 					for (const [key, val] of Object.entries(data)) {
 						if (val === undefined || !schemaModel[key]) continue;
