@@ -1,6 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import { SchemaMismatchError } from "@better-auth/core/db/internal";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { describe, expect, it } from "vitest";
 import { betterAuth } from "../auth/full";
 import { getMigrations } from "./get-migration";
@@ -171,5 +173,30 @@ describe("account table compatibility across v1 releases", () => {
 		).catch((error: unknown) => error);
 		expect(error).not.toBeInstanceOf(SchemaMismatchError);
 		expect((error as Error).message).toMatch(/NOT NULL constraint failed/);
+	});
+});
+
+describe("schema check timing", () => {
+	it("does not wait on a connection an ambient transaction holds", async () => {
+		const database = createDatabase(ACCOUNT_TABLE);
+		const { auth } = createAuth(database, {
+			database: {
+				dialect: new NodeSqliteDialect({ database }),
+				type: "sqlite",
+				transaction: true,
+			},
+		});
+		const { adapter } = await auth.$context;
+		await expect(
+			runWithTransaction(adapter, () =>
+				auth.api.signUpEmail({
+					body: {
+						email: "in-transaction@example.com",
+						password: "correct-horse-battery-staple",
+						name: "Employee",
+					},
+				}),
+			),
+		).resolves.toMatchObject({ user: { email: "in-transaction@example.com" } });
 	});
 });
