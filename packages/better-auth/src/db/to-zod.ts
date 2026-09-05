@@ -2,6 +2,17 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { ZodType } from "zod";
 import * as z from "zod";
 
+/**
+ * Static lookup keeps `zod` tree-shakeable. `z[field.type]()` forces bundlers
+ * to retain every `zod` export, including all locales.
+ */
+const scalarSchemas = {
+	string: z.string,
+	number: z.number,
+	boolean: z.boolean,
+	date: z.date,
+};
+
 export function toZodSchema<
 	Fields extends Record<string, DBFieldAttribute | never>,
 	IsClientSide extends boolean,
@@ -32,7 +43,7 @@ export function toZodSchema<
 		} else if (Array.isArray(field.type)) {
 			schema = z.any();
 		} else {
-			schema = z[field.type]();
+			schema = scalarSchemas[field.type]();
 		}
 
 		if (field?.required === false) {
