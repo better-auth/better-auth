@@ -4,6 +4,7 @@ import type {
 	SchemaFinding,
 } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Kysely, TableMetadata } from "kysely";
 import {
 	ColumnNode,
@@ -95,57 +96,40 @@ function sentIdentifiers(
 }
 
 /**
- * Get the current PostgreSQL schema (search_path) for the database connection
- * Returns the first schema in the search_path, defaulting to 'public' if not found
+ * The schema PostgreSQL selects for an unqualified CREATE statement.
+ * Let the server resolve role names, quoting, and schema privileges.
  */
 export async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{
-			search_path?: string;
-			searchPath?: string;
-		}>`SHOW search_path`.execute(db);
-		const searchPath =
-			result.rows[0]?.search_path ?? result.rows[0]?.searchPath;
-		if (searchPath) {
-			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
-			// Supabase may return escaped format like '"\$user", public'
-			// We want the first non-variable schema
-			const schemas = searchPath
-				.split(",")
-				.map((s) => s.trim())
-				// Remove quotes and filter out variables like $user
-				.map((s) => s.replace(/^["']|["']$/g, ""))
-				// Filter out variable references like $user, \$user (escaped)
-				.filter((s) => !s.startsWith("$") && !s.startsWith("\\$"));
-			return schemas[0] || "public";
-		}
-	} catch {
-		// If query fails, fall back to public schema
+	const result = await sql<{ schema: string | null }>`
+		SELECT pg_catalog.current_schema() AS schema
+	`.execute(db.withoutPlugins());
+	const schema = result.rows[0]?.schema;
+	if (!schema) {
+		throw new BetterAuthError(
+			"PostgreSQL search_path does not contain an accessible schema.",
+		);
 	}
-	return "public";
+	return schema;
 }
 
 export async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{ schemaName?: string }>`
-			SELECT SCHEMA_NAME() AS "schemaName"
-		`.execute(db);
-		return result.rows[0]?.schemaName || "dbo";
-	} catch {
-		return "dbo";
-	}
+	const result = await sql<{ schemaName?: string }>`
+		SELECT SCHEMA_NAME() AS "schemaName"
+	`.execute(db.withoutPlugins());
+	return result.rows[0]?.schemaName || "dbo";
 }
 
-/**
- * The schema an unqualified table name resolves to on this connection, for
- * the stores that have schemas.
- */
-async function defaultSchema(
+async function schemaSearchPath(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType | undefined,
-): Promise<string | undefined> {
-	if (dbType === "postgres") return getPostgresSchema(db);
-	if (dbType === "mssql") return getMssqlSchema(db);
+): Promise<string[] | undefined> {
+	if (dbType === "postgres") {
+		const result = await sql<{ schemas: string[] }>`
+			SELECT pg_catalog.current_schemas(true)::text[] AS schemas
+		`.execute(db.withoutPlugins());
+		return result.rows[0]?.schemas ?? [];
+	}
+	if (dbType === "mssql") return [await getMssqlSchema(db), "dbo"];
 	return undefined;
 }
 
@@ -161,12 +145,21 @@ export async function findSchemaProblems(
 	expected: ExpectedSchema,
 ): Promise<SchemaFinding[]> {
 	const physical = toPhysicalSchema(db, expected);
-	const fallback = await defaultSchema(db, dbType);
-	for (const table of Object.values(physical)) {
-		table.schema ??= fallback;
-	}
-	return diffSchema(
-		physical,
-		toIntrospectedTables(await db.introspection.getTables()),
-	);
+	return db.connection().execute(async (connection) => {
+		const searchPath = await schemaSearchPath(connection, dbType);
+		const tables = toIntrospectedTables(
+			await connection.introspection.getTables(),
+		);
+		for (const [name, table] of Object.entries(physical)) {
+			if (table.schema !== undefined || !searchPath) continue;
+			table.schema =
+				searchPath.find((schema) =>
+					tables.some(
+						(candidate) =>
+							candidate.name === name && candidate.schema === schema,
+					),
+				) ?? "";
+		}
+		return diffSchema(physical, tables);
+	});
 }
