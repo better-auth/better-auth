@@ -174,8 +174,19 @@ export interface VerifyAccessTokenOptions {
 		requiredScope: string,
 		grantedScopes: ReadonlySet<string>,
 	) => boolean;
-	/** Required to verify access token locally */
-	jwksUrl?: string;
+	/**
+	 * Required to verify access token locally. Accepts the JWKS URL, or a
+	 * function resolving the key set in-process for resource servers co-located
+	 * with their authorization server — an HTTP self-fetch can be impossible
+	 * there (Cloudflare Workers cannot request their own origin by default).
+	 */
+	jwksUrl?: string | (() => Promise<JSONWebKeySet | undefined>);
+	/**
+	 * Stable object to cache the result of a function `jwksUrl` source under,
+	 * with the same TTL and kid-miss refetch rules as string sources. Without
+	 * it, a function source is fetched on every verification.
+	 */
+	jwksCacheKey?: object;
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
 }
@@ -364,6 +375,7 @@ async function verifyAccessTokenPayload(
 		try {
 			payload = await verifyJwsAccessToken(token, {
 				jwksFetch: opts.jwksUrl,
+				jwksCacheKey: opts.jwksCacheKey,
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {

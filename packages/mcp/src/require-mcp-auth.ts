@@ -1,11 +1,12 @@
-import type { Awaitable } from "@better-auth/core";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import type {
 	DpopReplayReservations,
 	DpopReplayStore,
 } from "better-auth/oauth2";
 import { createDpopReplayStore } from "better-auth/oauth2";
+import type { jwt } from "better-auth/plugins";
 import type { BetterAuthOptions } from "better-auth/types";
-import type { JWTPayload } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	createMcpProtectedRequestHandler,
 	validateMcpResource,
@@ -23,10 +24,13 @@ export interface RequireMcpAuthOptions {
 	 */
 	issuer?: string;
 	/**
-	 * URL of the authorization server's JWKS. Defaults to `/jwks` under the
-	 * server's resolved base URL.
+	 * Source of the authorization server's JWKS: its URL, or a function
+	 * resolving the key set in-process. By default the key set is resolved
+	 * in-process through the auth instance's JWT plugin (or from the plugin's
+	 * configured `jwks.remoteUrl`), so no HTTP self-fetch is needed when the
+	 * authorization server and the MCP resource server share one deployment.
 	 */
-	jwksUrl?: string;
+	jwksUrl?: string | (() => Promise<JSONWebKeySet | undefined>);
 	/**
 	 * Scopes to advertise in the `WWW-Authenticate` challenge (RFC 6750),
 	 * hinting which scopes the client should request. Defaults to the enforced
@@ -81,6 +85,7 @@ export const requireMcpAuth = <
 		$context: Promise<{
 			baseURL: string;
 			internalAdapter: DpopReplayReservations;
+			getPlugin?: AuthContext["getPlugin"];
 		}>;
 	},
 >(
@@ -100,7 +105,8 @@ export const requireMcpAuth = <
 		// the auth context so the verified issuer and audience match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
-		const { baseURL, internalAdapter } = await auth.$context;
+		const context = await auth.$context;
+		const { baseURL, internalAdapter } = context;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `createMcpProtectedRequestHandler` with explicit verification options.",
@@ -108,7 +114,31 @@ export const requireMcpAuth = <
 		}
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
-		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
+		// Resolve the key set in-process by default, mirroring introspect/revoke:
+		// the authorization server is this same auth instance, and an HTTP
+		// self-fetch of `${baseURL}/jwks` fails on runtimes that cannot request
+		// their own origin (Cloudflare Workers by default, where it surfaced as
+		// a 500 on every request carrying a valid token) and is a wasted round
+		// trip everywhere else.
+		let jwksUrl: string | (() => Promise<JSONWebKeySet | undefined>);
+		let jwksCacheKey: object | undefined;
+		const jwtPlugin = (context.getPlugin?.("jwt") ?? null) as ReturnType<
+			typeof jwt
+		> | null;
+		const remoteJwksUrl = jwtPlugin?.options?.jwks?.remoteUrl;
+		if (opts?.jwksUrl !== undefined) {
+			jwksUrl = opts.jwksUrl;
+		} else if (jwtPlugin && !remoteJwksUrl) {
+			jwksUrl = async (): Promise<JSONWebKeySet | undefined> => {
+				const jwksRes = await jwtPlugin.endpoints.getJwks({
+					context: context as unknown as AuthContext,
+				});
+				return jwksRes as JSONWebKeySet | undefined;
+			};
+			jwksCacheKey = jwtPlugin;
+		} else {
+			jwksUrl = remoteJwksUrl ?? `${baseURL}/jwks`;
+		}
 		return createMcpProtectedRequestHandler(
 			{
 				issuer,
@@ -117,6 +147,7 @@ export const requireMcpAuth = <
 				challengeScopes: opts?.challengeScopes,
 				isScopeSatisfied: opts?.isScopeSatisfied,
 				jwksUrl,
+				jwksCacheKey,
 				dpop: {
 					proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
 					signingAlgorithms: opts?.dpop?.signingAlgorithms,
