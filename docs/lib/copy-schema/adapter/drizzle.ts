@@ -82,7 +82,9 @@ export const drizzleResolver = (options: DrizzleResolverOptions): Resolver => {
 							: `t.text("${fieldName}").primaryKey()`,
 					foreignKeyId: ctx.useNumberId
 						? `t.integer("${fieldName}")`
-						: `t.text("${fieldName}")`,
+						: provider === "mysql"
+							? `t.varchar("${fieldName}", { length: 36 })`
+							: `t.text("${fieldName}")`,
 					"number[]": `${number}.array()`,
 					"string[]": `t.text("${fieldName}").array()`,
 				};
