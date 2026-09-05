@@ -21,6 +21,7 @@ export {
 	diffSchema,
 	type ExpectedSchema,
 	formatSchemaFinding,
+	getExpectedSchema,
 	type IntrospectedColumn,
 	type IntrospectedTable,
 	type SchemaFinding,

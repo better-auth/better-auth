@@ -1,4 +1,6 @@
 import { BetterAuthError } from "../error";
+import type { BetterAuthOptions } from "../types";
+import { getAuthTables } from "./get-tables";
 import type { DBFieldAttribute } from "./type";
 
 /**
@@ -42,6 +44,26 @@ export type ExpectedSchema = Record<
 		schema?: string | undefined;
 	}
 >;
+
+/**
+ * The tables this configuration writes, keyed the way the adapter addresses
+ * them. Tables that share a physical name are merged into one entry.
+ */
+export function getExpectedSchema(
+	options: BetterAuthOptions,
+	{ usePlural = false }: { usePlural?: boolean | undefined } = {},
+): ExpectedSchema {
+	const expected: ExpectedSchema = {};
+	for (const table of Object.values(getAuthTables(options))) {
+		const name = usePlural ? `${table.modelName}s` : table.modelName;
+		const entry = (expected[name] ??= { fields: {} });
+		for (const [key, field] of Object.entries(table.fields)) {
+			entry.fields[field.fieldName || key] = field;
+		}
+		if (table.disableMigrations) entry.disableMigrations = true;
+	}
+	return expected;
+}
 
 export type SchemaFinding =
 	| { kind: "missing-table"; table: string }
