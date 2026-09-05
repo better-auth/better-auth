@@ -2699,6 +2699,165 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11075
+	 */
+	it("should complete an earlier cookie-backed flow after a second one starts", async () => {
+		const { client, customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-parallel",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		// One cookie jar, as a single browser would have across two tabs.
+		const headers = new Headers();
+		const startSignIn = async () => {
+			const res = await client.signIn.social({
+				provider: "test-cookie-parallel",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					// Send the jar as well as collect it, so the second sign-in sees
+					// the cookie the first one wrote.
+					headers,
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			return res.data?.url ?? "";
+		};
+
+		const firstURL = await startSignIn();
+		const secondURL = await startSignIn();
+
+		expect(firstURL).toBeTruthy();
+		expect(secondURL).toBeTruthy();
+		expect(new URL(firstURL).searchParams.get("state")).not.toBe(
+			new URL(secondURL).searchParams.get("state"),
+		);
+
+		// The older tab finishes first. Its nonce must still be honoured.
+		const firstFlow = await simulateOAuthFlow(
+			firstURL,
+			headers,
+			customFetchImpl,
+		);
+		expect(firstFlow.callbackURL).not.toContain("state_mismatch");
+
+		// And consuming it must leave the newer tab's flow usable, rather than
+		// clearing the cookie outright.
+		const secondFlow = await simulateOAuthFlow(
+			secondURL,
+			firstFlow.headers,
+			customFetchImpl,
+		);
+		expect(secondFlow.callbackURL).not.toContain("state_mismatch");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11075
+	 */
+	it("should keep the newest cookie-backed flow usable when entries are oversized", async () => {
+		const { client, customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-oversized",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		const headers = new Headers();
+		// Long callback URLs push the encrypted cookie past the browser limit well
+		// before the entry cap is reached.
+		const longCallbackURL = `http://localhost:3000/dashboard?padding=${"x".repeat(1200)}`;
+		const startSignIn = async () => {
+			const res = await client.signIn.social({
+				provider: "test-cookie-oversized",
+				callbackURL: longCallbackURL,
+				fetchOptions: {
+					headers,
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			return res.data?.url ?? "";
+		};
+
+		await startSignIn();
+		await startSignIn();
+		const newestURL = await startSignIn();
+
+		const stateCookie = headers
+			.get("cookie")
+			?.split("; ")
+			.find((entry) => entry.startsWith("better-auth.oauth_state="));
+		expect(stateCookie?.length ?? 0).toBeLessThan(4096);
+
+		const { callbackURL } = await simulateOAuthFlow(
+			newestURL,
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).not.toContain("state_mismatch");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11075
+	 */
+	it("should reject a single cookie-backed flow that cannot fit in a cookie", async () => {
+		const { client } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-too-large",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		const headers = new Headers();
+		// Trimming cannot rescue this: the single flow is over the budget by itself.
+		const res = await client.signIn.social({
+			provider: "test-cookie-too-large",
+			callbackURL: `http://localhost:3000/dashboard?padding=${"x".repeat(6000)}`,
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.url).toBeFalsy();
+		expect(res.error).toBeTruthy();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/4951
 	 * @see https://github.com/better-auth/better-auth/pull/9069
 	 */

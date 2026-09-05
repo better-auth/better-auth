@@ -27,7 +27,7 @@ import { redirectOnError } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
-import { parseGenericState } from "../../state";
+import { parseGenericState, toPendingStates } from "../../state";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
@@ -434,7 +434,22 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								key: getEncryptionKey(ctx),
 								data: statePackage.stateCookie,
 							});
-							stateData = parseJSON<StateData>(decryptedState);
+							// The cookie can hold several in-flight sign-ins. Falling back to
+							// the newest leaves the binding check below to reject a mismatch.
+							const pendingStates = toPendingStates(
+								parseJSON<unknown>(decryptedState),
+							);
+							const selectedState =
+								pendingStates.find(
+									(entry) => entry.oauthState === statePackage.state,
+								) ?? pendingStates.at(-1);
+
+							if (!selectedState) {
+								ctx.context.logger.error("No OAuth proxy state to restore");
+								return;
+							}
+
+							stateData = selectedState;
 						} catch (e) {
 							ctx.context.logger.error(
 								"Failed to decrypt OAuth proxy state cookie:",
