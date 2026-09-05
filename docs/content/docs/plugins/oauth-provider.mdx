@@ -440,11 +440,26 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use a claimed `https` URI, an `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]` with any port, or an authority-free private-use URI with a reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)). Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, and routable-host `http` redirects.
+`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use a claimed `https` URI, an `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]` with any port, an authority-free private-use URI with a reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)), or a non-reserved custom-scheme URI with an authority such as `cursor://anysphere.cursor-mcp/oauth/callback`. The reverse-domain form remains the recommended private-use shape; host-bearing custom schemes are accepted because RFC 8252 does not forbid them and native MCP clients emit them. Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, and routable-host `http` redirects.
 
 Application type is independent of client authentication. For example, a native client may use `client_secret_post`, while a web client may use `token_endpoint_auth_method: "none"`. Authentication capability is derived only from `token_endpoint_auth_method`; the removed `type` and `public` metadata fields are not accepted or returned.
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
+
+Some native MCP clients omit `application_type` in DCR (current Cursor builds do), which the OIDC default classifies as `web` — rejecting their custom-scheme redirect. `clientRegistrationDefaultApplicationType` sets server-owned policy for that absent field: `"web"` (the default, strict OIDC behavior), `"native"`, or `"infer"`, which classifies a registration as `native` only when every `redirect_uris` entry uses a non-http(s) scheme. An `application_type` the client actually sends is never overridden, and web-client redirect policy is unchanged.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  allowUnauthenticatedClientRegistration: true,
+  clientRegistrationDefaultApplicationType: "infer",
+  // ... other options
+})
+```
+
+<Callout type="warn">
+  Accepting private-use schemes without a period (such as `cursor:`) deviates from the [RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1) recommendation that authorization servers reject schemes lacking a domain-based dot. Better Auth mitigates redirect interception by requiring PKCE for all public-client authorization requests, which makes an intercepted authorization code unusable without the code verifier.
+</Callout>
 
 Note the following parameters are not yet supported:
 
