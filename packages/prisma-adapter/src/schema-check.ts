@@ -51,7 +51,7 @@ function clientProperty(model: string): string {
  * each model by its client property, each field by name. Relation fields are
  * not columns and are skipped.
  */
-export function introspectPrismaDataModel(
+function introspectPrismaDataModel(
 	dataModel: PrismaRuntimeDataModel,
 ): IntrospectedTable[] {
 	return Object.entries(dataModel.models).map(([model, { fields }]) => ({

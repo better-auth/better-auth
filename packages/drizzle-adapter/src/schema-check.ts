@@ -11,7 +11,7 @@ import { getTableColumns, is, Table } from "drizzle-orm";
  * by the key it is exported under, each column by its property name. Values
  * that are not tables, such as relations, are skipped.
  */
-export function introspectDrizzleSchema(
+function introspectDrizzleSchema(
 	schema: Record<string, unknown>,
 ): IntrospectedTable[] {
 	const tables: IntrospectedTable[] = [];
