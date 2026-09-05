@@ -1027,7 +1027,7 @@ export const createInternalAdapter = (
 			});
 			if (accountsWithUsers.length > 1) {
 				throw new BetterAuthError(
-					"Multiple accounts match the same providerId and accountId. Resolve duplicate account identities before continuing.",
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
 				);
 			}
 			const accountWithUser = accountsWithUsers[0];
@@ -1216,7 +1216,7 @@ export const createInternalAdapter = (
 			});
 			if (accounts.length > 1) {
 				throw new BetterAuthError(
-					"Multiple accounts match the same providerId and accountId. Resolve duplicate account identities before continuing.",
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
 				);
 			}
 			return accounts[0] ?? null;

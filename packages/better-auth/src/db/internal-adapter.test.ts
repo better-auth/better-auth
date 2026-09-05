@@ -956,10 +956,10 @@ describe("internal adapter test", async () => {
 		}
 		const key = { providerId: "tenant", accountId: "shared-subject" };
 		await expect(accounts.findAccountByKey(key)).rejects.toThrow(
-			"Multiple accounts match",
+			'Multiple accounts match the same accountId for provider "tenant".',
 		);
 		await expect(accounts.findAccountOwnerByKey(key)).rejects.toThrow(
-			"Multiple accounts match",
+			'Multiple accounts match the same accountId for provider "tenant".',
 		);
 	});
 

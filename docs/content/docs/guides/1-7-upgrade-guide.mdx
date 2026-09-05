@@ -56,10 +56,20 @@ These features change the schema:
 
 Use this order:
 
-1. Complete the manual preparation in [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
+1. Check for [duplicate account keys](#check-for-duplicate-account-keys) and complete the manual preparation in [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
 2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth generate`, review the output, and apply it with your migration tooling.
 3. Deploy the 1.7 packages and configuration changes together.
 4. Complete any post-deployment work, including SCIM reprovisioning.
+
+### Check for duplicate account keys
+
+Check for duplicate `(providerId, accountId)` pairs before upgrading, including from 1.6. In PostgreSQL, run:
+
+```sql
+SELECT "providerId", "accountId", count(*) FROM account GROUP BY 1, 2 HAVING count(*) > 1;
+```
+
+Use your configured table and column names. Resolve any rows returned before upgrading. If different issuers share a provider ID and use the same account IDs, give each issuer its own provider ID and update the matching account rows. Keep different users separate. Better Auth rejects account lookups when more than one row matches the key.
 
 ***
 
@@ -71,13 +81,11 @@ This covers email and password, social login, the generic OAuth plugin, One Tap,
 
 Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account` table and a unique index on `issuer` and `accountId`. Better Auth 1.7.3 removes that requirement. Accounts are recognized by `providerId` and `accountId`, as in 1.6.
 
-**Upgrading from 1.6 changes nothing.** The account schema is the same one 1.6 shipped, so there is no column to add and no data to migrate.
+**The account schema is unchanged from 1.6.** No column needs to be added.
 
 <Callout type="warn">
   Only databases that ran 1.7.0 through 1.7.2 need the steps below. New rows no longer write `issuer`, so a `NOT NULL` column rejects every sign-up and account link until you relax it.
 </Callout>
-
-Before removing `issuer`, check for duplicate `(providerId, accountId)` pairs. If different issuers share a provider ID and use the same account IDs, give each issuer its own provider ID and update the matching account rows before upgrading. Keep different users separate. Better Auth rejects account lookups when more than one row matches the key.
 
 <Steps>
   <Step>
