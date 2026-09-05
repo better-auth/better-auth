@@ -7,6 +7,11 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	checksSchema,
+	createSchemaCheck,
+	registerSchemaCheck,
+} from "@better-auth/core/db/internal";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { SQL } from "drizzle-orm";
@@ -42,6 +47,7 @@ import {
 	insensitiveNe,
 	insensitiveNotInArray,
 } from "./query-builders";
+import { findDrizzleSchemaProblems } from "./schema-check";
 
 export interface DB {
 	[key: string]: any;
@@ -1206,6 +1212,21 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		const instance = adapter(options);
+		if (checksSchema(options)) {
+			registerSchemaCheck(
+				instance,
+				createSchemaCheck(
+					async () =>
+						findDrizzleSchemaProblems(
+							config.schema ?? db._?.fullSchema ?? {},
+							options,
+							config.usePlural,
+						),
+					"drizzle",
+				),
+			);
+		}
+		return instance;
 	};
 };
