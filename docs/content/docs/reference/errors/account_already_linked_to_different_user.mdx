@@ -31,7 +31,8 @@ not triggered by email/password flows on their own.
 * Test/preview environments share the same OAuth provider configuration and database; the provider account
   is already linked to a different user record.
 * Data migration or manual database edits left a stale link pointing to the wrong user.
-* You rely on email matching to decide linking, but the actual unique key is always `(issuer, accountId)`. Under issuer strategy, `issuer` is the verified authority; under provider-id strategy, it is a deterministic provider namespace. If that identity belongs to another user, linking will be blocked.
+* You rely on email matching to decide linking, but the actual account key is `providerId` and
+  `accountId`. If that identity belongs to another user, linking will be blocked.
 
 ### Safer patterns and prevention
 
@@ -43,7 +44,8 @@ not triggered by email/password flows on their own.
 
 ### Debug locally
 
-* Inspect your `account` database table. Each row points to a `userId` and is uniquely keyed by `issuer` and `accountId`. The issuer is either the verified authority or the deterministic provider namespace selected by `account.identityStrategy`.
+* Inspect your `account` database table. Each row points to a `userId` and is keyed by
+  `providerId` and `accountId`. For OpenID Connect providers, `accountId` is the verified subject.
 * Identify which user currently owns the provider link and decide whether to unlink, merge, or keep as-is.
 * Verify your app is connected to the expected database and environment (dev/staging/prod) to avoid confusion
   due to shared credentials or misconfigured environment variables.

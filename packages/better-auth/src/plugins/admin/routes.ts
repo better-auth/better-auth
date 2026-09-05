@@ -3,7 +3,6 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -461,7 +460,6 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				);
 				await ctx.context.internalAdapter.linkAccount({
 					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
 					accountId: user.id,
 					password: hashedPassword,
 					userId: user.id,
@@ -1742,7 +1740,6 @@ export const setUserPassword = (opts: AdminOptions) =>
 				await ctx.context.internalAdapter.createAccount({
 					userId,
 					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
 					accountId: user.id,
 					password: hashedPassword,
 				});

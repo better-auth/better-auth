@@ -39,7 +39,6 @@ export function auth0(options: Auth0Options): GenericOAuthConfig<"auth0"> {
 
 	return {
 		providerId: "auth0",
-		accountIssuer: `https://${domain}/`,
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,

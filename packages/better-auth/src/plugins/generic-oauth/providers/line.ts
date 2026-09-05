@@ -124,7 +124,6 @@ export function line(options: LineOptions): GenericOAuthConfig {
 	return {
 		providerId: options.providerId ?? "line",
 		accountSubject: ({ profile }) => profile.sub ?? "",
-		accountIssuer: "https://access.line.me",
 		authorizationUrl,
 		tokenUrl,
 		userInfoUrl,

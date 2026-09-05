@@ -91,10 +91,9 @@ describe.runIf(isPostgresAvailable)(
 		});
 
 		it("refuses a required no-default column on a populated table before any statement executes", async () => {
-			const { runMigrations } = await getMigrations(
-				unsafeChangeConfig(schemaPool),
+			const failure = await getMigrations(unsafeChangeConfig(schemaPool)).catch(
+				(error: unknown) => error,
 			);
-			const failure = await runMigrations().catch((error: unknown) => error);
 
 			expect(failure).toBeInstanceOf(UnsafeMigrationError);
 
@@ -114,21 +113,16 @@ describe.runIf(isMysqlAvailable)("MySQL unsafe migration guardrail", () => {
 
 	beforeAll(async () => {
 		await pool.query("DROP TABLE IF EXISTS `populatedNoDefault`");
-		await pool.query("DROP TABLE IF EXISTS `migrationAccount`");
 		await pool.query(
 			"CREATE TABLE `populatedNoDefault` (`id` varchar(36) primary key not null, `name` text not null)",
 		);
 		await pool.query(
 			"INSERT INTO `populatedNoDefault` (`id`, `name`) VALUES ('p1', 'existing-row')",
 		);
-		await pool.query(
-			"CREATE TABLE `migrationAccount` (`id` varchar(36) primary key not null, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null, `createdAt` timestamp(3) not null, `updatedAt` timestamp(3) not null, `externalKey` text not null)",
-		);
 	});
 
 	afterAll(async () => {
 		await pool.query("DROP TABLE IF EXISTS `populatedNoDefault`");
-		await pool.query("DROP TABLE IF EXISTS `migrationAccount`");
 		await pool.end();
 	});
 
@@ -139,8 +133,9 @@ describe.runIf(isMysqlAvailable)("MySQL unsafe migration guardrail", () => {
 	 * reporting a successful migration over corrupted data.
 	 */
 	it("refuses a required no-default column on a populated table before any statement executes", async () => {
-		const { runMigrations } = await getMigrations(unsafeChangeConfig(pool));
-		const failure = await runMigrations().catch((error: unknown) => error);
+		const failure = await getMigrations(unsafeChangeConfig(pool)).catch(
+			(error: unknown) => error,
+		);
 
 		expect(failure).toBeInstanceOf(UnsafeMigrationError);
 
@@ -149,44 +144,6 @@ describe.runIf(isMysqlAvailable)("MySQL unsafe migration guardrail", () => {
 		);
 		expect(rows.some((row) => row.COLUMN_NAME === "connectionIssuer")).toBe(
 			false,
-		);
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10575#discussion_r3812055040
-	 */
-	it("identifies the exact account indexes whose columns exceed dialect bounds", async () => {
-		const migration = await getMigrations(
-			{
-				account: {
-					modelName: "migrationAccount",
-				},
-				database: pool,
-				plugins: [
-					{
-						id: "migration-account-index",
-						schema: {
-							account: {
-								fields: {
-									externalKey: {
-										required: true,
-										type: "string",
-									},
-								},
-								indexes: [{ fields: ["externalKey"] }],
-							},
-						},
-					},
-				],
-			},
-			{ deferIndexBoundsToRelease: true, throwOnUnsafe: false },
-		);
-
-		const blockedIndexes = migration.migrationBlockers.flatMap((blocker) =>
-			blocker.code === "index-column-bounds" ? [blocker.index.columns] : [],
-		);
-		expect(blockedIndexes).toEqual(
-			expect.arrayContaining([["issuer", "accountId"], ["externalKey"]]),
 		);
 	});
 });

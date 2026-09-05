@@ -1738,7 +1738,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 			enabled: true,
 		},
 		account: {
-			identityStrategy: "issuer",
 			accountLinking: {
 				enabled: true,
 				trustedProviders: ["google", "github"],
@@ -1869,7 +1868,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.issuer).toBe("local:oauth:github");
 		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 
@@ -1885,66 +1883,58 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
 	});
+});
 
-	it("persists the provider namespace when linking under provider-id identity", async () => {
-		const { auth, client, cookieSetter } = await getTestInstance(
+describe("oauth2 - ambiguous account identity", () => {
+	it("does not issue a session for an ambiguous provider key", async () => {
+		const { auth } = await getTestInstance(
 			{
-				account: {
-					identityStrategy: "provider-id",
-					accountLinking: {
-						enabled: true,
-						trustedProviders: ["github"],
-					},
-				},
-				emailAndPassword: { enabled: true },
+				logger: { disabled: true },
 				socialProviders: {
-					github: {
+					google: {
 						clientId: "test",
 						clientSecret: "test",
-						enabled: true,
+						verifyIdToken: async () => true,
 					},
 				},
 			},
 			{ disableTestUser: true },
 		);
-		const headers = new Headers();
-		const signUp = await client.signUp.email(
+		const ctx = await auth.$context;
+		for (const name of ["first", "second"]) {
+			const user = await ctx.internalAdapter.createUser(
+				{ name, email: `${name}@ambiguous-account.test` },
+				{ method: "test" },
+			);
+			await ctx.internalAdapter.createAccount({
+				userId: user.id,
+				providerId: "google",
+				accountId: "shared-subject",
+			});
+		}
+		const token = await signJWT(
 			{
-				email: "provider-id-link@example.com",
-				password: "password123",
-				name: "Provider ID Link",
+				sub: "shared-subject",
+				email: "second@ambiguous-account.test",
+				email_verified: true,
+				name: "Second",
+				iss: "https://accounts.google.com",
+				aud: "test",
 			},
-			{ onSuccess: cookieSetter(headers) },
+			DEFAULT_SECRET,
 		);
-		expect(signUp.error).toBeNull();
-
-		mockGithubToken(
-			"provider-id-link",
-			Number(SHARED_ACCOUNT_ID),
-			"provider-id-link@example.com",
-		);
-		const link = await client.linkSocial(
-			{ provider: "github", callbackURL: "/settings" },
-			{ headers, onSuccess: cookieSetter(headers) },
-		);
-		const state = new URL(link.data!.url!).searchParams.get("state") || "";
-		await client.$fetch("/callback/github", {
-			query: { state, code: "test_code" },
-			method: "GET",
-			headers,
-		});
-
-		const context = await auth.$context;
-		const user = (await client.getSession({ fetchOptions: { headers } })).data!
-			.user;
-		const accounts = await context.internalAdapter.findAccounts(user.id);
-		expect(accounts).toContainEqual(
-			expect.objectContaining({
-				providerId: "github",
-				accountId: SHARED_ACCOUNT_ID,
-				issuer: "local:oauth:github",
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider: "google", idToken: { token } }),
 			}),
 		);
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toContain(
+			"error=internal_server_error",
+		);
+		expect(await ctx.adapter.findMany({ model: "session" })).toEqual([]);
 	});
 });
 
@@ -1982,7 +1972,6 @@ describe("oauth2 - orphaned account identity", () => {
 				model: "account",
 				data: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId,
 					userId: "missing-account-owner",
 					createdAt: new Date(),

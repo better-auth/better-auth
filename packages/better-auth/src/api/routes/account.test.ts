@@ -203,7 +203,6 @@ describe("account", async () => {
 		const storedAccount = await isolatedContext.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "local-account-selector-subject",
 			accessToken: "local-account-selector-token",
 		});
@@ -215,7 +214,6 @@ describe("account", async () => {
 			(account) => account.id === storedAccount.id,
 		);
 		assert(googleAccount, "google account should be listed");
-		expect(googleAccount.issuer).toBe("https://accounts.google.com");
 		expect(googleAccount.accountId).toBe("local-account-selector-subject");
 		expect(googleAccount.id).not.toBe(googleAccount.accountId);
 
@@ -258,7 +256,6 @@ describe("account", async () => {
 		const storedAccount = await testCtx.internalAdapter.createAccount({
 			userId: session.data!.user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId,
 			accessToken: "access-token",
 			scope: "",
@@ -311,7 +308,6 @@ describe("account", async () => {
 		const googleAccount = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "provider-subject",
 			accessToken: "provider-access-token",
 		});
@@ -328,7 +324,6 @@ describe("account", async () => {
 				account: {
 					id: googleAccount.id,
 					providerId: googleAccount.providerId,
-					issuer: googleAccount.issuer,
 					accountId: googleAccount.accountId,
 				},
 				data: expect.any(Object),
@@ -355,7 +350,6 @@ describe("account", async () => {
 		const googleAccount = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "unavailable-provider-subject",
 			accessToken: "provider-access-token",
 		});
@@ -395,7 +389,6 @@ describe("account", async () => {
 		const googleAccount = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "server-side-provider-subject",
 			accessToken: "server-side-access-token",
 		});
@@ -426,7 +419,6 @@ describe("account", async () => {
 			account: {
 				id: googleAccount.id,
 				providerId: googleAccount.providerId,
-				issuer: googleAccount.issuer,
 				accountId: googleAccount.accountId,
 			},
 			data: expect.any(Object),
@@ -470,7 +462,6 @@ describe("account", async () => {
 		const otherUserAccount = await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "other-user-google-subject",
 			accessToken: "other-access-token",
 		});
@@ -519,14 +510,12 @@ describe("account", async () => {
 		await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: sharedProviderAccountId,
 			accessToken: "google-access-token",
 		});
 		const githubAccount = await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "github",
-			issuer: "local:oauth:github",
 			accountId: sharedProviderAccountId,
 			accessToken: "github-access-token",
 		});
@@ -585,7 +574,6 @@ describe("account", async () => {
 		const otherUserAccount = await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
-			issuer: "local:oauth:github",
 			accountId: "other-server-side-subject",
 			accessToken: "github-access-token",
 		});
@@ -916,7 +904,7 @@ describe("account", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10214
 	 */
-	it("should reuse an issuer subject across provider aliases without allowing cross-user linking", async () => {
+	it("should keep provider aliases as separate accounts without allowing cross-user linking", async () => {
 		const verifyIdToken = vi.fn(async () => true);
 		const {
 			auth,
@@ -981,12 +969,11 @@ describe("account", async () => {
 				firstUserSession.user.id,
 			);
 		expect(
-			firstUserAccounts.filter(
-				(account) =>
-					account.issuer === "https://accounts.google.com" &&
-					account.accountId === accountId,
-			),
-		).toHaveLength(1);
+			firstUserAccounts
+				.filter((account) => account.accountId === accountId)
+				.map((account) => account.providerId)
+				.sort(),
+		).toEqual(["google", "google-mobile"]);
 
 		const secondUserHeaders = new Headers();
 		await isolatedClient.signUp.email(
@@ -1016,11 +1003,7 @@ describe("account", async () => {
 				secondUserSession.user.id,
 			);
 		expect(
-			secondUserAccounts.some(
-				(account) =>
-					account.issuer === "https://accounts.google.com" &&
-					account.accountId === accountId,
-			),
+			secondUserAccounts.some((account) => account.accountId === accountId),
 		).toBe(false);
 	});
 
@@ -1101,7 +1084,6 @@ describe("account", async () => {
 			model: "account",
 			data: {
 				providerId: "google",
-				issuer: "https://accounts.google.com",
 				accountId: "123",
 				userId: user.id,
 				createdAt: new Date(),
@@ -1113,7 +1095,6 @@ describe("account", async () => {
 			model: "account",
 			data: {
 				providerId: "google",
-				issuer: "https://accounts.google.com",
 				accountId: "345",
 				userId: user.id,
 				createdAt: new Date(),
@@ -1447,7 +1428,6 @@ describe("account", async () => {
 		const secondUserAccount = await testCtx.internalAdapter.createAccount({
 			userId: session.user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "second-google-sub",
 			accessToken: "second-access-token",
 			refreshToken: "second-refresh-token",
@@ -2651,7 +2631,6 @@ describe("account selector validation", async () => {
 		const account = await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
-			issuer: "https://accounts.google.com",
 			accountId: "stale-google-subject",
 			accessToken: "stale-access-token",
 		});
@@ -2735,7 +2714,6 @@ describe("account resolution in stateless mode", async () => {
 	const idpHandlers = [
 		http.get(`${IDP}/.well-known/openid-configuration`, () =>
 			HttpResponse.json({
-				issuer: IDP,
 				authorization_endpoint: `${IDP}/authorize`,
 				token_endpoint: `${IDP}/token`,
 				userinfo_endpoint: `${IDP}/userinfo`,
@@ -2905,7 +2883,6 @@ describe("account resolution in stateless mode", async () => {
 
 		assert(info, "expected accountInfo to resolve from the account cookie");
 		expect(info.account).toMatchObject({
-			issuer: IDP,
 			accountId: "shared-idp-user",
 			providerId: "idp",
 		});
