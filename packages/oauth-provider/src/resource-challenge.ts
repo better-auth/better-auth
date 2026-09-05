@@ -136,7 +136,11 @@ function buildBearerChallenge(
  * Create an OAuth resource-server challenge for a failed access-token request.
  *
  * Missing/invalid bearer credentials are reported with RFC 6750 plus the RFC
- * 9728 `resource_metadata` pointer. Insufficient-scope failures (built with
+ * 9728 `resource_metadata` pointer. A token that was presented and then failed
+ * also carries its `error` code (RFC 6750 §3), so a client can tell a rejected
+ * token from credentials it never sent; credentials that were absent or used an
+ * unsupported scheme carry no code, per RFC 6750 §3.1. Insufficient-scope
+ * failures (built with
  * `createInsufficientScopeError`) are reported with RFC 6750 §3.1's
  * `insufficient_scope` challenge on a 403 naming the scopes the token lacks, so
  * clients can step up their authorization. DPoP-bound-token failures are
@@ -175,6 +179,11 @@ export function createResourceServerChallenge(
 				{ "WWW-Authenticate": buildDpopChallenge(error, opts) },
 			);
 		}
+		// RFC 6750 §3: a request that presented a token which then failed is
+		// answered with its error code, so a client can tell a rejected token from
+		// credentials it never sent. Credentials that were absent or unsupported
+		// carry no code, and so challenge without one.
+		const { errorCode } = extractDpopError(error);
 		return new APIError(
 			"UNAUTHORIZED",
 			{ message: error.message },
@@ -183,6 +192,7 @@ export function createResourceServerChallenge(
 					resource,
 					opts,
 					(metadataUrl) => [
+						errorCode && `error="${quoteAuthParam(errorCode)}"`,
 						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
 						challengeScope && `scope="${quoteAuthParam(challengeScope)}"`,
 					],
