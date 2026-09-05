@@ -132,6 +132,14 @@ const applyHint: Record<SchemaSource, string> = {
 		"Run `npx auth generate` to refresh the Prisma schema, then run `prisma migrate`.",
 };
 
+const relaxHint: Record<SchemaSource, string> = {
+	database: "Drop the column, make it nullable, or give it a database default.",
+	drizzle:
+		"Remove it from the Drizzle schema, make it nullable, or give it a default, then apply the change with your migration tool.",
+	prisma:
+		"Remove it from the Prisma schema, make it optional, or give it a default, then run `prisma migrate`.",
+};
+
 const sourceLabel: Record<SchemaSource, string> = {
 	database: "database",
 	drizzle: "Drizzle",
@@ -155,7 +163,7 @@ export function formatSchemaFinding(
 				finding.column === "issuer"
 					? " If this column came from Better Auth 1.7.0 through 1.7.2, follow the upgrade guide before removing it: https://www.better-auth.com/docs/guides/1-7-upgrade-guide"
 					: "";
-			return `Column "${finding.column}" on table "${finding.table}" is required but Better Auth never writes it, so every insert into "${finding.table}" fails. Drop the column, make it nullable, or give it a database default.${issuer}`;
+			return `Column "${finding.column}" on table "${finding.table}" is required but Better Auth never writes it, so every insert into "${finding.table}" fails. ${relaxHint[source]}${issuer}`;
 		}
 	}
 }
