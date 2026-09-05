@@ -1,3 +1,4 @@
+import { schemaCheckFor } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getKyselyDatabaseType } from "@better-auth/kysely-adapter";
 import { getAdapter } from "../db/adapter-kysely";
@@ -14,6 +15,7 @@ export const init = async (options: BetterAuthOptions) => {
 
 	// Use base context creation
 	const ctx = await createAuthContext(adapter, options, getDatabaseType);
+	ctx.checkSchema = schemaCheckFor(adapter);
 
 	// Add runMigrations with Kysely support
 	ctx.runMigrations = async function () {

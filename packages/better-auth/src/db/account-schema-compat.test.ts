@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import { describe, expect, it } from "vitest";
 import { betterAuth } from "../auth/full";
 import { getMigrations } from "./get-migration";
@@ -24,18 +26,38 @@ function createDatabase(accountTable: string) {
 	return database;
 }
 
-function createAuth(database: DatabaseSync) {
-	return betterAuth({
+function seedAccountWrittenBy17(database: DatabaseSync) {
+	const timestamp = new Date().toISOString();
+	database.exec(
+		`insert into "user" values ('u1', 'Employee', 'written-by-1-7@example.com', 0, null, '${timestamp}', '${timestamp}');
+		 insert into "account" values ('a1', 'https://idp.example.com', 'google-subject', 'google', 'u1', null, null, null, null, null, null, null, '${timestamp}', '${timestamp}');`,
+	);
+}
+
+function createAuth(
+	database: DatabaseSync,
+	extra: Partial<BetterAuthOptions> = {},
+) {
+	const warnings: string[] = [];
+	const auth = betterAuth({
 		baseURL: "http://localhost:3000",
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database,
 		emailAndPassword: { enabled: true },
+		logger: {
+			level: "warn",
+			log: (_level, message) => {
+				warnings.push(message);
+			},
+		},
+		...extra,
 	});
+	return { auth, warnings };
 }
 
 /** Signs a user up, links a social account, then reads it back by its key. */
 async function signUpAndLinkSocialAccount(
-	auth: ReturnType<typeof createAuth>,
+	auth: ReturnType<typeof createAuth>["auth"],
 	email: string,
 ) {
 	const signUp = await auth.api.signUpEmail({
@@ -63,11 +85,14 @@ describe("account table compatibility across v1 releases", () => {
 	}) => {
 		const database = createDatabase(ACCOUNT_TABLE);
 		onTestFinished(() => database.close());
-		const auth = createAuth(database);
+		const { auth, warnings } = createAuth(database);
 
-		const { toBeCreated, toBeAdded } = await getMigrations(auth.options);
+		const { toBeCreated, toBeAdded, schemaProblems } = await getMigrations(
+			auth.options,
+		);
 		expect(toBeCreated).toEqual([]);
 		expect(toBeAdded).toEqual([]);
+		expect(schemaProblems).toEqual([]);
 
 		const { signUp, linked, found } = await signUpAndLinkSocialAccount(
 			auth,
@@ -75,6 +100,12 @@ describe("account table compatibility across v1 releases", () => {
 		);
 		expect(signUp.user.email).toBe("without-issuer-column@example.com");
 		expect(found?.id).toBe(linked.id);
+
+		const columns = database
+			.prepare(`select name from pragma_table_info('account')`)
+			.all() as { name: string }[];
+		expect(columns.map((column) => column.name)).not.toContain("issuer");
+		expect(warnings).toEqual([]);
 	});
 
 	it("keeps accounts written by 1.7 readable through their provider key", async ({
@@ -82,12 +113,8 @@ describe("account table compatibility across v1 releases", () => {
 	}) => {
 		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
 		onTestFinished(() => database.close());
-		const timestamp = new Date().toISOString();
-		database.exec(
-			`insert into "user" values ('u1', 'Employee', 'written-by-1-7@example.com', 0, null, '${timestamp}', '${timestamp}');
-			 insert into "account" values ('a1', 'https://idp.example.com', 'google-subject', 'google', 'u1', null, null, null, null, null, null, null, '${timestamp}', '${timestamp}');`,
-		);
-		const auth = createAuth(database);
+		seedAccountWrittenBy17(database);
+		const { auth } = createAuth(database);
 
 		const { internalAdapter } = await auth.$context;
 		const found = await internalAdapter.findAccountByKey({
@@ -98,20 +125,51 @@ describe("account table compatibility across v1 releases", () => {
 		expect(found?.userId).toBe("u1");
 	});
 
-	it("names the leftover issuer column instead of surfacing the driver error", async ({
+	it("rejects every request until the required issuer column is relaxed", async ({
 		onTestFinished,
 	}) => {
 		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
 		onTestFinished(() => database.close());
-		const auth = createAuth(database);
+		seedAccountWrittenBy17(database);
+		const { auth } = createAuth(database);
 
-		// Migrations never drop a column, so the CLI cannot resolve this state.
-		const { toBeCreated, toBeAdded } = await getMigrations(auth.options);
-		expect(toBeCreated).toEqual([]);
+		// Migrations never drop a column, so the CLI reports it instead.
+		const { toBeAdded, schemaProblems } = await getMigrations(auth.options);
 		expect(toBeAdded).toEqual([]);
+		expect(schemaProblems).toHaveLength(1);
+		expect(schemaProblems[0]).toContain('Column "issuer" on table "account"');
+		expect(schemaProblems[0]).toContain("account_issuer_accountId_uidx");
 
-		await expect(
-			signUpAndLinkSocialAccount(auth, "with-issuer-column@example.com"),
-		).rejects.toThrow(/account_issuer_accountId_uidx/);
+		const signUp = await signUpAndLinkSocialAccount(
+			auth,
+			"with-issuer-column@example.com",
+		).catch((error: unknown) => error);
+		expect(signUp).toBeInstanceOf(SchemaMismatchError);
+		expect((signUp as Error).message).toContain(
+			"account_issuer_accountId_uidx",
+		);
+
+		// A read meets the verdict kept from the first request.
+		const read = await auth.api
+			.getSession({ headers: new Headers() })
+			.catch((error: unknown) => error);
+		expect(read).toBe(signUp);
+	});
+
+	it("surfaces the raw constraint error when the check is disabled", async ({
+		onTestFinished,
+	}) => {
+		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
+		onTestFinished(() => database.close());
+		const { auth } = createAuth(database, {
+			advanced: { database: { validateSchema: false } },
+		});
+
+		const error = await signUpAndLinkSocialAccount(
+			auth,
+			"unchecked@example.com",
+		).catch((error: unknown) => error);
+		expect(error).not.toBeInstanceOf(SchemaMismatchError);
+		expect((error as Error).message).toMatch(/NOT NULL constraint failed/);
 	});
 });

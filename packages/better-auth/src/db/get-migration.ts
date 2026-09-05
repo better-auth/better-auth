@@ -7,6 +7,8 @@ import {
 } from "@better-auth/core/db/adapter";
 import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
 import {
+	diffSchema,
+	formatSchemaFinding,
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
@@ -30,6 +32,7 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import { getSchema } from "./get-schema";
+import { toIntrospectedTables } from "./introspect";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -562,7 +565,7 @@ export function matchType(
  * Get the current PostgreSQL schema (search_path) for the database connection
  * Returns the first schema in the search_path, defaulting to 'public' if not found
  */
-async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
+export async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	try {
 		const result = await sql<{
 			search_path?: string;
@@ -589,7 +592,7 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
-async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
+export async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
 	try {
 		const result = await sql<{ schemaName?: string }>`
 			SELECT SCHEMA_NAME() AS "schemaName"
@@ -736,6 +739,15 @@ export async function getMigrations(
 			(table) => table.schema === currentSchema,
 		);
 	}
+	// Columns the migration cannot fix: required, without a default, and never
+	// written by Better Auth. Reported so the CLI stops before an insert fails.
+	const schemaProblems = diffSchema(
+		betterAuthSchema,
+		toIntrospectedTables(tableMetadata),
+	)
+		.filter((finding) => finding.kind === "unexpected-required-column")
+		.map((finding) => formatSchemaFinding(finding, "database"));
+
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
@@ -1246,6 +1258,7 @@ export async function getMigrations(
 		toBeAdded,
 		toBeAddedIndexes,
 		unsafeChanges,
+		schemaProblems,
 		runMigrations,
 		compileMigrations,
 	};

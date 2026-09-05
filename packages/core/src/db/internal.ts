@@ -11,6 +11,13 @@ export {
 } from "./database-index";
 export { getAuthTablesWithResolvedIndexes } from "./get-tables";
 export {
+	checksSchema,
+	createSchemaCheck,
+	registerSchemaCheck,
+	type SchemaCheck,
+	schemaCheckFor,
+} from "./schema-check";
+export {
 	diffSchema,
 	type ExpectedSchema,
 	formatSchemaFinding,
