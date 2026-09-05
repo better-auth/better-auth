@@ -127,7 +127,7 @@ await runMigrations();
 
 Before the first request, Better Auth compares the schema with the tables it writes and reports every difference together with the change that resolves it: a missing table, a missing column, or a required column Better Auth never fills. Without the check, each of these surfaces as a constraint error on the first insert.
 
-The check runs outside production and keeps its verdict for the life of the process. The built-in Kysely adapter introspects the database once. `npx auth migrate` reports the same problems before it changes anything.
+The check runs outside production and keeps its verdict for the life of the process. The built-in Kysely adapter introspects the database once. Kysely plugins that rename identifiers, such as `CamelCasePlugin`, are taken into account, so a snake\_case database compares correctly. `npx auth migrate` reports the same problems before it changes anything.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
