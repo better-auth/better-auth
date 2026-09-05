@@ -112,5 +112,8 @@ describe("SchemaMismatchError", () => {
 		expect(formatSchemaFinding(issuerDrift, "database")).toContain(
 			"account_issuer_accountId_uidx",
 		);
+		expect(
+			formatSchemaFinding({ ...issuerDrift, table: "accounts" }, "database"),
+		).toContain("accounts_issuer_accountId_uidx");
 	});
 });
