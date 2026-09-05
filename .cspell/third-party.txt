@@ -7,7 +7,6 @@ nativewind
 nanostores
 fumadocs
 kysely
-froms
 haveibeenpwned
 elysia
 elysiajs

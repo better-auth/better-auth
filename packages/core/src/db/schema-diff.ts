@@ -36,6 +36,7 @@ export type ExpectedSchema = Record<
 	string,
 	{
 		fields: Record<string, DBFieldAttribute>;
+		idColumn?: string | undefined;
 		disableMigrations?: boolean | undefined;
 		/**
 		 * The schema the table is addressed in. Unset when the store has no
@@ -56,11 +57,12 @@ export function getExpectedSchema(
 	const expected: ExpectedSchema = {};
 	for (const table of Object.values(getAuthTables(options))) {
 		const name = usePlural ? `${table.modelName}s` : table.modelName;
-		const entry = (expected[name] ??= { fields: {} });
+		const entry = (expected[name] ??= { fields: {}, disableMigrations: true });
 		for (const [key, field] of Object.entries(table.fields)) {
 			entry.fields[field.fieldName || key] = field;
 		}
-		if (table.disableMigrations) entry.disableMigrations = true;
+		entry.disableMigrations =
+			entry.disableMigrations && !!table.disableMigrations;
 	}
 	return expected;
 }
@@ -99,7 +101,10 @@ export function diffSchema(
 			findings.push({ kind: "missing-table", table: tableName });
 			continue;
 		}
-		const written = new Set(["id", ...Object.keys(table.fields)]);
+		const written = new Set([
+			table.idColumn ?? "id",
+			...Object.keys(table.fields),
+		]);
 		for (const column of written) {
 			if (!actualTable.columns.some((candidate) => candidate.name === column)) {
 				findings.push({ kind: "missing-column", table: tableName, column });
@@ -148,7 +153,7 @@ export function formatSchemaFinding(
 		case "unexpected-required-column": {
 			const issuer =
 				finding.column === "issuer"
-					? ` Better Auth 1.7.0 through 1.7.2 created this column on the account table; drop the "${finding.table}_issuer_accountId_uidx" index before the column.`
+					? " If this column came from Better Auth 1.7.0 through 1.7.2, follow the upgrade guide before removing it: https://www.better-auth.com/docs/guides/1-7-upgrade-guide"
 					: "";
 			return `Column "${finding.column}" on table "${finding.table}" is required but Better Auth never writes it, so every insert into "${finding.table}" fails. Drop the column, make it nullable, or give it a database default.${issuer}`;
 		}
@@ -159,8 +164,9 @@ export function formatSchemaFinding(
  * The store cannot hold what this configuration writes.
  *
  * `findings` carries every problem as data; `message` lists each one with the
- * change that resolves it. Thrown before the first request in development,
- * and by `auth migrate` before it changes anything.
+ * change that resolves it. Reported during initialization and thrown when
+ * requests await validation, in every environment. Also thrown by
+ * `auth migrate` before it changes anything.
  *
  * @example
  * ```ts

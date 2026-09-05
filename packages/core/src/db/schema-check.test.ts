@@ -15,6 +15,9 @@ const issuerDrift: SchemaFinding = {
 	column: "issuer",
 };
 
+/**
+ * @see https://www.better-auth.com/docs/concepts/database#programmatic-migrations
+ */
 describe("createSchemaCheck", () => {
 	it("invalidates only checks for the migrated database", async () => {
 		const database = {};
@@ -45,10 +48,35 @@ describe("createSchemaCheck", () => {
 		invalidateSchemaChecks(database);
 		await expect(check()).rejects.toThrow(SchemaMismatchError);
 		finish([]);
-		await older;
+		await expect(older).rejects.toThrow(SchemaMismatchError);
 		await expect(check()).rejects.toThrow(SchemaMismatchError);
 		expect(find).toHaveBeenCalledTimes(2);
 	});
+	it.each([
+		{ findings: [] },
+		{ findings: [issuerDrift] },
+	])("rechecks a pending result after invalidation (%j)", async ({
+		findings,
+	}) => {
+		const database = {};
+		let finish = (_findings: SchemaFinding[]) => {};
+		const pending = new Promise<SchemaFinding[]>((resolve) => {
+			finish = resolve;
+		});
+		const find = vi
+			.fn<() => Promise<SchemaFinding[]>>()
+			.mockReturnValueOnce(pending)
+			.mockResolvedValueOnce([]);
+		const check = createSchemaCheck(find, "database", database);
+		const older = check();
+		await Promise.resolve();
+		invalidateSchemaChecks(database);
+		finish(findings);
+		await expect(older).resolves.toBeUndefined();
+		expect(find).toHaveBeenCalledTimes(2);
+		expect(check()).toBeUndefined();
+	});
+
 	it("turns a synchronous lookup failure into a retryable rejection", async () => {
 		const failure = new Error("connection unavailable");
 		const find = vi
