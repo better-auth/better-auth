@@ -1034,6 +1034,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							required: false,
 							fieldName: opts.schema?.teamMember?.fields?.createdAt,
 						},
+						...(opts.schema?.teamMember?.additionalFields || {}),
 					},
 				},
 			} satisfies BetterAuthPluginDBSchema)
