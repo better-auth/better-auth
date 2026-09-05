@@ -563,9 +563,12 @@ const accountSelectionSchema = z.union([
 			.optional(),
 	}),
 	z.strictObject({
-		useAccountCookie: z.literal(true).meta({
-			description: "Select the current OAuth account from its signed cookie",
-		}),
+		useAccountCookie: z
+			.literal([true, "true"])
+			.transform(() => true as const)
+			.meta({
+				description: "Select the current OAuth account from its signed cookie",
+			}),
 		userId: z
 			.string()
 			.meta({
