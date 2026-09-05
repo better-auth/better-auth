@@ -1,6 +1,7 @@
 ---
 "better-auth": patch
 "@better-auth/core": patch
+"@better-auth/kysely-adapter": patch
 "auth": patch
 ---
 

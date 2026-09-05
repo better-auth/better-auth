@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { runWithTransaction } from "@better-auth/core/context";
 import { SchemaMismatchError } from "@better-auth/core/db/internal";
+import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { CamelCasePlugin, Kysely } from "kysely";
 import { describe, expect, it } from "vitest";
@@ -174,6 +175,22 @@ describe("account table compatibility across v1 releases", () => {
 		).catch((error: unknown) => error);
 		expect(error).not.toBeInstanceOf(SchemaMismatchError);
 		expect((error as Error).message).toMatch(/NOT NULL constraint failed/);
+	});
+});
+
+describe("schema check with the adapter passed as a function", () => {
+	it("rejects every request until the required issuer column is relaxed", async ({
+		onTestFinished,
+	}) => {
+		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
+		onTestFinished(() => database.close());
+		const db = new Kysely({ dialect: new NodeSqliteDialect({ database }) });
+		const { auth } = createAuth(database, {
+			database: kyselyAdapter(db, { type: "sqlite" }),
+		});
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).rejects.toThrow(SchemaMismatchError);
 	});
 });
 

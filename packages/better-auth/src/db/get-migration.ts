@@ -21,7 +21,13 @@ import type {
 	DatabaseIndexMetadata,
 	KyselyDatabaseType,
 } from "@better-auth/kysely-adapter";
-import { createKyselyAdapter } from "@better-auth/kysely-adapter";
+import {
+	createKyselyAdapter,
+	getMssqlSchema,
+	getPostgresSchema,
+	toIntrospectedTables,
+	toPhysicalSchema,
+} from "@better-auth/kysely-adapter";
 import type {
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
@@ -32,7 +38,6 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import { getSchema } from "./get-schema";
-import { toIntrospectedTables, toPhysicalSchema } from "./introspect";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -559,48 +564,6 @@ export function matchType(
 		? types["string"].map((t) => t.toLowerCase())
 		: types[fieldType]!.map((t) => t.toLowerCase());
 	return expected.includes(normalize(columnDataType));
-}
-
-/**
- * Get the current PostgreSQL schema (search_path) for the database connection
- * Returns the first schema in the search_path, defaulting to 'public' if not found
- */
-export async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{
-			search_path?: string;
-			searchPath?: string;
-		}>`SHOW search_path`.execute(db);
-		const searchPath =
-			result.rows[0]?.search_path ?? result.rows[0]?.searchPath;
-		if (searchPath) {
-			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
-			// Supabase may return escaped format like '"\$user", public'
-			// We want the first non-variable schema
-			const schemas = searchPath
-				.split(",")
-				.map((s) => s.trim())
-				// Remove quotes and filter out variables like $user
-				.map((s) => s.replace(/^["']|["']$/g, ""))
-				// Filter out variable references like $user, \$user (escaped)
-				.filter((s) => !s.startsWith("$") && !s.startsWith("\\$"));
-			return schemas[0] || "public";
-		}
-	} catch {
-		// If query fails, fall back to public schema
-	}
-	return "public";
-}
-
-export async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{ schemaName?: string }>`
-			SELECT SCHEMA_NAME() AS "schemaName"
-		`.execute(db);
-		return result.rows[0]?.schemaName || "dbo";
-	} catch {
-		return "dbo";
-	}
 }
 
 /**

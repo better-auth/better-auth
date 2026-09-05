@@ -9,7 +9,7 @@ import {
 	SqliteQueryCompiler,
 } from "kysely";
 import { describe, expect, it } from "vitest";
-import { toPhysicalSchema } from "./introspect";
+import { toPhysicalSchema } from "./schema-check";
 
 /**
  * A connection that compiles queries and never sends them.
