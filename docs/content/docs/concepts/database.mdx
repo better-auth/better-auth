@@ -123,6 +123,24 @@ await runMigrations();
   </Accordion>
 </Accordions>
 
+## Schema Validation
+
+Before the first request, Better Auth compares the schema with the tables it writes and reports every difference together with the change that resolves it: a missing table, a missing column, or a required column Better Auth never fills. Without the check, each of these surfaces as a constraint error on the first insert.
+
+The check runs outside production and keeps its verdict for the life of the process. The built-in Kysely adapter introspects the database once. `npx auth migrate` reports the same problems before it changes anything.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	advanced: {
+		database: {
+			validateSchema: false, // or `true` to check in production as well
+		},
+	},
+});
+```
+
 ## Secondary Storage
 
 Secondary storage in Better Auth allows you to use key-value stores for managing session data, verification records, rate limiting counters, and other short-lived auth data. This can be useful when you want to offload the storage of intensive records to a high performance storage or even RAM.
