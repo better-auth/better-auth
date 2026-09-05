@@ -15,6 +15,7 @@ export function toIntrospectedTables(
 ): IntrospectedTable[] {
 	return tables.map((table) => ({
 		name: table.name,
+		schema: table.schema,
 		columns: table.columns.map((column) => ({
 			name: column.name,
 			nullable: column.isNullable,
@@ -45,26 +46,37 @@ export function toPhysicalSchema(
 		entries.forEach(([column, attribute], index) => {
 			fields[sent.columns[index] ?? column] = attribute;
 		});
-		physical[sent.table] = { ...definition, fields };
+		physical[sent.table] = {
+			...definition,
+			fields,
+			schema: sent.schema ?? definition.schema,
+		};
 	}
 	return physical;
 }
 
 /**
  * Compiles a select of `columns` from `table` and reads the identifiers back
- * out of the transformed query. A node the query does not carry in the
- * expected shape leaves its identifier undefined.
+ * out of the transformed query, including the schema a plugin such as
+ * `WithSchemaPlugin` qualifies the table with. A node the query does not
+ * carry in the expected shape leaves its identifier undefined.
  */
 function sentIdentifiers(
 	db: Kysely<AnyTables>,
 	table: string,
 	columns: string[],
-): { table: string; columns: (string | undefined)[] } {
+): {
+	schema?: string | undefined;
+	table: string;
+	columns: (string | undefined)[];
+} {
 	const { query } = db.selectFrom(table).select(columns).compile();
 	if (!SelectQueryNode.is(query)) return { table, columns: [] };
 	const from = query.from?.froms[0];
+	const sentTable = from && TableNode.is(from) ? from.table : undefined;
 	return {
-		table: from && TableNode.is(from) ? from.table.identifier.name : table,
+		schema: sentTable?.schema?.name,
+		table: sentTable?.identifier.name ?? table,
 		columns: (query.selections ?? []).map(({ selection }) =>
 			ReferenceNode.is(selection) && ColumnNode.is(selection.column)
 				? selection.column.column.name

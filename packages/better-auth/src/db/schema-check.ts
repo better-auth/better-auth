@@ -1,6 +1,5 @@
 import type {
 	ExpectedSchema,
-	IntrospectedTable,
 	SchemaFinding,
 } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
@@ -10,33 +9,36 @@ import { getMssqlSchema, getPostgresSchema } from "./get-migration";
 import { toIntrospectedTables, toPhysicalSchema } from "./introspect";
 
 /**
- * Reads the tables that unqualified statements on this connection see.
+ * The schema an unqualified table name resolves to on this connection, for
+ * the stores that have schemas.
  */
-async function introspectDatabaseTables(
+async function defaultSchema(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType,
-): Promise<IntrospectedTable[]> {
-	let tables = await db.introspection.getTables();
-	if (dbType === "postgres" || dbType === "mssql") {
-		const schema =
-			dbType === "postgres"
-				? await getPostgresSchema(db)
-				: await getMssqlSchema(db);
-		tables = tables.filter((table) => table.schema === schema);
-	}
-	return toIntrospectedTables(tables);
+): Promise<string | undefined> {
+	if (dbType === "postgres") return getPostgresSchema(db);
+	if (dbType === "mssql") return getMssqlSchema(db);
+	return undefined;
 }
 
 /**
- * Compares the live database with the tables this configuration writes.
+ * Compares the live database with the tables this configuration writes. Both
+ * sides are read in the identifiers the connection sends: a plugin that
+ * renames identifiers or qualifies them with a schema is applied to the
+ * expected side, and introspection reports what the database stores.
  */
 export async function findSchemaProblems(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType,
 	expected: ExpectedSchema,
 ): Promise<SchemaFinding[]> {
+	const physical = toPhysicalSchema(db, expected);
+	const fallback = await defaultSchema(db, dbType);
+	for (const table of Object.values(physical)) {
+		table.schema ??= fallback;
+	}
 	return diffSchema(
-		toPhysicalSchema(db, expected),
-		await introspectDatabaseTables(db, dbType),
+		physical,
+		toIntrospectedTables(await db.introspection.getTables()),
 	);
 }
