@@ -5,7 +5,7 @@ import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { CamelCasePlugin, Kysely } from "kysely";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
 import { getMigrations } from "./get-migration";
 
@@ -179,6 +179,31 @@ describe("account table compatibility across v1 releases", () => {
 });
 
 describe("schema check with the adapter passed as a function", () => {
+	it("accepts the plural table names the adapter uses", async ({
+		onTestFinished,
+	}) => {
+		const database = new DatabaseSync(":memory:");
+		onTestFinished(() => database.close());
+		let ddl = [
+			USER_TABLE,
+			SESSION_TABLE,
+			ACCOUNT_TABLE,
+			VERIFICATION_TABLE,
+		].join("\n");
+		for (const table of ["user", "session", "account", "verification"]) {
+			ddl = ddl.replaceAll(`"${table}"`, `"${table}s"`);
+		}
+		database.exec(ddl);
+		const db = new Kysely({ dialect: new NodeSqliteDialect({ database }) });
+		const { auth } = createAuth(database, {
+			database: kyselyAdapter(db, { type: "sqlite", usePlural: true }),
+		});
+
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).resolves.toBeNull();
+	});
+
 	it("rejects every request until the required issuer column is relaxed", async ({
 		onTestFinished,
 	}) => {
@@ -195,6 +220,73 @@ describe("schema check with the adapter passed as a function", () => {
 });
 
 describe("schema check timing", () => {
+	/**
+	 * @see https://www.better-auth.com/docs/concepts/database#programmatic-migrations
+	 */
+	it("rechecks the schema after programmatic migrations", async ({
+		onTestFinished,
+	}) => {
+		const database = new DatabaseSync(":memory:");
+		onTestFinished(() => database.close());
+		const { auth } = createAuth(database);
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).rejects.toThrow(SchemaMismatchError);
+
+		await (await getMigrations(auth.options)).runMigrations();
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "after-migration@example.com",
+					password: "correct-horse-battery-staple",
+					name: "Employee",
+				},
+			}),
+		).resolves.toMatchObject({
+			user: { email: "after-migration@example.com" },
+		});
+	});
+
+	it("reports drift during initialization without an auth request", async ({
+		onTestFinished,
+	}) => {
+		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
+		onTestFinished(() => database.close());
+		const log = vi.fn();
+		const { auth } = createAuth(database, { logger: { log } });
+
+		await vi.waitFor(() => {
+			expect(log).toHaveBeenCalledWith(
+				"error",
+				expect.stringContaining('Column "issuer" on table "account"'),
+			);
+		});
+		expect(
+			database.prepare('select count(*) as count from "user"').get(),
+		).toMatchObject({ count: 0 });
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).rejects.toThrow(SchemaMismatchError);
+	});
+
+	it("does not inspect the database when validation is disabled", async ({
+		onTestFinished,
+	}) => {
+		const database = new DatabaseSync(":memory:");
+		onTestFinished(() => database.close());
+		const { auth, warnings } = createAuth(database, {
+			advanced: { database: { validateSchema: false } },
+		});
+		const context = await auth.$context;
+
+		expect(context.checkSchema).toBeUndefined();
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).resolves.toBeNull();
+		expect(warnings).toEqual([]);
+	});
+
 	it("does not wait on a connection an ambient transaction holds", async ({
 		onTestFinished,
 	}) => {

@@ -5,4 +5,4 @@
 "auth": patch
 ---
 
-Compare the database with the tables Better Auth writes before the first request outside production, and list every missing table, missing column, or required column Better Auth never fills together with its fix. `auth migrate` reports the same problems before it changes anything.
+Start schema validation during initialization in every environment and report missing tables, missing columns, and required unwritten columns with their fixes. Authentication requests share the same check and fail on a schema mismatch. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` reports schema problems before changing anything.

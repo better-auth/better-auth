@@ -472,18 +472,13 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				joins?: boolean;
 				/**
-				 * Compare the schema with the tables this configuration writes
-				 * before the first request, and report every problem with its
-				 * fix instead of failing on the first insert. The built-in
-				 * database is introspected once per process. The Drizzle adapter
-				 * reads the schema object it was given and the Prisma adapter
-				 * reads the generated client's data model, so neither sends a
-				 * query. The verdict is kept for the life of the process.
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database using its configured dialect.
+				 * Set `false` to disable runtime schema validation.
 				 *
-				 * On by default outside production unless set. Production deployments run
-				 * `auth migrate`, which reports the same problems.
-				 *
-				 * @default process.env.NODE_ENV !== "production"
+				 * @default true
 				 */
 				validateSchema?: boolean;
 		  }

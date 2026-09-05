@@ -13,6 +13,7 @@ export { getAuthTablesWithResolvedIndexes } from "./get-tables";
 export {
 	checksSchema,
 	createSchemaCheck,
+	invalidateSchemaChecks,
 	registerSchemaCheck,
 	type SchemaCheck,
 	schemaCheckFor,

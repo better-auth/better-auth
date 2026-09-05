@@ -12,6 +12,7 @@ import {
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
+	invalidateSchemaChecks,
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -1208,8 +1209,14 @@ export async function getMigrations(
 	}
 
 	async function runMigrations() {
-		for (const migration of migrations) {
-			await migration.execute();
+		try {
+			for (const migration of migrations) {
+				await migration.execute();
+			}
+		} finally {
+			if (migrations.length && config.database) {
+				invalidateSchemaChecks(config.database);
+			}
 		}
 	}
 	async function compileMigrations() {

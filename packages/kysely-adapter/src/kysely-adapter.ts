@@ -1026,8 +1026,13 @@ export const kyselyAdapter = (
 				instance,
 				createSchemaCheck(
 					() =>
-						findSchemaProblems(db, config?.type, getExpectedSchema(options)),
+						findSchemaProblems(
+							db,
+							config?.type,
+							getExpectedSchema(options, { usePlural: config?.usePlural }),
+						),
 					"database",
+					options.database,
 				),
 			);
 		}

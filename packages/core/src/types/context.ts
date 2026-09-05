@@ -10,6 +10,7 @@ import type {
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
 import type { AccountKey } from "../db/schema/account";
+import type { SchemaCheck } from "../db/schema-check";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type {
@@ -420,11 +421,13 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			/**
 			 * Confirms the database can hold what this configuration writes.
 			 *
-			 * Runs once per process before the first endpoint executes and keeps
-			 * its verdict; returns nothing once the schema is known to be clean.
+			 * Shared by initialization and requests for this adapter instance;
+			 * returns nothing once the schema is known to be clean.
+			 * Context construction does not await the verdict, so migration
+			 * tooling can still use a context whose schema needs repair.
 			 * Absent when the check is disabled or the adapter registers none.
 			 */
-			checkSchema?: (() => Promise<void> | undefined) | undefined;
+			checkSchema?: SchemaCheck | undefined;
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;

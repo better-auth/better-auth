@@ -125,9 +125,13 @@ await runMigrations();
 
 ## Schema Validation
 
-Before the first request, Better Auth compares the schema with the tables it writes and reports every difference together with the change that resolves it: a missing table, a missing column, or a required column Better Auth never fills. Without the check, each of these surfaces as a constraint error on the first insert.
+During initialization, Better Auth compares the schema with the tables it writes and reports missing tables, missing columns, and required columns it never fills, together with their fixes. Errors appear through your configured logger without waiting for an authentication request. Requests await the same check and fail if the schema does not match; validation does not automatically stop your server or build.
 
-The check runs outside production and keeps its verdict for the life of the process. The built-in Kysely adapter introspects the database once. Kysely plugins that rename identifiers, such as `CamelCasePlugin`, are taken into account, so a snake\_case database compares correctly. `npx auth migrate` reports the same problems before it changes anything.
+Validation is enabled by default, including in production, and caches a clean result or mismatch per adapter instance. Programmatic migrations invalidate cached checks for the same database instance. Restart after applying schema changes with other tools. Kysely reads live database metadata and needs database access during initialization. Custom adapters without a registered check are not validated.
+
+For adapters without schema validation, initialization logs a warning if you explicitly set `validateSchema: true`, or a debug message if you omit the option. Database operations proceed normally.
+
+Set `advanced.database.validateSchema` to `false` to disable runtime validation and its skip message. `auth migrate` and `auth generate` retain their own schema diagnostics.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -135,7 +139,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		database: {
-			validateSchema: false, // or `true` to check in production as well
+			validateSchema: false, // [!code highlight]
 		},
 	},
 });
