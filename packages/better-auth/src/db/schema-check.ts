@@ -12,7 +12,7 @@ import { toIntrospectedTables } from "./introspect";
 /**
  * Reads the tables that unqualified statements on this connection see.
  */
-export async function introspectDatabaseTables(
+async function introspectDatabaseTables(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType,
 ): Promise<IntrospectedTable[]> {

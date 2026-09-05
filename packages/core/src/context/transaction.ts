@@ -1,6 +1,7 @@
 import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
+import { schemaCheckFor } from "../db/schema-check";
 import type { BetterAuthOptions } from "../types";
 import { __getBetterAuthGlobal } from "./global";
 
@@ -114,6 +115,10 @@ export const runWithTransaction = async <
 			if (store?.isTransactionActive) {
 				return fn();
 			}
+			// Settle the schema verdict before this transaction holds the
+			// connection a single-connection store would need for the lookup.
+			const pendingSchemaCheck = schemaCheckFor(adapter)?.();
+			if (pendingSchemaCheck) await pendingSchemaCheck;
 			const pendingHooks: Array<() => Promise<void>> = [];
 			let result: Awaited<R>;
 			let error: unknown;
