@@ -170,11 +170,17 @@ export const createInternalAdapter = (
 		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
 		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
 
-		if (furthestExpiration) {
+		// Gate on the whole-second ttl, not the millisecond expiry: a list under
+		// a second from expiry floors to 0, which secondary storage reads as
+		// "no expiry" and would keep the list forever.
+		const listTTL = furthestExpiration
+			? getTTLSeconds(furthestExpiration, now)
+			: 0;
+		if (listTTL > 0) {
 			await secondaryStorage.set(
 				activeSessionsKey,
 				JSON.stringify(remainingSessionReferences),
-				getTTLSeconds(furthestExpiration, now),
+				listTTL,
 			);
 			return;
 		}
@@ -828,11 +834,14 @@ export const createInternalAdapter = (
 									);
 									const furthestSessionExp = sorted.at(-1)?.expiresAt;
 
-									if (furthestSessionExp && furthestSessionExp > now) {
+									const listTTL = furthestSessionExp
+										? getTTLSeconds(furthestSessionExp, now)
+										: 0;
+									if (listTTL > 0) {
 										await secondaryStorage.set(
 											listKey,
 											JSON.stringify(sorted),
-											getTTLSeconds(furthestSessionExp, now),
+											listTTL,
 										);
 									} else {
 										await secondaryStorage.delete(listKey);
@@ -877,15 +886,14 @@ export const createInternalAdapter = (
 						const sorted = filtered.sort((a, b) => a.expiresAt - b.expiresAt);
 						const furthestSessionExp = sorted.at(-1)?.expiresAt;
 
-						if (
-							filtered.length > 0 &&
-							furthestSessionExp &&
-							furthestSessionExp > Date.now()
-						) {
+						const listTTL = furthestSessionExp
+							? getTTLSeconds(furthestSessionExp, now)
+							: 0;
+						if (filtered.length > 0 && listTTL > 0) {
 							await secondaryStorage.set(
 								`active-sessions-${userId}`,
 								JSON.stringify(filtered),
-								getTTLSeconds(furthestSessionExp, now),
+								listTTL,
 							);
 						} else {
 							await secondaryStorage.delete(`active-sessions-${userId}`);
