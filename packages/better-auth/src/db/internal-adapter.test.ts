@@ -432,6 +432,50 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
+	it("should delete verification by id with hooks", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: "delete-by-id",
+			value: "delete-by-id",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationById(
+			verification.identifier,
+			verification.id,
+		);
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+		expect(
+			await internalAdapter.findVerificationValue("delete-by-id"),
+		).toBeNull();
+	});
+
+	it("should keep a row stored under the same identifier when deleting by id", async () => {
+		const replaced = await internalAdapter.createVerificationValue({
+			identifier: "delete-by-id-replaced",
+			value: "old",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		await authContext.adapter.delete({
+			model: "verification",
+			where: [{ field: "id", value: replaced.id }],
+		});
+		const current = await internalAdapter.createVerificationValue({
+			identifier: "delete-by-id-replaced",
+			value: "new",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationById(
+			replaced.identifier,
+			replaced.id,
+		);
+		expect(hookVerificationDeleteBefore).not.toHaveBeenCalled();
+		expect(
+			await internalAdapter.findVerificationValue("delete-by-id-replaced"),
+		).toMatchObject({ id: current.id, value: "new" });
+	});
+
 	it("should not call adapter.delete for missing verification record (prevents Prisma P2025)", async () => {
 		const verification = await internalAdapter.createVerificationValue({
 			identifier: "missing-entity-test",

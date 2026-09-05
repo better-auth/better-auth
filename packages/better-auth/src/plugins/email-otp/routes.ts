@@ -81,10 +81,10 @@ async function resolveOTP(
 			if (pass >= 2) throw error;
 			seen = current;
 			if (current) {
-				await ctx.context.adapter.delete({
-					model: "verification",
-					where: [{ field: "id", value: current.id }],
-				});
+				await ctx.context.internalAdapter.deleteVerificationById(
+					identifier,
+					current.id,
+				);
 			}
 		}
 	}

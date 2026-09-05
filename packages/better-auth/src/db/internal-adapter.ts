@@ -1346,6 +1346,32 @@ export const createInternalAdapter = (
 				);
 			}
 		},
+		deleteVerificationById: async (identifier: string, id: string) => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const key = `verification:${storedIdentifier}`;
+				const cached = await secondaryStorage.get(key);
+				if (cached && safeJSONParse<Verification>(cached)?.id === id) {
+					await secondaryStorage.delete(key);
+				}
+			}
+
+			if (!secondaryStorage || options.verification?.storeInDatabase) {
+				await deleteWithHooks(
+					[{ field: "id", value: id }],
+					"verification",
+					undefined,
+				);
+			}
+		},
 		/**
 		 * Atomically consume a single-use verification row by `identifier` and
 		 * return it. The first concurrent caller receives the latest row for the

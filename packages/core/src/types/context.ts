@@ -258,6 +258,14 @@ export interface InternalAdapter<
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
 	/**
+	 * Delete one verification row by `id`, leaving any other row stored under
+	 * the same `identifier` in the meantime untouched. Use it instead of
+	 * `deleteVerificationByIdentifier` when replacing a row that a concurrent
+	 * request may have replaced already.
+	 */
+	deleteVerificationById(identifier: string, id: string): Promise<void>;
+
+	/**
 	 * Atomically consume a single-use verification row by `identifier` and
 	 * return it. Only the first concurrent caller receives the latest row;
 	 * subsequent callers receive `null`. Consuming one row invalidates the
