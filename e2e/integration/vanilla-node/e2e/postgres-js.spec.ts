@@ -37,6 +37,6 @@ test.describe("postgres-js", async () => {
     `;
 		const tableNames = allTables.map((row) => row.table_name);
 		const expectedTableNames = ["user", "session", "account", "verification"];
-		expect(tableNames.toSorted()).toEqual(expectedTableNames.toSorted());
+		expect([...tableNames].sort()).toEqual([...expectedTableNames].sort());
 	});
 });
