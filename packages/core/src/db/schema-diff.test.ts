@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SchemaFinding } from "./schema-diff";
 import {
 	diffSchema,
 	formatSchemaFinding,
@@ -104,9 +105,7 @@ describe("SchemaMismatchError", () => {
 		const error = new SchemaMismatchError([issuerDrift], "database");
 		expect(error.code).toBe("SCHEMA_MISMATCH");
 		expect(error.findings).toEqual([issuerDrift]);
-		expect(error.message).toContain("1 problem");
-		expect(error.message).toContain("1.7.0 through 1.7.2");
-		expect(error.message).toContain("validateSchema: false");
+		expect(error.source).toBe("database");
 	});
 
 	/**
@@ -160,5 +159,92 @@ describe("shared physical tables", () => {
 				{ name: "shared", columns: [column("id"), column("value")] },
 			]),
 		).toEqual([]);
+	});
+});
+
+describe("schema diagnostic output", () => {
+	it("groups missing tables with one migration command", () => {
+		const findings: SchemaFinding[] = [
+			"user",
+			"session",
+			"account",
+			"verification",
+		].map((table) => ({ kind: "missing-table", table }));
+		expect(
+			new SchemaMismatchError(findings, "database").message,
+		).toMatchInlineSnapshot(`
+"Database schema mismatch
+
+  Missing tables
+    user, session, account, verification
+
+  help: Run \`npx auth migrate\` to add the missing tables and columns."
+`);
+	});
+
+	it("groups mixed findings and presents repairs before migrations", () => {
+		expect(
+			new SchemaMismatchError(
+				[
+					{ kind: "missing-column", table: "user", column: "email" },
+					issuerDrift,
+					{ kind: "missing-table", table: "verification" },
+				],
+				"database",
+			).message,
+		).toMatchInlineSnapshot(`
+"Database schema mismatch
+
+  Missing tables
+    verification
+
+  Missing columns
+    user.email
+
+  Required columns Better Auth never writes
+    account.issuer
+
+  Inserts into account will fail.
+
+  help: Make the listed columns nullable, give them defaults, or remove them.
+        Run \`npx auth migrate\` to add the missing tables and columns.
+
+  note: If this column came from Better Auth 1.7.0 through 1.7.2,
+        follow the upgrade guide before removing it:
+        https://www.better-auth.com/docs/guides/1-7-upgrade-guide"
+`);
+	});
+
+	it.each([
+		{
+			source: "drizzle" as const,
+			repair: "nullable in your Drizzle schema",
+			apply: "apply it with your migration tool",
+		},
+		{
+			source: "prisma" as const,
+			repair: "optional in your Prisma schema",
+			apply: "prisma migrate",
+		},
+	])("uses the $source schema workflow", ({ source, repair, apply }) => {
+		const message = new SchemaMismatchError(
+			[
+				{
+					kind: "unexpected-required-column",
+					table: "account",
+					column: "legacyKey",
+				},
+				{
+					kind: "unexpected-required-column",
+					table: "user",
+					column: "legacyRole",
+				},
+			],
+			source,
+		).message;
+		expect(message).toContain(repair);
+		expect(message).toContain(apply);
+		expect(message.match(/npx auth generate/g)).toHaveLength(1);
+		expect(message).not.toContain("npx auth migrate");
 	});
 });

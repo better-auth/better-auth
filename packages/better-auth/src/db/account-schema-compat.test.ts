@@ -265,7 +265,16 @@ describe("schema check timing", () => {
 		await vi.waitFor(() => {
 			expect(log).toHaveBeenCalledWith(
 				"error",
-				expect.stringContaining('Column "issuer" on table "account"'),
+				new SchemaMismatchError(
+					[
+						{
+							kind: "unexpected-required-column",
+							table: "account",
+							column: "issuer",
+						},
+					],
+					"database",
+				).message,
 			);
 		});
 		expect(

@@ -226,7 +226,7 @@ describe.each([
 		await vi.waitFor(() => {
 			expect(contextLog).toHaveBeenCalledWith(
 				"error",
-				expect.stringContaining('Column "issuer"'),
+				new SchemaMismatchError(issuerDrift, "database").message,
 			);
 		});
 		expect(log).not.toHaveBeenCalled();

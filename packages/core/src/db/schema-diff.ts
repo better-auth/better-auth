@@ -133,7 +133,7 @@ const applyHint: Record<SchemaSource, string> = {
 };
 
 const sourceLabel: Record<SchemaSource, string> = {
-	database: "database",
+	database: "Database",
 	drizzle: "Drizzle",
 	prisma: "Prisma",
 };
@@ -160,6 +160,79 @@ export function formatSchemaFinding(
 	}
 }
 
+const repairHint: Record<SchemaSource, string> = {
+	database:
+		"Make the listed columns nullable, give them defaults, or remove them.",
+	drizzle:
+		"Make the listed columns nullable in your Drizzle schema, give them defaults, or remove them.",
+	prisma:
+		"Make the listed fields optional in your Prisma schema, give them defaults, or remove them.",
+};
+
+const migrationHint: Record<SchemaSource, string> = {
+	...applyHint,
+	database: "Run `npx auth migrate` to add the missing tables and columns.",
+};
+
+function formatSchemaMismatch(
+	findings: readonly SchemaFinding[],
+	source: SchemaSource,
+): string {
+	const tables: string[] = [];
+	const columns: string[] = [];
+	const required: string[] = [];
+	const affectedTables = new Set<string>();
+	let hasIssuer = false;
+	for (const finding of findings) {
+		switch (finding.kind) {
+			case "missing-table":
+				tables.push(finding.table);
+				break;
+			case "missing-column":
+				columns.push(`${finding.table}.${finding.column}`);
+				break;
+			case "unexpected-required-column":
+				required.push(`${finding.table}.${finding.column}`);
+				affectedTables.add(finding.table);
+				hasIssuer ||= finding.column === "issuer";
+				break;
+		}
+	}
+
+	const sections = [`${sourceLabel[source]} schema mismatch`];
+	if (tables.length)
+		sections.push(`  Missing tables\n    ${tables.join(", ")}`);
+	if (columns.length)
+		sections.push(`  Missing columns\n    ${columns.join("\n    ")}`);
+	if (required.length) {
+		sections.push(
+			`  Required columns Better Auth never writes\n    ${required.join("\n    ")}`,
+		);
+		sections.push(
+			`  Inserts into ${[...affectedTables].join(", ")} will fail.`,
+		);
+	}
+
+	const help: string[] = [];
+	if (required.length) help.push(repairHint[source]);
+	if (
+		tables.length ||
+		columns.length ||
+		(required.length && source !== "database")
+	) {
+		help.push(migrationHint[source]);
+	}
+	if (help.length) sections.push(`  help: ${help.join("\n        ")}`);
+	if (hasIssuer) {
+		sections.push(
+			"  note: If this column came from Better Auth 1.7.0 through 1.7.2,\n" +
+				"        follow the upgrade guide before removing it:\n" +
+				"        https://www.better-auth.com/docs/guides/1-7-upgrade-guide",
+		);
+	}
+	return sections.join("\n\n");
+}
+
 /**
  * The store cannot hold what this configuration writes.
  *
@@ -184,14 +257,6 @@ export class SchemaMismatchError extends BetterAuthError {
 		readonly findings: readonly SchemaFinding[],
 		readonly source: SchemaSource,
 	) {
-		super(
-			[
-				`The ${sourceLabel[source]} schema does not match this Better Auth configuration (${findings.length} ${findings.length === 1 ? "problem" : "problems"}):`,
-				...findings.map(
-					(finding) => `- ${formatSchemaFinding(finding, source)}`,
-				),
-				"Set `advanced.database.validateSchema: false` to skip this check.",
-			].join("\n"),
-		);
+		super(formatSchemaMismatch(findings, source));
 	}
 }
