@@ -89,6 +89,34 @@ describe("findPrismaSchemaProblems", () => {
 	});
 });
 
+describe("findPrismaSchemaProblems with the compact data model", () => {
+	/**
+	 * The shape the `prisma-client` generator emits: names and kinds only.
+	 */
+	function compact(dataModel: PrismaRuntimeDataModel): PrismaRuntimeDataModel {
+		return {
+			models: Object.fromEntries(
+				Object.entries(dataModel.models).map(([model, { fields }]) => [
+					model,
+					{ fields: fields.map(({ name, kind }) => ({ name, kind })) },
+				]),
+			),
+		};
+	}
+
+	it("still reports a model or field the client does not expose", () => {
+		const { Account: _account, ...models } = compact(dataModelFor({})).models;
+		expect(findPrismaSchemaProblems({ models }, {})).toEqual([
+			{ kind: "missing-table", table: "account" },
+		]);
+	});
+
+	it("cannot tell a required field apart and stays silent about it", () => {
+		const dataModel = compact(withAccountFields(scalar("issuer")));
+		expect(findPrismaSchemaProblems(dataModel, {})).toEqual([]);
+	});
+});
+
 describe("prismaAdapter", () => {
 	const adapterFor = (client: object, options: BetterAuthOptions = {}) =>
 		prismaAdapter({ $transaction: vi.fn(), ...client } as never, {
