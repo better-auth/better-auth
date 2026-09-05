@@ -343,4 +343,28 @@ describe("createSP assertion-signing metadata", () => {
 			),
 		).toThrow("Invalid SAML service provider metadata");
 	});
+
+	/**
+	 * When wantAssertionsSigned is absent (the only shape available before
+	 * @better-auth/infra 0.4.3), the SP must advertise WantAssertionsSigned="false"
+	 * so that IdPs configured to sign only the Response continue to work.
+	 * @see https://github.com/better-auth/better-auth/issues/11054
+	 */
+	it("defaults to WantAssertionsSigned=false when wantAssertionsSigned is absent", () => {
+		const config: SAMLConfig = {
+			issuer: "https://service.example.com/saml",
+			entryPoint: "https://idp.example.com/sso",
+			idpMetadata: { entityID: "https://idp.example.com/metadata" },
+		};
+
+		const provider = createSP(
+			config,
+			"https://service.example.com/api/auth",
+			"workforce",
+		);
+		expect(provider.getMetadata()).toContain('WantAssertionsSigned="false"');
+		expect(deriveSAMLServiceProviderPolicy(config)).toEqual({
+			wantAssertionsSigned: false,
+		});
+	});
 });
