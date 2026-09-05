@@ -476,6 +476,52 @@ describe("internal adapter test", async () => {
 		).toMatchObject({ id: current.id, value: "new" });
 	});
 
+	it("should update verification by id", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: "update-by-id",
+			value: "update-by-id",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		const expiresAt = new Date(Date.now() + 5000);
+
+		const updated = await internalAdapter.updateVerificationById(
+			verification.identifier,
+			verification.id,
+			{ expiresAt },
+		);
+		expect(updated).toMatchObject({ id: verification.id, expiresAt });
+		expect(
+			await internalAdapter.findVerificationValue("update-by-id"),
+		).toMatchObject({ id: verification.id, expiresAt });
+	});
+
+	it("should leave a row stored under the same identifier untouched when updating by id", async () => {
+		const replaced = await internalAdapter.createVerificationValue({
+			identifier: "update-by-id-replaced",
+			value: "old",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		await authContext.adapter.delete({
+			model: "verification",
+			where: [{ field: "id", value: replaced.id }],
+		});
+		const current = await internalAdapter.createVerificationValue({
+			identifier: "update-by-id-replaced",
+			value: "new",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		const updated = await internalAdapter.updateVerificationById(
+			replaced.identifier,
+			replaced.id,
+			{ expiresAt: new Date(Date.now() + 5000) },
+		);
+		expect(updated).toBeNull();
+		expect(
+			await internalAdapter.findVerificationValue("update-by-id-replaced"),
+		).toMatchObject({ id: current.id, expiresAt: current.expiresAt });
+	});
+
 	it("should not call adapter.delete for missing verification record (prevents Prisma P2025)", async () => {
 		const verification = await internalAdapter.createVerificationValue({
 			identifier: "missing-entity-test",

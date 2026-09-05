@@ -108,9 +108,16 @@ export async function tryReuseOTP(
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
 
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		expiresAt: getDate(opts.expiresIn, "sec"),
-	});
+	// Extend only the row that was read: a concurrent request may have replaced
+	// it in the meantime, and extending the replacement while returning this
+	// row's code would email a code that is already invalid. When the row is
+	// gone, report that nothing could be reused so the caller re-reads.
+	const extended = await ctx.context.internalAdapter.updateVerificationById(
+		identifier,
+		existing.id,
+		{ expiresAt: getDate(opts.expiresIn, "sec") },
+	);
+	if (!extended) return null;
 
 	return plainOtp;
 }

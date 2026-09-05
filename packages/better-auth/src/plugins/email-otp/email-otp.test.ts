@@ -2700,6 +2700,87 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		const res = await client.signIn.emailOtp({ email, otp: otps[0]! });
 		expect(res.data?.token).toBeDefined();
 	});
+
+	it("should hand over to the replacement when the reused row is rotated before it is extended", async () => {
+		const otps: string[] = [];
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					uniqueVerificationIdentifier,
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							otps.push(otp);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const email = "concurrent-rotate-during-reuse@example.com";
+		const identifier = `sign-in-otp-${email}`;
+		const context = await auth.$context;
+		await context.internalAdapter.createVerificationValue({
+			identifier,
+			value: "000000:0",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		// The first request looked the identifier up before the pending row
+		// appeared, so its insert loses to that row and it sets out to deliver the
+		// pending code. Before it extends that row, a resend that had seen the row
+		// rotates it; the first request must then deliver the rotated code rather
+		// than the code it read, which the rotation has just invalidated.
+		const internalAdapter = context.internalAdapter;
+		let lookups = 0;
+		context.internalAdapter = {
+			...internalAdapter,
+			async findVerificationValue(id) {
+				if (id === identifier && lookups++ === 0) return null;
+				return internalAdapter.findVerificationValue(id);
+			},
+		};
+		const adapter = context.adapter;
+		let rotated = false;
+		context.adapter = {
+			...adapter,
+			async update(data) {
+				if (data.model === "verification" && !rotated) {
+					rotated = true;
+					const rotation = await client.emailOtp.sendVerificationOtp({
+						email,
+						type: "sign-in",
+					});
+					expect(rotation.error).toBeNull();
+				}
+				return adapter.update(data);
+			},
+		};
+
+		const result = await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		expect(result.error).toBeNull();
+
+		expect(otps).toHaveLength(2);
+		expect(otps[1]).toBe(otps[0]);
+		expect(otps[0]).not.toBe("000000");
+
+		const rows = await adapter.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rows).toHaveLength(1);
+
+		const rejected = await client.signIn.emailOtp({ email, otp: "000000" });
+		expect(rejected.error?.code).toBe("INVALID_OTP");
+		const res = await client.signIn.emailOtp({ email, otp: otps[0]! });
+		expect(res.data?.token).toBeDefined();
+	});
 });
 
 describe("email-otp verify-email cookie cache isolation", async () => {

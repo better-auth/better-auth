@@ -303,6 +303,18 @@ export interface InternalAdapter<
 		data: Partial<Verification>,
 	): Promise<Verification>;
 
+	/**
+	 * Update one verification row by `id`, leaving any other row stored under
+	 * the same `identifier` in the meantime untouched. Returns `null` when that
+	 * row no longer exists, so a caller that read the row before can tell that
+	 * a concurrent request has replaced it.
+	 */
+	updateVerificationById(
+		identifier: string,
+		id: string,
+		data: Partial<Verification>,
+	): Promise<Verification | null>;
+
 	refreshUserSessions(user: User): Promise<void>;
 }
 

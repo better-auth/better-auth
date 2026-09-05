@@ -1652,6 +1652,49 @@ export const createInternalAdapter = (
 			}
 			return data as Verification;
 		},
+		updateVerificationById: async (
+			identifier: string,
+			id: string,
+			data: Partial<Verification>,
+		) => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const key = `verification:${storedIdentifier}`;
+				const cached = await secondaryStorage.get(key);
+				const parsed = cached ? safeJSONParse<Verification>(cached) : null;
+				const updated = parsed?.id === id ? { ...parsed, ...data } : null;
+				if (updated) {
+					const expiresAt = updated.expiresAt ?? parsed!.expiresAt;
+					const ttl = getTTLSeconds(
+						expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
+					);
+					if (ttl > 0) {
+						await secondaryStorage.set(key, JSON.stringify(updated), ttl);
+					}
+				}
+				if (!options.verification?.storeInDatabase) {
+					return updated;
+				}
+			}
+
+			return await updateWithHooks<Verification>(
+				data,
+				[
+					{ field: "identifier", value: storedIdentifier },
+					{ field: "id", value: id },
+				],
+				"verification",
+				undefined,
+			);
+		},
 		refreshUserSessions,
 	};
 };
