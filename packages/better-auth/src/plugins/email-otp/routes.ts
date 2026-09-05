@@ -16,7 +16,12 @@ import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-ac
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
+import {
+	isPendingOTP,
+	storeOTP,
+	tryReuseOTP,
+	verifyStoredOTP,
+} from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { splitAtLastColon, toOTPIdentifier } from "./utils";
 
@@ -29,7 +34,9 @@ const types = [
 
 /**
  * Resolves the OTP to send: reuses an existing one if possible,
- * otherwise generates and stores a new one.
+ * otherwise generates and stores a new one. Returns `null` when a concurrent
+ * request has just stored a code that this request cannot read back, so that
+ * request delivers it and this one has nothing to send.
  *
  * @internal
  */
@@ -38,36 +45,72 @@ async function resolveOTP(
 	opts: RequiredEmailOTPOptions,
 	email: string,
 	type: (typeof types)[number],
-): Promise<string> {
+): Promise<string | null> {
 	const identifier = toOTPIdentifier(type, email);
 
-	if (opts.resendStrategy === "reuse") {
-		const reused = await tryReuseOTP(ctx, opts, identifier);
+	let seen =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (opts.resendStrategy === "reuse" && seen) {
+		const reused = await tryReuseOTP(ctx, opts, identifier, seen);
 		if (reused) return reused;
 	}
 
 	const otp =
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
-	const storedOTP = await storeOTP(ctx, opts, otp);
+	// Choose the row's id here so that the row this request inserted can be told
+	// apart from one a concurrent request inserted, which may hold the same code
+	// (`generateOTP` can be deterministic). Databases that assign ids themselves
+	// ignore it; there the stored value has to do.
+	const id = ctx.context.generateId({ model: "verification" });
+	const verification = {
+		...(id ? { id } : {}),
+		value: `${await storeOTP(ctx, opts, otp)}:0`,
+		identifier,
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	};
 
-	await ctx.context.internalAdapter
-		.createVerificationValue({
-			value: `${storedOTP}:0`,
-			identifier,
-			expiresAt: getDate(opts.expiresIn, "sec"),
-		})
-		.catch(async () => {
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				identifier,
-			);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
-		});
-
-	return otp;
+	// On databases that enforce a unique identifier the insert fails while a row
+	// is stored. A row other than the one seen at the last lookup belongs to a
+	// concurrent request that is about to email its own code: deliver that same
+	// code (regardless of `resendStrategy`) instead of replacing it, because
+	// replacing would silently invalidate the code the user is about to receive.
+	// When that code cannot be read back (hashed storage) the concurrent request
+	// alone delivers it and this request sends nothing. Only the row seen at the
+	// last lookup is replaced (with `reuse` it could not be reused; with `rotate`
+	// the user asked for a new code), and only that very row, so that a
+	// replacement never removes what a concurrent request stored in the meantime.
+	// The insert after a replacement can lose to a concurrent request in the same
+	// way, hence the loop: each pass either hands over to the code another request
+	// just stored or replaces a row nobody else can use.
+	for (let pass = 0; ; pass++) {
+		try {
+			await ctx.context.internalAdapter.createVerificationValue(verification);
+			return otp;
+		} catch (error) {
+			const current =
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
+			// The insert itself succeeded and something after it failed (such as a
+			// `verification.create.after` hook), which is not a conflict to recover
+			// from.
+			const inserted = id
+				? current?.id === id
+				: current?.value === verification.value;
+			if (inserted) throw error;
+			if (current && current.id !== seen?.id) {
+				const concurrent = await tryReuseOTP(ctx, opts, identifier, current);
+				if (concurrent) return concurrent;
+				if (isPendingOTP(opts, current)) return null;
+			}
+			if (pass >= 2) throw error;
+			seen = current;
+			if (current) {
+				await ctx.context.internalAdapter.deleteVerificationById(
+					identifier,
+					current.id,
+				);
+			}
+		}
+	}
 }
 
 const sendVerificationOTPBodySchema = z.object({
@@ -149,6 +192,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
+			if (otp === null) return ctx.json({ success: true });
 
 			const shouldSendOTP = ctx.body.type === "sign-in" && !opts.disableSignUp;
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -769,6 +813,7 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const email = ctx.body.email.toLowerCase();
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
+			if (otp === null) return ctx.json({ success: true });
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
@@ -861,6 +906,7 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 			const email = ctx.body.email.toLowerCase();
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
+			if (otp === null) return ctx.json({ success: true });
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(

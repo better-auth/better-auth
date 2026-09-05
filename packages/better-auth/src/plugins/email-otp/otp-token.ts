@@ -4,6 +4,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import type { Verification } from "../../types";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -87,28 +88,45 @@ async function retrieveOTP(
 }
 
 /**
- * Tries to reuse an existing unexpired OTP.
+ * Whether a stored OTP can still be verified: not expired and not out of
+ * attempts.
+ */
+export function isPendingOTP(
+	opts: RequiredEmailOTPOptions,
+	existing: Verification,
+): boolean {
+	if (existing.expiresAt < new Date()) return false;
+	const [, attempts] = splitAtLastColon(existing.value);
+	const allowedAttempts = opts.allowedAttempts || 3;
+	return !attempts || parseInt(attempts) < allowedAttempts;
+}
+
+/**
+ * Tries to reuse the stored OTP row the caller has read.
  * Returns the plain-text OTP if reusable, `null` otherwise.
  */
 export async function tryReuseOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,
 	identifier: string,
+	existing: Verification,
 ): Promise<string | null> {
-	const existing =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (!existing || existing.expiresAt < new Date()) return null;
+	if (!isPendingOTP(opts, existing)) return null;
 
-	const [storedOtpValue, attempts] = splitAtLastColon(existing.value);
-	const allowedAttempts = opts.allowedAttempts || 3;
-	if (attempts && parseInt(attempts) >= allowedAttempts) return null;
-
+	const [storedOtpValue] = splitAtLastColon(existing.value);
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
 
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		expiresAt: getDate(opts.expiresIn, "sec"),
-	});
+	// Extend only the row that was read: a concurrent request may have replaced
+	// it in the meantime, and extending the replacement while returning this
+	// row's code would email a code that is already invalid. When the row is
+	// gone, report that nothing could be reused so the caller re-reads.
+	const extended = await ctx.context.internalAdapter.updateVerificationById(
+		identifier,
+		existing.id,
+		{ expiresAt: getDate(opts.expiresIn, "sec") },
+	);
+	if (!extended) return null;
 
 	return plainOtp;
 }
