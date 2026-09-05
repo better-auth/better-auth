@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ExpectedSchema } from "@better-auth/core/db/internal";
+import { diffSchema } from "@better-auth/core/db/internal";
 import type { KyselyPlugin } from "kysely";
 import {
 	CamelCasePlugin,
@@ -79,6 +80,25 @@ describe("toPhysicalSchema", () => {
 		expect(physical).toEqual({
 			users: { fields: { email: { type: "string" } }, schema: "internal" },
 		});
+	});
+
+	/**
+	 * @see https://kysely-org.github.io/kysely-apidoc/classes/CamelCasePlugin.html
+	 */
+	it("compares the implicit id using its physical identifier", () => {
+		const physical = toPhysicalSchema(
+			connection([new CamelCasePlugin({ upperCase: true })]),
+			expected,
+		);
+		const columns = ["ID", "USER_ID", "BACKUP_CODES"].map((name) => ({
+			name,
+			nullable: false,
+			hasDefault: false,
+		}));
+		expect(diffSchema(physical, [{ name: "TWO_FACTOR", columns }])).toEqual([]);
+		expect(
+			diffSchema(physical, [{ name: "TWO_FACTOR", columns: columns.slice(1) }]),
+		).toEqual([{ kind: "missing-column", table: "TWO_FACTOR", column: "ID" }]);
 	});
 
 	it("follows the plugin options rather than a fixed rule", () => {

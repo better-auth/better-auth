@@ -46,19 +46,19 @@ export function toPhysicalSchema(
 	const physical: ExpectedSchema = {};
 	for (const [table, definition] of Object.entries(expected)) {
 		const entries = Object.entries(definition.fields);
-		const sent = sentIdentifiers(
-			db as Kysely<AnyTables>,
-			table,
-			entries.map(([column]) => column),
-		);
+		const sent = sentIdentifiers(db as Kysely<AnyTables>, table, [
+			definition.idColumn ?? "id",
+			...entries.map(([column]) => column),
+		]);
 		const fields: ExpectedSchema[string]["fields"] = {};
 		entries.forEach(([column, attribute], index) => {
-			fields[sent.columns[index] ?? column] = attribute;
+			fields[sent.columns[index + 1] ?? column] = attribute;
 		});
 		physical[sent.table] = {
 			...definition,
 			fields,
 			schema: sent.schema ?? definition.schema,
+			...(sent.columns[0] !== "id" && { idColumn: sent.columns[0] }),
 		};
 	}
 	return physical;
@@ -81,6 +81,7 @@ function sentIdentifiers(
 } {
 	const { query } = db.selectFrom(table).select(columns).compile();
 	if (!SelectQueryNode.is(query)) return { table, columns: [] };
+	// cspell:ignore froms
 	const from = query.from?.froms[0];
 	const sentTable = from && TableNode.is(from) ? from.table : undefined;
 	return {

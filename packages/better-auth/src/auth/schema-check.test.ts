@@ -171,7 +171,7 @@ describe.each([
 		expect(auth.options.database).toBeTypeOf("function");
 		expect(log).toHaveBeenCalledWith(
 			"error",
-			expect.stringContaining("account_issuer_accountId_uidx"),
+			expect.stringContaining("1.7.0 through 1.7.2"),
 		);
 	});
 
