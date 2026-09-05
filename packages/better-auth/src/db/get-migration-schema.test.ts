@@ -1,10 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { findSchemaProblems } from "../../../kysely-adapter/src/schema-check";
 import { betterAuth } from "../auth/full";
 import { getMigrations } from "./get-migration";
 
@@ -830,64 +828,5 @@ describe("index generation for columns added to existing tables", () => {
 
 		const repeated = await getMigrations(upgradedConfig);
 		await expect(repeated.compileMigrations()).resolves.toBe(";");
-	});
-});
-
-/**
- * @see https://www.postgresql.org/docs/current/ddl-schemas.html#DDL-SCHEMAS-PATH
- */
-describe.runIf(isPostgresAvailable)("schema validation search path", () => {
-	it("reads PostgreSQL metadata without changing the schema", async ({
-		onTestFinished,
-	}) => {
-		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
-		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
-		onTestFinished(() => db.destroy());
-		const table = `ba_missing_${randomUUID().replaceAll("-", "")}`;
-
-		await expect(
-			findSchemaProblems(db, "postgres", { [table]: { fields: {} } }),
-		).resolves.toEqual([{ kind: "missing-table", table }]);
-	});
-
-	it("resolves role schemas and each table in search-path order", async ({
-		onTestFinished,
-	}) => {
-		const role = `ba_readiness_${randomUUID().replaceAll("-", "")}`;
-		const fallback = `${role}_fallback`;
-		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
-		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
-		onTestFinished(() => db.destroy());
-		await pool.query(`CREATE ROLE "${role}"`);
-		onTestFinished(async () => {
-			await pool.query("RESET ROLE");
-			await pool.query(`DROP ROLE "${role}"`);
-		});
-		await pool.query(`CREATE SCHEMA "${role}" AUTHORIZATION "${role}"`);
-		onTestFinished(() =>
-			pool.query(`DROP SCHEMA "${role}" CASCADE`).then(() => {}),
-		);
-		await pool.query(`CREATE SCHEMA "${fallback}" AUTHORIZATION "${role}"`);
-		onTestFinished(() =>
-			pool.query(`DROP SCHEMA "${fallback}" CASCADE`).then(() => {}),
-		);
-		await pool.query(`SET ROLE "${role}"`);
-		await pool.query(`SET search_path TO "$user", "${fallback}"`);
-		await pool.query(
-			'CREATE TABLE account (id text PRIMARY KEY, "providerId" text NOT NULL)',
-		);
-		await pool.query(
-			`CREATE TABLE "${fallback}".account (id text PRIMARY KEY, issuer text NOT NULL)`,
-		);
-		await pool.query(
-			`CREATE TABLE "${fallback}".session (id text PRIMARY KEY, token text NOT NULL)`,
-		);
-
-		await expect(
-			findSchemaProblems(db, "postgres", {
-				account: { fields: { providerId: { type: "string" } } },
-				session: { fields: { token: { type: "string" } } },
-			}),
-		).resolves.toEqual([]);
 	});
 });

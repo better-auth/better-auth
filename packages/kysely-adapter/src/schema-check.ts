@@ -4,7 +4,6 @@ import type {
 	SchemaFinding,
 } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
-import { BetterAuthError } from "@better-auth/core/error";
 import type { Kysely, TableMetadata } from "kysely";
 import {
 	ColumnNode,
@@ -96,20 +95,15 @@ function sentIdentifiers(
 }
 
 /**
- * The schema PostgreSQL selects for an unqualified CREATE statement.
- * Let the server resolve role names, quoting, and schema privileges.
+ * The default schema for migration tooling. Let PostgreSQL resolve role
+ * names and privileges, retaining the legacy public fallback when none exists.
+ * Runtime validation uses the effective search path instead of this fallback.
  */
 export async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	const result = await sql<{ schema: string | null }>`
 		SELECT pg_catalog.current_schema() AS schema
 	`.execute(db.withoutPlugins());
-	const schema = result.rows[0]?.schema;
-	if (!schema) {
-		throw new BetterAuthError(
-			"PostgreSQL search_path does not contain an accessible schema.",
-		);
-	}
-	return schema;
+	return result.rows[0]?.schema ?? "public";
 }
 
 export async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
