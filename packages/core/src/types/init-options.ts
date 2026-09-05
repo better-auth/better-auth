@@ -480,7 +480,7 @@ export type BetterAuthAdvancedOptions = {
 				 * reads the generated client's data model, so neither sends a
 				 * query. The verdict is kept for the life of the process.
 				 *
-				 * On outside production unless set. Production deployments run
+				 * On by default outside production unless set. Production deployments run
 				 * `auth migrate`, which reports the same problems.
 				 *
 				 * @default process.env.NODE_ENV !== "production"

@@ -178,8 +178,11 @@ describe("account table compatibility across v1 releases", () => {
 });
 
 describe("schema check timing", () => {
-	it("does not wait on a connection an ambient transaction holds", async () => {
+	it("does not wait on a connection an ambient transaction holds", async ({
+		onTestFinished,
+	}) => {
 		const database = createDatabase(ACCOUNT_TABLE);
+		onTestFinished(() => database.close());
 		const { auth } = createAuth(database, {
 			database: {
 				dialect: new NodeSqliteDialect({ database }),
@@ -208,8 +211,11 @@ create table "session" ("id" text not null primary key, "expires_at" date not nu
 create table "account" ("id" text not null primary key, "account_id" text not null, "provider_id" text not null, "user_id" text not null references "user" ("id") on delete cascade, "access_token" text, "refresh_token" text, "id_token" text, "access_token_expires_at" date, "refresh_token_expires_at" date, "scope" text, "password" text, "created_at" date not null, "updated_at" date not null);
 create table "verification" ("id" text not null primary key, "identifier" text not null, "value" text not null, "expires_at" date not null, "created_at" date not null, "updated_at" date not null);`;
 
-	it("compares the names the plugin exposes, not the ones the database stores", async () => {
+	it("compares the names the plugin exposes, not the ones the database stores", async ({
+		onTestFinished,
+	}) => {
 		const database = new DatabaseSync(":memory:");
+		onTestFinished(() => database.close());
 		database.exec(SNAKE_CASE_TABLES);
 		const { auth } = createAuth(database, {
 			database: {

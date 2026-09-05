@@ -64,6 +64,15 @@ describe("toPhysicalSchema", () => {
 		).toBeUndefined();
 	});
 
+	it("splits a schema-qualified model name into schema and table", () => {
+		const physical = toPhysicalSchema(connection(), {
+			"internal.users": { fields: { email: { type: "string" } } },
+		});
+		expect(physical).toEqual({
+			users: { fields: { email: { type: "string" } }, schema: "internal" },
+		});
+	});
+
 	it("follows the plugin options rather than a fixed rule", () => {
 		expect(
 			toPhysicalSchema(
