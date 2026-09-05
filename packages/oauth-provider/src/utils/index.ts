@@ -17,7 +17,7 @@ import {
 	isExtensionTokenEndpointAuthMethod,
 } from "../extensions";
 import type { oauthProvider } from "../oauth";
-import { canonicalizeOAuthQueryParams } from "../signed-query";
+import { canonicalizeOAuthQueryParams, toBase64Url } from "../signed-query";
 import type {
 	ClientDiscovery,
 	Confirmation,
@@ -234,10 +234,14 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
+	// Compare in base64url so signatures issued before this alphabet change keep
+	// verifying, and so a `sig` that went through a url decode still matches.
+	// URLSearchParams converts + to space, so restore it before converting.
+	const normalizedSig = sig.replace(/ /g, "+");
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(sig, verifySig) &&
+		constantTimeEqual(toBase64Url(normalizedSig), toBase64Url(verifySig)) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }
