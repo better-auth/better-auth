@@ -13,6 +13,7 @@ import type {
 import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
+import { isPathEnabled } from "../../utils/enabled-paths";
 
 export interface Path {
 	get?: OpenAPIOperation | undefined;
@@ -939,7 +940,12 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const usedOperationIds = new Set<string>();
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
-		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
+		if (
+			!value.path ||
+			ctx.options.disabledPaths?.includes(value.path) ||
+			!isPathEnabled(value.path, ctx.options.enabledPaths)
+		)
+			return;
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
@@ -1040,7 +1046,11 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			})
 			.filter((x) => x !== null) as Endpoint[];
 		Object.entries(api).forEach(([key, value]) => {
-			if (!value.path || ctx.options.disabledPaths?.includes(value.path))
+			if (
+				!value.path ||
+				ctx.options.disabledPaths?.includes(value.path) ||
+				!isPathEnabled(value.path, ctx.options.enabledPaths)
+			)
 				return;
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
