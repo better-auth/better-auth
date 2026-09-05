@@ -531,8 +531,6 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 						let accountKey: AccountKey;
 						try {
-							// Relay the verified authority. The receiving environment applies
-							// its configured storage namespace in handleOAuthUserInfo.
 							accountKey = await resolveOAuthAccountKey(
 								provider,
 								tokens,
@@ -565,7 +563,6 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							},
 							profile: providerProfile,
 							account: {
-								providerId: provider.id,
 								...accountKey,
 								accessToken: tokens.accessToken,
 								refreshToken: tokens.refreshToken,

@@ -1424,7 +1424,6 @@ describe("Admin plugin", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 

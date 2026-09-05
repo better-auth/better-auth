@@ -2134,90 +2134,6 @@ describe("oauth2", async () => {
 		});
 	});
 
-	it("recognizes one OIDC account across provider aliases when mutable profile fields change", async () => {
-		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "workforce-web",
-							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-							clientId,
-							clientSecret,
-						},
-						{
-							providerId: "workforce-mobile",
-							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-							clientId,
-							clientSecret,
-						},
-					],
-				}),
-			],
-		});
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: { customFetchImpl },
-		});
-
-		async function signIn(
-			provider: "workforce-web" | "workforce-mobile",
-			profileId: string,
-			name: string,
-		) {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					sub: "workforce-subject",
-					id: profileId,
-					email: "employee@workforce.test",
-					name,
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
-			});
-			const stateHeaders = new Headers();
-			const response = await client.signIn.social({
-				provider,
-				callbackURL: "http://localhost:3000/dashboard",
-				newUserCallbackURL: "http://localhost:3000/new-user",
-				fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
-			});
-			const flow = await simulateOAuthFlow(
-				response.data?.url ?? "",
-				stateHeaders,
-				customFetchImpl,
-			);
-			const session = await client.getSession({
-				fetchOptions: { headers: flow.headers },
-			});
-			expect(session.data).not.toBeNull();
-			return session.data!;
-		}
-
-		const firstSession = await signIn(
-			"workforce-web",
-			"mutable-profile-id-1",
-			"Employee One",
-		);
-		const secondSession = await signIn(
-			"workforce-mobile",
-			"mutable-profile-id-2",
-			"Employee Two",
-		);
-
-		expect(secondSession.user.id).toBe(firstSession.user.id);
-		const context = await auth.$context;
-		const accounts = await context.internalAdapter.findAccounts(
-			firstSession.user.id,
-		);
-		expect(accounts).toHaveLength(1);
-		expect(accounts[0]).toMatchObject({
-			issuer: server.issuer.url,
-			accountId: "workforce-subject",
-			providerId: "workforce-mobile",
-		});
-	});
-
 	it("keeps different OIDC subjects separate when a mutable id field is reused", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
@@ -2878,7 +2794,7 @@ describe("oauth2", async () => {
 			);
 		});
 
-		it("normalizes a trailing slash in the domain and account issuer", () => {
+		it("normalizes a trailing slash in the domain", () => {
 			const auth0Config = auth0({
 				clientId: "auth0-client-id",
 				clientSecret: "auth0-client-secret",
@@ -2888,7 +2804,6 @@ describe("oauth2", async () => {
 			expect(auth0Config.discoveryUrl).toBe(
 				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
 			);
-			expect(auth0Config.accountIssuer).toBe("https://dev-xxx.eu.auth0.com/");
 		});
 
 		it("should allow overriding scopes", () => {
@@ -3017,7 +2932,7 @@ describe("oauth2", async () => {
 			"common",
 			"organizations",
 			"consumers",
-		])("rejects the multi-tenant %s endpoint because it cannot provide a stable issuer", (tenantId) => {
+		])("rejects the multi-tenant %s endpoint because it requires a concrete tenant GUID", (tenantId) => {
 			expect(() =>
 				microsoftEntraId({
 					clientId: "ms-client-id",
@@ -3862,7 +3777,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3893,7 +3807,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3939,7 +3852,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3968,7 +3880,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3991,7 +3902,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -5082,49 +4992,6 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("skips a provider when discovery cannot establish an account issuer", async () => {
-			const discoveryServer = createServer((_req, res) => {
-				res.setHeader("content-type", "application/json");
-				res.end(
-					JSON.stringify({
-						authorization_endpoint: `http://localhost:${port}/authorize`,
-						token_endpoint: `http://localhost:${port}/token`,
-						userinfo_endpoint: `http://localhost:${port}/userinfo`,
-					}),
-				);
-			});
-			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
-			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
-			try {
-				const { auth } = await getTestInstance(
-					{
-						plugins: [
-							genericOAuth({
-								config: [
-									{
-										providerId: "issuerless-discovery",
-										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
-										clientId,
-										clientSecret,
-									},
-								],
-							}),
-						],
-					},
-					{ disableTestUser: true },
-				);
-
-				const context = await auth.$context;
-				expect(
-					context.socialProviders.map((provider) => provider.id),
-				).not.toContain("issuerless-discovery");
-			} finally {
-				await new Promise<void>((resolve, reject) =>
-					discoveryServer.close((error) => (error ? reject(error) : resolve())),
-				);
-			}
-		});
-
 		it("skips a provider when required ID token verification metadata is unavailable", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
@@ -5149,7 +5016,6 @@ describe("oauth2", async () => {
 										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
 										authorizationUrl: `http://localhost:${port}/authorize`,
 										tokenUrl: `http://localhost:${port}/token`,
-										accountIssuer: `http://localhost:${port}`,
 										requireIdTokenVerification: true,
 										clientId,
 										clientSecret,
@@ -5257,7 +5123,7 @@ describe("oauth2", async () => {
 		const ctx = await auth.$context;
 		const providerIds = ctx.socialProviders.map((provider) => provider.id);
 		expect(providerIds).toContain("healthy-idp");
-		expect(providerIds).not.toContain("broken-idp");
+		expect(providerIds).toContain("broken-idp");
 
 		const signUp = await auth.api.signUpEmail({
 			body: {

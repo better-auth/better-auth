@@ -16,7 +16,7 @@ describe("prisma-adapter", () => {
 							fields: [
 								{ name: "accountId", dbName: "account_id" },
 								{ name: "providerId", dbName: "provider_id" },
-								{ name: "issuer", dbName: "identity_issuer" },
+								{ name: "scope", dbName: "token_scope" },
 							],
 						},
 					},
@@ -30,7 +30,7 @@ describe("prisma-adapter", () => {
 			fields: {
 				accountId: { type: "string", fieldName: "accountId" },
 				providerId: { type: "string", fieldName: "providerId" },
-				issuer: { type: "string", fieldName: "issuer" },
+				scope: { type: "string", fieldName: "scope" },
 			},
 		} satisfies BetterAuthDBSchema[string];
 		const resolved =
@@ -41,7 +41,7 @@ describe("prisma-adapter", () => {
 		expect(resolved?.account?.modelName).toBe("auth_account");
 		expect(resolved?.account?.fields.accountId?.fieldName).toBe("account_id");
 		expect(resolved?.account?.fields.providerId?.fieldName).toBe("provider_id");
-		expect(resolved?.account?.fields.issuer?.fieldName).toBe("identity_issuer");
+		expect(resolved?.account?.fields.scope?.fieldName).toBe("token_scope");
 	});
 
 	it("keeps declared names for schema additions missing from the Prisma model", async () => {
@@ -67,7 +67,7 @@ describe("prisma-adapter", () => {
 						modelName: "account",
 						fields: {
 							id: { type: "string", fieldName: "id" },
-							issuer: { type: "string", fieldName: "issuer" },
+							scope: { type: "string", fieldName: "scope" },
 						},
 					},
 					jwks: {
@@ -79,7 +79,7 @@ describe("prisma-adapter", () => {
 
 		expect(resolved?.account?.modelName).toBe("auth_account");
 		expect(resolved?.account?.fields.id?.fieldName).toBe("account_id");
-		expect(resolved?.account?.fields.issuer?.fieldName).toBe("issuer");
+		expect(resolved?.account?.fields.scope?.fieldName).toBe("scope");
 		expect(resolved?.jwks?.modelName).toBe("jwks");
 		expect(resolved?.jwks?.fields.id?.fieldName).toBe("id");
 	});
@@ -137,8 +137,8 @@ describe("prisma-adapter", () => {
 		});
 		await expect(
 			migrationConnection?.execute({
-				parameters: ["issuer"],
-				sql: "UPDATE account SET issuer = ?",
+				parameters: ["openid"],
+				sql: "UPDATE account SET scope = ?",
 			}),
 		).resolves.toEqual({
 			numAffectedRows: 2n,
@@ -149,8 +149,8 @@ describe("prisma-adapter", () => {
 			"credential",
 		);
 		expect(executeRaw).toHaveBeenCalledWith(
-			"UPDATE account SET issuer = ?",
-			"issuer",
+			"UPDATE account SET scope = ?",
+			"openid",
 		);
 	});
 
@@ -174,8 +174,8 @@ describe("prisma-adapter", () => {
 
 		await migrationConnection?.transaction?.(async (connection) => {
 			await connection.execute({
-				parameters: ["local:credential"],
-				sql: "UPDATE account SET issuer = ?",
+				parameters: ["openid"],
+				sql: "UPDATE account SET scope = ?",
 			});
 		});
 
@@ -184,8 +184,8 @@ describe("prisma-adapter", () => {
 			timeout: 600_000,
 		});
 		expect(transactionExecuteRaw).toHaveBeenCalledWith(
-			"UPDATE account SET issuer = ?",
-			"local:credential",
+			"UPDATE account SET scope = ?",
+			"openid",
 		);
 		expect(rootExecuteRaw).not.toHaveBeenCalled();
 	});

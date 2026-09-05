@@ -1061,7 +1061,6 @@ describe("change-email rejects confirmation-only config for verified users", asy
 describe("credential identity across email changes", async () => {
 	const { client, db, sessionSetter } = await getTestInstance(
 		{
-			account: { identityStrategy: "issuer" },
 			user: {
 				changeEmail: {
 					enabled: true,
@@ -1094,7 +1093,6 @@ describe("credential identity across email changes", async () => {
 		expect(accountsBefore).toHaveLength(1);
 		expect(accountsBefore[0]).toMatchObject({
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 
@@ -1123,33 +1121,8 @@ describe("credential identity across email changes", async () => {
 		expect(accountsAfter[0]).toMatchObject({
 			id: accountsBefore[0]!.id,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
-	});
-
-	it("stores the credential identity under provider-id strategy", async () => {
-		const { client, db } = await getTestInstance(
-			{ account: { identityStrategy: "provider-id" } },
-			{ disableTestUser: true },
-		);
-		const signUp = await client.signUp.email({
-			name: "Provider ID Credential",
-			email: "provider-id-credential@example.com",
-			password: "credential-password",
-		});
-		expect(signUp.error).toBeNull();
-		const accounts = await db.findMany<Account>({
-			model: "account",
-			where: [{ field: "userId", value: signUp.data!.user.id }],
-		});
-		expect(accounts).toContainEqual(
-			expect.objectContaining({
-				providerId: "credential",
-				issuer: "local:credential",
-				accountId: signUp.data!.user.id,
-			}),
-		);
 	});
 });
 
