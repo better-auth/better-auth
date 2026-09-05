@@ -10,6 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
+import { emailSchema } from "../../utils/email";
 import { isAPIError } from "../../utils/is-api-error";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -18,7 +19,7 @@ import { createEmailVerificationToken } from "./email-verification";
 const signUpEmailBodySchema = z
 	.object({
 		name: z.string(),
-		email: z.email(),
+		email: emailSchema,
 		password: z.string().nonempty(),
 		image: z.string().optional(),
 		callbackURL: z.string().optional(),
@@ -207,12 +208,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					rememberMe,
 					...rest
 				} = body;
-				const isValidEmail = z.email().safeParse(email);
-
-				if (!isValidEmail.success) {
-					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
-				}
-
 				if (!password || typeof password !== "string") {
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 				}

@@ -452,6 +452,100 @@ describe("email-otp", async () => {
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
 
+	it("should use the configured custom email validator", async () => {
+		const customEmail = "δοκιμή@example.com";
+		const emailValidator = vi.fn(
+			async (email: string) => email === customEmail,
+		);
+		const { client: scopedClient } = await getTestInstance(
+			{
+				user: {
+					emailValidator,
+				},
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: vi.fn(),
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const res = await scopedClient.emailOtp.sendVerificationOtp({
+			email: customEmail,
+			type: "email-verification",
+		});
+
+		expect(res.data?.success).toBe(true);
+		expect(emailValidator).toHaveBeenCalledWith(customEmail);
+	});
+
+	it("should enforce the custom validator across sign-in and password-reset endpoints", async () => {
+		let shouldRejectEmail = false;
+		const emailValidator = vi.fn(async () => !shouldRejectEmail);
+		const { auth: scopedAuth, testUser: scopedTestUser } =
+			await getTestInstance({
+				user: {
+					emailValidator,
+				},
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: vi.fn(),
+					}),
+				],
+			});
+
+		shouldRejectEmail = true;
+		emailValidator.mockClear();
+
+		const calls = [
+			() =>
+				scopedAuth.api.signInEmailOTP({
+					body: {
+						email: scopedTestUser.email,
+						otp: "123456",
+					},
+				}),
+			() =>
+				scopedAuth.api.requestPasswordResetEmailOTP({
+					body: {
+						email: scopedTestUser.email,
+					},
+				}),
+			() =>
+				scopedAuth.api.forgetPasswordEmailOTP({
+					body: {
+						email: scopedTestUser.email,
+					},
+				}),
+			() =>
+				scopedAuth.api.resetPasswordEmailOTP({
+					body: {
+						email: scopedTestUser.email,
+						otp: "123456",
+						password: "new-password123",
+					},
+				}),
+		];
+
+		for (const call of calls) {
+			await expect(call()).rejects.toMatchObject({
+				statusCode: 400,
+				body: {
+					code: "INVALID_EMAIL",
+				},
+			});
+		}
+
+		expect(emailValidator).toHaveBeenCalledTimes(calls.length);
+		expect(emailValidator).toHaveBeenCalledWith(scopedTestUser.email);
+	});
+
 	it("should reject change-email type", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,

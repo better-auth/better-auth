@@ -575,6 +575,64 @@ describe("Email Verification", async () => {
 	});
 });
 
+describe("Email Verification - Custom email validator", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10920
+	 */
+	it("should not revalidate the normalized email in a signed verification token", async () => {
+		const submittedEmail = "User@Example.com";
+		const normalizedEmail = submittedEmail.toLowerCase();
+		const emailValidator = vi.fn(
+			async (email: string) => email === normalizedEmail,
+		);
+		let verificationToken = "";
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					emailValidator,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					sendOnSignUp: true,
+					async sendVerificationEmail({ token }) {
+						verificationToken = token;
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: submittedEmail,
+				password: "password123",
+				name: "Mixed Case User",
+			},
+		});
+
+		expect(signUpResult.user.email).toBe(normalizedEmail);
+		expect(emailValidator).toHaveBeenCalledWith(normalizedEmail);
+		expect(verificationToken).not.toBe("");
+
+		emailValidator.mockClear();
+		const verificationResult = await auth.api.verifyEmail({
+			query: {
+				token: verificationToken,
+			},
+		});
+
+		expect(verificationResult).toEqual(
+			expect.objectContaining({ status: true }),
+		);
+		expect(emailValidator).not.toHaveBeenCalled();
+	});
+});
+
 describe("Email Verification - Timing-safe unauthenticated path", () => {
 	it("should enforce a constant-time floor for both existing and non-existing emails", async () => {
 		const mockSendEmail = vi.fn();

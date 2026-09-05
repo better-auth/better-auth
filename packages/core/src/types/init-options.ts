@@ -916,6 +916,17 @@ export type BetterAuthOptions = {
 	user?:
 		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
 				/**
+				 * Validate email addresses accepted by Better Auth.
+				 *
+				 * When provided, this replaces the default email syntax validator across
+				 * built-in email flows. It does not verify that the address exists or is
+				 * owned by the user. The validator receives the email normalized to
+				 * lowercase, matching how Better Auth stores and looks up email addresses.
+				 *
+				 * @default Uses Zod's email validation.
+				 */
+				emailValidator?: (email: string) => Awaitable<boolean>;
+				/**
 				 * Gate which identities Better Auth admits. Called just before
 				 * `create-user`, `link-account`, and (for OAuth) `sign-in`, across
 				 * every authentication method, including stateless setups with no

@@ -134,10 +134,6 @@ export async function createAdminAction(opts: unknown) {
 	}
 
 	const { email, password } = await resolveRequiredInput(options);
-	const emailResult = z.email().safeParse(email);
-	if (!emailResult.success) {
-		exitWithError("Invalid email address.");
-	}
 	const data = {
 		...parseData(options.data),
 		emailVerified: options.emailVerified,
