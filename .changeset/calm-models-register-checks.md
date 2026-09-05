@@ -5,4 +5,6 @@
 "auth": patch
 ---
 
-Check the Drizzle schema object and the generated Prisma client against the tables Better Auth writes before the first request outside production, and report every missing table, missing column, or required column Better Auth never fills together with its fix. `auth generate` reports a required column an existing Prisma schema declares that Better Auth never fills.
+Validate Drizzle schema objects and generated Prisma client models during initialization, including in production, and report mismatches with guidance for fixing them. These checks do not query the database and cannot detect unapplied migrations.
+
+For Prisma clients whose model metadata omits nullability, `auth generate` reports required fields that Better Auth never writes by reading the existing Prisma schema. Set `advanced.database.validateSchema: false` to disable runtime validation.
