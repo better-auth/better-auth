@@ -5,4 +5,6 @@
 "auth": patch
 ---
 
-Start schema validation during initialization in every environment and report missing tables, missing columns, and required unwritten columns with their fixes. Authentication requests share the same check and fail on a schema mismatch. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` reports schema problems before changing anything.
+Report missing tables, missing columns, and required columns Better Auth never writes during initialization, with guidance for fixing them. Kysely checks the live database schema. Authentication requests await the same check and are rejected if the schema does not match.
+
+Validation is enabled by default, including in production. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` refuses to apply changes when required unwritten columns need manual repair.
