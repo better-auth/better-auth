@@ -624,6 +624,18 @@ export const createAdapterFactory =
 			}) as any;
 		};
 
+		// `references.model` may point at an application table that better-auth
+		// knows nothing about. Such a reference can never match the model being
+		// joined, so treat it as a non-match rather than letting the strict
+		// resolver throw and take the whole query down.
+		const resolveReferencedModel = (model: string): string | undefined => {
+			try {
+				return getDefaultModelName(model);
+			} catch {
+				return undefined;
+			}
+		};
+
 		const transformJoinClause = (
 			baseModel: string,
 			unsanitizedJoin: JoinOption | undefined,
@@ -643,7 +655,7 @@ export const createAdapterFactory =
 				).filter(
 					([field, fieldAttributes]) =>
 						fieldAttributes.references &&
-						getDefaultModelName(fieldAttributes.references.model) ===
+						resolveReferencedModel(fieldAttributes.references.model) ===
 							defaultBaseModelName,
 				);
 
@@ -656,7 +668,7 @@ export const createAdapterFactory =
 					).filter(
 						([field, fieldAttributes]) =>
 							fieldAttributes.references &&
-							getDefaultModelName(fieldAttributes.references.model) ===
+							resolveReferencedModel(fieldAttributes.references.model) ===
 								defaultModelName,
 					);
 					isForwardJoin = false;
