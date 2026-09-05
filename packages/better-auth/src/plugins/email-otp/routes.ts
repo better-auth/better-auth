@@ -147,11 +147,25 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 					message: "Invalid OTP type",
 				});
 			}
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			/**
+			 * `/send-verification-email` refuses to mail an already verified address
+			 * for a caller with no session, and returns the same body it would for an
+			 * unknown one (#7707). This endpoint is the same operation, so it must not
+			 * become a second door onto that email. The session owner is still served:
+			 * `changeEmail.verifyCurrentEmail` steps up through here.
+			 */
+			if (ctx.body.type === "email-verification" && user?.user.emailVerified) {
+				const session = await getSessionFromCtx(ctx);
+				if (session?.user.id !== user.user.id) {
+					return ctx.json({ success: true });
+				}
+			}
+
 			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
 
 			const shouldSendOTP = ctx.body.type === "sign-in" && !opts.disableSignUp;
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user && !shouldSendOTP) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					identifier,
