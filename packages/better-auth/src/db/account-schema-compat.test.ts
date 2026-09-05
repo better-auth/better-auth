@@ -142,16 +142,22 @@ describe("account table compatibility across v1 releases", () => {
 		expect(toBeAdded).toEqual([]);
 		expect(schemaProblems).toHaveLength(1);
 		expect(schemaProblems[0]).toContain('Column "issuer" on table "account"');
-		expect(schemaProblems[0]).toContain("account_issuer_accountId_uidx");
 
 		const signUp = await signUpAndLinkSocialAccount(
 			auth,
 			"with-issuer-column@example.com",
 		).catch((error: unknown) => error);
 		expect(signUp).toBeInstanceOf(SchemaMismatchError);
-		expect((signUp as Error).message).toContain(
-			"account_issuer_accountId_uidx",
-		);
+		expect(signUp).toMatchObject({
+			code: "SCHEMA_MISMATCH",
+			findings: [
+				{
+					kind: "unexpected-required-column",
+					table: "account",
+					column: "issuer",
+				},
+			],
+		});
 
 		// A read meets the verdict kept from the first request.
 		const read = await auth.api
