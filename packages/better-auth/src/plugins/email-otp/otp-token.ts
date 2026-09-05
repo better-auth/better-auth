@@ -4,6 +4,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import type { Verification } from "../../types";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -94,8 +95,9 @@ export async function tryReuseOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,
 	identifier: string,
+	existing?: Verification | null,
 ): Promise<string | null> {
-	const existing =
+	existing ??=
 		await ctx.context.internalAdapter.findVerificationValue(identifier);
 	if (!existing || existing.expiresAt < new Date()) return null;
 

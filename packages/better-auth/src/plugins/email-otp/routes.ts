@@ -41,52 +41,53 @@ async function resolveOTP(
 ): Promise<string> {
 	const identifier = toOTPIdentifier(type, email);
 
-	if (opts.resendStrategy === "reuse") {
-		const reused = await tryReuseOTP(ctx, opts, identifier);
+	let seen =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (opts.resendStrategy === "reuse" && seen) {
+		const reused = await tryReuseOTP(ctx, opts, identifier, seen);
 		if (reused) return reused;
 	}
 
 	const otp =
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
-	const storedOTP = await storeOTP(ctx, opts, otp);
+	const verification = {
+		value: `${await storeOTP(ctx, opts, otp)}:0`,
+		identifier,
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	};
 
-	// Remember whether a code was already pending before this insert: on databases
-	// that enforce a unique identifier the insert below fails in both cases, but a
-	// pending code must be rotated while a code that appeared in the meantime
-	// belongs to a concurrent request and must be delivered as-is (see below).
-	const hadPendingCode = Boolean(
-		await ctx.context.internalAdapter.findVerificationValue(identifier),
-	);
-
-	try {
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${storedOTP}:0`,
-			identifier,
-			expiresAt: getDate(opts.expiresIn, "sec"),
-		});
-	} catch {
-		// No code was pending a moment ago, so the insert can only have lost to a
-		// concurrent request that is about to email its own code. Deliver that same
-		// code (regardless of `resendStrategy`) instead of replacing it: replacing
-		// would silently invalidate the code the user is about to receive. Replace
-		// it only when it cannot be reused (unrecoverable storage, expired, or
-		// attempts exhausted).
-		if (!hadPendingCode) {
-			const concurrent = await tryReuseOTP(ctx, opts, identifier);
-			if (concurrent) return concurrent;
+	// On databases that enforce a unique identifier the insert fails while a row
+	// is stored. A row other than the one seen at the last lookup belongs to a
+	// concurrent request that is about to email its own code: deliver that same
+	// code (regardless of `resendStrategy`) instead of replacing it, because
+	// replacing would silently invalidate the code the user is about to receive.
+	// Only the row seen at the last lookup is replaced (with `reuse` it could not
+	// be reused; with `rotate` the user asked for a new code), and only that very
+	// row, so that a replacement never removes what a concurrent request stored in
+	// the meantime. The insert after a replacement can lose to a concurrent
+	// request in the same way, hence the loop: each pass either hands over to the
+	// code another request just stored or replaces a row nobody else can use.
+	for (let pass = 0; ; pass++) {
+		try {
+			await ctx.context.internalAdapter.createVerificationValue(verification);
+			return otp;
+		} catch (error) {
+			const current =
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
+			if (current && current.id !== seen?.id) {
+				const concurrent = await tryReuseOTP(ctx, opts, identifier, current);
+				if (concurrent) return concurrent;
+			}
+			if (pass >= 2) throw error;
+			seen = current;
+			if (current) {
+				await ctx.context.adapter.delete({
+					model: "verification",
+					where: [{ field: "id", value: current.id }],
+				});
+			}
 		}
-
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			identifier,
-		);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${storedOTP}:0`,
-			identifier,
-			expiresAt: getDate(opts.expiresIn, "sec"),
-		});
 	}
-
-	return otp;
 }
 
 const sendVerificationOTPBodySchema = z.object({

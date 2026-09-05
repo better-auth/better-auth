@@ -2634,6 +2634,72 @@ describe("email-otp concurrent sends on a unique verification identifier", async
 		const res = await client.signIn.emailOtp({ email, otp: otps[1]! });
 		expect(res.data?.token).toBeDefined();
 	});
+
+	it("should deliver the code a concurrent request stored while replacing a pending one", async () => {
+		const otps: string[] = [];
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					uniqueVerificationIdentifier,
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							otps.push(otp);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const email = "concurrent-replace@example.com";
+		const identifier = `sign-in-otp-${email}`;
+		const context = await auth.$context;
+		await context.internalAdapter.createVerificationValue({
+			identifier,
+			value: "000000:0",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		// Both requests set out to replace the pending row. The first one to reach
+		// its delete pauses, so the second one replaces the row and stores its own
+		// code in the meantime; the first one must then deliver that code instead
+		// of removing it.
+		const adapter = context.adapter;
+		let deletes = 0;
+		context.adapter = {
+			...adapter,
+			async delete(data) {
+				if (data.model === "verification" && deletes++ === 0) {
+					await new Promise((resolve) => setTimeout(resolve, 100));
+				}
+				return adapter.delete(data);
+			},
+		};
+
+		const results = await Promise.all([
+			client.emailOtp.sendVerificationOtp({ email, type: "sign-in" }),
+			client.emailOtp.sendVerificationOtp({ email, type: "sign-in" }),
+		]);
+		for (const result of results) {
+			expect(result.error).toBeNull();
+		}
+
+		expect(otps).toHaveLength(2);
+		expect(otps[1]).toBe(otps[0]);
+		expect(otps[0]).not.toBe("000000");
+
+		const rows = await adapter.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rows).toHaveLength(1);
+
+		const res = await client.signIn.emailOtp({ email, otp: otps[0]! });
+		expect(res.data?.token).toBeDefined();
+	});
 });
 
 describe("email-otp verify-email cookie cache isolation", async () => {
