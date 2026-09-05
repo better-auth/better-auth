@@ -1432,9 +1432,15 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250121.0
         version: 4.20260226.1
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
       kysely:
         specifier: 0.28.17
         version: 0.28.17
+      pg:
+        specifier: ^8.0.0
+        version: 8.19.0
       tsdown:
         specifier: 'catalog:'
         version: 0.21.10(@arethetypeswrong/core@0.18.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)

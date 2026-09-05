@@ -1,15 +1,23 @@
+import { randomUUID } from "node:crypto";
 import type { ExpectedSchema } from "@better-auth/core/db/internal";
 import type { KyselyPlugin } from "kysely";
 import {
 	CamelCasePlugin,
 	DummyDriver,
 	Kysely,
+	PostgresDialect,
 	SqliteAdapter,
 	SqliteIntrospector,
 	SqliteQueryCompiler,
+	sql,
 } from "kysely";
-import { describe, expect, it } from "vitest";
-import { toPhysicalSchema } from "./schema-check";
+import { Pool } from "pg";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+	findSchemaProblems,
+	getPostgresSchema,
+	toPhysicalSchema,
+} from "./schema-check";
 
 /**
  * A connection that compiles queries and never sends them.
@@ -80,5 +88,107 @@ describe("toPhysicalSchema", () => {
 				expected,
 			),
 		).toHaveProperty("TWO_FACTOR.fields.USER_ID");
+	});
+});
+
+/**
+ * @see https://www.postgresql.org/docs/current/ddl-schemas.html#DDL-SCHEMAS-PATH
+ */
+describe("PostgreSQL schema validation", () => {
+	const CONNECTION_STRING =
+		"postgres://user:password@localhost:5433/better_auth";
+	let postgresAvailable = false;
+
+	beforeAll(async () => {
+		const probe = new Pool({
+			connectionString: CONNECTION_STRING,
+			connectionTimeoutMillis: 2000,
+		});
+		try {
+			await probe.query("SELECT 1");
+			postgresAvailable = true;
+		} catch {
+			// Integration tests require the local PostgreSQL test database.
+		} finally {
+			await probe.end();
+		}
+	});
+
+	beforeEach(({ skip }) => {
+		if (!postgresAvailable)
+			skip("Local PostgreSQL test database is unavailable");
+	});
+
+	it("keeps the migration fallback when search_path is empty", async ({
+		onTestFinished,
+	}) => {
+		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const db = new Kysely({
+			dialect: new PostgresDialect({ pool }),
+			plugins: [new CamelCasePlugin()],
+		});
+		onTestFinished(() => db.destroy());
+
+		await db.transaction().execute(async (trx) => {
+			await sql`SET TRANSACTION READ ONLY`.execute(trx);
+			await sql`SELECT pg_catalog.set_config('search_path', '', true)`.execute(
+				trx,
+			);
+			await expect(getPostgresSchema(trx)).resolves.toBe("public");
+		});
+	});
+
+	it("reads PostgreSQL metadata without changing the schema", async ({
+		onTestFinished,
+	}) => {
+		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+		onTestFinished(() => db.destroy());
+		const table = `ba_missing_${randomUUID().replaceAll("-", "")}`;
+
+		await expect(
+			findSchemaProblems(db, "postgres", { [table]: { fields: {} } }),
+		).resolves.toEqual([{ kind: "missing-table", table }]);
+	});
+
+	it("resolves role schemas and each table in search-path order", async ({
+		onTestFinished,
+	}) => {
+		const role = `ba_readiness_${randomUUID().replaceAll("-", "")}`;
+		const fallback = `${role}_fallback`;
+		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+		onTestFinished(() => db.destroy());
+		await pool.query(`CREATE ROLE "${role}"`);
+		onTestFinished(async () => {
+			await pool.query("RESET ROLE");
+			await pool.query(`DROP ROLE "${role}"`);
+		});
+		await pool.query(`CREATE SCHEMA "${role}" AUTHORIZATION "${role}"`);
+		onTestFinished(() =>
+			pool.query(`DROP SCHEMA "${role}" CASCADE`).then(() => {}),
+		);
+		await pool.query(`CREATE SCHEMA "${fallback}" AUTHORIZATION "${role}"`);
+		onTestFinished(() =>
+			pool.query(`DROP SCHEMA "${fallback}" CASCADE`).then(() => {}),
+		);
+		await pool.query(`SET ROLE "${role}"`);
+		await pool.query(`SET search_path TO "$user", "${fallback}"`);
+		await pool.query(
+			'CREATE TABLE account (id text PRIMARY KEY, "providerId" text NOT NULL)',
+		);
+		await pool.query(
+			`CREATE TABLE "${fallback}".account (id text PRIMARY KEY, issuer text NOT NULL)`,
+		);
+		await pool.query(
+			`CREATE TABLE "${fallback}".session (id text PRIMARY KEY, token text NOT NULL)`,
+		);
+
+		await expect(
+			findSchemaProblems(db, "postgres", {
+				account: { fields: { providerId: { type: "string" } } },
+				session: { fields: { token: { type: "string" } } },
+			}),
+		).resolves.toEqual([]);
 	});
 });
