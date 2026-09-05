@@ -3,6 +3,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { runWithTransaction } from "@better-auth/core/context";
 import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
+import { CamelCasePlugin, Kysely } from "kysely";
 import { describe, expect, it } from "vitest";
 import { betterAuth } from "../auth/full";
 import { getMigrations } from "./get-migration";
@@ -198,5 +199,35 @@ describe("schema check timing", () => {
 				}),
 			),
 		).resolves.toMatchObject({ user: { email: "in-transaction@example.com" } });
+	});
+});
+
+describe("schema check with Kysely's CamelCasePlugin", () => {
+	const SNAKE_CASE_TABLES = `create table "user" ("id" text not null primary key, "name" text not null, "email" text not null unique, "email_verified" integer not null, "image" text, "created_at" date not null, "updated_at" date not null);
+create table "session" ("id" text not null primary key, "expires_at" date not null, "token" text not null unique, "created_at" date not null, "updated_at" date not null, "ip_address" text, "user_agent" text, "user_id" text not null references "user" ("id") on delete cascade);
+create table "account" ("id" text not null primary key, "account_id" text not null, "provider_id" text not null, "user_id" text not null references "user" ("id") on delete cascade, "access_token" text, "refresh_token" text, "id_token" text, "access_token_expires_at" date, "refresh_token_expires_at" date, "scope" text, "password" text, "created_at" date not null, "updated_at" date not null);
+create table "verification" ("id" text not null primary key, "identifier" text not null, "value" text not null, "expires_at" date not null, "created_at" date not null, "updated_at" date not null);`;
+
+	it("compares the names the plugin exposes, not the ones the database stores", async () => {
+		const database = new DatabaseSync(":memory:");
+		database.exec(SNAKE_CASE_TABLES);
+		const { auth } = createAuth(database, {
+			database: {
+				db: new Kysely({
+					dialect: new NodeSqliteDialect({ database }),
+					plugins: [new CamelCasePlugin()],
+				}),
+				type: "sqlite",
+			},
+		});
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "snake@example.com",
+					password: "correct-horse-battery-staple",
+					name: "Employee",
+				},
+			}),
+		).resolves.toMatchObject({ user: { email: "snake@example.com" } });
 	});
 });
