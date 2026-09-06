@@ -1999,6 +1999,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "enum": [
                           "apple",
                           "atlassian",
+                          "cloudflare",
                           "cognito",
                           "discord",
                           "facebook",
@@ -4111,6 +4112,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "enum": [
                           "apple",
                           "atlassian",
+                          "cloudflare",
                           "cognito",
                           "discord",
                           "facebook",
