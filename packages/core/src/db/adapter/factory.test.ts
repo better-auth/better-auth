@@ -441,6 +441,36 @@ describe("legacy adapter atomic fallbacks", () => {
 			counter: 3,
 		});
 	});
+	it("uses stored counters even when output transformation is lossy", async ({
+		onTestFinished,
+	}) => {
+		const { raw, db } = setup(onTestFinished);
+		db.exec("UPDATE verification SET counter = 2");
+		const adapter = createAdapterFactory({
+			config: {
+				adapterId: "masked-counter",
+				mapKeysTransformInput: { id: "_id" },
+				mapKeysTransformOutput: { _id: "id" },
+				customTransformOutput: ({ field, data }) =>
+					field === "attempts" ? 0 : data,
+			},
+			adapter: () => raw,
+		})({
+			verification: {
+				additionalFields: {
+					attempts: { type: "number", required: false, fieldName: "counter" },
+				},
+			},
+		});
+		expect(await adapter.findOne(request)).toMatchObject({ attempts: 0 });
+		expect(
+			await adapter.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).toMatchObject({ attempts: 0 });
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: 3,
+		});
+	});
+
 	it("returns the row produced by its own update", async ({
 		onTestFinished,
 	}) => {
@@ -608,16 +638,24 @@ describe("legacy adapter atomic fallbacks", () => {
 			db.prepare("SELECT count(*) AS count FROM verification").get(),
 		).toMatchObject({ count: 1 });
 	});
-	it("requires a native method for non-scalar snapshots", async ({
+	it("allows unrelated structured data in returned rows", async ({
 		onTestFinished,
 	}) => {
 		const { raw, first, db } = setup(onTestFinished);
-		raw.findOne = async <T>() =>
-			({ _id: "a", identifier: "token", value: { secret: true } }) as T;
-		await expect(first.consumeOne(request)).rejects.toThrow(/non-scalar/);
+		const find = raw.findOne;
+		raw.findOne = async <T>(args: { where: CleanedWhere[] }) => {
+			const row = await find<Record<string, unknown>>(args);
+			return row
+				? ({ ...row, metadata: { locale: "en" }, tags: ["test"] } as T)
+				: null;
+		};
+		expect(await first.consumeOne(request)).toMatchObject({
+			id: "a",
+			value: "secret",
+		});
 		expect(
 			db.prepare("SELECT count(*) AS count FROM verification").get(),
-		).toMatchObject({ count: 1 });
+		).toMatchObject({ count: 0 });
 	});
 
 	it("rejects malformed reads instead of treating them as missing", async ({
@@ -630,23 +668,54 @@ describe("legacy adapter atomic fallbacks", () => {
 			db.prepare("SELECT count(*) AS count FROM verification").get(),
 		).toMatchObject({ count: 1 });
 	});
-	it("rejects non-scalar assignments without exposing their values", async ({
+	it("propagates write failures without reporting a successful increment", async ({
 		onTestFinished,
 	}) => {
-		const { first, db } = setup(onTestFinished);
-		const result = await first
-			.incrementOne({
-				...request,
-				increment: {},
-				set: { value: { secret: "must-not-leak" } },
-			})
-			.catch((error: unknown) => error);
-		expect(result).toBeInstanceOf(Error);
-		expect(String(result)).not.toContain("must-not-leak");
-		expect(db.prepare("SELECT value FROM verification").get()).toMatchObject({
+		const { first, raw, db } = setup(onTestFinished);
+		const failure = new Error("backend unavailable");
+		raw.updateMany = async () => {
+			throw failure;
+		};
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).rejects.toBe(failure);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: null,
+		});
+	});
+
+	it("uses adapter-owned transforms for object IDs", async () => {
+		const physicalId = { encoded: "a" };
+		const raw = createCustomAdapter({
+			consumeOne: undefined,
+			incrementOne: undefined,
+			findOne: async <T>() =>
+				({ _id: physicalId, identifier: "token", value: "secret" }) as T,
+			deleteMany: async ({ where }) => {
+				expect(where.find((clause) => clause.field === "_id")?.value).toBe(
+					physicalId,
+				);
+				return 1;
+			},
+		});
+		const adapter = createAdapterFactory({
+			config: {
+				adapterId: "object-id",
+				mapKeysTransformInput: { id: "_id" },
+				mapKeysTransformOutput: { _id: "id" },
+				customTransformInput: ({ field, data }) =>
+					field === "_id" ? physicalId : data,
+				customTransformOutput: ({ field, data }) =>
+					field === "id" ? "a" : data,
+			},
+			adapter: () => raw,
+		})({});
+		expect(await adapter.consumeOne(request)).toMatchObject({
+			id: "a",
 			value: "secret",
 		});
 	});
+
 	it("rejects increments that cannot change a large counter", async ({
 		onTestFinished,
 	}) => {

@@ -8,7 +8,7 @@ import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
 import { getAuthTables } from "../get-tables";
-import { consumeOneFallback, incrementOneFallback } from "./atomic-fallback";
+import { createAtomicFallbacks } from "./atomic-fallback";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { initGetFieldAttributes } from "./get-field-attributes";
@@ -842,6 +842,16 @@ export const createAdapterFactory =
 		});
 
 		let lazyLoadTransaction: DBAdapter<Options>["transaction"] | null = null;
+		const atomicFallbacks = createAtomicFallbacks({
+			adapter: adapterInstance,
+			adapterId: config.adapterId,
+			mapKeysTransformInput: config.mapKeysTransformInput,
+			mapKeysTransformOutput: config.mapKeysTransformOutput,
+			getFieldName,
+			transformOutput,
+			transformWhereClause,
+		});
+
 		const adapter: DBAdapter<Options> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
@@ -1376,14 +1386,10 @@ export const createAdapterFactory =
 					() =>
 						adapterInstance.consumeOne
 							? adapterInstance.consumeOne<T>({ model, where })
-							: consumeOneFallback({
-									adapter: adapterInstance,
-									adapterId: config.adapterId,
+							: atomicFallbacks.consumeOne({
 									model,
+									logicalModel: unsafeModel,
 									where,
-									idField:
-										config.mapKeysTransformInput?.id ||
-										getFieldName({ model: unsafeModel, field: "id" }),
 								}),
 				);
 
@@ -1482,16 +1488,12 @@ export const createAdapterFactory =
 									increment,
 									set,
 								})
-							: incrementOneFallback({
-									adapter: adapterInstance,
-									adapterId: config.adapterId,
+							: atomicFallbacks.incrementOne({
 									model,
+									logicalModel: unsafeModel,
 									where,
 									increment,
 									set,
-									idField:
-										config.mapKeysTransformInput?.id ||
-										getFieldName({ model: unsafeModel, field: "id" }),
 								}),
 				);
 

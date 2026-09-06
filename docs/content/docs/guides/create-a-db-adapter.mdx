@@ -272,7 +272,7 @@ consumeOne: async ({ model, where }) => {
 ```
 
 <Callout type="warn">
-  `consumeOne` is optional. Without it, Better Auth reads a candidate and conditionally deletes it only if its ID and stored values still match. It returns the candidate only when exactly one row was deleted.
+  `consumeOne` is optional. Without it, Better Auth reads a candidate and conditionally deletes it only if its ID, original AND conditions, and comparable stored values still match. It returns the candidate only when exactly one row was deleted.
 </Callout>
 
 ### `incrementOne` method
@@ -308,7 +308,7 @@ incrementOne: async ({ model, where, increment, set }) => {
 
 Both fallbacks require `findOne` to return a complete, detached snapshot of the stored row with its mapped ID. `deleteMany` and `updateMany` must check all conditions and perform each row mutation atomically, with accurate numeric affected-row counts. Equality against `null` must also match an absent nullable field. Splitting the condition check and mutation into separate operations is not safe, even inside an application-level lock.
 
-Fallbacks validate and compare scalar values (strings, finite numbers, booleans, dates, and null). Implement the native methods for rows or assignments containing structured values, or for adapter-specific ID objects. Native methods are also preferable under contention or when database triggers change the returned values. The increment fallback returns the values it wrote without a second read that could observe another caller's update.
+Fallbacks preserve returned objects and arrays and compare scalar values (strings, finite numbers, booleans, dates, and null). Object IDs use the adapter's existing ID input and output transformations. OR predicates on structured values still require native methods because the fallback cannot safely reconstruct their comparisons. Native methods are also preferable under contention or when database triggers change the returned values. The increment fallback returns the values it wrote without a second read that could observe another caller's update.
 
 ### `findOne` method
 
