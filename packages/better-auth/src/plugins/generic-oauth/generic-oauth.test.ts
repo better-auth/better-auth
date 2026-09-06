@@ -2869,23 +2869,15 @@ describe("oauth2", async () => {
 			expect(auth0Config.getUserInfo).toBeUndefined();
 		});
 
-		it("should handle domain with protocol prefix", () => {
+		it.each([
+			["HTTP URL", "http://dev-xxx.eu.auth0.com"],
+			["HTTPS URL", "https://dev-xxx.eu.auth0.com"],
+			["trailing slashes", "https://dev-xxx.eu.auth0.com///"],
+		])("normalizes an Auth0 domain supplied as %s", (_case, domain) => {
 			const auth0Config = auth0({
 				clientId: "auth0-client-id",
 				clientSecret: "auth0-client-secret",
-				domain: "https://dev-xxx.eu.auth0.com",
-			});
-
-			expect(auth0Config.discoveryUrl).toBe(
-				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
-			);
-		});
-
-		it("normalizes a trailing slash in the domain", () => {
-			const auth0Config = auth0({
-				clientId: "auth0-client-id",
-				clientSecret: "auth0-client-secret",
-				domain: "https://dev-xxx.eu.auth0.com/",
+				domain,
 			});
 
 			expect(auth0Config.discoveryUrl).toBe(
