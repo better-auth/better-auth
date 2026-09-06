@@ -1,5 +1,35 @@
 # @better-auth/core
 
+## 1.7.3
+
+### Patch Changes
+
+- [#11179](https://github.com/better-auth/better-auth/pull/11179) [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate Drizzle schema objects and generated Prisma client models during initialization, including in production, and report mismatches with guidance for fixing them. These checks do not query the database and cannot detect unapplied migrations.
+
+  For Prisma clients whose model metadata omits nullability, `auth generate` reports required fields that Better Auth never writes by reading the existing Prisma schema. Set `advanced.database.validateSchema: false` to disable runtime validation.
+
+- [#9908](https://github.com/better-auth/better-auth/pull/9908) [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6) Thanks [@harshil1712](https://github.com/harshil1712)! - Add Cloudflare as a built-in social provider, with support for client-secret authentication and PKCE clients without a secret.
+
+- [#11101](https://github.com/better-auth/better-auth/pull/11101) [`3e9e197`](https://github.com/better-auth/better-auth/commit/3e9e19746e609004da31bea3356c0059611d9ed4) Thanks [@bytaesu](https://github.com/bytaesu)! - Add a custom token endpoint authentication strategy for providers that require non-standard request parameters.
+
+- [#11068](https://github.com/better-auth/better-auth/pull/11068) [`157ec8d`](https://github.com/better-auth/better-auth/commit/157ec8d8799ddda642f2fe40120fc364660a8864) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve request IP validation performance.
+
+- [#11102](https://github.com/better-auth/better-auth/pull/11102) [`baa08f4`](https://github.com/better-auth/better-auth/commit/baa08f4ee674f5cc39624063847c89f1bea73186) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix TikTok sign-in and token refresh failing when configured with the documented `clientKey` and `clientSecret` options.
+
+- [#11129](https://github.com/better-auth/better-auth/pull/11129) [`9e36635`](https://github.com/better-auth/better-auth/commit/9e36635eb2fbf27d58c70d3361724335ba9a9951) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve PayPal authorization code and refresh token requests, including PKCE parameter handling.
+
+- [#11178](https://github.com/better-auth/better-auth/pull/11178) [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9) Thanks [@bytaesu](https://github.com/bytaesu)! - Report missing tables, missing columns, and required columns Better Auth never writes during initialization, with guidance for fixing them. Kysely checks the live database schema. Authentication requests await the same check and are rejected if the schema does not match.
+
+  Validation is enabled by default, including in production. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` refuses to apply changes when required unwritten columns need manual repair.
+
+- [#11134](https://github.com/better-auth/better-auth/pull/11134) [`a2bae0c`](https://github.com/better-auth/better-auth/commit/a2bae0cad04ccc23c40555c77f86b0da1ba40ebc) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve Reddit token requests with OAuth-compliant Basic authentication and redirect protection.
+
+- [#11189](https://github.com/better-auth/better-auth/pull/11189) [`1a1b7d5`](https://github.com/better-auth/better-auth/commit/1a1b7d56f51cb9ce6b06334b22fcbfa0d52be05a) Thanks [@bytaesu](https://github.com/bytaesu)! - Make `consumeOne` and `incrementOne` optional again for custom database adapters, using guarded fallbacks when native methods are absent. Fallbacks require atomic conditional writes and accurate affected-row counts. Fallback increments can fail when contention exhausts their retries.
+
+- [#11153](https://github.com/better-auth/better-auth/pull/11153) [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
+
+  If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
+
 ## 1.7.2
 
 ### Patch Changes
