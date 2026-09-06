@@ -120,7 +120,6 @@ describe("email-otp", async () => {
 		await internalAdapter.createAccount({
 			userId,
 			providerId: "google",
-			issuer: "local:google",
 			accountId: "attacker-google",
 		});
 
@@ -438,7 +437,6 @@ describe("email-otp", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 	});

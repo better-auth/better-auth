@@ -2,7 +2,6 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
@@ -1664,10 +1663,6 @@ async function handleOIDCCallback(
 			provider.issuer,
 		accountId: userInfoId,
 	};
-	const persistedIssuer =
-		ctx.context.options.account?.identityStrategy === "provider-id"
-			? createOAuthAccountIssuer(provider.providerId)
-			: accountKey.issuer;
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
@@ -1740,7 +1735,6 @@ async function handleOIDCCallback(
 						idToken: tokenResponse.idToken,
 						accessToken: tokenResponse.accessToken,
 						refreshToken: tokenResponse.refreshToken,
-						issuer: persistedIssuer,
 						accountId: userInfoId,
 						providerId: provider.providerId,
 						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,

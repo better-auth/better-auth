@@ -165,6 +165,8 @@ describe("oauth2", async () => {
 			return new Response(
 				JSON.stringify({
 					issuer: "https://idp.example.com",
+					authorization_endpoint: "https://idp.example.com/authorize",
+					token_endpoint: "https://idp.example.com/token",
 					end_session_endpoint: "https://idp.example.com/logout",
 				}),
 				{
@@ -2134,7 +2136,7 @@ describe("oauth2", async () => {
 		});
 	});
 
-	it("recognizes one OIDC account across provider aliases when mutable profile fields change", async () => {
+	it("links provider aliases as separate accounts of one user when mutable profile fields change", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -2210,12 +2212,13 @@ describe("oauth2", async () => {
 		const accounts = await context.internalAdapter.findAccounts(
 			firstSession.user.id,
 		);
-		expect(accounts).toHaveLength(1);
-		expect(accounts[0]).toMatchObject({
-			issuer: server.issuer.url,
-			accountId: "workforce-subject",
-			providerId: "workforce-mobile",
-		});
+		expect(accounts.map((account) => account.providerId).sort()).toEqual([
+			"workforce-mobile",
+			"workforce-web",
+		]);
+		expect(
+			accounts.every((account) => account.accountId === "workforce-subject"),
+		).toBe(true);
 	});
 
 	it("keeps different OIDC subjects separate when a mutable id field is reused", async () => {
@@ -2866,29 +2869,20 @@ describe("oauth2", async () => {
 			expect(auth0Config.getUserInfo).toBeUndefined();
 		});
 
-		it("should handle domain with protocol prefix", () => {
+		it.each([
+			["HTTP URL", "http://dev-xxx.eu.auth0.com"],
+			["HTTPS URL", "https://dev-xxx.eu.auth0.com"],
+			["trailing slashes", "https://dev-xxx.eu.auth0.com///"],
+		])("normalizes an Auth0 domain supplied as %s", (_case, domain) => {
 			const auth0Config = auth0({
 				clientId: "auth0-client-id",
 				clientSecret: "auth0-client-secret",
-				domain: "https://dev-xxx.eu.auth0.com",
+				domain,
 			});
 
 			expect(auth0Config.discoveryUrl).toBe(
 				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
 			);
-		});
-
-		it("normalizes a trailing slash in the domain and account issuer", () => {
-			const auth0Config = auth0({
-				clientId: "auth0-client-id",
-				clientSecret: "auth0-client-secret",
-				domain: "https://dev-xxx.eu.auth0.com/",
-			});
-
-			expect(auth0Config.discoveryUrl).toBe(
-				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
-			);
-			expect(auth0Config.accountIssuer).toBe("https://dev-xxx.eu.auth0.com/");
 		});
 
 		it("should allow overriding scopes", () => {
@@ -2983,7 +2977,7 @@ describe("oauth2", async () => {
 			expect(msConfig.disableImplicitSignUp).toBe(true);
 		});
 
-		it("fails initialization when Microsoft discovery is unavailable", async () => {
+		it("skips the Microsoft provider when discovery is unavailable", async () => {
 			mswServer.use(
 				http.get(
 					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
@@ -3007,8 +3001,9 @@ describe("oauth2", async () => {
 				{ disableTestUser: true },
 			);
 
-			await expect(auth.$context).rejects.toThrow(
-				"discovery returned no valid data",
+			const ctx = await auth.$context;
+			expect(ctx.socialProviders.map((provider) => provider.id)).not.toContain(
+				"microsoft-entra-id",
 			);
 		});
 
@@ -3861,7 +3856,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3892,7 +3886,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3938,7 +3931,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3967,7 +3959,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3990,7 +3981,6 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
-				account: { identityStrategy: "issuer" },
 				plugins: [
 					genericOAuth({
 						config: [
@@ -5081,49 +5071,7 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("fails provider initialization when discovery cannot establish an account issuer", async () => {
-			const discoveryServer = createServer((_req, res) => {
-				res.setHeader("content-type", "application/json");
-				res.end(
-					JSON.stringify({
-						authorization_endpoint: `http://localhost:${port}/authorize`,
-						token_endpoint: `http://localhost:${port}/token`,
-						userinfo_endpoint: `http://localhost:${port}/userinfo`,
-					}),
-				);
-			});
-			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
-			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
-			try {
-				const { auth } = await getTestInstance(
-					{
-						plugins: [
-							genericOAuth({
-								config: [
-									{
-										providerId: "issuerless-discovery",
-										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
-										clientId,
-										clientSecret,
-									},
-								],
-							}),
-						],
-					},
-					{ disableTestUser: true },
-				);
-
-				await expect(auth.$context).rejects.toThrow(
-					"discovery did not return an issuer",
-				);
-			} finally {
-				await new Promise<void>((resolve, reject) =>
-					discoveryServer.close((error) => (error ? reject(error) : resolve())),
-				);
-			}
-		});
-
-		it("fails provider initialization when required ID token verification metadata is unavailable", async () => {
+		it("skips a provider when required ID token verification metadata is unavailable", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5147,7 +5095,6 @@ describe("oauth2", async () => {
 										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
 										authorizationUrl: `http://localhost:${port}/authorize`,
 										tokenUrl: `http://localhost:${port}/token`,
-										accountIssuer: `http://localhost:${port}`,
 										requireIdTokenVerification: true,
 										clientId,
 										clientSecret,
@@ -5159,9 +5106,10 @@ describe("oauth2", async () => {
 					{ disableTestUser: true },
 				);
 
-				await expect(auth.$context).rejects.toThrow(
-					"requires verified ID tokens",
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("verified-id-token-required");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((error) => (error ? reject(error) : resolve())),
@@ -5169,7 +5117,7 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("fails provider initialization when discovery returns a malformed jwks_uri", async () => {
+		it("skips a provider when discovery returns a malformed jwks_uri", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5204,15 +5152,150 @@ describe("oauth2", async () => {
 					},
 					{ disableTestUser: true },
 				);
-				await expect(auth.$context).rejects.toThrow(
-					'invalid jwks_uri "http://[malformed"',
-				);
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("malformed-jwks");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
 				);
 			}
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 */
+	it.each([
+		"authorization",
+		"token",
+		"both",
+	])("skips discovery missing %s endpoints", async (missing) => {
+		const discoveryUrl =
+			"https://incomplete-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: "https://incomplete-idp.test",
+					...(missing === "token"
+						? {
+								authorization_endpoint: "https://incomplete-idp.test/authorize",
+							}
+						: {}),
+					...(missing === "authorization"
+						? { token_endpoint: "https://incomplete-idp.test/token" }
+						: {}),
+				}),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "incomplete",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).not.toContain("incomplete");
+	});
+
+	it.each([
+		false,
+		true,
+	])("keeps explicit token exchange with incomplete discovery (custom=%s)", async (custom) => {
+		const discoveryUrl =
+			"https://incomplete-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({ issuer: "https://incomplete-idp.test" }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "explicit",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								authorizationUrl: "https://incomplete-idp.test/authorize",
+								...(custom
+									? { getToken: async () => ({ accessToken: "custom-token" }) }
+									: { tokenUrl: "https://incomplete-idp.test/token" }),
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).toContain("explicit");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 */
+	it("does not take down the auth API when one provider's discovery is unreachable", async () => {
+		mswServer.use(
+			http.get(
+				"https://broken-idp.test/.well-known/openid-configuration",
+				() => new HttpResponse(null, { status: 503 }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "broken-idp",
+								clientId: "client",
+								clientSecret: "secret",
+								discoveryUrl:
+									"https://broken-idp.test/.well-known/openid-configuration",
+							},
+							{
+								providerId: "healthy-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const ctx = await auth.$context;
+		const providerIds = ctx.socialProviders.map((provider) => provider.id);
+		expect(providerIds).toContain("healthy-idp");
+		expect(providerIds).not.toContain("broken-idp");
+
+		const signUp = await auth.api.signUpEmail({
+			body: {
+				email: "isolated@example.test",
+				password: "correct-horse-battery-staple",
+				name: "Repro",
+			},
+		});
+		expect(signUp.token).toEqual(expect.any(String));
 	});
 });
 

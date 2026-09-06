@@ -7,9 +7,12 @@ import {
 } from "@better-auth/core/db/adapter";
 import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
 import {
+	diffSchema,
+	formatSchemaFinding,
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
+	invalidateSchemaChecks,
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -18,6 +21,13 @@ import type {
 	DatabaseIndexIntrospector,
 	DatabaseIndexMetadata,
 	KyselyDatabaseType,
+} from "@better-auth/kysely-adapter";
+import {
+	createKyselyAdapter,
+	getMssqlSchema,
+	getPostgresSchema,
+	toIntrospectedTables,
+	toPhysicalSchema,
 } from "@better-auth/kysely-adapter";
 import type {
 	AlterTableColumnAlteringBuilder,
@@ -28,42 +38,7 @@ import type {
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { getSchemaFromAuthTables } from "./get-schema";
-import type { MigrationDatabase } from "./migration-database";
-import { getMigrationDatabase } from "./migration-database";
-import type {
-	AccountIdentityMigrationAssessment,
-	MigrateFrom16Options,
-	ReleaseMigrationBlocker,
-} from "./release-migration";
-import {
-	describeMigrationDecisionBlocker,
-	findReleaseMigrationBlockers,
-	inspectAccountIdentityMigration,
-	inspectLegacyReleaseDataFrom16,
-	inspectScimAccountsFrom16,
-	migrateAccountIdentityFrom16,
-	migrateOAuthProviderDataFrom16,
-	prepareOAuthProviderDataFrom16,
-	renameLegacyTables,
-	retireScimAccountsFrom16,
-	summarizeScimMigration,
-	validateMigrationFrom16,
-} from "./release-migration";
-
-export type {
-	LegacyReleaseDataState,
-	LegacyReleaseModel,
-	MigrateFrom16Options,
-	MigrationDecisionBlocker,
-	OAuthClientSecretStorage,
-	OAuthClientSecretStorageTransition,
-} from "./release-migration";
-export {
-	describeMigrationDecisionBlocker,
-	inspectLegacyReleaseDataFrom16,
-	validateMigrationFrom16,
-};
+import { getSchema } from "./get-schema";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -177,160 +152,6 @@ interface DatabaseColumnBound {
 	maxIndexBytes: number | null;
 }
 
-/** Identifies one configured index whose existing columns exceed dialect limits. */
-export interface MigrationBlockedIndex {
-	columns: string[];
-	name: string;
-	unique: boolean;
-}
-
-/** Reports a configured index that needs reviewed column-bound changes. */
-export interface IndexColumnBoundsBlocker {
-	code: "index-column-bounds";
-	index: MigrationBlockedIndex;
-	message: string;
-	table: string;
-}
-
-export interface RequiredColumnBackfillBlocker {
-	code: "required-column-backfill";
-	columns: string[];
-	table: string;
-}
-
-export interface RequiredColumnConstraintBlocker {
-	code: "required-column-constraint";
-	columns: string[];
-	table: string;
-}
-
-export interface AccountIdentityStrategyMismatchBlocker {
-	accountCount: number;
-	affectedProviders: string[];
-	code: "account-identity-strategy-mismatch";
-	configuredStrategy: "provider-id" | "issuer";
-	detectedStrategy: "provider-id" | "issuer" | "mixed";
-	malformedNamespaces: number;
-	table: string;
-}
-
-export type MigrationBlocker =
-	| AccountIdentityStrategyMismatchBlocker
-	| IndexColumnBoundsBlocker
-	| RequiredColumnBackfillBlocker
-	| RequiredColumnConstraintBlocker
-	| ReleaseMigrationBlocker;
-
-function isAccountIdentitySchemaBlocker(
-	blocker: MigrationBlocker,
-	accountTable: string,
-	issuerColumn: string,
-	accountIdColumn: string,
-) {
-	if (blocker.code === "index-column-bounds") {
-		return (
-			blocker.table === accountTable &&
-			blocker.index.unique &&
-			blocker.index.columns.length === 2 &&
-			blocker.index.columns[0] === issuerColumn &&
-			blocker.index.columns[1] === accountIdColumn
-		);
-	}
-	if (blocker.code === "account-identity-strategy-mismatch") {
-		return false;
-	}
-	return (
-		(blocker.code === "required-column-backfill" ||
-			blocker.code === "required-column-constraint") &&
-		blocker.table === accountTable &&
-		blocker.columns.length === 1 &&
-		blocker.columns[0] === issuerColumn
-	);
-}
-
-/** @internal Reports whether the guided 1.6 migration handles this blocker. */
-export function isHandledByMigrationFrom16(
-	config: BetterAuthOptions,
-	blocker: MigrationBlocker,
-	accountIdentity?: AccountIdentityMigrationAssessment | undefined,
-) {
-	if (
-		blocker.code === "reprovision-data" ||
-		blocker.code === "retired-table-data" ||
-		blocker.code === "table-data-conversion" ||
-		blocker.code === "table-data-move"
-	) {
-		return true;
-	}
-	const accountSchema = getAuthTables(config).account;
-	return isAccountIdentitySchemaBlocker(
-		blocker,
-		accountIdentity?.physicalSchema?.table ||
-			accountSchema?.modelName ||
-			"account",
-		accountIdentity?.physicalSchema?.issuerColumn ||
-			accountSchema?.fields.issuer?.fieldName ||
-			"issuer",
-		accountIdentity?.physicalSchema?.accountIdColumn ||
-			accountSchema?.fields.accountId?.fieldName ||
-			"accountId",
-	);
-}
-
-function createMigrationBlockerError(blocker: MigrationBlocker) {
-	if (blocker.code === "index-column-bounds") {
-		return new BetterAuthError(blocker.message);
-	}
-	if (blocker.code === "account-identity-strategy-mismatch") {
-		const scope = `${blocker.accountCount} account${blocker.accountCount === 1 ? "" : "s"} across providers ${blocker.affectedProviders.map((providerId) => `"${providerId}"`).join(", ") || "(unknown)"}`;
-		if (blocker.malformedNamespaces > 0) {
-			return new BetterAuthError(
-				`Migration blocked: table "${blocker.table}" contains ${blocker.malformedNamespaces} malformed persisted account namespace${blocker.malformedNamespaces === 1 ? "" : "s"} in ${scope}. Repair the namespaces for the configured strategy before applying the migration.`,
-			);
-		}
-		if (
-			blocker.configuredStrategy === "issuer" &&
-			blocker.detectedStrategy === "provider-id"
-		) {
-			return new BetterAuthError(
-				`Migration blocked: table "${blocker.table}" already uses provider-id account identity for ${scope}, but account.identityStrategy is "issuer". Set account: { identityStrategy: "provider-id" } to preserve the existing identity, or perform a separate reviewed re-key migration.`,
-			);
-		}
-		return new BetterAuthError(
-			`Migration blocked: table "${blocker.table}" already uses ${blocker.detectedStrategy} account identity for ${scope}, but account.identityStrategy is "${blocker.configuredStrategy}". Changing strategy for populated v1.7 data requires a separate reviewed re-key migration.`,
-		);
-	}
-	if (blocker.code === "table-data-move") {
-		return new BetterAuthError(
-			`Migration blocked: move rows from retired table "${blocker.sourceTable}" to "${blocker.targetTable}" before applying the schema migration.`,
-		);
-	}
-	if (blocker.code === "reprovision-data") {
-		return new BetterAuthError(
-			`Migration blocked: back up and remove rows from retired SCIM table "${blocker.sourceTables.join('", "')}", then complete a full SCIM reprovision.`,
-		);
-	}
-	if (blocker.code === "retired-table-data") {
-		return new BetterAuthError(
-			`Migration blocked: remove rows from retired OAuth token table "${blocker.table}" before applying the schema migration.`,
-		);
-	}
-	if (blocker.code === "table-data-conversion") {
-		return new BetterAuthError(
-			`Migration blocked: convert or remove rows from legacy OAuth consent table "${blocker.sourceTable}" before applying the schema migration.`,
-		);
-	}
-	const columns = blocker.columns.map((column) => `"${column}"`).join(", ");
-	if (blocker.code === "required-column-constraint") {
-		return new UnsafeMigrationError(
-			`Migration blocked: existing table "${blocker.table}" must make ${columns} non-nullable.`,
-		);
-	}
-	return new UnsafeMigrationError(
-		`Migration blocked: existing table "${blocker.table}" contains rows and requires values for ${columns}.`,
-	);
-}
-
 function createDatabaseIndexKey(tableName: string, indexName: string) {
 	return `${getPortableDatabaseIdentifierKey(tableName)}\u0000${getPortableDatabaseIdentifierKey(indexName)}`;
 }
@@ -353,81 +174,10 @@ function databaseIndexMatches(
 	);
 }
 
-function databaseValueIsTrue(value: unknown) {
+function databaseValueIsTrue(value: boolean | number | string | undefined) {
 	if (typeof value === "boolean") return value;
 	if (typeof value === "number") return value !== 0;
-	if (typeof value === "bigint") return value !== 0n;
-	return (
-		typeof value === "string" &&
-		(value === "1" || value.toLowerCase() === "true" || value === "t")
-	);
-}
-
-function hasAutomaticColumnBackfill(
-	field: DBFieldAttribute,
-	dbType: KyselyDatabaseType,
-): boolean {
-	if (field.required === false) return true;
-	if (
-		field.type === "date" &&
-		typeof field.defaultValue === "function" &&
-		(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
-	) {
-		return true;
-	}
-	return (
-		(field.type === "string" ||
-			field.type === "number" ||
-			field.type === "boolean") &&
-		field.defaultValue !== undefined &&
-		field.defaultValue !== null &&
-		typeof field.defaultValue !== "function"
-	);
-}
-
-async function tableContainsRows(
-	db: Kysely<unknown>,
-	table: string,
-): Promise<boolean> {
-	const query = await sql<{ hasRows: unknown }>`
-		SELECT CASE
-			WHEN EXISTS (SELECT 1 FROM ${sql.table(table)}) THEN 1
-			ELSE 0
-		END AS "hasRows"
-	`.execute(db);
-	return databaseValueIsTrue(query.rows[0]?.hasRows);
-}
-
-async function getTableRowCount(db: Kysely<unknown>, table: string) {
-	const query = await sql<{ count: bigint | number | string }>`
-		SELECT COUNT(*) AS "count"
-		FROM ${sql.table(table)}
-	`.execute(db);
-	const count = Number(query.rows[0]?.count ?? 0);
-	if (!Number.isSafeInteger(count) || count < 0) {
-		throw new BetterAuthError(
-			`Could not determine the row count for migration table "${table}".`,
-		);
-	}
-	return count;
-}
-
-async function columnContainsNullValues(
-	db: Kysely<unknown>,
-	table: string,
-	column: string,
-): Promise<boolean> {
-	const query = await sql<{ hasNullValues: unknown }>`
-		SELECT CASE
-			WHEN EXISTS (
-				SELECT 1
-				FROM ${sql.table(table)}
-				WHERE ${sql.ref(column)} IS NULL
-			) THEN 1
-			ELSE 0
-		END AS "hasNullValues"
-	`.execute(db);
-	return databaseValueIsTrue(query.rows[0]?.hasNullValues);
+	return value === "1" || value?.toLowerCase() === "true" || value === "t";
 }
 
 function toDatabaseIndexMap(indexes: readonly DatabaseIndexMetadata[]) {
@@ -699,11 +449,7 @@ async function getDatabaseColumnBounds(
 	);
 }
 
-/**
- * Reports why an index cannot be created over existing columns, or undefined
- * when it fits. The caller decides whether that is a refusal or a report.
- */
-function describeExistingTableIndexMisfit({
+function assertExistingTableIndexFits({
 	columnBounds,
 	dbType,
 	existingColumns,
@@ -738,7 +484,9 @@ function describeExistingTableIndexMisfit({
 			}
 			const bound = columnBounds.get(createDatabaseColumnKey(table, column));
 			if (!bound?.maxIndexBytes) {
-				return `Cannot create database index "${index.name}" on existing table "${table}" because column "${column}" is not bounded for ${dbType === "mysql" ? "MySQL" : "SQL Server"}. Change it to a bounded string column, resolve oversized values, then run the migration again.`;
+				throw new BetterAuthError(
+					`Cannot create database index "${index.name}" on existing table "${table}" because column "${column}" is not bounded for ${dbType === "mysql" ? "MySQL" : "SQL Server"}. Change it to a bounded string column, resolve oversized values, then run the migration again.`,
+				);
 			}
 			requiredBytes += bound.maxIndexBytes;
 		} else {
@@ -746,17 +494,15 @@ function describeExistingTableIndexMisfit({
 		}
 	}
 	if (requiredBytes > byteBudget) {
-		return `Cannot create database index "${index.name}" on existing table "${table}" because its columns can exceed ${dbType === "mysql" ? "MySQL" : "SQL Server"}'s ${byteBudget}-byte index-key limit. Bound the indexed string columns to the generated schema lengths, resolve oversized values, then run the migration again.`;
+		throw new BetterAuthError(
+			`Cannot create database index "${index.name}" on existing table "${table}" because its columns can exceed ${dbType === "mysql" ? "MySQL" : "SQL Server"}'s ${byteBudget}-byte index-key limit. Bound the indexed string columns to the generated schema lengths, resolve oversized values, then run the migration again.`,
+		);
 	}
-	return undefined;
 }
 
-const columnBackfillGuideUrl =
-	"https://better-auth.com/docs/guides/1-7-upgrade-guide#choose-account-identity-strategy";
-
 /**
- * Thrown when a migration plan refuses to run or compile because it would
- * leave existing rows without a correct value. Distinct from the plain
+ * Thrown when {@link getMigrations} refuses to add a required column with no
+ * default value to a populated table. Distinct from the plain
  * {@link BetterAuthError} thrown for index-definition conflicts, so callers
  * can tell the two apart without matching on message text.
  */
@@ -790,6 +536,19 @@ function hasStaticColumnDefault(field: DBFieldAttribute) {
 	);
 }
 
+async function tableHasRows(
+	db: Kysely<Record<string, Record<string, unknown>>>,
+	dbType: KyselyDatabaseType,
+	table: string,
+) {
+	const probe = db.selectFrom(table).select(sql`1`.as("present"));
+	const rows = await (dbType === "mssql"
+		? probe.top(1)
+		: probe.limit(1)
+	).execute();
+	return rows.length > 0;
+}
+
 export function matchType(
 	columnDataType: string,
 	fieldType: DBFieldType,
@@ -809,132 +568,51 @@ export function matchType(
 }
 
 /**
- * Get the current PostgreSQL schema (search_path) for the database connection
- * Returns the first schema in the search_path, defaulting to 'public' if not found
- */
-async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{
-			search_path?: string;
-			searchPath?: string;
-		}>`SHOW search_path`.execute(db);
-		const searchPath =
-			result.rows[0]?.search_path ?? result.rows[0]?.searchPath;
-		if (searchPath) {
-			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
-			// Supabase may return escaped format like '"\$user", public'
-			// We want the first non-variable schema
-			const schemas = searchPath
-				.split(",")
-				.map((s) => s.trim())
-				// Remove quotes and filter out variables like $user
-				.map((s) => s.replace(/^["']|["']$/g, ""))
-				// Filter out variable references like $user, \$user (escaped)
-				.filter((s) => !s.startsWith("$") && !s.startsWith("\\$"));
-			return schemas[0] || "public";
-		}
-	} catch {
-		// If query fails, fall back to public schema
-	}
-	return "public";
-}
-
-async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
-	try {
-		const result = await sql<{ schemaName?: string }>`
-			SELECT SCHEMA_NAME() AS "schemaName"
-		`.execute(db);
-		return result.rows[0]?.schemaName || "dbo";
-	} catch {
-		return "dbo";
-	}
-}
-
-/**
- * How a migration is inspected: physical names for retired models that cannot
- * be inferred from the current Better Auth configuration, and whether the plan
- * refuses to compile or run when it would corrupt existing rows.
- */
-export interface MigrationInspectionOptions {
-	legacyTableNames?: {
-		oauthAccessToken?: string | null | undefined;
-		oauthApplication?: string | null | undefined;
-		oauthConsent?: string | null | undefined;
-		scimProvider?: string | null | undefined;
-	};
-	/**
-	 * Report an index that cannot be created over the current column bounds as
-	 * a blocker instead of failing. Only the guided 1.6 migration sets this: it
-	 * bounds the account identity columns itself, then plans again strictly.
-	 */
-	deferIndexBoundsToRelease?: boolean;
-	throwOnUnsafe?: boolean;
-}
-
-/**
  * Build the migration plan that `auth migrate` executes and `auth generate`
  * prints for the Kysely adapter.
  *
- * The returned plan always reports what it found: `migrationBlockers` lists
- * every reason the migration cannot run, and `unsafeChanges` explains, in one
- * message per column, the changes that would corrupt existing rows. Running or
- * compiling a blocked plan is refused unless `throwOnUnsafe` is turned off.
+ * Adding a required column without a default to a populated table is refused:
+ * existing rows have no value to backfill. `throwOnUnsafe` picks how that
+ * refusal is delivered: executing callers get an {@link UnsafeMigrationError},
+ * read-only callers get the plan plus the same message in `unsafeChanges`.
  *
+ * @throws {UnsafeMigrationError} when a required column cannot be migrated
+ * safely and `throwOnUnsafe` is left on.
  * @throws {BetterAuthError} when an index definition conflicts with an
  * existing or already-planned index.
  */
 export async function getMigrations(
 	config: BetterAuthOptions,
-	inspectionOptions: MigrationInspectionOptions = {},
+	{ throwOnUnsafe = true }: { throwOnUnsafe?: boolean } = {},
 ) {
-	return getMigrationsWithDatabase(
-		config,
-		inspectionOptions,
-		await getMigrationDatabase(config),
-	);
-}
-
-async function getMigrationsWithDatabase(
-	config: BetterAuthOptions,
-	inspectionOptions: MigrationInspectionOptions,
-	migrationDatabase: MigrationDatabase,
-) {
-	const throwOnUnsafe = inspectionOptions.throwOnUnsafe !== false;
-	const authTables = migrationDatabase.authTables;
-	const betterAuthSchema = getSchemaFromAuthTables(authTables);
-	const accountIssuerField = authTables.account?.fields.issuer;
-	const accountIssuer =
-		authTables.account && accountIssuerField
-			? {
-					table: authTables.account.modelName,
-					column: accountIssuerField.fieldName || "issuer",
-				}
-			: undefined;
-	const isAccountIssuerColumn = (table: string, column: string) =>
-		table === accountIssuer?.table && column === accountIssuer.column;
+	const betterAuthSchema = getSchema(config);
+	const authTables = getAuthTables(config);
 	const logger = createLogger(config.logger);
 	const unsafeChanges: string[] = [];
-	const describeUnsafeColumnAdd = (
-		table: string,
-		fieldName: string,
-		field: DBFieldAttribute | undefined,
-	) => {
-		const textDetail =
-			field?.type === "string"
-				? " For a text column, every existing row ends up with the same empty string."
-				: "";
-		const guideLink = isAccountIssuerColumn(table, fieldName)
-			? ` See ${columnBackfillGuideUrl}`
-			: "";
-		return `Cannot add required column "${fieldName}" to populated table "${table}": the schema declares no default value, so existing rows have no value to backfill. MySQL accepts this statement instead of rejecting it and fills every existing row with an implicit default for the column type, reporting a successful migration over corrupted data.${textDetail} Add the column as nullable, backfill a correct value for every row, then make it NOT NULL.${guideLink}`;
+	const reportUnsafeChange = (message: string) => {
+		if (throwOnUnsafe) throw new UnsafeMigrationError(message);
+		unsafeChanges.push(message);
 	};
 
-	const {
-		adapterId,
+	let {
 		kysely: db,
 		databaseType: dbType,
 		introspectIndexes,
-	} = migrationDatabase;
+	} = await createKyselyAdapter(config);
+
+	if (!dbType) {
+		logger.warn(
+			"Could not determine database type, defaulting to sqlite. Please provide a type in the database options to avoid this.",
+		);
+		dbType = "sqlite";
+	}
+
+	if (!db) {
+		logger.error(
+			"Only kysely adapter is supported for migrations. You can use `generate` command to generate the schema, if you're using a different adapter.",
+		);
+		process.exit(1);
+	}
 
 	let currentSchema = dbType === "mssql" ? await getMssqlSchema(db) : "public";
 	if (dbType === "postgres") {
@@ -1025,11 +703,15 @@ async function getMigrationsWithDatabase(
 			(table) => table.schema === currentSchema,
 		);
 	}
-	const accountIdentity = await inspectAccountIdentityMigration(
-		config,
-		migrationDatabase,
-		tableMetadata,
-	);
+	// Columns the migration cannot fix: required, without a default, and never
+	// written by Better Auth. Reported so the CLI stops before an insert fails.
+	const schemaProblems = diffSchema(
+		toPhysicalSchema(db, betterAuthSchema),
+		toIntrospectedTables(tableMetadata),
+	)
+		.filter((finding) => finding.kind === "unexpected-required-column")
+		.map((finding) => formatSchemaFinding(finding, "database"));
+
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
@@ -1045,39 +727,13 @@ async function getMigrationsWithDatabase(
 		index: ResolvedDBTableIndex;
 		name: string;
 	}[] = [];
-	const migrationBlockers: MigrationBlocker[] = [];
-	if (
-		accountIdentity.requiresRekey &&
-		accountIdentity.detectedStrategy !== "empty"
-	) {
-		migrationBlockers.push({
-			accountCount: accountIdentity.totalAccounts ?? 0,
-			affectedProviders: accountIdentity.affectedProviders ?? [],
-			code: "account-identity-strategy-mismatch",
-			configuredStrategy: accountIdentity.selectedStrategy,
-			detectedStrategy: accountIdentity.detectedStrategy,
-			malformedNamespaces: accountIdentity.malformedNamespaces ?? 0,
-			table:
-				migrationDatabase.inspectionAuthTables.account?.modelName || "account",
-		});
-	}
 	const plannedIndexes = new Map<string, ResolvedDBTableIndex>();
-	migrationBlockers.push(
-		...(await findReleaseMigrationBlockers({
-			authTables,
-			existingTables: tableMetadata,
-			legacyTableNames: inspectionOptions.legacyTableNames,
-			tableContainsRows: (table) => tableContainsRows(db, table),
-		})),
-	);
 
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
 		if (value.disableMigrations) {
 			continue;
 		}
 		const table = tableMetadata.find((table) => table.name === key);
-		const requiredColumnsNeedingBackfill: string[] = [];
-		const requiredColumnsNeedingConstraint: string[] = [];
 		for (const index of value.indexes ?? []) {
 			const name = index.name;
 			const indexKey = createDatabaseIndexKey(key, name);
@@ -1121,7 +777,7 @@ async function getMigrationsWithDatabase(
 				continue;
 			}
 			if (table && (dbType === "mysql" || dbType === "mssql")) {
-				const misfit = describeExistingTableIndexMisfit({
+				assertExistingTableIndexFits({
 					columnBounds: databaseColumnBounds,
 					dbType,
 					existingColumns: new Set(table.columns.map((column) => column.name)),
@@ -1130,22 +786,6 @@ async function getMigrationsWithDatabase(
 					indexes: value.indexes ?? [],
 					table: key,
 				});
-				if (misfit) {
-					if (!inspectionOptions.deferIndexBoundsToRelease) {
-						throw new BetterAuthError(misfit);
-					}
-					migrationBlockers.push({
-						code: "index-column-bounds",
-						index: {
-							columns: [...index.columns],
-							name: index.name,
-							unique: index.unique ?? false,
-						},
-						message: misfit,
-						table: key,
-					});
-					continue;
-				}
 			}
 			plannedIndexes.set(indexKey, index);
 			toBeAddedIndexes.push({ table: key, index, name });
@@ -1183,15 +823,11 @@ async function getMigrationsWithDatabase(
 				toBeAddedFields[fieldName] = field;
 				continue;
 			}
+
 			if (field.required !== false && column.isNullable) {
 				logger.warn(
 					`Column "${fieldName}" on table "${key}" stays nullable while the schema declares the field required, so existing rows can still hold null. Backfill every row for this column and enforce NOT NULL to remove the drift.`,
 				);
-				if (await columnContainsNullValues(db, key, fieldName)) {
-					requiredColumnsNeedingBackfill.push(fieldName);
-				} else {
-					requiredColumnsNeedingConstraint.push(fieldName);
-				}
 			}
 
 			if (matchType(column.dataType, field.type, dbType)) {
@@ -1207,61 +843,6 @@ async function getMigrationsWithDatabase(
 				table: key,
 				fields: toBeAddedFields,
 				order: value.order || Infinity,
-			});
-			const requiredColumnsWithoutBackfill = Object.entries(toBeAddedFields)
-				.filter(([, field]) => !hasAutomaticColumnBackfill(field, dbType))
-				.map(([fieldName]) => fieldName);
-			const requiredUniqueColumnsWithSharedDefault = Object.entries(
-				toBeAddedFields,
-			)
-				.filter(
-					([, field]) =>
-						field.required !== false &&
-						field.unique === true &&
-						hasAutomaticColumnBackfill(field, dbType),
-				)
-				.map(([fieldName]) => fieldName);
-			if (
-				(requiredColumnsWithoutBackfill.length > 0 ||
-					requiredUniqueColumnsWithSharedDefault.length > 0) &&
-				!migrationBlockers.some(
-					(blocker) =>
-						blocker.code === "retired-table-data" && blocker.table === key,
-				) &&
-				(await tableContainsRows(db, key))
-			) {
-				requiredColumnsNeedingBackfill.push(...requiredColumnsWithoutBackfill);
-				for (const fieldName of requiredColumnsWithoutBackfill) {
-					unsafeChanges.push(
-						describeUnsafeColumnAdd(key, fieldName, toBeAddedFields[fieldName]),
-					);
-				}
-				if (
-					requiredUniqueColumnsWithSharedDefault.length > 0 &&
-					(await getTableRowCount(db, key)) > 1
-				) {
-					requiredColumnsNeedingBackfill.push(
-						...requiredUniqueColumnsWithSharedDefault,
-					);
-				}
-			}
-		}
-		const releaseOwnsTableData = migrationBlockers.some(
-			(blocker) =>
-				blocker.code === "retired-table-data" && blocker.table === key,
-		);
-		if (!releaseOwnsTableData && requiredColumnsNeedingBackfill.length > 0) {
-			migrationBlockers.push({
-				code: "required-column-backfill",
-				columns: [...new Set(requiredColumnsNeedingBackfill)],
-				table: key,
-			});
-		}
-		if (!releaseOwnsTableData && requiredColumnsNeedingConstraint.length > 0) {
-			migrationBlockers.push({
-				code: "required-column-constraint",
-				columns: [...new Set(requiredColumnsNeedingConstraint)],
-				table: key,
 			});
 		}
 	}
@@ -1422,71 +1003,44 @@ async function getMigrationsWithDatabase(
 	// Indexes are collected separately and appended last to ensure all
 	// referenced columns/tables exist before any CREATE INDEX executes.
 	const deferredIndexes: CreateIndexBuilder[] = [];
-	const getTableIndexStringLength = (
-		tableName: string,
-		fieldName: string,
-		field: DBFieldAttribute,
-	) => {
+	const getTableIndexStringLength = (tableName: string, fieldName: string) => {
 		if (dbType !== "mysql" && dbType !== "mssql") return undefined;
-		const getFieldStringLength = (candidate: DBFieldAttribute) => {
-			if (candidate.type !== "string" && !Array.isArray(candidate.type)) {
-				return undefined;
-			}
-			if (candidate.unique || candidate.sortable || candidate.index) {
-				return 255;
-			}
-			if (candidate.references) return 36;
-			return undefined;
-		};
-		if (field.references && field.references.field !== "id") {
-			try {
-				const referencedTableName = getModelName(field.references.model);
-				const referencedFieldName = getFieldName({
-					model: field.references.model,
-					field: field.references.field,
-				});
-				const referencedTable = betterAuthSchema[referencedTableName];
-				if (referencedTable) {
-					const referencedField = referencedTable.fields[referencedFieldName];
-					return (
-						getDatabaseIndexStringLength({
-							columnName: referencedFieldName,
-							dialect: dbType,
-							fields: referencedTable.fields,
-							indexes: referencedTable.indexes ?? [],
-						}) ??
-						(referencedField
-							? getFieldStringLength(referencedField)
-							: undefined)
-					);
-				}
-			} catch {
-				// External models are not part of Better Auth's resolved schema.
-				// Their physical reference path is still valid, but their field
-				// length cannot be inferred here.
-			}
-		}
 		const table = betterAuthSchema[tableName];
 		if (!table) return undefined;
-		return (
-			getDatabaseIndexStringLength({
-				columnName: fieldName,
-				dialect: dbType,
-				fields: table.fields,
-				indexes: table.indexes ?? [],
-			}) ?? getFieldStringLength(field)
-		);
+		return getDatabaseIndexStringLength({
+			columnName: fieldName,
+			dialect: dbType,
+			fields: table.fields,
+			indexes: table.indexes ?? [],
+		});
 	};
 
 	if (toBeAdded.length) {
+		const populatedTables = new Map<string, boolean>();
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const timestampDefault = hasTimestampColumnDefault(field, dbType);
 				const staticDefault = hasStaticColumnDefault(field);
+				if (field.required !== false && !timestampDefault && !staticDefault) {
+					let populated = populatedTables.get(table.table);
+					if (populated === undefined) {
+						populated = await tableHasRows(db, dbType, table.table);
+						populatedTables.set(table.table, populated);
+					}
+					if (populated) {
+						const textDetail =
+							field.type === "string"
+								? " For a text column, every existing row ends up with the same empty string."
+								: "";
+						reportUnsafeChange(
+							`Cannot add required column "${fieldName}" to populated table "${table.table}": the schema declares no default value, so existing rows have no value to backfill. MySQL accepts this statement instead of rejecting it and fills every existing row with an implicit default for the column type, reporting a successful migration over corrupted data.${textDetail} Add the column as nullable, backfill a correct value for every row, then make it NOT NULL.`,
+						);
+					}
+				}
 				const type = getType(
 					field,
 					fieldName,
-					getTableIndexStringLength(table.table, fieldName, field),
+					getTableIndexStringLength(table.table, fieldName),
 				);
 				const builder = db.schema.alterTable(table.table);
 
@@ -1509,6 +1063,16 @@ async function getMigrationsWithDatabase(
 							// NULL backfill on existing rows would abort the index
 							// build. Filtering NULLs matches the other dialects.
 							indexBuilder = indexBuilder.where(fieldName, "is not", null);
+						}
+						if (
+							field.required !== false &&
+							field.defaultValue !== undefined &&
+							field.defaultValue !== null &&
+							typeof field.defaultValue !== "function"
+						) {
+							logger.warn(
+								`Adding unique column "${fieldName}" to existing table "${table.table}" backfills every existing row with its default value. If the table has more than one row, creating the unique index "${indexName}" will fail; backfill distinct values manually, then re-run the migration or create the index yourself.`,
+							);
 						}
 					}
 					deferredIndexes.push(indexBuilder);
@@ -1583,7 +1147,7 @@ async function getMigrationsWithDatabase(
 				const type = getType(
 					field,
 					fieldName,
-					getTableIndexStringLength(table.table, fieldName, field),
+					getTableIndexStringLength(table.table, fieldName),
 				);
 				dbT = dbT.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
@@ -1644,164 +1208,28 @@ async function getMigrationsWithDatabase(
 		migrations.push(index);
 	}
 
-	function assertMigrationIsUnblocked() {
-		if (!throwOnUnsafe) return;
-		const blocker = migrationBlockers[0];
-		if (!blocker) return;
-		throw createMigrationBlockerError(blocker);
-	}
-
 	async function runMigrations() {
-		assertMigrationIsUnblocked();
-		for (const migration of migrations) {
-			await migration.execute();
+		try {
+			for (const migration of migrations) {
+				await migration.execute();
+			}
+		} finally {
+			if (migrations.length && config.database) {
+				invalidateSchemaChecks(config.database);
+			}
 		}
 	}
 	async function compileMigrations() {
-		assertMigrationIsUnblocked();
 		const compiled = migrations.map((m) => m.compile().sql);
 		return compiled.join(";\n\n") + ";";
 	}
 	return {
-		accountIdentity,
-		migrationTarget: {
-			adapter: adapterId,
-			dialect: dbType,
-		},
 		toBeCreated,
 		toBeAdded,
 		toBeAddedIndexes,
-		migrationBlockers,
 		unsafeChanges,
+		schemaProblems,
 		runMigrations,
 		compileMigrations,
 	};
-}
-
-/**
- * Migrates a populated Better Auth 1.6 database to the configured 1.7 schema.
- *
- * Data decisions are explicit so the migration never infers identity
- * ownership from mutable profile fields.
- */
-export async function migrateFrom16(
-	config: BetterAuthOptions,
-	options: MigrateFrom16Options,
-) {
-	const releaseData = await inspectLegacyReleaseDataFrom16(config, options);
-	const oauthProviderPlan = await prepareOAuthProviderDataFrom16(
-		config,
-		options,
-		releaseData,
-	);
-	const inspectedScimAccounts = await inspectScimAccountsFrom16(
-		config,
-		options,
-		releaseData,
-	);
-	const migrationDatabase = await getMigrationDatabase(config);
-	if (
-		migrationDatabase.databaseType === "mysql" &&
-		inspectedScimAccounts.length > 0 &&
-		!migrationDatabase.transaction
-	) {
-		throw new BetterAuthError(
-			`The ${migrationDatabase.adapterId} adapter must expose a transaction-scoped migration connection before Better Auth can safely retire populated 1.6 SCIM accounts on MySQL.`,
-		);
-	}
-	const initialMigration = await getMigrationsWithDatabase(
-		config,
-		{
-			deferIndexBoundsToRelease: true,
-			legacyTableNames: options.legacyTableNames,
-			throwOnUnsafe: false,
-		},
-		migrationDatabase,
-	);
-	const unhandledBlocker = initialMigration.migrationBlockers.find(
-		(blocker) =>
-			!isHandledByMigrationFrom16(
-				config,
-				blocker,
-				initialMigration.accountIdentity,
-			),
-	);
-	if (unhandledBlocker) throw createMigrationBlockerError(unhandledBlocker);
-	const applyReleaseMigration = async (database: MigrationDatabase) => {
-		const currentScimAccounts = await inspectScimAccountsFrom16(
-			config,
-			options,
-			releaseData,
-			undefined,
-			database,
-		);
-		const migratedAccounts = await migrateAccountIdentityFrom16(
-			config,
-			options,
-			database,
-		);
-		const checkpointedReleaseData = await renameLegacyTables(
-			config,
-			releaseData,
-			database,
-		);
-		const retiredScimIdentities = await retireScimAccountsFrom16(
-			config,
-			options,
-			checkpointedReleaseData,
-			currentScimAccounts,
-			database,
-		);
-		const migration = await getMigrationsWithDatabase(
-			config,
-			{ legacyTableNames: options.legacyTableNames },
-			database,
-		);
-		await migration.runMigrations();
-		const oauthProvider = await migrateOAuthProviderDataFrom16(
-			config,
-			options,
-			checkpointedReleaseData,
-			oauthProviderPlan,
-			database,
-		);
-		return { migratedAccounts, oauthProvider, retiredScimIdentities };
-	};
-	let releaseMigration: Awaited<ReturnType<typeof applyReleaseMigration>>;
-	if (migrationDatabase.databaseType === "mysql") {
-		releaseMigration = await applyReleaseMigration(migrationDatabase);
-	} else {
-		if (!migrationDatabase.transaction) {
-			throw new BetterAuthError(
-				`The ${migrationDatabase.adapterId} adapter must expose a transaction-scoped migration connection before Better Auth can safely migrate a populated 1.6 ${migrationDatabase.databaseType} database.`,
-			);
-		}
-		releaseMigration = await migrationDatabase.transaction(
-			applyReleaseMigration,
-		);
-	}
-	const { migratedAccounts, oauthProvider, retiredScimIdentities } =
-		releaseMigration;
-	const retiredAccountsByProvider = retiredScimIdentities.reduce<
-		Record<string, number>
-	>((counts, identity) => {
-		counts[identity.providerId] = (counts[identity.providerId] ?? 0) + 1;
-		return counts;
-	}, {});
-	const accountProviders = Object.entries(migratedAccounts.providers).reduce<
-		Record<string, number>
-	>((providers, [providerId, count]) => {
-		const remaining = count - (retiredAccountsByProvider[providerId] ?? 0);
-		if (remaining > 0) providers[providerId] = remaining;
-		return providers;
-	}, {});
-	const accounts = {
-		migrated: Object.values(accountProviders).reduce(
-			(total, count) => total + count,
-			0,
-		),
-		providers: accountProviders,
-	};
-	const scim = summarizeScimMigration(releaseData, retiredScimIdentities);
-	return { accounts, oauthProvider, scim };
 }

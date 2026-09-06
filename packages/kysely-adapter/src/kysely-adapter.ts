@@ -8,6 +8,12 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	checksSchema,
+	createSchemaCheck,
+	getExpectedSchema,
+	registerSchemaCheck,
+} from "@better-auth/core/db/internal";
 import { logger } from "@better-auth/core/env";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
@@ -24,6 +30,7 @@ import {
 	insensitiveNe,
 	insensitiveNotIn,
 } from "./query-builders";
+import { findSchemaProblems } from "./schema-check";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
@@ -1013,6 +1020,22 @@ export const kyselyAdapter = (
 
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		const instance = adapter(options);
+		if (checksSchema(options)) {
+			registerSchemaCheck(
+				instance,
+				createSchemaCheck(
+					() =>
+						findSchemaProblems(
+							db,
+							config?.type,
+							getExpectedSchema(options, { usePlural: config?.usePlural }),
+						),
+					"database",
+					options.database,
+				),
+			);
+		}
+		return instance;
 	};
 };
