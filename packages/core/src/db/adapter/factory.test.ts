@@ -441,6 +441,33 @@ describe("legacy adapter atomic fallbacks", () => {
 			counter: 3,
 		});
 	});
+	it("increments despite unrelated concurrent writes", async ({
+		onTestFinished,
+	}) => {
+		const { db, raw, first } = setup(onTestFinished);
+		const update = raw.updateMany;
+		raw.updateMany = async (args) => {
+			db.exec("UPDATE verification SET value = value || '-changed'");
+			return update(args);
+		};
+		expect(
+			await first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).toMatchObject({ attempts: 1 });
+		expect(
+			db.prepare("SELECT counter, value FROM verification").get(),
+		).toMatchObject({ counter: 1, value: "secret-changed" });
+	});
+	it("treats an undefined legacy read as a missing row", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first } = setup(onTestFinished);
+		// Legacy JavaScript adapters commonly return rows[0].
+		raw.findOne = async <T>() => undefined as T | null;
+		await expect(first.consumeOne(request)).resolves.toBeNull();
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).resolves.toBeNull();
+	});
 	it("uses stored counters even when output transformation is lossy", async ({
 		onTestFinished,
 	}) => {
@@ -541,6 +568,34 @@ describe("legacy adapter atomic fallbacks", () => {
 		await expect(
 			first.incrementOne({ ...request, increment: { attempts: 1 } }),
 		).rejects.toThrow(/affected/);
+	});
+	it("identifies invalid increment input before writing", async ({
+		onTestFinished,
+	}) => {
+		const { first, db } = setup(onTestFinished);
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: Number.NaN } }),
+		).rejects.toThrow(/^incrementOne requires finite increments/);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: null,
+		});
+	});
+	it("rejects bigint counters without coercion or writes", async ({
+		onTestFinished,
+	}) => {
+		const { raw, first, db } = setup(onTestFinished);
+		const read = raw.findOne;
+		raw.findOne = async <T>(args: { where: CleanedWhere[] }) =>
+			({
+				...(await read<Record<string, unknown>>(args)),
+				counter: 9007199254740993n,
+			}) as T;
+		await expect(
+			first.incrementOne({ ...request, increment: { attempts: 1 } }),
+		).rejects.toThrow(/finite numeric counter/);
+		expect(db.prepare("SELECT counter FROM verification").get()).toMatchObject({
+			counter: null,
+		});
 	});
 	it("rejects invalid counters before writing", async ({ onTestFinished }) => {
 		const { db, first } = setup(onTestFinished);

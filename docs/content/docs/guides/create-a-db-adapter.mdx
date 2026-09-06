@@ -272,7 +272,7 @@ consumeOne: async ({ model, where }) => {
 ```
 
 <Callout type="warn">
-  `consumeOne` is optional. Without it, Better Auth reads a candidate and conditionally deletes it only if its ID, original AND conditions, and comparable stored values still match. It returns the candidate only when exactly one row was deleted.
+  `consumeOne` is optional. Without it, Better Auth uses a conditional delete and returns the record only when exactly one row was deleted.
 </Callout>
 
 ### `incrementOne` method
@@ -284,7 +284,7 @@ parameters:
 * `model`: The model/table name to update.
 * `where`: The `where` clause that must still match for the increment to apply.
 * `increment`: Numeric deltas to apply, such as `{ count: 1 }` or `{ remaining: -1 }`.
-* `set`: Optional fields to set in the same atomic operation.
+* `set`: Optional fields to set in the same atomic operation. `undefined` leaves a field unchanged, while `null` clears it.
 
 **Returns** `Promise<T | null>`: the updated record, or `null` if no row matched. Implementations must update at most one matching row.
 
@@ -303,12 +303,12 @@ incrementOne: async ({ model, where, increment, set }) => {
 ```
 
 <Callout type="warn">
-  `incrementOne` is optional. Without it, Better Auth reads a candidate and updates it only if its stored values still match. It retries a lost race up to five attempts, then throws on contention instead of silently dropping the increment. Null or absent counters start at zero and remain part of the write condition. An `undefined` value in `set` leaves the field unchanged, while `null` explicitly clears it.
+  `incrementOne` is optional. Without it, Better Auth uses conditional updates with bounded retries. If retries are exhausted, the operation throws and the increment is not recorded. Use native increments for heavily contended counters and security controls such as failed-attempt limits.
 </Callout>
 
-Both fallbacks require `findOne` to return a complete, detached snapshot of the stored row with its mapped ID. `deleteMany` and `updateMany` must check all conditions and perform each row mutation atomically, with accurate numeric affected-row counts. Equality against `null` must also match an absent nullable field. Splitting the condition check and mutation into separate operations is not safe, even inside an application-level lock.
+Fallbacks reuse your adapter's CRUD methods. They need complete, stable row snapshots with mapped IDs, atomic conditional writes, and exact affected-row counts. Null comparisons must also match absent nullable fields.
 
-Fallbacks preserve returned objects and arrays and compare scalar values (strings, finite numbers, booleans, dates, and null). Object IDs use the adapter's existing ID input and output transformations. OR predicates on structured values still require native methods because the fallback cannot safely reconstruct their comparisons. Native methods are also preferable under contention or when database triggers change the returned values. The increment fallback returns the values it wrote without a second read that could observe another caller's update.
+Fallback counters must be finite numbers, with null or missing values starting at zero. Use native methods for `bigint` counters, OR predicates on structured values, or trigger-generated return values. Fields not updated by the increment fallback reflect the initial read.
 
 ### `findOne` method
 

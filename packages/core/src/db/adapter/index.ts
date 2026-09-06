@@ -493,6 +493,8 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 * Always defined on the factory-wrapped adapter. Without a native method,
 	 * the factory uses bounded compare-and-swap retries. Contention exhaustion
 	 * throws rather than returning null. Conditional writes must be atomic.
+	 * A no-op may return the read snapshot without writing. A non-null result
+	 * alone does not establish exclusive ownership of the row.
 	 */
 	incrementOne: <T>(data: {
 		model: string;

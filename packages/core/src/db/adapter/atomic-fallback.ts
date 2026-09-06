@@ -8,7 +8,7 @@ const scalar = z
 	.union([z.string(), z.number(), z.boolean(), z.date()])
 	.nullable();
 const rowSchema = z.record(z.string(), z.unknown());
-const readSchema = rowSchema.nullable();
+const readSchema = rowSchema.nullish();
 const setSchema = z.record(z.string(), z.unknown()).transform((values) => {
 	const assignments: z.output<typeof rowSchema> = {};
 	for (const [field, value] of Object.entries(values)) {
@@ -49,6 +49,8 @@ type FallbackRequest = {
 	where: CleanedWhere[];
 };
 
+// Read a snapshot, then conditionally mutate it. A write succeeds only when
+// an adapter checks and mutates atomically and reports exactly one affected row.
 export function createAtomicFallbacks(context: FallbackContext) {
 	const { adapter, adapterId } = context;
 	const outputId =
@@ -103,7 +105,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 				`Adapter "${adapterId}" must return a row snapshot or null.`,
 			);
 		}
-		return result.data;
+		return result.data ?? null;
 	}
 
 	async function snapshotGuard(
@@ -115,7 +117,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 		const id = await idWhere(row, request.logicalModel, action);
 		const hasOr = request.where.some((clause) => clause.connector === "OR");
 		const guard: CleanedWhere[] = hasOr ? [id] : [...request.where, id];
-		const keys = new Set([...Object.keys(row), ...fields]);
+		const keys = new Set(fields);
 		for (const field of keys) {
 			if (field === id.field) continue;
 			const value = scalar.safeParse(row[field] ?? null);
@@ -156,7 +158,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 		// Guard the selected snapshot with AND predicates, without widening an OR selector.
 		const guard = await snapshotGuard(
 			row,
-			where.map(({ field }) => field),
+			[...Object.keys(row), ...where.map(({ field }) => field)],
 			request,
 			"consumeOne",
 		);
@@ -174,7 +176,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 		const mutation = mutationSchema.safeParse(request);
 		if (!mutation.success) {
 			throw new BetterAuthError(
-				`Adapter "${adapterId}" requires finite increments and a set object for the atomic fallback.`,
+				"incrementOne requires finite increments and a set object for the atomic fallback.",
 			);
 		}
 		const { increment, set } = mutation.data;
@@ -205,7 +207,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 				update[field] = next;
 			}
 			const guard = await snapshotGuard(row, fields, request, "incrementOne");
-			// A no-op can finish at the read, including stores reporting changed rows.
+			// A no-op takes effect at the read. Stores counting changed rows would report zero.
 			if (
 				Object.entries(update).every(([field, value]) => {
 					const previous = row[field];
