@@ -4,7 +4,11 @@ import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { betterAuth } from "../auth/full";
-import { getMigrations } from "./get-migration";
+import {
+	getMigrations,
+	migrateFrom16,
+	validateMigrationFrom16,
+} from "./get-migration";
 
 const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";
 // Check if PostgreSQL is available
@@ -902,4 +906,159 @@ describe.runIf(isPostgresAvailable)("PostgreSQL configured schema name", () => {
 
 		expect(await compileMigrations()).toEqual(";");
 	});
+
+	it("inspects the release migration through the configured schema", async () => {
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+	});
+
+	it("ignores same-named tables outside the configured schema", async () => {
+		// A 1.6-shaped account table in `public`: no issuer column, one row.
+		await pool.query(`
+			CREATE TABLE public."account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null
+			)
+		`);
+		await pool.query(
+			`INSERT INTO public."account" ("id", "accountId", "providerId", "userId")
+			 VALUES ('legacy', 'legacy@test.com', 'credential', 'legacy-user')`,
+		);
+		try {
+			await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+		} finally {
+			await pool.query(`DROP TABLE IF EXISTS public."account"`);
+		}
+	});
 });
+
+describe.runIf(isPostgresAvailable)(
+	"PostgreSQL configured schema name: 1.6 release migration",
+	() => {
+		const schema = "schema_name_release_test";
+		const pool = new Pool({ connectionString: CONNECTION_STRING });
+		const config: BetterAuthOptions = {
+			account: { identityStrategy: "provider-id" },
+			database: {
+				dialect: new PostgresDialect({ pool }),
+				schemaName: schema,
+				transaction: true,
+				type: "postgres",
+			},
+			emailAndPassword: { enabled: true },
+		};
+		const identityIndex = "account_issuer_accountId_uidx";
+
+		const readAccounts = (target: string) =>
+			pool.query<{ issuer: string | null; providerId: string }>(
+				`SELECT "providerId", "issuer" FROM ${target}."account" ORDER BY "providerId"`,
+			);
+		const readIssuerNullability = (target: string) =>
+			pool.query<{ is_nullable: string }>(
+				`SELECT is_nullable FROM information_schema.columns
+				 WHERE table_schema = $1 AND table_name = 'account' AND column_name = 'issuer'`,
+				[target],
+			);
+		const readIdentityIndexSchemas = () =>
+			pool.query<{ schemaname: string }>(
+				`SELECT schemaname FROM pg_indexes WHERE indexname = $1 ORDER BY schemaname`,
+				[identityIndex],
+			);
+
+		beforeAll(async () => {
+			await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+			await pool.query(`DROP TABLE IF EXISTS public."account" CASCADE`);
+			// A 1.6 account table in the configured schema: the 1.7 tables without
+			// the `issuer` column, which also removes the identity index.
+			await (await getMigrations(config)).runMigrations();
+			await pool.query(`ALTER TABLE ${schema}."account" DROP COLUMN "issuer"`);
+			await pool.query(
+				`INSERT INTO ${schema}."user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+				 VALUES ('u1', 'Ada', 'ada@release.test', true, now(), now())`,
+			);
+			await pool.query(
+				`INSERT INTO ${schema}."account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+				 VALUES
+					('a1', 'ada@release.test', 'credential', 'u1', now(), now()),
+					('a2', '10769150350006150715113082367', 'google', 'u1', now(), now())`,
+			);
+			// A same-named 1.7 account table in `public`, already carrying the
+			// identity index, that the release migration must leave alone.
+			await pool.query(`
+				CREATE TABLE public."account" (
+					"id" text primary key not null,
+					"accountId" text not null,
+					"providerId" text not null,
+					"userId" text not null,
+					"issuer" text
+				)
+			`);
+			await pool.query(
+				`INSERT INTO public."account" ("id", "accountId", "providerId", "userId")
+				 VALUES ('decoy', 'decoy@release.test', 'credential', 'decoy-user')`,
+			);
+			await pool.query(
+				`CREATE UNIQUE INDEX "${identityIndex}" ON public."account" ("issuer", "accountId")`,
+			);
+		});
+
+		afterAll(async () => {
+			await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+			await pool.query(`DROP TABLE IF EXISTS public."account" CASCADE`);
+			await pool.end();
+		});
+
+		it("backfills account issuers inside the configured schema only", async () => {
+			await expect(migrateFrom16(config, {})).resolves.toMatchObject({
+				accounts: { migrated: 2, providers: { credential: 1, google: 1 } },
+			});
+
+			expect((await readAccounts(schema)).rows).toEqual([
+				{ issuer: "local:credential", providerId: "credential" },
+				{ issuer: "local:oauth:google", providerId: "google" },
+			]);
+			expect((await readIssuerNullability(schema)).rows).toEqual([
+				{ is_nullable: "NO" },
+			]);
+			expect((await readIdentityIndexSchemas()).rows).toEqual([
+				{ schemaname: "public" },
+				{ schemaname: schema },
+			]);
+
+			expect((await readAccounts("public")).rows).toEqual([
+				{ issuer: null, providerId: "credential" },
+			]);
+			expect((await readIssuerNullability("public")).rows).toEqual([
+				{ is_nullable: "YES" },
+			]);
+		});
+
+		it("repairs empty issuers through the index in the configured schema", async () => {
+			await pool.query(`UPDATE ${schema}."account" SET "issuer" = ''`);
+
+			await expect(migrateFrom16(config, {})).resolves.toMatchObject({
+				accounts: { migrated: 2, providers: { credential: 1, google: 1 } },
+			});
+
+			expect((await readAccounts(schema)).rows).toEqual([
+				{ issuer: "local:credential", providerId: "credential" },
+				{ issuer: "local:oauth:google", providerId: "google" },
+			]);
+			expect((await readIdentityIndexSchemas()).rows).toEqual([
+				{ schemaname: "public" },
+				{ schemaname: schema },
+			]);
+			expect((await readAccounts("public")).rows).toEqual([
+				{ issuer: null, providerId: "credential" },
+			]);
+		});
+
+		it("has nothing left to migrate afterwards", async () => {
+			await expect(migrateFrom16(config, {})).resolves.toMatchObject({
+				accounts: { migrated: 0, providers: {} },
+			});
+			await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+		});
+	},
+);

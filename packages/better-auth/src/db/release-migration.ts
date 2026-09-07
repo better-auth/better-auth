@@ -850,12 +850,39 @@ function getLegacyBackupTableName(
 	return backupTable;
 }
 
-async function countTableRows(kysely: Kysely<unknown>, table: string) {
+async function countTableRows(
+	kysely: Kysely<unknown>,
+	table: string,
+	schemaName: string | undefined,
+) {
 	const result = await sql<{ count: bigint | number | string }>`
 		SELECT COUNT(*) AS "count"
-		FROM ${sql.table(table)}
+		FROM ${sql.table(qualifyMigrationTable(table, schemaName))}
 	`.execute(kysely);
 	return toSafeRowCount(result.rows[0]?.count ?? 0);
+}
+
+/**
+ * The tables the release migration may touch. Kysely introspects every
+ * schema, so a configured PostgreSQL schema narrows the result to the tables
+ * Better Auth owns there instead of same-named tables elsewhere.
+ */
+async function getReleaseMigrationTables(
+	kysely: Kysely<unknown>,
+	schemaName: string | undefined,
+) {
+	const tables = await kysely.introspection.getTables();
+	return schemaName
+		? tables.filter((table) => table.schema === schemaName)
+		: tables;
+}
+
+/**
+ * The schema the raw PostgreSQL catalog queries look in. Without a configured
+ * schema this stays `current_schema()`, which follows `search_path`.
+ */
+function currentPostgresSchema(schemaName: string | undefined) {
+	return schemaName ? sql`${schemaName}` : sql`current_schema()`;
 }
 
 function hasLegacyTableShape(
@@ -874,12 +901,14 @@ async function inspectLegacyTable({
 	blockers,
 	kysely,
 	model,
+	schemaName,
 	sourceTable,
 	tables,
 }: {
 	blockers: MigrationDecisionBlocker[] | undefined;
 	kysely: Kysely<unknown>;
 	model: LegacyReleaseModel;
+	schemaName: string | undefined;
 	sourceTable: string;
 	tables: readonly TableMetadata[];
 }): Promise<LegacyTableState | undefined> {
@@ -918,7 +947,7 @@ async function inspectLegacyTable({
 
 	return {
 		backupTable,
-		rowCount: await countTableRows(kysely, activeLegacyTable),
+		rowCount: await countTableRows(kysely, activeLegacyTable, schemaName),
 		sourceTable,
 		sourceTableNeedsRename: sourceHasLegacyShape,
 	};
@@ -933,11 +962,13 @@ async function findLegacyTableCandidates({
 	candidateTables,
 	kysely,
 	model,
+	schemaName,
 	sourceTable,
 }: {
 	candidateTables: readonly TableMetadata[];
 	kysely: Kysely<unknown>;
 	model: LegacyReleaseModel;
+	schemaName: string | undefined;
 	sourceTable: string;
 }) {
 	const shape = legacyTableShapes[model];
@@ -945,7 +976,7 @@ async function findLegacyTableCandidates({
 	for (const table of candidateTables) {
 		if (table.name === sourceTable) continue;
 		if (!hasLegacyTableShape(table, shape)) continue;
-		if ((await countTableRows(kysely, table.name)) === 0) continue;
+		if ((await countTableRows(kysely, table.name, schemaName)) === 0) continue;
 		candidates.push(table.name);
 	}
 	return candidates.sort();
@@ -957,6 +988,7 @@ async function inspectLegacyModel({
 	configuredTable,
 	kysely,
 	model,
+	schemaName,
 	tables,
 }: {
 	blockers: MigrationDecisionBlocker[] | undefined;
@@ -964,6 +996,7 @@ async function inspectLegacyModel({
 	configuredTable: string | null | undefined;
 	kysely: Kysely<unknown>;
 	model: LegacyReleaseModel;
+	schemaName: string | undefined;
 	tables: readonly TableMetadata[];
 }): Promise<LegacyTableState | undefined> {
 	const sourceTable = configuredTable || model;
@@ -971,6 +1004,7 @@ async function inspectLegacyModel({
 		blockers,
 		kysely,
 		model,
+		schemaName,
 		sourceTable,
 		tables,
 	});
@@ -979,6 +1013,7 @@ async function inspectLegacyModel({
 		candidateTables,
 		kysely,
 		model,
+		schemaName,
 		sourceTable,
 	});
 	if (candidates.length > 0) {
@@ -1009,8 +1044,8 @@ export async function inspectLegacyReleaseDataFrom16(
 	options: MigrateFrom16Options,
 	blockers?: MigrationDecisionBlocker[],
 ): Promise<LegacyReleaseDataState> {
-	const { authTables, kysely } = await getMigrationDatabase(config);
-	const tables = await kysely.introspection.getTables();
+	const { authTables, kysely, schemaName } = await getMigrationDatabase(config);
+	const tables = await getReleaseMigrationTables(kysely, schemaName);
 	const configuredTables = new Set(
 		Object.keys(getSchemaFromAuthTables(authTables)),
 	);
@@ -1033,6 +1068,7 @@ export async function inspectLegacyReleaseDataFrom16(
 					configuredTable: options.legacyTableNames?.[model],
 					kysely,
 					model,
+					schemaName,
 					tables,
 				})
 			: undefined;
@@ -1169,7 +1205,7 @@ export async function renameLegacyTables(
 	state: LegacyReleaseDataState,
 	migrationDatabase?: MigrationDatabase,
 ) {
-	const { databaseType, kysely } =
+	const { databaseType, kysely, schemaName } =
 		migrationDatabase ?? (await getMigrationDatabase(config));
 	for (const table of [
 		state.oauthApplication,
@@ -1201,7 +1237,7 @@ export async function renameLegacyTables(
 				LEFT JOIN pg_constraint AS index_constraint
 					ON index_constraint.conindid = index_class.oid
 				WHERE
-					table_namespace.nspname = current_schema() AND
+					table_namespace.nspname = ${currentPostgresSchema(schemaName)} AND
 					table_class.relname = ${table.backupTable} AND
 					index_constraint.oid IS NULL
 			`.execute(kysely);
@@ -1327,10 +1363,12 @@ export async function prepareOAuthProviderDataFrom16(
 	) {
 		return undefined;
 	}
-	const { authTables, kysely } = await getMigrationDatabase(config);
+	const { authTables, kysely, schemaName } = await getMigrationDatabase(config);
 	const adapter = await getAdapter(config);
 	const existingTables = new Set(
-		(await kysely.introspection.getTables()).map((table) => table.name),
+		(await getReleaseMigrationTables(kysely, schemaName)).map(
+			(table) => table.name,
+		),
 	);
 	const clients: OAuthProviderDataFrom16Plan["clients"] = [];
 	const clientSecretStorage = options.oauthProvider?.clientSecrets;
@@ -1354,7 +1392,7 @@ export async function prepareOAuthProviderDataFrom16(
 			: state.oauthApplication.backupTable;
 		const source = await sql<LegacyOAuthClientRow>`
 			SELECT *
-			FROM ${sql.table(sourceTable)}
+			FROM ${sql.table(qualifyMigrationTable(sourceTable, schemaName))}
 		`.execute(kysely);
 		const oauthClientTable = authTables.oauthClient?.modelName || "oauthClient";
 		const canInspectExistingClients = targetTableExists({
@@ -1432,7 +1470,7 @@ export async function prepareOAuthProviderDataFrom16(
 			: state.oauthConsent.backupTable;
 		const source = await sql<LegacyOAuthConsentRow>`
 			SELECT *
-			FROM ${sql.table(sourceTable)}
+			FROM ${sql.table(qualifyMigrationTable(sourceTable, schemaName))}
 		`.execute(kysely);
 		const oauthConsentTable =
 			authTables.oauthConsent?.modelName || "oauthConsent";
@@ -1552,13 +1590,13 @@ async function readScimAccountsFrom16(
 }> {
 	if (!state.scimProvider) return { accounts: [], accountTable: "account" };
 	const database = migrationDatabase ?? (await getMigrationDatabase(config));
-	const { authTables, kysely } = database;
+	const { authTables, kysely, schemaName } = database;
 	const providerTable = state.scimProvider.sourceTableNeedsRename
 		? state.scimProvider.sourceTable
 		: state.scimProvider.backupTable;
 	const providers = await sql<LegacyScimProviderRow>`
 		SELECT ${sql.ref("providerId")} AS "providerId"
-		FROM ${sql.table(providerTable)}
+		FROM ${sql.table(qualifyMigrationTable(providerTable, schemaName))}
 	`.execute(kysely);
 	const providerIds = new Set(providers.rows.map((row) => row.providerId));
 	const accountSchema = authTables.account;
@@ -1570,9 +1608,9 @@ async function readScimAccountsFrom16(
 	const providerIdColumn =
 		accountSchema.fields.providerId?.fieldName || "providerId";
 	const userIdColumn = accountSchema.fields.userId?.fieldName || "userId";
-	const accountTableMetadata = (await kysely.introspection.getTables()).find(
-		(table) => table.name === accountTable,
-	);
+	const accountTableMetadata = (
+		await getReleaseMigrationTables(kysely, schemaName)
+	).find((table) => table.name === accountTable);
 	if (!accountTableMetadata) return { accounts: [], accountTable };
 	if (providerIds.size === 0) return { accounts: [], accountTable };
 	const accountQuery = sql<LegacyScimAccountRecord>`
@@ -1581,7 +1619,7 @@ async function readScimAccountsFrom16(
 			${sql.ref(accountIdColumn)} AS "providerAccountId",
 			${sql.ref(providerIdColumn)} AS "providerId",
 			${sql.ref(userIdColumn)} AS "userId"
-		FROM ${sql.table(accountTable)}
+		FROM ${sql.table(qualifyMigrationTable(accountTable, schemaName))}
 		WHERE ${sql.ref(providerIdColumn)} IN (${sql.join([...providerIds])})
 	`;
 	const lockedAccountQuery =
@@ -1695,7 +1733,7 @@ export async function retireScimAccountsFrom16(
 	const accountTable = accountSchema.modelName || "account";
 	const idColumn = accountSchema.fields.id?.fieldName || "id";
 	await sql`
-		DELETE FROM ${sql.table(accountTable)}
+		DELETE FROM ${sql.table(qualifyMigrationTable(accountTable, database.schemaName))}
 		WHERE ${sql.ref(idColumn)} IN (${sql.join(accounts.map((account) => account.id))})
 	`.execute(kysely);
 	// The upgrade requires a maintenance window with every SCIM and account
@@ -1872,10 +1910,13 @@ async function inspectAccountIdentityFrom16(
 	blockers?: MigrationDecisionBlocker[],
 ) {
 	const database = migrationDatabase ?? (await getMigrationDatabase(config));
-	const { authTables, kysely } = database;
+	const { authTables, kysely, schemaName } = database;
 	const accountSchema = authTables.account;
 	if (!accountSchema) return undefined;
 	const accountTable = accountSchema.modelName || "account";
+	const accountTableRef = sql.table(
+		qualifyMigrationTable(accountTable, schemaName),
+	);
 	const resolvedAccountSchema =
 		getSchemaFromAuthTables(authTables)[accountTable];
 	if (!resolvedAccountSchema) {
@@ -1889,9 +1930,9 @@ async function inspectAccountIdentityFrom16(
 		accountSchema.fields.accountId?.fieldName || "accountId";
 	const providerIdColumn =
 		accountSchema.fields.providerId?.fieldName || "providerId";
-	const accountTableMetadata = (await kysely.introspection.getTables()).find(
-		(table) => table.name === accountTable,
-	);
+	const accountTableMetadata = (
+		await getReleaseMigrationTables(kysely, schemaName)
+	).find((table) => table.name === accountTable);
 	if (!accountTableMetadata) return undefined;
 	const existingColumns = new Set(
 		accountTableMetadata.columns.map((column) => column.name),
@@ -1903,7 +1944,7 @@ async function inspectAccountIdentityFrom16(
 			${sql.ref(accountIdColumn)} AS "providerAccountId",
 			${existingColumns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer",
 			${sql.ref(providerIdColumn)} AS "providerId"
-		FROM ${sql.table(accountTable)}
+		FROM ${accountTableRef}
 	`.execute(kysely);
 	const accountsWithoutIssuer = accountIdentities.rows.filter(
 		(account) => !readStoredIssuer(account.issuer),
@@ -1939,7 +1980,7 @@ async function inspectAccountIdentityFrom16(
 		SELECT
 			${sql.ref(providerIdColumn)} AS "providerId",
 			COUNT(*) AS "count"
-		FROM ${sql.table(accountTable)}
+		FROM ${accountTableRef}
 		GROUP BY ${sql.ref(providerIdColumn)}
 	`.execute(kysely);
 	const populatedProviders: Record<string, number> = {};
@@ -2023,10 +2064,11 @@ async function countCorruptedAccountIssuers(
 	kysely: Kysely<unknown>,
 	accountTable: string,
 	issuerColumn: string,
+	schemaName: string | undefined,
 ) {
 	const corrupted = await sql<{ count: bigint | number | string }>`
 		SELECT COUNT(*) AS "count"
-		FROM ${sql.table(accountTable)}
+		FROM ${sql.table(qualifyMigrationTable(accountTable, schemaName))}
 		WHERE ${sql.ref(issuerColumn)} = ''
 	`.execute(kysely);
 	return toSafeRowCount(corrupted.rows[0]?.count ?? 0);
@@ -2037,11 +2079,13 @@ async function accountIndexExists({
 	databaseType,
 	indexName,
 	kysely,
+	schemaName,
 }: {
 	accountTable: string;
 	databaseType: "mssql" | "mysql" | "postgres" | "sqlite";
 	indexName: string;
 	kysely: Kysely<unknown>;
+	schemaName: string | undefined;
 }) {
 	const existing =
 		databaseType === "mysql"
@@ -2058,7 +2102,7 @@ async function accountIndexExists({
 					SELECT indexname AS "name"
 					FROM pg_indexes
 					WHERE
-						schemaname = current_schema() AND
+						schemaname = ${currentPostgresSchema(schemaName)} AND
 						tablename = ${accountTable} AND
 						indexname = ${indexName}
 				`.execute(kysely)
@@ -2083,7 +2127,7 @@ export async function migrateAccountIdentityFrom16(
 	options: MigrateFrom16Options,
 	migrationDatabase?: MigrationDatabase,
 ): Promise<MigratedAccountSummary> {
-	const { databaseType, inTransaction, kysely } =
+	const { databaseType, inTransaction, kysely, schemaName } =
 		migrationDatabase ?? (await getMigrationDatabase(config));
 	if (
 		databaseType !== "postgres" &&
@@ -2112,6 +2156,9 @@ export async function migrateAccountIdentityFrom16(
 		providerNamespaces,
 		resolvedAccountSchema,
 	} = inspection;
+	const accountTableRef = sql.table(
+		qualifyMigrationTable(accountTable, schemaName),
+	);
 	const identityColumnType = (columnName: "accountId" | "issuer") => {
 		if (databaseType === "postgres" || databaseType === "sqlite") {
 			return sql`text`;
@@ -2136,7 +2183,7 @@ export async function migrateAccountIdentityFrom16(
 		SELECT
 			${sql.ref(providerIdColumn)} AS "providerId",
 			COUNT(*) AS "count"
-		FROM ${sql.table(accountTable)}
+		FROM ${accountTableRef}
 		WHERE ${unresolvedIssuerPredicate(issuerColumn)}
 		GROUP BY ${sql.ref(providerIdColumn)}
 	`.execute(kysely);
@@ -2156,13 +2203,18 @@ export async function migrateAccountIdentityFrom16(
 	);
 	if (
 		identityIndex &&
-		(await countCorruptedAccountIssuers(kysely, accountTable, issuerColumn)) >
-			0 &&
+		(await countCorruptedAccountIssuers(
+			kysely,
+			accountTable,
+			issuerColumn,
+			schemaName,
+		)) > 0 &&
 		(await accountIndexExists({
 			accountTable,
 			databaseType,
 			indexName: identityIndex.name,
 			kysely,
+			schemaName,
 		}))
 	) {
 		const dropIndex = kysely.schema.dropIndex(identityIndex.name);
@@ -2176,7 +2228,7 @@ export async function migrateAccountIdentityFrom16(
 	for (const [providerId, issuer] of Object.entries(providerNamespaces)) {
 		if (!providers[providerId]) continue;
 		await sql`
-			UPDATE ${sql.table(accountTable)}
+			UPDATE ${accountTableRef}
 			SET ${sql.ref(issuerColumn)} = ${issuer}
 			WHERE
 				${sql.ref(providerIdColumn)} = ${providerId} AND
@@ -2187,12 +2239,12 @@ export async function migrateAccountIdentityFrom16(
 		databaseType === "mssql"
 			? await sql`
 				SELECT TOP 1 1
-				FROM ${sql.table(accountTable)}
+				FROM ${accountTableRef}
 				WHERE ${unresolvedIssuerPredicate(issuerColumn)}
 			`.execute(kysely)
 			: await sql`
 				SELECT 1
-				FROM ${sql.table(accountTable)}
+				FROM ${accountTableRef}
 				WHERE ${unresolvedIssuerPredicate(issuerColumn)}
 				LIMIT 1
 			`.execute(kysely);
@@ -2206,7 +2258,7 @@ export async function migrateAccountIdentityFrom16(
 		databaseType === "mssql"
 			? await sql`
 				SELECT TOP 1 1
-				FROM ${sql.table(accountTable)}
+				FROM ${accountTableRef}
 				GROUP BY
 					${sql.ref(issuerColumn)},
 					${sql.ref(accountIdColumn)}
@@ -2214,7 +2266,7 @@ export async function migrateAccountIdentityFrom16(
 			`.execute(kysely)
 			: await sql`
 				SELECT 1
-				FROM ${sql.table(accountTable)}
+				FROM ${accountTableRef}
 				GROUP BY
 					${sql.ref(issuerColumn)},
 					${sql.ref(accountIdColumn)}
@@ -2229,28 +2281,28 @@ export async function migrateAccountIdentityFrom16(
 
 	if (databaseType === "postgres") {
 		await sql`
-			ALTER TABLE ${sql.table(accountTable)}
+			ALTER TABLE ${accountTableRef}
 			ALTER COLUMN ${sql.ref(issuerColumn)} SET NOT NULL
 		`.execute(kysely);
 	} else if (databaseType === "mysql") {
 		await sql`
-			ALTER TABLE ${sql.table(accountTable)}
+			ALTER TABLE ${accountTableRef}
 			MODIFY COLUMN ${sql.ref(issuerColumn)}
 			${identityColumnType("issuer")} NOT NULL
 		`.execute(kysely);
 		await sql`
-			ALTER TABLE ${sql.table(accountTable)}
+			ALTER TABLE ${accountTableRef}
 			MODIFY COLUMN ${sql.ref(accountIdColumn)}
 			${identityColumnType("accountId")} NOT NULL
 		`.execute(kysely);
 	} else if (databaseType === "mssql") {
 		await sql`
-			ALTER TABLE ${sql.table(accountTable)}
+			ALTER TABLE ${accountTableRef}
 			ALTER COLUMN ${sql.ref(issuerColumn)}
 			${identityColumnType("issuer")} NOT NULL
 		`.execute(kysely);
 		await sql`
-			ALTER TABLE ${sql.table(accountTable)}
+			ALTER TABLE ${accountTableRef}
 			ALTER COLUMN ${sql.ref(accountIdColumn)}
 			${identityColumnType("accountId")} NOT NULL
 		`.execute(kysely);
