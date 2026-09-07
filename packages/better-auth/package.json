@@ -523,7 +523,6 @@
     "@sveltejs/kit": "^2.0.0",
     "@tanstack/react-start": "^1.0.0",
     "@tanstack/solid-start": "^1.0.0",
-    "better-sqlite3": "^12.0.0",
     "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1",
     "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0",
     "mongodb": "^6.0.0 || ^7.0.0",
@@ -588,9 +587,6 @@
       "optional": true
     },
     "prisma": {
-      "optional": true
-    },
-    "better-sqlite3": {
       "optional": true
     },
     "vitest": {
