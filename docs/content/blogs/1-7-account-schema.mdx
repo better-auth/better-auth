@@ -19,21 +19,21 @@ We're sorry for the failed sign-ins and the extra database work this caused. You
 
 **I created or migrated my database on 1.7.0 through 1.7.2.** Follow the [cleanup steps](#how-do-i-clean-up-a-database-that-already-migrated) before deploying 1.7.3.
 
-**I'm starting a new app on 1.7.3.** Follow the [installation steps](/docs/installation).
-
 **I'm upgrading directly from 1.6 to 1.7.3.** No issuer cleanup is needed. Follow the [upgrade guide](/docs/guides/1-7-upgrade-guide) for the other changes.
 
 ## Why did a simple app need a migration?
 
 We introduced `issuer` so multiple connections to the same login service could share an account for the same user. Making it a required core field imposed that migration on apps that did not need account sharing. We did not adequately assess the cost for existing databases.
 
-A follow-up compatibility option preserved the old account matching but still required the new field and a migration. Some instructions also referred to commands that were not yet available in the published CLI. By then, users had already begun migrating, which made reversing the change harder.
+A proposed compatibility option preserved the old account matching but still required the new field and a migration. Some instructions also referred to commands that were not yet available in the published CLI. By then, users had already begun migrating, which made reversing the change harder.
 
-## What does 1.7.3 change?
+## Why we reversed the schema change
 
-Version 1.7.3 restores the 1.6 account model, identifying accounts by the configured provider ID (`providerId`) and that provider's user ID (`accountId`). Token issuer verification remains in place; it does not depend on storing `issuer` in the account table.
+The 1.x commitment has not changed: upgrades should not require a migration of Better Auth's core tables. Changes that require a core migration belong in 2.0. Plugins and optional features can still have their own upgrade requirements.
 
-Because 1.7.3 no longer writes `issuer`, databases that still require it can reject new accounts. Schema checks can also block existing sign-ins until the database is corrected.
+Version 1.7.3 restores the account schema used before 1.7, identifying accounts by the configured provider ID (`providerId`) and that provider's user ID (`accountId`). Token issuer verification remains in place; it does not depend on storing `issuer` in the account table.
+
+Because 1.7.3 no longer writes `issuer`, databases that still require it can reject new accounts. Schema validation starts when Better Auth initializes. If it detects an incompatible schema, authentication requests are blocked.
 
 ## How do I clean up a database that already migrated?
 
@@ -49,15 +49,7 @@ If several single sign-on (SSO) connections shared one account, column cleanup a
 
 Test existing sessions, fresh sign-ins, and registrations with every provider, confirming that returning users reach their existing accounts. Include account linking, token refresh, and unlinking where supported. For SCIM-managed users, also verify that disabling a user blocks access and enabling them restores it.
 
-<details>
-  <summary>If you used a preview build with `identityStrategy`</summary>
-
-  Preview builds with `account.identityStrategy: "provider-id"` also stored `issuer` and need the same cleanup. Remove `identityStrategy` from your configuration for 1.7.3.
-</details>
-
 ## Keeping 1.x upgrades stable
-
-Our commitment is to keep Better Auth's core schema stable throughout 1.x. Any future change that requires a core database migration belongs in 2.0. Plugins and optional features can still have their own upgrade requirements.
 
 We will add guardrails to our review and release process to:
 
