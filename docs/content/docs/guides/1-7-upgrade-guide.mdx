@@ -89,7 +89,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
 
 <Steps>
   <Step>
-    #### Inspect and prepare
+    #### Check whether the column is there
 
     Inspect the account table's columns and indexes using your database tools. For SQL databases, this query shows the columns without reading account data:
 
@@ -99,7 +99,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
 
     If neither the `issuer` column nor its old index exists, no issuer schema cleanup is needed. If you already dropped the column on MySQL, check whether the old index survived on `accountId` alone.
 
-    Back up the database, including existing issuer values, and rehearse cleanup on a restored copy. Resolve [duplicate account keys](#check-for-duplicate-account-keys) and review [connections that shared an account](#recover-connections-that-shared-an-account) before changing the live database.
+    Back up the database, including existing issuer values, and rehearse cleanup on a restored copy. Resolve [duplicate account keys](#check-for-duplicate-account-keys) and review connections that shared an account before changing the live database.
   </Step>
 
   <Step>
@@ -120,18 +120,18 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
       </Tab>
 
       <Tab value="MySQL">
-        Keep the column's existing type, length, and collation. This example assumes `VARCHAR(255)`:
+        Read the existing column definition with `SHOW CREATE TABLE account`. Replace the example's type, length, character set, and collation with those of your `issuer` column before running it; omitting these attributes can change them.
 
         ```sql
         DROP INDEX account_issuer_accountId_uidx ON account;
-        ALTER TABLE account MODIFY issuer VARCHAR(255) NULL;
+        ALTER TABLE account MODIFY issuer VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL;
         ```
 
         In non-strict mode, MySQL can fill a missing required `issuer` with an empty string. The surviving unique index then rejects equal account IDs across providers. These databases also need cleanup.
       </Tab>
 
       <Tab value="SQL Server">
-        Match the type, length, collation, and schema below to your existing column:
+        Check the column definition in your database tools. Replace the example's type, length, collation, and schema with your existing values before running it; the collation shown is not a required Better Auth setting.
 
         ```sql
         DROP INDEX account_issuer_accountId_uidx ON dbo.account;
@@ -171,7 +171,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
   </Step>
 
   <Step>
-    #### Restart and confirm
+    #### Confirm
 
     Deploy the matching packages and configuration, then restart every app instance to clear cached schema mismatches after manual repair. Schema validation does not stop the server, so successful startup alone does not confirm compatibility.
 
@@ -179,15 +179,11 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
   </Step>
 </Steps>
 
-#### Recover connections that shared an account
+If several sign-in connections shared one account row on 1.7.0 through 1.7.2, some may stop working after cleanup. Each provider ID now needs its own account row. Before removing issuer values, identify which connections need to be linked back to their existing users.
 
-On 1.7.0 through 1.7.2, several provider configurations could share one Account row. In 1.7.3, each provider ID needs its own row; removing the issuer column or index does not create missing accounts. Inventory those connections and their existing users before removing issuer values.
+For OAuth sign-in, users can sign in through a connection that still works, then [link the missing connection](/docs/concepts/users-accounts#manually-linking-accounts). Have them sign out and sign in through that connection to confirm they reach their original account.
 
-For affected SSO connections, configure the [user resolver](/docs/plugins/sso#resolve-sso-users) with a reviewed mapping from the configured connection, verified issuer, and subject to the existing `userId`. Return `{ action: "link", userId, profile: "preserve" }` for known mappings and reject unknown identities. The verified sign-in creates the connection's Account row for that user. Do not infer ownership from an email match or copy tokens between connections.
-
-For other providers, have the existing user authenticate with a working sign-in method and link the missing connection through the normal account-linking flow. Keep any connection without a verified recovery path disabled until its mapping is reviewed.
-
-#### Update account selectors
+For SSO, users cannot link the connection themselves. Configure [`resolveUser`](/docs/plugins/sso#resolve-sso-users) to match each verified SSO identity to the correct existing user. Check its database and session requirements first: deployments without resolver support have no automatic recovery path in this guide. Test the mapping on a restored database copy before re-enabling affected SSO connections.
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
 
