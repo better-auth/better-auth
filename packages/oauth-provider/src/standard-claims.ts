@@ -13,10 +13,19 @@ interface StandardClaimDefinition {
 	resolve: (user: User) => unknown;
 }
 
-function splitDisplayName(name: string): {
+/**
+ * Splits a display name into the `given_name` and `family_name` claims.
+ *
+ * `User["name"]` is typed as a string, but the stored value can be absent:
+ * providers may omit it, and rows can predate a name being required. The `name`
+ * claim below already resolves that away with `?? undefined`, so a missing name
+ * leaves these two claims unresolved rather than failing the whole response.
+ */
+function splitDisplayName(name: string | null | undefined): {
 	given?: string;
 	family?: string;
 } {
+	if (!name) return {};
 	const parts = name.split(" ").filter((part) => part !== "");
 	if (parts.length <= 1) return {};
 	return { given: parts.slice(0, -1).join(" "), family: parts.at(-1) };
