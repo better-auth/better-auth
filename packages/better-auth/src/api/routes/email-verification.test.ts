@@ -190,7 +190,7 @@ describe("Email Verification - Request body consumption bug", () => {
 describe("Email Verification", async () => {
 	const mockSendEmail = vi.fn();
 	let token: string;
-	const { auth, testUser, client, signInWithUser } = await getTestInstance({
+	const { auth, testUser, client } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
 			requireEmailVerification: true,
@@ -259,11 +259,22 @@ describe("Email Verification", async () => {
 	});
 
 	it("should send a verification email if verification is required and user is not verified", async () => {
-		await signInWithUser(testUser.email, testUser.password);
+		const sendVerificationEmail = vi.fn();
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: { enabled: true, requireEmailVerification: true },
+			emailVerification: { sendOnSignIn: true, sendVerificationEmail },
+		});
+		sendVerificationEmail.mockClear();
 
-		expect(mockSendEmail).toHaveBeenCalledWith(
-			testUser.email,
-			expect.any(String),
+		const result = await client.signIn.email(testUser);
+
+		expect(result.error?.code).toBe("EMAIL_NOT_VERIFIED");
+		expect(sendVerificationEmail).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: testUser.email }),
+				url: expect.any(String),
+			}),
+			expect.anything(),
 		);
 	});
 

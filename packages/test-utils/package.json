@@ -49,6 +49,6 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "better-auth": "workspace:^",
-    "vitest": "catalog:vitest"
+    "vitest": "^4.1.10 || ^5.0.0"
   }
 }
