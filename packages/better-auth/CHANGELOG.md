@@ -1,5 +1,52 @@
 # better-auth
 
+## 1.7.3
+
+### Patch Changes
+
+- [#11060](https://github.com/better-auth/better-auth/pull/11060) [`3660f06`](https://github.com/better-auth/better-auth/commit/3660f062d6e7a9b02e3fc8eee5b99482117ebba0) Thanks [@bytaesu](https://github.com/bytaesu)! - Handle malformed custom-scheme callback URLs without excessive processing.
+
+- [#11037](https://github.com/better-auth/better-auth/pull/11037) [`5bd7096`](https://github.com/better-auth/better-auth/commit/5bd709640a14e03972420bbfe778e3c732df80d5) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent repeated TOTP enrollment from replacing an active authenticator and its backup codes.
+
+- [#11120](https://github.com/better-auth/better-auth/pull/11120) [`7ec7146`](https://github.com/better-auth/better-auth/commit/7ec71461f1b3dcc0f9852ced5cc1ed7252ded4f2) Thanks [@onmax](https://github.com/onmax)! - Prevent `getSession` from failing when cookie caching is disabled while clients still have cached session cookies.
+
+- [#9908](https://github.com/better-auth/better-auth/pull/9908) [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6) Thanks [@harshil1712](https://github.com/harshil1712)! - Add Cloudflare as a built-in social provider, with support for client-secret authentication and PKCE clients without a secret.
+
+- [#11188](https://github.com/better-auth/better-auth/pull/11188) [`c47b765`](https://github.com/better-auth/better-auth/commit/c47b76517d235d7cde07a1b4717f76b8f71a675f) Thanks [@bytaesu](https://github.com/bytaesu)! - Normalize Auth0 domains without a potentially slow trailing-slash regular expression.
+
+- [#11084](https://github.com/better-auth/better-auth/pull/11084) [`2d5c63d`](https://github.com/better-auth/better-auth/commit/2d5c63d512164d4e18c5e67b79a9c7d19b27b669) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent duplicate session requests and hydration mismatches when using the Vue client with Nuxt `useFetch`.
+
+- [#11147](https://github.com/better-auth/better-auth/pull/11147) [`a9d8c12`](https://github.com/better-auth/better-auth/commit/a9d8c12d14b99a2df35ae2fba98ad4e4bc512ad5) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `isPasswordCompromised` for checking passwords against Have I Been Pwned in custom server-side flows, while ignoring padded response entries with zero occurrences.
+
+- [#10988](https://github.com/better-auth/better-auth/pull/10988) [`9fc7498`](https://github.com/better-auth/better-auth/commit/9fc749867592536b6e472381581cee8f00f6b59b) Thanks [@bytaesu](https://github.com/bytaesu)! - Run callback hooks after proxied OAuth sign-ins and preserve server state when callback cookies are unavailable. The legacy `/oauth-proxy-callback` endpoint is deprecated and will be removed in the next minor release.
+
+- [#11178](https://github.com/better-auth/better-auth/pull/11178) [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9) Thanks [@bytaesu](https://github.com/bytaesu)! - Report missing tables, missing columns, and required columns Better Auth never writes during initialization, with guidance for fixing them. Kysely checks the live database schema. Authentication requests await the same check and are rejected if the schema does not match.
+
+  Validation is enabled by default, including in production. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` refuses to apply changes when required unwritten columns need manual repair.
+
+- [#11069](https://github.com/better-auth/better-auth/pull/11069) [`0bb0dbf`](https://github.com/better-auth/better-auth/commit/0bb0dbf6f38ab53a0c1f2fb639acd7bd602e2a24) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve dynamic organization role permission check performance.
+
+- [#11153](https://github.com/better-auth/better-auth/pull/11153) [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
+
+  If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
+
+- [#10978](https://github.com/better-auth/better-auth/pull/10978) [`5fe5bc2`](https://github.com/better-auth/better-auth/commit/5fe5bc21d1bf699655054192f4f833bcc33d0ba4) Thanks [@BetterAndBetterII](https://github.com/BetterAndBetterII)! - Skip a generic OAuth provider when discovery fails instead of taking down the rest of the auth API.
+
+- [#10963](https://github.com/better-auth/better-auth/pull/10963) [`74a7369`](https://github.com/better-auth/better-auth/commit/74a7369179cc6ab9fc2a9f13a67b33e8c00aa9ac) Thanks [@thisismert](https://github.com/thisismert)! - Track email OTP sign-ins in the last login method plugin.
+
+- [#11085](https://github.com/better-auth/better-auth/pull/11085) [`e16b40a`](https://github.com/better-auth/better-auth/commit/e16b40aeadde4203c883f121e7e5f7a2ec04d6b2) Thanks [@bytaesu](https://github.com/bytaesu)! - Provide type-safe Nuxt `useFetch` integration for the Vue client's `useSession` hook.
+
+- [#11066](https://github.com/better-auth/better-auth/pull/11066) [`c0444dc`](https://github.com/better-auth/better-auth/commit/c0444dc97928f46978c42083083d3b8642b89493) Thanks [@bytaesu](https://github.com/bytaesu)! - Upgrade the packaged Zod dependency to 4.5. Generated OpenAPI schemas now mark required request fields consistently with runtime validation, including passkey registration responses.
+
+- Updated dependencies [[`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c), [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6), [`3e9e197`](https://github.com/better-auth/better-auth/commit/3e9e19746e609004da31bea3356c0059611d9ed4), [`157ec8d`](https://github.com/better-auth/better-auth/commit/157ec8d8799ddda642f2fe40120fc364660a8864), [`baa08f4`](https://github.com/better-auth/better-auth/commit/baa08f4ee674f5cc39624063847c89f1bea73186), [`9e36635`](https://github.com/better-auth/better-auth/commit/9e36635eb2fbf27d58c70d3361724335ba9a9951), [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9), [`a2bae0c`](https://github.com/better-auth/better-auth/commit/a2bae0cad04ccc23c40555c77f86b0da1ba40ebc), [`1a1b7d5`](https://github.com/better-auth/better-auth/commit/1a1b7d56f51cb9ce6b06334b22fcbfa0d52be05a), [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc)]:
+  - @better-auth/core@1.7.3
+  - @better-auth/drizzle-adapter@1.7.3
+  - @better-auth/prisma-adapter@1.7.3
+  - @better-auth/kysely-adapter@1.7.3
+  - @better-auth/memory-adapter@1.7.3
+  - @better-auth/mongo-adapter@1.7.3
+  - @better-auth/telemetry@1.7.3
+
 ## 1.7.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @better-auth/cimd
 
+## 1.7.3
+
+### Patch Changes
+
+- [#10730](https://github.com/better-auth/better-auth/pull/10730) [`1d9b55c`](https://github.com/better-auth/better-auth/commit/1d9b55cfdb789224b545ae317b4bca6b5621d755) Thanks [@erikpr1994](https://github.com/erikpr1994)! - Fix CIMD client metadata discovery failing with `ERR_INVALID_IP_ADDRESS` on supported Node.js versions.
+
 ## 1.7.2
 
 ## 1.7.1

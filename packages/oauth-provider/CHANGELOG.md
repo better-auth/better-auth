@@ -1,5 +1,11 @@
 # @better-auth/oauth-provider
 
+## 1.7.3
+
+### Patch Changes
+
+- [#11090](https://github.com/better-auth/better-auth/pull/11090) [`4d09d50`](https://github.com/better-auth/better-auth/commit/4d09d502254f1bfe65dafc8d813d803225429c4a) Thanks [@Salman-Arshad](https://github.com/Salman-Arshad)! - Allow native OAuth clients with `localhost` loopback redirect URIs to use ephemeral callback ports, and ensure loopback port variance changes only the port.
+
 ## 1.7.2
 
 ### Patch Changes

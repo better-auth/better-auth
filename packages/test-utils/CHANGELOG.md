@@ -1,5 +1,15 @@
 # @better-auth/test-utils
 
+## 1.7.3
+
+### Patch Changes
+
+- [#10762](https://github.com/better-auth/better-auth/pull/10762) [`b7aeed8`](https://github.com/better-auth/better-auth/commit/b7aeed84ce9b8dbec22fc5fc97995b75d8063d9c) Thanks [@starslingdev](https://github.com/apps/starslingdev)! - Adapter test suites now run significantly faster. Cleanup between tests no longer re-deletes rows it has already removed, so suites spend far less time waiting on redundant database round trips.
+
+- [#11153](https://github.com/better-auth/better-auth/pull/11153) [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
+
+  If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
+
 ## 1.7.2
 
 ## 1.7.1
