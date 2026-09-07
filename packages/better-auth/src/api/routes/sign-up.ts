@@ -17,7 +17,7 @@ import { createEmailVerificationToken } from "./email-verification";
 const signUpEmailBodySchema = z
 	.object({
 		name: z.string(),
-		email: z.email(),
+		email: z.string().nonempty(),
 		password: z.string().nonempty(),
 		image: z.string().optional(),
 		callbackURL: z.string().optional(),

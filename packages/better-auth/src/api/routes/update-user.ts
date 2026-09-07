@@ -670,7 +670,7 @@ export const changeEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			newEmail: z.email().meta({
+			newEmail: z.string().meta({
 				description:
 					"The new email address to set must be a valid email address",
 			}),
@@ -724,6 +724,11 @@ export const changeEmail = createAuthEndpoint(
 				"BAD_REQUEST",
 				BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED,
 			);
+		}
+		const isValidEmail = z.email().safeParse(ctx.body.newEmail);
+
+		if (!isValidEmail.success) {
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 		}
 
 		const newEmail = ctx.body.newEmail.toLowerCase();
