@@ -1,3 +1,4 @@
+import { logger } from "@better-auth/core/env";
 import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink, oAuthProxy } from "better-auth/plugins";
@@ -1120,7 +1121,7 @@ describe("expo with cookieCache", async () => {
 			storage.setItem("better-auth_cookie", previousValue);
 			expect(storage.getItem("better-auth_cookie")).toBe(previousValue);
 
-			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 			writes = 0;
 			failAfter = 2;
 			storage.setItem("better-auth_cookie", "c".repeat(5_000));
@@ -1157,7 +1158,7 @@ describe("expo with cookieCache", async () => {
 			await storage.setItemAsync("better-auth_cookie", previousValue);
 			writeIndex = 0;
 			failing = true;
-			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 
 			await storage.setItemAsync("better-auth_cookie", "c".repeat(5_000));
 
@@ -1186,7 +1187,7 @@ describe("expo with cookieCache", async () => {
 			await storage.setItemAsync("better-auth_cookie", "b".repeat(5_000));
 			writeIndex = 0;
 			failing = true;
-			vi.spyOn(console, "error").mockImplementation(() => {});
+			vi.spyOn(logger, "error").mockImplementation(() => {});
 
 			await storage.setItemAsync("better-auth_cookie", "c".repeat(5_000));
 			map.delete("better-auth_cookie.1.1");
@@ -1218,15 +1219,15 @@ describe("expo with cookieCache", async () => {
 			);
 		});
 
-		it("should read the previous value during a chunked overwrite", async () => {
+		it("should finish an earlier read before a chunked overwrite", async () => {
 			const storage = createAsyncStorage();
 			await storage.setItemAsync("better-auth_cookie", "a".repeat(3_000));
 			const previousValue = "b".repeat(5_000);
 			await storage.setItemAsync("better-auth_cookie", previousValue);
 			const newValue = "c".repeat(5_000);
 
-			const write = storage.setItemAsync("better-auth_cookie", newValue);
 			const read = storage.getItemAsync("better-auth_cookie");
+			const write = storage.setItemAsync("better-auth_cookie", newValue);
 			const [stored] = await Promise.all([read, write]);
 
 			expect(stored).toBe(previousValue);
@@ -1304,7 +1305,7 @@ describe("expo with cookieCache", async () => {
 					secondMap.set(name, value);
 				},
 			});
-			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 
 			const write = first.setItemAsync("better-auth_cookie", "a".repeat(5_000));
 			second.setItem("better-auth_cookie", "independent");
@@ -1330,7 +1331,7 @@ describe("expo with cookieCache", async () => {
 			const asyncStorage = storageAdapter(backingStorage);
 			const syncStorage = storageAdapter(backingStorage);
 			const asyncValue = "a".repeat(5_000);
-			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 
 			const write = asyncStorage.setItemAsync("better-auth_cookie", asyncValue);
 			syncStorage.setItem("better-auth_cookie", "b".repeat(5_000));
@@ -1399,7 +1400,7 @@ describe("expo with cookieCache", async () => {
 			plugin.getActions(undefined, { notify } as unknown as Parameters<
 				typeof plugin.getActions
 			>[1]);
-			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 
 			await applyCookieResponse(
 				plugin,
@@ -1422,7 +1423,7 @@ describe("expo with cookieCache", async () => {
 					map.set(name, value);
 				},
 			});
-			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 
 			await storage.setItemAsync("better-auth_cookie", "x".repeat(180_001));
 
@@ -1440,6 +1441,408 @@ describe("expo with cookieCache", async () => {
 			).resolves.toBeNull();
 			expect(getItem).toHaveBeenCalledTimes(1);
 			expect(getItemAsync).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11194
+	 */
+	describe("obsolete storage chunks", () => {
+		const key = "scenecutai_cookie";
+		const previousValue = JSON.stringify({
+			"better-auth.session_token": { value: "old-session-token" },
+			"better-auth.session_data": { value: "x".repeat(2_000) },
+		});
+		function createBackingStorage(map: Map<string, string>) {
+			return {
+				getItem: (name: string) => map.get(name) ?? null,
+				setItem: (name: string, value: string) => {
+					map.set(name, value);
+				},
+				getItemAsync: async (name: string) => map.get(name) ?? null,
+				setItemAsync: async (name: string, value: string) => {
+					map.set(name, value);
+				},
+			};
+		}
+
+		function pauseNextStorageRead(
+			backing: ReturnType<typeof createBackingStorage>,
+			chunkKey: string,
+		) {
+			let resume = () => {};
+			let started = () => {};
+			const paused = new Promise<void>((resolve) => {
+				resume = resolve;
+			});
+			const reading = new Promise<void>((resolve) => {
+				started = resolve;
+			});
+			const getItemAsync = backing.getItemAsync;
+			let pauseRead = true;
+			backing.getItemAsync = async (name) => {
+				if (name === chunkKey && pauseRead) {
+					pauseRead = false;
+					started();
+					await paused;
+				}
+				return getItemAsync(name);
+			};
+			return { reading, resume };
+		}
+
+		describe.each(["setItem", "setItemAsync"] as const)("%s", (method) => {
+			it("persists a short value when reading the previous marker fails", async () => {
+				const map = new Map<string, string>();
+				const backing = createBackingStorage(map);
+				backing.getItem = () => {
+					throw new Error("read unavailable");
+				};
+				backing.getItemAsync = async () => {
+					throw new Error("read unavailable");
+				};
+				const storage = storageAdapter(backing);
+				const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+				await storage[method](key, "{}");
+
+				expect(map.get(key)).toBe("{}");
+				expect(error).toHaveBeenCalledOnce();
+			});
+
+			it("clears known chunks beyond a missing chunk", async () => {
+				const map = new Map<string, string>([
+					[key, "\u0001ba-chunks:3"],
+					[`${key}.0`, "old-first"],
+					[`${key}.2`, "old-secret"],
+				]);
+				const storage = storageAdapter(createBackingStorage(map));
+				await storage[method](key, "{}");
+				expect(map.get(`${key}.2`) ?? "").toBe("");
+			});
+
+			it("clears orphaned chunks even when the first chunk is missing", async () => {
+				const map = new Map<string, string>([
+					[key, "{}"],
+					[`${key}.2`, "old-secret"],
+					[`${key}.0.2`, "old-cache"],
+				]);
+				const storage = storageAdapter(createBackingStorage(map));
+				await storage[method](key, "{}");
+				expect(map.get(`${key}.2`) ?? "").toBe("");
+				expect(map.get(`${key}.0.2`) ?? "").toBe("");
+			});
+
+			it("uses the marker to clear incomplete chunks after the initial sweep", async () => {
+				const map = new Map<string, string>();
+				const backing = createBackingStorage(map);
+				const storage = storageAdapter(backing);
+				await storage[method](key, "a".repeat(5_000));
+				map.delete(`${key}.0.1`);
+				const getItem = vi.spyOn(backing, "getItem");
+				const getItemAsync = vi.spyOn(backing, "getItemAsync");
+
+				await storage[method](key, "{}");
+
+				expect(getItem.mock.calls.length + getItemAsync.mock.calls.length).toBe(
+					1,
+				);
+				expect(map.get(`${key}.0.0`)).toBe("");
+				expect(map.get(`${key}.0.2`)).toBe("");
+			});
+
+			it.each([
+				{
+					name: "legacy migration",
+					marker: "\u0001ba-chunks:2",
+					initialValue: previousValue,
+					chunkKeys: [`${key}.0`, `${key}.1`],
+					value: previousValue.replace(
+						"old-session-token",
+						"new-session-token",
+					),
+				},
+				{
+					name: "legacy clear",
+					marker: "\u0001ba-chunks:2",
+					initialValue: previousValue,
+					chunkKeys: [`${key}.0`, `${key}.1`],
+					value: "{}",
+				},
+				{
+					name: "slotted clear with fallback",
+					marker: "\u0001ba-chunks:2:1:2",
+					initialValue: previousValue,
+					chunkKeys: [`${key}.1.0`, `${key}.1.1`, `${key}.0.0`, `${key}.0.1`],
+					value: "{}",
+				},
+				{
+					name: "a lost legacy marker",
+					marker: "{}",
+					initialValue: "{}",
+					chunkKeys: [`${key}.0`, `${key}.1`],
+					value: "{}",
+				},
+				{
+					name: "a lost slotted marker",
+					marker: "{}",
+					initialValue: "{}",
+					chunkKeys: [`${key}.1.0`, `${key}.1.1`, `${key}.0.0`, `${key}.0.1`],
+					value: "{}",
+				},
+			])("clears obsolete bytes after $name", async ({
+				marker,
+				initialValue,
+				chunkKeys,
+				value,
+			}) => {
+				const map = new Map<string, string>([[key, marker]]);
+				for (const [index, chunkKey] of chunkKeys.entries()) {
+					const start = (index % 2) * 1_800;
+					map.set(chunkKey, previousValue.slice(start, start + 1_800));
+				}
+				const storage = storageAdapter(createBackingStorage(map));
+
+				expect(storage.getItem(key)).toBe(initialValue);
+				await storage[method](key, value);
+				expect(storage.getItem(key)).toBe(value);
+				expect(chunkKeys.map((chunkKey) => map.get(chunkKey) ?? "")).toEqual(
+					chunkKeys.map(() => ""),
+				);
+			});
+
+			it("clears a reused slot's tail while preserving recovery", async () => {
+				const map = new Map<string, string>();
+				const storage = storageAdapter(createBackingStorage(map));
+				await storage[method](key, "a".repeat(5_000));
+				await storage[method](key, previousValue);
+				const nextValue = "b".repeat(2_000);
+				await storage[method](key, nextValue);
+
+				expect(storage.getItem(key)).toBe(nextValue);
+				expect(map.get(`${key}.0.2`)).toBe("");
+				map.delete(`${key}.0.0`);
+				expect(storage.getItem(key)).toBe(previousValue);
+			});
+
+			it("preserves legacy chunks when the replacement cannot be committed", async () => {
+				const map = new Map<string, string>([
+					[key, "\u0001ba-chunks:2"],
+					[`${key}.0`, previousValue.slice(0, 1_800)],
+					[`${key}.1`, previousValue.slice(1_800)],
+				]);
+				const backing = createBackingStorage(map);
+				const write = (name: string, value: string) => {
+					if (name === key) throw new Error("interrupted commit");
+					map.set(name, value);
+				};
+				backing.setItem = write;
+				backing.setItemAsync = async (name, value) => write(name, value);
+				const storage = storageAdapter(backing);
+				const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+				await storage[method](key, "b".repeat(3_000));
+
+				expect(error).toHaveBeenCalledOnce();
+				expect(storage.getItem(key)).toBe(previousValue);
+			});
+
+			it("retries interrupted cleanup without losing the committed value", async () => {
+				const map = new Map<string, string>([
+					[key, "\u0001ba-chunks:2"],
+					[`${key}.0`, previousValue.slice(0, 1_800)],
+					[`${key}.1`, previousValue.slice(1_800)],
+				]);
+				const backing = createBackingStorage(map);
+				let interrupted = false;
+				const write = (name: string, value: string) => {
+					if (name === `${key}.0` && !interrupted) {
+						interrupted = true;
+						throw new Error("interrupted cleanup");
+					}
+					map.set(name, value);
+				};
+				backing.setItem = write;
+				backing.setItemAsync = async (name, value) => write(name, value);
+				const storage = storageAdapter(backing);
+				const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+				await storage[method](key, "{}");
+				expect(error).toHaveBeenCalledOnce();
+				expect(storage.getItem(key)).toBe("{}");
+				expect(map.get(`${key}.1`)).toBe("");
+
+				await storage[method](key, "{}");
+				expect(map.get(`${key}.0`)).toBe("");
+				expect(map.get(`${key}.1`)).toBe("");
+			});
+
+			it("bounds orphan probing and skips it after successful cleanup", async () => {
+				const map = new Map<string, string>();
+				for (const prefix of [key, `${key}.0`, `${key}.1`]) {
+					for (let i = 0; i <= 100; i++) {
+						map.set(`${prefix}.${i}`, "old data");
+					}
+				}
+				const backing = createBackingStorage(map);
+				const getItem = vi.spyOn(backing, "getItem");
+				const getItemAsync = vi.spyOn(backing, "getItemAsync");
+				const storage = storageAdapter(backing);
+
+				await storage[method](key, "{}");
+				expect(getItem.mock.calls.length + getItemAsync.mock.calls.length).toBe(
+					301,
+				);
+				for (const prefix of [key, `${key}.0`, `${key}.1`]) {
+					expect(map.get(`${prefix}.0`)).toBe("");
+					expect(map.get(`${prefix}.99`)).toBe("");
+					expect(map.get(`${prefix}.100`)).toBe("old data");
+				}
+
+				getItem.mockClear();
+				getItemAsync.mockClear();
+				await storageAdapter(backing)[method](key, "{}");
+				expect(getItem.mock.calls.length + getItemAsync.mock.calls.length).toBe(
+					1,
+				);
+			});
+		});
+
+		it("allows a synchronous write while only an async read is pending", async () => {
+			const map = new Map<string, string>([[key, "previous"]]);
+			const storage = storageAdapter(createBackingStorage(map));
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+			const read = storage.getItemAsync(key);
+			storage.setItem(key, "next");
+			expect(map.get(key)).toBe("next");
+			await expect(read).resolves.toBe("next");
+			expect(error).not.toHaveBeenCalled();
+		});
+
+		it("keeps a complete read when synchronous writes reuse its slot", async () => {
+			const map = new Map<string, string>();
+			const backing = createBackingStorage(map);
+			const storage = storageAdapter(backing);
+			const other = storageAdapter(backing);
+			await storage.setItemAsync(key, previousValue);
+			const { reading, resume } = pauseNextStorageRead(backing, `${key}.0.1`);
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+			const read = storage.getItemAsync(key);
+			await reading;
+			try {
+				other.setItem(key, "b".repeat(3_000));
+				other.setItem(key, "c".repeat(3_000));
+				expect(storage.getItem(key)).toBe("c".repeat(3_000));
+			} finally {
+				resume();
+			}
+			await expect(read).resolves.toBe("c".repeat(3_000));
+			expect(error).not.toHaveBeenCalled();
+
+			map.delete(`${key}.0.1`);
+			await expect(storage.getItemAsync(key)).resolves.toBe("b".repeat(3_000));
+		});
+
+		it.each([
+			{ failure: "write", expected: previousValue, errors: 1 },
+			{ failure: "read", expected: "b".repeat(3_000), errors: 0 },
+		])("keeps a complete async read after a synchronous $failure failure", async ({
+			failure,
+			expected,
+			errors,
+		}) => {
+			const map = new Map<string, string>([
+				[key, "\u0001ba-chunks:2:1:2"],
+				[`${key}.0.0`, previousValue.slice(0, 1_800)],
+				[`${key}.0.1`, previousValue.slice(1_800)],
+			]);
+			const backing = createBackingStorage(map);
+			backing.getItem = (name) => {
+				if (failure === "read" && name === `${key}.0.0`)
+					throw new Error("read failed");
+				return map.get(name) ?? null;
+			};
+			backing.setItem = (name, value) => {
+				if (failure === "write" && name === `${key}.0.1`)
+					throw new Error("write failed");
+				map.set(name, value);
+			};
+			const { reading, resume } = pauseNextStorageRead(backing, `${key}.0.0`);
+			const storage = storageAdapter(backing);
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+			const read = storage.getItemAsync(key);
+			await reading;
+			try {
+				storage.setItem(key, "b".repeat(3_000));
+			} finally {
+				resume();
+			}
+			await expect(read).resolves.toBe(expected);
+			expect(error).toHaveBeenCalledTimes(errors);
+		});
+
+		it("continues queued writes after a read fails", async () => {
+			const map = new Map<string, string>();
+			const backing = createBackingStorage(map);
+			vi.spyOn(backing, "getItemAsync").mockRejectedValueOnce(
+				new Error("read failed"),
+			);
+			const storage = storageAdapter(backing);
+			const read = storage.getItemAsync(key);
+			const write = storage.setItemAsync(key, "next");
+			await expect(read).rejects.toThrow("read failed");
+			await write;
+			expect(storage.getItem(key)).toBe("next");
+		});
+
+		it("finishes reading before another adapter can reuse its slot", async () => {
+			const map = new Map<string, string>();
+			const backing = createBackingStorage(map);
+			const storage = storageAdapter(backing);
+			const other = storageAdapter(backing);
+			await storage.setItemAsync(key, previousValue);
+			const { reading, resume } = pauseNextStorageRead(backing, `${key}.0.1`);
+			const writes = vi.spyOn(backing, "setItemAsync");
+			const read = storage.getItemAsync(key);
+			await reading;
+			const firstWrite = other.setItemAsync(key, "b".repeat(3_000));
+			const secondWrite = other.setItemAsync(key, "c".repeat(3_000));
+			let overlappingWrites = 0;
+			try {
+				await other.setItemAsync("independent_cookie", "{}");
+				overlappingWrites = writes.mock.calls.filter(([name]) =>
+					name.startsWith(key),
+				).length;
+			} finally {
+				resume();
+			}
+			const value = await read;
+			await Promise.all([firstWrite, secondWrite]);
+			expect(overlappingWrites).toBe(0);
+			expect(value).toBe(previousValue);
+		});
+
+		it.each([
+			{ name: "legacy", marker: "\u0001ba-chunks:2", prefix: key },
+			{ name: "active", marker: "\u0001ba-chunks:2:0", prefix: `${key}.0` },
+			{ name: "fallback", marker: "\u0001ba-chunks:2:1:2", prefix: `${key}.0` },
+		])("finishes a $name read before cleanup", async ({ marker, prefix }) => {
+			const map = new Map<string, string>([
+				[key, marker],
+				[`${prefix}.0`, previousValue.slice(0, 1_800)],
+				[`${prefix}.1`, previousValue.slice(1_800)],
+			]);
+			const backing = createBackingStorage(map);
+			const { reading, resume } = pauseNextStorageRead(backing, `${prefix}.1`);
+			const storage = storageAdapter(backing);
+
+			const read = storage.getItemAsync(key);
+			await reading;
+			const write = storage.setItemAsync(key, "{}");
+			resume();
+			await expect(read).resolves.toBe(previousValue);
+			await write;
+			expect(storage.getItem(key)).toBe("{}");
 		});
 	});
 
@@ -1461,7 +1864,7 @@ describe("expo with cookieCache", async () => {
 	});
 
 	it("should log instead of throw when the backend rejects a write", async () => {
-		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const storage = storageAdapter({
 			getItem: () => null,
 			setItem: () => {
@@ -1844,6 +2247,7 @@ describe("expo session cache hydration", async () => {
 			}
 			return Promise.resolve(null);
 		});
+		const setItemAsync = vi.fn(async (_key: string, _value: string) => {});
 		const { client } = await getTestInstance(
 			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
 			{
@@ -1854,7 +2258,7 @@ describe("expo session cache hydration", async () => {
 								getItem: () => null,
 								setItem: () => {},
 								getItemAsync,
-								setItemAsync: async () => {},
+								setItemAsync,
 							},
 						}),
 					],
@@ -1907,21 +2311,25 @@ describe("expo session cache hydration", async () => {
 		const sessionCacheReads = getItemAsync.mock.calls.filter(
 			([key]) => key === "better-auth_session_data",
 		);
+		const sessionCacheWrites = setItemAsync.mock.calls.filter(
+			([key]) => key === "better-auth_session_data",
+		);
 		expect(sessionAtom.get().data).toEqual(serverSession);
-		expect(sessionCacheReads).toHaveLength(1);
+		expect(sessionCacheReads).toHaveLength(sessionCacheWrites.length + 1);
 	});
 
 	it("preserves additional fields through the cache round-trip", async () => {
 		const storage = new Map<string, string>();
 		const getItemAsync = vi.fn(async (key: string) => storage.get(key) || null);
+		const setItemAsync = vi.fn(async (key: string, value: string) => {
+			storage.set(key, value);
+		});
 		const sharedClientOptions = {
 			storage: {
 				getItem: (key: string) => storage.get(key) || null,
 				setItem: (key: string, value: string) => storage.set(key, value),
 				getItemAsync,
-				setItemAsync: async (key: string, value: string) => {
-					storage.set(key, value);
-				},
+				setItemAsync,
 			},
 		};
 		const serverConfig = {
@@ -1968,8 +2376,15 @@ describe("expo session cache hydration", async () => {
 		});
 
 		getItemAsync.mockClear();
+		setItemAsync.mockClear();
 		await coldStart.getSession();
-		expect(getItemAsync).not.toHaveBeenCalledWith("better-auth_session_data");
+		const sessionCacheReads = getItemAsync.mock.calls.filter(
+			([key]) => key === "better-auth_session_data",
+		);
+		const sessionCacheWrites = setItemAsync.mock.calls.filter(
+			([key]) => key === "better-auth_session_data",
+		);
+		expect(sessionCacheReads).toHaveLength(sessionCacheWrites.length);
 	});
 
 	it.each([
