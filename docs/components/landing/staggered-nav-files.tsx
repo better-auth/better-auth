@@ -326,9 +326,16 @@ function closeOnBlurOutside(close: () => void) {
 	};
 }
 
-function closeOnEscape(close: () => void) {
+function dismissOnEscape(
+	close: () => void,
+	triggerRef: React.RefObject<HTMLButtonElement | null>,
+) {
 	return (event: React.KeyboardEvent<HTMLElement>) => {
-		if (event.key === "Escape") close();
+		if (event.key !== "Escape") return;
+
+		event.preventDefault();
+		triggerRef.current?.focus();
+		close();
 	};
 }
 
@@ -339,6 +346,8 @@ export function StaggeredNavFiles() {
 	const [productsOpen, setProductsOpen] = useState(false);
 	const resourcesTimeout = useRef<NodeJS.Timeout>(undefined);
 	const productsTimeout = useRef<NodeJS.Timeout>(undefined);
+	const resourcesTriggerRef = useRef<HTMLButtonElement>(null);
+	const productsTriggerRef = useRef<HTMLButtonElement>(null);
 
 	useEffect(() => {
 		document.body.style.overflow =
@@ -593,11 +602,16 @@ export function StaggeredNavFiles() {
 						onMouseLeave={closeProducts}
 						onFocus={openProducts}
 						onBlur={closeOnBlurOutside(() => setProductsOpen(false))}
-						onKeyDown={closeOnEscape(() => setProductsOpen(false))}
+						onKeyDown={dismissOnEscape(
+							() => setProductsOpen(false),
+							productsTriggerRef,
+						)}
 					>
 						<button
+							ref={productsTriggerRef}
 							type="button"
 							aria-expanded={productsOpen}
+							onClick={() => setProductsOpen((open) => !open)}
 							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
 								isProductsPage
 									? `bg-background border-b-2 ${activeTabBorderClass}`
@@ -723,11 +737,16 @@ export function StaggeredNavFiles() {
 						onMouseLeave={closeResources}
 						onFocus={openResources}
 						onBlur={closeOnBlurOutside(() => setResourcesOpen(false))}
-						onKeyDown={closeOnEscape(() => setResourcesOpen(false))}
+						onKeyDown={dismissOnEscape(
+							() => setResourcesOpen(false),
+							resourcesTriggerRef,
+						)}
 					>
 						<button
+							ref={resourcesTriggerRef}
 							type="button"
 							aria-expanded={resourcesOpen}
+							onClick={() => setResourcesOpen((open) => !open)}
 							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer transition-colors duration-150 ${
 								isResourcePage
 									? `bg-background border-b-2 ${activeTabBorderClass}`
