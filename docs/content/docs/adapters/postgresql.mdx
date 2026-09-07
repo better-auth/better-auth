@@ -139,6 +139,38 @@ ALTER USER your_user SET search_path TO auth;
 
 After setting this, reconnect to apply the changes.
 
+### Option 4: Set the schema name
+
+Pass the `schemaName` option together with your dialect:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { PostgresDialect } from "kysely";
+import { Pool } from "pg";
+
+export const auth = betterAuth({
+  database: {
+    dialect: new PostgresDialect({
+      pool: new Pool({
+        connectionString: "postgres://user:password@localhost:5432/database",
+      }),
+    }),
+    type: "postgres",
+    schemaName: "auth",
+  },
+});
+```
+
+`generate` command will generate a migration file for the specified schema.
+
+```sql
+create schema if not exists "auth";
+
+create table "auth"."user" (...);
+create table "auth"."session" (..., "userId" text not null references "auth"."user" ("id") on delete cascade);
+...
+```
+
 ### Prerequisites
 
 Before using a non-default schema, ensure:

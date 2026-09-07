@@ -23,6 +23,7 @@ import type {
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
 	CreateIndexBuilder,
+	CreateSchemaBuilder,
 	CreateTableBuilder,
 	Kysely,
 	RawBuilder,
@@ -30,7 +31,10 @@ import type {
 import { sql } from "kysely";
 import { getSchemaFromAuthTables } from "./get-schema";
 import type { MigrationDatabase } from "./migration-database";
-import { getMigrationDatabase } from "./migration-database";
+import {
+	getMigrationDatabase,
+	qualifyMigrationTable,
+} from "./migration-database";
 import type {
 	AccountIdentityMigrationAssessment,
 	MigrateFrom16Options,
@@ -934,13 +938,17 @@ async function getMigrationsWithDatabase(
 		kysely: db,
 		databaseType: dbType,
 		introspectIndexes,
+		schemaName,
 	} = migrationDatabase;
+	// Raw statements are not covered by the schema `kysely` is bound to.
+	const qualifiedTable = (table: string) =>
+		qualifyMigrationTable(table, schemaName);
 
 	let currentSchema = dbType === "mssql" ? await getMssqlSchema(db) : "public";
 	if (dbType === "postgres") {
-		currentSchema = await getPostgresSchema(db);
+		currentSchema = schemaName ?? (await getPostgresSchema(db));
 		logger.debug(
-			`PostgreSQL migration: Using schema '${currentSchema}' (from search_path)`,
+			`PostgreSQL migration: Using schema '${currentSchema}' (${schemaName ? "from database.schemaName" : "from search_path"})`,
 		);
 
 		// Verify the schema exists
@@ -957,9 +965,15 @@ async function getMigrationsWithDatabase(
 			const schemaExists =
 				schemaCheck.rows[0]?.schema_name ?? schemaCheck.rows[0]?.schemaName;
 			if (!schemaExists) {
-				logger.warn(
-					`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
-				);
+				if (schemaName) {
+					logger.debug(
+						`Schema '${currentSchema}' does not exist yet. The migration creates it before creating tables.`,
+					);
+				} else {
+					logger.warn(
+						`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
+					);
+				}
 			}
 		} catch (error) {
 			logger.debug(
@@ -1067,7 +1081,8 @@ async function getMigrationsWithDatabase(
 			authTables,
 			existingTables: tableMetadata,
 			legacyTableNames: inspectionOptions.legacyTableNames,
-			tableContainsRows: (table) => tableContainsRows(db, table),
+			tableContainsRows: (table) =>
+				tableContainsRows(db, qualifiedTable(table)),
 		})),
 	);
 
@@ -1187,7 +1202,9 @@ async function getMigrationsWithDatabase(
 				logger.warn(
 					`Column "${fieldName}" on table "${key}" stays nullable while the schema declares the field required, so existing rows can still hold null. Backfill every row for this column and enforce NOT NULL to remove the drift.`,
 				);
-				if (await columnContainsNullValues(db, key, fieldName)) {
+				if (
+					await columnContainsNullValues(db, qualifiedTable(key), fieldName)
+				) {
 					requiredColumnsNeedingBackfill.push(fieldName);
 				} else {
 					requiredColumnsNeedingConstraint.push(fieldName);
@@ -1228,7 +1245,7 @@ async function getMigrationsWithDatabase(
 					(blocker) =>
 						blocker.code === "retired-table-data" && blocker.table === key,
 				) &&
-				(await tableContainsRows(db, key))
+				(await tableContainsRows(db, qualifiedTable(key)))
 			) {
 				requiredColumnsNeedingBackfill.push(...requiredColumnsWithoutBackfill);
 				for (const fieldName of requiredColumnsWithoutBackfill) {
@@ -1238,7 +1255,7 @@ async function getMigrationsWithDatabase(
 				}
 				if (
 					requiredUniqueColumnsWithSharedDefault.length > 0 &&
-					(await getTableRowCount(db, key)) > 1
+					(await getTableRowCount(db, qualifiedTable(key))) > 1
 				) {
 					requiredColumnsNeedingBackfill.push(
 						...requiredUniqueColumnsWithSharedDefault,
@@ -1268,9 +1285,14 @@ async function getMigrationsWithDatabase(
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
+		| CreateSchemaBuilder
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
+
+	if (schemaName && toBeCreated.length > 0) {
+		migrations.push(db.schema.createSchema(schemaName).ifNotExists());
+	}
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
 	const useNumberId = config.advanced?.database?.generateId === "serial";

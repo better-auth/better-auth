@@ -8,6 +8,12 @@ import type {
 	Kysely as KyselyInstance,
 	QueryCompiler,
 } from "kysely";
+import {
+	Kysely,
+	PostgresAdapter,
+	PostgresIntrospector,
+	PostgresQueryCompiler,
+} from "kysely";
 import { describe, expect, it, vi } from "vitest";
 import { createD1IndexIntrospector } from "./d1-sqlite-dialect";
 import { createKyselyAdapter } from "./dialect";
@@ -37,6 +43,16 @@ class UnknownDialect implements Dialect {
 	createIntrospector(): DatabaseIntrospector {
 		return {} as DatabaseIntrospector;
 	}
+}
+
+function postgresDialect(): Dialect {
+	return {
+		createAdapter: () => new PostgresAdapter(),
+		createDriver: () => new StubDriver(),
+		createIntrospector: (db: KyselyInstance<unknown>) =>
+			new PostgresIntrospector(db),
+		createQueryCompiler: () => new PostgresQueryCompiler(),
+	};
 }
 
 function fakeD1Database() {
@@ -158,5 +174,75 @@ describe("D1 index introspection", () => {
 				valid: true,
 			},
 		]);
+	});
+});
+
+describe("createKyselyAdapter schema namespace", () => {
+	it("qualifies every statement with the configured PostgreSQL schema", async () => {
+		const { kysely, schemaName } = await createKyselyAdapter({
+			database: {
+				dialect: postgresDialect(),
+				schemaName: "auth",
+				type: "postgres",
+			},
+		});
+
+		expect(schemaName).toBe("auth");
+		expect(kysely!.selectFrom("user").select("id").compile().sql).toBe(
+			'select "id" from "auth"."user"',
+		);
+	});
+
+	it("leaves statements unqualified when no schema is configured", async () => {
+		const { kysely, schemaName } = await createKyselyAdapter({
+			database: { dialect: postgresDialect(), type: "postgres" },
+		});
+
+		expect(schemaName).toBeUndefined();
+		expect(kysely!.selectFrom("user").select("id").compile().sql).toBe(
+			'select "id" from "user"',
+		);
+	});
+
+	it("qualifies statements for a caller-supplied Kysely instance", async () => {
+		const db = new Kysely<Record<string, never>>({
+			dialect: postgresDialect(),
+		});
+
+		const { kysely } = await createKyselyAdapter({
+			database: { db, schemaName: "auth", type: "postgres" },
+		});
+
+		expect(kysely!.selectFrom("user").select("id").compile().sql).toBe(
+			'select "id" from "auth"."user"',
+		);
+	});
+
+	// Only PostgreSQL migration inspection is schema-aware, so an accepted
+	// schema on another dialect would create the tables somewhere else.
+	it("refuses a schema on a dialect that does not support it", async () => {
+		await expect(
+			createKyselyAdapter({
+				database: {
+					dialect: postgresDialect(),
+					schemaName: "auth",
+					type: "mysql",
+				},
+			}),
+		).rejects.toThrow(
+			'`database.schemaName` is only supported on PostgreSQL, but the configured database type is "mysql".',
+		);
+	});
+
+	it("refuses an empty schema name", async () => {
+		await expect(
+			createKyselyAdapter({
+				database: {
+					dialect: postgresDialect(),
+					schemaName: "",
+					type: "postgres",
+				},
+			}),
+		).rejects.toThrow("`database.schemaName` must be a non-empty schema name.");
 	});
 });

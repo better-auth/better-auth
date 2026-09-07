@@ -50,11 +50,19 @@ export interface MigrationDatabase {
 	introspectIndexes?: DatabaseIndexIntrospector | undefined;
 	kysely: Kysely<unknown>;
 	recordWriter: Pick<DBTransactionAdapter<BetterAuthOptions>, "create">;
+	schemaName?: string | undefined;
 	transaction?:
 		| (<Result>(
 				callback: (database: MigrationDatabase) => Promise<Result>,
 		  ) => Promise<Result>)
 		| undefined;
+}
+
+export function qualifyMigrationTable(
+	table: string,
+	schemaName: string | undefined,
+) {
+	return schemaName ? `${schemaName}.${table}` : table;
 }
 
 function getInspectionAuthTables(config: BetterAuthOptions) {
@@ -240,6 +248,7 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 				directDatabase.kysely,
 				directDatabase.databaseType,
 			),
+			schemaName: directDatabase.schemaName,
 		};
 		if (directDatabase.transaction === true) {
 			database.transaction = async (callback) =>
@@ -257,6 +266,7 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 							transaction as unknown as Kysely<unknown>,
 							database.databaseType,
 						),
+						schemaName: database.schemaName,
 					}),
 				);
 		}

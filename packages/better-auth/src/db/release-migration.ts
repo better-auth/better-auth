@@ -19,7 +19,10 @@ import type { GenericOAuthConfig } from "../plugins/generic-oauth/types";
 import { getAdapter } from "./adapter-kysely";
 import { getSchemaFromAuthTables } from "./get-schema";
 import type { MigrationDatabase } from "./migration-database";
-import { getMigrationDatabase } from "./migration-database";
+import {
+	getMigrationDatabase,
+	qualifyMigrationTable,
+} from "./migration-database";
 
 // cspell:ignore conindid indexrelid
 
@@ -593,7 +596,7 @@ export async function inspectAccountIdentityMigration(
 			${sql.ref(accountIdColumn)} AS "providerAccountId",
 			${sql.ref(providerIdColumn)} AS "providerId",
 			${columns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer"
-		FROM ${sql.table(accountTable)}
+		FROM ${sql.table(qualifyMigrationTable(accountTable, database.schemaName))}
 	`.execute(database.kysely);
 	const accounts = rows.rows;
 	if (accounts.length === 0) return emptyAssessment;
