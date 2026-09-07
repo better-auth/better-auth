@@ -500,6 +500,7 @@ describe("SCIM managed connections", () => {
 		).rejects.toMatchObject({ statusCode: 400 });
 		for (const creationRequestId of [
 			"too-short",
+			"😎".repeat(8),
 			"x".repeat(256),
 			"                ",
 		]) {

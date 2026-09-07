@@ -29,6 +29,10 @@ import {
 	sql,
 } from "drizzle-orm";
 import {
+	buildRelationKeysByModel,
+	getOneToOneRelationKey,
+} from "../join-relation-key";
+import {
 	escapedLike,
 	insensitiveEq,
 	insensitiveInArray,
@@ -264,6 +268,7 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
+	const relationKeysByModel = buildRelationKeysByModel(db._?.relations);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
@@ -282,13 +287,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			}
 
 			function getSchema(model: string) {
-				const schema = config.schema || db._.fullSchema;
-				if (!schema) {
-					throw new BetterAuthError(
-						"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
-					);
-				}
-				const schemaModel = schema[model];
+				const schemaModel =
+					config.schema?.[model] ??
+					db._?.relations?.[model]?.table ??
+					db._?.fullSchema?.[model];
 				if (!schemaModel) {
 					throw new BetterAuthError(
 						`[# Drizzle Adapter]: The model "${model}" was not found in the schema object. Please pass the schema directly to the adapter options.`,
@@ -335,14 +337,24 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				return null;
 			}
-			/**
-			 * Mirror the schema generator's relation-key naming. One-to-one keeps
-			 * the singular model name. One-to-many is pluralized unless the model
-			 * already ends in "s" or `usePlural` keeps the schema keys as-is.
-			 */
-			function getJoinRelationKey(model: string, isUnique: boolean) {
-				if (isUnique || config.usePlural || model.endsWith("s")) return model;
-				return `${model}s`;
+			function getJoinRelationKey(
+				baseModel: string,
+				joinModel: string,
+				relationKeys: ReadonlySet<string> | undefined,
+				isUnique: boolean,
+			) {
+				if (isUnique) {
+					return getOneToOneRelationKey({
+						baseModel,
+						joinModel,
+						relationKeys,
+						schema: baSchema,
+						getDefaultModelName,
+					});
+				}
+				// Match the Relations v2 generator rule: preserve a trailing "s" when usePlural is disabled.
+				if (config.usePlural || joinModel.endsWith("s")) return joinModel;
+				return `${joinModel}s`;
 			}
 			const withReturning = async (
 				model: string,
@@ -705,19 +717,28 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: { key: string; target: string }[] = [];
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
 								const isUnique = joinAttr.relation === "one-to-one";
-								const relationKey = getJoinRelationKey(model, isUnique);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
 								includes[relationKey] = isUnique ? true : { limit };
-								if (!isUnique) {
-									pluralJoinResults.push({ key: relationKey, target: model });
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
 								}
 							}
 							const clause = convertNewWhereClause(where, model);
@@ -738,8 +759,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const { key, target } of pluralJoinResults) {
-									if (key === target) continue;
+								for (const { key, target } of renamedJoinResults) {
 									res[target] = res[key];
 									delete res[key];
 								}
@@ -785,19 +805,29 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number; offset?: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: { key: string; target: string }[] = [];
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const isUnique = joinAttr.relation === "one-to-one";
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
-								const relationKey = getJoinRelationKey(model, isUnique);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
 								includes[relationKey] = isUnique ? true : { limit };
-								if (!isUnique)
-									pluralJoinResults.push({ key: relationKey, target: model });
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
+								}
 							}
 							let orderBy: Record<string, "asc" | "desc"> | undefined =
 								undefined;
@@ -828,8 +858,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const { key, target } of pluralJoinResults) {
-										if (key === target) continue;
+									for (const { key, target } of renamedJoinResults) {
 										item[target] = item[key];
 										delete item[key];
 									}

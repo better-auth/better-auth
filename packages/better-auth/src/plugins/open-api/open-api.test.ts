@@ -262,6 +262,19 @@ const wrapperSemanticsPlugin = {
 					nonOptional: z.string().optional().nonoptional(),
 					unionOptional: z.union([z.string(), z.undefined()]),
 					unknownPayload: z.unknown(),
+					anyPayload: z.any(),
+					undefinedPayload: z.undefined(),
+					voidPayload: z.void(),
+					caughtPayload: z.string().catch("caught-value"),
+					caughtOptional: z.string().optional().catch("caught-value"),
+					preprocessedOptional: z.preprocess(
+						(value) => value,
+						z.string().optional(),
+					),
+					intersectionOptional: z.intersection(
+						z.string().optional(),
+						z.string().optional(),
+					),
 				}),
 			},
 			async () => ({ success: true }),
@@ -1022,7 +1035,18 @@ describe("open-api", async () => {
 		expect(requestBody.required).toBe(true);
 
 		const requestBodySchema = requestBody.content["application/json"].schema;
-		expect(requestBodySchema.required).toEqual(["nonOptional"]);
+		expect(new Set(requestBodySchema.required)).toEqual(
+			new Set([
+				"nonOptional",
+				"unionOptional",
+				"unknownPayload",
+				"anyPayload",
+				"undefinedPayload",
+				"voidPayload",
+				"caughtPayload",
+				"intersectionOptional",
+			]),
+		);
 		expect(wrapperDefaultFactoryCallCount).toBe(0);
 
 		expect(
@@ -1047,6 +1071,24 @@ describe("open-api", async () => {
 			"string",
 		);
 		expect(getSchemaProperty(requestBodySchema, "unknownPayload")).toEqual({});
-		expect(requestBodySchema.required).not.toContain("unknownPayload");
+		expect(getSchemaProperty(requestBodySchema, "anyPayload")).toEqual({});
+		expect(getSchemaProperty(requestBodySchema, "undefinedPayload")).toEqual(
+			{},
+		);
+		expect(getSchemaProperty(requestBodySchema, "voidPayload")).toEqual({});
+		expect(getSchemaProperty(requestBodySchema, "caughtPayload").type).toBe(
+			"string",
+		);
+		expect(getSchemaProperty(requestBodySchema, "caughtOptional").type).toBe(
+			"string",
+		);
+		expect(
+			getSchemaProperty(requestBodySchema, "preprocessedOptional").type,
+		).toBe("string");
+		expect(
+			getSchemaProperty(requestBodySchema, "intersectionOptional").allOf,
+		).toBeDefined();
+		expect(requestBodySchema.required).not.toContain("caughtOptional");
+		expect(requestBodySchema.required).not.toContain("preprocessedOptional");
 	});
 });

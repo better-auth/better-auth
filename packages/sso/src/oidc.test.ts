@@ -162,110 +162,6 @@ describe("SSO", async () => {
 		).rejects.toMatchObject({ status: 400 });
 	});
 
-	it("reuses one account when two provider aliases authenticate the same issuer subject", async () => {
-		const { headers: adminHeaders } = await signInWithTestUser();
-		const providerAliases = ["workforce-browser", "workforce-desktop"] as const;
-		const issuer = server.issuer.url!;
-		const accountId = "shared-workforce-subject";
-		const originalUserInfoListeners =
-			server.service.listeners("beforeUserinfo");
-		const originalTokenListeners =
-			server.service.listeners("beforeTokenSigning");
-		let profileRevision = 0;
-
-		server.service.removeAllListeners("beforeUserinfo");
-		server.service.removeAllListeners("beforeTokenSigning");
-		server.service.on("beforeUserinfo", (userInfoResponse) => {
-			profileRevision += 1;
-			userInfoResponse.body = {
-				sub: accountId,
-				employee_id: `mutable-employee-id-${profileRevision}`,
-				email: "shared-workforce@example.com",
-				name: "Shared Workforce User",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
-		});
-		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.sub = accountId;
-			token.payload.email = "shared-workforce@example.com";
-			token.payload.email_verified = true;
-			token.payload.name = "Shared Workforce User";
-		});
-
-		try {
-			for (const providerId of providerAliases) {
-				await auth.api.registerSSOProvider({
-					body: {
-						issuer,
-						domain: `${providerId}.example.com`,
-						providerId,
-						oidcConfig: {
-							clientId: "test",
-							clientSecret: "test",
-							discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
-						},
-					},
-					headers: adminHeaders,
-				});
-			}
-
-			const signInWithAlias = async (
-				providerId: (typeof providerAliases)[number],
-			) => {
-				const authorizationHeaders = new Headers();
-				const authorization = await authClient.signIn.sso({
-					providerId,
-					callbackURL: "/dashboard",
-					fetchOptions: {
-						throw: true,
-						onSuccess: cookieSetter(authorizationHeaders),
-					},
-				});
-				const callback = await simulateOAuthFlow(
-					authorization.url,
-					authorizationHeaders,
-				);
-				expect(callback.callbackURL).toContain("/dashboard");
-				const session = await authClient.getSession({
-					fetchOptions: { headers: callback.headers },
-				});
-				return { session, headers: callback.headers };
-			};
-
-			const firstSignIn = await signInWithAlias(providerAliases[0]);
-			const secondSignIn = await signInWithAlias(providerAliases[1]);
-
-			expect(secondSignIn.session.data?.user.id).toBe(
-				firstSignIn.session.data?.user.id,
-			);
-
-			const accounts = await authClient.listAccounts({
-				fetchOptions: { headers: secondSignIn.headers },
-			});
-			const matchingAccounts = accounts.data?.filter(
-				(account) =>
-					account.issuer === issuer && account.accountId === accountId,
-			);
-			expect(matchingAccounts).toEqual([
-				expect.objectContaining({
-					issuer,
-					accountId,
-					providerId: providerAliases[1],
-				}),
-			]);
-		} finally {
-			server.service.removeAllListeners("beforeUserinfo");
-			server.service.removeAllListeners("beforeTokenSigning");
-			for (const listener of originalUserInfoListeners) {
-				server.service.on("beforeUserinfo", listener);
-			}
-			for (const listener of originalTokenListeners) {
-				server.service.on("beforeTokenSigning", listener);
-			}
-		}
-	});
-
 	it("should fail to register a new SSO provider with invalid issuer", async () => {
 		const { headers } = await signInWithTestUser();
 
@@ -2456,7 +2352,10 @@ describe("SSO OIDC hook rejection redirect", async () => {
 		fetchOptions: { customFetchImpl },
 	});
 
-	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10022
+	 */
+	it("should preserve the errorCallbackURL query and fragment when a session hook throws", async () => {
 		const { headers: adminHeaders } = await signInWithTestUser();
 		await auth.api.registerSSOProvider({
 			body: {
@@ -2484,7 +2383,8 @@ describe("SSO OIDC hook rejection redirect", async () => {
 		const res = await authClient.signIn.sso({
 			providerId: "hook-reject",
 			callbackURL: "https://frontend.example.com/dashboard",
-			errorCallbackURL: "https://frontend.example.com/auth-error",
+			errorCallbackURL:
+				"https://frontend.example.com/auth-error?source=sso#retry",
 			fetchOptions: {
 				throw: true,
 				onSuccess: cookieSetter(signInHeaders),
@@ -2513,10 +2413,12 @@ describe("SSO OIDC hook rejection redirect", async () => {
 		const url = new URL(callbackURL);
 		expect(url.origin).toBe("https://frontend.example.com");
 		expect(url.pathname).toBe("/auth-error");
+		expect(url.searchParams.get("source")).toBe("sso");
 		expect(url.searchParams.get("error")).toBe("HOOK_REJECTED");
 		expect(url.searchParams.get("error_description")).toBe(
 			"SSO hook rejected this user",
 		);
+		expect(url.hash).toBe("#retry");
 	});
 });
 

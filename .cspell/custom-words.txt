@@ -27,3 +27,6 @@ rethrowing
 dedupe
 misrouting
 unpair
+unconfigured
+localisprimary
+untriaged

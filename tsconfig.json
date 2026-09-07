@@ -76,6 +76,9 @@
       "path": "./packages/redis-storage/tsconfig.json"
     },
     {
+      "path": "./packages/release-tooling/tsconfig.json"
+    },
+    {
       "path": "./packages/scim/tsconfig.json"
     },
     {

@@ -1,4 +1,6 @@
 {
   "title": "API Key",
-  "pages": ["index", "advanced", "reference"]
+  "icon": "pluginsAPIKey",
+  "pagesIndex": "index",
+  "pages": ["advanced", "reference", "..."]
 }

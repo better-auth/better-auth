@@ -1,5 +1,6 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
+import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
 import {
@@ -15,7 +16,26 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
-	const authContext = initFn(options);
+	const authContext = initFn(options).then((ctx) => {
+		const validateSchema = ctx.options.advanced?.database?.validateSchema;
+		if (!ctx.checkSchema && validateSchema !== false) {
+			const level = validateSchema === true ? "warn" : "debug";
+			ctx.logger[level](
+				`Schema validation is not available for adapter "${ctx.adapter.id}". Skipping schema validation. Database operations will proceed normally.`,
+			);
+		}
+		const pendingSchemaCheck = ctx.checkSchema?.();
+		if (pendingSchemaCheck) {
+			void pendingSchemaCheck.catch((error: unknown) => {
+				ctx.logger.error(
+					error instanceof SchemaMismatchError
+						? error.message
+						: "Could not validate the database schema. Check your database connection.",
+				);
+			});
+		}
+		return ctx;
+	});
 	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {

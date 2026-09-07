@@ -138,6 +138,14 @@ describe("anonymous", async () => {
 		expect(session.data?.user.isAnonymous).toBe(true);
 	});
 
+	it("uses a namespaced placeholder email by default", async () => {
+		const result = await client.signIn.anonymous();
+
+		expect(result.data?.user.email).toMatch(
+			/^[^@]+@anonymous\.placeholder\.invalid$/,
+		);
+	});
+
 	it("should reject anonymous sign-in when validateUserInfo returns error", async () => {
 		const { client } = await getTestInstance(
 			{

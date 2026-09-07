@@ -300,6 +300,9 @@ export const router = <Option extends BetterAuthOptions>(
 				return new Response("Not Found", { status: 404 });
 			}
 
+			const pendingSchemaCheck = ctx.checkSchema?.();
+			if (pendingSchemaCheck) await pendingSchemaCheck;
+
 			let currentRequest = req;
 
 			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);

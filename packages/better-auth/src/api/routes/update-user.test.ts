@@ -1093,7 +1093,6 @@ describe("credential identity across email changes", async () => {
 		expect(accountsBefore).toHaveLength(1);
 		expect(accountsBefore[0]).toMatchObject({
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 
@@ -1122,7 +1121,6 @@ describe("credential identity across email changes", async () => {
 		expect(accountsAfter[0]).toMatchObject({
 			id: accountsBefore[0]!.id,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 	});

@@ -18,6 +18,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - ALWAYS use `pnpm` (never npm, yarn, or bun)
 - NEVER run `pnpm test` (runs all packages). Use `vitest path/to/test -t <pattern>`
 - Type check: `pnpm typecheck`
+- After changing a dependency version in `package.json` or `pnpm-workspace.yaml`, run `pnpm install --lockfile-only` from the affected workspace root to avoid unrelated lockfile updates. Verify with `pnpm install --frozen-lockfile`. Nested `demo/*` workspaces have separate lockfiles.
 - Formatting/linting runs automatically on commit (Lefthook + Biome). No need to run manually.
 
 ## Writing Code
@@ -31,6 +32,23 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - Use `node:` protocol for Node.js built-ins (e.g. `node:crypto`)
 - JSDoc comments for public APIs
 - Plugins should be as independent as possible. When working on a plugin, prefer modifying the plugin over changing core.
+
+### URL Composition
+
+- When appending query parameters to callback or redirect URLs, use `appendQueryParams` from `@better-auth/core/utils/url`. Keep origin and trust validation separate.
+
+```ts
+const params = new URLSearchParams({ error });
+const redirectURL = appendQueryParams(errorURL, params);
+
+throw ctx.redirect(redirectURL);
+```
+
+### Placeholder Emails
+
+`User.email` is currently required and unique, which is a limitation of the current architecture.
+
+When a flow must synthesize an email, use `createPlaceholderEmail` with a stable identifier and namespace. Keep placeholder emails unverified, and preserve flows that delegate generation to user code.
 
 ## Issue Triage and Architecture
 
@@ -50,7 +68,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - NEVER create separate clients with `createAuthClient()` in tests
 - Default test DB is SQLite in-memory; use `testWith` for other databases
 - Adapter tests need Docker: `docker compose up -d`
-- Regression tests: add `@see` comment with issue URL above `it()` or `describe()`:
+- Regression tests: use `@see` for relevant issues or authoritative sources. Do not reference the current pull request or its review comments:
   ```typescript
   /**
    * @see https://github.com/better-auth/better-auth/issues/{issue_number}
@@ -59,6 +77,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
     // ...
   });
   ```
+- Put a shared `@see` above a focused `describe()` when multiple regression tests share the same reference. For a standalone regression test, put it above `it()`.
 
 ## Important Development Notes
 

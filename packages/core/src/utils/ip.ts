@@ -2,6 +2,9 @@ import * as z from "zod";
 import { isDevelopment, isTest } from "../env";
 import type { BetterAuthOptions } from "../types";
 
+const ipv4Schema = z.ipv4();
+const ipv6Schema = z.ipv6();
+
 /**
  * Normalizes an IP address for consistent rate limiting.
  *
@@ -27,14 +30,15 @@ interface NormalizeIPOptions {
  * Checks if an IP is valid IPv4 or IPv6
  */
 export function isValidIP(ip: string): boolean {
-	return z.ipv4().safeParse(ip).success || z.ipv6().safeParse(ip).success;
+	return isIPv4(ip) || isIPv6(ip);
 }
 
-/**
- * Checks if an IP is IPv6
- */
+function isIPv4(ip: string): boolean {
+	return z.validate(ipv4Schema, ip);
+}
+
 function isIPv6(ip: string): boolean {
-	return z.ipv6().safeParse(ip).success;
+	return z.validate(ipv6Schema, ip);
 }
 
 /**
@@ -48,7 +52,7 @@ function extractIPv4FromMapped(ipv6: string): string | null {
 	if (lower.startsWith("::ffff:")) {
 		const ipv4Part = lower.substring(7);
 		// Check if it's a valid IPv4
-		if (z.ipv4().safeParse(ipv4Part).success) {
+		if (isIPv4(ipv4Part)) {
 			return ipv4Part;
 		}
 	}
@@ -57,7 +61,7 @@ function extractIPv4FromMapped(ipv6: string): string | null {
 	const parts = ipv6.split(":");
 	if (parts.length === 7 && parts[5]?.toLowerCase() === "ffff") {
 		const ipv4Part = parts[6];
-		if (ipv4Part && z.ipv4().safeParse(ipv4Part).success) {
+		if (ipv4Part && isIPv4(ipv4Part)) {
 			return ipv4Part;
 		}
 	}
@@ -176,7 +180,7 @@ export function normalizeIP(
 	options: NormalizeIPOptions = {},
 ): string {
 	// IPv4 addresses are already normalized
-	if (z.ipv4().safeParse(ip).success) {
+	if (isIPv4(ip)) {
 		return ip.toLowerCase();
 	}
 
@@ -201,7 +205,7 @@ export function normalizeIP(
  * Raw bytes of an IP for CIDR comparison. Returns `null` for an invalid IP.
  */
 function ipToBytes(ip: string): Uint8Array | null {
-	if (z.ipv4().safeParse(ip).success) {
+	if (isIPv4(ip)) {
 		return Uint8Array.from(ip.split(".").map((octet) => Number(octet)));
 	}
 	if (!isIPv6(ip)) {

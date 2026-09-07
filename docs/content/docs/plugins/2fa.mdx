@@ -1,4 +1,6 @@
 ---
+icon: plugins2FA
+sidebarTitle: "Two Factor"
 title: Two-Factor Authentication (2FA)
 description: Enhance your app's security with two-factor authentication.
 ---
@@ -116,6 +118,10 @@ When `method` is `"totp"` (default):
 
 * Returns `{ method: "totp", totpURI, backupCodes }`. Use `totpURI` to display a QR code.
 * By default, `twoFactorEnabled` remains `false` until the user verifies a TOTP code. When the server plugin is configured with `skipVerificationOnEnable: true`, TOTP is enabled without enrollment-code verification. See [verifying TOTP](#totp).
+
+<Callout>
+  Calling `twoFactor.enable` when the user already has a verified TOTP authenticator returns `TOTP_ALREADY_ENABLED`. Disable the current authenticator before starting a new enrollment.
+</Callout>
 
 When `method` is `"otp"`:
 

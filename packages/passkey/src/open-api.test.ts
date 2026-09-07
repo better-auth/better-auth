@@ -39,6 +39,16 @@ describe("passkey open-api", async () => {
 		expect(operation.responses["200"].parameters).toBeUndefined();
 	});
 
+	it("should require the registration response in the request body", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const requestSchema =
+			paths["/passkey/verify-registration"].post.requestBody.content[
+				"application/json"
+			].schema;
+		expect(requestSchema.required).toContain("response");
+	});
+
 	it("should describe the optional registration session response", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
