@@ -84,44 +84,59 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
 **The account schema is unchanged from 1.6.** No column needs to be added.
 
 <Callout type="warn">
-  Only databases that ran 1.7.0 through 1.7.2 need the steps below. New rows no longer write `issuer`, so a `NOT NULL` column rejects every sign-up and account link until you relax it.
+  Databases created or migrated with 1.7.0 through 1.7.2 need the cleanup below, including preview builds that stored synthetic issuers with `identityStrategy: "provider-id"`. Remove `account.identityStrategy` from preview configurations; 1.7.3 no longer supports it. A required `issuer` column rejects new account writes, and schema checks can also block existing sign-ins and session requests.
 </Callout>
 
 <Steps>
   <Step>
-    #### Check whether the column is there
+    #### Inspect and prepare
+
+    Inspect the account table's columns and indexes using your database tools. For SQL databases, this query shows the columns without reading account data:
 
     ```sql
-    SELECT * FROM account LIMIT 0;
+    SELECT * FROM account WHERE 1 = 0;
     ```
 
-    If the result has no `issuer` column, you are done. A 1.6 database whose `account` table already had rows could not take the column, because a `NOT NULL` column with no default cannot be added to a populated table.
+    If neither the `issuer` column nor its old index exists, no issuer schema cleanup is needed. If you already dropped the column on MySQL, check whether the old index survived on `accountId` alone.
+
+    Back up the database, including existing issuer values, and rehearse cleanup on a restored copy. Resolve [duplicate account keys](#check-for-duplicate-account-keys) and review [connections that shared an account](#recover-connections-that-shared-an-account) before changing the live database.
   </Step>
 
   <Step>
     #### Relax the constraint
 
-    Dropping the constraint is enough, and it is reversible. Dropping the column is separate cleanup you can do whenever.
+    Pause authentication and background writes during the cutover. Remove the issuer index, then make the column nullable or drop it. Keeping it nullable preserves existing issuer values, but it does not make a package downgrade safe once new accounts have been written without them.
 
     <Callout type="warn">
       Drop the index before the column. MySQL keeps an index whose column disappears and rebuilds it on the remaining ones, turning the compound unique index into a unique constraint on `accountId` alone. That rejects a user who holds the same account ID at two providers.
     </Callout>
 
-    <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle", "MongoDB"]}>
+    <Tabs items={["Postgres", "MySQL", "SQL Server", "SQLite", "Prisma and Drizzle", "MongoDB"]}>
       <Tab value="Postgres">
         ```sql
+        DROP INDEX "account_issuer_accountId_uidx";
         ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL;
-        DROP INDEX account_issuer_accountId_uidx;
         ```
       </Tab>
 
-      <Tab value="MySQL and SQL Server">
+      <Tab value="MySQL">
+        Keep the column's existing type, length, and collation. This example assumes `VARCHAR(255)`:
+
         ```sql
-        ALTER TABLE account MODIFY issuer VARCHAR(255) NULL;
         DROP INDEX account_issuer_accountId_uidx ON account;
+        ALTER TABLE account MODIFY issuer VARCHAR(255) NULL;
         ```
 
-        Outside strict mode MySQL never rejected the insert. It filled `issuer` with an empty string, so sign-ups kept working and the unique index quietly became a constraint on `accountId` alone. Relax the column there too.
+        In non-strict mode, MySQL can fill a missing required `issuer` with an empty string. The surviving unique index then rejects equal account IDs across providers. These databases also need cleanup.
+      </Tab>
+
+      <Tab value="SQL Server">
+        Match the type, length, collation, and schema below to your existing column:
+
+        ```sql
+        DROP INDEX account_issuer_accountId_uidx ON dbo.account;
+        ALTER TABLE dbo.account ALTER COLUMN issuer VARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+        ```
       </Tab>
 
       <Tab value="SQLite">
@@ -134,11 +149,13 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
       </Tab>
 
       <Tab value="Prisma and Drizzle">
-        Regenerate instead of writing SQL. The generated `account` model drops both the field and the compound unique index, and your own tooling produces the migration.
+        Generate the 1.7.3 schema, review the removal of `issuer` and its index, and apply the changes with your ORM's migration tooling:
 
         ```bash
-        npx @better-auth/cli@latest generate
+        npx auth@1.7.3 generate
         ```
+
+        Regenerate the Prisma client where applicable and deploy the updated schema and client together. Drizzle checks its configured schema object, and Prisma checks its generated client; neither check proves that the migration was applied to the database.
       </Tab>
 
       <Tab value="MongoDB">
@@ -150,17 +167,27 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
       </Tab>
     </Tabs>
 
-    The generated index name is `account_issuer_accountId_uidx`. Adjust it if your own migration used another name, and use your column name if you renamed the column through `account.fields.issuer` on 1.7.
+    The examples assume the generated index name `account_issuer_accountId_uidx`. Use your actual schema, table, column, and index names, including any mappings previously configured through `account.fields.issuer`. If a cleanup step is already complete, skip that statement rather than rerunning it.
   </Step>
 
   <Step>
-    #### Confirm
+    #### Restart and confirm
 
-    Sign up a new user and sign in with an existing account.
+    Deploy the matching packages and configuration, then restart every app instance to clear cached schema mismatches after manual repair. Schema validation does not stop the server, so successful startup alone does not confirm compatibility.
+
+    Test existing sessions, fresh sign-ins, and new registrations with every provider before reopening traffic. Confirm that returning users reach the same application user, including through each connection that previously shared an account.
   </Step>
 </Steps>
 
-Provider configurations that shared one account issuer on 1.7.0 through 1.7.2 no longer collapse into a single account row. Each provider ID keeps its own row again, as in 1.6.
+#### Recover connections that shared an account
+
+On 1.7.0 through 1.7.2, several provider configurations could share one Account row. In 1.7.3, each provider ID needs its own row; removing the issuer column or index does not create missing accounts. Inventory those connections and their existing users before removing issuer values.
+
+For affected SSO connections, configure the [user resolver](/docs/plugins/sso#resolve-sso-users) with a reviewed mapping from the configured connection, verified issuer, and subject to the existing `userId`. Return `{ action: "link", userId, profile: "preserve" }` for known mappings and reject unknown identities. The verified sign-in creates the connection's Account row for that user. Do not infer ownership from an email match or copy tokens between connections.
+
+For other providers, have the existing user authenticate with a working sign-in method and link the missing connection through the normal account-linking flow. Keep any connection without a verified recovery path disabled until its mapping is reviewed.
+
+#### Update account selectors
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
 
