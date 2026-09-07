@@ -2,4 +2,7 @@
 "better-auth": minor
 ---
 
-Loosens email validation on sign-up and update-user endpoints. This changes the behavior of the endpoint in case the email is invalid that it throws now INVALID_EMAIL instead of VALIDATION_ERROR which grants developers the capability to show the users a more granular and translateable error. The endpoint now returns one error after the other instead of an array with all errors and error messages in english.
+Refactored email validation on sign-up and email change endpoints to return a localized, single error payload rather than a schema-level validation array.
+
+* **Specific Error Codes:** Invalid email inputs now throw `INVALID_EMAIL` instead of a generic `VALIDATION_ERROR`, enabling frontend applications to display specific, translatable error messages.
+* **Sequential Validation:** Request bodies now accept valid strings at the schema level and perform validation logic sequentially in the handler, returning errors one at a time.
