@@ -435,7 +435,7 @@ describe("pinned-kid + signingAlgorithm against legacy null-alg rows", () => {
 
 /* -----------------------------------------------------------------------
  * jwks schema persistence (alg, crv) — tripwire for downstream consumers
- * that skipped `npx @better-auth/cli generate` after the schema bump.
+ * that skipped `npx auth generate` after the schema bump.
  * --------------------------------------------------------------------- */
 
 describe("jwks.alg / jwks.crv persistence after createJwk", () => {
