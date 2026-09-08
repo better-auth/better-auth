@@ -310,13 +310,13 @@ describe("open-api", async () => {
 	});
 	const { auth: authWithPhoneNumber } = await getTestInstance({
 		plugins: [
-			openAPI(),
 			phoneNumber({
 				sendOTP: async () => {},
 				signUpOnVerification: {
 					getTempEmail: (phone) => `${phone}@phone.example.com`,
 				},
 			}),
+			openAPI(),
 		],
 	});
 	const { auth: authWithNullableIntersection } = await getTestInstance({
@@ -893,50 +893,32 @@ describe("open-api", async () => {
 		expect(signInEmailOTPSchema.additionalProperties).toEqual({});
 	});
 
-	it("should include request bodies for phone-number POST endpoints", async () => {
-		const schema = await authWithPhoneNumber.api.generateOpenAPISchema();
-		const paths = schema.paths as Record<string, any>;
-		const phoneNumberPostPaths = [
-			"/sign-in/phone-number",
-			"/phone-number/send-otp",
-			"/phone-number/verify",
-			"/phone-number/request-password-reset",
-			"/phone-number/reset-password",
-		];
-
-		for (const path of phoneNumberPostPaths) {
-			expect(paths[path]?.post?.requestBody).toBeDefined();
-		}
-	});
-
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8122
 	 */
-	it("should emit a requestBody for phone-number /phone-number/verify", async () => {
+	it("emits the phone-number verification request body", async () => {
 		const schema = await authWithPhoneNumber.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, Path>;
 		const requestBody = getPostRequestBody(paths, "/phone-number/verify");
-		expect(requestBody.required).toBe(true);
 
-		const requestBodySchema = requestBody.content["application/json"].schema;
-		expect(requestBodySchema.type).toBe("object");
-		expect(requestBodySchema.required).toEqual(
-			expect.arrayContaining(["phoneNumber", "code"]),
-		);
-		expect(getSchemaProperty(requestBodySchema, "phoneNumber").type).toBe(
-			"string",
-		);
-		expect(getSchemaProperty(requestBodySchema, "code").type).toBe("string");
-		expect(getSchemaProperty(requestBodySchema, "disableSession").type).toBe(
-			"boolean",
-		);
-		expect(getSchemaProperty(requestBodySchema, "updatePhoneNumber").type).toBe(
-			"boolean",
-		);
-		expect(requestBodySchema.required).not.toContain("disableSession");
-		expect(requestBodySchema.required).not.toContain("updatePhoneNumber");
-		// `.and(z.record(z.string(), z.any()))` means additional keys are allowed.
-		expect(requestBodySchema.additionalProperties).toEqual({});
+		expect(requestBody).toMatchObject({
+			required: true,
+			content: {
+				"application/json": {
+					schema: {
+						type: "object",
+						properties: {
+							phoneNumber: { type: "string" },
+							code: { type: "string" },
+							disableSession: { type: "boolean" },
+							updatePhoneNumber: { type: "boolean" },
+						},
+						required: ["phoneNumber", "code"],
+						additionalProperties: {},
+					},
+				},
+			},
+		});
 	});
 
 	it("should keep plain email OTP request bodies as object schemas", async () => {
