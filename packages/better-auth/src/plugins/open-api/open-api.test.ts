@@ -893,6 +893,18 @@ describe("open-api", async () => {
 		expect(signInEmailOTPSchema.additionalProperties).toEqual({});
 	});
 
+	it.for([
+		"/sign-in/phone-number",
+		"/phone-number/send-otp",
+		"/phone-number/request-password-reset",
+		"/phone-number/reset-password",
+	])("emits a request body for %s", async (path) => {
+		const schema = await authWithPhoneNumber.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		expect(paths[path]?.post?.requestBody).toBeDefined();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8122
 	 */
@@ -900,6 +912,7 @@ describe("open-api", async () => {
 		const schema = await authWithPhoneNumber.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, Path>;
 		const requestBody = getPostRequestBody(paths, "/phone-number/verify");
+		const requestBodySchema = requestBody.content["application/json"].schema;
 
 		expect(requestBody).toMatchObject({
 			required: true,
@@ -914,11 +927,11 @@ describe("open-api", async () => {
 							updatePhoneNumber: { type: "boolean" },
 						},
 						required: ["phoneNumber", "code"],
-						additionalProperties: {},
 					},
 				},
 			},
 		});
+		expect(requestBodySchema.additionalProperties).toEqual({});
 	});
 
 	it("should keep plain email OTP request bodies as object schemas", async () => {
