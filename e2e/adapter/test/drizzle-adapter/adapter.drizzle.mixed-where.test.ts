@@ -9,7 +9,7 @@
 import type { User } from "@better-auth/core/db";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import Database from "better-sqlite3";
-import { relations } from "drizzle-orm";
+import { relations } from "drizzle-orm/_relations";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
