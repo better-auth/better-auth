@@ -8,6 +8,7 @@ import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import { createAuthClient as createLynxClient } from "./lynx";
+import { createAuthClient as createOctaneClient } from "./octane";
 import {
 	adminClient,
 	deviceAuthorizationClient,
@@ -36,6 +37,12 @@ vi.mock("@lynx-js/react", () => ({
 	useSyncExternalStore: vi.fn(),
 }));
 
+vi.mock("octane", () => ({
+	useCallback: vi.fn(),
+	useRef: vi.fn(),
+	useSyncExternalStore: vi.fn(),
+}));
+
 describe("run time proxy", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
@@ -56,6 +63,7 @@ describe("run time proxy", async () => {
 		const clients = {
 			vanilla: createVanillaClient(),
 			react: createReactClient(),
+			octane: createOctaneClient(),
 			solid: createSolidClient(),
 			svelte: createSvelteClient(),
 			vue: createVueClient(),
@@ -505,6 +513,18 @@ describe("type", () => {
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<() => number>();
 	});
+	it("should infer resolved hooks octane", () => {
+		const client = createOctaneClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		expectTypeOf(client.useComputedAtom).toEqualTypeOf<() => number>();
+	});
 	it("should infer resolved hooks solid", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
@@ -705,6 +725,23 @@ describe("type", () => {
 			expectTypeOf<null>().toMatchTypeOf<DataField>();
 		});
 
+		it("useSession().data should be nullable with `throw:true` - octane", () => {
+			const client = createOctaneClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSessionReturn = ReturnType<typeof client.useSession>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
 		it("useSession().data should be nullable with `throw:true` - vue", () => {
 			const client = createVueClient({
 				plugins: [testClientPlugin()],
@@ -828,6 +865,43 @@ describe("type", () => {
 			refetch: (
 				queryParams?: { query?: SessionQueryParams } | undefined,
 			) => void;
+		}>();
+	});
+
+	it("should support refetch with query parameters - octane", () => {
+		const client = createOctaneClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionReturn = ReturnType<typeof client.useSession>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
 		}>();
 	});
 

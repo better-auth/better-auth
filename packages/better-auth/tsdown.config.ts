@@ -25,6 +25,7 @@ export default defineConfig({
 		"./src/db/get-migration.ts",
 		"./src/oauth2/index.ts",
 		"./src/client/react/index.ts",
+		"./src/client/octane/index.ts",
 		"./src/client/vue/index.ts",
 		"./src/client/svelte/index.ts",
 		"./src/client/solid/index.ts",
