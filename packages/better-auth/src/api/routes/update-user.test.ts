@@ -1468,11 +1468,14 @@ describe("change-email strategy: verification-table", async () => {
 			}),
 		);
 		const ctx = await auth.$context;
-		await ctx.internalAdapter.createUser({
-			email: "taken@example.com",
-			name: "taken",
-			emailVerified: false,
-		});
+		await ctx.internalAdapter.createUser(
+			{
+				email: "taken@example.com",
+				name: "taken",
+				emailVerified: false,
+			},
+			{ method: "test" },
+		);
 
 		const { headers } = await signInWithTestUser();
 		const res = await client.changeEmail(
