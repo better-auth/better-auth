@@ -630,7 +630,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				await ctx.context.runInBackgroundOrAwait(
 					ctx.context.options.onLogin(
 						{
-							user: user.user,
+							user,
 							session: { id: session.id, token: session.token },
 						},
 						ctx.request,

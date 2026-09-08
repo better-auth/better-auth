@@ -131,6 +131,7 @@ describe("passkey", async () => {
 	 */
 	it("should create a session after pre-auth passkey registration", async () => {
 		let userId = "";
+		const onPasskeyAdded = vi.fn();
 		const {
 			auth: preAuth,
 			client: preAuthClient,
@@ -145,6 +146,7 @@ describe("passkey", async () => {
 			}),
 			plugins: [
 				passkey({
+					onPasskeyAdded,
 					registration: {
 						requireSession: false,
 						resolveUser: async () => ({
@@ -194,6 +196,17 @@ describe("passkey", async () => {
 		expect(result.headers.get("set-cookie")).toContain(
 			"better-auth.session_token=",
 		);
+		expect(onPasskeyAdded).toHaveBeenCalledExactlyOnceWith(
+			{
+				userId,
+				passkey: expect.objectContaining({
+					userId,
+					credentialID:
+						mockRegistrationVerification.registrationInfo.credential.id,
+				}),
+			},
+			undefined,
+		);
 	});
 
 	/**
@@ -201,6 +214,7 @@ describe("passkey", async () => {
 	 */
 	it("should roll back passkey persistence when session creation fails", async () => {
 		let userId = "";
+		const onPasskeyAdded = vi.fn();
 		const {
 			auth: preAuth,
 			client: preAuthClient,
@@ -215,6 +229,7 @@ describe("passkey", async () => {
 			}),
 			plugins: [
 				passkey({
+					onPasskeyAdded,
 					registration: {
 						requireSession: false,
 						resolveUser: async () => ({
@@ -279,6 +294,7 @@ describe("passkey", async () => {
 		});
 		expect(passkeys).toHaveLength(0);
 		expect(await context.internalAdapter.findUserById(userId)).toBeNull();
+		expect(onPasskeyAdded).not.toHaveBeenCalled();
 	});
 
 	it("should require resolveUser when session is not available", async () => {

@@ -33,12 +33,14 @@ describe("sign-out", async () => {
 	});
 
 	it("should clear local session cookie when reading the session fails", async () => {
-		const instance = await getTestInstance();
+		const onLogout = vi.fn();
+		const instance = await getTestInstance({ onLogout });
 		const { headers } = await instance.signInWithTestUser();
 		const context = await instance.auth.$context;
 		vi.spyOn(context.internalAdapter, "findSession").mockRejectedValueOnce(
 			new Error("database unavailable"),
 		);
+		const deleteSession = vi.spyOn(context.internalAdapter, "deleteSession");
 		let setCookieHeader = "";
 
 		const res = await instance.client.signOut({
@@ -56,6 +58,32 @@ describe("sign-out", async () => {
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		expect(cookies.get("better-auth.session_token")?.value).toBe("");
 		expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(0);
+		expect(deleteSession).toHaveBeenCalledOnce();
+		expect(onLogout).not.toHaveBeenCalled();
+	});
+
+	it("should clear cookies without calling onLogout when deleting the session fails", async () => {
+		const onLogout = vi.fn();
+		const instance = await getTestInstance({ onLogout });
+		const { headers } = await instance.signInWithTestUser();
+		const context = await instance.auth.$context;
+		vi.spyOn(context.internalAdapter, "deleteSession").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		const response = await instance.auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-out", {
+				method: "POST",
+				headers,
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const cookies = parseSetCookieHeader(
+			response.headers.get("set-cookie") || "",
+		);
+		expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(0);
+		expect(onLogout).not.toHaveBeenCalled();
+		expect(await instance.auth.api.getSession({ headers })).not.toBeNull();
 	});
 
 	const baseOAuthConfig = {
@@ -102,9 +130,11 @@ describe("sign-out", async () => {
 	}
 
 	it("should return provider logout url with id_token_hint", async () => {
-		const { client, headers } = await setupGenericOAuthSignOut({
-			endSessionEndpoint: "https://idp.example.com/logout",
-		});
+		const onLogout = vi.fn();
+		const { client, headers, user } = await setupGenericOAuthSignOut(
+			{ endSessionEndpoint: "https://idp.example.com/logout" },
+			{ onLogout },
+		);
 		let locationHeader: string | null = null;
 
 		const res = await client.signOut({
@@ -125,6 +155,10 @@ describe("sign-out", async () => {
 			"id-token",
 		);
 		expect(locationHeader).toBe(res.data!.url);
+		expect(onLogout).toHaveBeenCalledExactlyOnceWith(
+			{ userId: user.id },
+			expect.any(Request),
+		);
 	});
 
 	it("should keep local-only sign out when provider has no logout endpoint", async () => {

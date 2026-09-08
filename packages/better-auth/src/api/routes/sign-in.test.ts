@@ -9,6 +9,40 @@ import { getTestInstance } from "../../test-utils/test-instance";
 describe("sign-in", async () => {
 	const { auth, testUser, cookieSetter } = await getTestInstance();
 
+	it("should call onLogin with the authenticated user and new session", async () => {
+		const onLogin = vi.fn();
+		const { auth, testUser } = await getTestInstance({ onLogin });
+		const result = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+		});
+
+		expect(onLogin).toHaveBeenCalledExactlyOnceWith(
+			{
+				user: expect.objectContaining({
+					id: result.user.id,
+					email: testUser.email,
+				}),
+				session: { id: expect.any(String), token: result.token },
+			},
+			undefined,
+		);
+	});
+
+	it("should not call onLogin when the password is rejected", async () => {
+		const onLogin = vi.fn();
+		const { auth, testUser } = await getTestInstance({ onLogin });
+
+		await expect(
+			auth.api.signInEmail({
+				body: { email: testUser.email, password: "incorrect-password" },
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		expect(onLogin).not.toHaveBeenCalled();
+	});
+
 	it("should return a response with a set-cookie header", async () => {
 		const signInRes = await auth.api.signInEmail({
 			body: {
