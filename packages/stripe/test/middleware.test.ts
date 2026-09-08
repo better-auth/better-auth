@@ -263,9 +263,15 @@ describe("referenceMiddleware", () => {
 		test("should reject when authorizeReference is not defined", async ({
 			stripeOptions,
 		}) => {
+			const stripeOptionsWithOrg: StripeOptions = {
+				...stripeOptions,
+				organization: {
+					enabled: true,
+				},
+			};
 			const { client, sessionSetter } = await getTestInstance(
 				{
-					plugins: [stripe(stripeOptions)],
+					plugins: [stripe(stripeOptionsWithOrg)],
 				},
 				{
 					disableTestUser: true,
@@ -303,6 +309,9 @@ describe("referenceMiddleware", () => {
 		}) => {
 			const stripeOptionsWithAuth: StripeOptions = {
 				...stripeOptions,
+				organization: {
+					enabled: true,
+				},
 				subscription: {
 					...stripeOptions.subscription,
 					authorizeReference: async () => true,
@@ -348,6 +357,9 @@ describe("referenceMiddleware", () => {
 		}) => {
 			const stripeOptionsWithAuth: StripeOptions = {
 				...stripeOptions,
+				organization: {
+					enabled: true,
+				},
 				subscription: {
 					...stripeOptions.subscription,
 					authorizeReference: async () => false,
@@ -387,6 +399,52 @@ describe("referenceMiddleware", () => {
 			});
 
 			expect(res.error?.code).toBe("UNAUTHORIZED");
+		});
+
+		test("should reject organization customerType when organization support is disabled", async ({
+			stripeOptions,
+		}) => {
+			const stripeOptionsWithAuth: StripeOptions = {
+				...stripeOptions,
+				subscription: {
+					...stripeOptions.subscription,
+					authorizeReference: async () => true,
+				},
+			};
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					plugins: [stripe(stripeOptionsWithAuth)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			await client.signUp.email(
+				{ ...testUser, email: "org-disabled@example.com" },
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "org-disabled@example.com" },
+				{
+					throw: true,
+					onSuccess: sessionSetter(headers),
+				},
+			);
+
+			const res = await client.subscription.upgrade({
+				plan: "starter",
+				customerType: "organization",
+				referenceId: "org_123",
+				fetchOptions: { headers },
+			});
+
+			expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
 		});
 
 		test("should pass when authorizeReference returns true", async ({

@@ -1,5 +1,5 @@
 {
-	"$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+	"$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
 	"ignoreExportsUsedInFile": {
 		"interface": true,
 		"type": true
@@ -7,15 +7,25 @@
 	"tags": ["-lintignore"],
 	"ignore": [
 		// test utilities only imported by test files — invisible to --production
-		"packages/better-auth/src/client/test-plugin.ts",
-		// CI scripts used by GitHub Actions workflows, not by packages
-		".github/scripts/**"
+		"packages/better-auth/src/client/test-plugin.ts"
 	],
-	"ignoreBinaries": ["playwright", "changeset", "open", "remark", "tsx"],
+	// pbcopy/xclip/clip: OS clipboard utilities shelled out from the CLI; auth: the CLI's own bin, self-invoked
+	"ignoreBinaries": [
+		"playwright",
+		"changeset",
+		"open",
+		"remark",
+		"tsx",
+		"pbcopy",
+		"xclip",
+		"clip",
+		"auth"
+	],
 	// exports used only by tests — invisible to --production mode
 	"ignoreIssues": {
 		"packages/cli/src/commands/init/index.ts": ["exports"],
 		"packages/cli/src/commands/init/utility/imports.ts": ["exports"],
+		"packages/oauth-provider/src/oauth-endpoint.ts": ["exports"],
 		"packages/sso/src/saml/assertions.ts": ["exports"],
 		"packages/sso/src/oidc/discovery.ts": ["exports"]
 	},
@@ -46,10 +56,18 @@
 				"nanostores!"
 			]
 		},
+		"packages/release-tooling": {
+			"entry": ["src/commands/*.ts!"],
+			"project": ["src/**/*.ts!", "test/**/*.ts!", "vitest.config.ts!"]
+		},
 		"packages/test-utils": {},
 		"packages/expo": {
 			// neverBundle externals: referenced in bundled output, not in source
 			"ignoreDependencies": ["@better-fetch/fetch", "better-call"]
+		},
+		"packages/electron": {
+			"entry": ["src/index.ts!", "src/client.typecheck.ts"],
+			"project": ["src/**/*.ts!"]
 		}
 	},
 	"vitest": {

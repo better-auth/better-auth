@@ -161,6 +161,10 @@ describe("forgot password", async () => {
 			],
 		});
 		expect(updatedAccounts.length).toBe(1);
+		expect(updatedAccounts[0]).toMatchObject({
+			providerId: "credential",
+			accountId: userId,
+		});
 		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
 
 		// Verify updatedAt was refreshed

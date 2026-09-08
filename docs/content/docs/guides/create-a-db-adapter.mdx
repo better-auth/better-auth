@@ -1,4 +1,5 @@
 ---
+icon: guidesCreateDatabaseAdapter
 title: Create a Database Adapter
 description: Learn how to create a custom database adapter for Better-Auth
 ---
@@ -251,9 +252,9 @@ deleteMany: async ({ model, where }) => {
 };
 ```
 
-### `consumeOne` method (optional)
+### `consumeOne` method
 
-The `consumeOne` method atomically deletes a single matching record and returns it, so that two concurrent requests cannot both consume the same row. It powers single-use credentials such as one-time verification challenges. Implementing it is optional: when omitted, the adapter factory falls back to wrapping `findMany` + `deleteMany` in a `transaction`, using the deleted-row count as the race gate.
+The `consumeOne` method atomically deletes a single matching record and returns it, so that two concurrent requests cannot both consume the same row. It powers single-use credentials such as one-time verification challenges.
 
 parameters:
 
@@ -270,9 +271,44 @@ consumeOne: async ({ model, where }) => {
 };
 ```
 
-<Callout type="info">
-  Although the factory provides a fallback, implementing `consumeOne` natively is recommended: the fallback is race-safe only under a real `transaction` with an accurate delete count. Stores without multi-document transactions therefore need a native atomic delete-and-return (`DELETE ... RETURNING`, `findOneAndDelete`, or a revision-conditional delete).
+<Callout type="warn">
+  `consumeOne` is optional. Without it, Better Auth uses a conditional delete and returns the record only when exactly one row was deleted.
 </Callout>
+
+### `incrementOne` method
+
+The `incrementOne` method atomically updates one matching record by applying numeric deltas and optional set values, then returns the updated row. It powers guarded counters such as rate limits, quotas, and one-winner state transitions.
+
+parameters:
+
+* `model`: The model/table name to update.
+* `where`: The `where` clause that must still match for the increment to apply.
+* `increment`: Numeric deltas to apply, such as `{ count: 1 }` or `{ remaining: -1 }`.
+* `set`: Optional fields to set in the same atomic operation. `undefined` leaves a field unchanged, while `null` clears it.
+
+**Returns** `Promise<T | null>`: the updated record, or `null` if no row matched. Implementations must update at most one matching row.
+
+```ts title="Example"
+incrementOne: async ({ model, where, increment, set }) => {
+  const [row] = await db
+    .update(model)
+    .set({
+      ...set,
+      count: sql`${model.count} + ${increment.count ?? 0}`,
+    })
+    .where(where)
+    .returning();
+  return row ?? null;
+};
+```
+
+<Callout type="warn">
+  `incrementOne` is optional. Without it, Better Auth uses conditional updates with bounded retries. If retries are exhausted, the operation throws and the increment is not recorded. Use native increments for heavily contended counters and security controls such as failed-attempt limits.
+</Callout>
+
+Fallbacks reuse your adapter's CRUD methods. They need complete, stable row snapshots with mapped IDs, atomic conditional writes, and exact affected-row counts. Null comparisons must also match absent nullable fields.
+
+Fallback counters must be finite numbers, with null or missing values starting at zero. Use native methods for `bigint` counters, OR predicates on structured values, or trigger-generated return values. Fields not updated by the increment fallback reflect the initial read.
 
 ### `findOne` method
 
@@ -486,7 +522,7 @@ Whether the adapter supports transactions. If `false`, operations run sequential
 
 ### `debugLogs`
 
-Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `count`.
+Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`.
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
 ```ts title="Example"

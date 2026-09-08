@@ -1,0 +1,48 @@
+name: Release Notes Draft
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions: {}
+
+concurrency:
+  group: release-notes-draft-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  draft:
+    if: >-
+      github.repository_owner == 'better-auth' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'changeset-release/') ||
+       (github.event.pull_request.head.ref == 'next' &&
+        (github.event.pull_request.base.ref == 'main' || github.event.changes.base.ref.from == 'main'))) &&
+      (github.event.action != 'edited' || github.event.changes.base != null) &&
+      (github.event.action != 'ready_for_review' ||
+       !contains(fromJSON('["better-release[bot]", "github-actions[bot]"]'), github.event.sender.login))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Generate scoped App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: Keep release PR in draft
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          IS_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+          if [ "$IS_DRAFT" = 'true' ]; then
+            exit 0
+          fi
+          gh pr ready "$PR_NUMBER" --undo --repo "$GITHUB_REPOSITORY"

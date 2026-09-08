@@ -1,4 +1,6 @@
 ---
+icon: guidesAuth0MigrationGuide
+sidebarTitle: "Auth0 Migration Guide"
 title: Migrating from Auth0 to Better Auth
 description: A step-by-step guide to transitioning from Auth0 to Better Auth.
 ---
@@ -203,7 +205,11 @@ Before starting the migration process, set up Better Auth in your project. Follo
         clientSecret: process.env.AUTH0_SECRET!,
     });
 
-
+    function getAccountProviderId(identity: { provider: string }) {
+        return identity.provider === "auth0"
+            ? "credential"
+            : (identity.provider.split("-")[0] ?? identity.provider);
+    }
 
     function safeDateConversion(timestamp?: string | number): Date {
         if (!timestamp) return new Date();
@@ -333,7 +339,10 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
         for (const identity of auth0User.identities) {
             try {
-                const providerId = identity.provider === 'auth0' ? "credential" : identity.provider.split("-")[0];
+                const providerId = getAccountProviderId(identity);
+                const accountId = providerId === "credential"
+                    ? userId
+                    : identity.user_id;
                 await ctx.adapter.create({
                     model: "account",
                     data: {
@@ -341,7 +350,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         userId: userId,
                         password: await migratePassword(auth0User),
                         providerId: providerId || identity.provider,
-                        accountId: identity.user_id,
+                        accountId,
                         accessToken: identity.access_token,
                         tokenType: identity.token_type,
                         refreshToken: identity.refresh_token,
@@ -365,7 +374,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                             userId: userId,
                             password: await migratePassword(auth0User),
                             providerId: providerId,
-                            accountId: identity.user_id,
+                            accountId,
                             accessToken: identity.access_token,
                             tokenType: identity.token_type,
                             refreshToken: identity.refresh_token,

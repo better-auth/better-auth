@@ -31,7 +31,14 @@ export const linear = (options: LinearOptions) => {
 	return {
 		id: "linear",
 		name: "Linear",
-		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
+		accountSubject: ({ profile }) => profile.id,
+		createAuthorizationURL({
+			state,
+			scopes,
+			loginHint,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope ? [] : ["read"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -43,6 +50,7 @@ export const linear = (options: LinearOptions) => {
 				state,
 				redirectURI,
 				loginHint,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -106,7 +114,6 @@ export const linear = (options: LinearOptions) => {
 			// We default to false for security consistency.
 			return {
 				user: {
-					id: profile.data.viewer.id,
 					name: profile.data.viewer.name,
 					email: profile.data.viewer.email,
 					image: profile.data.viewer.avatarUrl,

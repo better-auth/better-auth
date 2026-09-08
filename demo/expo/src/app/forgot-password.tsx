@@ -53,7 +53,7 @@ export default function ForgotPassword() {
 						className="w-full flex-row gap-4 items-center"
 						variant="outline"
 					>
-						<Icons name="arrowleft" size={18} />
+						<Icons name="arrow-left" size={18} />
 						<Text>Back to Sign In</Text>
 					</Button>
 				</View>

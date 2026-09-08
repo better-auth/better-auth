@@ -24,7 +24,14 @@ export const figma = (options: FigmaOptions) => {
 	return {
 		id: "figma",
 		name: "Figma",
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		accountSubject: ({ profile }) => profile.id,
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret are required for Figma. Make sure to provide them in the options.",
@@ -47,6 +54,7 @@ export const figma = (options: FigmaOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 
 			return url;
@@ -99,7 +107,6 @@ export const figma = (options: FigmaOptions) => {
 
 				return {
 					user: {
-						id: profile.id,
 						name: profile.handle,
 						email: profile.email,
 						image: profile.img_url,

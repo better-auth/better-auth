@@ -4,7 +4,7 @@ import type { User } from "../../types";
 
 export function createSaveUser(ctx: AuthContext) {
 	return async (user: User): Promise<User> => {
-		return ctx.internalAdapter.createUser(user);
+		return ctx.internalAdapter.createUser(user, { method: "test" });
 	};
 }
 

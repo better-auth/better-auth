@@ -5,6 +5,6 @@
   "dependencies": {
     "@hono/node-server": "^2.0.10",
     "better-auth": "workspace:*",
-    "hono": "^4.12.31"
+    "hono": "^4.12.34"
   }
 }

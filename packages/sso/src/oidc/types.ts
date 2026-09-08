@@ -107,6 +107,8 @@ export type DiscoveryErrorCode =
 	| "discovery_untrusted_origin"
 	/** OIDC endpoint URL (discovery or per-endpoint) points to a host that is not publicly routable (loopback, RFC 1918, link-local, cloud metadata FQDN, etc.) */
 	| "discovery_private_host"
+	/** Server-side OIDC endpoint fetch received an HTTP redirect response */
+	| "oidc_endpoint_redirect"
 	/** Discovery document issuer doesn't match configured issuer */
 	| "issuer_mismatch"
 	/** Discovery document is missing required fields */
@@ -169,7 +171,10 @@ export interface HydratedOIDCConfig {
 	userInfoEndpoint?: string;
 
 	/** Token endpoint authentication method */
-	tokenEndpointAuthentication?: "client_secret_basic" | "client_secret_post";
+	tokenEndpointAuthentication?:
+		| "client_secret_basic"
+		| "client_secret_post"
+		| "private_key_jwt";
 
 	/** Scopes supported by the IdP */
 	scopesSupported?: string[];

@@ -6,8 +6,10 @@ export const joinsTestSuite = createTestSuite(
 	"joins",
 	{
 		defaultBetterAuthOptions: {
-			experimental: {
-				joins: true,
+			advanced: {
+				database: {
+					joins: true,
+				},
 			},
 		},
 		alwaysMigrate: true,
@@ -20,7 +22,7 @@ export const joinsTestSuite = createTestSuite(
 		return {
 			"init - tests": async () => {
 				const opts = helpers.getBetterAuthOptions();
-				expect(opts.experimental?.joins).toBe(true);
+				expect(opts.advanced?.database?.joins).toBe(true);
 			},
 			...normalTests,
 		};

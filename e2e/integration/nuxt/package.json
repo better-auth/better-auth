@@ -1,0 +1,21 @@
+{
+  "name": "@better-auth-test/fixtures-nuxt",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "start": "node .output/server/index.mjs",
+    "typecheck:consumer": "nuxt typecheck"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*",
+    "nuxt": "4.5.2"
+  },
+  "devDependencies": {
+    "@nuxt/test-utils": "4.2.0",
+    "@playwright/test": "~1.58.2",
+    "typescript": "catalog:",
+    "vue-tsc": "3.3.11"
+  }
+}

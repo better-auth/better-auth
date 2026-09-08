@@ -8,4 +8,7 @@ export const SAML_ERROR_CODES = defineErrorCodes({
 	LOGOUT_FAILED_AT_IDP: "Logout failed at IdP",
 	IDP_SLO_NOT_SUPPORTED: "IdP does not support Single Logout Service",
 	SAML_PROVIDER_NOT_FOUND: "SAML provider not found",
+	// Cert source error
+	CERT_SOURCE_MISSING:
+		"samlConfig requires either a signing certificate (cert or idpMetadata.cert) or an idpMetadata.metadata XML document.",
 });

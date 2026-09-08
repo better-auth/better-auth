@@ -9,9 +9,10 @@ import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	stripSecureCookiePrefix,
-} from "better-auth/cookies";
+} from "better-auth/cookies/utils";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
+import type * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
@@ -22,12 +23,19 @@ if (Platform.OS !== "web") {
 	setupExpoOnlineManager();
 }
 
+/**
+ * Storage used by the Expo client for cookies and cached session data.
+ * Write coordination is scoped to the provided object, so reuse it across
+ * clients that access the same stored data.
+ */
+export type ExpoClientStorage = Pick<
+	typeof SecureStore,
+	"setItem" | "setItemAsync" | "getItem" | "getItemAsync"
+>;
+
 interface ExpoClientOptions {
 	scheme?: string | undefined;
-	storage: {
-		setItem: (key: string, value: string) => any;
-		getItem: (key: string) => string | null;
-	};
+	storage: ExpoClientStorage;
 	/**
 	 * Prefix for local storage keys (e.g., "my-app_cookie", "my-app_session_data")
 	 * @default "better-auth"
@@ -71,6 +79,12 @@ interface StoredCookie {
 	expires: string | null;
 }
 
+function defineExpoClientPlugin<Plugin extends BetterAuthClientPlugin>(
+	plugin: Plugin,
+): Plugin {
+	return plugin;
+}
+
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
 	const toSetCookie =
@@ -99,11 +113,8 @@ export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	return JSON.stringify(toSetCookie);
 }
 
-export function getCookie(cookie: string) {
-	let parsed = {} as Record<string, StoredCookie>;
-	try {
-		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
-	} catch {}
+export function getCookie(cookie: string | null) {
+	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookie) ?? {};
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
@@ -263,79 +274,369 @@ export function normalizeCookieName(name: string) {
  * @see https://github.com/better-auth/better-auth/issues/9151
  */
 const STORAGE_VALUE_LIMIT = 1800;
+const MAX_STORAGE_CHUNKS = 100;
 
 /**
- * Marks a base key whose value is split across `<key>.0..N` chunks. The leading
- * control char can't start a JSON value (so it never collides) and, unlike NUL,
- * survives the native storage bridge without C-string truncation.
+ * Marks a base key whose value is split across multiple storage keys. Legacy
+ * markers contain only the chunk count. Current markers also identify the
+ * active slot and retain the previous slot's chunk count for recovery.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11082
  */
 const CHUNK_MARKER = "\u0001ba-chunks:";
 
-export function storageAdapter(storage: {
-	getItem: (name: string) => string | null;
-	setItem: (name: string, value: string) => unknown;
-}) {
+type ChunkSlot = 0 | 1;
+
+interface ChunkMarker {
+	count: number;
+	slot: ChunkSlot | null;
+	fallbackCount: number | null;
+}
+
+function parseChunkCount(value: string | undefined): number | null {
+	if (value === undefined) {
+		return null;
+	}
+	const count = Number(value);
+	if (!Number.isInteger(count) || count < 1 || count > MAX_STORAGE_CHUNKS) {
+		return null;
+	}
+	return count;
+}
+
+function parseChunkMarker(baseValue: string): ChunkMarker | null {
+	const parts = baseValue.slice(CHUNK_MARKER.length).split(":");
+	if (parts.length > 3) {
+		return null;
+	}
+	const [countValue, slotValue, fallbackCountValue] = parts;
+	const count = parseChunkCount(countValue);
+	if (count === null) {
+		return null;
+	}
+	if (slotValue === undefined) {
+		return fallbackCountValue === undefined
+			? { count, slot: null, fallbackCount: null }
+			: null;
+	}
+	if (slotValue !== "0" && slotValue !== "1") {
+		return null;
+	}
+	const fallbackCount = parseChunkCount(fallbackCountValue);
+	if (fallbackCountValue !== undefined && fallbackCount === null) {
+		return null;
+	}
 	return {
-		/**
-		 * Reads a value, reassembling it if it was split across chunk keys. A value
-		 * that fit is returned as-is (values written before chunking still read
-		 * back); a missing chunk returns `null` so a torn write fails closed.
-		 */
-		getItem: (name: string): string | null => {
-			const key = normalizeCookieName(name);
-			const stored = storage.getItem(key);
-			if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
-				return stored;
+		count,
+		slot: slotValue === "0" ? 0 : 1,
+		fallbackCount,
+	};
+}
+
+function getChunkKey(key: string, marker: ChunkMarker, index: number) {
+	return marker.slot === null
+		? `${key}.${index}`
+		: `${key}.${marker.slot}.${index}`;
+}
+
+function getOtherSlot(slot: ChunkSlot): ChunkSlot {
+	return slot === 0 ? 1 : 0;
+}
+
+function serializeChunkMarker(marker: ChunkMarker) {
+	if (marker.slot === null) {
+		return `${CHUNK_MARKER}${marker.count}`;
+	}
+	const fallback =
+		marker.fallbackCount === null ? "" : `:${marker.fallbackCount}`;
+	return `${CHUNK_MARKER}${marker.count}:${marker.slot}${fallback}`;
+}
+
+function readChunks(
+	storage: Pick<ExpoClientStorage, "getItem">,
+	key: string,
+	marker: ChunkMarker,
+): string | null {
+	let value = "";
+	for (let i = 0; i < marker.count; i++) {
+		const chunk = storage.getItem(getChunkKey(key, marker, i));
+		if (chunk == null) {
+			return null;
+		}
+		value += chunk;
+	}
+	return value;
+}
+
+async function readChunksAsync(
+	storage: Pick<ExpoClientStorage, "getItemAsync">,
+	key: string,
+	marker: ChunkMarker,
+): Promise<string | null> {
+	let value = "";
+	for (let i = 0; i < marker.count; i++) {
+		const chunk = await storage.getItemAsync(getChunkKey(key, marker, i));
+		if (chunk == null) {
+			return null;
+		}
+		value += chunk;
+	}
+	return value;
+}
+
+function readStoredValue(
+	storage: Pick<ExpoClientStorage, "getItem">,
+	key: string,
+	baseValue: string | null,
+): string | null {
+	if (baseValue == null || !baseValue.startsWith(CHUNK_MARKER)) {
+		return baseValue;
+	}
+	const marker = parseChunkMarker(baseValue);
+	if (!marker) {
+		return null;
+	}
+	const value = readChunks(storage, key, marker);
+	if (value !== null || marker.slot === null || marker.fallbackCount === null) {
+		return value;
+	}
+	return readChunks(storage, key, {
+		count: marker.fallbackCount,
+		slot: getOtherSlot(marker.slot),
+		fallbackCount: null,
+	});
+}
+
+async function readStoredValueAsync(
+	storage: Pick<ExpoClientStorage, "getItemAsync">,
+	key: string,
+	baseValue: string | null,
+): Promise<string | null> {
+	if (baseValue == null || !baseValue.startsWith(CHUNK_MARKER)) {
+		return baseValue;
+	}
+	const marker = parseChunkMarker(baseValue);
+	if (!marker) {
+		return null;
+	}
+	const value = await readChunksAsync(storage, key, marker);
+	if (value !== null || marker.slot === null || marker.fallbackCount === null) {
+		return value;
+	}
+	return readChunksAsync(storage, key, {
+		count: marker.fallbackCount,
+		slot: getOtherSlot(marker.slot),
+		fallbackCount: null,
+	});
+}
+
+function getStorageWrites(
+	key: string,
+	value: string,
+	currentBaseValue: string | null,
+): [string, string][] {
+	if (value.length <= STORAGE_VALUE_LIMIT) {
+		return [[key, value]];
+	}
+
+	const count = Math.ceil(value.length / STORAGE_VALUE_LIMIT);
+	if (count > MAX_STORAGE_CHUNKS) {
+		throw new Error(
+			`Storage value requires ${count} chunks, exceeding the limit of ${MAX_STORAGE_CHUNKS}`,
+		);
+	}
+	const currentMarker = currentBaseValue?.startsWith(CHUNK_MARKER)
+		? parseChunkMarker(currentBaseValue)
+		: null;
+	const slot: ChunkSlot = currentMarker?.slot === 0 ? 1 : 0;
+	const marker: ChunkMarker = {
+		count,
+		slot,
+		fallbackCount: currentMarker?.slot == null ? null : currentMarker.count,
+	};
+	const writes: [string, string][] = [];
+	if (currentMarker?.slot != null && currentMarker.fallbackCount !== null) {
+		// The fallback slot becomes the next write target.
+		// Stop readers from using it until the new value is complete.
+		writes.push([
+			key,
+			serializeChunkMarker({ ...currentMarker, fallbackCount: null }),
+		]);
+	}
+	for (let i = 0; i < count; i++) {
+		const start = i * STORAGE_VALUE_LIMIT;
+		writes.push([
+			getChunkKey(key, marker, i),
+			value.slice(start, start + STORAGE_VALUE_LIMIT),
+		]);
+	}
+	writes.push([key, serializeChunkMarker(marker)]);
+	return writes;
+}
+
+function createKeyedWriteQueue() {
+	const tails = new Map<string, Promise<unknown>>();
+	return {
+		pending(key: string): boolean {
+			return tails.has(key);
+		},
+		enqueue<Result>(
+			key: string,
+			operation: () => Promise<Result>,
+		): Promise<Result> {
+			const previous = tails.get(key) ?? Promise.resolve();
+			const queued = previous.then(operation, operation);
+			tails.set(key, queued);
+
+			const cleanup = () => {
+				if (tails.get(key) === queued) {
+					tails.delete(key);
+				}
+			};
+			void queued.then(cleanup, cleanup);
+			return queued;
+		},
+	};
+}
+
+const storageWriteQueues = new WeakMap<
+	ExpoClientStorage,
+	ReturnType<typeof createKeyedWriteQueue>
+>();
+
+function getStorageWriteQueue(storage: ExpoClientStorage) {
+	const existing = storageWriteQueues.get(storage);
+	if (existing) {
+		return existing;
+	}
+	const queue = createKeyedWriteQueue();
+	storageWriteQueues.set(storage, queue);
+	return queue;
+}
+
+interface ExpoStorageAdapter {
+	getItem(name: string): string | null;
+	getItemAsync(name: string): Promise<string | null>;
+	setItem(name: string, value: string): void;
+	setItemAsync(name: string, value: string): Promise<void>;
+}
+
+interface StoredUpdate {
+	previousValue: string | null;
+	value: string;
+}
+
+function createManagedStorage(storage: ExpoClientStorage) {
+	const writeQueue = getStorageWriteQueue(storage);
+	const logWriteError = (key: string, error: unknown) => {
+		console.error(
+			`[better-auth/expo] failed to persist "${key}" to storage`,
+			error,
+		);
+	};
+	const getItem = (name: string): string | null => {
+		const key = normalizeCookieName(name);
+		return readStoredValue(storage, key, storage.getItem(key));
+	};
+	const getItemAsync = async (name: string): Promise<string | null> => {
+		const key = normalizeCookieName(name);
+		const baseValue = await storage.getItemAsync(key);
+		return readStoredValueAsync(storage, key, baseValue);
+	};
+	const writeItem = (
+		key: string,
+		value: string,
+		currentBaseValue: string | null,
+	) => {
+		for (const [writeKey, writeValue] of getStorageWrites(
+			key,
+			value,
+			currentBaseValue,
+		)) {
+			storage.setItem(writeKey, writeValue);
+		}
+	};
+	const writeItemAsync = async (
+		key: string,
+		value: string,
+		currentBaseValue: string | null,
+	) => {
+		for (const [writeKey, writeValue] of getStorageWrites(
+			key,
+			value,
+			currentBaseValue,
+		)) {
+			await storage.setItemAsync(writeKey, writeValue);
+		}
+	};
+	const setItem = (name: string, value: string): void => {
+		const key = normalizeCookieName(name);
+		if (writeQueue.pending(key)) {
+			logWriteError(
+				key,
+				new Error("Cannot write synchronously while an async write is pending"),
+			);
+			return;
+		}
+		try {
+			const currentBaseValue =
+				value.length > STORAGE_VALUE_LIMIT ? storage.getItem(key) : null;
+			writeItem(key, value, currentBaseValue);
+		} catch (error) {
+			logWriteError(key, error);
+		}
+	};
+	const setItemAsync = (name: string, value: string): Promise<void> => {
+		const key = normalizeCookieName(name);
+		return writeQueue.enqueue(key, async () => {
+			try {
+				const currentBaseValue =
+					value.length > STORAGE_VALUE_LIMIT
+						? await storage.getItemAsync(key)
+						: null;
+				await writeItemAsync(key, value, currentBaseValue);
+			} catch (error) {
+				logWriteError(key, error);
 			}
-			const count = Number(stored.slice(CHUNK_MARKER.length));
-			if (!Number.isInteger(count) || count < 1) {
+		});
+	};
+	const updateItemAsync = (
+		name: string,
+		update: (currentValue: string | null) => string,
+	): Promise<StoredUpdate | null> => {
+		const key = normalizeCookieName(name);
+		return writeQueue.enqueue(key, async () => {
+			try {
+				const currentBaseValue = await storage.getItemAsync(key);
+				const previousValue = await readStoredValueAsync(
+					storage,
+					key,
+					currentBaseValue,
+				);
+				const value = update(previousValue);
+				await writeItemAsync(key, value, currentBaseValue);
+				return { previousValue, value };
+			} catch (error) {
+				logWriteError(key, error);
 				return null;
 			}
-			let value = "";
-			for (let i = 0; i < count; i++) {
-				const chunk = storage.getItem(`${key}.${i}`);
-				if (chunk == null) {
-					return null;
-				}
-				value += chunk;
-			}
-			return value;
-		},
-		/**
-		 * Stores `value`, splitting it across chunk keys when it exceeds the
-		 * per-write limit. The base key is cleared before the chunks are rewritten
-		 * and set to the marker last, as the commit point, so a write interrupted
-		 * partway through reads as absent rather than a mix of old and new chunks.
-		 * Failures are logged, not thrown: persistence is best-effort and must not
-		 * break the request.
-		 */
-		setItem: async (name: string, value: string): Promise<void> => {
-			const key = normalizeCookieName(name);
-			try {
-				if (value.length <= STORAGE_VALUE_LIMIT) {
-					await storage.setItem(key, value);
-					return;
-				}
-				// Drop the marker first: chunks are overwritten in place below, so
-				// without this an interrupted rewrite would leave the old marker
-				// pointing at a mix of new and stale chunks.
-				await storage.setItem(key, "");
-				const count = Math.ceil(value.length / STORAGE_VALUE_LIMIT);
-				for (let i = 0; i < count; i++) {
-					const start = i * STORAGE_VALUE_LIMIT;
-					await storage.setItem(
-						`${key}.${i}`,
-						value.slice(start, start + STORAGE_VALUE_LIMIT),
-					);
-				}
-				await storage.setItem(key, `${CHUNK_MARKER}${count}`);
-			} catch (error) {
-				console.error(
-					`[better-auth/expo] failed to persist "${key}" to storage`,
-					error,
-				);
-			}
-		},
+		});
+	};
+
+	return { getItem, getItemAsync, setItem, setItemAsync, updateItemAsync };
+}
+
+/**
+ * Wraps Expo storage with chunking, recoverable writes, and serialized async
+ * updates.
+ */
+export function storageAdapter(storage: ExpoClientStorage): ExpoStorageAdapter {
+	const managedStorage = createManagedStorage(storage);
+	return {
+		getItem: managedStorage.getItem,
+		getItemAsync: managedStorage.getItemAsync,
+		setItem: managedStorage.setItem,
+		setItemAsync: managedStorage.setItemAsync,
 	};
 }
 
@@ -344,18 +645,58 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const storagePrefix = opts?.storagePrefix || "better-auth";
 	const cookieName = `${storagePrefix}_cookie`;
 	const localCacheName = `${storagePrefix}_session_data`;
-	const storage = storageAdapter(opts?.storage);
+	const storage = createManagedStorage(opts.storage);
 	const isWeb = Platform.OS === "web";
 	const cookiePrefix = opts?.cookiePrefix || "better-auth";
+	let sessionCacheHydration: Promise<void> | undefined;
+	const restoreSessionCache = async () => {
+		if (isWeb || opts?.disableCache) {
+			return;
+		}
+
+		const sessionAtom = store?.atoms.session;
+		if (!sessionAtom) {
+			return;
+		}
+		const initialSessionState = sessionAtom.get();
+		if (initialSessionState.data !== null) {
+			return;
+		}
+
+		const raw = await storage.getItemAsync(localCacheName);
+		const cached = raw
+			? safeJSONParse<{ user: User; session: Session }>(raw)
+			: null;
+		const expiresAt = cached?.session?.expiresAt;
+		const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
+		const fresh =
+			!!cached?.user?.id && !!cached.session?.id && expiresAtMs > Date.now();
+		if (fresh && sessionAtom.get() === initialSessionState) {
+			sessionAtom.set({
+				...initialSessionState,
+				data: cached,
+				error: null,
+			});
+		}
+	};
+	const hydrateSessionCache = () => {
+		if (!sessionCacheHydration) {
+			sessionCacheHydration = restoreSessionCache().catch((error) => {
+				sessionCacheHydration = undefined;
+				throw error;
+			});
+		}
+		return sessionCacheHydration;
+	};
 	const clearSessionCache = async () => {
-		await storage.setItem(cookieName, "{}");
+		await storage.setItemAsync(cookieName, "{}");
 		store?.atoms.session?.set({
 			...store.atoms.session.get(),
 			data: null,
 			error: null,
 			isPending: false,
 		});
-		await storage.setItem(localCacheName, "{}");
+		await storage.setItemAsync(localCacheName, "{}");
 	};
 
 	const rawScheme =
@@ -367,49 +708,28 @@ export const expoClient = (opts: ExpoClientOptions) => {
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
 	}
-	return {
+	return defineExpoClientPlugin({
 		id: "expo",
 		version: PACKAGE_VERSION,
-		getActions(_, $store) {
+		getActions(_fetch: unknown, $store) {
 			store = $store;
-			// Restore the last persisted session as the initial value of the session atom
-			const sessionAtom = $store.atoms.session;
-			if (!isWeb && !opts?.disableCache && sessionAtom) {
-				const raw = storage.getItem(localCacheName);
-				const cached = raw
-					? safeJSONParse<{ user: User; session: Session }>(raw)
-					: null;
-				const exp = cached?.session?.expiresAt;
-				const expMs = exp ? new Date(exp).getTime() : Number.NaN;
-				const isFresh =
-					!!cached?.user?.id && !!cached.session?.id && expMs > Date.now();
-				if (isFresh) {
-					sessionAtom.set({
-						...sessionAtom.get(),
-						data: cached,
-						error: null,
-					});
-				}
-			}
 			return {
 				/**
 				 * Get the stored cookie.
 				 *
-				 * You can use this to get the cookie stored in the device and use it in your fetch
-				 * requests.
-				 *
 				 * @example
 				 * ```ts
-				 * const cookie = client.getCookie();
+				 * const cookie = await client.getCookie();
 				 * fetch("https://api.example.com", {
 				 * 	headers: {
 				 * 		cookie,
 				 * 	},
 				 * });
+				 * ```
 				 */
-				getCookie: () => {
-					const cookie = storage.getItem(cookieName);
-					return getCookie(cookie || "{}");
+				getCookie: async () => {
+					const storedCookie = await storage.getItemAsync(cookieName);
+					return getCookie(storedCookie);
 				},
 			};
 		},
@@ -420,43 +740,42 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				hooks: {
 					async onSuccess(context) {
 						if (isWeb) return;
+						const { pathname } = new URL(context.request.url);
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = storage.getItem(cookieName);
-								const toSetCookie = getSetCookie(
-									setCookie || "",
-									prevCookie ?? undefined,
+								const update = await storage.updateItemAsync(
+									cookieName,
+									(currentValue) =>
+										getSetCookie(setCookie, currentValue ?? undefined),
 								);
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
-								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									await storage.setItem(cookieName, toSetCookie);
+								if (
+									update &&
+									hasSessionCookieChanged(update.previousValue, update.value)
+								) {
 									store?.notify("$sessionSignal");
-								} else {
-									// Still update the storage to refresh expiry times, but don't trigger refetch
-									await storage.setItem(cookieName, toSetCookie);
 								}
 							}
 						}
 
-						if (
-							context.request.url.toString().includes("/get-session") &&
-							!opts?.disableCache
-						) {
+						if (pathname.endsWith("/get-session") && !opts?.disableCache) {
 							const data = context.data;
-							await storage.setItem(localCacheName, JSON.stringify(data));
+							await storage.setItemAsync(localCacheName, JSON.stringify(data));
 						}
-						if (context.request.url.toString().includes("/sign-out")) {
+						if (pathname.endsWith("/sign-out")) {
 							await clearSessionCache();
 						}
 
+						const isSignInRequest =
+							pathname.endsWith("/sign-in") || pathname.includes("/sign-in/");
+						const isLinkSocialRequest = pathname.endsWith("/link-social");
 						if (
 							context.data?.redirect &&
-							(context.request.url.toString().includes("/sign-in") ||
-								context.request.url.toString().includes("/link-social")) &&
+							(isSignInRequest || isLinkSocialRequest) &&
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
@@ -485,7 +804,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								} catch {}
 							}
 
-							const storedCookieJson = storage.getItem(cookieName);
+							const storedCookieJson = await storage.getItemAsync(cookieName);
 							const oauthStateValue = getOAuthStateValue(
 								storedCookieJson,
 								cookiePrefix,
@@ -506,10 +825,14 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const url = new URL(result.url);
 							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
-							const prevCookie = storage.getItem(cookieName);
-							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
-							await storage.setItem(cookieName, toSetCookie);
-							store?.notify("$sessionSignal");
+							const update = await storage.updateItemAsync(
+								cookieName,
+								(currentValue) =>
+									getSetCookie(cookie, currentValue ?? undefined),
+							);
+							if (update) {
+								store?.notify("$sessionSignal");
+							}
 						}
 					},
 				},
@@ -519,6 +842,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							url,
 							options: options as ClientFetchOption,
 						};
+					}
+					const { pathname } = new URL(url, options?.baseURL);
+					if (pathname.endsWith("/get-session")) {
+						await hydrateSessionCache();
 					}
 					options = options || {};
 					options.credentials = "omit";
@@ -534,17 +861,18 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
-						const cookie = url.includes("/link-social")
-							? getCookie(storage.getItem(cookieName) || "{}")
-							: "";
+						const storedCookie = pathname.endsWith("/link-social")
+							? await storage.getItemAsync(cookieName)
+							: null;
+						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
-						const storedCookie = storage.getItem(cookieName);
-						const cookie = getCookie(storedCookie || "{}");
+						const storedCookie = await storage.getItemAsync(cookieName);
+						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
@@ -569,7 +897,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								options.body.errorCallbackURL = url;
 							}
 						}
-						if (url.includes("/sign-out")) {
+						if (pathname.endsWith("/sign-out")) {
 							await clearSessionCache();
 						}
 					}
@@ -580,9 +908,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				},
 			},
 		],
-	} satisfies BetterAuthClientPlugin;
+	});
 };
 
-export { parseSetCookieHeader } from "better-auth/cookies";
+export { parseSetCookieHeader } from "better-auth/cookies/utils";
 export * from "./focus-manager";
 export * from "./online-manager";

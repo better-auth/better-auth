@@ -2,6 +2,7 @@ import type {
 	BetterAuthClientOptions,
 	ClientFetchOption,
 } from "@better-auth/core";
+import type { SocialProviderList } from "@better-auth/core/social-providers";
 import type { BetterFetchResponse } from "@better-fetch/fetch";
 import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
 import type {
@@ -15,6 +16,31 @@ import type {
 	InferSessionFromClient,
 	InferUserFromClient,
 } from "./types";
+
+/**
+ * Extract generic OAuth provider IDs from the client options.
+ * Supports both `$InferAuth` (server type bridge) and client plugins
+ * with `$InferServerPlugin`.
+ */
+type InferGenericOAuthProviderIds<O extends BetterAuthClientOptions> =
+	| (O extends { $InferAuth: { options: { plugins: Array<infer P> } } }
+			? P extends {
+					id: "generic-oauth";
+					options: { config: Array<{ providerId: infer ID }> };
+				}
+				? ID & string
+				: never
+			: never)
+	| (O extends { plugins: Array<infer P> }
+			? P extends {
+					$InferServerPlugin: {
+						id: "generic-oauth";
+						options: { config: Array<{ providerId: infer ID }> };
+					};
+				}
+				? ID & string
+				: never
+			: never);
 
 type KeepNullishFromOriginal<Original, Replaced> =
 	| Replaced
@@ -136,17 +162,44 @@ type InferCtxQuery<
 					fetchOptions?: FetchOptions | undefined;
 				};
 
+type InferBodyCtx<Body, FetchOptions extends ClientFetchOption> =
+	Body extends Record<string, unknown>
+		? Body & {
+				fetchOptions?: FetchOptions | undefined;
+			}
+		: never;
+
+type PrettifyUnion<T> = T extends unknown ? Prettify<T> : never;
+
+type HasRequiredKeysInUnion<T> = true extends (
+	T extends unknown
+		? HasRequiredKeys<T>
+		: never
+)
+	? true
+	: false;
+
+type HasRequiredCtx<
+	C extends InputContext<any, any>,
+	FetchOptions extends ClientFetchOption,
+> =
+	IsAny<C["body"]> extends true
+		? HasRequiredKeysInUnion<InferCtx<C, FetchOptions>>
+		: undefined extends C["body"]
+			? HasRequiredKeysInUnion<InferCtxQuery<C, FetchOptions>>
+			: HasRequiredKeysInUnion<InferCtx<C, FetchOptions>>;
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > =
 	IsAny<C["body"]> extends true
 		? InferCtxQuery<C, FetchOptions>
-		: C["body"] extends Record<string, any>
-			? C["body"] & {
-					fetchOptions?: FetchOptions | undefined;
-				}
-			: InferCtxQuery<C, FetchOptions>;
+		: [NonNullable<C["body"]>] extends [never]
+			? InferCtxQuery<C, FetchOptions>
+			: NonNullable<C["body"]> extends Record<string, any>
+				? InferBodyCtx<NonNullable<C["body"]>, FetchOptions>
+				: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -178,19 +231,28 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											C["params"]
 										>,
 									>(
-										...data: HasRequiredKeys<
-											InferCtx<C, FetchOptions>
-										> extends true
+										...data: HasRequiredCtx<C, FetchOptions> extends true
 											? [
-													Prettify<
+													PrettifyUnion<
 														T["path"] extends `/sign-up/email`
 															? InferSignUpEmailCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
+															: T["path"] extends `/sign-in/social`
+																? Omit<
+																		InferCtx<C, FetchOptions>,
+																		"provider"
+																	> & {
+																		provider:
+																			| SocialProviderList[number]
+																			| InferGenericOAuthProviderIds<COpts>
+																			| (string & {});
+																		fetchOptions?: FetchOptions | undefined;
+																	}
+																: InferCtx<C, FetchOptions>
 													>,
 													FetchOptions?,
 												]
 											: [
-													Prettify<
+													PrettifyUnion<
 														T["path"] extends `/update-user`
 															? InferUserUpdateCtx<COpts, FetchOptions>
 															: T["path"] extends `/update-session`

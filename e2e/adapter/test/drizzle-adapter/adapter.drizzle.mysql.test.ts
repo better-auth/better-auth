@@ -1,4 +1,5 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { testAdapter } from "@better-auth/test-utils/adapter";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -13,6 +14,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const mysqlDB = createPool({
@@ -27,6 +29,7 @@ const { execute } = await testAdapter({
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "mysql",
+			transaction: true,
 		});
 	},
 	async runMigrations(betterAuthOptions) {
@@ -40,13 +43,21 @@ const { execute } = await testAdapter({
 			"mysql",
 		);
 
-		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/better_auth`;
-		console.log(`Running: ${command}`);
+		const command = [
+			`--dir=${resolve(import.meta.dirname, "../..")}`,
+			"exec",
+			"drizzle-kit",
+			"push",
+			"--dialect=mysql",
+			`--schema=${resolve(import.meta.dirname, `${fileName}.ts`)}`,
+			"--url=mysql://user:password@localhost:3306/better_auth",
+		];
+		console.log(`Running: pnpm ${command.join(" ")}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
 			// wait for the above console.log to be printed
 			await new Promise((resolve) => setTimeout(resolve, 10));
-			execSync(command, {
+			execFileSync("pnpm", command, {
 				cwd: import.meta.dirname,
 				stdio: "inherit",
 			});
@@ -65,7 +76,7 @@ const { execute } = await testAdapter({
 	prefixTests: "mysql",
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
@@ -74,6 +85,11 @@ const { execute } = await testAdapter({
 			disableTests: {
 				"findOne - eq with mode sensitive (default) should not match different case": true,
 			},
+		}),
+		scimHttpTestSuite({
+			connectionId: "drizzle-mysql-workforce",
+			token: "drizzle-mysql-scim-token",
+			testId: "drizzle-mysql",
 		}),
 	],
 	async onFinish() {

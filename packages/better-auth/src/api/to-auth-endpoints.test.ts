@@ -1029,6 +1029,27 @@ describe("dynamic baseURL resolution", () => {
 		expect(sharedCtx.baseURL).toBe("");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/9134
+	 */
+	it("should ignore x-forwarded headers when trustedProxyHeaders is not configured", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com", "proxy.example.com"],
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "proxy.example.com",
+				"x-forwarded-proto": "http",
+			}),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
 	it("should ignore x-forwarded-host when trustedProxyHeaders is explicitly disabled", async () => {
 		const authContext = init({
 			baseURL: {

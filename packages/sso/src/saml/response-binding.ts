@@ -1,10 +1,13 @@
+import type { Element as XMLElement } from "@xmldom/xmldom";
+import { DOMParser } from "@xmldom/xmldom";
 import { APIError } from "better-auth/api";
-import { countAllNodes, findNode, xmlParser } from "./parser";
+import { countAllNodes, xmlParser } from "./parser";
 
 export const SAML_HTTP_POST_BINDING =
 	"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
 
 const SAML_BEARER_CONFIRMATION_METHOD = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+const SAML_METADATA_NAMESPACE = "urn:oasis:names:tc:SAML:2.0:metadata";
 
 type XmlNode = Record<string, unknown>;
 
@@ -63,6 +66,161 @@ function parseSAMLContent(samlContent: string): XmlNode {
 	});
 }
 
+export interface SAMLServiceProviderMetadata {
+	entityID: string;
+	nameIDFormats: string[];
+	postAssertionConsumerServiceUrls: string[];
+	wantAssertionsSigned: boolean;
+}
+
+function directMetadataChildren(
+	element: XMLElement,
+	localName: string,
+): XMLElement[] {
+	return Array.from(element.childNodes).filter(
+		(node): node is XMLElement =>
+			node.nodeType === 1 &&
+			node.localName === localName &&
+			node.namespaceURI === SAML_METADATA_NAMESPACE,
+	);
+}
+
+function parseXMLSchemaBoolean(value: string | null): boolean {
+	if (value === null) {
+		return false;
+	}
+
+	switch (value.trim()) {
+		case "true":
+		case "1":
+			return true;
+		case "false":
+		case "0":
+			return false;
+		default:
+			throw new Error("Invalid XML Schema boolean");
+	}
+}
+
+function isAbsoluteHttpUrl(value: string): boolean {
+	// A lone trailing "#" normalizes to an empty url.hash, so check the raw
+	// string rather than the parsed URL to catch every fragment occurrence.
+	if (value.includes("#")) return false;
+	try {
+		const url = new URL(value);
+		return url.protocol === "http:" || url.protocol === "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Parses the security- and identity-relevant parts of SAML service-provider
+ * metadata without relying on local-name-only XML matching.
+ */
+export function parseSAMLServiceProviderMetadata(
+	metadata: string,
+): SAMLServiceProviderMetadata {
+	const document = new DOMParser({
+		onError: (_level, message) => {
+			throw new Error(message);
+		},
+	}).parseFromString(metadata, "text/xml");
+	const entityDescriptor = document.documentElement;
+	if (
+		!entityDescriptor ||
+		entityDescriptor.localName !== "EntityDescriptor" ||
+		entityDescriptor.namespaceURI !== SAML_METADATA_NAMESPACE
+	) {
+		throw new Error("Invalid SAML EntityDescriptor");
+	}
+
+	const entityID = entityDescriptor.getAttribute("entityID")?.trim();
+	if (!entityID) {
+		throw new Error("Missing SAML entityID");
+	}
+
+	const serviceProviderDescriptors = directMetadataChildren(
+		entityDescriptor,
+		"SPSSODescriptor",
+	);
+	if (serviceProviderDescriptors.length === 0) {
+		throw new Error("SAML metadata must contain an SPSSODescriptor");
+	}
+	const acceptedServiceProviderDescriptors = new Set<XMLElement>(
+		serviceProviderDescriptors,
+	);
+	for (const element of Array.from(document.getElementsByTagName("*"))) {
+		if (
+			element.localName === "EntityDescriptor" &&
+			element !== entityDescriptor
+		) {
+			throw new Error("Invalid nested SAML EntityDescriptor");
+		}
+		if (
+			element.localName === "SPSSODescriptor" &&
+			!acceptedServiceProviderDescriptors.has(element)
+		) {
+			throw new Error("Invalid SAML SPSSODescriptor namespace or position");
+		}
+		if (
+			(element.localName === "AssertionConsumerService" ||
+				element.localName === "NameIDFormat") &&
+			(element.namespaceURI !== SAML_METADATA_NAMESPACE ||
+				!element.parentNode ||
+				!acceptedServiceProviderDescriptors.has(
+					element.parentNode as XMLElement,
+				))
+		) {
+			throw new Error(
+				`Invalid SAML ${element.localName} namespace or position`,
+			);
+		}
+	}
+
+	const postAssertionConsumerServiceUrls: string[] = [];
+	const nameIDFormats: string[] = [];
+	let wantAssertionsSigned = false;
+	for (const descriptor of serviceProviderDescriptors) {
+		wantAssertionsSigned =
+			parseXMLSchemaBoolean(descriptor.getAttribute("WantAssertionsSigned")) ||
+			wantAssertionsSigned;
+
+		for (const nameIDFormat of directMetadataChildren(
+			descriptor,
+			"NameIDFormat",
+		)) {
+			const value = nameIDFormat.textContent?.trim();
+			if (value) {
+				nameIDFormats.push(value);
+			}
+		}
+
+		for (const service of directMetadataChildren(
+			descriptor,
+			"AssertionConsumerService",
+		)) {
+			if (service.getAttribute("Binding") !== SAML_HTTP_POST_BINDING) {
+				continue;
+			}
+			const location = service.getAttribute("Location")?.trim();
+			if (!location || !isAbsoluteHttpUrl(location)) {
+				throw new Error("Invalid SAML POST AssertionConsumerService");
+			}
+			postAssertionConsumerServiceUrls.push(location);
+		}
+	}
+
+	return {
+		entityID,
+		nameIDFormats: [...new Set(nameIDFormats)],
+		postAssertionConsumerServiceUrls: [
+			...new Set(postAssertionConsumerServiceUrls),
+		],
+		wantAssertionsSigned,
+	};
+}
+
 export function getSAMLPostAssertionConsumerServiceUrls(
 	metadata: string | undefined,
 ): string[] {
@@ -71,18 +229,8 @@ export function getSAMLPostAssertionConsumerServiceUrls(
 	}
 
 	try {
-		const parsed = toNode(xmlParser.parse(metadata));
-		const spDescriptors = toNodeArray(findNode(parsed, "SPSSODescriptor"));
-		const locations = spDescriptors.flatMap((descriptor) =>
-			toNodeArray(descriptor.AssertionConsumerService)
-				.filter((service) => service["@_Binding"] === SAML_HTTP_POST_BINDING)
-				.map((service) => service["@_Location"])
-				.filter(
-					(location): location is string =>
-						typeof location === "string" && !!location,
-				),
-		);
-		return [...new Set(locations)];
+		return parseSAMLServiceProviderMetadata(metadata)
+			.postAssertionConsumerServiceUrls;
 	} catch {
 		return [];
 	}

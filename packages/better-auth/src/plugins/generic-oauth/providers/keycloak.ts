@@ -30,7 +30,9 @@ export interface KeycloakOptions extends BaseOAuthProviderOptions {
  * });
  * ```
  */
-export function keycloak(options: KeycloakOptions): GenericOAuthConfig {
+export function keycloak(
+	options: KeycloakOptions,
+): GenericOAuthConfig<"keycloak"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	// Ensure issuer ends without trailing slash for proper discovery URL construction
@@ -42,8 +44,12 @@ export function keycloak(options: KeycloakOptions): GenericOAuthConfig {
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
+		endSessionEndpoint: options.endSessionEndpoint,
+		postLogoutRedirectURI: options.postLogoutRedirectURI,
+		disableProviderLogout: options.disableProviderLogout,
 		pkce: options.pkce,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
