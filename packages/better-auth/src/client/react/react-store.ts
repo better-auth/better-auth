@@ -1,7 +1,8 @@
 import type { Store, StoreValue } from "nanostores";
 import { listenKeys } from "nanostores";
-import type { DependencyList } from "react";
+import type { DependencyList, Usable } from "react";
 import { use, useCallback, useRef, useSyncExternalStore } from "react";
+import ReactDOM from "react-dom";
 import type { AuthQueryAtom, AuthQueryState } from "../query";
 import { isAuthQueryAtom, kAuthQueryResource } from "../query";
 
@@ -10,6 +11,14 @@ type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	: never;
 
 const queryStateCache = new WeakMap<object, object>();
+
+// `browser` is currently only exported by React DOM Canary/Experimental.
+// Keep stable React 19 usable until the API is available in a stable release.
+const { browser } = ReactDOM as typeof ReactDOM & {
+	browser?: (reason?: string) => Usable<void>;
+};
+const browserOnlyReason =
+	"Better Auth query hooks require the browser. Use auth.api.getSession with request headers for server-side session reads.";
 
 export type ReactStoreValue<SomeStore extends Store> =
 	SomeStore extends AuthQueryAtom<infer Data>
@@ -96,6 +105,16 @@ function omitPending<T>(
 export function useAuthStore<SomeStore extends Store>(
 	store: SomeStore,
 ): ReactStoreValue<SomeStore> {
+	if (isAuthQueryAtom(store)) {
+		if (browser) {
+			use(browser(browserOnlyReason));
+		} else if (typeof window === "undefined") {
+			// Stable React renders the nearest Suspense fallback on a server error
+			// and retries the component in the browser.
+			throw new Error(browserOnlyReason);
+		}
+	}
+
 	const value = useStore(store);
 
 	if (!isAuthQueryAtom(store)) {
@@ -103,10 +122,9 @@ export function useAuthStore<SomeStore extends Store>(
 	}
 
 	const state = value as AuthQueryState<unknown>;
-	const resolvedState =
-		typeof window !== "undefined" && store[kAuthQueryResource].shouldSuspend()
-			? use(store[kAuthQueryResource].getPromise())
-			: state;
+	const resolvedState = store[kAuthQueryResource].shouldSuspend()
+		? use(store[kAuthQueryResource].getPromise())
+		: state;
 
 	return omitPending(resolvedState) as ReactStoreValue<SomeStore>;
 }

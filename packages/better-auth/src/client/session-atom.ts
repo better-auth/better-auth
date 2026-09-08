@@ -124,6 +124,7 @@ export function getSessionAtom(
 	withEquality(session, isSessionAtomEqual);
 
 	let hasSettledInitialFetch = false;
+	let didRequestSuspensePromise = false;
 	let resolveInitialFetch:
 		| ((state: AuthQueryState<SessionData>) => void)
 		| undefined;
@@ -281,6 +282,7 @@ export function getSessionAtom(
 
 	session[kAuthQueryResource] = {
 		getPromise() {
+			didRequestSuspensePromise = true;
 			void fetchSessionOnMount();
 			return suspensePromise;
 		},
@@ -295,13 +297,20 @@ export function getSessionAtom(
 	let broadcastSessionUpdate: (
 		trigger: "signout" | "getSession" | "updateUser",
 	) => void = () => {};
+	let hasMounted = false;
 
 	onMount(session, () => {
 		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		const isRemount = hasMounted;
+		hasMounted = true;
 
-		if (!isServer()) {
+		if (!isServer() && (isRemount || !didRequestSuspensePromise)) {
 			timeoutId = setTimeout(() => {
-				void fetchSessionOnMount();
+				// A render can start a Suspense request after mounting but before
+				// this timer runs. That request already performs the initial fetch.
+				if (isRemount || !didRequestSuspensePromise) {
+					void fetchSessionOnMount();
+				}
 			}, 0);
 		}
 
