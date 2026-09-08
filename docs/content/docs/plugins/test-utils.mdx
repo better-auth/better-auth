@@ -156,16 +156,7 @@ const member = await test.addMember({
 
 Auth helpers create authenticated sessions for testing protected routes.
 
-All three helpers accept an optional `session` object with additional session fields. Use it to supply required fields without defaults or to override configured defaults for one session:
-
-```ts
-const { headers } = await test.login({
-    userId: user.id,
-    session: { providerToken: "test-token" }
-})
-```
-
-Configure these fields through `session.additionalFields` or a plugin's session schema. Standard session fields such as `id`, `userId`, `token`, and timestamps are ignored in this object; Better Auth continues to generate them. Omitting `session` preserves the default behavior.
+All three helpers accept an optional `session` object for fields configured through `session.additionalFields` or a plugin's session schema. Supplied values override defaults; omitted fields keep their defaults. Standard session fields such as `id`, `userId`, `token`, and timestamps are ignored.
 
 #### login
 
@@ -173,7 +164,8 @@ Creates a session for a user and returns session details, headers, cookies, and 
 
 ```ts
 const { session, user, headers, cookies, token } = await test.login({
-    userId: user.id
+    userId: user.id,
+    session: { providerToken: "test-token" } // optional additional fields
 })
 
 // session - The session object with userId, token, etc.

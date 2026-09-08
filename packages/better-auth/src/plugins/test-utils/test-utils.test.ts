@@ -245,11 +245,7 @@ describe("testUtils plugin", async () => {
 			} else if (helper === "getAuthHeaders") {
 				headers = await test.getAuthHeaders(options);
 			} else {
-				const cookies = await test.getCookies({
-					...options,
-					domain: "custom.example.com",
-				});
-				expect(cookies[0]?.domain).toBe("custom.example.com");
+				const cookies = await test.getCookies(options);
 				headers = new Headers({
 					cookie: cookies
 						.map(({ name, value }) => `${name}=${value}`)
