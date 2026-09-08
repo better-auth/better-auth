@@ -199,7 +199,19 @@ describe("testUtils plugin", async () => {
 	describe("additional session fields", async () => {
 		const { auth } = await getTestInstance(
 			{
-				plugins: [testUtils()],
+				plugins: [
+					testUtils(),
+					{
+						id: "session-fixture",
+						schema: {
+							session: {
+								fields: {
+									pluginToken: { type: "string", required: true, input: false },
+								},
+							},
+						},
+					},
+				],
 				session: {
 					additionalFields: {
 						providerToken: { type: "string", required: true, input: false },
@@ -219,7 +231,11 @@ describe("testUtils plugin", async () => {
 			const user = await test.saveUser(test.createUser());
 			const options = {
 				userId: user.id,
-				session: { providerToken: `token-${helper}`, label: "" },
+				session: {
+					providerToken: `token-${helper}`,
+					pluginToken: `plugin-${helper}`,
+					label: "",
+				},
 			};
 			let headers: Headers;
 			if (helper === "login") {
@@ -252,6 +268,7 @@ describe("testUtils plugin", async () => {
 				userId: user.id,
 				session: {
 					providerToken: "fixture-token",
+					pluginToken: "plugin-token",
 					id: "supplied-id",
 					userId: "another-user",
 					token: "supplied-token",
@@ -265,6 +282,7 @@ describe("testUtils plugin", async () => {
 			expect(result.session).toMatchObject({
 				userId: user.id,
 				providerToken: "fixture-token",
+				pluginToken: "plugin-token",
 				label: "default",
 				ipAddress: "",
 				userAgent: "",
