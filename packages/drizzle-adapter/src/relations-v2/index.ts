@@ -7,6 +7,11 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	checksSchema,
+	createSchemaCheck,
+	registerSchemaCheck,
+} from "@better-auth/core/db/internal";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { SQL } from "drizzle-orm";
@@ -39,6 +44,7 @@ import {
 	insensitiveNe,
 	insensitiveNotInArray,
 } from "../query-builders";
+import { findDrizzleSchemaProblems } from "../schema-check";
 
 export interface DB {
 	[key: string]: any;
@@ -687,7 +693,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				for (const key in values) {
 					if (!schema[key]) {
 						throw new BetterAuthError(
-							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli@latest generate".`,
+							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx auth@latest generate".`,
 						);
 					}
 				}
@@ -709,7 +715,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
@@ -797,7 +803,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
@@ -1128,6 +1134,27 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		const instance = adapter(options);
+		if (checksSchema(options)) {
+			registerSchemaCheck(
+				instance,
+				createSchemaCheck(async () => {
+					const relations: Record<string, { table: unknown }> =
+						db._?.relations ?? {};
+					const schema = {
+						...db._?.fullSchema,
+						...Object.fromEntries(
+							Object.entries(relations).map(([name, relation]) => [
+								name,
+								relation.table,
+							]),
+						),
+						...config.schema,
+					};
+					return findDrizzleSchemaProblems(schema, options, config.usePlural);
+				}, "drizzle"),
+			);
+		}
+		return instance;
 	};
 };
