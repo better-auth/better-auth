@@ -283,10 +283,10 @@ npx auth@latest generate
   The schema generator will output the new v2 format automatically.
 </Callout>
 
-Merge the generated auth relations after your app's relations when configuring Drizzle:
+Merge the generated auth relations after your app's relations in your existing
+Drizzle configuration:
 
 ```ts title="db.ts"
-import { drizzle } from 'drizzle-orm/...';
 import { authRelations } from './auth-schema.ts';
 import { relations } from './app-schema.ts';
 
