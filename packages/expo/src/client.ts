@@ -32,7 +32,8 @@ if (Platform.OS !== "web") {
 export type ExpoClientStorage = Pick<
 	typeof SecureStore,
 	"setItem" | "setItemAsync" | "getItem" | "getItemAsync"
->;
+> &
+	Partial<Pick<typeof SecureStore, "deleteItemAsync">>;
 
 interface ExpoClientOptions {
 	scheme?: string | undefined;
@@ -502,6 +503,18 @@ function getUnusedChunkRanges(
 	}));
 }
 
+async function clearStorageItemAsync(storage: ExpoClientStorage, key: string) {
+	if (!storage.deleteItemAsync) {
+		await storage.setItemAsync(key, "");
+		return;
+	}
+	try {
+		await storage.deleteItemAsync(key);
+	} catch {
+		await storage.setItemAsync(key, "");
+	}
+}
+
 interface StorageRead {
 	snapshot: { value: string | null } | null;
 }
@@ -510,8 +523,6 @@ interface StorageKeyState {
 	pending: Promise<unknown> | null;
 	pendingWrites: number;
 	activeRead: StorageRead | null;
-	revision: number;
-	cleanupRunning: boolean;
 	cleanupComplete: boolean;
 }
 
@@ -532,8 +543,6 @@ function getStorageState(storage: ExpoClientStorage, key: string) {
 			pending: null,
 			pendingWrites: 0,
 			activeRead: null,
-			revision: 0,
-			cleanupRunning: false,
 			cleanupComplete: false,
 		};
 		states.set(key, state);
@@ -568,75 +577,6 @@ function enqueueStorageWrite<Result>(
 			state.pendingWrites--;
 		}
 	});
-}
-
-async function sweepOrphanChunks(
-	storage: ExpoClientStorage,
-	key: string,
-	state: StorageKeyState,
-): Promise<number | null> {
-	await new Promise<void>((resolve) => setTimeout(resolve, 0));
-	// A failed operation should not stop cleanup.
-	for (let pending = state.pending; pending; pending = state.pending) {
-		await pending.catch(() => {});
-	}
-
-	const revision = state.revision;
-	const baseValue = await storage.getItemAsync(key);
-	for (let pending = state.pending; pending; pending = state.pending) {
-		await pending.catch(() => {});
-	}
-	if (state.revision !== revision) return null;
-	const marker = baseValue?.startsWith(CHUNK_MARKER)
-		? parseChunkMarker(baseValue)
-		: null;
-	if (baseValue?.startsWith(CHUNK_MARKER) && !marker) {
-		throw new Error("Cannot clean chunks with an invalid storage marker");
-	}
-
-	for (const slot of CHUNK_SLOTS) {
-		const prefix = slot === null ? key : `${key}.${slot}`;
-		const start = getSlotChunkCount(marker, slot);
-		for (let i = start; i < MAX_STORAGE_CHUNKS; i++) {
-			for (let pending = state.pending; pending; pending = state.pending) {
-				await pending.catch(() => {});
-			}
-			if (state.revision !== revision) return null;
-			const chunkKey = `${prefix}.${i}`;
-			const chunk = await storage.getItemAsync(chunkKey);
-			for (let pending = state.pending; pending; pending = state.pending) {
-				await pending.catch(() => {});
-			}
-			if (state.revision !== revision) return null;
-			// A synchronous clear prevents a writer from reusing the key after the check.
-			if (chunk) storage.setItem(chunkKey, "");
-			await new Promise<void>((resolve) => setTimeout(resolve, 0));
-		}
-	}
-	return state.revision === revision ? revision : null;
-}
-
-function scheduleOrphanCleanup(
-	storage: ExpoClientStorage,
-	key: string,
-	state: StorageKeyState,
-) {
-	if (state.cleanupComplete || state.cleanupRunning) return;
-	state.cleanupRunning = true;
-	void sweepOrphanChunks(storage, key, state).then(
-		(cleanedRevision) => {
-			state.cleanupRunning = false;
-			state.cleanupComplete = cleanedRevision === state.revision;
-			if (!state.cleanupComplete) scheduleOrphanCleanup(storage, key, state);
-		},
-		(error: unknown) => {
-			state.cleanupRunning = false;
-			logger.error(
-				`[better-auth/expo] failed to clear orphaned chunks for "${key}"`,
-				error,
-			);
-		},
-	);
 }
 
 interface ExpoStorageAdapter {
@@ -689,7 +629,6 @@ function createManagedStorage(storage: ExpoClientStorage) {
 		currentBaseValue: string | null,
 	) => {
 		const state = getStorageState(storage, key);
-		state.revision++;
 		const { writes, cleanup } = getStorageWritePlan(
 			key,
 			value,
@@ -699,16 +638,27 @@ function createManagedStorage(storage: ExpoClientStorage) {
 			storage.setItem(writeKey, writeValue);
 		}
 		try {
+			const scanContiguousOrphans = !state.cleanupComplete;
 			for (const { prefix, start, end } of cleanup) {
+				if (scanContiguousOrphans) {
+					const orphanStart = Math.max(start, end);
+					let orphanEnd = orphanStart;
+					for (; orphanEnd < MAX_STORAGE_CHUNKS; orphanEnd++) {
+						if (!storage.getItem(`${prefix}.${orphanEnd}`)) break;
+					}
+					for (let i = orphanEnd - 1; i >= orphanStart; i--) {
+						storage.setItem(`${prefix}.${i}`, "");
+					}
+				}
 				for (let i = end - 1; i >= start; i--) {
 					storage.setItem(`${prefix}.${i}`, "");
 				}
 			}
+			state.cleanupComplete = true;
 		} catch (error) {
 			state.cleanupComplete = false;
 			logCleanupError(key, error);
 		}
-		scheduleOrphanCleanup(storage, key, state);
 	};
 	const writeItemAsync = async (
 		key: string,
@@ -716,7 +666,6 @@ function createManagedStorage(storage: ExpoClientStorage) {
 		currentBaseValue: string | null,
 	) => {
 		const state = getStorageState(storage, key);
-		state.revision++;
 		const { writes, cleanup } = getStorageWritePlan(
 			key,
 			value,
@@ -726,16 +675,28 @@ function createManagedStorage(storage: ExpoClientStorage) {
 			await storage.setItemAsync(writeKey, writeValue);
 		}
 		try {
+			const scanContiguousOrphans = !state.cleanupComplete;
 			for (const { prefix, start, end } of cleanup) {
+				if (scanContiguousOrphans) {
+					const orphanStart = Math.max(start, end);
+					let orphanEnd = orphanStart;
+					for (; orphanEnd < MAX_STORAGE_CHUNKS; orphanEnd++) {
+						const chunk = await storage.getItemAsync(`${prefix}.${orphanEnd}`);
+						if (!chunk) break;
+					}
+					for (let i = orphanEnd - 1; i >= orphanStart; i--) {
+						await clearStorageItemAsync(storage, `${prefix}.${i}`);
+					}
+				}
 				for (let i = end - 1; i >= start; i--) {
-					await storage.setItemAsync(`${prefix}.${i}`, "");
+					await clearStorageItemAsync(storage, `${prefix}.${i}`);
 				}
 			}
+			state.cleanupComplete = true;
 		} catch (error) {
 			state.cleanupComplete = false;
 			logCleanupError(key, error);
 		}
-		scheduleOrphanCleanup(storage, key, state);
 	};
 	const setItem = (name: string, value: string): void => {
 		const key = normalizeCookieName(name);

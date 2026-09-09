@@ -1503,7 +1503,7 @@ describe("expo with cookieCache", async () => {
 		}
 
 		describe.each(["setItem", "setItemAsync"] as const)("%s", (method) => {
-			it("recovers an orphaned tail after earlier chunks were cleared", async () => {
+			it("retries orphan cleanup without leaving an unscannable gap", async () => {
 				const map = new Map<string, string>([
 					[key, "\u0001ba-chunks:2:0"],
 					[`${key}.0.0`, "first"],
@@ -1525,55 +1525,17 @@ describe("expo with cookieCache", async () => {
 				await storage[method](key, "{}");
 				await vi.runAllTimersAsync();
 				expect(map.get(key)).toBe("{}");
-				expect(map.get(`${key}.0.0`)).toBe("");
-				expect(map.get(`${key}.0.1`)).toBe("");
+				expect(map.get(`${key}.0.0`)).toBe("first");
+				expect(map.get(`${key}.0.1`)).toBe("second");
 				expect(map.get(`${key}.0.2`)).toBe("old-secret");
 				expect(error).toHaveBeenCalledOnce();
 
 				failing = false;
 				await storage[method](key, "{}");
 				await vi.runAllTimersAsync();
+				expect(map.get(`${key}.0.0`)).toBe("");
+				expect(map.get(`${key}.0.1`)).toBe("");
 				expect(map.get(`${key}.0.2`)).toBe("");
-			});
-
-			it("allows foreground access while a background probe is pending", async () => {
-				const map = new Map<string, string>([[`${key}.0.0`, "old-secret"]]);
-				const backing = createBackingStorage(map);
-				const { reading, resume } = pauseNextStorageRead(backing, `${key}.0.0`);
-				const storage = storageAdapter(backing);
-				const error = vi.spyOn(logger, "error").mockImplementation(() => {});
-				await storage[method](key, "{}");
-				await vi.runAllTimersAsync();
-				await reading;
-
-				try {
-					await expect(storage.getItemAsync(key)).resolves.toBe("{}");
-					await storage[method](key, previousValue);
-					expect(storage.getItem(key)).toBe(previousValue);
-				} finally {
-					resume();
-				}
-				await vi.runAllTimersAsync();
-				expect(storage.getItem(key)).toBe(previousValue);
-				expect(error).not.toHaveBeenCalled();
-			});
-
-			it("completes foreground writes before probing orphaned chunks", async () => {
-				const map = new Map<string, string>([[`${key}.2`, "old-secret"]]);
-				const backing = createBackingStorage(map);
-				const getItem = vi.spyOn(backing, "getItem");
-				const getItemAsync = vi.spyOn(backing, "getItemAsync");
-				const storage = storageAdapter(backing);
-
-				await storage[method](key, "{}");
-
-				expect(map.get(key)).toBe("{}");
-				expect(map.get(`${key}.2`)).toBe("old-secret");
-				expect(getItem.mock.calls.length + getItemAsync.mock.calls.length).toBe(
-					1,
-				);
-				await vi.runAllTimersAsync();
-				expect(map.get(`${key}.2`)).toBe("");
 			});
 
 			it("persists a short value when reading the previous marker fails", async () => {
@@ -1604,19 +1566,6 @@ describe("expo with cookieCache", async () => {
 				const storage = storageAdapter(createBackingStorage(map));
 				await storage[method](key, "{}");
 				expect(map.get(`${key}.2`) ?? "").toBe("");
-			});
-
-			it("clears orphaned chunks even when the first chunk is missing", async () => {
-				const map = new Map<string, string>([
-					[key, "{}"],
-					[`${key}.2`, "old-secret"],
-					[`${key}.0.2`, "old-cache"],
-				]);
-				const storage = storageAdapter(createBackingStorage(map));
-				await storage[method](key, "{}");
-				await vi.runAllTimersAsync();
-				expect(map.get(`${key}.2`) ?? "").toBe("");
-				expect(map.get(`${key}.0.2`) ?? "").toBe("");
 			});
 
 			it("uses the marker to clear incomplete chunks after the initial sweep", async () => {
@@ -1766,13 +1715,8 @@ describe("expo with cookieCache", async () => {
 				expect(map.get(`${key}.1`)).toBe("");
 			});
 
-			it("bounds orphan probing and skips it after successful cleanup", async () => {
+			it("stops orphan probing at the first empty chunk", async () => {
 				const map = new Map<string, string>();
-				for (const prefix of [key, `${key}.0`, `${key}.1`]) {
-					for (let i = 0; i <= 100; i++) {
-						map.set(`${prefix}.${i}`, "old data");
-					}
-				}
 				const backing = createBackingStorage(map);
 				const getItem = vi.spyOn(backing, "getItem");
 				const getItemAsync = vi.spyOn(backing, "getItemAsync");
@@ -1780,145 +1724,76 @@ describe("expo with cookieCache", async () => {
 
 				await storage[method](key, "{}");
 				expect(getItem.mock.calls.length + getItemAsync.mock.calls.length).toBe(
-					1,
+					4,
 				);
-				await vi.runAllTimersAsync();
-				const chunkReads = [
-					...getItem.mock.calls,
-					...getItemAsync.mock.calls,
-				].filter(([name]) => name !== key);
-				expect(chunkReads).toHaveLength(300);
-				for (const prefix of [key, `${key}.0`, `${key}.1`]) {
-					expect(map.get(`${prefix}.0`)).toBe("");
-					expect(map.get(`${prefix}.99`)).toBe("");
-					expect(map.get(`${prefix}.100`)).toBe("old data");
-				}
 
 				getItem.mockClear();
 				getItemAsync.mockClear();
 				await storageAdapter(backing)[method](key, "{}");
-				await vi.runAllTimersAsync();
 				expect(getItem.mock.calls.length + getItemAsync.mock.calls.length).toBe(
 					1,
 				);
+
+				const nextBacking = createBackingStorage(map);
+				const nextGetItem = vi.spyOn(nextBacking, "getItem");
+				const nextGetItemAsync = vi.spyOn(nextBacking, "getItemAsync");
+				await storageAdapter(nextBacking)[method](key, "{}");
+				expect(
+					nextGetItem.mock.calls.length + nextGetItemAsync.mock.calls.length,
+				).toBe(4);
 			});
 		});
 
-		it("yields after each orphan chunk probe", async () => {
+		it("deletes obsolete chunks when async deletion is available", async () => {
 			const map = new Map<string, string>([
-				[`${key}.8`, "old-secret"],
-				[`${key}.9`, "another-secret"],
+				[key, "\u0001ba-chunks:2"],
+				[`${key}.0`, "first"],
+				[`${key}.1`, "second"],
+			]);
+			const setItemAsync = vi.fn(async (name: string, value: string) => {
+				map.set(name, value);
+			});
+			const deleteItemAsync = vi.fn(async (name: string) => {
+				map.delete(name);
+			});
+			const storage = storageAdapter({
+				...createBackingStorage(map),
+				setItemAsync,
+				deleteItemAsync,
+			});
+
+			await storage.setItemAsync(key, "{}");
+
+			expect(deleteItemAsync).toHaveBeenCalledWith(`${key}.1`);
+			expect(deleteItemAsync).toHaveBeenCalledWith(`${key}.0`);
+			expect(setItemAsync).not.toHaveBeenCalledWith(`${key}.1`, "");
+			expect(setItemAsync).not.toHaveBeenCalledWith(`${key}.0`, "");
+		});
+
+		it("retries partially cleared orphan chunks on the next write", async () => {
+			const map = new Map<string, string>([
+				[`${key}.0`, "first"],
+				[`${key}.1`, "second"],
+				[`${key}.2`, "third"],
 			]);
 			const backing = createBackingStorage(map);
-			const schedule = vi.spyOn(globalThis, "setTimeout");
-			const turns = new Map<number, { probes: number; clears: number }>();
-			const record = (operation: "probes" | "clears") => {
-				const id = schedule.mock.calls.length;
-				const turn = turns.get(id) ?? { probes: 0, clears: 0 };
-				turn[operation]++;
-				turns.set(id, turn);
-			};
-			backing.getItemAsync = async (name) => {
-				if (name !== key) record("probes");
-				return map.get(name) ?? null;
-			};
-			backing.setItem = (name, value) => {
-				record("clears");
-				map.set(name, value);
-			};
-			const storage = storageAdapter(backing);
-			await storage.setItemAsync(key, "{}");
-			turns.clear();
-			await vi.runAllTimersAsync();
-			expect(turns.size).toBe(300);
-			for (const turn of turns.values()) {
-				expect(turn.probes).toBe(1);
-				expect(turn.clears).toBeLessThanOrEqual(1);
-			}
-			expect(map.get(`${key}.8`)).toBe("");
-			expect(map.get(`${key}.9`)).toBe("");
-		});
-
-		it.each([
-			{ outcome: "successful", failing: false, expected: "{}" },
-			{ outcome: "failed", failing: true, expected: null },
-		])("preserves scan progress across $outcome readers", async ({
-			failing,
-			expected,
-		}) => {
-			const map = new Map<string, string>([[`${key}.1.99`, "old-secret"]]);
-			const backing = createBackingStorage(map);
-			const storage = storageAdapter(backing);
-			const interruptions = new Set([`${key}.33`, `${key}.66`, `${key}.99`]);
-			const reads: Promise<string | null>[] = [];
-			const probes: string[] = [];
-			let failNextRead = false;
-			backing.getItemAsync = async (name) => {
-				if (name === key && failNextRead) {
-					failNextRead = false;
-					throw new Error("read failed");
-				}
-				if (name !== key) probes.push(name);
-				if (interruptions.delete(name)) {
-					failNextRead = failing;
-					reads.push(storage.getItemAsync(key).catch(() => null));
-				}
-				return map.get(name) ?? null;
-			};
-
-			await storage.setItemAsync(key, "{}");
-			await vi.runAllTimersAsync();
-
-			expect(await Promise.all(reads)).toEqual([expected, expected, expected]);
-			expect(probes).toHaveLength(300);
-			expect(new Set(probes).size).toBe(300);
-			expect(map.get(`${key}.1.99`)).toBe("");
-		});
-
-		it("waits for an active reader without polling or joining its queue", async () => {
-			const map = new Map<string, string>([[`${key}.0`, "old-secret"]]);
-			const backing = createBackingStorage(map);
-			const probe = pauseNextStorageRead(backing, `${key}.0`);
-			const storage = storageAdapter(backing);
-			await storage.setItemAsync(key, "{}");
-			await vi.runAllTimersAsync();
-			await probe.reading;
-			const reader = pauseNextStorageRead(backing, key);
-			const read = storage.getItemAsync(key);
-			await reader.reading;
-			probe.resume();
-			try {
-				await vi.runAllTimersAsync();
-				expect(map.get(`${key}.0`)).toBe("old-secret");
-				expect(vi.getTimerCount()).toBe(0);
-			} finally {
-				reader.resume();
-			}
-			await read;
-			await vi.runAllTimersAsync();
-			expect(map.get(`${key}.0`)).toBe("");
-		});
-
-		it("retries a failed background sweep after the next write", async () => {
-			const map = new Map<string, string>([[`${key}.0`, "old-secret"]]);
-			const backing = createBackingStorage(map);
 			let failing = true;
-			backing.getItemAsync = async (name) => {
-				if (name === `${key}.0` && failing) throw new Error("probe failed");
-				return map.get(name) ?? null;
+			backing.setItemAsync = async (name, value) => {
+				if (name === `${key}.1` && failing) throw new Error("cleanup failed");
+				map.set(name, value);
 			};
 			const storage = storageAdapter(backing);
 			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 			await storage.setItemAsync(key, "{}");
-			await vi.runAllTimersAsync();
-			expect(map.get(`${key}.0`)).toBe("old-secret");
+			expect(map.get(`${key}.0`)).toBe("first");
+			expect(map.get(`${key}.1`)).toBe("second");
+			expect(map.get(`${key}.2`)).toBe("");
 			expect(error).toHaveBeenCalledOnce();
-			expect(vi.getTimerCount()).toBe(0);
 
 			failing = false;
 			await storage.setItemAsync(key, "next");
-			await vi.runAllTimersAsync();
 			expect(map.get(`${key}.0`)).toBe("");
+			expect(map.get(`${key}.1`)).toBe("");
 			expect(map.get(key)).toBe("next");
 		});
 
