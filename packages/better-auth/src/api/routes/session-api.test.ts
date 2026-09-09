@@ -14,6 +14,7 @@ import {
 	expectTypeOf,
 	it,
 	onTestFinished,
+	test,
 	vi,
 } from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
@@ -1332,88 +1333,77 @@ describe("cookie cache with JWE strategy", () => {
 	});
 });
 
-describe("cookie cache refreshCache", async () => {
-	const { auth, client, testUser, cookieSetter } = await getTestInstance({
-		session: {
-			cookieCache: {
-				enabled: true,
-				strategy: "jwe",
-				maxAge: 300, // 5 minutes
-				refreshCache: {
-					updateAge: 60, // Refresh when less than 60 seconds remain
+const refreshCacheTest = test.extend(
+	"cachedSession",
+	async ({}, { onCleanup }) => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300,
+					refreshCache: { updateAge: 60 },
 				},
 			},
-		},
-	});
-	const ctx = await auth.$context;
-	const fn = vi.spyOn(ctx.adapter, "findOne");
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers), throw: true },
+		);
+		const context = await auth.$context;
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		onCleanup(() => findOne.mockRestore());
 
+		return { client, headers, cookieSetter, findOne };
+	},
+);
+
+describe("cookie cache refreshCache", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
-	const headers = new Headers();
+	refreshCacheTest(
+		"uses cached data before the refresh threshold",
+		async ({ cachedSession }) => {
+			const { client, headers, findOne } = cachedSession;
 
-	it("should use cached data when refreshCache threshold has not been reached", async () => {
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: cookieSetter(headers),
-			},
-		);
-		expect(fn).toHaveBeenCalledTimes(1);
+			const firstSession = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(firstSession.data).not.toBeNull();
+			expect(findOne).not.toHaveBeenCalled();
 
-		const session1 = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session1.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
+			const secondSession = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(secondSession.data).not.toBeNull();
+			expect(findOne).not.toHaveBeenCalled();
+		},
+	);
 
-		const session2 = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session2.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
-	});
+	refreshCacheTest(
+		"does not perform stateless refresh when a database is configured",
+		async ({ cachedSession }) => {
+			const { client, headers, cookieSetter, findOne } = cachedSession;
 
-	it("should not perform stateless refresh when a database is configured", async () => {
-		const callsBefore = fn.mock.calls.length;
+			vi.useFakeTimers();
+			await vi.advanceTimersByTimeAsync(241_000);
 
-		vi.useFakeTimers();
-		// Advance time by 241 seconds (300 - 60 = 240, so at 241 we're within the refresh window)
-		await vi.advanceTimersByTimeAsync(1000 * 241);
-
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					cookieSetter(headers)(context);
+			const session = await client.getSession({
+				fetchOptions: {
+					headers,
+					onSuccess: cookieSetter(headers),
 				},
-			},
-		});
-		expect(session.data).not.toBeNull();
+			});
+			expect(session.data).not.toBeNull();
+			expect(findOne).not.toHaveBeenCalled();
 
-		// With a database configured, `refreshCache` is ignored (a warning is logged),
-		// so no additional DB call should be made here.
-		const callsAfterRefresh = fn.mock.calls.length;
-		expect(callsAfterRefresh).toBe(callsBefore);
-
-		await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(fn).toHaveBeenCalledTimes(callsAfterRefresh);
-
-		vi.useRealTimers();
-	});
+			await client.getSession({ fetchOptions: { headers } });
+			expect(findOne).not.toHaveBeenCalled();
+		},
+	);
 
 	it("should not refresh cache when refreshCache is disabled (false)", async () => {
 		const {
