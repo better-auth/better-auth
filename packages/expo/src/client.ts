@@ -32,8 +32,7 @@ if (Platform.OS !== "web") {
 export type ExpoClientStorage = Pick<
 	typeof SecureStore,
 	"setItem" | "setItemAsync" | "getItem" | "getItemAsync"
-> &
-	Partial<Pick<typeof SecureStore, "deleteItemAsync">>;
+>;
 
 interface ExpoClientOptions {
 	scheme?: string | undefined;
@@ -503,18 +502,6 @@ function getUnusedChunkRanges(
 	}));
 }
 
-async function clearStorageItemAsync(storage: ExpoClientStorage, key: string) {
-	if (!storage.deleteItemAsync) {
-		await storage.setItemAsync(key, "");
-		return;
-	}
-	try {
-		await storage.deleteItemAsync(key);
-	} catch {
-		await storage.setItemAsync(key, "");
-	}
-}
-
 interface StorageRead {
 	snapshot: { value: string | null } | null;
 }
@@ -685,11 +672,11 @@ function createManagedStorage(storage: ExpoClientStorage) {
 						if (!chunk) break;
 					}
 					for (let i = orphanEnd - 1; i >= orphanStart; i--) {
-						await clearStorageItemAsync(storage, `${prefix}.${i}`);
+						await storage.setItemAsync(`${prefix}.${i}`, "");
 					}
 				}
 				for (let i = end - 1; i >= start; i--) {
-					await clearStorageItemAsync(storage, `${prefix}.${i}`);
+					await storage.setItemAsync(`${prefix}.${i}`, "");
 				}
 			}
 			state.cleanupComplete = true;

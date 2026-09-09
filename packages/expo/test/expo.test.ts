@@ -1744,32 +1744,6 @@ describe("expo with cookieCache", async () => {
 			});
 		});
 
-		it("deletes obsolete chunks when async deletion is available", async () => {
-			const map = new Map<string, string>([
-				[key, "\u0001ba-chunks:2"],
-				[`${key}.0`, "first"],
-				[`${key}.1`, "second"],
-			]);
-			const setItemAsync = vi.fn(async (name: string, value: string) => {
-				map.set(name, value);
-			});
-			const deleteItemAsync = vi.fn(async (name: string) => {
-				map.delete(name);
-			});
-			const storage = storageAdapter({
-				...createBackingStorage(map),
-				setItemAsync,
-				deleteItemAsync,
-			});
-
-			await storage.setItemAsync(key, "{}");
-
-			expect(deleteItemAsync).toHaveBeenCalledWith(`${key}.1`);
-			expect(deleteItemAsync).toHaveBeenCalledWith(`${key}.0`);
-			expect(setItemAsync).not.toHaveBeenCalledWith(`${key}.1`, "");
-			expect(setItemAsync).not.toHaveBeenCalledWith(`${key}.0`, "");
-		});
-
 		it("retries partially cleared orphan chunks on the next write", async () => {
 			const map = new Map<string, string>([
 				[`${key}.0`, "first"],
