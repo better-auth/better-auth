@@ -1675,5 +1675,18 @@ export type BetterAuthOptions = {
 		 * @default false
 		 */
 		joins?: boolean;
+		/**
+		 * OpenTelemetry instrumentation configuration.
+		 */
+		instrumentation?:
+			| {
+					/**
+					 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+					 *
+					 * @default true
+					 */
+					enabled?: boolean | undefined;
+			  }
+			| undefined;
 	};
 };

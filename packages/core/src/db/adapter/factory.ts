@@ -1,7 +1,7 @@
 import {
 	ATTR_DB_COLLECTION_NAME,
 	ATTR_DB_OPERATION_NAME,
-	withSpan,
+	createWithSpan,
 } from "@better-auth/core/instrumentation";
 import {
 	getCurrentAdapter,
@@ -61,6 +61,7 @@ export const createAdapterFactory =
 		config: cfg,
 	}: AdapterFactoryOptions): AdapterFactory<Options> =>
 	(options: Options): DBAdapter<Options> => {
+		const withSpan = createWithSpan(options);
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
