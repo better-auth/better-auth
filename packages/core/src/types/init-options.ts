@@ -1664,6 +1664,7 @@ export type BetterAuthOptions = {
 		  }
 		| undefined;
 	/**
+<<<<<<< HEAD
 	 * Experimental features
 	 */
 	experimental?: {
@@ -1690,4 +1691,25 @@ export type BetterAuthOptions = {
 			  }
 			| undefined;
 	};
+=======
+	 * Experimental features.
+	 */
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
+		  }
+		| undefined;
+>>>>>>> c1756a2 (feat(instrumentation): add option to disable tracing (#11224))
 };
