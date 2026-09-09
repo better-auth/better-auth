@@ -1036,9 +1036,6 @@ importers:
       better-call:
         specifier: 'catalog:'
         version: 1.4.0(zod@4.5.4)
-      better-sqlite3:
-        specifier: '>=12.10.0 <13'
-        version: 12.11.1
       defu:
         specifier: '>=6.1.5 <7'
         version: 6.1.7
