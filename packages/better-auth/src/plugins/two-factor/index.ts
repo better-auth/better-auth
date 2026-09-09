@@ -13,7 +13,6 @@ import {
 	expireCookie,
 	setSessionCookie,
 } from "../../cookies";
-import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { shouldRequirePassword, validatePassword } from "../../utils/password";
@@ -28,7 +27,7 @@ import {
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
-import { totp2fa } from "./totp";
+import { encodeTOTPSecret, totp2fa } from "./totp";
 import type {
 	TwoFactorOptions,
 	TwoFactorTable,
@@ -239,10 +238,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							where: [{ field: "userId", value: user.id }],
 						});
 					const secret = generateRandomString(32);
-					const encryptedSecret = await symmetricEncrypt({
-						key: ctx.context.secretConfig,
-						data: secret,
-					});
+					const encryptedSecret = await encodeTOTPSecret(
+						ctx,
+						secret,
+						options?.totpOptions,
+					);
 					if (options?.skipVerificationOnEnable) {
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							user.id,
