@@ -560,9 +560,110 @@ export const twoFactorTotpOptionsType = {
     type: "number",
     default: 30,
   },
+  storeSecret: {
+    description:
+      "How the TOTP secret is encrypted at rest. Either `encrypted` to use the built-in cipher, or a custom encryptor. Unlike `storeOTP` and `storeBackupCodes` there is no `plain` or `hashed` mode: the secret must stay recoverable to generate and verify codes, and it is a long-lived credential rather than a single-use code.",
+    type: '"encrypted" | { encrypt: (secret: string) => Promise<string>, decrypt: (secret: string) => Promise<string> }',
+    default: "encrypted",
+  },
 }
 
 <TypeTable type={twoFactorTotpOptionsType} />
+
+By default the TOTP secret is encrypted with the built-in cipher
+(XChaCha20-Poly1305) using your `secret`. You can supply your own
+implementation instead, for example to keep the secret inside a KMS/HSM or a
+[FIPS 140-3](https://csrc.nist.gov/pubs/fips/140-3/final) validated
+cryptographic module, since XChaCha20-Poly1305 is not FIPS-approved. Note that
+the built-in cipher also derives its key by hashing your `secret` directly,
+which is not an approved key-derivation function; a validated implementation
+should use an approved KDF such as HKDF.
+
+**Custom encryptor**
+
+`encrypt` and `decrypt` are required together — configuring only one is a
+startup error, because it would store the secret with a different cipher than
+the one used to read it.
+
+```ts title="auth.ts"
+twoFactor({
+    totpOptions: {
+        storeSecret: {
+            encrypt: async (secret) => {
+                return myCustomEncryptor(secret);
+            },
+            decrypt: async (secret) => {
+                return myCustomDecryptor(secret);
+            },
+        },
+    },
+})
+```
+
+<Callout type="warn">
+  The stored value must fit the `secret` column. Using Better Auth's own
+  migrations, it is generated as `varchar(255)` on MySQL and `varchar(8000)` on
+  MSSQL, and as `text` on PostgreSQL and SQLite. The Prisma generator emits
+  `@db.Text` for it, with only the index prefix limited to 191 characters. So
+  MySQL is the one tight case: a wrapped key returned by a KMS can exceed 255
+  characters and will fail on enrollment. Check your column width before
+  rolling this out.
+</Callout>
+
+**Migrating existing secrets**
+
+Secrets already in your database were written with the built-in cipher. Adding
+`storeSecret` does not re-encrypt them, and they are only rewritten when a user
+re-enrolls, so `decrypt` has to read both formats or existing users will not be
+able to sign in.
+
+Tag your own ciphertext and branch on that tag. Do not rely on the previous
+cipher throwing to detect its own values: that holds for an AEAD such as
+AES-GCM, but a non-AEAD mode can return garbage instead of failing, which would
+silently feed an invalid secret into code verification.
+
+Pass the fallback the *same* secret material your app passes to `betterAuth`,
+from a single source, rather than re-reading it from the environment inside the
+hook. The value may be set in code or come from a secret manager, and the way
+you reach the environment is not portable across every supported runtime.
+
+```ts title="auth.ts"
+import { symmetricDecrypt } from "better-auth/crypto";
+
+// However your app sources it: env var, secret manager, config module.
+const secret = getAuthSecret();
+
+export const auth = betterAuth({
+    secret,
+    plugins: [
+        twoFactor({
+            totpOptions: {
+                storeSecret: {
+                    encrypt: async (value) => `v2$${await myCustomEncryptor(value)}`,
+                    decrypt: async (value) => {
+                        if (value.startsWith("v2$")) {
+                            return await myCustomDecryptor(value.slice(3));
+                        }
+                        // Written before `storeSecret` was configured.
+                        return await symmetricDecrypt({ key: secret, data: value });
+                    },
+                },
+            },
+        }),
+    ],
+});
+```
+
+<Callout type="warn">
+  If you use [secret rotation](/docs/reference/security#secret-rotation)
+  (`secrets: [...]`), existing values are wrapped in a versioned envelope and a
+  plain string key cannot decrypt them. Build the same `SecretConfig` your app
+  uses and pass that as `key` instead.
+
+  Keep the fallback until every row has been migrated. If your compliance
+  requirements forbid the old algorithm outright, drop the fallback and have
+  affected users disable and re-enable two-factor authentication to re-enroll.
+</Callout>
 
 **OTP options**
 
