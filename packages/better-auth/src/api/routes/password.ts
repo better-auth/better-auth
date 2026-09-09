@@ -142,6 +142,15 @@ export const requestPasswordReset = createAuthEndpoint(
 				ctx.request,
 			),
 		);
+		if (ctx.context.options.emailAndPassword?.onResetPasswordRequested) {
+			const onResetPasswordRequested =
+				ctx.context.options.emailAndPassword.onResetPasswordRequested;
+			await ctx.context.runInBackgroundOrAwait(
+				Promise.resolve().then(() =>
+					onResetPasswordRequested({ user: user.user }, ctx.request),
+				),
+			);
+		}
 		return ctx.json({
 			status: true,
 			message:

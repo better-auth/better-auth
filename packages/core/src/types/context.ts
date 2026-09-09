@@ -391,6 +391,8 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * by `setNewSession` method.
 			 */
 			newSession: {
+				/** Set only for a newly authenticated session, pending the after hooks. */
+				isLogin?: boolean;
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
@@ -400,6 +402,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			} | null;
 			setNewSession: (
 				session: {
+					isLogin?: boolean;
 					session: Session & Record<string, any>;
 					user: User & Record<string, any>;
 				} | null,

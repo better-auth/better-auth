@@ -188,6 +188,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						);
 					}
 					await setSessionCookie(ctx, {
+						isLogin: true,
 						session,
 						user: newUser,
 					});

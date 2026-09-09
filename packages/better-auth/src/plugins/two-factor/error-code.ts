@@ -1,6 +1,9 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
+	TWO_FACTOR_REQUIRES_TRANSACTION:
+		"Two-factor configuration requires a transactional database without secondary storage",
+	FAILED_TO_UPDATE_TWO_FACTOR: "Failed to update two-factor configuration",
 	OTP_NOT_ENABLED: "OTP not enabled",
 	OTP_NOT_CONFIGURED: "OTP is not available",
 	OTP_HAS_EXPIRED: "OTP has expired",

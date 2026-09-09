@@ -3,6 +3,13 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 export const schema = {
 	user: {
 		fields: {
+			twoFactorVersion: {
+				type: "number",
+				required: true,
+				defaultValue: 0,
+				input: false,
+				returned: false,
+			},
 			twoFactorEnabled: {
 				type: "boolean",
 				required: false,

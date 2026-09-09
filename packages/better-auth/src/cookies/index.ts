@@ -355,6 +355,8 @@ export async function decodeCookieCache(
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
+		/** Marks a fresh authentication for onLogin after the hook pipeline. */
+		isLogin?: boolean;
 		session: Session & Record<string, unknown>;
 		user: User;
 	},
@@ -393,7 +395,14 @@ export async function setSessionCookie(
 		);
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
-	ctx.context.setNewSession(session);
+	const isLogin =
+		session.isLogin ??
+		(ctx.context.newSession?.session.token === session.session.token &&
+			ctx.context.newSession.isLogin);
+	ctx.context.setNewSession({
+		...session,
+		...(isLogin ? { isLogin: true } : {}),
+	});
 }
 
 type CookieScrubView = GenericEndpointContext & {

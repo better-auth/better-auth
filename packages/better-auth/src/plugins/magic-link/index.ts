@@ -57,6 +57,15 @@ export interface MagicLinkOptions {
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
 	/**
+	 * A lifecycle callback triggered when a magic link is
+	 * sent. Use for logging, analytics, or notifications.
+	 * Runs alongside sendMagicLink, not instead of it.
+	 */
+	onMagicLinkRequested?: (
+		data: { email: string },
+		ctx?: GenericEndpointContext | undefined,
+	) => Awaitable<void>;
+	/**
 	 * Disable sign up if user is not found.
 	 *
 	 * @default false
@@ -275,6 +284,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 						ctx,
 					);
+					if (options.onMagicLinkRequested) {
+						const onMagicLinkRequested = options.onMagicLinkRequested;
+						await ctx.context.runInBackgroundOrAwait(
+							Promise.resolve().then(() =>
+								onMagicLinkRequested({ email }, ctx),
+							),
+						);
+					}
 					return ctx.json({
 						status: true,
 					});
@@ -452,10 +469,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						redirectWithError("failed_to_create_session");
 					}
 
-					await setSessionCookie(ctx, {
-						session,
-						user,
-					});
+					await setSessionCookie(ctx, { isLogin: true, session, user });
 					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,

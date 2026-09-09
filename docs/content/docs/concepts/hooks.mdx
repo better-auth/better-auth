@@ -322,6 +322,184 @@ export const auth = betterAuth({
 });
 ```
 
+## Lifecycle Callbacks
+
+Verification email delivery and its lifecycle callback receive independent request clones when
+an HTTP request is available. Each can read the original body without consuming it for the other.
+This includes email signup, username sign-in, OAuth ID tokens and Google One Tap.
+
+Lifecycle callbacks are purpose-built event handlers for security-sensitive operations. Unlike [before/after hooks](#before-hooks) which intercept all endpoints via middleware, lifecycle callbacks target specific events and are configured directly in the relevant options section.
+
+<Callout>
+  The callbacks introduced here use `runInBackgroundOrAwait` internally. They complete before the response when no background task handler is configured, or run asynchronously when one is. Synchronous exceptions and rejected promises are logged without turning a completed operation into an authentication error. They are notifications, not authorization gates or durable delivery guarantees. Use [before/after hooks](#before-hooks) to enforce access policies. Existing callbacks such as `onPasswordReset` retain their existing execution behavior. See [backgroundTasks](/docs/reference/options#backgroundtasks) for more details.
+</Callout>
+
+### Core Callbacks
+
+These callbacks are configured at the top level of your auth options.
+
+#### onLogin
+
+Triggered after a new authentication session survives the complete endpoint and after-hook pipeline. This includes email/password, username, magic link, OAuth, passkey, device authorization and automatic sign-in after registration. Anonymous sign-in also creates a new authentication session.
+
+For two-factor sign-in, the callback runs after the second factor succeeds. A pending challenge, a rejected after hook, session refresh, profile change, password-change session rotation or impersonation does not trigger it. Nested endpoint dispatches preserve the event until the outer authentication pipeline completes.
+
+Custom plugins that create an authentication session through this pipeline must pass `isLogin: true` to `setSessionCookie` or `ctx.context.setNewSession`. Omit it when rotating or refreshing an existing session. The marker is internal and is not serialized into cookies or responses.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    onLogin: async ({ user, session }, request) => {
+        console.log(`User ${user.email} signed in, session ${session.id}`);
+    },
+});
+```
+
+#### onLogout
+
+Triggered when a user signs out and session deletion is confirmed. A database hook that vetoes deletion prevents this notification.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    onLogout: async ({ userId }, request) => {
+        console.log(`User ${userId} signed out`);
+    },
+});
+```
+
+### Email & Password Callbacks
+
+These callbacks are configured inside the `emailAndPassword` options.
+
+#### onPasswordReset
+
+Triggered when a user's password is reset via the forgot-password flow (after the new password is set).
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+        onPasswordReset: async ({ user }, request) => {
+            // Notify user about password reset
+        },
+    },
+});
+```
+
+#### onPasswordChanged
+
+Triggered when a user changes their password from their profile and the account update succeeds. A vetoed update does not trigger it.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+        onPasswordChanged: async ({ user }, request) => {
+            // Notify user about password change
+        },
+    },
+});
+```
+
+#### onResetPasswordRequested
+
+Triggered when a user requests a password reset. Runs alongside the `sendResetPassword` email callback. Use for logging, analytics, or security notifications.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+        sendResetPassword: async ({ user, url }) => { /* send email */ },
+        onResetPasswordRequested: async ({ user }, request) => {
+            // Log the reset request for audit
+        },
+    },
+});
+```
+
+### Email Verification Callbacks
+
+These callbacks are configured inside the `emailVerification` options.
+
+#### onEmailVerificationRequested
+
+Triggered after the configured `sendVerificationEmail` callback resolves successfully. This covers explicit requests, automatic sign-up and sign-in delivery, username and OAuth verification gates, and account email verification. It does not assert mailbox delivery. A failed sender does not trigger the event, and OAuth sends queued by a transaction run only after it commits.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailVerification: {
+        sendVerificationEmail: async ({ user, url }) => { /* send email */ },
+        onEmailVerificationRequested: async ({ user }, request) => {
+            // Track verification requests
+        },
+    },
+});
+```
+
+### Plugin Callbacks
+
+Some plugins provide their own lifecycle callbacks, configured in the plugin options.
+
+#### Two-Factor: onTotpEnabled / onTotpDisabled
+
+Despite their names, these callbacks cover activation and deactivation of the two-factor plugin, including OTP. Preparing a TOTP QR code does not trigger activation. The callback runs once enrollment is verified, or immediately when `skipVerificationOnEnable` or OTP enrollment enables the factor. Adding and verifying TOTP on an OTP-enabled account also triggers activation. Re-verification and legacy-row normalization during sign-in do not. Activation receives the updated user with `twoFactorEnabled: true`. Configuration changes require transactional database storage and the migrated private `twoFactorVersion` field. Factor, user and session changes commit atomically before cookies or callbacks are emitted. See [transactional configuration](/docs/plugins/2fa#transactional-configuration). If a database hook vetoes or rewrites the requested activation or deactivation, the endpoint returns `FAILED_TO_UPDATE_USER` before rotating the session or completing the factor change.
+
+```ts title="auth.ts"
+import { twoFactor } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        twoFactor({
+            onTotpEnabled: async ({ user }, request) => {
+                // Notify about 2FA activation
+            },
+            onTotpDisabled: async ({ user }, request) => {
+                // Alert about 2FA deactivation
+            },
+        }),
+    ],
+});
+```
+
+#### Passkey: onPasskeyAdded / onPasskeyDeleted
+
+```ts title="auth.ts"
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+    plugins: [
+        passkey({
+            onPasskeyAdded: async ({ userId, passkey }, request) => {
+                // Log passkey registration
+            },
+            onPasskeyDeleted: async ({ userId, passkeyId }, request) => {
+                // Log passkey removal
+            },
+        }),
+    ],
+});
+```
+
+#### Magic Link: onMagicLinkRequested
+
+Triggered when a magic link is sent. Runs alongside the `sendMagicLink` callback.
+
+```ts title="auth.ts"
+import { magicLink } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        magicLink({
+            sendMagicLink: async ({ email, url }) => { /* send email */ },
+            onMagicLinkRequested: async ({ email }, ctx) => {
+                // Track magic link requests
+            },
+        }),
+    ],
+});
+```
+
 ## Reusable Hooks
 
 If you need to reuse a hook across multiple endpoints, consider creating a plugin. Learn more in the [Plugins Documentation](/docs/concepts/plugins).

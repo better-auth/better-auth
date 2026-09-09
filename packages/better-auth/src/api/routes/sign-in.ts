@@ -26,7 +26,10 @@ import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
-import { createEmailVerificationToken } from "./email-verification";
+import {
+	createEmailVerificationToken,
+	dispatchVerificationEmail,
+} from "./email-verification";
 
 const socialSignInBodySchema = z.object({
 	/**
@@ -201,6 +204,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "socialSignIn",
 			body: socialSignInBodySchema,
+			cloneRequest: true,
 			metadata: {
 				$Infer: {
 					body: {} as z.infer<typeof socialSignInBodySchema>,
@@ -361,7 +365,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						code: "OAUTH_LINK_ERROR",
 					});
 				}
-				await setSessionCookie(c, data.data!);
+				await setSessionCookie(c, { ...data.data!, isLogin: true });
 				return c.json({
 					redirect: false,
 					token: data.data!.session.token,
@@ -590,7 +594,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 					await ctx.context.runInBackgroundOrAwait(
-						ctx.context.options.emailVerification.sendVerificationEmail(
+						dispatchVerificationEmail(
+							ctx,
 							{
 								user,
 								url,
@@ -620,6 +625,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			await setSessionCookie(
 				ctx,
 				{
+					isLogin: true,
 					session,
 					user,
 				},

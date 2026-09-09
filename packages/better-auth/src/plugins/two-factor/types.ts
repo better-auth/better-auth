@@ -86,6 +86,23 @@ export interface TwoFactorOptions {
 				durationSeconds?: number | undefined;
 		  }
 		| undefined;
+	/**
+	 * A callback function that is triggered when a user
+	 * completes two-factor activation (TOTP or OTP). Preparing an unverified
+	 * TOTP enrollment does not trigger it.
+	 */
+	onTotpEnabled?: (
+		data: { user: UserWithTwoFactor },
+		request?: Request,
+	) => Promise<void>;
+	/**
+	 * A callback function that is triggered when a user
+	 * disables two-factor authentication.
+	 */
+	onTotpDisabled?: (
+		data: { user: UserWithTwoFactor },
+		request?: Request,
+	) => Promise<void>;
 }
 
 export interface UserWithTwoFactor extends User {

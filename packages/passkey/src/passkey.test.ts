@@ -131,6 +131,7 @@ describe("passkey", async () => {
 	 */
 	it("should create a session after pre-auth passkey registration", async () => {
 		let userId = "";
+		const onPasskeyAdded = vi.fn();
 		const {
 			auth: preAuth,
 			client: preAuthClient,
@@ -145,6 +146,7 @@ describe("passkey", async () => {
 			}),
 			plugins: [
 				passkey({
+					onPasskeyAdded,
 					registration: {
 						requireSession: false,
 						resolveUser: async () => ({
@@ -194,6 +196,17 @@ describe("passkey", async () => {
 		expect(result.headers.get("set-cookie")).toContain(
 			"better-auth.session_token=",
 		);
+		expect(onPasskeyAdded).toHaveBeenCalledExactlyOnceWith(
+			{
+				userId,
+				passkey: expect.objectContaining({
+					userId,
+					credentialID:
+						mockRegistrationVerification.registrationInfo.credential.id,
+				}),
+			},
+			undefined,
+		);
 	});
 
 	/**
@@ -201,6 +214,7 @@ describe("passkey", async () => {
 	 */
 	it("should roll back passkey persistence when session creation fails", async () => {
 		let userId = "";
+		const onPasskeyAdded = vi.fn();
 		const {
 			auth: preAuth,
 			client: preAuthClient,
@@ -215,6 +229,7 @@ describe("passkey", async () => {
 			}),
 			plugins: [
 				passkey({
+					onPasskeyAdded,
 					registration: {
 						requireSession: false,
 						resolveUser: async () => ({
@@ -279,6 +294,7 @@ describe("passkey", async () => {
 		});
 		expect(passkeys).toHaveLength(0);
 		expect(await context.internalAdapter.findUserById(userId)).toBeNull();
+		expect(onPasskeyAdded).not.toHaveBeenCalled();
 	});
 
 	it("should require resolveUser when session is not available", async () => {
@@ -1453,6 +1469,81 @@ describe("passkey registration naming (afterVerification fallback)", async () =>
 		});
 		expect(record.name).toBe("Explicit Name");
 		expect(afterVerification).toHaveBeenCalled();
+	});
+
+	it("should call onPasskeyAdded after registration", async () => {
+		const mockOnPasskeyAdded = vi.fn();
+		const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+			await getTestInstance({
+				plugins: [
+					passkey({
+						onPasskeyAdded: mockOnPasskeyAdded,
+					}),
+				],
+			});
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: { customFetchImpl },
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const { headers, user } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+		await auth.api.verifyPasskeyRegistration({
+			headers,
+			body: { response: mockRegistrationResponse },
+		});
+		expect(mockOnPasskeyAdded).toHaveBeenCalledWith(
+			expect.objectContaining({ userId: user.id }),
+			undefined,
+		);
+	});
+
+	it("should call onPasskeyDeleted after deletion", async () => {
+		const mockOnPasskeyDeleted = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				passkey({
+					onPasskeyDeleted: mockOnPasskeyDeleted,
+				}),
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID-delete-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+		await auth.api.deletePasskey({
+			headers,
+			body: { id: createdPasskey.id },
+		});
+		expect(mockOnPasskeyDeleted).toHaveBeenCalledWith(
+			{ userId: user.id, passkeyId: createdPasskey.id },
+			undefined,
+		);
 	});
 });
 

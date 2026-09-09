@@ -530,6 +530,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					updatedUser.id,
 				);
 				await setSessionCookie(ctx, {
+					isLogin: true,
 					session,
 					user: updatedUser,
 				});
@@ -676,10 +677,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
 				);
-				await setSessionCookie(ctx, {
-					session,
-					user: newUser,
-				});
+				await setSessionCookie(ctx, { isLogin: true, session, user: newUser });
 				return ctx.json({
 					token: session.token,
 					user: parseUserOutput(ctx.context.options, newUser),
@@ -702,6 +700,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				verifiedUser.id,
 			);
 			await setSessionCookie(ctx, {
+				isLogin: true,
 				session,
 				user: verifiedUser,
 			});

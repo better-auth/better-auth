@@ -757,7 +757,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				});
 			}
 
-			ctx.context.setNewSession({ session, user });
+			ctx.context.setNewSession({ session, user, isLogin: true });
 			if (ctx.context.options.secondaryStorage) {
 				await ctx.context.secondaryStorage?.set(
 					session.token,

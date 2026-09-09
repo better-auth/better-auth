@@ -120,10 +120,7 @@ export const electronToken = (_opts: ElectronOptions) =>
 				);
 			}
 
-			await setSessionCookie(ctx, {
-				session,
-				user,
-			});
+			await setSessionCookie(ctx, { isLogin: true, session, user });
 
 			return ctx.json({
 				token: session.token,

@@ -3,7 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it } from "vitest";
-import { symmetricDecrypt } from "../../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Session, User, Verification } from "../../types";
@@ -621,37 +621,30 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		],
 	});
 
-	const { headers } = await signInWithTestUser();
+	await signInWithTestUser();
 	const dbUser = await db.findOne<User>({
 		model: "user",
 		where: [{ field: "email", value: testUser.email }],
 	});
 	const userId = dbUser?.id as string;
 
-	const enrollment = await auth.api.enableTwoFactor({
-		body: { password: testUser.password },
-		headers,
-	});
-	if (enrollment.method !== "totp") {
-		throw new Error("expected totp enrollment");
-	}
-	const row = await db.findOne<TwoFactorTable>({
-		model: "twoFactor",
-		where: [{ field: "userId", value: userId }],
-	});
-	const secret = await symmetricDecrypt({
-		key: DEFAULT_SECRET,
-		data: row!.secret,
-	});
-	const enrollCode = await createOTP(secret).totp();
-	await auth.api.verifyTOTP({ body: { code: enrollCode }, headers });
-	const verified = await db.findOne<UserWithTwoFactor>({
+	await db.update({
 		model: "user",
 		where: [{ field: "id", value: userId }],
+		update: { twoFactorEnabled: true },
 	});
-	if (!verified?.twoFactorEnabled) {
-		throw new Error("failed to enable 2FA for test user");
-	}
+	await db.create({
+		model: "twoFactor",
+		data: {
+			userId,
+			verified: true,
+			backupCodes: "[]",
+			secret: await symmetricEncrypt({
+				key: DEFAULT_SECRET,
+				data: "secondary-storage-otp-account",
+			}),
+		},
+	});
 
 	async function startChallengeWithOtp(): Promise<Headers> {
 		const signIn = await auth.api.signInEmail({

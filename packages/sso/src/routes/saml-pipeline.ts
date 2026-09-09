@@ -840,7 +840,7 @@ export async function processSAMLResponse(
 	if ("accountCookie" in result && result.accountCookie) {
 		await setAccountCookie(ctx, result.accountCookie);
 	}
-	await setSessionCookie(ctx, { session, user });
+	await setSessionCookie(ctx, { isLogin: true, session, user });
 
 	// 20. SLO session record
 	if (options?.saml?.enableSingleLogout && extract.nameID) {

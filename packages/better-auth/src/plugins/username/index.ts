@@ -7,6 +7,7 @@ import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
+import { dispatchVerificationEmail } from "../../api/routes/email-verification";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
@@ -355,6 +356,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 				{
 					method: "POST",
 					body: signInUsernameBodySchema,
+					cloneRequest: true,
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
@@ -526,7 +528,8 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 								ctx.body.callbackURL || "/",
 							)}`;
 							await ctx.context.runInBackgroundOrAwait(
-								ctx.context.options.emailVerification.sendVerificationEmail(
+								dispatchVerificationEmail(
+									ctx,
 									{
 										user: user,
 										url,
@@ -552,7 +555,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 					}
 					await setSessionCookie(
 						ctx,
-						{ session, user },
+						{ isLogin: true, session, user },
 						ctx.body.rememberMe === false,
 					);
 					if (ctx.body.callbackURL) {

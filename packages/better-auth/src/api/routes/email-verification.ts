@@ -13,6 +13,34 @@ import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
+/** Sends an account verification email and records successful delivery handoff. */
+export async function dispatchVerificationEmail(
+	ctx: GenericEndpointContext,
+	data: { user: User; url: string; token: string },
+	request: Request | undefined = ctx.request,
+) {
+	const options = ctx.context.options.emailVerification;
+	if (!options?.sendVerificationEmail) {
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+		);
+	}
+	const senderRequest = safeCloneRequest(request);
+	const lifecycleRequest = safeCloneRequest(request);
+	await options.sendVerificationEmail(data, senderRequest);
+	if (options.onEmailVerificationRequested) {
+		await ctx.context.runInBackgroundOrAwait(
+			Promise.resolve().then(() =>
+				options.onEmailVerificationRequested!(
+					{ user: data.user },
+					lifecycleRequest,
+				),
+			),
+		);
+	}
+}
+
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
@@ -67,7 +95,8 @@ export async function sendVerificationEmailFn(
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 	// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors (see #8757).
 	// This path only runs once a real unverified user is known, so timing here does not weaken the unauthenticated anti-enumeration behavior above.
-	await ctx.context.options.emailVerification.sendVerificationEmail(
+	await dispatchVerificationEmail(
+		ctx,
 		{
 			user: user,
 			url,
@@ -349,7 +378,8 @@ export const verifyEmail = createAuthEndpoint(
 					const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
+							dispatchVerificationEmail(
+								ctx,
 								{
 									user: { ...user.user, email: parsed.updateTo },
 									url,
@@ -448,7 +478,8 @@ export const verifyEmail = createAuthEndpoint(
 						: encodeURIComponent("/");
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
+							dispatchVerificationEmail(
+								ctx,
 								{
 									user: updatedUser,
 									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
@@ -516,6 +547,7 @@ export const verifyEmail = createAuthEndpoint(
 					);
 				}
 				await setSessionCookie(ctx, {
+					isLogin: true,
 					session,
 					user: {
 						...user.user,

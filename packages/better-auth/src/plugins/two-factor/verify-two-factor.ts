@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx } from "../../api";
 import { expireCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
@@ -24,7 +24,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 	};
 
-	const session = await getSessionFromCtx(ctx);
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		const twoFactorCookie = ctx.context.createAuthCookie(
 			TWO_FACTOR_COOKIE_NAME,
@@ -90,10 +90,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						code: "FAILED_TO_CREATE_SESSION",
 					});
 				}
-				await setSessionCookie(ctx, {
-					session,
-					user,
-				});
+				await setSessionCookie(ctx, { isLogin: true, session, user });
 				// Always clear the two factor cookie after successful verification
 				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {

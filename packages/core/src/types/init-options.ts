@@ -679,6 +679,19 @@ export type BetterAuthOptions = {
 	 */
 	secondaryStorage?: SecondaryStorage | undefined;
 	/**
+	 * A callback function that is triggered when a user successfully
+	 * completes authentication with a new session, after every after-hook
+	 * and any required second factor. Session rotations do not trigger it.
+	 */
+	onLogin?: (
+		data: { user: User; session: { id: string; token: string } },
+		request?: Request,
+	) => Promise<void>;
+	/**
+	 * A callback function that is triggered when a user signs out.
+	 */
+	onLogout?: (data: { userId: string }, request?: Request) => Promise<void>;
+	/**
 	 * Email verification configuration
 	 */
 	emailVerification?:
@@ -704,6 +717,15 @@ export type BetterAuthOptions = {
 					/**
 					 * The request object
 					 */
+					request?: Request,
+				) => Promise<void>;
+				/**
+				 * A lifecycle callback triggered when a verification email
+				 * is sent. Use for logging, analytics, or notifications.
+				 * This runs alongside sendVerificationEmail, not instead of it.
+				 */
+				onEmailVerificationRequested?: (
+					data: { user: User },
 					request?: Request,
 				) => Promise<void>;
 				/**
@@ -808,6 +830,15 @@ export type BetterAuthOptions = {
 					request?: Request,
 				) => Promise<void>;
 				/**
+				 * A lifecycle callback triggered when a password
+				 * reset is requested. Use for logging, analytics,
+				 * or notifications. Runs alongside sendResetPassword.
+				 */
+				onResetPasswordRequested?: (
+					data: { user: User },
+					request?: Request,
+				) => Promise<void>;
+				/**
 				 * Number of seconds the reset password token is
 				 * valid for.
 				 * @default 1 hour (60 * 60)
@@ -815,9 +846,17 @@ export type BetterAuthOptions = {
 				resetPasswordTokenExpiresIn?: number;
 				/**
 				 * A callback function that is triggered
-				 * when a user's password is changed successfully.
+				 * when a user's password is reset via forgot password flow.
 				 */
 				onPasswordReset?: (
+					data: { user: User },
+					request?: Request,
+				) => Promise<void>;
+				/**
+				 * A callback function that is triggered
+				 * when a user changes their password from their profile.
+				 */
+				onPasswordChanged?: (
 					data: { user: User },
 					request?: Request,
 				) => Promise<void>;

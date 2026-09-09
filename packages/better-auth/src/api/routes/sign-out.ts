@@ -79,6 +79,7 @@ export const signOut = createAuthEndpoint(
 			ctx.context.authCookies.sessionToken.name,
 			ctx.context.secret,
 		);
+		let sessionDeleted = false;
 		let currentSession: Awaited<
 			ReturnType<typeof ctx.context.internalAdapter.findSession>
 		> | null = null;
@@ -93,11 +94,25 @@ export const signOut = createAuthEndpoint(
 		if (sessionCookieToken) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
+				if (currentSession && ctx.context.options.onLogout) {
+					sessionDeleted =
+						!(await ctx.context.internalAdapter.findSession(
+							sessionCookieToken,
+						));
+				}
 			} catch (e) {
 				ctx.context.logger.error("Failed to delete session from database", e);
 			}
 		}
 		deleteSessionCookie(ctx);
+		if (currentSession && sessionDeleted && ctx.context.options.onLogout) {
+			const onLogout = ctx.context.options.onLogout;
+			await ctx.context.runInBackgroundOrAwait(
+				Promise.resolve().then(() =>
+					onLogout({ userId: currentSession.session.userId }, ctx.request),
+				),
+			);
+		}
 		const providerLogoutResult = await (async () => {
 			try {
 				if (!currentSession) {
