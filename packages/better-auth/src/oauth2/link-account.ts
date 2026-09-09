@@ -9,6 +9,7 @@ import {
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
 import { createEmailVerificationToken } from "../api";
+import { dispatchVerificationEmail } from "../api/routes/email-verification";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { Account, User } from "../types";
@@ -480,7 +481,7 @@ export async function handleOAuthUserInfo(
 		(c.context.options.emailVerification?.sendOnSignUp ??
 			requireEmailVerification)
 	) {
-		await dispatchVerificationEmail(
+		await scheduleVerificationEmail(
 			c,
 			user,
 			callbackURL,
@@ -490,7 +491,7 @@ export async function handleOAuthUserInfo(
 
 	if (requireEmailVerification && !user.emailVerified) {
 		if (!isRegister && c.context.options.emailVerification?.sendOnSignIn) {
-			await dispatchVerificationEmail(
+			await scheduleVerificationEmail(
 				c,
 				user,
 				callbackURL,
@@ -539,7 +540,7 @@ export async function handleOAuthUserInfo(
 	};
 }
 
-async function dispatchVerificationEmail(
+async function scheduleVerificationEmail(
 	c: GenericEndpointContext,
 	user: User,
 	callbackURL: string | undefined,
@@ -562,7 +563,8 @@ async function dispatchVerificationEmail(
 				callbackURL || "/",
 			)}`;
 			await c.context.runInBackgroundOrAwait(
-				sendVerificationEmail(
+				dispatchVerificationEmail(
+					c,
 					{
 						user,
 						url,

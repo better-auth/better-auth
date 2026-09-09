@@ -55,11 +55,14 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		storeBackupCodes: "encrypted",
 		...options?.backupCodeOptions,
 	} satisfies BackupCodeOptions;
-	const totp = totp2fa({
-		...options?.totpOptions,
-		allowPasswordless:
-			options?.totpOptions?.allowPasswordless ?? allowPasswordless,
-	});
+	const totp = totp2fa(
+		{
+			...options?.totpOptions,
+			allowPasswordless:
+				options?.totpOptions?.allowPasswordless ?? allowPasswordless,
+		},
+		options?.onTotpEnabled,
+	);
 	const backupCode = backupCode2fa({
 		...backupCodeOptions,
 		allowPasswordless:
@@ -214,6 +217,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								twoFactorEnabled: true,
 							},
 						);
+						if (
+							(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !==
+							true
+						) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+							);
+						}
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
 							false,
@@ -226,6 +238,16 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						await ctx.context.internalAdapter.deleteSession(
 							ctx.context.session.session.token,
 						);
+						if (options?.onTotpEnabled) {
+							await ctx.context.runInBackgroundOrAwait(
+								Promise.resolve().then(() =>
+									options.onTotpEnabled!(
+										{ user: updatedUser as UserWithTwoFactor },
+										ctx.request,
+									),
+								),
+							);
+						}
 						return ctx.json({ method: "otp" as const });
 					}
 
@@ -243,6 +265,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						key: ctx.context.secretConfig,
 						data: secret,
 					});
+					let enabledUser: UserWithTwoFactor | undefined;
 					if (options?.skipVerificationOnEnable) {
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							user.id,
@@ -250,6 +273,16 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								twoFactorEnabled: true,
 							},
 						);
+						if (
+							(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !==
+							true
+						) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+							);
+						}
+						enabledUser = updatedUser as UserWithTwoFactor;
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
 							false,
@@ -287,11 +320,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
 					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
-					if (options?.onTotpEnabled) {
+					if (enabledUser && options?.onTotpEnabled) {
+						const user = enabledUser;
 						await ctx.context.runInBackgroundOrAwait(
-							options.onTotpEnabled(
-								{ user: user as UserWithTwoFactor },
-								ctx.request,
+							Promise.resolve().then(() =>
+								options.onTotpEnabled!({ user }, ctx.request),
 							),
 						);
 					}
@@ -385,6 +418,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							twoFactorEnabled: false,
 						},
 					);
+					if (
+						(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !==
+						false
+					) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+						);
+					}
 					await ctx.context.adapter.delete({
 						model: opts.twoFactorTable,
 						where: [
@@ -411,10 +453,13 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						ctx.context.session.session.token,
 					);
 					if (options?.onTotpDisabled) {
+						const onTotpDisabled = options.onTotpDisabled;
 						await ctx.context.runInBackgroundOrAwait(
-							options.onTotpDisabled(
-								{ user: updatedUser as UserWithTwoFactor },
-								ctx.request,
+							Promise.resolve().then(() =>
+								onTotpDisabled(
+									{ user: updatedUser as UserWithTwoFactor },
+									ctx.request,
+								),
 							),
 						);
 					}

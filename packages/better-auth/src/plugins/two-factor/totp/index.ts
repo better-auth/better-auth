@@ -11,6 +11,7 @@ import type { BackupCodeOptions } from "../backup-codes";
 import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
+	TwoFactorOptions,
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
@@ -79,7 +80,10 @@ const verifyTOTPBodySchema = z.object({
 		.optional(),
 });
 
-export const totp2fa = (options?: TOTPOptions | undefined) => {
+export const totp2fa = (
+	options?: TOTPOptions | undefined,
+	onEnabled?: TwoFactorOptions["onTotpEnabled"],
+) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,
@@ -327,6 +331,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			// adding TOTP to an OTP-only account (twoFactorEnabled=true),
 			// and pre-migration rows where verified is null/undefined.
 			if (twoFactor.verified !== true) {
+				let enabledUser = user;
 				if (!user.twoFactorEnabled) {
 					// session.session is guaranteed non-null here: the sign-in guard
 					// above already rejected isSignIn && verified === false.
@@ -337,6 +342,15 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 							twoFactorEnabled: true,
 						},
 					);
+					if (
+						(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !== true
+					) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+						);
+					}
+					enabledUser = updatedUser as UserWithTwoFactor;
 					const newSession = await ctx.context.internalAdapter.createSession(
 						user.id,
 						false,
@@ -352,11 +366,25 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				// Mark verified only after all session operations succeed.
 				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
 				// a partial failure cannot leave verified=true with twoFactorEnabled=false.
-				await ctx.context.adapter.update({
+				const activated = await ctx.context.adapter.updateMany({
 					model: twoFactorTable,
 					update: { verified: true },
-					where: [{ field: "id", value: twoFactor.id }],
+					where: [
+						{ field: "id", value: twoFactor.id },
+						{ field: "verified", value: twoFactor.verified ?? null },
+					],
 				});
+				if (
+					activated === 1 &&
+					onEnabled &&
+					(!user.twoFactorEnabled || twoFactor.verified === false)
+				) {
+					await ctx.context.runInBackgroundOrAwait(
+						Promise.resolve().then(() =>
+							onEnabled({ user: enabledUser }, ctx.request),
+						),
+					);
+				}
 			}
 			return valid(ctx);
 		},

@@ -12,6 +12,8 @@ describe("sign-in", async () => {
 	it("should call onLogin with the authenticated user and new session", async () => {
 		const onLogin = vi.fn();
 		const { auth, testUser } = await getTestInstance({ onLogin });
+		expect(onLogin).toHaveBeenCalledOnce();
+		onLogin.mockClear();
 		const result = await auth.api.signInEmail({
 			body: {
 				email: testUser.email,
@@ -34,6 +36,8 @@ describe("sign-in", async () => {
 	it("should not call onLogin when the password is rejected", async () => {
 		const onLogin = vi.fn();
 		const { auth, testUser } = await getTestInstance({ onLogin });
+		expect(onLogin).toHaveBeenCalledOnce();
+		onLogin.mockClear();
 
 		await expect(
 			auth.api.signInEmail({

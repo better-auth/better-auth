@@ -760,19 +760,23 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					: await persistRegistration();
 
 				if (options.onPasskeyAdded) {
+					const onPasskeyAdded = options.onPasskeyAdded;
 					await ctx.context.runInBackgroundOrAwait(
-						options.onPasskeyAdded(
-							{
-								userId: registration.passkey.userId,
-								passkey: registration.passkey,
-							},
-							ctx.request,
+						Promise.resolve().then(() =>
+							onPasskeyAdded(
+								{
+									userId: registration.passkey.userId,
+									passkey: registration.passkey,
+								},
+								ctx.request,
+							),
 						),
 					);
 				}
 
 				if (registration.session && registration.user) {
 					await setSessionCookie(ctx, {
+						isLogin: true,
 						session: registration.session,
 						user: registration.user,
 					});
@@ -964,10 +968,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 						message: "User not found",
 					});
 				}
-				await setSessionCookie(ctx, {
-					session: s,
-					user,
-				});
+				await setSessionCookie(ctx, { isLogin: true, session: s, user });
 
 				return ctx.json(
 					{
@@ -1120,10 +1121,13 @@ export const deletePasskey = (pluginOptions?: PasskeyOptions) =>
 			});
 
 			if (pluginOptions?.onPasskeyDeleted) {
+				const onPasskeyDeleted = pluginOptions.onPasskeyDeleted;
 				await ctx.context.runInBackgroundOrAwait(
-					pluginOptions.onPasskeyDeleted(
-						{ userId: ctx.context.session.user.id, passkeyId: ctx.body.id },
-						ctx.request,
+					Promise.resolve().then(() =>
+						onPasskeyDeleted(
+							{ userId: ctx.context.session.user.id, passkeyId: ctx.body.id },
+							ctx.request,
+						),
 					),
 				);
 			}

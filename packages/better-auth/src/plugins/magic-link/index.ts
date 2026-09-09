@@ -285,8 +285,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx,
 					);
 					if (options.onMagicLinkRequested) {
+						const onMagicLinkRequested = options.onMagicLinkRequested;
 						await ctx.context.runInBackgroundOrAwait(
-							options.onMagicLinkRequested({ email }, ctx),
+							Promise.resolve().then(() =>
+								onMagicLinkRequested({ email }, ctx),
+							),
 						);
 					}
 					return ctx.json({
@@ -466,10 +469,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						redirectWithError("failed_to_create_session");
 					}
 
-					await setSessionCookie(ctx, {
-						session,
-						user,
-					});
+					await setSessionCookie(ctx, { isLogin: true, session, user });
 					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,

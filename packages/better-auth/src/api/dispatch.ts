@@ -324,6 +324,9 @@ export async function dispatchAuthEndpoint(
 ): Promise<unknown> {
 	const operationId = input.operationId ?? getOperationId(endpoint);
 	const route = endpoint.path ?? "/:virtual";
+	const inheritedLoginToken = input.context.newSession?.isLogin
+		? input.context.newSession.session.token
+		: undefined;
 	const endpointMethod = endpoint.options?.method;
 	const defaultMethod = Array.isArray(endpointMethod)
 		? endpointMethod[0]
@@ -433,6 +436,38 @@ export async function dispatchAuthEndpoint(
 					result.response = after.response;
 				}
 				result.headers = after.headers ?? result.headers;
+
+				const login = internalContext.context.newSession;
+				const status = isAPIError(result.response)
+					? result.response.statusCode
+					: result.response instanceof Response
+						? result.response.status
+						: (result.status ?? 200);
+				if (
+					login?.isLogin &&
+					login.session.token !== inheritedLoginToken &&
+					status >= 200 &&
+					status < 400
+				) {
+					login.isLogin = false;
+					const onLogin = internalContext.context.options.onLogin;
+					if (onLogin) {
+						await internalContext.context.runInBackgroundOrAwait(
+							Promise.resolve().then(() =>
+								onLogin(
+									{
+										user: login.user,
+										session: {
+											id: login.session.id,
+											token: login.session.token,
+										},
+									},
+									internalContext.request,
+								),
+							),
+						);
+					}
+				}
 
 				if (
 					isAPIError(result.response) &&

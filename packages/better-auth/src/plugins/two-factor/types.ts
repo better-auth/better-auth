@@ -88,7 +88,8 @@ export interface TwoFactorOptions {
 		| undefined;
 	/**
 	 * A callback function that is triggered when a user
-	 * enables two-factor authentication.
+	 * completes two-factor activation (TOTP or OTP). Preparing an unverified
+	 * TOTP enrollment does not trigger it.
 	 */
 	onTotpEnabled?: (
 		data: { user: UserWithTwoFactor },

@@ -213,7 +213,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						});
 					}
 
-					await setSessionCookie(ctx, result.data!);
+					await setSessionCookie(ctx, { ...result.data!, isLogin: true });
 					return ctx.json({
 						token: result.data!.session.token,
 						user: parseUserOutput(ctx.context.options, result.data!.user),

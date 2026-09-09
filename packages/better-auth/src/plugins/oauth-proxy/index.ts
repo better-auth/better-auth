@@ -310,7 +310,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
 
-					await setSessionCookie(ctx, result.data);
+					await setSessionCookie(ctx, { ...result.data, isLogin: true });
 
 					// Redirect to final callback URL
 					const finalURL = result.isRegister

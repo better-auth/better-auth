@@ -680,8 +680,8 @@ export type BetterAuthOptions = {
 	secondaryStorage?: SecondaryStorage | undefined;
 	/**
 	 * A callback function that is triggered when a user successfully
-	 * signs in (email/password, magic link, OAuth, passkey, etc.)
-	 * and a new session is created.
+	 * completes authentication with a new session, after every after-hook
+	 * and any required second factor. Session rotations do not trigger it.
 	 */
 	onLogin?: (
 		data: { user: User; session: { id: string; token: string } },

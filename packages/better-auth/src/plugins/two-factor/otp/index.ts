@@ -385,6 +385,14 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 							twoFactorEnabled: true,
 						},
 					);
+					if (
+						(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !== true
+					) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+						);
+					}
 					const newSession = await ctx.context.internalAdapter.createSession(
 						session.user.id,
 						false,
@@ -397,6 +405,18 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					await ctx.context.internalAdapter.deleteSession(
 						session.session.token,
 					);
+					const onTotpEnabled =
+						ctx.context.getPlugin("two-factor")?.options?.onTotpEnabled;
+					if (onTotpEnabled) {
+						await ctx.context.runInBackgroundOrAwait(
+							Promise.resolve().then(() =>
+								onTotpEnabled(
+									{ user: updatedUser as UserWithTwoFactor },
+									ctx.request,
+								),
+							),
+						);
+					}
 					return ctx.json({
 						token: newSession.token,
 						user: parseUserOutput(ctx.context.options, updatedUser),

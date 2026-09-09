@@ -90,10 +90,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						code: "FAILED_TO_CREATE_SESSION",
 					});
 				}
-				await setSessionCookie(ctx, {
-					session,
-					user,
-				});
+				await setSessionCookie(ctx, { isLogin: true, session, user });
 				// Always clear the two factor cookie after successful verification
 				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {

@@ -396,10 +396,7 @@ export const callbackOAuth = createAuthEndpoint(
 			return redirectOnError(result.error.split(" ").join("_"));
 		}
 		const { session, user } = result.data!;
-		await setSessionCookie(c, {
-			session,
-			user,
-		});
+		await setSessionCookie(c, { isLogin: true, session, user });
 
 		let toRedirectTo: string;
 		try {

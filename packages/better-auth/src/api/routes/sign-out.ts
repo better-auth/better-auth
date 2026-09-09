@@ -94,17 +94,22 @@ export const signOut = createAuthEndpoint(
 		if (sessionCookieToken) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
-				sessionDeleted = true;
+				if (currentSession && ctx.context.options.onLogout) {
+					sessionDeleted =
+						!(await ctx.context.internalAdapter.findSession(
+							sessionCookieToken,
+						));
+				}
 			} catch (e) {
 				ctx.context.logger.error("Failed to delete session from database", e);
 			}
 		}
 		deleteSessionCookie(ctx);
 		if (currentSession && sessionDeleted && ctx.context.options.onLogout) {
+			const onLogout = ctx.context.options.onLogout;
 			await ctx.context.runInBackgroundOrAwait(
-				ctx.context.options.onLogout(
-					{ userId: currentSession.session.userId },
-					ctx.request,
+				Promise.resolve().then(() =>
+					onLogout({ userId: currentSession.session.userId }, ctx.request),
 				),
 			);
 		}
