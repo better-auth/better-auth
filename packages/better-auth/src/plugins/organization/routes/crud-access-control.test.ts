@@ -585,7 +585,7 @@ describe("dynamic access control", async () => {
 			},
 		);
 		if (!testRole.data) throw testRole.error;
-		expect(
+		await expect(
 			auth.api.deleteOrgRole({
 				body: { roleName: testRole.data.roleData.role },
 				headers: normalHeaders,
@@ -646,7 +646,9 @@ describe("dynamic access control", async () => {
 	});
 
 	it("should not be allowed to list roles without necessary permissions", async () => {
-		expect(auth.api.listOrgRoles({ headers: normalHeaders })).rejects.toThrow(
+		await expect(
+			auth.api.listOrgRoles({ headers: normalHeaders }),
+		).rejects.toThrow(
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE.message,
 		);
 	});

@@ -93,6 +93,7 @@ const promoteWorkflow = readWorkflow("promote.yml");
 const releaseWorkflow = readWorkflow("release.yml");
 const autoChangesetWorkflow = readWorkflow("auto-changeset.yml");
 const verifyChangesetsWorkflow = readWorkflow("verify-changesets.yml");
+const backportWorkflow = readWorkflow("backport.yml");
 
 describe("release notes command security", () => {
 	it("bounds every privileged release job", () => {
@@ -102,6 +103,7 @@ describe("release notes command security", () => {
 			promoteWorkflow,
 			releaseWorkflow,
 			autoChangesetWorkflow,
+			backportWorkflow,
 		]) {
 			for (const job of Object.values(file.workflow.jobs)) {
 				expect(job["timeout-minutes"]).toBeGreaterThan(0);
@@ -666,6 +668,34 @@ describe("release publication security", () => {
 		);
 		expect(releaseWorkflow.content).not.toContain("AI_GATEWAY_API_KEY");
 		expect(releaseWorkflow.workflow.jobs).not.toHaveProperty("preview-notes");
+	});
+});
+
+describe("backport workflow", () => {
+	it("retains narrowly scoped credentials for the backport push", () => {
+		const backport = getJob(backportWorkflow, "backport");
+		const token = getStep(backport, "Generate App Token");
+		const checkout = backport.steps.find((step) =>
+			step.uses?.startsWith("actions/checkout@"),
+		);
+
+		expect(backport.permissions).toEqual({
+			contents: "write",
+			"pull-requests": "write",
+		});
+		expect(appTokenPermissions(token)).toEqual({
+			"permission-contents": "write",
+			"permission-pull-requests": "write",
+		});
+		expect(checkout?.with?.["persist-credentials"]).toBe(true);
+	});
+
+	it("fails when the action reports an unsuccessful target", () => {
+		const backport = getJob(backportWorkflow, "backport");
+		const verify = getStep(backport, "Verify backport result");
+
+		expect(verify.if).toBe("steps.backport.outputs.was_successful == 'false'");
+		expect(verify.run).toContain("exit 1");
 	});
 });
 

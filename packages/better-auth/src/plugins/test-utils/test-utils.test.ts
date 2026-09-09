@@ -196,6 +196,104 @@ describe("testUtils plugin", async () => {
 		});
 	});
 
+	describe("additional session fields", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					testUtils(),
+					{
+						id: "session-fixture",
+						schema: {
+							session: {
+								fields: {
+									pluginToken: { type: "string", required: true, input: false },
+								},
+							},
+						},
+					},
+				],
+				session: {
+					additionalFields: {
+						providerToken: { type: "string", required: true, input: false },
+						label: { type: "string", defaultValue: "default" },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const test = (await auth.$context).test;
+
+		it.each([
+			"login",
+			"getAuthHeaders",
+			"getCookies",
+		] as const)("%s persists required fields and overrides defaults before authenticating", async (helper) => {
+			const user = await test.saveUser(test.createUser());
+			const options = {
+				userId: user.id,
+				session: {
+					providerToken: `token-${helper}`,
+					pluginToken: `plugin-${helper}`,
+					label: "",
+				},
+			};
+			let headers: Headers;
+			if (helper === "login") {
+				const result = await test.login(options);
+				expect(result.session).toMatchObject(options.session);
+				headers = result.headers;
+			} else if (helper === "getAuthHeaders") {
+				headers = await test.getAuthHeaders(options);
+			} else {
+				const cookies = await test.getCookies(options);
+				headers = new Headers({
+					cookie: cookies
+						.map(({ name, value }) => `${name}=${value}`)
+						.join("; "),
+				});
+			}
+			const session = await auth.api.getSession({ headers });
+			expect(session?.user.id).toBe(user.id);
+			expect(session?.session).toMatchObject(options.session);
+			await test.deleteUser(user.id);
+		});
+
+		it("keeps defaults for omitted fields and generates standard session fields", async () => {
+			const user = await test.saveUser(test.createUser());
+			const result = await test.login({
+				userId: user.id,
+				session: {
+					providerToken: "fixture-token",
+					pluginToken: "plugin-token",
+					id: "supplied-id",
+					userId: "another-user",
+					token: "supplied-token",
+					expiresAt: new Date(0),
+					createdAt: new Date(0),
+					updatedAt: new Date(0),
+					ipAddress: "192.0.2.1",
+					userAgent: "supplied-agent",
+				},
+			});
+			expect(result.session).toMatchObject({
+				userId: user.id,
+				providerToken: "fixture-token",
+				pluginToken: "plugin-token",
+				label: "default",
+				ipAddress: "",
+				userAgent: "",
+			});
+			expect(result.session.id).not.toBe("supplied-id");
+			expect(result.token).not.toBe("supplied-token");
+			expect(result.session.expiresAt.getTime()).toBeGreaterThan(Date.now());
+			expect(result.session.createdAt.getTime()).toBeGreaterThan(0);
+			expect(result.session.updatedAt.getTime()).toBeGreaterThan(0);
+			const session = await auth.api.getSession({ headers: result.headers });
+			expect(session?.user.id).toBe(user.id);
+			await test.deleteUser(user.id);
+		});
+	});
+
 	describe("with organization plugin", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [testUtils(), organization()],
