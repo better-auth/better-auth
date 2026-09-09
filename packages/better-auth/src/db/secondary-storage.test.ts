@@ -33,6 +33,28 @@ function createStringSecondaryStorage(
 	};
 }
 
+function createFlakySecondaryStorage(
+	inner: SecondaryStorage,
+): SecondaryStorage {
+	// Wraps a working store but throws on every set/get at primary-Redis-outage
+	// level: used to prove cache-repair failures cannot break the session read.
+	return {
+		...inner,
+		get() {
+			throw new Error("redis: connection refused");
+		},
+		set() {
+			throw new Error("redis: connection refused");
+		},
+		getAndDelete() {
+			throw new Error("redis: connection refused");
+		},
+		increment() {
+			throw new Error("redis: connection refused");
+		},
+	};
+}
+
 function createParsedSecondaryStorage(
 	store: Map<string, unknown>,
 ): SecondaryStorage {
@@ -353,6 +375,34 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			await (await auth.$context).internalAdapter.deleteSession(token);
 			expect(deletedSessionIds).toHaveLength(1);
 		});
+	});
+});
+
+describe("secondary storage - best-effort cache repair", () => {
+	it("a secondary-storage outage cannot turn the database fallback into a 500", async () => {
+		const store = new Map<string, string>();
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createFlakySecondaryStorage(
+				createStringSecondaryStorage(store),
+			),
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: false,
+			},
+			rateLimit: {
+				enabled: false,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		// First read misses the (outage) cache and falls back to the database:
+		// this drives cache-aside repair - which now throws internally. The
+		// request must still return the authoritative database session.
+		const s1 = await client.getSession({ fetchOptions: { headers } });
+		expect(s1.error).toBeNull();
+		expect(s1.data).not.toBeNull();
+		expect(s1.data!.session.token).toBeTruthy();
 	});
 });
 

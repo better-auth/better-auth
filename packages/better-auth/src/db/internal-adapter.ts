@@ -671,38 +671,54 @@ export const createInternalAdapter = (
 				// that a later revoke-all still sweeps this token.
 				// Unreachable under preserveSessionInDatabase thanks to the early
 				// return above, so revoked rows cannot be resurrected here.
-				const now = Date.now();
-				const sessionTTL = getTTLSeconds(parsedSession.expiresAt, now);
-				if (sessionTTL > 0) {
-					const activeSessionsKey = `active-sessions-${parsedUser.id}`;
-					const currentList = await secondaryStorage.get(activeSessionsKey);
-					const list =
-						safeJSONParse<{ token: string; expiresAt: number }[]>(currentList) ||
-						[];
-					const filtered = list.filter(
-						(s) => s.expiresAt > now && s.token !== token,
-					);
-					filtered.push({
-						token,
-						expiresAt: parsedSession.expiresAt.getTime(),
-					});
-					filtered.sort((a, b) => a.expiresAt - b.expiresAt);
-					const furthestSessionTTL = getTTLSeconds(
-						filtered[filtered.length - 1]!.expiresAt,
-						now,
-					);
-					await Promise.all([
-						secondaryStorage.set(
+				// Cache repair is best-effort: after the database has returned a
+				// valid session, a transient secondary-storage failure (e.g.
+				// Redis eviction plus a momentarily unreachable backend) must not
+				// turn /get-session into a 500 - the database result is
+				// authoritative (this matches the existing deferred-mirror
+				// handling below, which also has no ordering guard: see the
+				// known-limitation note for the revoke race).
+				try {
+					const now = Date.now();
+					const sessionTTL = getTTLSeconds(parsedSession.expiresAt, now);
+					if (sessionTTL > 0) {
+						const activeSessionsKey = `active-sessions-${parsedUser.id}`;
+						const currentList =
+							await secondaryStorage.get(activeSessionsKey);
+						const list =
+							safeJSONParse<{ token: string; expiresAt: number }[]>(
+								currentList,
+							) || [];
+						const filtered = list.filter(
+							(s) => s.expiresAt > now && s.token !== token,
+						);
+						filtered.push({
 							token,
-							JSON.stringify({ session: parsedSession, user: parsedUser }),
-							sessionTTL,
-						),
-						secondaryStorage.set(
-							activeSessionsKey,
-							JSON.stringify(filtered),
-							furthestSessionTTL,
-						),
-					]);
+							expiresAt: parsedSession.expiresAt.getTime(),
+						});
+						filtered.sort((a, b) => a.expiresAt - b.expiresAt);
+						const furthestSessionTTL = getTTLSeconds(
+							filtered[filtered.length - 1]!.expiresAt,
+							now,
+						);
+						await Promise.all([
+							secondaryStorage.set(
+								token,
+								JSON.stringify({ session: parsedSession, user: parsedUser }),
+								sessionTTL,
+							),
+							secondaryStorage.set(
+								activeSessionsKey,
+								JSON.stringify(filtered),
+								furthestSessionTTL,
+							),
+						]);
+					}
+				} catch (error) {
+					logger.error(
+						"[better-auth] secondary-storage session repair failed; serving the authoritative database session",
+						error,
+					);
 				}
 			}
 			return {
