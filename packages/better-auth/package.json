@@ -504,6 +504,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
+    "botid": "^1.5.10",
     "happy-dom": "^20.8.9",
     "msw": "^2.14.6",
     "next": "^16.2.11",
@@ -524,6 +525,7 @@
     "@tanstack/react-start": "^1.0.0",
     "@tanstack/solid-start": "^1.0.0",
     "better-sqlite3": "^12.0.0",
+    "botid": "^1.5.10",
     "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1",
     "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0",
     "mongodb": "^6.0.0 || ^7.0.0",
@@ -552,6 +554,9 @@
       "optional": true
     },
     "@tanstack/solid-start": {
+      "optional": true
+    },
+    "botid": {
       "optional": true
     },
     "next": {
