@@ -16,6 +16,15 @@ const workflowValueSchema = z.union([
 	z.null(),
 ]);
 
+const workflowCallSchema = z.union([
+	z.null(),
+	z.looseObject({
+		secrets: z
+			.record(z.string(), z.looseObject({ required: z.boolean() }))
+			.optional(),
+	}),
+]);
+
 const workflowStepSchema = z.looseObject({
 	if: z.string().optional(),
 	name: z.string().optional(),
@@ -36,6 +45,11 @@ const workflowJobSchema = z.looseObject({
 });
 
 const workflowSchema = z.looseObject({
+	on: z
+		.looseObject({
+			workflow_call: workflowCallSchema.optional(),
+		})
+		.optional(),
 	concurrency: z
 		.looseObject({
 			group: z.string(),
@@ -501,13 +515,23 @@ describe("release notes command security", () => {
 });
 
 describe("release publication security", () => {
+	it("requires the release App key from reusable release callers", () => {
+		expect(releaseWorkflow.workflow.on?.workflow_call).toMatchObject({
+			secrets: {
+				RELEASE_APP_PRIVATE_KEY: {
+					required: true,
+				},
+			},
+		});
+	});
+
 	it("exposes release policy workflows to pinned maintenance callers", () => {
 		for (const file of [
 			releaseWorkflow,
 			draftWorkflow,
 			verifyChangesetsWorkflow,
 		]) {
-			expect(file.content).toContain("\n  workflow_call:");
+			expect(file.workflow.on?.workflow_call).not.toBeUndefined();
 		}
 	});
 

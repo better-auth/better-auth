@@ -15,7 +15,7 @@ on:
         type: boolean
     secrets:
       RELEASE_APP_PRIVATE_KEY:
-        required: false
+        required: true
   workflow_dispatch:
     inputs:
       snapshot:
