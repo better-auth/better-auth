@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.3
+
+### Patch Changes
+
+- [#11099](https://github.com/better-auth/better-auth/pull/11099) [`fb7c018`](https://github.com/better-auth/better-auth/commit/fb7c018608bdc019c1685e70a878a084602c2fd3) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent Expo apps from sending unauthenticated requests while large stored cookies are being updated, and recover the previous cookie value when an update is interrupted or incomplete.
+
 ## 1.7.2
 
 ## 1.7.1

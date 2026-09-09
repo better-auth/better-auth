@@ -477,13 +477,9 @@ describe("siwe", async () => {
 		);
 	});
 
-	it.each([
-		"issuer",
-		"provider-id",
-	] as const)("accepts verification with email under explicit %s identity strategy", async (identityStrategy) => {
+	it("should accept verification with email when anonymous is false", async () => {
 		const { auth, client } = await getTestInstance(
 			{
-				account: { identityStrategy },
 				plugins: [
 					siwe({
 						domain,
@@ -521,7 +517,6 @@ describe("siwe", async () => {
 		expect(accounts).toContainEqual(
 			expect.objectContaining({
 				providerId: "siwe",
-				issuer: "local:siwe",
 				accountId: `${walletAddress}:${chainId}`,
 			}),
 		);
