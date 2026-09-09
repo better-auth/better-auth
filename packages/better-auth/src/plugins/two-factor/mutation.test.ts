@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { twoFactor, twoFactorClient } from ".";
@@ -291,4 +292,211 @@ describe("transactional two-factor configuration", () => {
 		const result = await first.auth.api.getSession({ headers });
 		expect(result?.user).not.toHaveProperty("twoFactorVersion");
 	});
+});
+
+/** @see https://github.com/better-auth/better-auth/pull/8915 */
+it.each([
+	true,
+	false,
+])("re-verifies active OTP and TOTP without changing configuration (transactions: %s)", async (transactional) => {
+	let code = "";
+	const enabled = vi.fn();
+	const { auth, client, db, testUser, signInWithTestUser, sessionSetter } =
+		await getTestInstance(
+			{
+				plugins: [
+					twoFactor({
+						onTotpEnabled: enabled,
+						otpOptions: {
+							allowedAttempts: 2,
+							sendOTP: async ({ otp }) => {
+								code = otp;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [twoFactorClient()] } },
+		);
+	const { headers, user } = await signInWithTestUser();
+	await client.twoFactor.enable({ password: testUser.password }, { headers });
+	const factor = await db.findOne<{ secret: string }>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: user.id }],
+	});
+	const totp = await createOTP(
+		await symmetricDecrypt({
+			key: (await auth.$context).secretConfig,
+			data: factor!.secret,
+		}),
+	).totp();
+	expect(
+		(
+			await client.twoFactor.verifyTotp(
+				{ code: totp },
+				{ headers, onSuccess: sessionSetter(headers) },
+			)
+		).error,
+	).toBeNull();
+	enabled.mockClear();
+	const before = await db.findOne({
+		model: "user",
+		where: [{ field: "id", value: user.id }],
+	});
+	const sessions = await db.findMany({
+		model: "session",
+		where: [{ field: "userId", value: user.id }],
+	});
+	if (!transactional)
+		(await auth.$context).adapter.options!.adapterConfig.transaction = false;
+	await client.twoFactor.sendOtp({}, { headers });
+	const wrong = code === "000000" ? "111111" : "000000";
+	expect(
+		(await client.twoFactor.verifyOtp({ code: wrong }, { headers })).error
+			?.code,
+	).toBe("INVALID_CODE");
+	expect(
+		(await client.twoFactor.verifyOtp({ code }, { headers })).error,
+	).toBeNull();
+	expect(
+		(await client.twoFactor.verifyOtp({ code }, { headers })).error?.code,
+	).toBe("OTP_HAS_EXPIRED");
+	const wrongTotp = totp === "000000" ? "111111" : "000000";
+	expect(
+		(await client.twoFactor.verifyTotp({ code: wrongTotp }, { headers })).error
+			?.code,
+	).toBe("INVALID_CODE");
+	expect(
+		(await client.twoFactor.verifyTotp({ code: totp }, { headers })).error,
+	).toBeNull();
+	expect(
+		await db.findOne({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		}),
+	).toEqual(before);
+	expect(
+		await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		}),
+	).toEqual(sessions);
+	expect(enabled).not.toHaveBeenCalled();
+});
+
+/** @see https://github.com/better-auth/better-auth/pull/8915 */
+it.each([
+	["totp", false],
+	["otp", false],
+	["skip", false],
+	["totp", true],
+	["otp", true],
+	["skip", true],
+] as const)("preserves remember-me lifetime during %s activation and disable (remember: %s)", async (method, rememberMe) => {
+	let code = "";
+	const { auth, client, db, testUser, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				twoFactor({
+					skipVerificationOnEnable: method === "skip",
+					otpOptions: {
+						sendOTP: async ({ otp }) => {
+							code = otp;
+						},
+					},
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [twoFactorClient()] } },
+	);
+	const headers = new Headers();
+	const jar = new Map<string, string>();
+	const keepCookies = (
+		context: Parameters<ReturnType<typeof sessionSetter>>[0],
+	) => {
+		const cookies = parseSetCookieHeader(
+			context.response.headers.get("set-cookie") ?? "",
+		);
+		for (const [name, cookie] of cookies) jar.set(name, cookie.value);
+		headers.set(
+			"cookie",
+			[...jar].map(([name, value]) => `${name}=${value}`).join("; "),
+		);
+		const tokenCookie = cookies.get("better-auth.session_token");
+		if (tokenCookie?.value) {
+			if (rememberMe) expect(tokenCookie["max-age"]).toBeGreaterThan(0);
+			else expect(tokenCookie["max-age"]).toBeUndefined();
+		}
+	};
+	const signedIn = await client.signIn.email(
+		{ email: testUser.email, password: testUser.password, rememberMe },
+		{ onSuccess: keepCookies },
+	);
+	expect(signedIn.error).toBeNull();
+	const before = (await auth.api.getSession({ headers }))!;
+	const lifetime =
+		before.session.expiresAt.getTime() - before.session.createdAt.getTime();
+	if (rememberMe) expect(lifetime).toBeGreaterThan(86400000);
+	else expect(lifetime).toBeLessThanOrEqual(86401000);
+	const enable = await client.twoFactor.enable(
+		{ password: testUser.password, method: method === "otp" ? "otp" : "totp" },
+		{ headers, onSuccess: keepCookies },
+	);
+	expect(enable.error).toBeNull();
+	if (method === "totp") {
+		const factor = await db.findOne<{ secret: string }>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: before.user.id }],
+		});
+		code = await createOTP(
+			await symmetricDecrypt({
+				key: (await auth.$context).secretConfig,
+				data: factor!.secret,
+			}),
+		).totp();
+		expect(
+			(
+				await client.twoFactor.verifyTotp(
+					{ code },
+					{ headers, onSuccess: keepCookies },
+				)
+			).error,
+		).toBeNull();
+	} else if (method === "otp") {
+		await client.twoFactor.sendOtp({}, { headers });
+		expect(
+			(
+				await client.twoFactor.verifyOtp(
+					{ code },
+					{ headers, onSuccess: keepCookies },
+				)
+			).error,
+		).toBeNull();
+	}
+	const activated = (await auth.api.getSession({ headers }))!;
+	expect(activated.session.token).not.toBe(before.session.token);
+	expect(
+		activated.session.expiresAt.getTime() -
+			activated.session.createdAt.getTime(),
+	).toBeLessThanOrEqual(lifetime + 1000);
+	expect(
+		activated.session.expiresAt.getTime() -
+			activated.session.createdAt.getTime(),
+	).toBeGreaterThanOrEqual(lifetime - 1000);
+	expect(
+		(
+			await client.twoFactor.disable(
+				{ password: testUser.password },
+				{ headers, onSuccess: keepCookies },
+			)
+		).error,
+	).toBeNull();
+	const disabled = (await auth.api.getSession({ headers }))!;
+	expect(disabled.session.token).not.toBe(activated.session.token);
+	expect(
+		disabled.session.expiresAt.getTime() - disabled.session.createdAt.getTime(),
+	).toBeLessThanOrEqual(lifetime + 1000);
+	expect(
+		disabled.session.expiresAt.getTime() - disabled.session.createdAt.getTime(),
+	).toBeGreaterThanOrEqual(lifetime - 1000);
 });

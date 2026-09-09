@@ -73,9 +73,13 @@ export async function rotateTwoFactorSession(
 	user: UserWithTwoFactor,
 	activeSession: Session,
 ): Promise<Session> {
+	const dontRememberMe = !!(await ctx.getSignedCookie(
+		ctx.context.authCookies.dontRememberToken.name,
+		ctx.context.secret,
+	));
 	const session = await ctx.context.internalAdapter.createSession(
 		user.id,
-		false,
+		dontRememberMe,
 		activeSession,
 	);
 	if (!session || session.userId !== user.id) {
@@ -98,7 +102,7 @@ export async function rotateTwoFactorSession(
 		);
 	}
 	await queueAfterTransactionHook(() =>
-		setSessionCookie(ctx, { session, user }),
+		setSessionCookie(ctx, { session, user }, dontRememberMe),
 	);
 	return session;
 }

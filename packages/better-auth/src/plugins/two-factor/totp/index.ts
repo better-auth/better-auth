@@ -328,7 +328,10 @@ export const totp2fa = (
 				await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
 			}
 
-			if (!isSignIn) {
+			if (
+				!isSignIn &&
+				(!user.twoFactorEnabled || twoFactor.verified === false)
+			) {
 				const completed = await runTwoFactorMutation(
 					ctx,
 					user.id,

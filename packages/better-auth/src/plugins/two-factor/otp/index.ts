@@ -321,7 +321,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
 			const isSignIn = !session.session;
-			if (!isSignIn) assertTwoFactorTransaction(ctx);
+			const requiresActivation = !isSignIn && !session.user.twoFactorEnabled;
+			if (requiresActivation) assertTwoFactorTransaction(ctx);
 			const twoFactorTable = "twoFactor";
 			// Account-level lockout shares one counter across all factors, so OTP
 			// failures count toward and are blocked by the same lock as TOTP and
@@ -410,9 +411,9 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				}
 				return { response: await valid(ctx) };
 			};
-			const result = isSignIn
-				? await verify()
-				: await runTwoFactorMutation(ctx, session.user.id, verify);
+			const result = requiresActivation
+				? await runTwoFactorMutation(ctx, session.user.id, verify)
+				: await verify();
 			if (result.error) {
 				if (result.error === "INVALID_CODE") return invalid(result.error);
 				throw APIError.from(
