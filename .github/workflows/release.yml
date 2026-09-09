@@ -13,6 +13,9 @@ on:
         required: false
         default: false
         type: boolean
+    secrets:
+      RELEASE_APP_PRIVATE_KEY:
+        required: false
   workflow_dispatch:
     inputs:
       snapshot:
