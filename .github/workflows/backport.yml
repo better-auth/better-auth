@@ -10,15 +10,18 @@ permissions: {}
 
 concurrency:
   group: backport-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
 
 jobs:
   backport:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: >
       github.repository_owner == 'better-auth' && (
         (
           github.event_name == 'pull_request_target' &&
-          github.event.pull_request.merged
+          github.event.pull_request.merged &&
+          contains(toJSON(github.event.pull_request.labels.*.name), '"backport ')
         ) || (
           github.event_name == 'issue_comment' &&
           github.event.issue.pull_request &&
@@ -42,11 +45,8 @@ jobs:
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Check PR state and labels
         id: pr
@@ -63,14 +63,29 @@ jobs:
           HAS_LABEL=$(echo "$PR_DATA" | jq '[.labels[].name] | any(. == "backport-auto-merge")')
           echo "auto_merge=$HAS_LABEL" >> "$GITHUB_OUTPUT"
 
+      # Credentials stay available because backport-action pushes the generated branch.
+      # zizmor: ignore[artipacked]
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: true
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+
       - name: Create backport PRs
+        id: backport
         uses: korthout/backport-action@66065406958f46e82238fd59546f5a99e69e22aa # v4.5.2
         with:
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           label_pattern: '^backport ([^ ]+)$'
           pull_title: '[backport ${target_branch}] ${pull_title}'
+          comment_style: summary
           copy_assignees: true
           add_author_as_reviewer: true
           auto_merge_enabled: ${{ steps.pr.outputs.auto_merge }}
           auto_merge_method: squash
           experimental: '{"conflict_resolution": "draft_commit_conflicts"}'
+
+      - name: Verify backport result
+        if: steps.backport.outputs.was_successful != 'true'
+        run: |
+          echo "::error::One or more backports failed"
+          exit 1
