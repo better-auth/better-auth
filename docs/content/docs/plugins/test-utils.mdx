@@ -156,13 +156,16 @@ const member = await test.addMember({
 
 Auth helpers create authenticated sessions for testing protected routes.
 
+All three helpers accept an optional `session` object for fields configured through `session.additionalFields` or a plugin's session schema. Supplied values override defaults; omitted fields keep their defaults. Standard session fields such as `id`, `userId`, `token`, and timestamps are ignored.
+
 #### login
 
 Creates a session for a user and returns session details, headers, cookies, and token.
 
 ```ts
 const { session, user, headers, cookies, token } = await test.login({
-    userId: user.id
+    userId: user.id,
+    session: { providerToken: "test-token" } // optional additional fields
 })
 
 // session - The session object with userId, token, etc.
