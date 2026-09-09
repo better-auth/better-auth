@@ -404,3 +404,40 @@ describe("getAuthTables", () => {
 		});
 	});
 });
+
+describe("email change strategy fields", () => {
+	it.each([
+		undefined,
+		{ enabled: true, strategy: "jwt" as const },
+		{ enabled: false, strategy: "verification-table" as const },
+	])("omits pending fields without opting in: %o", (changeEmail) => {
+		const { user } = getAuthTables({ user: { changeEmail } });
+		expect(user!.fields).not.toHaveProperty("pendingEmail");
+		expect(user!.fields).not.toHaveProperty("pendingEmailRequestId");
+	});
+
+	it("maps both nullable fields and keeps the request identity private", () => {
+		const { user } = getAuthTables({
+			user: {
+				changeEmail: { enabled: true, strategy: "verification-table" },
+				fields: {
+					pendingEmail: "pending_email",
+					pendingEmailRequestId: "pending_email_request_id",
+				},
+			},
+		});
+		expect(user!.fields.pendingEmail).toMatchObject({
+			type: "string",
+			required: false,
+			input: false,
+			fieldName: "pending_email",
+		});
+		expect(user!.fields.pendingEmailRequestId).toMatchObject({
+			type: "string",
+			required: false,
+			input: false,
+			returned: false,
+			fieldName: "pending_email_request_id",
+		});
+	});
+});

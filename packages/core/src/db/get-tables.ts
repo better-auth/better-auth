@@ -252,10 +252,17 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 							pendingEmail: {
 								type: "string" as const,
 								required: false,
-								fieldName:
-									(options.user?.fields as Record<string, string> | undefined)
-										?.pendingEmail || "pendingEmail",
+								fieldName: options.user?.fields?.pendingEmail || "pendingEmail",
 								input: false,
+							},
+							pendingEmailRequestId: {
+								type: "string" as const,
+								required: false,
+								fieldName:
+									options.user?.fields?.pendingEmailRequestId ||
+									"pendingEmailRequestId",
+								input: false,
+								returned: false,
 							},
 						}
 					: {}),

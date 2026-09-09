@@ -1,5 +1,9 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -9,9 +13,11 @@ import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
 import { getDate } from "../../utils/date";
+import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
 import {
+	getAuthoritativeSessionFromCtx,
 	getSessionFromCtx,
 	isStateful,
 	sensitiveSessionMiddleware,
@@ -41,6 +47,19 @@ const changeEmailIdentifier = (userId: string, token: string) =>
 
 /** Fallback lifetime for a pending email change, in seconds. */
 const DEFAULT_CHANGE_EMAIL_EXPIRES_IN = 60 * 60;
+
+const assertEmailChangeRevocationSupport = (ctx: GenericEndpointContext) => {
+	if (
+		ctx.context.options.user?.changeEmail?.revokeOtherSessions &&
+		(!ctx.context.adapter.options?.adapterConfig.transaction ||
+			ctx.context.options.secondaryStorage)
+	) {
+		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+			message:
+				"Email change session revocation requires database transactions without secondary storage",
+		});
+	}
+};
 
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -690,6 +709,7 @@ export const changeEmail = createAuthEndpoint(
 	"/change-email",
 	{
 		method: "POST",
+		cloneRequest: true,
 		body: z.object({
 			newEmail: z.email().meta({
 				description:
@@ -774,6 +794,7 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.options.emailVerification?.sendVerificationEmail;
 
 		const canUpdateWithoutVerification =
+			!useVerificationTable &&
 			ctx.context.session.user.emailVerified !== true &&
 			changeEmailOptions.updateEmailWithoutVerification;
 		/**
@@ -808,7 +829,7 @@ export const changeEmail = createAuthEndpoint(
 
 		const existingUser =
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
-		if (existingUser) {
+		if (existingUser && !useVerificationTable) {
 			// Simulate token generation to prevent timing attacks
 			await createEmailVerificationToken(
 				ctx.context.secret,
@@ -859,7 +880,7 @@ export const changeEmail = createAuthEndpoint(
 							url,
 							token,
 						},
-						ctx.request,
+						safeCloneRequest(ctx.request),
 					),
 				);
 			}
@@ -895,7 +916,7 @@ export const changeEmail = createAuthEndpoint(
 						url,
 						token,
 					},
-					ctx.request,
+					safeCloneRequest(ctx.request),
 				),
 			);
 			return ctx.json({
@@ -911,8 +932,10 @@ export const changeEmail = createAuthEndpoint(
 		}
 
 		if (useVerificationTable) {
+			assertEmailChangeRevocationSupport(ctx);
 			const userId = ctx.context.session.user.id;
 			const verificationToken = generateId(24);
+			const requestId = generateId(24);
 			const identifier = changeEmailIdentifier(userId, verificationToken);
 			const expiresAt = getDate(
 				ctx.context.options.emailVerification?.expiresIn ||
@@ -920,37 +943,57 @@ export const changeEmail = createAuthEndpoint(
 				"sec",
 			);
 
-			/**
-			 * The row is keyed by token, so requests never overwrite each other and a
-			 * link can only ever consume its own row.
-			 *
-			 * `user.pendingEmail` selects the current *target address*, and verification
-			 * cross-checks against it: requesting a different address makes every earlier
-			 * link inert. Requesting the *same* address twice leaves both links valid —
-			 * they lead to the same outcome, so there is nothing to arbitrate between
-			 * them. Rows are never deleted here; they expire.
-			 *
-			 * (Deleting earlier rows by identifier prefix isn't an option: with
-			 * `verification.storeIdentifier` set to `"hashed"`, stored identifiers share
-			 * no prefix with the plaintext ones.)
-			 */
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: JSON.stringify({
-					oldEmail: ctx.context.session.user.email,
-					newEmail,
-				}),
-				identifier,
-				expiresAt,
-			});
-			await ctx.context.internalAdapter.updateUser(userId, {
-				pendingEmail: newEmail,
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: JSON.stringify({
+						oldEmail: ctx.context.session.user.email,
+						newEmail,
+						requestId,
+					}),
+					identifier,
+					expiresAt,
+				});
+			if (!verification) {
+				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+					message: "Failed to persist the email change verification",
+				});
+			}
+			const pendingUser = await ctx.context.internalAdapter.updateUserIf(
+				userId,
+				{ pendingEmail: newEmail, pendingEmailRequestId: requestId },
+				[{ field: "email", value: ctx.context.session.user.email }],
+			);
+			const pendingState = pendingUser as {
+				pendingEmail?: unknown;
+				pendingEmailRequestId?: unknown;
+			} | null;
+			if (
+				!pendingUser ||
+				pendingUser.id !== userId ||
+				pendingUser.email !== ctx.context.session.user.email ||
+				pendingState?.pendingEmail !== newEmail ||
+				pendingState?.pendingEmailRequestId !== requestId
+			) {
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					identifier,
+				);
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Email change is no longer current",
+				});
+			}
+			await setSessionCookie(ctx, {
+				session: ctx.context.session.session,
+				user: pendingUser,
 			});
 
 			if (changeEmailOptions.onChangeEmailRequested) {
+				const callback = changeEmailOptions.onChangeEmailRequested;
 				await ctx.context.runInBackgroundOrAwait(
-					changeEmailOptions.onChangeEmailRequested(
-						{ user: ctx.context.session.user, newEmail },
-						ctx.request,
+					Promise.resolve().then(() =>
+						callback(
+							{ user: pendingUser, newEmail },
+							safeCloneRequest(ctx.request),
+						),
 					),
 				);
 			}
@@ -961,31 +1004,23 @@ export const changeEmail = createAuthEndpoint(
 				ctx.body.callbackURL || "/",
 			)}`;
 
-			/**
-			 * If the send fails, roll the pending state back rather than leaving the user
-			 * with a `pendingEmail` and a token they never received.
-			 */
-			try {
-				await canSendVerification(
-					{
-						user: {
-							...ctx.context.session.user,
-							email: newEmail,
-						},
-						url,
-						token: verificationToken,
-					},
-					ctx.request,
-				);
-			} catch (e) {
-				await ctx.context.internalAdapter.updateUser(userId, {
-					pendingEmail: null,
-				});
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					identifier,
-				);
-				throw e;
+			if (existingUser) {
+				ctx.context.logger.info("Change email attempt for existing email");
+				return ctx.json({ status: true });
 			}
+
+			await ctx.context.runInBackgroundOrAwait(
+				Promise.resolve().then(() =>
+					canSendVerification(
+						{
+							user: { ...pendingUser, email: newEmail },
+							url,
+							token: verificationToken,
+						},
+						safeCloneRequest(ctx.request),
+					),
+				),
+			);
 
 			return ctx.json({ status: true });
 		}
@@ -1014,7 +1049,7 @@ export const changeEmail = createAuthEndpoint(
 					url,
 					token,
 				},
-				ctx.request,
+				safeCloneRequest(ctx.request),
 			),
 		);
 		return ctx.json({
@@ -1036,13 +1071,14 @@ export const changeEmail = createAuthEndpoint(
  * **client:**
  * `authClient.cancelEmailChange`
  *
- * Returns `404` unless `user.changeEmail.strategy` is `"verification-table"`.
+ * Returns `400` when email changes are disabled and `404` for another strategy.
  */
 export const cancelEmailChange = createAuthEndpoint(
 	"/cancel-email-change",
 	{
 		method: "POST",
-		use: [sessionMiddleware],
+		cloneRequest: true,
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				operationId: "cancelEmailChange",
@@ -1091,22 +1127,34 @@ export const cancelEmailChange = createAuthEndpoint(
 			throw APIError.fromStatus("NOT_FOUND");
 		}
 
-		/**
-		 * Clearing `pendingEmail` is what cancels the change: verification cross-checks
-		 * against it, so any outstanding link is inert from here on and its row simply
-		 * expires. Nothing needs deleting — and nothing can be deleted anyway, since the
-		 * rows are keyed by token.
-		 */
 		const userId = ctx.context.session.user.id;
-		await ctx.context.internalAdapter.updateUser(userId, {
+		const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
 			pendingEmail: null,
+			pendingEmailRequestId: null,
+		});
+
+		if (
+			!updatedUser ||
+			updatedUser.pendingEmail !== null ||
+			updatedUser.pendingEmailRequestId !== null
+		) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+			);
+		}
+
+		await setSessionCookie(ctx, {
+			session: ctx.context.session.session,
+			user: updatedUser,
 		});
 
 		if (ctx.context.options.user.changeEmail.onChangeEmailCancelled) {
+			const callback =
+				ctx.context.options.user.changeEmail.onChangeEmailCancelled;
 			await ctx.context.runInBackgroundOrAwait(
-				ctx.context.options.user.changeEmail.onChangeEmailCancelled(
-					{ user: ctx.context.session.user },
-					ctx.request,
+				Promise.resolve().then(() =>
+					callback({ user: updatedUser }, safeCloneRequest(ctx.request)),
 				),
 			);
 		}
@@ -1123,7 +1171,7 @@ export const cancelEmailChange = createAuthEndpoint(
  * Verifies a pending email change and applies it. The verification row is consumed
  * atomically, so a token cannot be replayed.
  *
- * Returns `404` unless `user.changeEmail.strategy` is `"verification-table"`.
+ * Redirects with `INVALID_TOKEN` unless the verification-table strategy is enabled.
  */
 export const verifyEmailChange = createAuthEndpoint(
 	"/verify-email-change/:userId/:token",
@@ -1197,95 +1245,153 @@ export const verifyEmailChange = createAuthEndpoint(
 		if (!userId || !token) {
 			throw ctx.redirect(errorURL);
 		}
+		const currentSession = await getAuthoritativeSessionFromCtx(ctx);
+		if (currentSession && currentSession.user.id !== userId) {
+			throw ctx.redirect(errorURL);
+		}
+		assertEmailChangeRevocationSupport(ctx);
+		const revokeOtherSessions =
+			ctx.context.options.user.changeEmail.revokeOtherSessions;
+		const completeChange = async () => {
+			/**
+			 * The token is part of the key, so this claims exactly the row this link refers
+			 * to — atomically, and without touching any other pending request. A bogus token
+			 * addresses a row that doesn't exist and therefore consumes nothing; two
+			 * concurrent clicks on the same link race for one row and only one wins.
+			 */
+			const verification =
+				await ctx.context.internalAdapter.consumeVerificationValue(
+					changeEmailIdentifier(userId, token),
+				);
 
-		/**
-		 * The token is part of the key, so this claims exactly the row this link refers
-		 * to — atomically, and without touching any other pending request. A bogus token
-		 * addresses a row that doesn't exist and therefore consumes nothing; two
-		 * concurrent clicks on the same link race for one row and only one wins.
-		 */
-		const verification =
-			await ctx.context.internalAdapter.consumeVerificationValue(
-				changeEmailIdentifier(userId, token),
+			if (!verification || verification.expiresAt < new Date()) {
+				throw ctx.redirect(errorURL);
+			}
+
+			let pending: { oldEmail: string; newEmail: string; requestId: string };
+			try {
+				pending = z
+					.object({
+						oldEmail: z.email(),
+						newEmail: z.email(),
+						requestId: z.string().min(1),
+					})
+					.parse(JSON.parse(verification.value));
+			} catch {
+				throw ctx.redirect(errorURL);
+			}
+
+			const user = await ctx.context.internalAdapter.findUserById(userId);
+			const currentPendingEmail = (
+				user as { pendingEmail?: string | null } | null
+			)?.pendingEmail;
+			if (user && currentPendingEmail === undefined) {
+				ctx.context.logger.warn(
+					'user.pendingEmail is missing while changeEmail.strategy is "verification-table", run your migrations before verifying an email change.',
+				);
+			}
+			if (
+				!user ||
+				currentPendingEmail !== pending.newEmail ||
+				user.email !== pending.oldEmail
+			) {
+				throw ctx.redirect(errorURL);
+			}
+
+			/**
+			 * The address may have been taken between the request and the click.
+			 */
+			const existingUser = await ctx.context.internalAdapter.findUserByEmail(
+				pending.newEmail,
 			);
+			if (existingUser) {
+				await ctx.context.internalAdapter.updateUserIf(
+					userId,
+					{ pendingEmail: null, pendingEmailRequestId: null },
+					[{ field: "pendingEmailRequestId", value: pending.requestId }],
+				);
+				throw ctx.redirect(errorURL);
+			}
 
-		if (!verification || verification.expiresAt < new Date()) {
-			throw ctx.redirect(errorURL);
-		}
-
-		let pending: { oldEmail: string; newEmail: string };
-		try {
-			pending = JSON.parse(verification.value);
-		} catch {
-			throw ctx.redirect(errorURL);
-		}
-
-		/**
-		 * `pendingEmail` is the authority on the current target address, so a link
-		 * pointing at a superseded address is rejected here rather than by deleting rows
-		 * — which is what lets a newer request survive an older link being clicked.
-		 */
-		const user = await ctx.context.internalAdapter.findUserById(userId);
-		const currentPendingEmail = (
-			user as { pendingEmail?: string | null } | null
-		)?.pendingEmail;
-		if (user && currentPendingEmail === undefined) {
-			ctx.context.logger.warn(
-				'user.pendingEmail is missing while changeEmail.strategy is "verification-table" — run your migrations, every verification link will be rejected until the column exists.',
+			const updatedUser = await ctx.context.internalAdapter.updateUserIf(
+				userId,
+				{
+					email: pending.newEmail,
+					emailVerified: true,
+					pendingEmail: null,
+					pendingEmailRequestId: null,
+				},
+				[
+					{ field: "email", value: pending.oldEmail },
+					{ field: "pendingEmail", value: pending.newEmail },
+					{ field: "pendingEmailRequestId", value: pending.requestId },
+				],
 			);
-		}
-		if (!user || currentPendingEmail !== pending.newEmail) {
-			throw ctx.redirect(errorURL);
-		}
+			const completedPendingState = updatedUser as {
+				pendingEmail?: unknown;
+				pendingEmailRequestId?: unknown;
+			} | null;
+			if (
+				!updatedUser ||
+				updatedUser.id !== userId ||
+				updatedUser.email !== pending.newEmail ||
+				updatedUser.emailVerified !== true ||
+				completedPendingState?.pendingEmail !== null ||
+				completedPendingState?.pendingEmailRequestId !== null
+			)
+				throw ctx.redirect(errorURL);
 
-		/**
-		 * The address may have been taken between the request and the click.
-		 */
-		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
-			pending.newEmail,
-		);
-		if (existingUser) {
-			await ctx.context.internalAdapter.updateUser(userId, {
-				pendingEmail: null,
-			});
-			throw ctx.redirect(errorURL);
-		}
+			/**
+			 * Revoke before replacing an authenticated visitor's session.
+			 */
+			if (revokeOtherSessions) {
+				await ctx.context.internalAdapter.deleteUserSessions(updatedUser.id, {
+					throwOnVeto: true,
+				});
+			}
 
-		const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
-			email: pending.newEmail,
-			emailVerified: true,
-			pendingEmail: null,
-		});
+			const session = currentSession
+				? revokeOtherSessions
+					? await ctx.context.internalAdapter.createSession(
+							updatedUser.id,
+							undefined,
+							undefined,
+							undefined,
+							{ deferSecondaryStorageWrites: true },
+						)
+					: currentSession.session
+				: null;
+			if (currentSession && (!session || session.userId !== userId))
+				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+					message: "Failed to replace the session after email verification",
+				});
+			return {
+				updatedUser,
+				session,
+				oldEmail: pending.oldEmail,
+				newEmail: pending.newEmail,
+			};
+		};
+		const { updatedUser, session, oldEmail, newEmail } = revokeOtherSessions
+			? await runWithTransaction(ctx.context.adapter, completeChange)
+			: await completeChange();
+		if (session) await setSessionCookie(ctx, { session, user: updatedUser });
 
 		if (ctx.context.options.user?.changeEmail?.onChangeEmailCompleted) {
+			const callback =
+				ctx.context.options.user.changeEmail.onChangeEmailCompleted;
 			await ctx.context.runInBackgroundOrAwait(
-				ctx.context.options.user.changeEmail.onChangeEmailCompleted(
-					{
-						user: updatedUser,
-						oldEmail: pending.oldEmail,
-						newEmail: pending.newEmail,
-					},
-					ctx.request,
+				Promise.resolve().then(() =>
+					callback(
+						{
+							user: updatedUser,
+							oldEmail,
+							newEmail,
+						},
+						safeCloneRequest(ctx.request),
+					),
 				),
 			);
-		}
-
-		/**
-		 * Revoke before minting the new session, otherwise the session issued below
-		 * would be revoked along with the others.
-		 */
-		if (ctx.context.options.user.changeEmail.revokeOtherSessions) {
-			await ctx.context.internalAdapter.deleteUserSessions(updatedUser.id);
-		}
-
-		const session = await ctx.context.internalAdapter.createSession(
-			updatedUser.id,
-		);
-		if (session) {
-			await setSessionCookie(ctx, {
-				session,
-				user: updatedUser,
-			});
 		}
 
 		throw ctx.redirect(callbackURL);

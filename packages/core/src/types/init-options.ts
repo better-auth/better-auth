@@ -914,7 +914,10 @@ export type BetterAuthOptions = {
 	 * User configuration
 	 */
 	user?:
-		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
+		| (BetterAuthDBOptions<
+				"user",
+				keyof BaseUser | "pendingEmail" | "pendingEmailRequestId"
+		  > & {
 				/**
 				 * Gate which identities Better Auth admits. Called just before
 				 * `create-user`, `link-account`, and (for OAuth) `sign-in`, across
@@ -967,6 +970,7 @@ export type BetterAuthOptions = {
 					) => Promise<void>;
 					/**
 					 * Update the email without verification if the user is not verified.
+					 * Only applies to the default `"jwt"` strategy.
 					 * @default false
 					 */
 					updateEmailWithoutVerification?: boolean;
@@ -983,7 +987,9 @@ export type BetterAuthOptions = {
 					 *   consumed atomically, so it cannot be replayed.
 					 *
 					 * `"verification-table"` requires `changeEmail.sendVerificationEmail`
-					 * and adds a `pendingEmail` field to the user table.
+					 * and adds nullable `pendingEmail` and private `pendingEmailRequestId`
+					 * fields to the user table. Only the latest request can be applied,
+					 * including repeated requests for the same address.
 					 *
 					 * @default "jwt"
 					 */
@@ -1012,6 +1018,9 @@ export type BetterAuthOptions = {
 					 * Revoke every other session once an email change is applied.
 					 *
 					 * Only used when `strategy` is `"verification-table"`.
+					 * Requires a transaction-capable database adapter with transactions
+					 * enabled and no secondary storage. A veto or failed session replacement
+					 * rolls back the email, token consumption and session changes together.
 					 *
 					 * @default false
 					 */

@@ -1349,9 +1349,9 @@ describe("change-email strategy: verification-table", async () => {
 		expect(afterCurrent!.pendingEmail).toBe(null);
 	});
 
-	it("keeps both links valid when the same address is requested twice", async () => {
+	it("only accepts the latest link when the same address is requested twice", async () => {
 		const urls: string[] = [];
-		const { client, db, signInWithTestUser } = await getTestInstance(
+		const { auth, client, db, signInWithTestUser } = await getTestInstance(
 			verificationTableOptions({
 				sendVerificationEmail: async ({ url }: { url: string }) => {
 					urls.push(url);
@@ -1359,32 +1359,24 @@ describe("change-email strategy: verification-table", async () => {
 			}),
 		);
 		const { headers, user } = await signInWithTestUser();
-
 		await client.changeEmail({ newEmail: "same@example.com" }, { headers });
 		await client.changeEmail({ newEmail: "same@example.com" }, { headers });
-		const [urlA] = urls;
-
-		/**
-		 * Documented semantics: `pendingEmail` arbitrates the target *address*, not the
-		 * individual request. Two requests for the same address produce two links that
-		 * both remain valid — they lead to the same outcome, so there is nothing to
-		 * arbitrate. Requesting a *different* address is what makes earlier links inert,
-		 * which the superseded-link test above covers.
-		 */
-		await client.$fetch(urlA!.replace(/^.*\/api\/auth/, ""), {
-			headers,
-			method: "GET",
-		});
-
-		const [stored] = await db.findMany<{
-			email: string;
-			pendingEmail: string | null;
-		}>({
-			model: "user",
-			where: [{ field: "id", value: user.id }],
-		});
-		expect(stored!.email).toBe("same@example.com");
-		expect(stored!.pendingEmail).toBe(null);
+		const stale = await auth.handler(new Request(urls[0]!, { headers }));
+		expect(stale.headers.get("location")).toContain("error=INVALID_TOKEN");
+		expect(
+			await db.findOne({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			}),
+		).toMatchObject({ email: user.email, pendingEmail: "same@example.com" });
+		const current = await auth.handler(new Request(urls[1]!, { headers }));
+		expect(current.headers.get("location")).toBe("/");
+		expect(
+			await db.findOne({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			}),
+		).toMatchObject({ email: "same@example.com", pendingEmail: null });
 	});
 
 	it("leaves the pending change in place when the token has expired", async () => {
@@ -1488,7 +1480,7 @@ describe("change-email strategy: verification-table", async () => {
 		expect(sendVerificationEmail).not.toHaveBeenCalled();
 	});
 
-	it("rolls the pending state back when the send fails", async () => {
+	it("keeps pending state and a generic response when delivery fails", async () => {
 		const { client, db, signInWithTestUser } = await getTestInstance(
 			verificationTableOptions({
 				sendVerificationEmail: async () => {
@@ -1498,7 +1490,12 @@ describe("change-email strategy: verification-table", async () => {
 		);
 		const { headers, user } = await signInWithTestUser();
 
-		await client.changeEmail({ newEmail: "rollback@example.com" }, { headers });
+		const result = await client.changeEmail(
+			{ newEmail: "rollback@example.com" },
+			{ headers },
+		);
+		expect(result.error).toBeNull();
+		expect(result.data).toEqual({ status: true });
 
 		const [stored] = await db.findMany<{
 			email: string;
@@ -1508,7 +1505,7 @@ describe("change-email strategy: verification-table", async () => {
 			where: [{ field: "id", value: user.id }],
 		});
 		expect(stored!.email).toBe(user.email);
-		expect(stored!.pendingEmail).toBe(null);
+		expect(stored!.pendingEmail).toBe("rollback@example.com");
 	});
 });
 
