@@ -204,6 +204,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "socialSignIn",
 			body: socialSignInBodySchema,
+			cloneRequest: true,
 			metadata: {
 				$Infer: {
 					body: {} as z.infer<typeof socialSignInBodySchema>,

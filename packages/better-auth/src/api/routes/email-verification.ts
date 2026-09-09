@@ -26,11 +26,16 @@ export async function dispatchVerificationEmail(
 			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 		);
 	}
-	await options.sendVerificationEmail(data, request);
+	const senderRequest = safeCloneRequest(request);
+	const lifecycleRequest = safeCloneRequest(request);
+	await options.sendVerificationEmail(data, senderRequest);
 	if (options.onEmailVerificationRequested) {
 		await ctx.context.runInBackgroundOrAwait(
 			Promise.resolve().then(() =>
-				options.onEmailVerificationRequested!({ user: data.user }, request),
+				options.onEmailVerificationRequested!(
+					{ user: data.user },
+					lifecycleRequest,
+				),
 			),
 		);
 	}

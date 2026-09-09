@@ -67,6 +67,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				{
 					method: "POST",
 					body: oneTapCallbackBodySchema,
+					cloneRequest: true,
 					metadata: {
 						openapi: {
 							summary: "One tap callback",

@@ -324,6 +324,10 @@ export const auth = betterAuth({
 
 ## Lifecycle Callbacks
 
+Verification email delivery and its lifecycle callback receive independent request clones when
+an HTTP request is available. Each can read the original body without consuming it for the other.
+This includes email signup, username sign-in, OAuth ID tokens and Google One Tap.
+
 Lifecycle callbacks are purpose-built event handlers for security-sensitive operations. Unlike [before/after hooks](#before-hooks) which intercept all endpoints via middleware, lifecycle callbacks target specific events and are configured directly in the relevant options section.
 
 <Callout>
@@ -439,7 +443,7 @@ Some plugins provide their own lifecycle callbacks, configured in the plugin opt
 
 #### Two-Factor: onTotpEnabled / onTotpDisabled
 
-Despite their names, these callbacks cover activation and deactivation of the two-factor plugin, including OTP. Preparing a TOTP QR code does not trigger activation. The callback runs once enrollment is verified, or immediately when `skipVerificationOnEnable` or OTP enrollment enables the factor. Adding and verifying TOTP on an OTP-enabled account also triggers activation. Re-verification and legacy-row normalization during sign-in do not. Activation receives the updated user with `twoFactorEnabled: true`. If a database hook vetoes or rewrites the requested activation or deactivation, the endpoint returns `FAILED_TO_UPDATE_USER` before rotating the session or completing the factor change.
+Despite their names, these callbacks cover activation and deactivation of the two-factor plugin, including OTP. Preparing a TOTP QR code does not trigger activation. The callback runs once enrollment is verified, or immediately when `skipVerificationOnEnable` or OTP enrollment enables the factor. Adding and verifying TOTP on an OTP-enabled account also triggers activation. Re-verification and legacy-row normalization during sign-in do not. Activation receives the updated user with `twoFactorEnabled: true`. Configuration changes require transactional database storage and the migrated private `twoFactorVersion` field. Factor, user and session changes commit atomically before cookies or callbacks are emitted. See [transactional configuration](/docs/plugins/2fa#transactional-configuration). If a database hook vetoes or rewrites the requested activation or deactivation, the endpoint returns `FAILED_TO_UPDATE_USER` before rotating the session or completing the factor change.
 
 ```ts title="auth.ts"
 import { twoFactor } from "better-auth/plugins";

@@ -44,6 +44,7 @@ export async function getTestInstance<
 				testUser?: Partial<User>;
 				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
 				transaction?: boolean;
+				postgresURL?: string;
 		  }
 		| undefined,
 ) {
@@ -60,7 +61,9 @@ export async function getTestInstance<
 		const { Kysely, PostgresDialect } = await import("kysely");
 		const { Pool } = await import("pg");
 		const pool = new Pool({
-			connectionString: "postgres://user:password@localhost:5432/better_auth",
+			connectionString:
+				config?.postgresURL ??
+				"postgres://user:password@localhost:5432/better_auth",
 			options: postgresSchema
 				? `-c search_path=${postgresSchema},public`
 				: undefined,

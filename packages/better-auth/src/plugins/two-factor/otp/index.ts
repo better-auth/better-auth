@@ -1,8 +1,8 @@
 import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { queueAfterTransactionHook } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../../cookies";
 import {
 	constantTimeEqual,
 	generateRandomString,
@@ -12,6 +12,11 @@ import {
 import { parseUserOutput } from "../../../db/schema";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import {
+	assertTwoFactorTransaction,
+	rotateTwoFactorSession,
+	runTwoFactorMutation,
+} from "../mutation";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
@@ -316,6 +321,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
 			const isSignIn = !session.session;
+			if (!isSignIn) assertTwoFactorTransaction(ctx);
 			const twoFactorTable = "twoFactor";
 			// Account-level lockout shares one counter across all factors, so OTP
 			// failures count toward and are blocked by the same lock as TOTP and
@@ -332,111 +338,89 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
 				}
 			}
-			// Consume the OTP row atomically as the race gate. The first concurrent
-			// submission wins the row; every other racer receives null and is
-			// rejected, so a burst of guesses cannot all read the same attempt
-			// counter before any write lands. Expiry is gated inside the consume,
-			// so a stale row returns null without minting a session.
-			const consumed =
-				await ctx.context.internalAdapter.consumeVerificationValue(
-					`2fa-otp-${key}`,
+			const verify = async (currentUser?: UserWithTwoFactor) => {
+				const consumed =
+					await ctx.context.internalAdapter.consumeVerificationValue(
+						`2fa-otp-${key}`,
+					);
+				if (!consumed) return { error: "OTP_HAS_EXPIRED" as const };
+				const [otp, counter] = consumed.value?.split(":") ?? [];
+				const allowedAttempts = options?.allowedAttempts || 5;
+				const attempts = parseInt(counter!, 10) || 0;
+				if (attempts >= allowedAttempts)
+					return { error: "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE" as const };
+				const [storedValue, inputValue] = await decryptOrHashForComparison(
+					ctx,
+					otp!,
+					ctx.body.code,
 				);
-			if (!consumed) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
+				const isCodeValid = constantTimeEqual(
+					new TextEncoder().encode(storedValue),
+					new TextEncoder().encode(inputValue),
 				);
-			}
-			const [otp, counter] = consumed.value?.split(":") ?? [];
-			const allowedAttempts = options?.allowedAttempts || 5;
-			const attempts = parseInt(counter!, 10) || 0;
-			if (attempts >= allowedAttempts) {
-				// The budget is spent. The row stays consumed, so the next
-				// submission is rejected as expired/already-consumed.
-				throw APIError.from(
-					"BAD_REQUEST",
-					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
-				);
-			}
-			const [storedValue, inputValue] = await decryptOrHashForComparison(
-				ctx,
-				otp!,
-				ctx.body.code,
-			);
-			const isCodeValid = constantTimeEqual(
-				new TextEncoder().encode(storedValue),
-				new TextEncoder().encode(inputValue),
-			);
-			if (isCodeValid) {
-				if (twoFactor) {
-					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+				if (!isCodeValid) {
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: `${otp}:${attempts + 1}`,
+						identifier: `2fa-otp-${key}`,
+						expiresAt: consumed.expiresAt,
+					});
+					if (twoFactor)
+						await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+					return { error: "INVALID_CODE" as const };
 				}
-				// Leave the row consumed: a valid OTP is single-use.
-				if (!session.user.twoFactorEnabled) {
-					if (!session.session) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-						);
-					}
+				if (twoFactor)
+					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+				if (session.session && currentUser && !currentUser.twoFactorEnabled) {
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						session.user.id,
-						{
-							twoFactorEnabled: true,
-						},
+						currentUser.id,
+						{ twoFactorEnabled: true },
 					);
 					if (
-						(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !== true
+						!updatedUser ||
+						updatedUser.id !== currentUser.id ||
+						(updatedUser as UserWithTwoFactor).twoFactorEnabled !== true
 					) {
 						throw APIError.from(
 							"BAD_REQUEST",
 							BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
 						);
 					}
-					const newSession = await ctx.context.internalAdapter.createSession(
-						session.user.id,
-						false,
+					const enabledUser = updatedUser as UserWithTwoFactor;
+					const newSession = await rotateTwoFactorSession(
+						ctx,
+						enabledUser,
 						session.session,
-					);
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
 					);
 					const onTotpEnabled =
 						ctx.context.getPlugin("two-factor")?.options?.onTotpEnabled;
-					if (onTotpEnabled) {
-						await ctx.context.runInBackgroundOrAwait(
-							Promise.resolve().then(() =>
-								onTotpEnabled(
-									{ user: updatedUser as UserWithTwoFactor },
-									ctx.request,
+					if (onTotpEnabled)
+						await queueAfterTransactionHook(async () => {
+							await ctx.context.runInBackgroundOrAwait(
+								Promise.resolve().then(() =>
+									onTotpEnabled({ user: enabledUser }, ctx.request),
 								),
-							),
-						);
-					}
-					return ctx.json({
-						token: newSession.token,
-						user: parseUserOutput(ctx.context.options, updatedUser),
-					});
+							);
+						});
+					return {
+						response: ctx.json({
+							token: newSession.token,
+							user: parseUserOutput(ctx.context.options, enabledUser),
+						}),
+					};
 				}
-				return valid(ctx);
+				return { response: await valid(ctx) };
+			};
+			const result = isSignIn
+				? await verify()
+				: await runTwoFactorMutation(ctx, session.user.id, verify);
+			if (result.error) {
+				if (result.error === "INVALID_CODE") return invalid(result.error);
+				throw APIError.from(
+					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES[result.error],
+				);
 			}
-			// Wrong code within budget: re-arm the row with the incremented counter
-			// and the original expiry. The recreated counter is the durable record
-			// of the attempt, so the next submission either keeps guessing or hits
-			// the lock-out guard above. The original expiry caps the whole burst.
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${otp}:${attempts + 1}`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: consumed.expiresAt,
-			});
-			if (twoFactor) {
-				await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
-			}
-			return invalid("INVALID_CODE");
+			return result.response;
 		},
 	);
 

@@ -356,6 +356,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 				{
 					method: "POST",
 					body: signInUsernameBodySchema,
+					cloneRequest: true,
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",

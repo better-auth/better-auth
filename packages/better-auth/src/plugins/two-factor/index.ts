@@ -3,16 +3,13 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { queueAfterTransactionHook } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
-import {
-	deleteSessionCookie,
-	expireCookie,
-	setSessionCookie,
-} from "../../cookies";
+import { sensitiveSessionMiddleware } from "../../api";
+import { deleteSessionCookie, expireCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
@@ -26,6 +23,7 @@ import {
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { rotateTwoFactorSession, runTwoFactorMutation } from "./mutation";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
 import { totp2fa } from "./totp";
@@ -128,7 +126,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: enableTwoFactorBodySchema,
-					use: [sessionMiddleware],
+					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
 							summary: "Enable two factor authentication",
@@ -170,171 +168,178 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						},
 					},
 				},
-				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password, issuer, method } = ctx.body;
-					const requirePassword = await shouldRequirePassword(
+				async (ctx) =>
+					runTwoFactorMutation(
 						ctx,
-						user.id,
-						allowPasswordless,
-					);
-					if (requirePassword) {
-						if (!password) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
+						ctx.context.session.user.id,
+						async (user, adapter) => {
+							const { password, issuer, method } = ctx.body;
+							const requirePassword = await shouldRequirePassword(
+								ctx,
+								user.id,
+								allowPasswordless,
 							);
-						}
-						const isPasswordValid = await validatePassword(ctx, {
-							password,
-							userId: user.id,
-						});
-						if (!isPasswordValid) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
-							);
-						}
-					}
+							if (requirePassword) {
+								if (!password) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										BASE_ERROR_CODES.INVALID_PASSWORD,
+									);
+								}
+								const isPasswordValid = await validatePassword(ctx, {
+									password,
+									userId: user.id,
+								});
+								if (!isPasswordValid) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										BASE_ERROR_CODES.INVALID_PASSWORD,
+									);
+								}
+							}
 
-					if (method === "otp" && !options?.otpOptions?.sendOTP) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							TWO_FACTOR_ERROR_CODES.OTP_NOT_CONFIGURED,
-						);
-					}
-					if (method === "totp" && options?.totpOptions?.disable) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							TWO_FACTOR_ERROR_CODES.TOTP_NOT_CONFIGURED,
-						);
-					}
+							if (method === "otp" && !options?.otpOptions?.sendOTP) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									TWO_FACTOR_ERROR_CODES.OTP_NOT_CONFIGURED,
+								);
+							}
+							if (method === "totp" && options?.totpOptions?.disable) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									TWO_FACTOR_ERROR_CODES.TOTP_NOT_CONFIGURED,
+								);
+							}
 
-					if (method === "otp") {
-						const updatedUser = await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								twoFactorEnabled: true,
-							},
-						);
-						if (
-							(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !==
-							true
-						) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
-							);
-						}
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
-						if (options?.onTotpEnabled) {
-							await ctx.context.runInBackgroundOrAwait(
-								Promise.resolve().then(() =>
-									options.onTotpEnabled!(
-										{ user: updatedUser as UserWithTwoFactor },
-										ctx.request,
-									),
-								),
-							);
-						}
-						return ctx.json({ method: "otp" as const });
-					}
+							if (method === "otp") {
+								const updatedUser =
+									await ctx.context.internalAdapter.updateUser(user.id, {
+										twoFactorEnabled: true,
+									});
+								if (
+									(updatedUser as UserWithTwoFactor | null)
+										?.twoFactorEnabled !== true
+								) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+									);
+								}
+								await rotateTwoFactorSession(
+									ctx,
+									updatedUser as UserWithTwoFactor,
+									ctx.context.session.session,
+								);
+								if (options?.onTotpEnabled) {
+									await queueAfterTransactionHook(async () => {
+										await ctx.context.runInBackgroundOrAwait(
+											Promise.resolve().then(() =>
+												options.onTotpEnabled!(
+													{ user: updatedUser as UserWithTwoFactor },
+													ctx.request,
+												),
+											),
+										);
+									});
+								}
+								return ctx.json({ method: "otp" as const });
+							}
 
-					const backupCodes = await generateBackupCodes(
-						ctx.context.secretConfig,
-						backupCodeOptions,
-					);
-					const existingTwoFactor =
-						await ctx.context.adapter.findOne<TwoFactorTable>({
-							model: opts.twoFactorTable,
-							where: [{ field: "userId", value: user.id }],
-						});
-					const secret = generateRandomString(32);
-					const encryptedSecret = await symmetricEncrypt({
-						key: ctx.context.secretConfig,
-						data: secret,
-					});
-					let enabledUser: UserWithTwoFactor | undefined;
-					if (options?.skipVerificationOnEnable) {
-						const updatedUser = await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								twoFactorEnabled: true,
-							},
-						);
-						if (
-							(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !==
-							true
-						) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+							const backupCodes = await generateBackupCodes(
+								ctx.context.secretConfig,
+								backupCodeOptions,
 							);
-						}
-						enabledUser = updatedUser as UserWithTwoFactor;
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
-					}
-					const totpData = {
-						secret: encryptedSecret,
-						backupCodes: backupCodes.encryptedBackupCodes,
-						verified:
-							(existingTwoFactor != null &&
-								existingTwoFactor.verified === true) ||
-							!!options?.skipVerificationOnEnable,
-					};
-					if (existingTwoFactor) {
-						await ctx.context.adapter.update({
-							model: opts.twoFactorTable,
-							update: totpData,
-							where: [{ field: "id", value: existingTwoFactor.id }],
-						});
-					} else {
-						await ctx.context.adapter.create({
-							model: opts.twoFactorTable,
-							data: { ...totpData, userId: user.id },
-						});
-					}
-					const totpURI = createOTP(secret, {
-						digits: options?.totpOptions?.digits || 6,
-						period: options?.totpOptions?.period,
-					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
-					if (enabledUser && options?.onTotpEnabled) {
-						const user = enabledUser;
-						await ctx.context.runInBackgroundOrAwait(
-							Promise.resolve().then(() =>
-								options.onTotpEnabled!({ user }, ctx.request),
-							),
-						);
-					}
+							const existingTwoFactor = await adapter.findOne<TwoFactorTable>({
+								model: opts.twoFactorTable,
+								where: [{ field: "userId", value: user.id }],
+							});
+							const secret = generateRandomString(32);
+							const encryptedSecret = await symmetricEncrypt({
+								key: ctx.context.secretConfig,
+								data: secret,
+							});
+							let enabledUser: UserWithTwoFactor | undefined;
+							if (options?.skipVerificationOnEnable) {
+								const updatedUser =
+									await ctx.context.internalAdapter.updateUser(user.id, {
+										twoFactorEnabled: true,
+									});
+								if (
+									(updatedUser as UserWithTwoFactor | null)
+										?.twoFactorEnabled !== true
+								) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+									);
+								}
+								enabledUser = updatedUser as UserWithTwoFactor;
+								await rotateTwoFactorSession(
+									ctx,
+									updatedUser as UserWithTwoFactor,
+									ctx.context.session.session,
+								);
+							}
+							const totpData = {
+								secret: encryptedSecret,
+								backupCodes: backupCodes.encryptedBackupCodes,
+								verified:
+									(existingTwoFactor != null &&
+										existingTwoFactor.verified === true) ||
+									!!options?.skipVerificationOnEnable,
+							};
+							if (existingTwoFactor) {
+								await adapter.update({
+									model: opts.twoFactorTable,
+									update: totpData,
+									where: [{ field: "id", value: existingTwoFactor.id }],
+								});
+							} else {
+								await adapter.create({
+									model: opts.twoFactorTable,
+									data: { ...totpData, userId: user.id },
+								});
+							}
+							const stored = await adapter.findOne<TwoFactorTable>({
+								model: opts.twoFactorTable,
+								where: [{ field: "userId", value: user.id }],
+							});
+							if (
+								!stored ||
+								stored.secret !== encryptedSecret ||
+								stored.backupCodes !== backupCodes.encryptedBackupCodes ||
+								stored.verified !== totpData.verified
+							) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									TWO_FACTOR_ERROR_CODES.FAILED_TO_UPDATE_TWO_FACTOR,
+								);
+							}
+							const totpURI = createOTP(secret, {
+								digits: options?.totpOptions?.digits || 6,
+								period: options?.totpOptions?.period,
+							}).url(
+								issuer || options?.issuer || ctx.context.appName,
+								user.email,
+							);
+							if (enabledUser && options?.onTotpEnabled) {
+								const user = enabledUser;
+								await queueAfterTransactionHook(async () => {
+									await ctx.context.runInBackgroundOrAwait(
+										Promise.resolve().then(() =>
+											options.onTotpEnabled!({ user }, ctx.request),
+										),
+									);
+								});
+							}
 
-					return ctx.json({
-						method: "totp" as const,
-						totpURI,
-						backupCodes: backupCodes.backupCodes,
-					});
-				},
+							return ctx.json({
+								method: "totp" as const,
+								totpURI,
+								backupCodes: backupCodes.backupCodes,
+							});
+						},
+					),
 			),
 			/**
 			 * ### Endpoint
@@ -386,105 +391,113 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						},
 					},
 				},
-				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password } = ctx.body;
-					const requirePassword = await shouldRequirePassword(
+				async (ctx) =>
+					runTwoFactorMutation(
 						ctx,
-						user.id,
-						allowPasswordless,
-					);
-					if (requirePassword) {
-						if (!password) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
+						ctx.context.session.user.id,
+						async (user, adapter) => {
+							const { password } = ctx.body;
+							const requirePassword = await shouldRequirePassword(
+								ctx,
+								user.id,
+								allowPasswordless,
 							);
-						}
-						const isPasswordValid = await validatePassword(ctx, {
-							password,
-							userId: user.id,
-						});
-						if (!isPasswordValid) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
+							if (requirePassword) {
+								if (!password) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										BASE_ERROR_CODES.INVALID_PASSWORD,
+									);
+								}
+								const isPasswordValid = await validatePassword(ctx, {
+									password,
+									userId: user.id,
+								});
+								if (!isPasswordValid) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										BASE_ERROR_CODES.INVALID_PASSWORD,
+									);
+								}
+							}
+							const updatedUser = await ctx.context.internalAdapter.updateUser(
+								user.id,
+								{
+									twoFactorEnabled: false,
+								},
 							);
-						}
-					}
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.id,
-						{
-							twoFactorEnabled: false,
-						},
-					);
-					if (
-						(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !==
-						false
-					) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
-						);
-					}
-					await ctx.context.adapter.delete({
-						model: opts.twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: updatedUser.id,
-							},
-						],
-					});
-					const newSession = await ctx.context.internalAdapter.createSession(
-						updatedUser.id,
-						false,
-						ctx.context.session.session,
-					);
-					/**
-					 * Update the session cookie with the new user data
-					 */
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					//remove current session
-					await ctx.context.internalAdapter.deleteSession(
-						ctx.context.session.session.token,
-					);
-					if (options?.onTotpDisabled) {
-						const onTotpDisabled = options.onTotpDisabled;
-						await ctx.context.runInBackgroundOrAwait(
-							Promise.resolve().then(() =>
-								onTotpDisabled(
-									{ user: updatedUser as UserWithTwoFactor },
-									ctx.request,
-								),
-							),
-						);
-					}
+							if (
+								(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !==
+								false
+							) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+								);
+							}
+							await adapter.delete({
+								model: opts.twoFactorTable,
+								where: [
+									{
+										field: "userId",
+										value: updatedUser.id,
+									},
+								],
+							});
+							if (
+								await adapter.findOne({
+									model: opts.twoFactorTable,
+									where: [{ field: "userId", value: user.id }],
+								})
+							) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									TWO_FACTOR_ERROR_CODES.FAILED_TO_UPDATE_TWO_FACTOR,
+								);
+							}
+							await rotateTwoFactorSession(
+								ctx,
+								updatedUser as UserWithTwoFactor,
+								ctx.context.session.session,
+							);
+							if (options?.onTotpDisabled) {
+								const onTotpDisabled = options.onTotpDisabled;
+								await queueAfterTransactionHook(async () => {
+									await ctx.context.runInBackgroundOrAwait(
+										Promise.resolve().then(() =>
+											onTotpDisabled(
+												{ user: updatedUser as UserWithTwoFactor },
+												ctx.request,
+											),
+										),
+									);
+								});
+							}
 
-					const disableTrustCookie = ctx.context.createAuthCookie(
-						TRUST_DEVICE_COOKIE_NAME,
-						{
-							maxAge: trustDeviceMaxAge,
-						},
-					);
-					const disableTrustValue = await ctx.getSignedCookie(
-						disableTrustCookie.name,
-						ctx.context.secret,
-					);
-					if (disableTrustValue) {
-						const [, trustId] = disableTrustValue.split("!");
-						if (trustId) {
-							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-								trustId,
+							const disableTrustCookie = ctx.context.createAuthCookie(
+								TRUST_DEVICE_COOKIE_NAME,
+								{
+									maxAge: trustDeviceMaxAge,
+								},
 							);
-						}
-						expireCookie(ctx, disableTrustCookie);
-					}
-					return ctx.json({ status: true });
-				},
+							const disableTrustValue = await ctx.getSignedCookie(
+								disableTrustCookie.name,
+								ctx.context.secret,
+							);
+							if (disableTrustValue) {
+								const [, trustId] = disableTrustValue.split("!");
+								if (trustId) {
+									await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+										trustId,
+									);
+								}
+								await queueAfterTransactionHook(async () => {
+									expireCookie(ctx, disableTrustCookie);
+								});
+							}
+							return ctx.json({ status: true });
+						},
+					),
 			),
 		},
 		options: options as NoInfer<O>,
@@ -659,7 +672,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				},
 			],
 		},
-		schema: mergeSchema(schema, {
+		schema: mergeSchema(structuredClone(schema), {
 			...options?.schema,
 			twoFactor: {
 				...options?.schema?.twoFactor,

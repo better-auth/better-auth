@@ -823,3 +823,42 @@ describe("oneTapClient types", () => {
 		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });
+
+/** @see https://github.com/better-auth/better-auth/pull/8915 */
+it("preserves the HTTP body for verification sender and lifecycle on One Tap", async () => {
+	const sent = vi.fn();
+	const requested = vi.fn();
+	const previous = verifiedPayload.email_verified;
+	verifiedPayload.email_verified = false;
+	try {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [oneTap({ clientId: "test-client" })],
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail: async (_data, request) => {
+						sent(await request!.json());
+					},
+					onEmailVerificationRequested: async (_data, request) => {
+						requested(await request!.json());
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const body = { idToken: "stub-id-token" };
+		const response = await auth.handler(
+			new Request(`${context.baseURL}/one-tap/callback`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		expect(response.status).toBe(200);
+		expect(sent).toHaveBeenCalledWith(body);
+		expect(requested).toHaveBeenCalledWith(body);
+	} finally {
+		verifiedPayload.email_verified = previous;
+	}
+});

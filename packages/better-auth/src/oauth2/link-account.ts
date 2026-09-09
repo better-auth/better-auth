@@ -14,6 +14,7 @@ import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { safeCloneRequest } from "../utils/request";
 import { assertValidUserInfo } from "../utils/validate-user-info";
 import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
@@ -551,6 +552,7 @@ async function scheduleVerificationEmail(
 	if (!sendVerificationEmail) {
 		return;
 	}
+	const verificationRequest = safeCloneRequest(c.request);
 	const send = async () => {
 		try {
 			const token = await createEmailVerificationToken(
@@ -570,7 +572,7 @@ async function scheduleVerificationEmail(
 						url,
 						token,
 					},
-					c.request,
+					verificationRequest,
 				),
 			);
 		} catch (e) {

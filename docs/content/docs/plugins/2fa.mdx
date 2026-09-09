@@ -82,6 +82,14 @@ This plugin offers two main methods to do a second factor verification:
 
 ## Usage
 
+### Transactional configuration
+
+Enabling, disabling and authenticated activation require a database adapter with real transactions and database-backed sessions. Enable transactions in the adapter configuration when they are optional. Memory adapters and configurations with `secondaryStorage` are refused with `TWO_FACTOR_REQUIRES_TRANSACTION` before configuration writes. Existing second-factor sign-in for an enrolled account is unaffected by this configuration restriction.
+
+Regenerate and migrate your schema before upgrading. The plugin adds a private integer `twoFactorVersion` to the user table, with a default of `0`. It is not accepted as client input or returned in user responses. A transactional increment serializes configuration changes for each user without changing their identity.
+
+Factor persistence, the user flag and session replacement commit together. Failed writes and database-hook vetoes roll back the complete operation. Valid OTP consumption participates in the configuration transaction, so a failed activation can retry the same unexpired code. Invalid-code counters commit before returning an error. Cookies and lifecycle callbacks are emitted after commit. Errors in post-commit database hooks are logged and cannot suppress the replacement cookie or later callbacks. A code generated for an enrollment secret cannot verify a replacement secret. If two activation requests share a session, the winner rotates it and the second request receives `SESSION_EXPIRED`; authenticate again before retrying.
+
 ### Enabling 2FA
 
 To enable two-factor authentication, call `twoFactor.enable`. The user must provide their password if they have an email/password account. You can choose between two methods:

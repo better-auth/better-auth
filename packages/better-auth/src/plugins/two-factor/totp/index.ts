@@ -1,15 +1,17 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { queueAfterTransactionHook } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
-import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
+import { parseUserOutput } from "../../../db/schema";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
 import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { rotateTwoFactorSession, runTwoFactorMutation } from "../mutation";
 import type {
 	TwoFactorOptions,
 	TwoFactorProvider,
@@ -326,64 +328,105 @@ export const totp2fa = (
 				await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
 			}
 
-			// Enrollment mode: TOTP row exists but hasn't been verified yet.
-			// This covers fresh TOTP setup (twoFactorEnabled=false),
-			// adding TOTP to an OTP-only account (twoFactorEnabled=true),
-			// and pre-migration rows where verified is null/undefined.
-			if (twoFactor.verified !== true) {
-				let enabledUser = user;
-				if (!user.twoFactorEnabled) {
-					// session.session is guaranteed non-null here: the sign-in guard
-					// above already rejected isSignIn && verified === false.
-					const activeSession = session.session!;
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.id,
-						{
-							twoFactorEnabled: true,
-						},
-					);
-					if (
-						(updatedUser as UserWithTwoFactor | null)?.twoFactorEnabled !== true
-					) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
-						);
-					}
-					enabledUser = updatedUser as UserWithTwoFactor;
-					const newSession = await ctx.context.internalAdapter.createSession(
-						user.id,
-						false,
-						activeSession,
-					);
-
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
+			if (!isSignIn) {
+				const completed = await runTwoFactorMutation(
+					ctx,
+					user.id,
+					async (currentUser, adapter) => {
+						const current = await adapter.findOne<TwoFactorTable>({
+							model: twoFactorTable,
+							where: [
+								{ field: "id", value: twoFactor.id },
+								{ field: "userId", value: user.id },
+								{ field: "secret", value: twoFactor.secret },
+							],
+						});
+						if (!current)
+							throw APIError.from(
+								"BAD_REQUEST",
+								TWO_FACTOR_ERROR_CODES.FAILED_TO_UPDATE_TWO_FACTOR,
+							);
+						let activated = false;
+						if (current.verified !== true) {
+							const count = await adapter.updateMany({
+								model: twoFactorTable,
+								update: { verified: true },
+								where: [
+									{ field: "id", value: current.id },
+									{ field: "userId", value: user.id },
+									{ field: "secret", value: twoFactor.secret },
+									{ field: "verified", value: current.verified ?? null },
+								],
+							});
+							if (count !== 1)
+								throw APIError.from(
+									"BAD_REQUEST",
+									TWO_FACTOR_ERROR_CODES.FAILED_TO_UPDATE_TWO_FACTOR,
+								);
+							const persisted = await adapter.findOne<TwoFactorTable>({
+								model: twoFactorTable,
+								where: [{ field: "id", value: current.id }],
+							});
+							if (
+								!persisted ||
+								persisted.userId !== user.id ||
+								persisted.secret !== twoFactor.secret ||
+								persisted.verified !== true
+							) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									TWO_FACTOR_ERROR_CODES.FAILED_TO_UPDATE_TWO_FACTOR,
+								);
+							}
+							activated = current.verified === false;
+						}
+						let enabledUser = currentUser;
+						let rotatedSession = null;
+						if (!currentUser.twoFactorEnabled) {
+							if (!session.session)
+								throw APIError.from(
+									"BAD_REQUEST",
+									BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+								);
+							const updatedUser = await ctx.context.internalAdapter.updateUser(
+								user.id,
+								{ twoFactorEnabled: true },
+							);
+							if (
+								!updatedUser ||
+								updatedUser.id !== user.id ||
+								(updatedUser as UserWithTwoFactor).twoFactorEnabled !== true
+							) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+								);
+							}
+							enabledUser = updatedUser as UserWithTwoFactor;
+							rotatedSession = await rotateTwoFactorSession(
+								ctx,
+								enabledUser,
+								session.session,
+							);
+							activated = true;
+						}
+						if (activated && onEnabled) {
+							await queueAfterTransactionHook(async () => {
+								await ctx.context.runInBackgroundOrAwait(
+									Promise.resolve().then(() =>
+										onEnabled({ user: enabledUser }, ctx.request),
+									),
+								);
+							});
+						}
+						return { user: enabledUser, session: rotatedSession };
+					},
+				);
+				if (completed.session) {
+					return ctx.json({
+						token: completed.session.token,
+						user: parseUserOutput(ctx.context.options, completed.user),
 					});
-					await ctx.context.internalAdapter.deleteSession(activeSession.token);
-				}
-				// Mark verified only after all session operations succeed.
-				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
-				// a partial failure cannot leave verified=true with twoFactorEnabled=false.
-				const activated = await ctx.context.adapter.updateMany({
-					model: twoFactorTable,
-					update: { verified: true },
-					where: [
-						{ field: "id", value: twoFactor.id },
-						{ field: "verified", value: twoFactor.verified ?? null },
-					],
-				});
-				if (
-					activated === 1 &&
-					onEnabled &&
-					(!user.twoFactorEnabled || twoFactor.verified === false)
-				) {
-					await ctx.context.runInBackgroundOrAwait(
-						Promise.resolve().then(() =>
-							onEnabled({ user: enabledUser }, ctx.request),
-						),
-					);
 				}
 			}
 			return valid(ctx);

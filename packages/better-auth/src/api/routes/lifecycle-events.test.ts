@@ -108,8 +108,155 @@ describe("authentication lifecycle completion", () => {
 			const responses = await Promise.all(
 				[1, 2].map(() => client.twoFactor.verifyTotp({ code }, { headers })),
 			);
-			expect(responses.map(({ error }) => error)).toEqual([null, null]);
+			expect(responses.filter(({ error }) => error === null)).toHaveLength(1);
+			expect(responses.find(({ error }) => error !== null)?.error?.code).toBe(
+				"SESSION_EXPIRED",
+			);
 			expect(enabled).toHaveBeenCalledOnce();
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it.each([
+		"zero",
+		"throw",
+	] as const)("does not enable the account or rotate its session when factor verification fails: %s", async (failure) => {
+		const enabled = vi.fn();
+		const { auth, db, client, signInWithTestUser, testUser } =
+			await getTestInstance(
+				{ plugins: [twoFactor({ onTotpEnabled: enabled })] },
+				{ clientOptions: { plugins: [twoFactorClient()] } },
+			);
+		const { headers, user } = await signInWithTestUser();
+		const before = await auth.api.getSession({ headers });
+		const enrollment = await client.twoFactor.enable(
+			{ password: testUser.password, method: "totp" },
+			{ headers },
+		);
+		if (enrollment.data?.method !== "totp")
+			throw new Error("Expected TOTP enrollment");
+		const factor = await db.findOne<{ secret: string }>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const secret = await symmetricDecrypt({
+			key: (await auth.$context).secretConfig,
+			data: factor!.secret,
+		});
+		const context = await auth.$context;
+		const sessionsBefore = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const transaction = context.adapter.transaction.bind(context.adapter);
+		const spy = vi
+			.spyOn(context.adapter, "transaction")
+			.mockImplementation(async (callback) =>
+				transaction(async (tx) =>
+					callback({
+						...tx,
+						updateMany: async (input) => {
+							if (input.model === "twoFactor") {
+								if (failure === "throw")
+									throw new Error("Factor storage unavailable");
+								return 0;
+							}
+							return tx.updateMany(input);
+						},
+					}),
+				),
+			);
+		try {
+			const result = await client.twoFactor.verifyTotp(
+				{ code: await createOTP(secret).totp() },
+				{ headers },
+			);
+			expect(result.error).not.toBeNull();
+			expect(enabled).not.toHaveBeenCalled();
+			expect(
+				await db.findOne({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+				}),
+			).toMatchObject({ twoFactorEnabled: false });
+			expect((await auth.api.getSession({ headers }))?.session.token).toBe(
+				before?.session.token,
+			);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toEqual(sessionsBefore);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it("does not verify a replaced enrollment with the previous secret's code", async () => {
+		const enabled = vi.fn();
+		const { auth, db, client, signInWithTestUser, testUser } =
+			await getTestInstance(
+				{ plugins: [twoFactor({ onTotpEnabled: enabled })] },
+				{ clientOptions: { plugins: [twoFactorClient()] } },
+			);
+		const { headers, user } = await signInWithTestUser();
+		const before = await auth.api.getSession({ headers });
+		const enrollment = await client.twoFactor.enable(
+			{ password: testUser.password, method: "totp" },
+			{ headers },
+		);
+		if (enrollment.data?.method !== "totp")
+			throw new Error("Expected TOTP enrollment");
+		const factor = await db.findOne<{ secret: string }>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const secret = await symmetricDecrypt({
+			key: (await auth.$context).secretConfig,
+			data: factor!.secret,
+		});
+		const context = await auth.$context;
+		const findOne = context.adapter.findOne.bind(context.adapter);
+		let replaced = false;
+		const spy = vi
+			.spyOn(context.adapter, "findOne")
+			.mockImplementation(async (input) => {
+				const result = await findOne(input);
+				if (input.model === "twoFactor" && !replaced) {
+					replaced = true;
+					const replacement = await client.twoFactor.enable(
+						{ password: testUser.password, method: "totp" },
+						{ headers },
+					);
+					expect(replacement.error).toBeNull();
+				}
+				return result;
+			});
+		try {
+			const result = await client.twoFactor.verifyTotp(
+				{ code: await createOTP(secret).totp() },
+				{ headers },
+			);
+			expect(replaced).toBe(true);
+			expect(result.error).not.toBeNull();
+			expect(enabled).not.toHaveBeenCalled();
+			expect(
+				await db.findOne({
+					model: "twoFactor",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toMatchObject({ verified: false });
+			expect(
+				await db.findOne({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+				}),
+			).toMatchObject({ twoFactorEnabled: false });
+			expect((await auth.api.getSession({ headers }))?.session.token).toBe(
+				before?.session.token,
+			);
 		} finally {
 			spy.mockRestore();
 		}
@@ -338,6 +485,7 @@ describe("authentication lifecycle completion", () => {
 		});
 		await client.signOut({}, { headers });
 		enabled.mockClear();
+		(await auth.$context).adapter.options!.adapterConfig.transaction = false;
 		const challenge = new Headers();
 		expect(
 			(
@@ -805,4 +953,43 @@ describe("authentication lifecycle completion", () => {
 			expect(requested).toHaveBeenCalledOnce();
 		}
 	});
+});
+
+/** @see https://github.com/better-auth/better-auth/pull/8915 */
+it("finalizes login once when an endpoint returns a raw Response", async () => {
+	let userId = "";
+	const login = vi.fn();
+	const { auth, signInWithTestUser } = await getTestInstance({
+		onLogin: login,
+		plugins: [
+			{
+				id: "raw-response-login",
+				endpoints: {
+					rawLogin: createAuthEndpoint(
+						"/raw-login",
+						{ method: "GET" },
+						async (ctx) => {
+							const user =
+								await ctx.context.internalAdapter.findUserById(userId);
+							const session =
+								await ctx.context.internalAdapter.createSession(userId);
+							if (!user || !session) throw new Error("Missing test identity");
+							await setSessionCookie(ctx, { user, session, isLogin: true });
+							return new Response("signed in", { status: 200 });
+						},
+					),
+				},
+			},
+		],
+	});
+	const signedIn = await signInWithTestUser();
+	userId = signedIn.user.id;
+	login.mockClear();
+	const response = await auth.handler(
+		new Request(`${(await auth.$context).baseURL}/raw-login`),
+	);
+	expect(response.status).toBe(200);
+	expect(await response.text()).toBe("signed in");
+	expect(login).toHaveBeenCalledOnce();
+	expect(login.mock.calls[0]![0].user.id).toBe(userId);
 });
