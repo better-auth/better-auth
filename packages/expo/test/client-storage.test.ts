@@ -90,6 +90,29 @@ it("should round-trip a value larger than the per-write storage limit", async ()
 	expect(storedValue).toBe(large);
 });
 
+/**
+ * @see https://docs.expo.dev/versions/latest/sdk/securestore/#securestoresetitemasynckey-value-options
+ */
+it("should keep Unicode chunks within the storage byte limit", () => {
+	const map = new Map<string, string>();
+	const storage = storageAdapter({
+		getItem: (name) => map.get(name) ?? null,
+		setItem: (name, value) => map.set(name, value),
+		getItemAsync: async (name) => map.get(name) ?? null,
+		setItemAsync: async (name, value) => {
+			map.set(name, value);
+		},
+	});
+	const value = `${"x".repeat(1_799)}🔐${"🙂".repeat(1_000)}`;
+
+	storage.setItem("better-auth_cookie", value);
+
+	for (const chunk of map.values()) {
+		expect(new TextEncoder().encode(chunk).length).toBeLessThanOrEqual(1_800);
+	}
+	expect(storage.getItem("better-auth_cookie")).toBe(value);
+});
+
 it("should store a value within the limit under the base key unchanged", () => {
 	const map = new Map<string, string>();
 	const storage = storageAdapter({
