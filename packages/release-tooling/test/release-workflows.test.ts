@@ -501,6 +501,34 @@ describe("release notes command security", () => {
 });
 
 describe("release publication security", () => {
+	it("exposes release policy workflows to pinned maintenance callers", () => {
+		for (const file of [
+			releaseWorkflow,
+			draftWorkflow,
+			verifyChangesetsWorkflow,
+		]) {
+			expect(file.content).toContain("\n  workflow_call:");
+		}
+	});
+
+	it("loads release tooling from the called workflow revision", () => {
+		const release = getJob(releaseWorkflow, "release");
+		const checkout = getStep(release, "Checkout shared release tooling");
+		const resolve = getStep(release, "Resolve release tooling");
+		const detect = getStep(release, "Detect release commit");
+
+		expect(checkout.if).toContain("inputs.use_shared_tooling");
+		expect(checkout.with).toMatchObject({
+			repository: "${{ job.workflow_repository }}",
+			ref: "${{ job.workflow_sha }}",
+			path: ".release-tooling",
+			"persist-credentials": false,
+		});
+		expect(resolve.run).toContain(".git/info/exclude");
+		expect(resolve.run).toContain("RELEASE_NOTES_COMMAND");
+		expect(detect.run).toContain('node "$RELEASE_NOTES_COMMAND" candidate');
+	});
+
 	it("rejects stale release merge groups before publication", () => {
 		const mergeGuard = getStep(
 			getJob(ciWorkflow, "lint"),
@@ -527,7 +555,7 @@ describe("release publication security", () => {
 		expect(approvalIndex).toBeGreaterThan(-1);
 		expect(publishIndex).toBeGreaterThan(approvalIndex);
 		expect(release.steps[approvalIndex]?.run).toContain(
-			"release-notes:comment extract",
+			'node "$RELEASE_NOTES_COMMENT_COMMAND" extract',
 		);
 	});
 
@@ -552,7 +580,7 @@ describe("release publication security", () => {
 			"Detect release commit",
 		);
 
-		expect(detect.run).toContain("release-notes candidate");
+		expect(detect.run).toContain('node "$RELEASE_NOTES_COMMAND" candidate');
 		expect(detect.run).toContain('--branch "$GITHUB_SHA"');
 		expect(detect.run).not.toContain("github.event.before");
 	});
@@ -608,7 +636,7 @@ describe("release publication security", () => {
 			"if",
 			expect.stringContaining("release-candidate.outputs.release == 'true'"),
 		);
-		expect(guard.run).toContain("check-changesets --branch");
+		expect(guard.run).toContain('"$RELEASE_NOTES_COMMAND" check-changesets');
 		expect(guard.run).toContain("GITHUB_STEP_SUMMARY");
 		expect(guard.run).toContain("Revert this release merge");
 		expect(guard.run).toContain("exit 1");

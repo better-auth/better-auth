@@ -3,6 +3,7 @@ name: Release Notes Draft
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, edited]
+  workflow_call:
 
 permissions: {}
 
