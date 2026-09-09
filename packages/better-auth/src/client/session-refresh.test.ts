@@ -283,6 +283,53 @@ describe("session-refresh", () => {
 		expect(mockFetchSession).toHaveBeenCalledTimes(1);
 	});
 
+	it("should not resume a stale trailing coalesce after cleanup then init again", async () => {
+		const sessionSignal = atom(false);
+		let releaseFirst!: () => void;
+		const firstGate = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		let fetchCount = 0;
+		const mockFetchSession = vi.fn(async () => {
+			fetchCount += 1;
+			if (fetchCount === 1) {
+				await firstGate;
+			}
+		});
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		manager.init();
+
+		// Leading fetch stays in-flight.
+		sessionSignal.set(!sessionSignal.get());
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+
+		// Queue a trailing refetch in the old subscription closure.
+		sessionSignal.set(!sessionSignal.get());
+
+		// Clean up and init again before the old request settles.
+		manager.cleanup();
+		manager.init();
+
+		// New lifecycle starts its own fetch.
+		sessionSignal.set(!sessionSignal.get());
+		expect(mockFetchSession).toHaveBeenCalledTimes(2);
+
+		// Stale trailing work from the prior lifecycle must not resume.
+		releaseFirst();
+		await vi.runAllTimersAsync();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(mockFetchSession).toHaveBeenCalledTimes(2);
+
+		manager.cleanup();
+	});
+
 	it("should refetch on $sessionSignal even when offline", async () => {
 		const onlineManager = getGlobalOnlineManager();
 		onlineManager.setOnline(false);

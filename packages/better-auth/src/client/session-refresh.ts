@@ -129,6 +129,9 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		});
 	};
 
+	// Bumped on init/cleanup so a stale coalesce closure cannot resume after a later init.
+	let initGeneration = 0;
+
 	const setupSignalSubscription = () => {
 		// Coalesce $sessionSignal bursts. fetchSession() cancels any in-flight
 		// /get-session, so calling it on every notify aborts work the server already
@@ -136,9 +139,10 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		// arrived and run one trailing fetch after settle.
 		let signalFlight: Promise<void> | null = null;
 		let trailingSignal = false;
+		const generation = initGeneration;
 
 		state.unsubscribeSignal = sessionSignal.listen(() => {
-			if (signalFlight) {
+			if (signalFlight !== null) {
 				trailingSignal = true;
 				return;
 			}
@@ -147,8 +151,14 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 				do {
 					trailingSignal = false;
 					await fetchSession();
-					// Stop if the manager was cleaned up during the in-flight fetch.
-				} while (trailingSignal && state.isInitialized);
+					// Stop if cleaned up or initialized again during the in-flight fetch.
+					// Generation check blocks a stale trailing resume after a later init
+					// (shared state.isInitialized alone is not enough).
+				} while (
+					trailingSignal &&
+					state.isInitialized &&
+					generation === initGeneration
+				);
 			};
 
 			const flight = run().finally(() => {
@@ -162,6 +172,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 	const init = () => {
 		if (state.isInitialized) return;
+		initGeneration += 1;
 		state.isInitialized = true;
 
 		setupPolling();
@@ -210,6 +221,9 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.cleanupOnlineSetup();
 			state.cleanupOnlineSetup = undefined;
 		}
+		// Invalidate pending trailing coalesce work from this lifecycle before
+		// flipping isInitialized, so a later init cannot resume it.
+		initGeneration += 1;
 		state.isInitialized = false;
 		state.lastSessionRequest = 0;
 	};
