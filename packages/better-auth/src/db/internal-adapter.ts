@@ -663,6 +663,48 @@ export const createInternalAdapter = (
 			if (!user) return null;
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
+			if (secondaryStorage) {
+				// Cache-aside repair: the session was absent from secondary storage
+				// (TTL expiry, eviction, flush) but is still valid in the database.
+				// Repopulate the cache, including the active-sessions index, so that
+				// every subsequent request does not hit the primary database - and so
+				// that a later revoke-all still sweeps this token.
+				// Unreachable under preserveSessionInDatabase thanks to the early
+				// return above, so revoked rows cannot be resurrected here.
+				const now = Date.now();
+				const sessionTTL = getTTLSeconds(parsedSession.expiresAt, now);
+				if (sessionTTL > 0) {
+					const activeSessionsKey = `active-sessions-${parsedUser.id}`;
+					const currentList = await secondaryStorage.get(activeSessionsKey);
+					const list =
+						safeJSONParse<{ token: string; expiresAt: number }[]>(currentList) ||
+						[];
+					const filtered = list.filter(
+						(s) => s.expiresAt > now && s.token !== token,
+					);
+					filtered.push({
+						token,
+						expiresAt: parsedSession.expiresAt.getTime(),
+					});
+					filtered.sort((a, b) => a.expiresAt - b.expiresAt);
+					const furthestSessionTTL = getTTLSeconds(
+						filtered[filtered.length - 1]!.expiresAt,
+						now,
+					);
+					await Promise.all([
+						secondaryStorage.set(
+							token,
+							JSON.stringify({ session: parsedSession, user: parsedUser }),
+							sessionTTL,
+						),
+						secondaryStorage.set(
+							activeSessionsKey,
+							JSON.stringify(filtered),
+							furthestSessionTTL,
+						),
+					]);
+				}
+			}
 			return {
 				session: parsedSession,
 				user: parsedUser,

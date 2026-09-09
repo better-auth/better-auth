@@ -202,6 +202,63 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			const after = await client.getSession({ fetchOptions: { headers } });
 			expect(after.data).toBeNull();
 		});
+
+		it("repopulates secondary storage after a database fallback", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const s1 = await client.getSession({ fetchOptions: { headers } });
+			expect(s1.data).not.toBeNull();
+			const token = s1.data!.session.token;
+			const userId = s1.data!.user.id;
+
+			expect(store.has(token)).toBe(true);
+
+			// Simulate a cache flush for this user: both the session entry and
+			// the active-sessions index are gone, the database row is still valid.
+			store.delete(token);
+			store.delete(`active-sessions-${userId}`);
+
+			const s2 = await client.getSession({ fetchOptions: { headers } });
+			expect(s2.data).not.toBeNull();
+			expect(s2.data!.session.token).toBe(token);
+
+			// The fallback repaired the cache: subsequent requests must not hit
+			// the primary database for this session anymore.
+			expect(store.has(token)).toBe(true);
+			const listRaw = store.get(`active-sessions-${userId}`);
+			expect(listRaw).toBeTruthy();
+			expect(JSON.parse(listRaw!)).toEqual([
+				{ token, expiresAt: s2.data!.session.expiresAt.getTime() },
+			]);
+
+			const s3 = await client.getSession({ fetchOptions: { headers } });
+			expect(s3.data).not.toBeNull();
+		});
+
+		it("revoke-all still sweeps a session repopulated by a database fallback", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const s1 = await client.getSession({ fetchOptions: { headers } });
+			expect(s1.data).not.toBeNull();
+			const token = s1.data!.session.token;
+			const userId = s1.data!.user.id;
+
+			// Flush the cache, then let the database fallback repopulate it.
+			store.delete(token);
+			store.delete(`active-sessions-${userId}`);
+			const s2 = await client.getSession({ fetchOptions: { headers } });
+			expect(s2.data).not.toBeNull();
+			expect(store.has(token)).toBe(true);
+
+			const revokeAll = await client.revokeSessions({
+				fetchOptions: { headers },
+			});
+			expect(revokeAll.data?.status).toBe(true);
+
+			expect(store.has(token)).toBe(false);
+			const after = await client.getSession({ fetchOptions: { headers } });
+			expect(after.data).toBeNull();
+		});
 	});
 
 	describe("preserveSessionInDatabase: true", async () => {
