@@ -694,7 +694,7 @@ describe("backport workflow", () => {
 		const backport = getJob(backportWorkflow, "backport");
 		const verify = getStep(backport, "Verify backport result");
 
-		expect(verify.if).toContain("steps.backport.outputs.was_successful");
+		expect(verify.if).toBe("steps.backport.outputs.was_successful == 'false'");
 		expect(verify.run).toContain("exit 1");
 	});
 });

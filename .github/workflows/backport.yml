@@ -85,7 +85,7 @@ jobs:
           experimental: '{"conflict_resolution": "draft_commit_conflicts"}'
 
       - name: Verify backport result
-        if: steps.backport.outputs.was_successful != 'true'
+        if: steps.backport.outputs.was_successful == 'false'
         run: |
           echo "::error::One or more backports failed"
           exit 1
