@@ -483,6 +483,58 @@ describe("forgot password", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9561
+ */
+it.each([
+	false,
+	true,
+])("should mask synchronous no-account callback errors with background tasks %s", async (background) => {
+	const tasks: Promise<unknown>[] = [];
+	const statuses: number[] = [];
+	const sendNoAccount = vi.fn(() => {
+		throw new Error("Email SDK rejected its configuration");
+	});
+	const { client, testUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			async sendResetPassword() {},
+			sendResetPasswordNoAccount: sendNoAccount,
+		},
+		advanced: {
+			backgroundTasks: background
+				? {
+						handler: (task) => {
+							tasks.push(task);
+						},
+					}
+				: undefined,
+		},
+	});
+	const existing = await client.requestPasswordReset({
+		email: testUser.email,
+		fetchOptions: {
+			onResponse: ({ response }) => {
+				statuses.push(response.status);
+			},
+		},
+	});
+	const unknown = await client.requestPasswordReset({
+		email: "unknown@example.com",
+		fetchOptions: {
+			onResponse: ({ response }) => {
+				statuses.push(response.status);
+			},
+		},
+	});
+	await Promise.all(tasks);
+	expect(sendNoAccount).toHaveBeenCalledTimes(1);
+	expect(statuses).toEqual([200, 200]);
+	expect(existing.data?.status).toBe(true);
+	expect(unknown.error).toBeNull();
+	expect(unknown.data).toEqual(existing.data);
+});
+
 describe("revoke sessions on password reset", async () => {
 	const mockSendEmail = vi.fn();
 	let token = "";

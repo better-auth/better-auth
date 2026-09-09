@@ -114,9 +114,11 @@ export const requestPasswordReset = createAuthEndpoint(
 			ctx.context.logger.warn("Reset Password: User not found");
 			if (ctx.context.options.emailAndPassword?.sendResetPasswordNoAccount) {
 				await ctx.context.runInBackgroundOrAwait(
-					ctx.context.options.emailAndPassword.sendResetPasswordNoAccount(
-						{ email },
-						ctx.request,
+					Promise.resolve().then(() =>
+						ctx.context.options.emailAndPassword?.sendResetPasswordNoAccount?.(
+							{ email },
+							ctx.request,
+						),
 					),
 				);
 			}
