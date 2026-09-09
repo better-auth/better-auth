@@ -25,13 +25,40 @@ export function normalizeCookieName(name: string) {
 }
 
 /**
- * Character budget per stored chunk. Some native stores reject large values,
- * so larger strings are split across keys. This is not a byte-size guarantee.
+ * UTF-8 byte budget per stored chunk. Some native stores reject large values,
+ * so larger strings are split across keys.
  *
  * @see https://github.com/better-auth/better-auth/issues/9151
  */
 const STORAGE_VALUE_LIMIT = 1800;
 const MAX_STORAGE_CHUNKS = 100;
+
+function getUtf8ByteLength(character: string) {
+	const codePoint = character.codePointAt(0) ?? 0;
+	if (codePoint <= 0x7f) return 1;
+	if (codePoint <= 0x7ff) return 2;
+	if (codePoint <= 0xffff) return 3;
+	return 4;
+}
+
+function splitStorageValue(value: string) {
+	const chunks: string[] = [];
+	let start = 0;
+	let end = 0;
+	let bytes = 0;
+	for (const character of value) {
+		const characterBytes = getUtf8ByteLength(character);
+		if (bytes + characterBytes > STORAGE_VALUE_LIMIT) {
+			chunks.push(value.slice(start, end));
+			start = end;
+			bytes = 0;
+		}
+		bytes += characterBytes;
+		end += character.length;
+	}
+	chunks.push(value.slice(start));
+	return chunks;
+}
 
 /**
  * Marks a base key whose value is split across multiple storage keys. Legacy
@@ -202,14 +229,15 @@ function getStorageWritePlan(
 	const currentMarker = currentBaseValue?.startsWith(CHUNK_MARKER)
 		? parseChunkMarker(currentBaseValue)
 		: null;
-	if (value.length <= STORAGE_VALUE_LIMIT) {
+	const chunks = splitStorageValue(value);
+	if (chunks.length === 1) {
 		return {
 			writes: [[key, value]],
 			cleanup: getUnusedChunkRanges(key, currentMarker, null),
 		};
 	}
 
-	const count = Math.ceil(value.length / STORAGE_VALUE_LIMIT);
+	const count = chunks.length;
 	if (count > MAX_STORAGE_CHUNKS) {
 		throw new Error(
 			`Storage value requires ${count} chunks, exceeding the limit of ${MAX_STORAGE_CHUNKS}`,
@@ -230,12 +258,8 @@ function getStorageWritePlan(
 			serializeChunkMarker({ ...currentMarker, fallbackCount: null }),
 		]);
 	}
-	for (let i = 0; i < count; i++) {
-		const start = i * STORAGE_VALUE_LIMIT;
-		writes.push([
-			getChunkKey(key, marker, i),
-			value.slice(start, start + STORAGE_VALUE_LIMIT),
-		]);
+	for (const [index, chunk] of chunks.entries()) {
+		writes.push([getChunkKey(key, marker, index), chunk]);
 	}
 	writes.push([key, serializeChunkMarker(marker)]);
 	return { writes, cleanup: getUnusedChunkRanges(key, currentMarker, marker) };
