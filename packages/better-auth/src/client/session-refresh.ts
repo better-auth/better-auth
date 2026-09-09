@@ -130,8 +130,33 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	};
 
 	const setupSignalSubscription = () => {
+		// Coalesce $sessionSignal bursts. fetchSession() cancels any in-flight
+		// /get-session, so calling it on every notify aborts work the server already
+		// finished. While a refetch is running, only remember that another signal
+		// arrived and run one trailing fetch after settle.
+		let signalFlight: Promise<void> | null = null;
+		let trailingSignal = false;
+
 		state.unsubscribeSignal = sessionSignal.listen(() => {
-			void fetchSession();
+			if (signalFlight) {
+				trailingSignal = true;
+				return;
+			}
+
+			const run = async () => {
+				do {
+					trailingSignal = false;
+					await fetchSession();
+					// Stop if the manager was cleaned up during the in-flight fetch.
+				} while (trailingSignal && state.isInitialized);
+			};
+
+			const flight = run().finally(() => {
+				if (signalFlight === flight) {
+					signalFlight = null;
+				}
+			});
+			signalFlight = flight;
 		});
 	};
 
