@@ -1310,7 +1310,7 @@ export const verifyEmailChange = createAuthEndpoint(
 					{ pendingEmail: null, pendingEmailRequestId: null },
 					[{ field: "pendingEmailRequestId", value: pending.requestId }],
 				);
-				throw ctx.redirect(errorURL);
+				return { invalid: true as const };
 			}
 
 			const updatedUser = await ctx.context.internalAdapter.updateUserIf(
@@ -1372,9 +1372,11 @@ export const verifyEmailChange = createAuthEndpoint(
 				newEmail: pending.newEmail,
 			};
 		};
-		const { updatedUser, session, oldEmail, newEmail } = revokeOtherSessions
+		const result = revokeOtherSessions
 			? await runWithTransaction(ctx.context.adapter, completeChange)
 			: await completeChange();
+		if ("invalid" in result) throw ctx.redirect(errorURL);
+		const { updatedUser, session, oldEmail, newEmail } = result;
 		if (session) await setSessionCookie(ctx, { session, user: updatedUser });
 
 		if (ctx.context.options.user?.changeEmail?.onChangeEmailCompleted) {

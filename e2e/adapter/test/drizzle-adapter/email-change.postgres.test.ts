@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import type { PoolClient } from "pg";
 import { Pool } from "pg";
 import { expect, it } from "vitest";
 import { drizzleAdapter } from "../../../../packages/drizzle-adapter/src/drizzle-adapter";
@@ -40,8 +41,9 @@ it.runIf(process.env.BETTER_AUTH_TEST_POSTGRES_URL)(
 				pendingEmailRequestId: text("pendingEmailRequestId"),
 			});
 			const cancel = await pool.connect();
-			const verify = await pool.connect();
+			let verify: PoolClient | undefined;
 			try {
+				verify = await pool.connect();
 				await cancel.query("BEGIN");
 				await cancel.query(
 					'UPDATE "user" SET "pendingEmail"=NULL, "pendingEmailRequestId"=NULL WHERE id=$1',
@@ -95,9 +97,12 @@ it.runIf(process.env.BETTER_AUTH_TEST_POSTGRES_URL)(
 					(await pool.query('SELECT email, "pendingEmail" FROM "user"')).rows,
 				).toEqual([{ email: "old@example.com", pendingEmail: null }]);
 			} finally {
-				await cancel.query("ROLLBACK");
-				cancel.release();
-				verify.release();
+				try {
+					await cancel.query("ROLLBACK");
+				} finally {
+					cancel.release();
+					verify?.release();
+				}
 			}
 		} finally {
 			await pool.end();

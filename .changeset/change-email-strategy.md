@@ -1,7 +1,7 @@
 ---
 "better-auth": minor
 "@better-auth/core": minor
-"@better-auth/drizzle-adapter": patch
+"@better-auth/drizzle-adapter": minor
 ---
 
 Add an opt-in `user.changeEmail.strategy` for the email-change flow.
@@ -34,3 +34,7 @@ most one row. PostgreSQL can then recheck those guards after waiting for a concu
 Email change session revocation requires enabled database transactions without secondary storage.
 Vetoes and failed session replacement roll back the email, verification token and sessions together.
 Cookie caching does not authorize revoked sessions, and pending state is refreshed after changes.
+
+If the target address is claimed before confirmation, the pending request is cleared and its
+link consumed without revoking sessions. A separately declared mutable configuration retains
+the optional pending-email user type.

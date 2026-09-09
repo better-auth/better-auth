@@ -194,6 +194,7 @@ describe("verification-table session authority and completion", () => {
 		let url = "";
 		let verifying = false;
 		let deleted = 0;
+		let vetoAt = 0;
 		let replacementOwner = "";
 		const completed = vi.fn();
 		const afterUpdate = vi.fn();
@@ -217,7 +218,7 @@ describe("verification-table session authority and completion", () => {
 							if (
 								verifying &&
 								failure === "session deletion" &&
-								++deleted === 2
+								++deleted === vetoAt
 							)
 								return false;
 						},
@@ -254,6 +255,7 @@ describe("verification-table session authority and completion", () => {
 			.map((session) => session.token)
 			.sort();
 		expect(beforeTokens.length).toBeGreaterThanOrEqual(2);
+		vetoAt = beforeTokens.length;
 		await client.changeEmail(
 			{ newEmail: "atomic@example.com" },
 			{ headers: first.headers },
@@ -509,4 +511,73 @@ describe("verification-table session authority and completion", () => {
 			await Promise.all(tasks);
 		}
 	});
+});
+
+/** @see https://github.com/better-auth/better-auth/pull/8916 */
+it.each([
+	false,
+	true,
+])("consumes an occupied target request without changing sessions (revocation: %s)", async (revokeOtherSessions) => {
+	let url = "";
+	const completed = vi.fn();
+	const { auth, client, db, signInWithTestUser } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+				strategy: "verification-table",
+				revokeOtherSessions,
+				sendVerificationEmail: async (data) => {
+					url = data.url;
+				},
+				onChangeEmailCompleted: completed,
+			},
+		},
+	});
+	const { headers, user } = await signInWithTestUser();
+	const sessions = await db.findMany({
+		model: "session",
+		where: [{ field: "userId", value: user.id }],
+	});
+	const request = await client.changeEmail(
+		{ newEmail: "claimed@example.com" },
+		{ headers },
+	);
+	expect(request.error).toBeNull();
+	expect(url).not.toBe("");
+	const claimant = await db.create<{ id: string }>({
+		model: "user",
+		data: {
+			name: "Claimant",
+			email: "claimed@example.com",
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		},
+	});
+	const response = await auth.handler(new Request(url, { headers }));
+	expect(response.status).toBe(302);
+	expect(response.headers.get("location")).toContain("INVALID_TOKEN");
+	expect(
+		await db.findOne({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		}),
+	).toMatchObject({
+		email: user.email,
+		pendingEmail: null,
+		pendingEmailRequestId: null,
+	});
+	expect(
+		await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		}),
+	).toEqual(sessions);
+	await db.delete({
+		model: "user",
+		where: [{ field: "id", value: claimant.id }],
+	});
+	const replay = await auth.handler(new Request(url, { headers }));
+	expect(replay.headers.get("location")).toContain("INVALID_TOKEN");
+	expect(completed).not.toHaveBeenCalled();
 });

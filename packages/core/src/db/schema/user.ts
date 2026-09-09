@@ -19,7 +19,7 @@ export const userSchema = coreSchema.extend({
 export type BaseUser = z.infer<typeof userSchema>;
 
 type PendingEmailFields<Options> = Options extends {
-	changeEmail: { enabled: true; strategy: "verification-table" };
+	changeEmail: { strategy: "verification-table" };
 }
 	? { pendingEmail?: string | null }
 	: {};
