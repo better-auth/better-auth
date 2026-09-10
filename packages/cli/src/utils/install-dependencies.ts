@@ -76,12 +76,19 @@ export function installDependencies({
 			flags.push(flag);
 		}
 	}
-	const command = `${installCommand}${flags.length > 0 ? ` ${flags.join(" ")}` : ""} ${Array.isArray(dependencies) ? dependencies.join(" ") : dependencies}`;
+	const dependencyList = Array.isArray(dependencies)
+		? dependencies
+		: [dependencies];
+	if (dependencyList.length === 0) {
+		return Promise.resolve(true);
+	}
+	const command = `${installCommand}${flags.length > 0 ? ` ${flags.join(" ")}` : ""} ${dependencyList.join(" ")}`;
 
 	return new Promise((resolve, reject) => {
 		exec(command, { cwd }, (error, stdout, stderr) => {
 			if (error) {
-				reject(new Error(stderr));
+				const message = stderr.trim() || stdout.trim() || error.message;
+				reject(new Error(message, { cause: error }));
 				return;
 			}
 			resolve(true);

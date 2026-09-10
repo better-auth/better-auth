@@ -1,14 +1,20 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
-import type { AdditionalUserFieldsInput } from "../../types";
+import type { AdditionalUserFieldsInput, User } from "../../types";
 import { originCheck } from "../middlewares";
-import { createEmailVerificationToken } from "./email-verification";
+import {
+	buildChangeEmailVerificationURL,
+	createEmailVerificationToken,
+} from "./email-verification";
 import {
 	getSessionFromCtx,
 	isStateful,
@@ -349,7 +355,6 @@ export const setPassword = createAuthEndpoint.serverOnly(
 			await ctx.context.internalAdapter.linkAccount({
 				userId: session.user.id,
 				providerId: "credential",
-				issuer: createLocalAccountIssuer("credential"),
 				accountId: session.user.id,
 				password: passwordHash,
 			});
@@ -517,11 +522,19 @@ export const deleteUser = createAuthEndpoint(
 							1000,
 				),
 			});
-			const url = `${
-				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
-				ctx.body.callbackURL || "/",
-			)}`;
+			const confirmationMode =
+				ctx.context.options.user.deleteUser?.confirmationMode || "instant";
+			const url =
+				confirmationMode === "explicit"
+					? appendQueryParams(
+							ctx.body.callbackURL || "/",
+							new URLSearchParams({ token }),
+						)
+					: `${
+							ctx.context.baseURL
+						}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+							ctx.body.callbackURL || "/",
+						)}`;
 			await ctx.context.runInBackgroundOrAwait(
 				ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 					{
@@ -563,6 +576,31 @@ export const deleteUser = createAuthEndpoint(
 		});
 	},
 );
+
+/**
+ * Runs the actual account deletion: hooks, user/session/account rows, cookie.
+ * Shared by the instant callback and the explicit-mode confirm endpoint so
+ * both apply exactly the same mutation once a delete token is consumed.
+ */
+async function performDeleteUser(
+	ctx: GenericEndpointContext,
+	session: { user: User },
+) {
+	const beforeDelete = ctx.context.options.user?.deleteUser?.beforeDelete;
+	if (beforeDelete) {
+		await beforeDelete(session.user, ctx.request);
+	}
+	await ctx.context.internalAdapter.deleteUser(session.user.id);
+	await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
+	await ctx.context.internalAdapter.deleteAccounts(session.user.id);
+
+	deleteSessionCookie(ctx);
+
+	const afterDelete = ctx.context.options.user?.deleteUser?.afterDelete;
+	if (afterDelete) {
+		await afterDelete(session.user, ctx.request);
+	}
+}
 
 export const deleteUserCallback = createAuthEndpoint(
 	"/delete-user/callback",
@@ -643,23 +681,172 @@ export const deleteUserCallback = createAuthEndpoint(
 		if (!token || token.value !== session.user.id) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
-		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
-		if (beforeDelete) {
-			await beforeDelete(session.user, ctx.request);
-		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-
-		deleteSessionCookie(ctx);
-
-		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
-		if (afterDelete) {
-			await afterDelete(session.user, ctx.request);
-		}
+		await performDeleteUser(ctx, session);
 		if (ctx.query.callbackURL) {
 			throw ctx.redirect(ctx.query.callbackURL || "/");
 		}
+		return ctx.json({
+			success: true,
+			message: "User deleted",
+		});
+	},
+);
+
+export const deleteUserPreview = createAuthEndpoint(
+	"/delete-user/preview",
+	{
+		method: "GET",
+		query: z.object({
+			token: z.string().meta({
+				description: "The token to preview the deletion request",
+			}),
+		}),
+		metadata: {
+			openapi: {
+				description:
+					"Preview a pending account deletion without applying it. Used by explicit confirmation mode.",
+				responses: {
+					"200": {
+						description: "The pending deletion, not yet applied",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										user: {
+											type: "object",
+											$ref: "#/components/schemas/User",
+										},
+									},
+									required: ["user"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		if (!ctx.context.options.user?.deleteUser?.enabled) {
+			ctx.context.logger.error(
+				"Delete user is disabled. Enable it in the options",
+			);
+			throw APIError.fromStatus("NOT_FOUND");
+		}
+		const session = await getSessionFromCtx(ctx, {
+			disableCookieCache: isStateful(ctx),
+		});
+		if (!session) {
+			throw APIError.from(
+				"NOT_FOUND",
+				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+			);
+		}
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(
+				`delete-account-${ctx.query.token}`,
+			);
+		if (
+			!verification ||
+			verification.value !== session.user.id ||
+			verification.expiresAt < new Date()
+		) {
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
+		}
+		return ctx.json({
+			user: parseUserOutput(ctx.context.options, session.user),
+		});
+	},
+);
+
+export const deleteUserConfirm = createAuthEndpoint(
+	"/delete-user/confirm",
+	{
+		method: "POST",
+		body: z.object({
+			token: z.string().meta({
+				description: "The token to confirm the deletion request",
+			}),
+			password: z
+				.string()
+				.meta({
+					description:
+						"An optional password re-check before applying the deletion",
+				})
+				.optional(),
+		}),
+		metadata: {
+			openapi: {
+				description:
+					"Confirm and apply a pending account deletion. Used by explicit confirmation mode.",
+				responses: {
+					"200": {
+						description: "User successfully deleted",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: { type: "boolean" },
+										message: { type: "string", enum: ["User deleted"] },
+									},
+									required: ["success", "message"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		if (!ctx.context.options.user?.deleteUser?.enabled) {
+			ctx.context.logger.error(
+				"Delete user is disabled. Enable it in the options",
+			);
+			throw APIError.fromStatus("NOT_FOUND");
+		}
+		// Account deletion is sensitive: bypass the cookie cache on stateful
+		// deployments so a revoked-but-cached session cannot complete the
+		// deletion even when paired with a valid delete-account token.
+		const session = await getSessionFromCtx(ctx, {
+			disableCookieCache: isStateful(ctx),
+		});
+		if (!session) {
+			throw APIError.from(
+				"NOT_FOUND",
+				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+			);
+		}
+		if (ctx.body.password) {
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
+				session.user.id,
+			);
+			if (!account || !account.password) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+				);
+			}
+			const verify = await ctx.context.password.verify({
+				hash: account.password,
+				password: ctx.body.password,
+			});
+			if (!verify) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+			}
+		}
+		// Consume the single-use delete token atomically before any
+		// destructive work so concurrent confirms with the same token can
+		// only delete the account once.
+		const token = await ctx.context.internalAdapter.consumeVerificationValue(
+			`delete-account-${ctx.body.token}`,
+		);
+		if (!token || token.value !== session.user.id) {
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
+		}
+		await performDeleteUser(ctx, session);
 		return ctx.json({
 			success: true,
 			message: "User deleted",
@@ -877,11 +1064,11 @@ export const changeEmail = createAuthEndpoint(
 				requestType: "change-email-verification",
 			},
 		);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-			ctx.body.callbackURL || "/",
-		)}`;
+		const url = buildChangeEmailVerificationURL(
+			ctx,
+			token,
+			ctx.body.callbackURL,
+		);
 		await ctx.context.runInBackgroundOrAwait(
 			canSendVerification(
 				{

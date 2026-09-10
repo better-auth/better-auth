@@ -1,5 +1,23 @@
 # @better-auth/expo
 
+## 1.7.4
+
+### Patch Changes
+
+- [#11200](https://github.com/better-auth/better-auth/pull/11200) [`9b1be99`](https://github.com/better-auth/better-auth/commit/9b1be996a5a30537db12f2e6712e08acf86203c6) Thanks [@bytaesu](https://github.com/bytaesu)! - Clear leftover session data from secure storage after upgrades or sign-out, and prevent corrupted cookies during concurrent updates.
+
+- [#11238](https://github.com/better-auth/better-auth/pull/11238) [`ada6b44`](https://github.com/better-auth/better-auth/commit/ada6b4436de1195876e964b1967d8aef6f163c43) Thanks [@bytaesu](https://github.com/bytaesu)! - Store multibyte session data safely in Expo secure storage.
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11099](https://github.com/better-auth/better-auth/pull/11099) [`fb7c018`](https://github.com/better-auth/better-auth/commit/fb7c018608bdc019c1685e70a878a084602c2fd3) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent Expo apps from sending unauthenticated requests while large stored cookies are being updated, and recover the previous cookie value when an update is interrupted or incomplete.
+
+## 1.7.2
+
+## 1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

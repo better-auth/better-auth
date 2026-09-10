@@ -16,6 +16,7 @@
     "**/test/**",
     "packages/better-auth/src/**",
     "packages/core/src/**",
-    "packages/electron/src/**"
+    "packages/electron/src/**",
+    "packages/release-tooling/src/**"
   ]
 }

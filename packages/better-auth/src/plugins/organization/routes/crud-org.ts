@@ -1,10 +1,19 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
-import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
+import {
+	getSessionFromCtx,
+	isStateful,
+	originCheck,
+	requestOnlySessionMiddleware,
+} from "../../../api";
 import { setSessionCookie } from "../../../cookies";
+import { generateRandomString } from "../../../crypto";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import type { Session, User } from "../../../types";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -18,6 +27,167 @@ import type {
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
+
+/**
+ * The session shape as extended by the organization plugin's schema
+ * (`activeOrganizationId`/`activeTeamId` are real columns added by the
+ * plugin, but `getSessionFromCtx`'s own return type doesn't know about
+ * them).
+ */
+type OrgSession = Session & {
+	activeOrganizationId?: string | undefined;
+	activeTeamId?: string | undefined;
+};
+
+const deleteOrganizationTokenValueSchema = z.object({
+	organizationId: z.string(),
+	userId: z.string(),
+});
+
+function parseDeleteOrganizationTokenValue(raw: string) {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		return null;
+	}
+	const result = deleteOrganizationTokenValueSchema.safeParse(parsed);
+	return result.success ? result.data : null;
+}
+
+/**
+ * Re-validates a pending organization-deletion token *without consuming it*:
+ * session, membership, and the `organization:delete` permission are all
+ * checked here because they may have changed since the confirmation email
+ * was sent. Used by all three endpoints. The callback and confirm endpoints
+ * additionally call `consumeDeleteOrganizationToken` immediately before
+ * applying the deletion -- burning the token here instead would let an
+ * unauthenticated or unauthorized visit (an email scanner following the
+ * link with no session, for instance) permanently invalidate it before the
+ * real user ever gets a chance to use it.
+ */
+async function resolveDeleteOrganizationToken<O extends OrganizationOptions>(
+	ctx: GenericEndpointContext,
+	options: O,
+	token: string,
+) {
+	const identifier = `delete-organization-${token}`;
+	const verification =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!verification || verification.expiresAt < new Date()) {
+		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
+	}
+	const tokenValue = parseDeleteOrganizationTokenValue(verification.value);
+	if (!tokenValue) {
+		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
+	}
+	const { organizationId, userId } = tokenValue;
+	// Deletion is sensitive: bypass the cookie cache on stateful deployments
+	// so a revoked-but-cached session cannot complete it even when paired
+	// with a valid delete-organization token.
+	const session = (await getSessionFromCtx(ctx, {
+		disableCookieCache: isStateful(ctx),
+	})) as { user: User; session: OrgSession } | null;
+	if (!session || session.user.id !== userId) {
+		throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO);
+	}
+	const adapter = getOrgAdapter<O>(ctx.context, options);
+	const member = await adapter.findMemberByOrgId({
+		userId: session.user.id,
+		organizationId,
+	});
+	if (!member) {
+		throw APIError.from(
+			"BAD_REQUEST",
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		);
+	}
+	const canDeleteOrg = await hasPermission(
+		{
+			role: member.role,
+			permissions: { organization: ["delete"] },
+			organizationId,
+			options,
+		},
+		ctx,
+	);
+	if (!canDeleteOrg) {
+		throw APIError.from(
+			"FORBIDDEN",
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+		);
+	}
+	const org = await adapter.findOrganizationById(organizationId);
+	if (!org) {
+		throw APIError.from(
+			"BAD_REQUEST",
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		);
+	}
+	return { organizationId, session, org };
+}
+
+/**
+ * Atomically consumes the delete-organization token, once every check in
+ * `resolveDeleteOrganizationToken` has already passed. This is the only
+ * point that burns the single-use token, so two concurrent callbacks with
+ * the same token can still complete the deletion at most once, while an
+ * unauthorized peek never destroys it. Re-validates the consumed row still
+ * matches what was already checked, in case it changed in the gap between
+ * the two calls.
+ */
+async function consumeDeleteOrganizationToken(
+	ctx: GenericEndpointContext,
+	token: string,
+	expected: { organizationId: string; userId: string },
+) {
+	const identifier = `delete-organization-${token}`;
+	const verification =
+		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
+	const tokenValue = verification
+		? parseDeleteOrganizationTokenValue(verification.value)
+		: null;
+	if (
+		!tokenValue ||
+		tokenValue.organizationId !== expected.organizationId ||
+		tokenValue.userId !== expected.userId
+	) {
+		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
+	}
+}
+
+/**
+ * Runs the actual organization deletion: clears the active-org pointer if
+ * needed, fires the before/after hooks, then deletes the org. Shared by the
+ * immediate path (no confirmation configured), the instant callback, and
+ * the explicit-mode confirm endpoint so all three apply exactly the same
+ * mutation.
+ */
+async function performDeleteOrganization<O extends OrganizationOptions>(
+	ctx: GenericEndpointContext,
+	options: O,
+	organizationId: string,
+	session: { user: User; session: OrgSession },
+	org: InferOrganization<O>,
+) {
+	const adapter = getOrgAdapter<O>(ctx.context, options);
+	if (organizationId === session.session.activeOrganizationId) {
+		await adapter.setActiveOrganization(session.session.token, null, ctx);
+	}
+	if (options?.organizationHooks?.beforeDeleteOrganization) {
+		await options.organizationHooks.beforeDeleteOrganization(
+			{ organization: org, user: session.user },
+			ctx,
+		);
+	}
+	await adapter.deleteOrganization(organizationId);
+	if (options?.organizationHooks?.afterDeleteOrganization) {
+		await options.organizationHooks.afterDeleteOrganization(
+			{ organization: org, user: session.user },
+			ctx,
+		);
+	}
+}
 
 const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({
@@ -510,9 +680,33 @@ export const updateOrganization = <O extends OrganizationOptions>(
 };
 
 const deleteOrganizationBodySchema = z.object({
-	organizationId: z.string().meta({
-		description: "The organization id to delete",
-	}),
+	organizationId: z
+		.string()
+		.meta({
+			description: "The organization id to delete",
+		})
+		.optional(),
+	/**
+	 * The callback URL to redirect to after the organization is deleted.
+	 * Only used when a deletion confirmation email is sent.
+	 */
+	callbackURL: z
+		.string()
+		.meta({
+			description:
+				"The callback URL to redirect to after the organization is deleted",
+		})
+		.optional(),
+	/**
+	 * The token to confirm a pending deletion. If provided, the organization
+	 * is deleted immediately and the other fields are ignored.
+	 */
+	token: z
+		.string()
+		.meta({
+			description: "The token to confirm the deletion request",
+		})
+		.optional(),
 });
 
 export const deleteOrganization = <O extends OrganizationOptions>(
@@ -530,13 +724,11 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					description: "Delete an organization",
 					responses: {
 						"200": {
-							description: "Success",
+							description:
+								"The deleted organization, or a pending-verification acknowledgement when a deletion confirmation email is configured",
 							content: {
 								"application/json": {
-									schema: {
-										type: "string",
-										description: "The organization id that was deleted",
-									},
+									schema: { type: "object" },
 								},
 							},
 						},
@@ -548,11 +740,29 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			const disableOrganizationDeletion =
 				ctx.context.orgOptions.disableOrganizationDeletion;
 			if (disableOrganizationDeletion) {
-				throw APIError.from("NOT_FOUND", {
-					message: "Organization deletion is disabled",
-					code: "ORGANIZATION_DELETION_DISABLED",
-				});
+				throw APIError.from(
+					"NOT_FOUND",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_DELETION_DISABLED,
+				);
 			}
+
+			if (ctx.body.token) {
+				const { organizationId, session, org } =
+					await resolveDeleteOrganizationToken(ctx, options, ctx.body.token);
+				await consumeDeleteOrganizationToken(ctx, ctx.body.token, {
+					organizationId,
+					userId: session.user.id,
+				});
+				await performDeleteOrganization(
+					ctx,
+					options,
+					organizationId,
+					session,
+					org,
+				);
+				return ctx.json(org);
+			}
+
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
 				throw APIError.fromStatus("UNAUTHORIZED");
@@ -593,36 +803,190 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				);
 			}
-			if (organizationId === session.session.activeOrganizationId) {
-				/**
-				 * If the organization is deleted, we set the active organization to null
-				 */
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
 
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
-			if (options?.organizationHooks?.beforeDeleteOrganization) {
-				await options.organizationHooks.beforeDeleteOrganization(
-					{
-						organization: org,
-						user: session.user,
-					},
-					ctx,
+
+			if (options?.organizationDeletion?.sendDeleteOrganizationVerification) {
+				const token = generateRandomString(32, "0-9", "a-z");
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: JSON.stringify({
+						organizationId,
+						userId: session.user.id,
+					} satisfies z.infer<typeof deleteOrganizationTokenValueSchema>),
+					identifier: `delete-organization-${token}`,
+					expiresAt: new Date(
+						Date.now() +
+							(options.organizationDeletion?.deleteTokenExpiresIn ||
+								60 * 60 * 24) *
+								1000,
+					),
+				});
+				const confirmationMode =
+					options.organizationDeletion?.confirmationMode || "instant";
+				const url =
+					confirmationMode === "explicit"
+						? appendQueryParams(
+								ctx.body.callbackURL || "/",
+								new URLSearchParams({ token }),
+							)
+						: `${
+								ctx.context.baseURL
+							}/organization/delete/callback?token=${token}&callbackURL=${encodeURIComponent(
+								ctx.body.callbackURL || "/",
+							)}`;
+				await ctx.context.runInBackgroundOrAwait(
+					options.organizationDeletion.sendDeleteOrganizationVerification(
+						{ organization: org, user: session.user, url, token },
+						ctx.request,
+					),
 				);
+				return ctx.json({
+					success: true,
+					message: "Verification email sent",
+				});
 			}
-			await adapter.deleteOrganization(organizationId);
-			if (options?.organizationHooks?.afterDeleteOrganization) {
-				await options.organizationHooks.afterDeleteOrganization(
-					{
-						organization: org,
-						user: session.user,
+
+			await performDeleteOrganization(
+				ctx,
+				options,
+				organizationId,
+				session,
+				org,
+			);
+			return ctx.json(org);
+		},
+	);
+};
+
+export const deleteOrganizationCallback = <O extends OrganizationOptions>(
+	options: O,
+) => {
+	return createAuthEndpoint(
+		"/organization/delete/callback",
+		{
+			method: "GET",
+			query: z.object({
+				token: z.string().meta({
+					description: "The token to verify the deletion request",
+				}),
+				callbackURL: z
+					.string()
+					.meta({
+						description: "The URL to redirect to after deletion",
+					})
+					.optional(),
+			}),
+			use: [originCheck((ctx) => ctx.query.callbackURL)],
+			metadata: {
+				openapi: {
+					description:
+						"Callback to complete organization deletion with a verification token",
+					responses: {
+						"200": {
+							description: "Organization successfully deleted",
+						},
 					},
-					ctx,
-				);
+				},
+			},
+		},
+		async (ctx) => {
+			const { organizationId, session, org } =
+				await resolveDeleteOrganizationToken(ctx, options, ctx.query.token);
+			await consumeDeleteOrganizationToken(ctx, ctx.query.token, {
+				organizationId,
+				userId: session.user.id,
+			});
+			await performDeleteOrganization(
+				ctx,
+				options,
+				organizationId,
+				session,
+				org,
+			);
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
 			}
+			return ctx.json(org);
+		},
+	);
+};
+
+export const deleteOrganizationPreview = <O extends OrganizationOptions>(
+	options: O,
+) => {
+	return createAuthEndpoint(
+		"/organization/delete/preview",
+		{
+			method: "GET",
+			query: z.object({
+				token: z.string().meta({
+					description: "The token to preview the deletion request",
+				}),
+			}),
+			metadata: {
+				openapi: {
+					description:
+						"Preview a pending organization deletion without applying it. Used by explicit confirmation mode.",
+					responses: {
+						"200": {
+							description: "The organization pending deletion",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { org } = await resolveDeleteOrganizationToken(
+				ctx,
+				options,
+				ctx.query.token,
+			);
+			return ctx.json({ organization: org });
+		},
+	);
+};
+
+export const deleteOrganizationConfirm = <O extends OrganizationOptions>(
+	options: O,
+) => {
+	return createAuthEndpoint(
+		"/organization/delete/confirm",
+		{
+			method: "POST",
+			body: z.object({
+				token: z.string().meta({
+					description: "The token to confirm the deletion request",
+				}),
+			}),
+			metadata: {
+				openapi: {
+					description:
+						"Confirm and apply a pending organization deletion. Used by explicit confirmation mode.",
+					responses: {
+						"200": {
+							description: "Organization successfully deleted",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { organizationId, session, org } =
+				await resolveDeleteOrganizationToken(ctx, options, ctx.body.token);
+			await consumeDeleteOrganizationToken(ctx, ctx.body.token, {
+				organizationId,
+				userId: session.user.id,
+			});
+			await performDeleteOrganization(
+				ctx,
+				options,
+				organizationId,
+				session,
+				org,
+			);
 			return ctx.json(org);
 		},
 	);

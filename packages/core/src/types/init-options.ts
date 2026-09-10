@@ -471,6 +471,17 @@ export type BetterAuthAdvancedOptions = {
 				 * @default false
 				 */
 				joins?: boolean;
+				/**
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database; Drizzle and Prisma inspect
+				 * local schema metadata without opening a connection.
+				 * Set `false` to disable runtime schema validation.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
@@ -970,6 +981,19 @@ export type BetterAuthOptions = {
 					 * @default false
 					 */
 					updateEmailWithoutVerification?: boolean;
+					/**
+					 * How the emailed link resolves the email change.
+					 *
+					 * - `"instant"`: clicking the link changes the email immediately (`GET`).
+					 * - `"explicit"`: the link only previews the change; the app must call
+					 *   the confirm endpoint (`POST`) to apply it. Use this when the emailed
+					 *   link can be visited by something other than the user, e.g. mail
+					 *   clients and security scanners that open links automatically
+					 *   (Outlook Safe Links, link-preview proxies).
+					 *
+					 * @default "instant"
+					 */
+					confirmationMode?: "instant" | "explicit";
 				};
 				/**
 				 * User deletion configuration
@@ -1012,6 +1036,19 @@ export type BetterAuthOptions = {
 					 * @default 1 day (60 * 60 * 24) in seconds
 					 */
 					deleteTokenExpiresIn?: number;
+					/**
+					 * How the emailed link resolves the deletion.
+					 *
+					 * - `"instant"`: clicking the link deletes the account immediately (`GET`).
+					 * - `"explicit"`: the link only previews the deletion; the app must call
+					 *   the confirm endpoint (`POST`) to apply it. Use this when the emailed
+					 *   link can be visited by something other than the user, e.g. mail
+					 *   clients and security scanners that open links automatically
+					 *   (Outlook Safe Links, link-preview proxies).
+					 *
+					 * @default "instant"
+					 */
+					confirmationMode?: "instant" | "explicit";
 				};
 		  })
 		| undefined;
@@ -1784,6 +1821,26 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debug?: boolean;
+		  }
+		| undefined;
+	/**
+	 * Experimental features.
+	 */
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
 		  }
 		| undefined;
 };

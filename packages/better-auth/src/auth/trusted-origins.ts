@@ -1,6 +1,10 @@
 import { getHost, getOrigin, getProtocol } from "../utils/url";
 import { wildcardMatch } from "../utils/wildcard";
 
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
+const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
+const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
+
 /**
  * Resolves `.` and `..` segments in a path after percent-decoding so a
  * path-pinned pattern cannot be bypassed with traversal: e.g.
@@ -39,6 +43,10 @@ const normalizePath = (path: string): string => {
  * a path-pinned pattern.
  */
 const parseCustomSchemeOrigin = (value: string) => {
+	if (CONTROL_CHARACTER_PATTERN.test(value)) {
+		return null;
+	}
+
 	const schemeEnd = value.indexOf(":");
 	if (schemeEnd <= 0) {
 		return null;
@@ -59,8 +67,41 @@ const parseCustomSchemeOrigin = (value: string) => {
 			rest = rest.slice(authorityEnd);
 		}
 	}
-	const path = normalizePath(rest.replace(/[?#].*$/, ""));
+	const pathEnd = rest.search(/[?#]/);
+	const path = normalizePath(pathEnd === -1 ? rest : rest.slice(0, pathEnd));
 	return { scheme, authority: authority.toLowerCase(), path };
+};
+/**
+ * Validates root-relative redirects against ambiguous browser and router parsing.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-4.2
+ * @see https://url.spec.whatwg.org/#concept-basic-url-parser
+ */
+const isSafeRelativeURL = (value: string): boolean => {
+	if (
+		!value.startsWith("/") ||
+		value.startsWith("//") ||
+		value.includes("\\") ||
+		CONTROL_CHARACTER_PATTERN.test(value)
+	) {
+		return false;
+	}
+
+	const pathEnd = value.search(/[?#]/);
+	const path = pathEnd === -1 ? value : value.slice(0, pathEnd);
+	if (ENCODED_PATH_SEPARATOR_PATTERN.test(path)) {
+		return false;
+	}
+
+	try {
+		// Recheck authority after web-platform URL normalization.
+		return (
+			new URL(value, RELATIVE_URL_PARSER_ORIGIN).origin ===
+			RELATIVE_URL_PARSER_ORIGIN
+		);
+	} catch {
+		return false;
+	}
 };
 
 /**
@@ -78,14 +119,7 @@ export const matchesOriginPattern = (
 	settings?: { allowRelativePaths: boolean },
 ): boolean => {
 	if (url.startsWith("/")) {
-		if (settings?.allowRelativePaths) {
-			return (
-				url.startsWith("/") &&
-				/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)
-			);
-		}
-
-		return false;
+		return settings?.allowRelativePaths === true && isSafeRelativeURL(url);
 	}
 
 	// Check if pattern contains wildcard characters (*, **, or ?)

@@ -7,7 +7,7 @@ import {
 	PostgresDialect,
 	SqliteDialect,
 } from "kysely";
-import type { KyselyDatabaseType } from "./types";
+import type { DatabaseIndexIntrospector, KyselyDatabaseType } from "./types";
 
 export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],
@@ -62,6 +62,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: null,
 			databaseType: null,
+			introspectIndexes: undefined,
 			transaction: undefined,
 		};
 	}
@@ -70,6 +71,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: db.db,
 			databaseType: db.type,
+			introspectIndexes: undefined,
 			transaction: db.transaction,
 		};
 	}
@@ -78,11 +80,13 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: new Kysely<any>({ dialect: db.dialect }),
 			databaseType: db.type,
+			introspectIndexes: undefined,
 			transaction: db.transaction,
 		};
 	}
 
 	let dialect: Dialect | undefined = undefined;
+	let introspectIndexes: DatabaseIndexIntrospector | undefined = undefined;
 	let transaction: boolean | undefined = undefined;
 
 	const databaseType = getKyselyDatabaseType(db);
@@ -153,10 +157,13 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	// Cloudflare D1
 	if ("batch" in db && "exec" in db && "prepare" in db) {
-		const { D1SqliteDialect } = await import("./d1-sqlite-dialect");
+		const { createD1IndexIntrospector, D1SqliteDialect } = await import(
+			"./d1-sqlite-dialect"
+		);
 		dialect = new D1SqliteDialect({
 			database: db,
 		});
+		introspectIndexes = createD1IndexIntrospector(db);
 		// D1 has no interactive transactions; only its batch() API.
 		transaction = false;
 	}
@@ -164,6 +171,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	return {
 		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
+		introspectIndexes,
 		transaction,
 	};
 };

@@ -1,5 +1,23 @@
 # @better-auth/oauth-provider
 
+## 1.7.4
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11090](https://github.com/better-auth/better-auth/pull/11090) [`4d09d50`](https://github.com/better-auth/better-auth/commit/4d09d502254f1bfe65dafc8d813d803225429c4a) Thanks [@Salman-Arshad](https://github.com/Salman-Arshad)! - Allow native OAuth clients with `localhost` loopback redirect URIs to use ephemeral callback ports, and ensure loopback port variance changes only the port.
+
+## 1.7.2
+
+### Patch Changes
+
+- [#11010](https://github.com/better-auth/better-auth/pull/11010) [`bb8d7c4`](https://github.com/better-auth/better-auth/commit/bb8d7c4541992baedd53325761e19a919a805fc7) Thanks [@bytaesu](https://github.com/bytaesu)! - Client ID Metadata Document clients that declare a grant the server does not offer (such as Claude's enterprise `jwt-bearer` grant) can now register. Only documents sharing no grant with the server are refused.
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
+## 1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

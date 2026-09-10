@@ -1,4 +1,6 @@
 ---
+icon: guidesClerkMigrationGuide
+sidebarTitle: "Clerk Migration Guide"
 title: Migrating from Clerk to Better Auth
 description: A step-by-step guide to transitioning from Clerk to Better Auth.
 ---
@@ -177,22 +179,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
     import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 
     import { auth } from "@/lib/auth"; // import your auth instance
-
-    // Review every provider in your Clerk export. Use the exact trusted issuer
-    // Better Auth uses, or local:oauth:<encoded providerId> when it has no
-    // issuer. The provider ID segment is percent-encoded.
-    const accountIssuers: Record<string, string> = {
-      github: "local:oauth:github",
-      google: "https://accounts.google.com",
-    };
-
-    function getAccountIssuer(providerId: string) {
-      const issuer = accountIssuers[providerId];
-      if (!issuer) {
-        throw new Error(`Missing trusted issuer for ${providerId}`);
-      }
-      return issuer;
-    }
 
     function getCSVData(csv: string) {
       const lines = csv.split('\n').filter(line => line.trim());
@@ -381,7 +367,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
                           data: {
                               id,
                               providerId: provider,
-                              issuer: "local:credential",
                               accountId: createdUser.id,
                               scope: approved_scopes,
                               userId: createdUser.id,
@@ -397,7 +382,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
                           data: {
                               id,
                               providerId,
-                              issuer: getAccountIssuer(providerId),
                               accountId: externalAccount.provider_user_id,
                               scope: approved_scopes,
                               userId: createdUser.id,

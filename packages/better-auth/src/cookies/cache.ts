@@ -1,5 +1,6 @@
 import type { CookieCachePayload } from "@better-auth/core";
 import { sessionSchema, userSchema } from "@better-auth/core/db";
+import { logger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 
@@ -19,8 +20,22 @@ const compactCookieCacheSchema = z.object({
 export function parseCookieCachePayload(
 	value: unknown,
 ): CookieCachePayload | null {
-	const result = cookieCachePayloadSchema.safeParse(safeJSONParse(value));
-	return result.success ? result.data : null;
+	const parsed = safeJSONParse(value);
+	if (parsed === null) {
+		// safeJSONParse already logs malformed JSON.
+		// otherwise, there is no payload to validate.
+		return null;
+	}
+
+	const result = cookieCachePayloadSchema.safeParse(parsed);
+	if (result.success) {
+		return result.data;
+	}
+
+	logger.warn("Cookie cache payload failed schema validation", {
+		issues: result.error.issues.map(({ code, path }) => ({ code, path })),
+	});
+	return null;
 }
 
 export function parseCompactCookieCache(value: unknown) {
