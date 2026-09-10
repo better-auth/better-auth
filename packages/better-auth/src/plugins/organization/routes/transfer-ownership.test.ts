@@ -499,6 +499,16 @@ describe("transferOwnership", () => {
 		});
 		const owners = membersRes.members.filter((m) => m.role === "owner");
 		expect(owners.length).toBe(1);
+
+		// The loser's promotion must have been rolled back, not left in place
+		// alongside the winner's -- otherwise this would show two owners
+		// above instead of failing the assertion just made.
+		const loserResult = toX.status === "fulfilled" ? toY : toX;
+		expect(loserResult.status).toBe("rejected");
+		const loserTarget = membersRes.members.find(
+			(m) => m.id === (toX.status === "fulfilled" ? memberY!.id : memberX!.id),
+		);
+		expect(loserTarget?.role).toBe("member");
 	});
 
 	it("fires beforeTransferOwnership and afterTransferOwnership hooks", async () => {
