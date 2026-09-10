@@ -227,7 +227,9 @@ export const sendVerificationEmail = createAuthEndpoint(
  * (`requestType: "change-email-verification"`). In `"explicit"` confirmation
  * mode this points at the app's callbackURL with the token attached instead
  * of better-auth's own `/verify-email` endpoint, so visiting the emailed
- * link previews the change instead of applying it directly.
+ * link previews the change instead of applying it directly. `callbackURL` is
+ * already validated against `trustedOrigins` by the global
+ * `originCheckMiddleware` (api/index.ts) on both call sites before this runs.
  */
 export function buildChangeEmailVerificationURL(
 	ctx: GenericEndpointContext,

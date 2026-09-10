@@ -835,6 +835,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				});
 				const confirmationMode =
 					options.organizationDeletion?.confirmationMode || "instant";
+				// In explicit mode, ctx.body.callbackURL becomes the app-owned URL
+				// itself, not just a post-callback redirect target. It's already
+				// validated against trustedOrigins by the global
+				// originCheckMiddleware (api/index.ts) before this handler runs.
 				const url =
 					confirmationMode === "explicit"
 						? appendQueryParams(
@@ -888,7 +892,7 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 					})
 					.optional(),
 			}),
-			use: [originCheck((ctx) => ctx.query.callbackURL)],
+			use: [orgMiddleware, originCheck((ctx) => ctx.query.callbackURL)],
 			metadata: {
 				openapi: {
 					description:
@@ -935,6 +939,8 @@ export const deleteOrganizationPreview = <O extends OrganizationOptions>(
 					description: "The token to preview the deletion request",
 				}),
 			}),
+			requireHeaders: true,
+			use: [orgMiddleware],
 			metadata: {
 				openapi: {
 					description:
@@ -970,6 +976,8 @@ export const deleteOrganizationConfirm = <O extends OrganizationOptions>(
 					description: "The token to confirm the deletion request",
 				}),
 			}),
+			requireHeaders: true,
+			use: [orgMiddleware],
 			metadata: {
 				openapi: {
 					description:

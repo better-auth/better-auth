@@ -357,6 +357,10 @@ export const transferOwnership = <O extends OrganizationOptions>(
 				});
 				const confirmationMode =
 					options.ownershipTransfer?.confirmationMode || "instant";
+				// In explicit mode, ctx.body.callbackURL becomes the app-owned URL
+				// itself, not just a post-callback redirect target. It's already
+				// validated against trustedOrigins by the global
+				// originCheckMiddleware (api/index.ts) before this handler runs.
 				const url =
 					confirmationMode === "explicit"
 						? appendQueryParams(
@@ -427,7 +431,7 @@ export const transferOwnershipCallback = <O extends OrganizationOptions>(
 					})
 					.optional(),
 			}),
-			use: [originCheck((ctx) => ctx.query.callbackURL)],
+			use: [orgMiddleware, originCheck((ctx) => ctx.query.callbackURL)],
 			metadata: {
 				openapi: {
 					description:
@@ -482,6 +486,8 @@ export const transferOwnershipPreview = <O extends OrganizationOptions>(
 					description: "The token to preview the ownership transfer request",
 				}),
 			}),
+			requireHeaders: true,
+			use: [orgMiddleware],
 			metadata: {
 				openapi: {
 					description:
@@ -514,6 +520,8 @@ export const transferOwnershipConfirm = <O extends OrganizationOptions>(
 					description: "The token to confirm the ownership transfer request",
 				}),
 			}),
+			requireHeaders: true,
+			use: [orgMiddleware],
 			metadata: {
 				openapi: {
 					description:
