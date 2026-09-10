@@ -39,6 +39,11 @@ type OrgSession = Session & {
 	activeTeamId?: string | undefined;
 };
 
+const deleteOrganizationTokenValueSchema = z.object({
+	organizationId: z.string(),
+	userId: z.string(),
+});
+
 /**
  * Re-validates a pending organization-deletion token: session, membership,
  * and the `organization:delete` permission are all rechecked here because
@@ -60,10 +65,19 @@ async function resolveDeleteOrganizationToken<O extends OrganizationOptions>(
 	if (!verification || (!consume && verification.expiresAt < new Date())) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	const [organizationId, userId] = verification.value.split(":");
-	if (!organizationId || !userId) {
+	// Parsed as JSON (not a delimited string) so an organization or user id
+	// that happens to contain the delimiter character can't shift the split.
+	let parsedValue: unknown;
+	try {
+		parsedValue = JSON.parse(verification.value);
+	} catch {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
+	const tokenValue = deleteOrganizationTokenValueSchema.safeParse(parsedValue);
+	if (!tokenValue.success) {
+		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
+	}
+	const { organizationId, userId } = tokenValue.data;
 	// Deletion is sensitive: bypass the cookie cache on stateful deployments
 	// so a revoked-but-cached session cannot complete it even when paired
 	// with a valid delete-organization token.
@@ -763,7 +777,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			if (options?.organizationDeletion?.sendDeleteOrganizationVerification) {
 				const token = generateRandomString(32, "0-9", "a-z");
 				await ctx.context.internalAdapter.createVerificationValue({
-					value: `${organizationId}:${session.user.id}`,
+					value: JSON.stringify({
+						organizationId,
+						userId: session.user.id,
+					} satisfies z.infer<typeof deleteOrganizationTokenValueSchema>),
 					identifier: `delete-organization-${token}`,
 					expiresAt: new Date(
 						Date.now() +
