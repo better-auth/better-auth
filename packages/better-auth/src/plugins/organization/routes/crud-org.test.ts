@@ -951,4 +951,117 @@ describe("deleteOrganization confirmation", () => {
 		});
 		expect(stillThere?.id).toBe(org!.id);
 	});
+
+	it("a delete token for one organization cannot delete another", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const orgToDelete = await auth.api.createOrganization({
+			body: { name: "Delete Me", slug: "delete-me-scope" },
+			headers,
+		});
+		const otherOrg = await auth.api.createOrganization({
+			body: { name: "Untouchable", slug: "untouchable" },
+			headers,
+		});
+
+		await auth.api.deleteOrganization({
+			body: { organizationId: orgToDelete!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// The token is scoped to `orgToDelete`; it must not also delete
+		// `otherOrg`, even though the same session created both.
+		await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+
+		const deleted = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: orgToDelete!.id }],
+		});
+		expect(deleted).toBeNull();
+		const untouched = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: otherOrg!.id }],
+		});
+		expect(untouched).not.toBeNull();
+	});
+
+	// The delete token is single-use: two concurrent callbacks with the same
+	// token must delete the organization exactly once. Whichever request
+	// consumes the verification row first wins; the loser sees an invalid
+	// token, and the destructive hooks must each fire only once.
+	it("deletes only once when the same token is used concurrently", async () => {
+		let capturedToken = "";
+		const beforeDeleteOrganization = vi.fn(async () => {
+			// Widen the race so both requests pass the token lookup before
+			// either one finishes the destructive work.
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		});
+		const afterDeleteOrganization = vi.fn(async () => {});
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+					organizationHooks: {
+						beforeDeleteOrganization,
+						afterDeleteOrganization,
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Race Me", slug: "race-me" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		const [first, second] = await Promise.allSettled([
+			auth.api.deleteOrganizationCallback({
+				query: { token: capturedToken },
+				headers,
+			}),
+			auth.api.deleteOrganizationCallback({
+				query: { token: capturedToken },
+				headers,
+			}),
+		]);
+		const successes = [first, second].filter((r) => r.status === "fulfilled");
+		const failures = [first, second].filter((r) => r.status === "rejected");
+		expect(successes.length).toBe(1);
+		expect(failures.length).toBe(1);
+
+		expect(beforeDeleteOrganization).toHaveBeenCalledTimes(1);
+		expect(afterDeleteOrganization).toHaveBeenCalledTimes(1);
+
+		const remaining = await db.findMany({
+			model: "verification",
+			where: [
+				{ field: "identifier", value: `delete-organization-${capturedToken}` },
+			],
+		});
+		expect(remaining.length).toBe(0);
+	});
 });

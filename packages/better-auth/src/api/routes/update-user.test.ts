@@ -227,6 +227,54 @@ describe("updateUser", () => {
 			);
 			expect(capturedUrl).not.toContain("/verify-email");
 		});
+
+		it("the change-email token is a JWT, not a single-use row: a sequential confirm replay fails once the email has moved", async () => {
+			let capturedToken = "";
+			const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			const newEmail = "replay-target@email.com";
+			await auth.api.changeEmail({
+				body: { newEmail },
+				headers,
+			});
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			const first = await auth.api.changeEmailConfirm({
+				body: { token: capturedToken },
+				headers,
+			});
+			expect(first.user?.email).toBe(newEmail);
+
+			// Unlike the delete/transfer verification rows, this JWT is never
+			// explicitly invalidated. A sequential replay still fails here,
+			// but only because the token embeds the *old* email as the lookup
+			// key, and that email no longer belongs to any user -- not because
+			// the token itself was consumed. A sufficiently concurrent replay
+			// (both requests reading the old email before either commits the
+			// update) is not guarded against the way the other three
+			// verification-row-based flows are.
+			await expect(
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+			).rejects.toThrow();
+		});
 	});
 
 	it("should update the user's password", async () => {
@@ -943,6 +991,46 @@ describe("delete user", async () => {
 			success: true,
 			message: "User deleted",
 		});
+		const gone = await client.getSession({ fetchOptions: { headers } });
+		expect(gone.data).toBeNull();
+	});
+
+	it("explicit confirmation mode: /confirm rejects a wrong password without burning the token", async () => {
+		let capturedToken = "";
+		const { client, auth, signInWithTestUser, testUser } =
+			await getTestInstance({
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				},
+			});
+		const { headers, runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.deleteUser({ password: testUser.password });
+		});
+		expect(capturedToken.length).toBe(32);
+
+		await expect(
+			auth.api.deleteUserConfirm({
+				body: { token: capturedToken, password: "definitely-wrong" },
+				headers,
+			}),
+		).rejects.toThrow();
+
+		// The failed password check must not have consumed the token.
+		const stillThere = await client.getSession({ fetchOptions: { headers } });
+		expect(stillThere.data).toBeDefined();
+
+		const confirmed = await auth.api.deleteUserConfirm({
+			body: { token: capturedToken, password: testUser.password },
+			headers,
+		});
+		expect(confirmed).toMatchObject({ success: true, message: "User deleted" });
 		const gone = await client.getSession({ fetchOptions: { headers } });
 		expect(gone.data).toBeNull();
 	});
