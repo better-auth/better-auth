@@ -13,6 +13,12 @@ import { hasPermission } from "../has-permission";
 import type { InferOrganization, Member } from "../schema";
 import type { OrganizationOptions } from "../types";
 
+const transferOwnershipTokenValueSchema = z.object({
+	organizationId: z.string(),
+	currentOwnerMemberId: z.string(),
+	newOwnerMemberId: z.string(),
+});
+
 /**
  * Re-validates a pending ownership-transfer token: session, the current
  * owner's membership, and the `member:update` permission (or creator
@@ -35,11 +41,20 @@ async function resolveTransferOwnershipToken<O extends OrganizationOptions>(
 	if (!verification || (!consume && verification.expiresAt < new Date())) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	const [organizationId, currentOwnerMemberId, newOwnerMemberId] =
-		verification.value.split(":");
-	if (!organizationId || !currentOwnerMemberId || !newOwnerMemberId) {
+	// Parsed as JSON (not a delimited string) so an id that happens to
+	// contain the delimiter character can't shift the split.
+	let parsedValue: unknown;
+	try {
+		parsedValue = JSON.parse(verification.value);
+	} catch {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
+	const tokenValue = transferOwnershipTokenValueSchema.safeParse(parsedValue);
+	if (!tokenValue.success) {
+		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
+	}
+	const { organizationId, currentOwnerMemberId, newOwnerMemberId } =
+		tokenValue.data;
 	// Ownership transfer is sensitive: bypass the cookie cache on stateful
 	// deployments so a revoked-but-cached session cannot complete it even
 	// when paired with a valid transfer-ownership token.
@@ -320,7 +335,11 @@ export const transferOwnership = <O extends OrganizationOptions>(
 				}
 				const token = generateRandomString(32, "0-9", "a-z");
 				await ctx.context.internalAdapter.createVerificationValue({
-					value: `${organizationId}:${currentOwner.id}:${newOwnerMember.id}`,
+					value: JSON.stringify({
+						organizationId,
+						currentOwnerMemberId: currentOwner.id,
+						newOwnerMemberId: newOwnerMember.id,
+					} satisfies z.infer<typeof transferOwnershipTokenValueSchema>),
 					identifier: `transfer-ownership-${token}`,
 					expiresAt: new Date(
 						Date.now() +
