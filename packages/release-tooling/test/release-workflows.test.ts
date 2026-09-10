@@ -703,7 +703,7 @@ describe("release publication security", () => {
 			"steps.app-token.outputs.token || secrets.GITHUB_TOKEN",
 		);
 		expect(approvedNotes.run).toContain("performed_via_github_app.id");
-		expect(approvedNotes.run).not.toContain('github-actions[bot]');
+		expect(approvedNotes.run).not.toContain("github-actions[bot]");
 	});
 
 	it("scopes the promotion App token to its required permissions", () => {
