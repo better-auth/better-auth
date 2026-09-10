@@ -926,7 +926,7 @@ renders a confirmation page from it, then:
 
 ## Transfer Ownership
 
-To transfer ownership of an organization to another member, use `organization.transferOwnership`. It is callable by the current owner (or a member with permission to update other members), and swaps the `creatorRole` between the current owner and the target member atomically — the organization always has an owner, before and after.
+To transfer ownership of an organization to another member, use `organization.transferOwnership`. Only a member who currently holds `creatorRole` may call it — the generic `member: ["update"]` permission (which a plain admin also holds) is not enough, since granting it would let an admin nominate a new owner while leaving the real owner untouched. It swaps the `creatorRole` between the current owner and the target member atomically — the organization always has an owner, before and after.
 
 <APIMethod path="/organization/transfer-ownership" method="POST" requireSession>
   ```ts
@@ -943,10 +943,6 @@ To transfer ownership of an organization to another member, use `organization.tr
        * The callback URL to redirect to after ownership is transferred. Only used when a transfer confirmation email is sent.
        */
       callbackURL?: string = "/dashboard"
-      /**
-       * The token to confirm the ownership transfer request. If provided, ownership is transferred immediately and the other fields are ignored.
-       */
-      token?: string = "token"
   }
   ```
 </APIMethod>
@@ -988,8 +984,8 @@ With this configured, `organization.transferOwnership` emails the current owner 
 confirmation link instead of swapping immediately, responding with
 `{ success: true, message: "Verification email sent" }`. Visiting the link
 (`GET /organization/transfer-ownership/callback`) re-validates the session, the current
-owner's membership, and their permission, re-checks the target hasn't already become the
-owner, consumes the single-use token, then performs the swap.
+owner's membership, and that they still hold `creatorRole`, re-checks the target hasn't
+already become the owner, consumes the single-use token, then performs the swap.
 
 In `"explicit"` confirmation mode, the same `GET /organization/transfer-ownership/preview`
 (peek only) and `POST /organization/transfer-ownership/confirm` (apply) endpoints exist as

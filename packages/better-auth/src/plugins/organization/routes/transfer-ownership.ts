@@ -238,16 +238,6 @@ const transferOwnershipBodySchema = z.object({
 				"The callback URL to redirect to after ownership is transferred",
 		})
 		.optional(),
-	/**
-	 * The token to confirm a pending transfer. If provided, ownership is
-	 * transferred immediately and the other fields are ignored.
-	 */
-	token: z
-		.string()
-		.meta({
-			description: "The token to confirm the ownership transfer request",
-		})
-		.optional(),
 });
 
 export const transferOwnership = <O extends OrganizationOptions>(
@@ -274,31 +264,6 @@ export const transferOwnership = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			if (ctx.body.token) {
-				const {
-					organizationId,
-					organization,
-					creatorRole,
-					currentOwner,
-					newOwner,
-				} = await resolveTransferOwnershipToken(ctx, options, ctx.body.token);
-				await consumeTransferOwnershipToken(ctx, ctx.body.token, {
-					organizationId,
-					currentOwnerMemberId: currentOwner.id,
-					newOwnerMemberId: newOwner.id,
-				});
-				const result = await performTransferOwnership(
-					ctx,
-					options,
-					organizationId,
-					creatorRole,
-					currentOwner,
-					newOwner,
-					organization,
-				);
-				return ctx.json(result);
-			}
-
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
 				throw APIError.fromStatus("UNAUTHORIZED");
