@@ -117,17 +117,20 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Determine npm dist-tag
-        id: npm-tag
+      - name: Resolve release channel
+        id: release-channel
         run: |
           REF="${GITHUB_REF_NAME}"
           if [[ "$REF" == "main" ]]; then
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "publish_command=pnpm ci:release --tag latest" >> "$GITHUB_OUTPUT"
+            echo "github_latest=true" >> "$GITHUB_OUTPUT"
           elif [[ "$REF" =~ ^v([0-9]+)\.([0-9]+)\.x$ ]]; then
             TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "publish_command=pnpm ci:release --tag $TAG" >> "$GITHUB_OUTPUT"
+            echo "github_latest=false" >> "$GITHUB_OUTPUT"
           elif [ "$REF" = "next" ]; then
-            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "publish_command=pnpm ci:release" >> "$GITHUB_OUTPUT"
+            echo "github_latest=false" >> "$GITHUB_OUTPUT"
           else
             echo "::error::Unsupported release branch ${REF}"
             exit 1
@@ -240,14 +243,13 @@ jobs:
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: pnpm ci:version
-          publish: pnpm ci:release
+          publish: ${{ steps.release-channel.outputs.publish_command }}
           title: "chore: release"
           commit: "chore: release"
           createGithubReleases: false
           prDraft: always
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
 
       - name: Rename release PR with version
         if: steps.changesets.outputs.pullRequestNumber
@@ -283,6 +285,7 @@ jobs:
           VERSION: ${{ steps.release-candidate.outputs.version }}
           RELEASE_COMMIT: ${{ steps.approved-notes.outputs.release_commit }}
           NOTES_FILE: ${{ steps.approved-notes.outputs.notes_path }}
+          GITHUB_LATEST: ${{ steps.release-channel.outputs.github_latest }}
         run: |
           if [ -z "$VERSION" ] || [ ! -s "$NOTES_FILE" ]; then
             echo "::error::Approved release notes are missing"
@@ -296,13 +299,16 @@ jobs:
           fi
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --notes-file "$NOTES_FILE" $PRERELEASE_FLAG
+              --notes-file "$NOTES_FILE" \
+              --latest="$GITHUB_LATEST" \
+              $PRERELEASE_FLAG
             echo "Updated release ${TAG}"
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" \
               --notes-file "$NOTES_FILE" \
               --target "$RELEASE_COMMIT" \
+              --latest="$GITHUB_LATEST" \
               $PRERELEASE_FLAG
             echo "Created release ${TAG}"
           fi
