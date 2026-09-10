@@ -325,6 +325,13 @@ async function resolveChangeEmailVerificationToken(
  * explicit-mode `/change-email/confirm` endpoint so both apply exactly the
  * same mutation -- each caller resolves its own session first, per its own
  * endpoint's session contract (see `resolveChangeEmailVerificationToken`).
+ *
+ * The underlying token is a stateless JWT, not a single-use `verification`
+ * row (see the replay note on `resolveChangeEmailVerificationToken`'s call
+ * sites), so a losing concurrent or sequential replay can reach here after
+ * `email` no longer belongs to any user. `updateUserByEmail` then matches no
+ * row and returns a falsy result -- that must fail cleanly here rather than
+ * flow a `null` user into `afterEmailVerification` or the caller's response.
  */
 async function applyChangeEmailVerification(
 	ctx: GenericEndpointContext,
@@ -336,6 +343,9 @@ async function applyChangeEmailVerification(
 		email,
 		{ email: updateTo, emailVerified: true },
 	);
+	if (!updatedUser) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+	}
 	if (ctx.context.options.emailVerification?.afterEmailVerification) {
 		await ctx.context.options.emailVerification.afterEmailVerification(
 			updatedUser,

@@ -279,13 +279,15 @@ describe("updateUser", async () => {
 			// the token itself was consumed. A sufficiently concurrent replay
 			// (both requests reading the old email before either commits the
 			// update) is not guarded against the way the other three
-			// verification-row-based flows are.
+			// verification-row-based flows are, and fails the same clean,
+			// explicit way: the shared apply step never lets a no-op update
+			// flow a `null` user into a hook or the response.
 			await expect(
 				auth.api.changeEmailConfirm({
 					body: { token: capturedToken },
 					headers,
 				}),
-			).rejects.toThrow();
+			).rejects.toThrow("User not found");
 		});
 
 		/**
