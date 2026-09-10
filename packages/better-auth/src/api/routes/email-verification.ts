@@ -250,12 +250,18 @@ export function buildChangeEmailVerificationURL(
 }
 
 type MaybeSession = Awaited<ReturnType<typeof getSessionFromCtx>>;
+type ActiveSession = NonNullable<MaybeSession>;
 
 /**
- * Decodes and validates a `change-email-verification` JWT without applying
- * it: used by both the instant `/verify-email` callback (to know whether to
- * apply immediately) and the explicit-mode preview/confirm endpoints (to
- * peek the pending change / apply it on demand).
+ * Decodes and validates a `change-email-verification` JWT and requires a
+ * signed-in session matching it, for the two endpoints meant to be called
+ * by the app's own confirmation page (server-side or cross-origin, not a
+ * direct browser navigation): `/change-email/preview` and
+ * `/change-email/confirm`. This is the same session contract every other
+ * preview/confirm endpoint in this feature set enforces (delete-user,
+ * organization deletion, ownership transfer) -- unlike the instant
+ * `/verify-email` GET callback, which is a direct link click and is allowed
+ * to arrive with no session, this pair never is.
  */
 async function resolveChangeEmailVerificationToken(
 	ctx: GenericEndpointContext,
@@ -286,7 +292,10 @@ async function resolveChangeEmailVerificationToken(
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 	}
 	const session = await getSessionFromCtx(ctx);
-	if (session && session.user.email !== parsed.email) {
+	if (!session) {
+		throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO);
+	}
+	if (session.user.email !== parsed.email) {
 		throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_USER);
 	}
 	return {
@@ -298,32 +307,19 @@ async function resolveChangeEmailVerificationToken(
 }
 
 /**
- * Applies a pending email change: reuses the active session if it belongs
- * to the same user, otherwise creates one, updates the email, fires
- * `afterEmailVerification`, and sets the session cookie. Shared by the
- * instant `/verify-email` callback and the explicit-mode `/change-email/confirm`
- * endpoint so both endpoints apply exactly the same mutation.
+ * Applies a pending email change to an already-resolved session: updates
+ * the email, fires `afterEmailVerification`, and refreshes the session
+ * cookie. Shared by the instant `/verify-email` callback and the
+ * explicit-mode `/change-email/confirm` endpoint so both apply exactly the
+ * same mutation -- each caller resolves its own session first, per its own
+ * endpoint's session contract (see `resolveChangeEmailVerificationToken`).
  */
-async function completeChangeEmailVerification(
+async function applyChangeEmailVerification(
 	ctx: GenericEndpointContext,
-	user: { user: User },
+	activeSession: ActiveSession,
 	email: string,
 	updateTo: string,
-	currentSession: MaybeSession,
 ) {
-	let activeSession = currentSession;
-	if (!activeSession) {
-		const newSession = await ctx.context.internalAdapter.createSession(
-			user.user.id,
-		);
-		if (!newSession) {
-			throw APIError.from(
-				"INTERNAL_SERVER_ERROR",
-				BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-			);
-		}
-		activeSession = { session: newSession, user: user.user };
-	}
 	const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 		email,
 		{ email: updateTo, emailVerified: true },
@@ -489,12 +485,28 @@ export const verifyEmail = createAuthEndpoint(
 				 * User clicks verification -> updates email
 				 */
 				case "change-email-verification": {
-					const updatedUser = await completeChangeEmailVerification(
+					// A direct browser GET on the emailed link is allowed to
+					// arrive with no active session (link opened on a device
+					// where the user isn't currently logged in): create one,
+					// same as the legacy branch below.
+					let activeSession = session;
+					if (!activeSession) {
+						const newSession = await ctx.context.internalAdapter.createSession(
+							user.user.id,
+						);
+						if (!newSession) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							);
+						}
+						activeSession = { session: newSession, user: user.user };
+					}
+					const updatedUser = await applyChangeEmailVerification(
 						ctx,
-						user,
+						activeSession,
 						parsed.email,
 						parsed.updateTo,
-						session,
 					);
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
@@ -721,14 +733,13 @@ export const changeEmailConfirm = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const { user, email, updateTo, session } =
+		const { email, updateTo, session } =
 			await resolveChangeEmailVerificationToken(ctx, ctx.body.token);
-		const updatedUser = await completeChangeEmailVerification(
+		const updatedUser = await applyChangeEmailVerification(
 			ctx,
-			user,
+			session,
 			email,
 			updateTo,
-			session,
 		);
 		return ctx.json({
 			status: true,

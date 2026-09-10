@@ -184,9 +184,14 @@ describe("updateUser", async () => {
 			expect(capturedUrl).not.toContain("/verify-email");
 			expect(capturedUrl).toContain(`token=${capturedToken}`);
 
-			// Previewing must not change the email.
+			// Previewing must not change the email. Like every other preview/
+			// confirm pair in this feature set, these require the signed-in
+			// session matching the pending change -- unlike the instant
+			// `/verify-email` link, they are never called by a bare, sessionless
+			// browser navigation.
 			const preview = await auth.api.changeEmailPreview({
 				query: { token: capturedToken },
+				headers,
 			});
 			expect(preview).toMatchObject({ email: testUser.email, newEmail });
 			const stillOld = await client.getSession({ fetchOptions: { headers } });
@@ -195,6 +200,7 @@ describe("updateUser", async () => {
 			// Confirming actually applies it.
 			const confirmed = await auth.api.changeEmailConfirm({
 				body: { token: capturedToken },
+				headers,
 			});
 			expect(confirmed.status).toBe(true);
 			expect(confirmed.user?.email).toBe(newEmail);
@@ -280,6 +286,59 @@ describe("updateUser", async () => {
 					headers,
 				}),
 			).rejects.toThrow();
+		});
+
+		/**
+		 * Unlike the instant `/verify-email` link (a direct browser navigation
+		 * that may legitimately arrive with no session), `/change-email/preview`
+		 * and `/change-email/confirm` are meant to be called by the app's own
+		 * confirmation page -- often server-side, with no end-user session
+		 * forwarded at all. Silently minting a session for that call would
+		 * leak an orphaned row per confirmation and never actually sign the
+		 * user in anywhere. Both must instead require the same session
+		 * contract every other preview/confirm pair in this feature set does.
+		 */
+		it("preview and confirm require a session and never create one as a side effect", async () => {
+			let capturedToken = "";
+			const { auth, db, testUser, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+			await auth.api.changeEmail({
+				body: { newEmail: "no-session-target@email.com" },
+				headers,
+			});
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			const sessionsBefore = await db.findMany({ model: "session" });
+
+			await expect(
+				auth.api.changeEmailPreview({ query: { token: capturedToken } }),
+			).rejects.toThrow();
+			await expect(
+				auth.api.changeEmailConfirm({ body: { token: capturedToken } }),
+			).rejects.toThrow();
+
+			const sessionsAfter = await db.findMany({ model: "session" });
+			expect(sessionsAfter.length).toBe(sessionsBefore.length);
+
+			const user = await db.findOne({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			expect((user as { email: string } | null)?.email).toBe(testUser.email);
 		});
 	});
 
