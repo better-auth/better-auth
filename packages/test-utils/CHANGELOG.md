@@ -1,5 +1,11 @@
 # @better-auth/test-utils
 
+## 1.7.4
+
+### Patch Changes
+
+- [#11205](https://github.com/better-auth/better-auth/pull/11205) [`3f890eb`](https://github.com/better-auth/better-auth/commit/3f890eb631e0278045b3b5b40d29b11bd9d4c332) Thanks [@bytaesu](https://github.com/bytaesu)! - Support Vitest 5 in the testing utilities while retaining support for previously supported Vitest versions.
+
 ## 1.7.3
 
 ### Patch Changes

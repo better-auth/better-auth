@@ -1,5 +1,24 @@
 # better-auth
 
+## 1.7.4
+
+### Patch Changes
+
+- [#11205](https://github.com/better-auth/better-auth/pull/11205) [`3f890eb`](https://github.com/better-auth/better-auth/commit/3f890eb631e0278045b3b5b40d29b11bd9d4c332) Thanks [@bytaesu](https://github.com/bytaesu)! - Support Vitest 5 in the testing utilities while retaining support for previously supported Vitest versions.
+
+- [#11224](https://github.com/better-auth/better-auth/pull/11224) [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `experimental.instrumentation.enabled` to disable Better Auth OpenTelemetry span creation per auth instance. Instrumentation remains enabled by default and independent of usage reporting.
+
+- [#11217](https://github.com/better-auth/better-auth/pull/11217) [`9b9638e`](https://github.com/better-auth/better-auth/commit/9b9638ec99057ade649280fa1447408238158f1c) Thanks [@onmax](https://github.com/onmax)! - Allow `testUtils` auth helpers to accept additional session fields through the `session` option, including required fields without defaults and per-session overrides of configured defaults.
+
+- Updated dependencies [[`3ff842a`](https://github.com/better-auth/better-auth/commit/3ff842ab7fdf60746b5d7bd8c27becd2d0a79c2e), [`b905bfe`](https://github.com/better-auth/better-auth/commit/b905bfe3d97de3c88fc31f7f2820531702df583e), [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f)]:
+  - @better-auth/core@1.7.4
+  - @better-auth/drizzle-adapter@1.7.4
+  - @better-auth/kysely-adapter@1.7.4
+  - @better-auth/memory-adapter@1.7.4
+  - @better-auth/mongo-adapter@1.7.4
+  - @better-auth/prisma-adapter@1.7.4
+  - @better-auth/telemetry@1.7.4
+
 ## 1.7.3
 
 ### Patch Changes
