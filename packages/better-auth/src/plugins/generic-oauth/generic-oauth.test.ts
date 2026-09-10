@@ -5162,6 +5162,241 @@ describe("oauth2", async () => {
 				);
 			}
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11121
+		 */
+		describe("HS256 discovery verification", () => {
+			let hs256Server: ReturnType<typeof createServer>;
+			let hs256Port: number;
+			let advertisedSigningAlgs: string[] = ["HS256"];
+
+			beforeAll(async () => {
+				hs256Server = createServer((req, res) => {
+					if (req.url === "/.well-known/openid-configuration") {
+						res.setHeader("content-type", "application/json");
+						res.end(
+							JSON.stringify({
+								issuer: `http://localhost:${hs256Port}`,
+								authorization_endpoint: `http://localhost:${port}/authorize`,
+								token_endpoint: `http://localhost:${port}/token`,
+								userinfo_endpoint: `http://localhost:${port}/userinfo`,
+								jwks_uri: `http://localhost:${hs256Port}/jwks`,
+								id_token_signing_alg_values_supported: advertisedSigningAlgs,
+							}),
+						);
+						return;
+					}
+					if (req.url === "/jwks") {
+						res.setHeader("content-type", "application/json");
+						res.end(
+							JSON.stringify({
+								keys: [
+									{
+										kty: "oct",
+										kid: "hs256-key",
+										use: "sig",
+										alg: "HS256",
+									},
+								],
+							}),
+						);
+						return;
+					}
+					res.statusCode = 404;
+					res.end();
+				});
+				await new Promise<void>((resolve) => hs256Server.listen(0, resolve));
+				hs256Port = (hs256Server.address() as AddressInfo).port;
+			});
+
+			afterEach(() => {
+				advertisedSigningAlgs = ["HS256"];
+			});
+
+			afterAll(async () => {
+				await new Promise<void>((resolve, reject) =>
+					hs256Server.close((err) => (err ? reject(err) : resolve())),
+				);
+			});
+
+			async function createHs256Token(
+				signingSecret: string,
+				payloadOverrides?: Record<string, unknown>,
+				headerOverrides?: Record<string, unknown>,
+			) {
+				return new SignJWT({
+					email: "hs256@test.com",
+					email_verified: true,
+					name: "HS256 User",
+					...payloadOverrides,
+				})
+					.setProtectedHeader({
+						alg: "HS256",
+						kid: "hs256-key",
+						...headerOverrides,
+					})
+					.setSubject("hs256-user")
+					.setIssuer(`http://localhost:${hs256Port}`)
+					.setAudience(clientId)
+					.setIssuedAt()
+					.setExpirationTime("1h")
+					.sign(new TextEncoder().encode(signingSecret));
+			}
+
+			it("should verify an authentic HS256 id_token using clientSecret when discovery specifies jwks_uri", async () => {
+				let authNonce = "";
+				const { customFetchImpl, cookieSetter } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "hs256-valid",
+									discoveryUrl: `http://localhost:${hs256Port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									getToken: async () => ({
+										accessToken: "hs256-access-token",
+										idToken: await createHs256Token(clientSecret, {
+											nonce: authNonce,
+										}),
+										tokenType: "bearer",
+									}),
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const headers = new Headers();
+				const res = await client.signIn.social({
+					provider: "hs256-valid",
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: cookieSetter(headers) },
+				});
+				authNonce =
+					new URL(res.data?.url || "").searchParams.get("nonce") || "";
+				const { callbackURL, headers: sessionHeaders } =
+					await simulateOAuthFlow(
+						res.data?.url || "",
+						headers,
+						customFetchImpl,
+					);
+				expect(callbackURL).toBe("http://localhost:3000/new_user");
+				const session = await client.getSession({
+					fetchOptions: { headers: sessionHeaders },
+				});
+				expect(session.data?.user.email).toBe("hs256@test.com");
+
+				const directToken = await createHs256Token(clientSecret);
+				const directSignIn = await client.signIn.social({
+					provider: "hs256-valid",
+					idToken: { token: directToken },
+				});
+				expect(directSignIn.error).toBeNull();
+				expect(directSignIn.data).toMatchObject({
+					token: expect.any(String),
+				});
+			});
+
+			it("should reject an HS256 id_token signed with an invalid clientSecret", async () => {
+				const invalidToken = await createHs256Token("wrong-secret");
+				const { customFetchImpl, cookieSetter } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "hs256-wrong-secret",
+									discoveryUrl: `http://localhost:${hs256Port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									getToken: async () => ({
+										accessToken: "hs256-access-token",
+										idToken: invalidToken,
+										tokenType: "bearer",
+									}),
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const headers = new Headers();
+				const res = await client.signIn.social({
+					provider: "hs256-wrong-secret",
+					callbackURL: "http://localhost:3000/dashboard",
+					fetchOptions: { onSuccess: cookieSetter(headers) },
+				});
+				const { callbackURL } = await simulateOAuthFlow(
+					res.data?.url || "",
+					headers,
+					customFetchImpl,
+				);
+				expect(callbackURL).toContain("?error=");
+
+				const directSignIn = await client.signIn.social({
+					provider: "hs256-wrong-secret",
+					idToken: { token: invalidToken },
+				});
+				expect(directSignIn.error).not.toBeNull();
+			});
+
+			it("should reject an HS256 id_token when discovery advertises only RS256", async () => {
+				advertisedSigningAlgs = ["RS256"];
+				const tokenWithSecret = await createHs256Token(clientSecret);
+				const { customFetchImpl, cookieSetter } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "hs256-alg-restricted",
+									discoveryUrl: `http://localhost:${hs256Port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									getToken: async () => ({
+										accessToken: "hs256-access-token",
+										idToken: tokenWithSecret,
+										tokenType: "bearer",
+									}),
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const headers = new Headers();
+				const res = await client.signIn.social({
+					provider: "hs256-alg-restricted",
+					callbackURL: "http://localhost:3000/dashboard",
+					fetchOptions: { onSuccess: cookieSetter(headers) },
+				});
+				const { callbackURL } = await simulateOAuthFlow(
+					res.data?.url || "",
+					headers,
+					customFetchImpl,
+				);
+				expect(callbackURL).toContain("?error=");
+
+				const directSignIn = await client.signIn.social({
+					provider: "hs256-alg-restricted",
+					idToken: { token: tokenWithSecret },
+				});
+				expect(directSignIn.error).not.toBeNull();
+			});
+		});
 	});
 
 	/**
