@@ -113,6 +113,31 @@ it("should keep Unicode chunks within the storage byte limit", () => {
 	expect(storage.getItem("better-auth_cookie")).toBe(value);
 });
 
+it.each([
+	"setItem",
+	"setItemAsync",
+] as const)("should stop %s when a multibyte value requires chunks and the base read fails", async (method) => {
+	const setItem = vi.fn();
+	const setItemAsync = vi.fn(async () => {});
+	const storage = storageAdapter({
+		getItem: () => {
+			throw new Error("read unavailable");
+		},
+		setItem,
+		getItemAsync: async () => {
+			throw new Error("read unavailable");
+		},
+		setItemAsync,
+	});
+	const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+	await storage[method]("better-auth_cookie", "한".repeat(700));
+
+	expect(setItem).not.toHaveBeenCalled();
+	expect(setItemAsync).not.toHaveBeenCalled();
+	expect(error).toHaveBeenCalledOnce();
+});
+
 it("should store a value within the limit under the base key unchanged", () => {
 	const map = new Map<string, string>();
 	const storage = storageAdapter({

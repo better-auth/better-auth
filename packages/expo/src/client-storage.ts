@@ -484,7 +484,7 @@ export function createManagedStorage(storage: ExpoClientStorage) {
 			currentBaseValue = storage.getItem(key);
 		} catch (error) {
 			state.cleanupComplete = false;
-			if (value.length > STORAGE_VALUE_LIMIT) {
+			if (splitStorageValue(value).length > 1) {
 				logWriteError(key, error);
 				return;
 			}
@@ -522,7 +522,7 @@ export function createManagedStorage(storage: ExpoClientStorage) {
 				currentBaseValue = await storage.getItemAsync(key);
 			} catch (error) {
 				state.cleanupComplete = false;
-				if (value.length > STORAGE_VALUE_LIMIT) {
+				if (splitStorageValue(value).length > 1) {
 					logWriteError(key, error);
 					return;
 				}
