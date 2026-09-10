@@ -950,6 +950,66 @@ describe("deleteOrganization confirmation", () => {
 			headers,
 		});
 		expect(stillThere?.id).toBe(org!.id);
+
+		// A failed authorization check must not have burned the token either.
+		const remaining = await db.findMany({
+			model: "verification",
+			where: [
+				{ field: "identifier", value: `delete-organization-${capturedToken}` },
+			],
+		});
+		expect(remaining.length).toBe(1);
+	});
+
+	/**
+	 * The token must never be burned by a request that can't complete the
+	 * deletion -- otherwise an email scanner following the callback link
+	 * with no session would permanently invalidate it before the real user
+	 * ever gets to click it.
+	 */
+	it("does not consume the token when the callback is visited with no session", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "No Session", slug: "no-session" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Visited with no session at all -- must fail without burning the token.
+		await expect(
+			auth.api.deleteOrganizationCallback({ query: { token: capturedToken } }),
+		).rejects.toThrow();
+
+		const remaining = await db.findMany({
+			model: "verification",
+			where: [
+				{ field: "identifier", value: `delete-organization-${capturedToken}` },
+			],
+		});
+		expect(remaining.length).toBe(1);
+
+		// The legitimate user can still use it afterwards.
+		const callbackRes = await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(callbackRes?.id).toBe(org!.id);
 	});
 
 	it("a delete token for one organization cannot delete another", async () => {
