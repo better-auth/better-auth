@@ -106,6 +106,45 @@ export const auth = betterAuth({
   If `updateEmailWithoutVerification` is false (default), the email will not be updated until the new email is verified, even if the current email is unverified.
 </Callout>
 
+#### Explicit Confirmation Mode
+
+By default (`confirmationMode: "instant"`), the emailed verification link changes the email
+address the moment it's visited — a plain `GET`. Some email clients and security scanners open
+links automatically to scan them (Outlook Safe Links, link-preview proxies), which can trigger
+the change without the user's intent. Set `confirmationMode: "explicit"` to require a separate
+confirmation step instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            confirmationMode: "explicit", // default: "instant"
+            sendChangeEmailConfirmation: async ({ url, token }) => { /* ... */ },
+        }
+    }
+})
+```
+
+In `"explicit"` mode, the `url` passed to `sendChangeEmailConfirmation` (or to
+`emailVerification.sendVerificationEmail`, when no confirmation step is configured) is your
+app's own URL with `token` attached, instead of better-auth's `/verify-email` endpoint. Your
+app renders a confirmation page from it, then:
+
+* `GET /change-email/preview` — validates the token and returns the pending email change
+  without applying it.
+* `POST /change-email/confirm` — consumes the token and applies the change, the same way the
+  instant link does.
+
+<Callout type="warn">
+  The change-email token is a signed JWT, not a single-use database row, so it is not
+  invalidated on first use — a `/change-email/confirm` replay before it expires just re-applies
+  the same (idempotent) change. This matches the existing instant-mode behavior; it is not
+  specific to explicit mode.
+</Callout>
+
 #### Client Usage
 
 Use the `changeEmail` function on the client to initiate the process.
@@ -249,6 +288,39 @@ await authClient.deleteUser({
     token
 });
 ```
+
+#### Explicit Confirmation Mode
+
+By default (`confirmationMode: "instant"`), the pre-generated `url` above deletes the account
+the moment it's visited — a plain `GET`. Some email clients and security scanners open links
+automatically to scan them (Outlook Safe Links, link-preview proxies), which can trigger the
+deletion without the user's intent. Set `confirmationMode: "explicit"` to require a separate
+confirmation step instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            confirmationMode: "explicit", // default: "instant"
+            sendDeleteAccountVerification: async ({ url, token }) => { /* ... */ },
+        },
+    },
+});
+```
+
+In `"explicit"` mode, `url` is your app's own URL (built from `callbackURL`) with `token`
+attached, instead of better-auth's `/delete-user/callback` endpoint. Your app renders a
+confirmation page from it, then:
+
+* `GET /delete-user/preview` — validates the token and returns the pending user without
+  deleting it, so you can render "you're about to delete your account".
+* `POST /delete-user/confirm` — body `{ token, password? }`; consumes the token and deletes
+  the account, the same way the instant callback does. Passing `password` here re-verifies it
+  first, letting you require a second factor at confirmation time — something the instant
+  `GET` link can't do at all, since a link click carries no request body.
 
 ### Authentication Requirements
 

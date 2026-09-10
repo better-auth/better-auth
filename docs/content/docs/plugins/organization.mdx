@@ -831,7 +831,7 @@ To remove user owned organization, you can use `organization.delete`
 
 If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
 
-You can configure how organization deletion is handled through `organizationDeletion` option:
+You can disable organization deletion altogether with the top-level `disableOrganizationDeletion` option, and hook into the deletion with `organizationHooks`:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -854,6 +854,131 @@ const auth = betterAuth({
   ],
 });
 ```
+
+#### Email confirmation before deletion
+
+By default, `organization.delete` deletes the organization immediately once the caller
+passes the `organization:delete` permission check. To require email confirmation first
+(mirroring `user.deleteUser`'s `sendDeleteAccountVerification`), configure
+`organizationDeletion.sendDeleteOrganizationVerification`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [
+    organization({
+      organizationDeletion: {
+        async sendDeleteOrganizationVerification({ organization, user, url, token }) {
+          // send an email with `url` to `user`
+        },
+        // how long the token is valid for, in seconds. Defaults to 1 day.
+        deleteTokenExpiresIn: 60 * 60 * 24,
+      },
+    }),
+  ],
+});
+```
+
+With this configured, `organization.delete` no longer deletes immediately: it emails a
+confirmation link and responds with `{ success: true, message: "Verification email sent" }`
+instead of the deleted organization. Visiting the link (`GET /organization/delete/callback`)
+re-validates the session and permission, consumes the single-use token, then runs the same
+deletion path — including the `beforeDeleteOrganization`/`afterDeleteOrganization` hooks.
+
+If `sendDeleteOrganizationVerification` is not set, behavior is unchanged and fully
+backward-compatible.
+
+##### Explicit confirmation mode
+
+The emailed link above is a plain `GET` that deletes the organization on visit. Some email
+clients and security scanners open links automatically to scan them (Outlook Safe Links,
+link-preview proxies), which can trigger it without the user's intent. Set
+`confirmationMode: "explicit"` to require a separate, explicit confirmation step instead:
+
+```ts title="auth.ts"
+organization({
+  organizationDeletion: {
+    confirmationMode: "explicit", // default: "instant"
+    async sendDeleteOrganizationVerification({ url, token }) {
+      // `url` now points at your own app, with `token` attached
+    },
+  },
+})
+```
+
+In `"explicit"` mode, the `url` passed to the callback is your app's own URL (built from
+`callbackURL`) rather than better-auth's `/organization/delete/callback` endpoint. Your app
+renders a confirmation page from it, then:
+
+* `GET /organization/delete/preview` — validates the token and returns the pending
+  organization without deleting it, so you can render "you're about to delete X".
+* `POST /organization/delete/confirm` — consumes the token and performs the deletion, the
+  same way the instant callback does.
+
+## Transfer Ownership
+
+To transfer ownership of an organization to another member, use `organization.transferOwnership`. It is callable by the current owner (or a member with permission to update other members), and swaps the `creatorRole` between the current owner and the target member atomically — the organization always has an owner, before and after.
+
+<APIMethod path="/organization/transfer-ownership" method="POST" requireSession>
+  ```ts
+  type transferOwnership = {
+      /**
+       * The organization id the transfer applies to. If not provided, the active organization from the session is used.
+       */
+      organizationId?: string = "organization-id"
+      /**
+       * The member id to transfer ownership to.
+       */
+      newOwnerMemberId: string = "member-id"
+  }
+  ```
+</APIMethod>
+
+By default, the swap happens immediately. To require email confirmation from the *current
+owner* first (they're the one giving up control, not the target member), configure
+`ownershipTransfer.sendTransferOwnershipVerification`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [
+    organization({
+      ownershipTransfer: {
+        async sendTransferOwnershipVerification({ organization, currentOwner, newOwner, url, token }) {
+          // send an email with `url` to `currentOwner.user`
+        },
+        // how long the token is valid for, in seconds. Defaults to 1 day.
+        transferTokenExpiresIn: 60 * 60 * 24,
+        // same "instant" | "explicit" confirmation mode as organizationDeletion above
+        confirmationMode: "instant",
+      },
+      organizationHooks: {
+        beforeTransferOwnership: async (data, ctx) => {
+          // a callback to run before transferring ownership
+        },
+        afterTransferOwnership: async (data, ctx) => {
+          // a callback to run after transferring ownership
+        },
+      },
+    }),
+  ],
+});
+```
+
+With this configured, `organization.transferOwnership` emails the current owner a
+confirmation link instead of swapping immediately, responding with
+`{ success: true, message: "Verification email sent" }`. Visiting the link
+(`GET /organization/transfer-ownership/callback`) re-validates the session, the current
+owner's membership, and their permission, re-checks the target hasn't already become the
+owner, consumes the single-use token, then performs the swap.
+
+In `"explicit"` confirmation mode, the same `GET /organization/transfer-ownership/preview`
+(peek only) and `POST /organization/transfer-ownership/confirm` (apply) endpoints exist as
+for organization deletion above.
 
 ## Invitations
 
@@ -2584,3 +2709,9 @@ await client.organization.create({
 **invitationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of invitations allowed for a user. By default, it's `100`. You can set it to any number you want or a function that returns a boolean.
 
 **requireEmailVerificationOnInvitation**: `boolean | undefined` - Whether to require email verification before recipient invitation calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth preserves the normal emailed-invitation flow for built-in opaque invitation IDs, including the default generator and `advanced.database.generateId: "uuid"`. It requires verification for externally controlled or predictable invitation IDs, such as `advanced.database.generateId: "serial"` / `false` or custom ID generation. Set this option to `true` when invitation IDs may be visible outside the invited user's mailbox, when organization invitation lists are exposed to members, or when you want verified email to be the ownership proof for by-ID invitation actions. Client-side `listUserInvitations` always requires a verified session email because it enumerates invitation IDs from the session email.
+
+**disableOrganizationDeletion**: `boolean` - Disable organization deletion altogether. By default, it's `false`.
+
+**organizationDeletion**: `{ sendDeleteOrganizationVerification?, deleteTokenExpiresIn?, confirmationMode? }` - Require email confirmation before deleting an organization. If `sendDeleteOrganizationVerification` isn't set, `organization.delete` deletes immediately (unchanged, backward compatible). See [Email confirmation before deletion](#email-confirmation-before-deletion).
+
+**ownershipTransfer**: `{ sendTransferOwnershipVerification?, transferTokenExpiresIn?, confirmationMode? }` - Require email confirmation from the current owner before `organization.transferOwnership` swaps ownership. If `sendTransferOwnershipVerification` isn't set, the swap happens immediately. See [Transfer Ownership](#transfer-ownership).
