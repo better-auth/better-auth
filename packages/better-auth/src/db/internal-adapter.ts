@@ -608,16 +608,24 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				// Best-effort cache read: a secondary-storage outage must not 500
-				// the request when the database fallback is available - treat a
-				// failed read as a cache miss and fall through to the database.
-				// Without storeSessionInDatabase the miss path below still
-				// returns null, matching an ordinary cache miss.
+				// the request when the database fallback below can actually serve
+				// the session - treat a failed read as a cache miss and fall
+				// through. The fallback only runs with storeSessionInDatabase
+				// enabled and preserveSessionInDatabase off (preserve skips it
+				// entirely). In the secondary-storage-authoritative config there
+				// is no fallback, so a read failure must surface as an error,
+				// not a cache miss: returning null would treat a transient
+				// outage as an invalid session and log users out.
 				let sessionStringified: unknown = null;
 				try {
 					sessionStringified = await secondaryStorage.get(token);
 				} catch (error) {
+					const hasDatabaseFallback =
+						options.session?.storeSessionInDatabase === true &&
+						ctx.options.session?.preserveSessionInDatabase !== true;
+					if (!hasDatabaseFallback) throw error;
 					logger.error(
-						"[better-auth] secondary-storage session read failed; treating it as a cache miss",
+						"[better-auth] secondary-storage session read failed; falling back to the database",
 						error,
 					);
 				}

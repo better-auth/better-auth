@@ -418,6 +418,33 @@ describe("secondary storage - best-effort cache repair", () => {
 		expect(s1.data).not.toBeNull();
 		expect(s1.data!.session.token).toBeTruthy();
 	});
+
+	it("without storeSessionInDatabase, an outage surfaces as an error instead of a silent logout", async () => {
+		const store = new Map<string, string>();
+		let outage = false;
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createFlakySecondaryStorage(
+				createStringSecondaryStorage(store),
+				() => outage,
+			),
+			rateLimit: {
+				enabled: false,
+			},
+		});
+
+		// storeSessionInDatabase is disabled (the default), so secondary
+		// storage is the authoritative session store with no database
+		// fallback. Sign in against the healthy store first.
+		const { headers } = await signInWithTestUser();
+
+		// During an outage the read must fail loudly (request error, cookie
+		// intact) - a null here would clear a valid session on a transient
+		// blip and log the user out.
+		outage = true;
+		const s1 = await client.getSession({ fetchOptions: { headers } });
+		expect(s1.data).toBeNull();
+		expect(s1.error).not.toBeNull();
+	});
 });
 
 describe("secondary storage - deleteUser", () => {
