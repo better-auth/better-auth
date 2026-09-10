@@ -5169,7 +5169,7 @@ describe("oauth2", async () => {
 		describe("HS256 discovery verification", () => {
 			let hs256Server: ReturnType<typeof createServer>;
 			let hs256Port: number;
-			let advertisedSigningAlgs: string[] = ["HS256"];
+			let advertisedSigningAlgs: string[] | undefined = ["HS256"];
 
 			beforeAll(async () => {
 				hs256Server = createServer((req, res) => {
@@ -5182,7 +5182,12 @@ describe("oauth2", async () => {
 								token_endpoint: `http://localhost:${port}/token`,
 								userinfo_endpoint: `http://localhost:${port}/userinfo`,
 								jwks_uri: `http://localhost:${hs256Port}/jwks`,
-								id_token_signing_alg_values_supported: advertisedSigningAlgs,
+								...(advertisedSigningAlgs !== undefined
+									? {
+											id_token_signing_alg_values_supported:
+												advertisedSigningAlgs,
+										}
+									: {}),
 							}),
 						);
 						return;
@@ -5392,6 +5397,119 @@ describe("oauth2", async () => {
 
 				const directSignIn = await client.signIn.social({
 					provider: "hs256-alg-restricted",
+					idToken: { token: tokenWithSecret },
+				});
+				expect(directSignIn.error).not.toBeNull();
+			});
+
+			it("should reject an HS256 id_token when clientSecret is missing", async () => {
+				const tokenWithSecret = await createHs256Token("some-secret");
+				const { customFetchImpl } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "hs256-missing-secret",
+									discoveryUrl: `http://localhost:${hs256Port}/.well-known/openid-configuration`,
+									clientId,
+									pkce: true,
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const directSignIn = await client.signIn.social({
+					provider: "hs256-missing-secret",
+					idToken: { token: tokenWithSecret },
+				});
+				expect(directSignIn.error).not.toBeNull();
+			});
+
+			it("should reject an HS256 id_token when clientSecret is empty", async () => {
+				const tokenWithSecret = await createHs256Token("some-secret");
+				const { customFetchImpl } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "hs256-empty-secret",
+									discoveryUrl: `http://localhost:${hs256Port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret: "",
+									pkce: true,
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const directSignIn = await client.signIn.social({
+					provider: "hs256-empty-secret",
+					idToken: { token: tokenWithSecret },
+				});
+				expect(directSignIn.error).not.toBeNull();
+			});
+
+			it("should reject an HS256 id_token when discovery omits id_token_signing_alg_values_supported", async () => {
+				advertisedSigningAlgs = undefined;
+				const tokenWithSecret = await createHs256Token(clientSecret);
+				const { customFetchImpl } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "hs256-omitted-metadata",
+									discoveryUrl: `http://localhost:${hs256Port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const directSignIn = await client.signIn.social({
+					provider: "hs256-omitted-metadata",
+					idToken: { token: tokenWithSecret },
+				});
+				expect(directSignIn.error).not.toBeNull();
+			});
+
+			it("should reject an HS256 id_token when discovery provides an empty id_token_signing_alg_values_supported", async () => {
+				advertisedSigningAlgs = [];
+				const tokenWithSecret = await createHs256Token(clientSecret);
+				const { customFetchImpl } = await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "hs256-empty-metadata",
+									discoveryUrl: `http://localhost:${hs256Port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+								},
+							],
+						}),
+					],
+				});
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: { customFetchImpl },
+				});
+				const directSignIn = await client.signIn.social({
+					provider: "hs256-empty-metadata",
 					idToken: { token: tokenWithSecret },
 				});
 				expect(directSignIn.error).not.toBeNull();

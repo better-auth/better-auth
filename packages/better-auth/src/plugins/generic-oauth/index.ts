@@ -252,9 +252,16 @@ export const genericOAuth = <const ID extends string>(
 										protectedHeader.alg === "HS384" ||
 										protectedHeader.alg === "HS512"
 									) {
-										if (secretBytes) {
+										if (
+											secretBytes &&
+											Array.isArray(signingAlgs) &&
+											signingAlgs.includes(protectedHeader.alg)
+										) {
 											return secretBytes;
 										}
+										throw new Error(
+											`Provider "${c.providerId}": cannot verify ${protectedHeader.alg} id_token with discovery metadata`,
+										);
 									}
 									return remoteJWKS(protectedHeader, token);
 								},
