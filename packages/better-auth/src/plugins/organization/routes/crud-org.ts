@@ -57,20 +57,29 @@ function parseDeleteOrganizationTokenValue(raw: string) {
 
 /**
  * Re-validates a pending organization-deletion token *without consuming it*:
- * session, membership, and the `organization:delete` permission are all
- * checked here because they may have changed since the confirmation email
- * was sent. Used by all three endpoints. The callback and confirm endpoints
- * additionally call `consumeDeleteOrganizationToken` immediately before
- * applying the deletion -- burning the token here instead would let an
- * unauthenticated or unauthorized visit (an email scanner following the
- * link with no session, for instance) permanently invalidate it before the
- * real user ever gets a chance to use it.
+ * `disableOrganizationDeletion`, session, membership, and the
+ * `organization:delete` permission are all checked here because they may
+ * have changed since the confirmation email was sent -- most notably, an
+ * admin disabling deletion after a token was already issued must not leave
+ * that token able to delete the organization anyway. Used by all three
+ * endpoints. The callback and confirm endpoints additionally call
+ * `consumeDeleteOrganizationToken` immediately before applying the deletion
+ * -- burning the token here instead would let an unauthenticated or
+ * unauthorized visit (an email scanner following the link with no session,
+ * for instance) permanently invalidate it before the real user ever gets a
+ * chance to use it.
  */
 async function resolveDeleteOrganizationToken<O extends OrganizationOptions>(
 	ctx: GenericEndpointContext,
 	options: O,
 	token: string,
 ) {
+	if (options.disableOrganizationDeletion) {
+		throw APIError.from(
+			"NOT_FOUND",
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_DELETION_DISABLED,
+		);
+	}
 	const identifier = `delete-organization-${token}`;
 	const verification =
 		await ctx.context.internalAdapter.findVerificationValue(identifier);

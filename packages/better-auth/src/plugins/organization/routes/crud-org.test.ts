@@ -1124,4 +1124,69 @@ describe("deleteOrganization confirmation", () => {
 		});
 		expect(remaining.length).toBe(0);
 	});
+
+	/**
+	 * `disableOrganizationDeletion` may be turned on after a confirmation
+	 * email was already sent -- an admin reacting to abuse, for instance.
+	 * A still-unexpired token must not be able to delete the organization
+	 * anyway once deletion has been disabled.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10748
+	 */
+	it("rejects the callback, preview, and confirm once deletion is disabled after the token was issued", async () => {
+		let capturedToken = "";
+		// Held onto directly so it can be mutated below: `organization()` keeps
+		// this exact object as `ctx.context.orgOptions`, so flipping the flag
+		// on it after the instance is created is equivalent to a config
+		// change taking effect on the next request, with no server restart.
+		const orgOptions: Parameters<typeof organization>[0] = {
+			organizationDeletion: {
+				confirmationMode: "explicit",
+				async sendDeleteOrganizationVerification({ token }) {
+					capturedToken = token;
+				},
+			},
+		};
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [organization(orgOptions)],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Disable Me", slug: "disable-me" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Disabled after the email was already sent.
+		orgOptions.disableOrganizationDeletion = true;
+
+		await expect(
+			auth.api.deleteOrganizationPreview({
+				query: { token: capturedToken },
+				headers,
+			}),
+		).rejects.toThrow();
+		await expect(
+			auth.api.deleteOrganizationConfirm({
+				body: { token: capturedToken },
+				headers,
+			}),
+		).rejects.toThrow();
+		await expect(
+			auth.api.deleteOrganizationCallback({
+				query: { token: capturedToken },
+				headers,
+			}),
+		).rejects.toThrow();
+
+		const stillThere = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org!.id }],
+		});
+		expect(stillThere).not.toBeNull();
+	});
 });
