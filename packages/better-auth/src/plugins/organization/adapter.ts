@@ -475,6 +475,53 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member;
 		},
+		/**
+		 * Atomically promotes `newOwnerMemberId` to `creatorRole` and strips
+		 * `creatorRole` from `currentOwnerMemberId` (falling back to `"member"`
+		 * if that leaves them with no roles), in one transaction. Without the
+		 * transaction, a crash between the two updates could leave the
+		 * organization with zero owners or two.
+		 */
+		transferOwnership: async ({
+			currentOwnerMemberId,
+			newOwnerMemberId,
+			creatorRole,
+		}: {
+			currentOwnerMemberId: string;
+			newOwnerMemberId: string;
+			creatorRole: string;
+		}) => {
+			return runWithTransaction(baseAdapter, async () => {
+				const adapter = await getCurrentAdapter(baseAdapter);
+				const currentOwner = await adapter.findOne<InferMember<O, false>>({
+					model: "member",
+					where: [{ field: "id", value: currentOwnerMemberId }],
+				});
+				if (!currentOwner) {
+					throw new BetterAuthError("Member not found");
+				}
+				const remainingRoles = currentOwner.role
+					.split(",")
+					.map((role: string) => role.trim())
+					.filter((role: string) => role && role !== creatorRole);
+				const demotedRole =
+					remainingRoles.length > 0 ? remainingRoles.join(",") : "member";
+				const newOwner = await adapter.update<InferMember<O, false>>({
+					model: "member",
+					where: [{ field: "id", value: newOwnerMemberId }],
+					update: { role: creatorRole },
+				});
+				const previousOwner = await adapter.update<InferMember<O, false>>({
+					model: "member",
+					where: [{ field: "id", value: currentOwnerMemberId }],
+					update: { role: demotedRole },
+				});
+				if (!newOwner || !previousOwner) {
+					throw new BetterAuthError("Member not found");
+				}
+				return { newOwner, previousOwner };
+			});
+		},
 		deleteMember: async ({
 			memberId,
 			organizationId,

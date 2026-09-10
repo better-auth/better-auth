@@ -93,4 +93,11 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	ROLE_IS_ASSIGNED_TO_MEMBERS:
 		"Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
 	INVALID_TEAM_ID: "Team id contains a reserved character",
+	ORGANIZATION_DELETION_DISABLED: "Organization deletion is disabled",
+	INVALID_TOKEN: "Invalid token",
+	YOU_ARE_NOT_ALLOWED_TO_TRANSFER_OWNERSHIP_OF_THIS_ORGANIZATION:
+		"You are not allowed to transfer ownership of this organization",
+	TARGET_MEMBER_IS_ALREADY_THE_OWNER: "Target member is already the owner",
+	YOU_CANNOT_TRANSFER_OWNERSHIP_TO_YOURSELF:
+		"You cannot transfer ownership to yourself",
 });
