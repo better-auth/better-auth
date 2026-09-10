@@ -821,10 +821,18 @@ To remove user owned organization, you can use `organization.delete`
 <APIMethod path="/organization/delete" method="POST" requireSession>
   ```ts
   type deleteOrganization = {
-      /*
-      * The organization ID to delete.
-      */
-      organizationId: string = "org-id"
+      /**
+       * The organization id to delete.
+       */
+      organizationId?: string = "org-id"
+      /**
+       * The callback URL to redirect to after the organization is deleted. Only used when a deletion confirmation email is sent.
+       */
+      callbackURL?: string = "/dashboard"
+      /**
+       * The token to confirm the deletion request. If provided, the organization is deleted immediately and the other fields are ignored.
+       */
+      token?: string = "token"
   }
   ```
 </APIMethod>
@@ -932,6 +940,14 @@ To transfer ownership of an organization to another member, use `organization.tr
        * The member id to transfer ownership to.
        */
       newOwnerMemberId: string = "member-id"
+      /**
+       * The callback URL to redirect to after ownership is transferred. Only used when a transfer confirmation email is sent.
+       */
+      callbackURL?: string = "/dashboard"
+      /**
+       * The token to confirm the ownership transfer request. If provided, ownership is transferred immediately and the other fields are ignored.
+       */
+      token?: string = "token"
   }
   ```
 </APIMethod>

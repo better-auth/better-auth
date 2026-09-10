@@ -135,14 +135,16 @@ app renders a confirmation page from it, then:
 
 * `GET /change-email/preview` — validates the token and returns the pending email change
   without applying it.
-* `POST /change-email/confirm` — consumes the token and applies the change, the same way the
-  instant link does.
+* `POST /change-email/confirm` — applies the change, the same way the instant link does.
 
 <Callout type="warn">
   The change-email token is a signed JWT, not a single-use database row, so it is not
-  invalidated on first use — a `/change-email/confirm` replay before it expires just re-applies
-  the same (idempotent) change. This matches the existing instant-mode behavior; it is not
-  specific to explicit mode.
+  explicitly invalidated after use the way the delete/transfer tokens are. In practice a
+  sequential replay of `/change-email/confirm` (or the instant `/verify-email` link) fails once
+  the change has applied, because the token's lookup key is the *old* email address and that no
+  longer belongs to any user — but two sufficiently concurrent replays are not guarded against
+  the way single-use verification rows are. This is pre-existing behavior of the instant-mode
+  link too; it is not specific to explicit mode.
 </Callout>
 
 #### Client Usage
