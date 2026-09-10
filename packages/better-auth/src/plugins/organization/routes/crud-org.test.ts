@@ -790,3 +790,165 @@ describe("updateOrganization", async () => {
 		expect(org?.logo).toBeNull();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10748
+ */
+describe("deleteOrganization confirmation", () => {
+	it("instant mode: sends a verification email and only deletes after the callback token is consumed", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Delete Me", slug: "delete-me" },
+			headers,
+		});
+
+		const requestRes = await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(requestRes).toMatchObject({
+			success: true,
+			message: "Verification email sent",
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Not deleted yet.
+		const stillThere = await auth.api.getFullOrganization({
+			query: { organizationId: org!.id },
+			headers,
+		});
+		expect(stillThere?.id).toBe(org!.id);
+
+		const callbackRes = await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(callbackRes?.id).toBe(org!.id);
+
+		const afterDelete = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org!.id }],
+		});
+		expect(afterDelete).toBeNull();
+	});
+
+	it("explicit mode: preview doesn't delete, confirm applies it", async () => {
+		let capturedUrl = "";
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						confirmationMode: "explicit",
+						async sendDeleteOrganizationVerification({ url, token }) {
+							capturedUrl = url;
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Delete Me Explicitly", slug: "delete-me-explicitly" },
+			headers,
+		});
+
+		await auth.api.deleteOrganization({
+			body: {
+				organizationId: org!.id,
+				callbackURL: "https://app.example.com/orgs",
+			},
+			headers,
+		});
+
+		// The emailed link is app-owned, not better-auth's own GET callback.
+		expect(capturedUrl.startsWith("https://app.example.com/orgs")).toBe(true);
+		expect(capturedUrl).not.toContain("/organization/delete/callback");
+
+		const preview = await auth.api.deleteOrganizationPreview({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(preview.organization?.id).toBe(org!.id);
+
+		const stillThere = await auth.api.getFullOrganization({
+			query: { organizationId: org!.id },
+			headers,
+		});
+		expect(stillThere?.id).toBe(org!.id);
+
+		const confirmed = await auth.api.deleteOrganizationConfirm({
+			body: { token: capturedToken },
+			headers,
+		});
+		expect(confirmed?.id).toBe(org!.id);
+
+		const afterDelete = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org!.id }],
+		});
+		expect(afterDelete).toBeNull();
+	});
+
+	it("rejects the callback once the caller's delete permission has been revoked", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Revoked", slug: "revoked" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Demote the requester below the delete permission after the email was
+		// sent but before the link is clicked.
+		const session = await auth.api.getSession({ headers });
+		await db.update({
+			model: "member",
+			update: { role: "member" },
+			where: [
+				{ field: "organizationId", value: org!.id },
+				{ field: "userId", value: session!.user.id },
+			],
+		});
+
+		const callback = auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+		await expect(callback).rejects.toThrow();
+
+		const stillThere = await auth.api.getFullOrganization({
+			query: { organizationId: org!.id },
+			headers,
+		});
+		expect(stillThere?.id).toBe(org!.id);
+	});
+});
