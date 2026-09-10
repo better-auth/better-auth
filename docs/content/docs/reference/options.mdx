@@ -399,7 +399,8 @@ export const auth = betterAuth({
 			sendChangeEmailConfirmation: async ({ user, newEmail, url, token }) => {
 				// Send change email confirmation to the old email
 			},
-			updateEmailWithoutVerification: false // Update email without verification if user is not verified
+			updateEmailWithoutVerification: false, // Update email without verification if user is not verified
+			confirmationMode: "instant" // "instant" | "explicit", see Users & Accounts
 		},
 		deleteUser: {
 			enabled: true,
@@ -411,7 +412,8 @@ export const auth = betterAuth({
 			},
 			afterDelete: async (user) => {
 				// Perform cleanup after user deletion
-			}
+			},
+			confirmationMode: "instant" // "instant" | "explicit", see Users & Accounts
 		}
 	},
 })
