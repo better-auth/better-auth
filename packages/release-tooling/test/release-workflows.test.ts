@@ -685,19 +685,22 @@ describe("release publication security", () => {
 		expect(promote.run).toContain("Do not manually mark it ready");
 	});
 
-	it("does not grant issue write access to the publisher", () => {
+	it("publishes only through the scoped release App", () => {
 		const release = getJob(releaseWorkflow, "release");
 		const token = getStep(release, "Generate App Token");
 
 		expect(release.permissions).toEqual({
-			contents: "write",
-			"pull-requests": "write",
+			contents: "read",
 			"id-token": "write",
 		});
+		expect(token.if).toBeUndefined();
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-contents": "write",
 			"permission-pull-requests": "write",
 		});
+		expect(releaseWorkflow.content).not.toContain(
+			"steps.app-token.outputs.token || secrets.GITHUB_TOKEN",
+		);
 	});
 
 	it("scopes the promotion App token to its required permissions", () => {

@@ -43,8 +43,7 @@ jobs:
     timeout-minutes: 45
     environment: Release
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       id-token: write
     env:
       # The release bot's auto-commit must not be gated by the local pre-commit hooks.
@@ -53,7 +52,6 @@ jobs:
       - name: Generate App Token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        if: vars.RELEASE_APP_ID != ''
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
@@ -64,7 +62,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout shared release tooling
         if: inputs.use_shared_tooling
@@ -149,7 +147,7 @@ jobs:
         id: approved-notes
         if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.release-candidate.outputs.version }}
           VERSION_COMMIT: ${{ steps.release-candidate.outputs.version_commit }}
           RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
@@ -253,14 +251,14 @@ jobs:
           createGithubReleases: false
           prDraft: always
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
 
       - name: Rename release PR with version
         if: steps.changesets.outputs.pullRequestNumber
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
         run: |
           PR_DATA=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName,headRefOid)
@@ -286,7 +284,7 @@ jobs:
       - name: Create GitHub Release
         if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true' && steps.changesets.outputs.hasChangesets == 'false'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.release-candidate.outputs.version }}
           RELEASE_COMMIT: ${{ steps.approved-notes.outputs.release_commit }}
           NOTES_FILE: ${{ steps.approved-notes.outputs.notes_path }}
@@ -317,7 +315,7 @@ jobs:
       - name: Sync main to next via PR
         if: github.ref_name == 'main'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git fetch origin next || { echo "next branch does not exist, skipping"; exit 0; }
 
