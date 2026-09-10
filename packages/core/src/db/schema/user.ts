@@ -19,10 +19,12 @@ export const userSchema = coreSchema.extend({
 export type BaseUser = z.infer<typeof userSchema>;
 
 type PendingEmailFields<Options> = Options extends {
-	changeEmail: { strategy: "verification-table" };
+	changeEmail: { enabled: false };
 }
-	? { pendingEmail?: string | null }
-	: {};
+	? {}
+	: Options extends { changeEmail: { strategy: "verification-table" } }
+		? { pendingEmail?: string | null }
+		: {};
 
 /**
  * User schema type used by better-auth, note that it's possible that user could have additional fields

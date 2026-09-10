@@ -1375,7 +1375,18 @@ export const verifyEmailChange = createAuthEndpoint(
 		const result = revokeOtherSessions
 			? await runWithTransaction(ctx.context.adapter, completeChange)
 			: await completeChange();
-		if ("invalid" in result) throw ctx.redirect(errorURL);
+		if ("invalid" in result) {
+			if (currentSession) {
+				const refreshedUser =
+					await ctx.context.internalAdapter.findUserById(userId);
+				if (refreshedUser)
+					await setSessionCookie(ctx, {
+						session: currentSession.session,
+						user: refreshedUser,
+					});
+			}
+			throw ctx.redirect(errorURL);
+		}
 		const { updatedUser, session, oldEmail, newEmail } = result;
 		if (session) await setSessionCookie(ctx, { session, user: updatedUser });
 

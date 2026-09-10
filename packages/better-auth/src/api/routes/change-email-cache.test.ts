@@ -521,6 +521,7 @@ it.each([
 	let url = "";
 	const completed = vi.fn();
 	const { auth, client, db, signInWithTestUser } = await getTestInstance({
+		session: { cookieCache: { enabled: true, maxAge: 300 } },
 		user: {
 			changeEmail: {
 				enabled: true,
@@ -540,10 +541,13 @@ it.each([
 	});
 	const request = await client.changeEmail(
 		{ newEmail: "claimed@example.com" },
-		{ headers },
+		{ headers, onSuccess: ({ response }) => applyCookies(response, headers) },
 	);
 	expect(request.error).toBeNull();
 	expect(url).not.toBe("");
+	expect((await auth.api.getSession({ headers }))?.user).toMatchObject({
+		pendingEmail: "claimed@example.com",
+	});
 	const claimant = await db.create<{ id: string }>({
 		model: "user",
 		data: {
@@ -557,6 +561,10 @@ it.each([
 	const response = await auth.handler(new Request(url, { headers }));
 	expect(response.status).toBe(302);
 	expect(response.headers.get("location")).toContain("INVALID_TOKEN");
+	applyCookies(response, headers);
+	expect((await auth.api.getSession({ headers }))?.user).toMatchObject({
+		pendingEmail: null,
+	});
 	expect(
 		await db.findOne({
 			model: "user",

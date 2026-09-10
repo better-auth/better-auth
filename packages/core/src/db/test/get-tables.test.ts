@@ -457,3 +457,17 @@ it("infers pending email for a separately declared mutable configuration", () =>
 		getAuthTables({ user: { changeEmail } }).user?.fields.pendingEmail,
 	).toBeDefined();
 });
+
+/** @see https://github.com/better-auth/better-auth/pull/8916 */
+it("does not infer pending email for an explicitly disabled strategy", () => {
+	const changeEmail = {
+		enabled: false,
+		strategy: "verification-table",
+	} as const;
+	expectTypeOf<User<{ changeEmail: typeof changeEmail }>>().not.toHaveProperty(
+		"pendingEmail",
+	);
+	expect(
+		getAuthTables({ user: { changeEmail } }).user?.fields.pendingEmail,
+	).toBeUndefined();
+});
