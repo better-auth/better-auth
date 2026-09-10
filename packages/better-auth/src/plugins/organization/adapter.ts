@@ -566,9 +566,44 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				.filter((role: string) => role && role !== creatorRole);
 			const demotedRole =
 				remainingRoles.length > 0 ? remainingRoles.join(",") : "member";
-			// The rollback below must run whether the demotion loses its CAS
+			// Guarded on `promotedRole`: only undoes this transfer's own
+			// promotion, never an unrelated concurrent edit to the same
+			// member that happened to land in between. If that guard itself
+			// no longer matches -- yet another edit landed between the
+			// promotion and this rollback -- there is no safe value to
+			// restore without stomping that edit, and no adapter-agnostic
+			// transaction primitive available to make the promote+demote
+			// pair atomic in the first place (see the function doc above).
+			// Surface that loudly instead of silently reporting a clean
+			// "already transferred" while the promotion may still be live.
+			const rollbackPromotion = async (cause: unknown) => {
+				let rolledBack: InferMember<O, false> | null;
+				try {
+					rolledBack = await adapter.incrementOne<InferMember<O, false>>({
+						model: "member",
+						where: [
+							{ field: "id", value: newOwnerMemberId },
+							{ field: "role", value: promotedRole },
+						],
+						increment: {},
+						set: { role: newOwnerBefore.role },
+					});
+				} catch (rollbackError) {
+					throw new BetterAuthError(
+						"Ownership transfer failed and its automatic rollback also failed -- the organization may have more than one member holding the creator role and needs manual review",
+						{ cause: rollbackError },
+					);
+				}
+				if (!rolledBack) {
+					throw new BetterAuthError(
+						"Ownership transfer failed and could not automatically roll back its own promotion -- the organization may have more than one member holding the creator role and needs manual review",
+						{ cause },
+					);
+				}
+			};
+			// The rollback above must run whether the demotion loses its CAS
 			// guard (resolves to a falsy value) or the call itself throws (a
-			// transport/adapter error) -- either way the promotion above has
+			// transport/adapter error) -- either way the promotion has
 			// already committed and must not be left in place unrolled-back.
 			let previousOwner: InferMember<O, false> | null;
 			try {
@@ -582,36 +617,18 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					set: { role: demotedRole },
 				});
 			} catch (demoteError) {
-				// Guarded on `promotedRole`: only undo this transfer's own
-				// promotion, never an unrelated concurrent edit to the same
-				// member that happened to land in between.
-				await adapter.incrementOne<InferMember<O, false>>({
-					model: "member",
-					where: [
-						{ field: "id", value: newOwnerMemberId },
-						{ field: "role", value: promotedRole },
-					],
-					increment: {},
-					set: { role: newOwnerBefore.role },
-				});
+				await rollbackPromotion(demoteError);
 				throw demoteError;
 			}
 			if (!previousOwner) {
 				// Someone else already changed this member's role since it was
 				// read above -- most likely a concurrent transfer from the
-				// same owner. Roll back the promotion above (guarded, see
-				// above) so the losing attempt has no effect, rather than
-				// leaving a second owner behind.
-				await adapter.incrementOne<InferMember<O, false>>({
-					model: "member",
-					where: [
-						{ field: "id", value: newOwnerMemberId },
-						{ field: "role", value: promotedRole },
-					],
-					increment: {},
-					set: { role: newOwnerBefore.role },
-				});
-				throw new BetterAuthError("Ownership was already transferred");
+				// same owner.
+				const alreadyTransferred = new BetterAuthError(
+					"Ownership was already transferred",
+				);
+				await rollbackPromotion(alreadyTransferred);
+				throw alreadyTransferred;
 			}
 			return { newOwner, previousOwner };
 		},
