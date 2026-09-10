@@ -476,21 +476,34 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return member;
 		},
 		/**
-		 * Atomically promotes `newOwnerMemberId` to `creatorRole` and strips
-		 * `creatorRole` from `currentOwnerMemberId` (falling back to `"member"`
-		 * if that leaves them with no roles).
+		 * Promotes `newOwnerMemberId` to `creatorRole` -- keeping any other
+		 * roles it already holds (e.g. `"admin,billing"` becomes
+		 * `"owner,admin,billing"`, not just `"owner"`) -- and only then strips
+		 * `creatorRole` from `currentOwnerMemberId` (falling back to
+		 * `"member"` if that leaves them with no roles).
 		 *
-		 * The demotion is a guarded update -- conditioned on
-		 * `currentOwnerMemberId` still holding exactly the role read below --
-		 * so two concurrent transfers initiated by the same owner (to two
-		 * different targets) can result in at most one of them actually
-		 * applying; the guard is atomic on every adapter (same pattern as
-		 * `updateInvitation`'s `fromStatus` above). A plain `update` is not
-		 * safe here: nothing would stop a second, concurrent racer from
-		 * unconditionally overwriting a row the first racer already changed,
-		 * promoting a second owner on top of the first. This also runs inside
-		 * a transaction so a crash between the two updates can't leave the
-		 * organization with zero owners, on adapters that support one.
+		 * Promotion happens *before* demotion deliberately: if the target
+		 * member was removed or changed roles concurrently, the promotion's
+		 * own guard fails and nothing has been touched yet, so the org is
+		 * never left without anyone holding `creatorRole`. The reverse order
+		 * (demote first) would demote the real owner and then risk being
+		 * unable to promote the target at all.
+		 *
+		 * Both writes are guarded compare-and-swap updates (via
+		 * `incrementOne`'s `where`), not a `runWithTransaction` wrapper --
+		 * this deliberately does *not* mirror the pattern comment this
+		 * function used to carry. On adapters without real transaction
+		 * support (the default for Prisma and Drizzle, and the in-memory
+		 * adapter, whose "transaction" is a snapshot merged back on commit),
+		 * `runWithTransaction` evaluates the guard against a private
+		 * snapshot that never observes a concurrent writer until commit,
+		 * which defeats the guard entirely. A bare guarded `incrementOne`,
+		 * by contrast, is evaluated against live state on every adapter --
+		 * the same primitive `updateInvitation`'s `fromStatus` guard above
+		 * actually relies on. If the demotion loses that race (someone else
+		 * already transferred ownership away from `currentOwnerMemberId`),
+		 * the just-applied promotion is rolled back rather than left in
+		 * place, so the losing attempt has no effect at all.
 		 */
 		transferOwnership: async ({
 			currentOwnerMemberId,
@@ -501,49 +514,79 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			newOwnerMemberId: string;
 			creatorRole: string;
 		}) => {
-			return runWithTransaction(baseAdapter, async () => {
-				const adapter = await getCurrentAdapter(baseAdapter);
-				const currentOwner = await adapter.findOne<InferMember<O, false>>({
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const currentOwner = await adapter.findOne<InferMember<O, false>>({
+				model: "member",
+				where: [{ field: "id", value: currentOwnerMemberId }],
+			});
+			if (!currentOwner) {
+				throw new BetterAuthError("Member not found");
+			}
+			const newOwnerBefore = await adapter.findOne<InferMember<O, false>>({
+				model: "member",
+				where: [{ field: "id", value: newOwnerMemberId }],
+			});
+			if (!newOwnerBefore) {
+				throw new BetterAuthError("Member not found");
+			}
+			// "member" is the baseline default role, not extra privilege worth
+			// preserving -- treated the same way the demotion fallback below
+			// treats it, so promoting a plain member still yields exactly
+			// `creatorRole`, matching the pre-transfer role shape.
+			const extraNewOwnerRoles = newOwnerBefore.role
+				.split(",")
+				.map((role: string) => role.trim())
+				.filter((role: string) => role && role !== creatorRole && role !== "member");
+			const promotedRole =
+				extraNewOwnerRoles.length > 0
+					? [creatorRole, ...extraNewOwnerRoles].join(",")
+					: creatorRole;
+			const newOwner = await adapter.incrementOne<InferMember<O, false>>({
+				model: "member",
+				where: [
+					{ field: "id", value: newOwnerMemberId },
+					{ field: "role", value: newOwnerBefore.role },
+				],
+				increment: {},
+				set: { role: promotedRole },
+			});
+			if (!newOwner) {
+				// The target's role changed since it was read above (an
+				// unrelated concurrent role edit, most likely). Nothing has
+				// been demoted yet, so there's nothing to roll back.
+				throw new BetterAuthError("Member not found");
+			}
+			const remainingRoles = currentOwner.role
+				.split(",")
+				.map((role: string) => role.trim())
+				.filter((role: string) => role && role !== creatorRole);
+			const demotedRole =
+				remainingRoles.length > 0 ? remainingRoles.join(",") : "member";
+			const previousOwner = await adapter.incrementOne<InferMember<O, false>>(
+				{
 					model: "member",
-					where: [{ field: "id", value: currentOwnerMemberId }],
-				});
-				if (!currentOwner) {
-					throw new BetterAuthError("Member not found");
-				}
-				const remainingRoles = currentOwner.role
-					.split(",")
-					.map((role: string) => role.trim())
-					.filter((role: string) => role && role !== creatorRole);
-				const demotedRole =
-					remainingRoles.length > 0 ? remainingRoles.join(",") : "member";
-				const previousOwner = await adapter.incrementOne<InferMember<O, false>>(
-					{
-						model: "member",
-						where: [
-							{ field: "id", value: currentOwnerMemberId },
-							{ field: "role", value: currentOwner.role },
-						],
-						increment: {},
-						set: { role: demotedRole },
-					},
-				);
-				if (!previousOwner) {
-					// Someone else already changed this member's role since it was
-					// read above -- most likely a concurrent transfer from the
-					// same owner. Abort rather than promoting a second owner on
-					// top of it.
-					throw new BetterAuthError("Ownership was already transferred");
-				}
-				const newOwner = await adapter.update<InferMember<O, false>>({
+					where: [
+						{ field: "id", value: currentOwnerMemberId },
+						{ field: "role", value: currentOwner.role },
+					],
+					increment: {},
+					set: { role: demotedRole },
+				},
+			);
+			if (!previousOwner) {
+				// Someone else already changed this member's role since it was
+				// read above -- most likely a concurrent transfer from the
+				// same owner. Roll back the promotion above so the losing
+				// attempt has no effect, rather than leaving a second owner
+				// behind.
+				await adapter.update<InferMember<O, false>>({
 					model: "member",
 					where: [{ field: "id", value: newOwnerMemberId }],
-					update: { role: creatorRole },
+					update: { role: newOwnerBefore.role },
 				});
-				if (!newOwner) {
-					throw new BetterAuthError("Member not found");
-				}
-				return { newOwner, previousOwner };
-			});
+				throw new BetterAuthError("Ownership was already transferred");
+			}
+			return { newOwner, previousOwner };
 		},
 		deleteMember: async ({
 			memberId,

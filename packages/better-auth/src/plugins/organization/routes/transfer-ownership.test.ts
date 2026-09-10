@@ -693,4 +693,49 @@ describe("transferOwnership", () => {
 		});
 		expect((stillTarget as { role: string } | null)?.role).toBe("member");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10748
+	 */
+	it("preserves the target's other roles instead of overwriting them with just the creator role", async () => {
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Acme", slug: "acme" },
+			headers,
+		});
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "admin-target@test.com",
+				name: "Admin Target",
+				password: "password",
+			},
+		});
+		const targetMember = await auth.api.addMember({
+			body: {
+				organizationId: org!.id,
+				userId: newUser.user.id,
+				role: "admin",
+			},
+		});
+
+		const result = await auth.api.transferOwnership({
+			body: { organizationId: org!.id, newOwnerMemberId: targetMember!.id },
+			headers,
+		});
+		if (!("newOwner" in result)) throw new Error("expected an immediate swap");
+		expect(result.newOwner.role.split(",").sort()).toEqual(
+			["admin", "owner"].sort(),
+		);
+
+		const targetRow = await db.findOne({
+			model: "member",
+			where: [{ field: "id", value: targetMember!.id }],
+		});
+		expect(
+			(targetRow as { role: string } | null)?.role.split(",").sort(),
+		).toEqual(["admin", "owner"].sort());
+	});
 });
