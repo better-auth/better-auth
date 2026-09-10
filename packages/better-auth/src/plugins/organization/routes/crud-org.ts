@@ -44,40 +44,44 @@ const deleteOrganizationTokenValueSchema = z.object({
 	userId: z.string(),
 });
 
+function parseDeleteOrganizationTokenValue(raw: string) {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		return null;
+	}
+	const result = deleteOrganizationTokenValueSchema.safeParse(parsed);
+	return result.success ? result.data : null;
+}
+
 /**
- * Re-validates a pending organization-deletion token: session, membership,
- * and the `organization:delete` permission are all rechecked here because
- * they may have changed since the confirmation email was sent. `consume:
- * true` burns the single-use token (for the instant callback and the
- * explicit-mode confirm endpoint); `consume: false` only peeks it (for the
- * explicit-mode preview endpoint).
+ * Re-validates a pending organization-deletion token *without consuming it*:
+ * session, membership, and the `organization:delete` permission are all
+ * checked here because they may have changed since the confirmation email
+ * was sent. Used by all three endpoints. The callback and confirm endpoints
+ * additionally call `consumeDeleteOrganizationToken` immediately before
+ * applying the deletion -- burning the token here instead would let an
+ * unauthenticated or unauthorized visit (an email scanner following the
+ * link with no session, for instance) permanently invalidate it before the
+ * real user ever gets a chance to use it.
  */
 async function resolveDeleteOrganizationToken<O extends OrganizationOptions>(
 	ctx: GenericEndpointContext,
 	options: O,
 	token: string,
-	{ consume }: { consume: boolean },
 ) {
 	const identifier = `delete-organization-${token}`;
-	const verification = consume
-		? await ctx.context.internalAdapter.consumeVerificationValue(identifier)
-		: await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (!verification || (!consume && verification.expiresAt < new Date())) {
+	const verification =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!verification || verification.expiresAt < new Date()) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	// Parsed as JSON (not a delimited string) so an organization or user id
-	// that happens to contain the delimiter character can't shift the split.
-	let parsedValue: unknown;
-	try {
-		parsedValue = JSON.parse(verification.value);
-	} catch {
+	const tokenValue = parseDeleteOrganizationTokenValue(verification.value);
+	if (!tokenValue) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	const tokenValue = deleteOrganizationTokenValueSchema.safeParse(parsedValue);
-	if (!tokenValue.success) {
-		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
-	}
-	const { organizationId, userId } = tokenValue.data;
+	const { organizationId, userId } = tokenValue;
 	// Deletion is sensitive: bypass the cookie cache on stateful deployments
 	// so a revoked-but-cached session cannot complete it even when paired
 	// with a valid delete-organization token.
@@ -121,6 +125,35 @@ async function resolveDeleteOrganizationToken<O extends OrganizationOptions>(
 		);
 	}
 	return { organizationId, session, org };
+}
+
+/**
+ * Atomically consumes the delete-organization token, once every check in
+ * `resolveDeleteOrganizationToken` has already passed. This is the only
+ * point that burns the single-use token, so two concurrent callbacks with
+ * the same token can still complete the deletion at most once, while an
+ * unauthorized peek never destroys it. Re-validates the consumed row still
+ * matches what was already checked, in case it changed in the gap between
+ * the two calls.
+ */
+async function consumeDeleteOrganizationToken(
+	ctx: GenericEndpointContext,
+	token: string,
+	expected: { organizationId: string; userId: string },
+) {
+	const identifier = `delete-organization-${token}`;
+	const verification =
+		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
+	const tokenValue = verification
+		? parseDeleteOrganizationTokenValue(verification.value)
+		: null;
+	if (
+		!tokenValue ||
+		tokenValue.organizationId !== expected.organizationId ||
+		tokenValue.userId !== expected.userId
+	) {
+		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
+	}
 }
 
 /**
@@ -715,9 +748,11 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 
 			if (ctx.body.token) {
 				const { organizationId, session, org } =
-					await resolveDeleteOrganizationToken(ctx, options, ctx.body.token, {
-						consume: true,
-					});
+					await resolveDeleteOrganizationToken(ctx, options, ctx.body.token);
+				await consumeDeleteOrganizationToken(ctx, ctx.body.token, {
+					organizationId,
+					userId: session.user.id,
+				});
 				await performDeleteOrganization(
 					ctx,
 					options,
@@ -859,9 +894,11 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const { organizationId, session, org } =
-				await resolveDeleteOrganizationToken(ctx, options, ctx.query.token, {
-					consume: true,
-				});
+				await resolveDeleteOrganizationToken(ctx, options, ctx.query.token);
+			await consumeDeleteOrganizationToken(ctx, ctx.query.token, {
+				organizationId,
+				userId: session.user.id,
+			});
 			await performDeleteOrganization(
 				ctx,
 				options,
@@ -906,7 +943,6 @@ export const deleteOrganizationPreview = <O extends OrganizationOptions>(
 				ctx,
 				options,
 				ctx.query.token,
-				{ consume: false },
 			);
 			return ctx.json({ organization: org });
 		},
@@ -939,9 +975,11 @@ export const deleteOrganizationConfirm = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const { organizationId, session, org } =
-				await resolveDeleteOrganizationToken(ctx, options, ctx.body.token, {
-					consume: true,
-				});
+				await resolveDeleteOrganizationToken(ctx, options, ctx.body.token);
+			await consumeDeleteOrganizationToken(ctx, ctx.body.token, {
+				organizationId,
+				userId: session.user.id,
+			});
 			await performDeleteOrganization(
 				ctx,
 				options,
