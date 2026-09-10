@@ -123,6 +123,350 @@ describe("updateUser", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10748
+	 */
+	describe("changeEmail explicit confirmation mode", () => {
+		it("second hop (after confirming from the old address) uses an app URL, preview/confirm apply it", async () => {
+			let confirmationToken = "";
+			let capturedUrl = "";
+			let capturedToken = "";
+			const { client, auth, testUser, db, signInWithTestUser } =
+				await getTestInstance({
+					trustedOrigins: ["https://app.example.com"],
+					emailVerification: {
+						async sendVerificationEmail({ url, token }) {
+							capturedUrl = url;
+							capturedToken = token;
+						},
+					},
+					user: {
+						changeEmail: {
+							enabled: true,
+							confirmationMode: "explicit",
+							async sendChangeEmailConfirmation({ token }) {
+								confirmationToken = token;
+							},
+						},
+					},
+				});
+			const { headers, runWithUser } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			const newEmail = "explicit-new-email@email.com";
+			await runWithUser(async () => {
+				await client.changeEmail({
+					newEmail,
+					callbackURL: "https://app.example.com/account",
+				});
+			});
+			expect(confirmationToken).not.toBe("");
+
+			// Clicking the (non-destructive) confirmation link sends the second,
+			// destructive verification email -- its URL must be app-owned. The
+			// real link carries callbackURL as a query param (set above via
+			// changeEmail's own callbackURL), so simulate that here too.
+			await runWithUser(async () => {
+				await client.verifyEmail({
+					query: {
+						token: confirmationToken,
+						callbackURL: "https://app.example.com/account",
+					},
+				});
+			});
+			expect(capturedUrl.startsWith("https://app.example.com/account")).toBe(
+				true,
+			);
+			expect(capturedUrl).not.toContain("/verify-email");
+			expect(capturedUrl).toContain(`token=${capturedToken}`);
+
+			// Previewing must not change the email. Like every other preview/
+			// confirm pair in this feature set, these require the signed-in
+			// session matching the pending change -- unlike the instant
+			// `/verify-email` link, they are never called by a bare, sessionless
+			// browser navigation.
+			const preview = await auth.api.changeEmailPreview({
+				query: { token: capturedToken },
+				headers,
+			});
+			expect(preview).toMatchObject({ email: testUser.email, newEmail });
+			const stillOld = await client.getSession({ fetchOptions: { headers } });
+			expect(stillOld.data?.user.email).toBe(testUser.email);
+
+			// Confirming actually applies it.
+			const confirmed = await auth.api.changeEmailConfirm({
+				body: { token: capturedToken },
+				headers,
+			});
+			expect(confirmed.status).toBe(true);
+			expect(confirmed.user?.email).toBe(newEmail);
+			const updated = await client.getSession({ fetchOptions: { headers } });
+			expect(updated.data?.user.email).toBe(newEmail);
+		});
+
+		it("direct verification link (no confirmation configured) also uses an app URL", async () => {
+			let capturedUrl = "";
+			const { client, testUser, db, signInWithTestUser } =
+				await getTestInstance({
+					emailVerification: {
+						async sendVerificationEmail({ url }) {
+							capturedUrl = url;
+						},
+					},
+					user: {
+						changeEmail: { enabled: true, confirmationMode: "explicit" },
+					},
+				});
+			const { runWithUser } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			await runWithUser(async () => {
+				await client.changeEmail({
+					newEmail: "explicit-direct@email.com",
+					callbackURL: "https://app.example.com/account",
+				});
+			});
+			expect(capturedUrl.startsWith("https://app.example.com/account")).toBe(
+				true,
+			);
+			expect(capturedUrl).not.toContain("/verify-email");
+		});
+
+		it("the change-email token is a JWT, not a single-use row: a sequential confirm replay fails once the email has moved", async () => {
+			let capturedToken = "";
+			const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			const newEmail = "replay-target@email.com";
+			await auth.api.changeEmail({
+				body: { newEmail },
+				headers,
+			});
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			const first = await auth.api.changeEmailConfirm({
+				body: { token: capturedToken },
+				headers,
+			});
+			expect(first.user?.email).toBe(newEmail);
+
+			// Unlike the delete/transfer verification rows, this JWT is never
+			// explicitly invalidated. A sequential replay still fails here,
+			// but only because the token embeds the *old* email as the lookup
+			// key, and that email no longer belongs to any user -- not because
+			// the token itself was consumed. resolveChangeEmailVerificationToken's
+			// own findUserByEmail lookup is what rejects this, correctly, as
+			// "user not found" (see the concurrent case below for what happens
+			// when that lookup itself races).
+			await expect(
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+			).rejects.toThrow("User not found");
+		});
+
+		/**
+		 * A sufficiently concurrent replay -- both requests resolving the
+		 * token before either commits the update -- is not guarded against
+		 * the way the other three verification-row-based flows are (see the
+		 * JWT-is-not-single-use note above); this is documented, accepted
+		 * behavior, not a regression to fix here. What must hold is that the
+		 * loser fails cleanly instead of crashing: depending on exactly how
+		 * the two calls interleave, the loser is rejected either by the
+		 * resolver's own session/email match check or, if both clear that,
+		 * by `updateUserByEmail` matching no row in `applyChangeEmailVerification`
+		 * -- either way it must be a real, well-formed APIError, never a
+		 * `null` user flowing into `afterEmailVerification` or the response
+		 * (which would surface as an unrelated crash, not a clean rejection).
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10748
+		 */
+		it("a genuinely concurrent confirm race fails cleanly instead of passing a null user through", async () => {
+			let capturedToken = "";
+			const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			const newEmail = "concurrent-confirm-target@email.com";
+			await auth.api.changeEmail({ body: { newEmail }, headers });
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			const [first, second] = await Promise.allSettled([
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+			]);
+			const successes = [first, second].filter(
+				(r) => r.status === "fulfilled",
+			);
+			const failures = [first, second].filter((r) => r.status === "rejected");
+			expect(successes.length).toBe(1);
+			expect(failures.length).toBe(1);
+			if (failures[0]?.status === "rejected") {
+				// A well-formed APIError, not an uncaught TypeError from a
+				// `null` user reaching a hook or a response serializer.
+				expect(String(failures[0].reason)).toMatch(/^APIError:/);
+			}
+
+			const user = await db.findOne({
+				model: "user",
+				where: [{ field: "email", value: newEmail }],
+			});
+			expect((user as { email: string } | null)?.email).toBe(newEmail);
+		});
+
+		/**
+		 * Unlike the instant `/verify-email` link (a direct browser navigation
+		 * that may legitimately arrive with no session), `/change-email/preview`
+		 * and `/change-email/confirm` are meant to be called by the app's own
+		 * confirmation page -- often server-side, with no end-user session
+		 * forwarded at all. Silently minting a session for that call would
+		 * leak an orphaned row per confirmation and never actually sign the
+		 * user in anywhere. Both must instead require the same session
+		 * contract every other preview/confirm pair in this feature set does.
+		 */
+		it("preview and confirm require a session and never create one as a side effect", async () => {
+			let capturedToken = "";
+			const { auth, db, testUser, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+			await auth.api.changeEmail({
+				body: { newEmail: "no-session-target@email.com" },
+				headers,
+			});
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			const sessionsBefore = await db.findMany({ model: "session" });
+
+			await expect(
+				auth.api.changeEmailPreview({ query: { token: capturedToken } }),
+			).rejects.toThrow();
+			await expect(
+				auth.api.changeEmailConfirm({ body: { token: capturedToken } }),
+			).rejects.toThrow();
+
+			const sessionsAfter = await db.findMany({ model: "session" });
+			expect(sessionsAfter.length).toBe(sessionsBefore.length);
+
+			const user = await db.findOne({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			expect((user as { email: string } | null)?.email).toBe(testUser.email);
+		});
+
+		/**
+		 * `user.changeEmail.enabled` may be turned off after a token was
+		 * already issued -- an admin reacting to abuse, for instance. A
+		 * still-unexpired token must not be able to apply the change anyway
+		 * once the feature has been disabled.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10748
+		 */
+		it("rejects preview and confirm once changeEmail is disabled after the token was issued", async () => {
+			let capturedToken = "";
+			// Held onto directly so it can be mutated below: this exact object
+			// is what `ctx.context.options.user.changeEmail` reads from on
+			// every request, so flipping `enabled` after the instance is
+			// created is equivalent to a config change taking effect on the
+			// next request, with no server restart.
+			const changeEmailOptions: { enabled: boolean; confirmationMode: "explicit" } =
+				{ enabled: true, confirmationMode: "explicit" };
+			const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: { changeEmail: changeEmailOptions },
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+			await auth.api.changeEmail({
+				body: { newEmail: "disabled-after-send@email.com" },
+				headers,
+			});
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			// Disabled after the email was already sent.
+			changeEmailOptions.enabled = false;
+
+			await expect(
+				auth.api.changeEmailPreview({ query: { token: capturedToken }, headers }),
+			).rejects.toThrow();
+			await expect(
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+			).rejects.toThrow();
+
+			const user = await db.findOne({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			expect((user as { email: string } | null)?.email).toBe(testUser.email);
+		});
+	});
+
 	it("should update the user's password", async () => {
 		const newEmail = "new-email@email.com"; // User email is now this
 		await globalRunWithClient(async () => {
@@ -777,6 +1121,102 @@ describe("delete user", async () => {
 			});
 			expect(remaining.length).toBe(0);
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10748
+	 */
+	it("explicit confirmation mode: previews without deleting, only /confirm applies it", async () => {
+		let capturedUrl = "";
+		let capturedToken = "";
+		const { client, auth, signInWithTestUser, testUser } =
+			await getTestInstance({
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ url, token }) {
+							capturedUrl = url;
+							capturedToken = token;
+						},
+					},
+				},
+			});
+		const { headers, runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.deleteUser({
+				password: testUser.password,
+				callbackURL: "https://app.example.com/settings",
+			});
+			expect(res.data).toMatchObject({ success: true });
+		});
+
+		// The emailed link is app-owned in explicit mode, not better-auth's own
+		// GET callback -- visiting it must not be destructive on its own.
+		expect(capturedUrl.startsWith("https://app.example.com/settings")).toBe(
+			true,
+		);
+		expect(capturedUrl).not.toContain("/delete-user/callback");
+		expect(capturedUrl).toContain(`token=${capturedToken}`);
+
+		const preview = await auth.api.deleteUserPreview({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(preview.user).toBeDefined();
+		const stillThere = await client.getSession({ fetchOptions: { headers } });
+		expect(stillThere.data).toBeDefined();
+
+		const confirmed = await auth.api.deleteUserConfirm({
+			body: { token: capturedToken },
+			headers,
+		});
+		expect(confirmed).toMatchObject({
+			success: true,
+			message: "User deleted",
+		});
+		const gone = await client.getSession({ fetchOptions: { headers } });
+		expect(gone.data).toBeNull();
+	});
+
+	it("explicit confirmation mode: /confirm rejects a wrong password without burning the token", async () => {
+		let capturedToken = "";
+		const { client, auth, signInWithTestUser, testUser } =
+			await getTestInstance({
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				},
+			});
+		const { headers, runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.deleteUser({ password: testUser.password });
+		});
+		expect(capturedToken.length).toBe(32);
+
+		await expect(
+			auth.api.deleteUserConfirm({
+				body: { token: capturedToken, password: "definitely-wrong" },
+				headers,
+			}),
+		).rejects.toThrow();
+
+		// The failed password check must not have consumed the token.
+		const stillThere = await client.getSession({ fetchOptions: { headers } });
+		expect(stillThere.data).toBeDefined();
+
+		const confirmed = await auth.api.deleteUserConfirm({
+			body: { token: capturedToken, password: testUser.password },
+			headers,
+		});
+		expect(confirmed).toMatchObject({ success: true, message: "User deleted" });
+		const gone = await client.getSession({ fetchOptions: { headers } });
+		expect(gone.data).toBeNull();
 	});
 
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {

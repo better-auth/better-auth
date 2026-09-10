@@ -790,3 +790,403 @@ describe("updateOrganization", async () => {
 		expect(org?.logo).toBeNull();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10748
+ */
+describe("deleteOrganization confirmation", () => {
+	it("instant mode: sends a verification email and only deletes after the callback token is consumed", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Delete Me", slug: "delete-me" },
+			headers,
+		});
+
+		const requestRes = await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(requestRes).toMatchObject({
+			success: true,
+			message: "Verification email sent",
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Not deleted yet.
+		const stillThere = await auth.api.getFullOrganization({
+			query: { organizationId: org!.id },
+			headers,
+		});
+		expect(stillThere?.id).toBe(org!.id);
+
+		const callbackRes = await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(callbackRes?.id).toBe(org!.id);
+
+		const afterDelete = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org!.id }],
+		});
+		expect(afterDelete).toBeNull();
+	});
+
+	it("explicit mode: preview doesn't delete, confirm applies it", async () => {
+		let capturedUrl = "";
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						confirmationMode: "explicit",
+						async sendDeleteOrganizationVerification({ url, token }) {
+							capturedUrl = url;
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Delete Me Explicitly", slug: "delete-me-explicitly" },
+			headers,
+		});
+
+		await auth.api.deleteOrganization({
+			body: {
+				organizationId: org!.id,
+				callbackURL: "https://app.example.com/orgs",
+			},
+			headers,
+		});
+
+		// The emailed link is app-owned, not better-auth's own GET callback.
+		expect(capturedUrl.startsWith("https://app.example.com/orgs")).toBe(true);
+		expect(capturedUrl).not.toContain("/organization/delete/callback");
+
+		const preview = await auth.api.deleteOrganizationPreview({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(preview.organization?.id).toBe(org!.id);
+
+		const stillThere = await auth.api.getFullOrganization({
+			query: { organizationId: org!.id },
+			headers,
+		});
+		expect(stillThere?.id).toBe(org!.id);
+
+		const confirmed = await auth.api.deleteOrganizationConfirm({
+			body: { token: capturedToken },
+			headers,
+		});
+		expect(confirmed?.id).toBe(org!.id);
+
+		const afterDelete = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org!.id }],
+		});
+		expect(afterDelete).toBeNull();
+	});
+
+	it("rejects the callback once the caller's delete permission has been revoked", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Revoked", slug: "revoked" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Demote the requester below the delete permission after the email was
+		// sent but before the link is clicked.
+		const session = await auth.api.getSession({ headers });
+		await db.update({
+			model: "member",
+			update: { role: "member" },
+			where: [
+				{ field: "organizationId", value: org!.id },
+				{ field: "userId", value: session!.user.id },
+			],
+		});
+
+		const callback = auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+		await expect(callback).rejects.toThrow();
+
+		const stillThere = await auth.api.getFullOrganization({
+			query: { organizationId: org!.id },
+			headers,
+		});
+		expect(stillThere?.id).toBe(org!.id);
+
+		// A failed authorization check must not have burned the token either.
+		const remaining = await db.findMany({
+			model: "verification",
+			where: [
+				{ field: "identifier", value: `delete-organization-${capturedToken}` },
+			],
+		});
+		expect(remaining.length).toBe(1);
+	});
+
+	/**
+	 * The token must never be burned by a request that can't complete the
+	 * deletion -- otherwise an email scanner following the callback link
+	 * with no session would permanently invalidate it before the real user
+	 * ever gets to click it.
+	 */
+	it("does not consume the token when the callback is visited with no session", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "No Session", slug: "no-session" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Visited with no session at all -- must fail without burning the token.
+		await expect(
+			auth.api.deleteOrganizationCallback({ query: { token: capturedToken } }),
+		).rejects.toThrow();
+
+		const remaining = await db.findMany({
+			model: "verification",
+			where: [
+				{ field: "identifier", value: `delete-organization-${capturedToken}` },
+			],
+		});
+		expect(remaining.length).toBe(1);
+
+		// The legitimate user can still use it afterwards.
+		const callbackRes = await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(callbackRes?.id).toBe(org!.id);
+	});
+
+	it("a delete token for one organization cannot delete another", async () => {
+		let capturedToken = "";
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const orgToDelete = await auth.api.createOrganization({
+			body: { name: "Delete Me", slug: "delete-me-scope" },
+			headers,
+		});
+		const otherOrg = await auth.api.createOrganization({
+			body: { name: "Untouchable", slug: "untouchable" },
+			headers,
+		});
+
+		await auth.api.deleteOrganization({
+			body: { organizationId: orgToDelete!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// The token is scoped to `orgToDelete`; it must not also delete
+		// `otherOrg`, even though the same session created both.
+		await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+
+		const deleted = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: orgToDelete!.id }],
+		});
+		expect(deleted).toBeNull();
+		const untouched = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: otherOrg!.id }],
+		});
+		expect(untouched).not.toBeNull();
+	});
+
+	// The delete token is single-use: two concurrent callbacks with the same
+	// token must delete the organization exactly once. Whichever request
+	// consumes the verification row first wins; the loser sees an invalid
+	// token, and the destructive hooks must each fire only once.
+	it("deletes only once when the same token is used concurrently", async () => {
+		let capturedToken = "";
+		const beforeDeleteOrganization = vi.fn(async () => {
+			// Widen the race so both requests pass the token lookup before
+			// either one finishes the destructive work.
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		});
+		const afterDeleteOrganization = vi.fn(async () => {});
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationDeletion: {
+						async sendDeleteOrganizationVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+					organizationHooks: {
+						beforeDeleteOrganization,
+						afterDeleteOrganization,
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Race Me", slug: "race-me" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		const [first, second] = await Promise.allSettled([
+			auth.api.deleteOrganizationCallback({
+				query: { token: capturedToken },
+				headers,
+			}),
+			auth.api.deleteOrganizationCallback({
+				query: { token: capturedToken },
+				headers,
+			}),
+		]);
+		const successes = [first, second].filter((r) => r.status === "fulfilled");
+		const failures = [first, second].filter((r) => r.status === "rejected");
+		expect(successes.length).toBe(1);
+		expect(failures.length).toBe(1);
+
+		expect(beforeDeleteOrganization).toHaveBeenCalledTimes(1);
+		expect(afterDeleteOrganization).toHaveBeenCalledTimes(1);
+
+		const remaining = await db.findMany({
+			model: "verification",
+			where: [
+				{ field: "identifier", value: `delete-organization-${capturedToken}` },
+			],
+		});
+		expect(remaining.length).toBe(0);
+	});
+
+	/**
+	 * `disableOrganizationDeletion` may be turned on after a confirmation
+	 * email was already sent -- an admin reacting to abuse, for instance.
+	 * A still-unexpired token must not be able to delete the organization
+	 * anyway once deletion has been disabled.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10748
+	 */
+	it("rejects the callback, preview, and confirm once deletion is disabled after the token was issued", async () => {
+		let capturedToken = "";
+		// Held onto directly so it can be mutated below: `organization()` keeps
+		// this exact object as `ctx.context.orgOptions`, so flipping the flag
+		// on it after the instance is created is equivalent to a config
+		// change taking effect on the next request, with no server restart.
+		const orgOptions: Parameters<typeof organization>[0] = {
+			organizationDeletion: {
+				confirmationMode: "explicit",
+				async sendDeleteOrganizationVerification({ token }) {
+					capturedToken = token;
+				},
+			},
+		};
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [organization(orgOptions)],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Disable Me", slug: "disable-me" },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+		expect(capturedToken.length).toBe(32);
+
+		// Disabled after the email was already sent.
+		orgOptions.disableOrganizationDeletion = true;
+
+		await expect(
+			auth.api.deleteOrganizationPreview({
+				query: { token: capturedToken },
+				headers,
+			}),
+		).rejects.toThrow();
+		await expect(
+			auth.api.deleteOrganizationConfirm({
+				body: { token: capturedToken },
+				headers,
+			}),
+		).rejects.toThrow();
+		await expect(
+			auth.api.deleteOrganizationCallback({
+				query: { token: capturedToken },
+				headers,
+			}),
+		).rejects.toThrow();
+
+		const stillThere = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org!.id }],
+		});
+		expect(stillThere).not.toBeNull();
+	});
+});
