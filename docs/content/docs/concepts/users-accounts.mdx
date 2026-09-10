@@ -126,10 +126,12 @@ export const auth = betterAuth({
 })
 ```
 
-In `"explicit"` mode, the `url` passed to `sendChangeEmailConfirmation` (or to
-`emailVerification.sendVerificationEmail`, when no confirmation step is configured) is your
-app's own URL with `token` attached, instead of better-auth's `/verify-email` endpoint. Your
-app renders a confirmation page from it, then:
+In `"explicit"` mode, the `url` passed to `emailVerification.sendVerificationEmail` is your
+app's own URL with `token` attached, instead of better-auth's `/verify-email` endpoint — this
+holds whether that's the only email sent, or the follow-up sent after the user approves
+`sendChangeEmailConfirmation`'s own link (which is always better-auth's instant callback,
+regardless of `confirmationMode`). Your app renders a confirmation page from the app-owned URL,
+then:
 
 * `GET /change-email/preview` — validates the token and returns the pending email change
   without applying it.
