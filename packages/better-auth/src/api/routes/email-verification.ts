@@ -331,9 +331,13 @@ async function resolveChangeEmailVerificationToken(
  * The underlying token is a stateless JWT, not a single-use `verification`
  * row (see the replay note on `resolveChangeEmailVerificationToken`'s call
  * sites), so a losing concurrent or sequential replay can reach here after
- * `email` no longer belongs to any user. `updateUserByEmail` then matches no
- * row and returns a falsy result -- that must fail cleanly here rather than
- * flow a `null` user into `afterEmailVerification` or the caller's response.
+ * `email` no longer belongs to any user -- `updateUserByEmail` then matches
+ * no row. A `databaseHooks.user.update.before` hook vetoing the write
+ * returns the same falsy result for an existing user, so this can't be
+ * reported as "user not found" (same FAILED_TO_UPDATE_USER code and
+ * reasoning `phone-number`'s verify route uses for its own `updateUser`
+ * call) -- either way, it must fail cleanly here rather than flow a `null`
+ * user into `afterEmailVerification` or the caller's response.
  */
 async function applyChangeEmailVerification(
 	ctx: GenericEndpointContext,
@@ -346,7 +350,10 @@ async function applyChangeEmailVerification(
 		{ email: updateTo, emailVerified: true },
 	);
 	if (!updatedUser) {
-		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+		);
 	}
 	if (ctx.context.options.emailVerification?.afterEmailVerification) {
 		await ctx.context.options.emailVerification.afterEmailVerification(

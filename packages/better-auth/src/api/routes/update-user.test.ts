@@ -276,18 +276,84 @@ describe("updateUser", async () => {
 			// explicitly invalidated. A sequential replay still fails here,
 			// but only because the token embeds the *old* email as the lookup
 			// key, and that email no longer belongs to any user -- not because
-			// the token itself was consumed. A sufficiently concurrent replay
-			// (both requests reading the old email before either commits the
-			// update) is not guarded against the way the other three
-			// verification-row-based flows are, and fails the same clean,
-			// explicit way: the shared apply step never lets a no-op update
-			// flow a `null` user into a hook or the response.
+			// the token itself was consumed. resolveChangeEmailVerificationToken's
+			// own findUserByEmail lookup is what rejects this, correctly, as
+			// "user not found" (see the concurrent case below for what happens
+			// when that lookup itself races).
 			await expect(
 				auth.api.changeEmailConfirm({
 					body: { token: capturedToken },
 					headers,
 				}),
 			).rejects.toThrow("User not found");
+		});
+
+		/**
+		 * A sufficiently concurrent replay -- both requests resolving the
+		 * token before either commits the update -- is not guarded against
+		 * the way the other three verification-row-based flows are (see the
+		 * JWT-is-not-single-use note above); this is documented, accepted
+		 * behavior, not a regression to fix here. What must hold is that the
+		 * loser fails cleanly instead of crashing: depending on exactly how
+		 * the two calls interleave, the loser is rejected either by the
+		 * resolver's own session/email match check or, if both clear that,
+		 * by `updateUserByEmail` matching no row in `applyChangeEmailVerification`
+		 * -- either way it must be a real, well-formed APIError, never a
+		 * `null` user flowing into `afterEmailVerification` or the response
+		 * (which would surface as an unrelated crash, not a clean rejection).
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10748
+		 */
+		it("a genuinely concurrent confirm race fails cleanly instead of passing a null user through", async () => {
+			let capturedToken = "";
+			const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			const newEmail = "concurrent-confirm-target@email.com";
+			await auth.api.changeEmail({ body: { newEmail }, headers });
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			const [first, second] = await Promise.allSettled([
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+			]);
+			const successes = [first, second].filter(
+				(r) => r.status === "fulfilled",
+			);
+			const failures = [first, second].filter((r) => r.status === "rejected");
+			expect(successes.length).toBe(1);
+			expect(failures.length).toBe(1);
+			if (failures[0]?.status === "rejected") {
+				// A well-formed APIError, not an uncaught TypeError from a
+				// `null` user reaching a hook or a response serializer.
+				expect(String(failures[0].reason)).toMatch(/^APIError:/);
+			}
+
+			const user = await db.findOne({
+				model: "user",
+				where: [{ field: "email", value: newEmail }],
+			});
+			expect((user as { email: string } | null)?.email).toBe(newEmail);
 		});
 
 		/**
