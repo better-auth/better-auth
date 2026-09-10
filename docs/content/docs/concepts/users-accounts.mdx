@@ -137,6 +137,11 @@ app renders a confirmation page from it, then:
   without applying it.
 * `POST /change-email/confirm` — applies the change, the same way the instant link does.
 
+Unlike the instant link — a direct browser navigation that may legitimately arrive with no
+active session — both `preview` and `confirm` require the caller to already be signed in as
+the user the token belongs to, and reject otherwise. Forward the user's session (cookies or an
+equivalent auth header) when your confirmation page calls them.
+
 <Callout type="warn">
   The change-email token is a signed JWT, not a single-use database row, so it is not
   explicitly invalidated after use the way the delete/transfer tokens are. In practice a
