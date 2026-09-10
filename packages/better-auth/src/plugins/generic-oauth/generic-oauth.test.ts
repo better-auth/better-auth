@@ -5170,6 +5170,7 @@ describe("oauth2", async () => {
 			let hs256Server: ReturnType<typeof createServer>;
 			let hs256Port: number;
 			let advertisedSigningAlgs: string[] | undefined = ["HS256"];
+			let jwksRequestCount = 0;
 
 			beforeAll(async () => {
 				hs256Server = createServer((req, res) => {
@@ -5193,6 +5194,7 @@ describe("oauth2", async () => {
 						return;
 					}
 					if (req.url === "/jwks") {
+						jwksRequestCount++;
 						res.setHeader("content-type", "application/json");
 						res.end(
 							JSON.stringify({
@@ -5217,6 +5219,7 @@ describe("oauth2", async () => {
 
 			afterEach(() => {
 				advertisedSigningAlgs = ["HS256"];
+				jwksRequestCount = 0;
 			});
 
 			afterAll(async () => {
@@ -5427,6 +5430,7 @@ describe("oauth2", async () => {
 					idToken: { token: tokenWithSecret },
 				});
 				expect(directSignIn.error).not.toBeNull();
+				expect(jwksRequestCount).toBe(0);
 			});
 
 			it("should reject an HS256 id_token when clientSecret is empty", async () => {
@@ -5455,6 +5459,7 @@ describe("oauth2", async () => {
 					idToken: { token: tokenWithSecret },
 				});
 				expect(directSignIn.error).not.toBeNull();
+				expect(jwksRequestCount).toBe(0);
 			});
 
 			it("should reject an HS256 id_token when discovery omits id_token_signing_alg_values_supported", async () => {
