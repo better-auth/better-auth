@@ -35,22 +35,30 @@ function createStringSecondaryStorage(
 
 function createFlakySecondaryStorage(
 	inner: SecondaryStorage,
+	isOutage: () => boolean = () => true,
 ): SecondaryStorage {
-	// Wraps a working store but throws on every set/get at primary-Redis-outage
-	// level: used to prove cache-repair failures cannot break the session read.
+	// Wraps a working store but throws on every get/set while the outage flag
+	// holds, at primary-Redis-outage level: used to prove cache failures
+	// cannot break the session read. Tests sign in with the store healthy
+	// (session creation touches the cache synchronously), then flip the
+	// outage on before exercising the read path.
+	const guard = <T>(fn: () => T): T => {
+		if (isOutage()) throw new Error("redis: connection refused");
+		return fn();
+	};
 	return {
 		...inner,
-		get() {
-			throw new Error("redis: connection refused");
+		get(key) {
+			return guard(() => inner.get(key));
 		},
-		set() {
-			throw new Error("redis: connection refused");
+		set(key, value, ttl) {
+			return guard(() => inner.set(key, value, ttl));
 		},
-		getAndDelete() {
-			throw new Error("redis: connection refused");
+		getAndDelete(key) {
+			return guard(() => inner.getAndDelete(key));
 		},
-		increment() {
-			throw new Error("redis: connection refused");
+		increment(key, ttl) {
+			return guard(() => inner.increment(key, ttl));
 		},
 	};
 }
@@ -381,9 +389,11 @@ describe("secondary storage - storeSessionInDatabase", () => {
 describe("secondary storage - best-effort cache repair", () => {
 	it("a secondary-storage outage cannot turn the database fallback into a 500", async () => {
 		const store = new Map<string, string>();
+		let outage = false;
 		const { client, signInWithTestUser } = await getTestInstance({
 			secondaryStorage: createFlakySecondaryStorage(
 				createStringSecondaryStorage(store),
+				() => outage,
 			),
 			session: {
 				storeSessionInDatabase: true,
@@ -394,11 +404,15 @@ describe("secondary storage - best-effort cache repair", () => {
 			},
 		});
 
+		// Sign in against the healthy store: session creation mirrors into
+		// the cache synchronously, so it must run before the outage starts.
 		const { headers } = await signInWithTestUser();
 
-		// First read misses the (outage) cache and falls back to the database:
-		// this drives cache-aside repair - which now throws internally. The
-		// request must still return the authoritative database session.
+		// Redis "goes down": every cache operation now throws. The guarded
+		// initial read treats this as a miss and falls back to the database,
+		// and the cache-aside repair fails internally as well - the request
+		// must still return the authoritative database session.
+		outage = true;
 		const s1 = await client.getSession({ fetchOptions: { headers } });
 		expect(s1.error).toBeNull();
 		expect(s1.data).not.toBeNull();

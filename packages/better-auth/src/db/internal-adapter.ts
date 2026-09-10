@@ -607,7 +607,20 @@ export const createInternalAdapter = (
 			user: User & Record<string, any>;
 		} | null> => {
 			if (secondaryStorage) {
-				const sessionStringified = await secondaryStorage.get(token);
+				// Best-effort cache read: a secondary-storage outage must not 500
+				// the request when the database fallback is available - treat a
+				// failed read as a cache miss and fall through to the database.
+				// Without storeSessionInDatabase the miss path below still
+				// returns null, matching an ordinary cache miss.
+				let sessionStringified: unknown = null;
+				try {
+					sessionStringified = await secondaryStorage.get(token);
+				} catch (error) {
+					logger.error(
+						"[better-auth] secondary-storage session read failed; treating it as a cache miss",
+						error,
+					);
+				}
 				// When preserveSessionInDatabase is enabled, revoked sessions
 				// remain in the database for audit purposes. Skip the database
 				// fallback to prevent those revoked sessions from being restored.
