@@ -4,6 +4,7 @@ import type {
 	ClientStore,
 } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
+import { logger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import {
 	parseSetCookieHeader,
@@ -25,7 +26,7 @@ if (Platform.OS !== "web") {
 
 /**
  * Storage used by the Expo client for cookies and cached session data.
- * Write coordination is scoped to the provided object, so reuse it across
+ * Async access is coordinated through the provided object, so reuse it across
  * clients that access the same stored data.
  */
 export type ExpoClientStorage = Pick<
@@ -266,10 +267,8 @@ export function normalizeCookieName(name: string) {
 }
 
 /**
- * Max characters written per `setItem`. Native secure stores silently reject
- * oversized writes (iOS Keychain refuses values above ~2KB), losing the cookie,
- * so a larger value is split across keys here. Mirrors the server's
- * `chunkCookie`/`joinChunks` in `session-store.ts`; keep the two in sync.
+ * Character budget per stored chunk. Some native stores reject large values,
+ * so larger strings are split across keys. This is not a byte-size guarantee.
  *
  * @see https://github.com/better-auth/better-auth/issues/9151
  */
@@ -286,6 +285,7 @@ const MAX_STORAGE_CHUNKS = 100;
 const CHUNK_MARKER = "\u0001ba-chunks:";
 
 type ChunkSlot = 0 | 1;
+const CHUNK_SLOTS = [null, 0, 1] as const;
 
 interface ChunkMarker {
 	count: number;
@@ -360,7 +360,7 @@ function readChunks(
 	let value = "";
 	for (let i = 0; i < marker.count; i++) {
 		const chunk = storage.getItem(getChunkKey(key, marker, i));
-		if (chunk == null) {
+		if (!chunk) {
 			return null;
 		}
 		value += chunk;
@@ -376,7 +376,7 @@ async function readChunksAsync(
 	let value = "";
 	for (let i = 0; i < marker.count; i++) {
 		const chunk = await storage.getItemAsync(getChunkKey(key, marker, i));
-		if (chunk == null) {
+		if (!chunk) {
 			return null;
 		}
 		value += chunk;
@@ -430,13 +430,25 @@ async function readStoredValueAsync(
 	});
 }
 
-function getStorageWrites(
+interface ChunkCleanupRange {
+	prefix: string;
+	start: number;
+	end: number;
+}
+
+function getStorageWritePlan(
 	key: string,
 	value: string,
 	currentBaseValue: string | null,
-): [string, string][] {
+): { writes: [key: string, value: string][]; cleanup: ChunkCleanupRange[] } {
+	const currentMarker = currentBaseValue?.startsWith(CHUNK_MARKER)
+		? parseChunkMarker(currentBaseValue)
+		: null;
 	if (value.length <= STORAGE_VALUE_LIMIT) {
-		return [[key, value]];
+		return {
+			writes: [[key, value]],
+			cleanup: getUnusedChunkRanges(key, currentMarker, null),
+		};
 	}
 
 	const count = Math.ceil(value.length / STORAGE_VALUE_LIMIT);
@@ -445,9 +457,6 @@ function getStorageWrites(
 			`Storage value requires ${count} chunks, exceeding the limit of ${MAX_STORAGE_CHUNKS}`,
 		);
 	}
-	const currentMarker = currentBaseValue?.startsWith(CHUNK_MARKER)
-		? parseChunkMarker(currentBaseValue)
-		: null;
 	const slot: ChunkSlot = currentMarker?.slot === 0 ? 1 : 0;
 	const marker: ChunkMarker = {
 		count,
@@ -471,47 +480,90 @@ function getStorageWrites(
 		]);
 	}
 	writes.push([key, serializeChunkMarker(marker)]);
-	return writes;
+	return { writes, cleanup: getUnusedChunkRanges(key, currentMarker, marker) };
 }
 
-function createKeyedWriteQueue() {
-	const tails = new Map<string, Promise<unknown>>();
-	return {
-		pending(key: string): boolean {
-			return tails.has(key);
-		},
-		enqueue<Result>(
-			key: string,
-			operation: () => Promise<Result>,
-		): Promise<Result> {
-			const previous = tails.get(key) ?? Promise.resolve();
-			const queued = previous.then(operation, operation);
-			tails.set(key, queued);
-
-			const cleanup = () => {
-				if (tails.get(key) === queued) {
-					tails.delete(key);
-				}
-			};
-			void queued.then(cleanup, cleanup);
-			return queued;
-		},
-	};
+function getSlotChunkCount(marker: ChunkMarker | null, slot: ChunkSlot | null) {
+	if (!marker) return 0;
+	if (marker.slot === slot) return marker.count;
+	if (marker.slot === null || slot === null) return 0;
+	return marker.fallbackCount ?? 0;
 }
 
-const storageWriteQueues = new WeakMap<
+function getUnusedChunkRanges(
+	key: string,
+	previousMarker: ChunkMarker | null,
+	marker: ChunkMarker | null,
+): ChunkCleanupRange[] {
+	return CHUNK_SLOTS.map((slot) => ({
+		prefix: slot === null ? key : `${key}.${slot}`,
+		start: getSlotChunkCount(marker, slot),
+		end: getSlotChunkCount(previousMarker, slot),
+	}));
+}
+
+interface StorageRead {
+	snapshot: { value: string | null } | null;
+}
+
+interface StorageKeyState {
+	pending: Promise<unknown> | null;
+	pendingWrites: number;
+	activeRead: StorageRead | null;
+	cleanupComplete: boolean;
+}
+
+const storageStates = new WeakMap<
 	ExpoClientStorage,
-	ReturnType<typeof createKeyedWriteQueue>
+	Map<string, StorageKeyState>
 >();
 
-function getStorageWriteQueue(storage: ExpoClientStorage) {
-	const existing = storageWriteQueues.get(storage);
-	if (existing) {
-		return existing;
+function getStorageState(storage: ExpoClientStorage, key: string) {
+	let states = storageStates.get(storage);
+	if (!states) {
+		states = new Map();
+		storageStates.set(storage, states);
 	}
-	const queue = createKeyedWriteQueue();
-	storageWriteQueues.set(storage, queue);
-	return queue;
+	let state = states.get(key);
+	if (!state) {
+		state = {
+			pending: null,
+			pendingWrites: 0,
+			activeRead: null,
+			cleanupComplete: false,
+		};
+		states.set(key, state);
+	}
+	return state;
+}
+
+function enqueueStorageOperation<Result>(
+	state: StorageKeyState,
+	operation: () => Promise<Result>,
+): Promise<Result> {
+	const previous = state.pending ?? Promise.resolve();
+	const queued = previous.then(operation, operation);
+	state.pending = queued;
+
+	const cleanup = () => {
+		if (state.pending === queued) state.pending = null;
+	};
+	void queued.then(cleanup, cleanup);
+	return queued;
+}
+
+function enqueueStorageWrite<Result>(
+	state: StorageKeyState,
+	operation: () => Promise<Result>,
+): Promise<Result> {
+	state.pendingWrites++;
+	return enqueueStorageOperation(state, async () => {
+		try {
+			return await operation();
+		} finally {
+			state.pendingWrites--;
+		}
+	});
 }
 
 interface ExpoStorageAdapter {
@@ -527,10 +579,15 @@ interface StoredUpdate {
 }
 
 function createManagedStorage(storage: ExpoClientStorage) {
-	const writeQueue = getStorageWriteQueue(storage);
 	const logWriteError = (key: string, error: unknown) => {
-		console.error(
+		logger.error(
 			`[better-auth/expo] failed to persist "${key}" to storage`,
+			error,
+		);
+	};
+	const logCleanupError = (key: string, error: unknown) => {
+		logger.error(
+			`[better-auth/expo] failed to clear unused chunks for "${key}"`,
 			error,
 		);
 	};
@@ -538,22 +595,56 @@ function createManagedStorage(storage: ExpoClientStorage) {
 		const key = normalizeCookieName(name);
 		return readStoredValue(storage, key, storage.getItem(key));
 	};
-	const getItemAsync = async (name: string): Promise<string | null> => {
+	const getItemAsync = (name: string): Promise<string | null> => {
 		const key = normalizeCookieName(name);
-		const baseValue = await storage.getItemAsync(key);
-		return readStoredValueAsync(storage, key, baseValue);
+		const state = getStorageState(storage, key);
+		return enqueueStorageOperation(state, async () => {
+			const read: StorageRead = { snapshot: null };
+			state.activeRead = read;
+			try {
+				const baseValue = await storage.getItemAsync(key);
+				const value = await readStoredValueAsync(storage, key, baseValue);
+				return read.snapshot ? read.snapshot.value : value;
+			} finally {
+				state.activeRead = null;
+			}
+		});
 	};
 	const writeItem = (
 		key: string,
 		value: string,
 		currentBaseValue: string | null,
 	) => {
-		for (const [writeKey, writeValue] of getStorageWrites(
+		const state = getStorageState(storage, key);
+		const { writes, cleanup } = getStorageWritePlan(
 			key,
 			value,
 			currentBaseValue,
-		)) {
+		);
+		for (const [writeKey, writeValue] of writes) {
 			storage.setItem(writeKey, writeValue);
+		}
+		try {
+			const scanContiguousOrphans = !state.cleanupComplete;
+			for (const { prefix, start, end } of cleanup) {
+				if (scanContiguousOrphans) {
+					const orphanStart = Math.max(start, end);
+					let orphanEnd = orphanStart;
+					for (; orphanEnd < MAX_STORAGE_CHUNKS; orphanEnd++) {
+						if (!storage.getItem(`${prefix}.${orphanEnd}`)) break;
+					}
+					for (let i = orphanEnd - 1; i >= orphanStart; i--) {
+						storage.setItem(`${prefix}.${i}`, "");
+					}
+				}
+				for (let i = end - 1; i >= start; i--) {
+					storage.setItem(`${prefix}.${i}`, "");
+				}
+			}
+			state.cleanupComplete = true;
+		} catch (error) {
+			state.cleanupComplete = false;
+			logCleanupError(key, error);
 		}
 	};
 	const writeItemAsync = async (
@@ -561,41 +652,103 @@ function createManagedStorage(storage: ExpoClientStorage) {
 		value: string,
 		currentBaseValue: string | null,
 	) => {
-		for (const [writeKey, writeValue] of getStorageWrites(
+		const state = getStorageState(storage, key);
+		const { writes, cleanup } = getStorageWritePlan(
 			key,
 			value,
 			currentBaseValue,
-		)) {
+		);
+		for (const [writeKey, writeValue] of writes) {
 			await storage.setItemAsync(writeKey, writeValue);
+		}
+		try {
+			const scanContiguousOrphans = !state.cleanupComplete;
+			for (const { prefix, start, end } of cleanup) {
+				if (scanContiguousOrphans) {
+					const orphanStart = Math.max(start, end);
+					let orphanEnd = orphanStart;
+					for (; orphanEnd < MAX_STORAGE_CHUNKS; orphanEnd++) {
+						const chunk = await storage.getItemAsync(`${prefix}.${orphanEnd}`);
+						if (!chunk) break;
+					}
+					for (let i = orphanEnd - 1; i >= orphanStart; i--) {
+						await storage.setItemAsync(`${prefix}.${i}`, "");
+					}
+				}
+				for (let i = end - 1; i >= start; i--) {
+					await storage.setItemAsync(`${prefix}.${i}`, "");
+				}
+			}
+			state.cleanupComplete = true;
+		} catch (error) {
+			state.cleanupComplete = false;
+			logCleanupError(key, error);
 		}
 	};
 	const setItem = (name: string, value: string): void => {
 		const key = normalizeCookieName(name);
-		if (writeQueue.pending(key)) {
+		const state = getStorageState(storage, key);
+		if (state.pendingWrites > 0) {
 			logWriteError(
 				key,
 				new Error("Cannot write synchronously while an async write is pending"),
 			);
 			return;
 		}
+
+		let currentBaseValue: string | null = null;
 		try {
-			const currentBaseValue =
-				value.length > STORAGE_VALUE_LIMIT ? storage.getItem(key) : null;
+			currentBaseValue = storage.getItem(key);
+		} catch (error) {
+			state.cleanupComplete = false;
+			if (value.length > STORAGE_VALUE_LIMIT) {
+				logWriteError(key, error);
+				return;
+			}
+		}
+
+		const read = state.activeRead;
+		if (read && read.snapshot === null) {
+			// Preserve the reader's value before its chunks can be overwritten.
+			try {
+				read.snapshot = {
+					value: readStoredValue(storage, key, currentBaseValue),
+				};
+			} catch {
+				read.snapshot = { value: null };
+			}
+		}
+
+		try {
 			writeItem(key, value, currentBaseValue);
 		} catch (error) {
+			state.cleanupComplete = false;
 			logWriteError(key, error);
+			return;
+		}
+		if (read) {
+			read.snapshot = { value };
 		}
 	};
 	const setItemAsync = (name: string, value: string): Promise<void> => {
 		const key = normalizeCookieName(name);
-		return writeQueue.enqueue(key, async () => {
+		const state = getStorageState(storage, key);
+		return enqueueStorageWrite(state, async () => {
+			let currentBaseValue: string | null = null;
 			try {
-				const currentBaseValue =
-					value.length > STORAGE_VALUE_LIMIT
-						? await storage.getItemAsync(key)
-						: null;
+				currentBaseValue = await storage.getItemAsync(key);
+			} catch (error) {
+				state.cleanupComplete = false;
+				if (value.length > STORAGE_VALUE_LIMIT) {
+					logWriteError(key, error);
+					return;
+				}
+			}
+
+			try {
 				await writeItemAsync(key, value, currentBaseValue);
 			} catch (error) {
+				state.cleanupComplete = false;
 				logWriteError(key, error);
 			}
 		});
@@ -605,7 +758,8 @@ function createManagedStorage(storage: ExpoClientStorage) {
 		update: (currentValue: string | null) => string,
 	): Promise<StoredUpdate | null> => {
 		const key = normalizeCookieName(name);
-		return writeQueue.enqueue(key, async () => {
+		const state = getStorageState(storage, key);
+		return enqueueStorageWrite(state, async () => {
 			try {
 				const currentBaseValue = await storage.getItemAsync(key);
 				const previousValue = await readStoredValueAsync(
@@ -617,6 +771,7 @@ function createManagedStorage(storage: ExpoClientStorage) {
 				await writeItemAsync(key, value, currentBaseValue);
 				return { previousValue, value };
 			} catch (error) {
+				state.cleanupComplete = false;
 				logWriteError(key, error);
 				return null;
 			}
@@ -628,7 +783,7 @@ function createManagedStorage(storage: ExpoClientStorage) {
 
 /**
  * Wraps Expo storage with chunking, recoverable writes, and serialized async
- * updates.
+ * access.
  */
 export function storageAdapter(storage: ExpoClientStorage): ExpoStorageAdapter {
 	const managedStorage = createManagedStorage(storage);
