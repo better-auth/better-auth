@@ -177,13 +177,8 @@ jobs:
             exit 1
           fi
           COMMENTS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | jq -s 'add')
-          if [ -n "$RELEASE_APP_ID" ]; then
-            COMMENT=$(echo "$COMMENTS" | jq -c --arg app "$RELEASE_APP_ID" \
-              '[.[] | select((.performed_via_github_app.id | tostring) == $app) | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
-          else
-            COMMENT=$(echo "$COMMENTS" | jq -c \
-              '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
-          fi
+          COMMENT=$(echo "$COMMENTS" | jq -c --arg app "$RELEASE_APP_ID" \
+            '[.[] | select((.performed_via_github_app.id | tostring) == $app) | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
           if [ -z "$COMMENT" ]; then
             {
               echo "### Approved release notes are missing"

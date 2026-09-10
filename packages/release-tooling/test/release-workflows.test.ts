@@ -688,6 +688,7 @@ describe("release publication security", () => {
 	it("publishes only through the scoped release App", () => {
 		const release = getJob(releaseWorkflow, "release");
 		const token = getStep(release, "Generate App Token");
+		const approvedNotes = getStep(release, "Resolve approved release notes");
 
 		expect(release.permissions).toEqual({
 			contents: "read",
@@ -701,6 +702,8 @@ describe("release publication security", () => {
 		expect(releaseWorkflow.content).not.toContain(
 			"steps.app-token.outputs.token || secrets.GITHUB_TOKEN",
 		);
+		expect(approvedNotes.run).toContain("performed_via_github_app.id");
+		expect(approvedNotes.run).not.toContain('github-actions[bot]');
 	});
 
 	it("scopes the promotion App token to its required permissions", () => {
