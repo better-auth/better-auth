@@ -36,6 +36,8 @@ Vetoes and failed session replacement roll back the email, verification token an
 Cookie caching does not authorize revoked sessions, and pending state is refreshed after changes.
 
 If the target address is claimed before confirmation, the pending request is cleared and its
-link consumed without revoking sessions, and the visiting account's cached pending state is refreshed.
+link consumed without revoking sessions. The visiting account's session cache is invalidated,
+including chunked cookies, so the next read fetches current state without re-signing a
+concurrently revoked session. The session token and remember-me choice are preserved.
 A separately declared mutable configuration retains
 the optional pending-email user type; an explicitly disabled strategy omits it.

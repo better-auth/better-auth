@@ -589,3 +589,101 @@ it.each([
 	expect(replay.headers.get("location")).toContain("INVALID_TOKEN");
 	expect(completed).not.toHaveBeenCalled();
 });
+
+/** @see https://github.com/better-auth/better-auth/pull/8916#discussion_r3976670283 */
+it.each([
+	{ chunked: false, revokeOtherSessions: false },
+	{ chunked: true, revokeOtherSessions: false },
+	{ chunked: false, revokeOtherSessions: true },
+	{ chunked: true, revokeOtherSessions: true },
+])("does not recache a concurrently revoked session after rejecting an occupied target (%j)", async ({
+	chunked,
+	revokeOtherSessions,
+}) => {
+	let url = "";
+	const completed = vi.fn();
+	const { auth, client, db, signInWithTestUser } = await getTestInstance({
+		session: { cookieCache: { enabled: true, maxAge: 300 } },
+		user: {
+			additionalFields: {
+				cachePadding: {
+					type: "string",
+					defaultValue: chunked ? "x".repeat(5000) : "",
+				},
+			},
+			changeEmail: {
+				enabled: true,
+				strategy: "verification-table",
+				revokeOtherSessions,
+				sendVerificationEmail: async (data) => {
+					url = data.url;
+				},
+				onChangeEmailCompleted: completed,
+			},
+		},
+	});
+	const { headers, user } = await signInWithTestUser();
+	const requested = await client.changeEmail(
+		{ newEmail: "claimed@example.com" },
+		{ headers, onSuccess: ({ response }) => applyCookies(response, headers) },
+	);
+	expect(requested.error).toBeNull();
+	const current = await auth.api.getSession({ headers });
+	expect(current?.user).toMatchObject({ pendingEmail: "claimed@example.com" });
+	const context = await auth.$context;
+	const cacheName = context.authCookies.sessionData.name;
+	expect(headers.get("cookie")?.includes(`${cacheName}.0=`)).toBe(chunked);
+	await db.create({
+		model: "user",
+		data: {
+			name: "Claimant",
+			email: "claimed@example.com",
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		},
+	});
+	const updateUserIf = context.internalAdapter.updateUserIf.bind(
+		context.internalAdapter,
+	);
+	const cleanup = vi
+		.spyOn(context.internalAdapter, "updateUserIf")
+		.mockImplementationOnce(async (...args) => {
+			const updated = await updateUserIf(...args);
+			await db.delete({
+				model: "session",
+				where: [{ field: "token", value: current!.session.token }],
+			});
+			return updated;
+		});
+	const response = await auth.handler(new Request(url, { headers }));
+	expect(response.status).toBe(302);
+	expect(response.headers.get("location")).toContain("INVALID_TOKEN");
+	expect(cleanup).toHaveBeenCalledOnce();
+	expect(
+		await db.findOne({
+			model: "session",
+			where: [{ field: "token", value: current!.session.token }],
+		}),
+	).toBeNull();
+	applyCookies(response, headers);
+	expect(await auth.api.getSession({ headers })).toBeNull();
+	const cachedCookies = response.headers
+		.getSetCookie()
+		.filter(
+			(cookie) =>
+				cookie.startsWith(`${cacheName}=`) ||
+				cookie.startsWith(`${cacheName}.`),
+		);
+	expect(cachedCookies.length).toBeGreaterThan(0);
+	expect(
+		cachedCookies.every((cookie) => /;\s*max-age=0(?:;|$)/i.test(cookie)),
+	).toBe(true);
+	expect(
+		await db.findOne({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		}),
+	).toMatchObject({ email: user.email, pendingEmail: null });
+	expect(completed).not.toHaveBeenCalled();
+});

@@ -8,7 +8,12 @@ import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	expireCookie,
+	setSessionCookie,
+} from "../../cookies";
+import { createSessionStore } from "../../cookies/session-store";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
@@ -1377,13 +1382,10 @@ export const verifyEmailChange = createAuthEndpoint(
 			: await completeChange();
 		if ("invalid" in result) {
 			if (currentSession) {
-				const refreshedUser =
-					await ctx.context.internalAdapter.findUserById(userId);
-				if (refreshedUser)
-					await setSessionCookie(ctx, {
-						session: currentSession.session,
-						user: refreshedUser,
-					});
+				const cache = ctx.context.authCookies.sessionData;
+				expireCookie(ctx, cache);
+				const store = createSessionStore(cache.name, cache.attributes, ctx);
+				store.setCookies(store.clean());
 			}
 			throw ctx.redirect(errorURL);
 		}

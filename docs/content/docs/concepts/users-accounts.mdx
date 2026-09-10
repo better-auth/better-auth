@@ -184,6 +184,10 @@ in to another account is rejected without consuming the link or replacing its se
 Sensitive operations read the authoritative session store even when cookie caching is enabled.
 A revoked cached session is treated as anonymous during verification and cannot cancel a request.
 Request and cancellation responses refresh the public pending state in the existing session cookie.
+If the requested address is taken before confirmation, the pending request is cleared and the link
+is consumed. The response invalidates the session cache, including chunked cookies, while preserving
+the session token and remember-me choice. The next session read fetches current state from storage
+instead of accepting a newly signed cache for a session that might have been revoked concurrently.
 
 When upgrading an earlier preview of this strategy, add the nullable `pendingEmailRequestId`
 column. Existing pending links do not carry a request identity and are rejected; users must
