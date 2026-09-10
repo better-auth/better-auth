@@ -222,6 +222,125 @@ export const sendVerificationEmail = createAuthEndpoint(
 	},
 );
 
+/**
+ * Builds the URL for the token that actually changes the email address
+ * (`requestType: "change-email-verification"`). In `"explicit"` confirmation
+ * mode this points at the app's callbackURL with the token attached instead
+ * of better-auth's own `/verify-email` endpoint, so visiting the emailed
+ * link previews the change instead of applying it directly.
+ */
+export function buildChangeEmailVerificationURL(
+	ctx: GenericEndpointContext,
+	token: string,
+	callbackURL: string | undefined,
+) {
+	const confirmationMode =
+		ctx.context.options.user?.changeEmail?.confirmationMode || "instant";
+	if (confirmationMode === "explicit") {
+		return appendQueryParams(
+			callbackURL || "/",
+			new URLSearchParams({ token }),
+		);
+	}
+	return `${
+		ctx.context.baseURL
+	}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+		callbackURL || "/",
+	)}`;
+}
+
+type MaybeSession = Awaited<ReturnType<typeof getSessionFromCtx>>;
+
+/**
+ * Decodes and validates a `change-email-verification` JWT without applying
+ * it: used by both the instant `/verify-email` callback (to know whether to
+ * apply immediately) and the explicit-mode preview/confirm endpoints (to
+ * peek the pending change / apply it on demand).
+ */
+async function resolveChangeEmailVerificationToken(
+	ctx: GenericEndpointContext,
+	token: string,
+) {
+	let jwt: JWTVerifyResult<JWTPayload>;
+	try {
+		jwt = await jwtVerify(token, new TextEncoder().encode(ctx.context.secret), {
+			algorithms: ["HS256"],
+		});
+	} catch (e) {
+		if (e instanceof JWTExpired) {
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.TOKEN_EXPIRED);
+		}
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+	}
+	const schema = z.object({
+		email: z.email(),
+		updateTo: z.string().optional(),
+		requestType: z.string().optional(),
+	});
+	const parsed = schema.parse(jwt.payload);
+	if (!parsed.updateTo || parsed.requestType !== "change-email-verification") {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+	}
+	const user = await ctx.context.internalAdapter.findUserByEmail(parsed.email);
+	if (!user) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+	}
+	const session = await getSessionFromCtx(ctx);
+	if (session && session.user.email !== parsed.email) {
+		throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_USER);
+	}
+	return {
+		user,
+		email: parsed.email,
+		updateTo: parsed.updateTo,
+		session,
+	};
+}
+
+/**
+ * Applies a pending email change: reuses the active session if it belongs
+ * to the same user, otherwise creates one, updates the email, fires
+ * `afterEmailVerification`, and sets the session cookie. Shared by the
+ * instant `/verify-email` callback and the explicit-mode `/change-email/confirm`
+ * endpoint so both endpoints apply exactly the same mutation.
+ */
+async function completeChangeEmailVerification(
+	ctx: GenericEndpointContext,
+	user: { user: User },
+	email: string,
+	updateTo: string,
+	currentSession: MaybeSession,
+) {
+	let activeSession = currentSession;
+	if (!activeSession) {
+		const newSession = await ctx.context.internalAdapter.createSession(
+			user.user.id,
+		);
+		if (!newSession) {
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+			);
+		}
+		activeSession = { session: newSession, user: user.user };
+	}
+	const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+		email,
+		{ email: updateTo, emailVerified: true },
+	);
+	if (ctx.context.options.emailVerification?.afterEmailVerification) {
+		await ctx.context.options.emailVerification.afterEmailVerification(
+			updatedUser,
+			ctx.request,
+		);
+	}
+	await setSessionCookie(ctx, {
+		session: activeSession.session,
+		user: { ...activeSession.user, email: updateTo, emailVerified: true },
+	});
+	return updatedUser;
+}
+
 export const verifyEmail = createAuthEndpoint(
 	"/verify-email",
 	{
@@ -344,10 +463,11 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.options.emailVerification?.expiresIn,
 						{ requestType: "change-email-verification" },
 					);
-					const updateCallbackURL = ctx.query.callbackURL
-						? encodeURIComponent(ctx.query.callbackURL)
-						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
+					const url = buildChangeEmailVerificationURL(
+						ctx,
+						newToken,
+						ctx.query.callbackURL,
+					);
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
@@ -369,41 +489,13 @@ export const verifyEmail = createAuthEndpoint(
 				 * User clicks verification -> updates email
 				 */
 				case "change-email-verification": {
-					let activeSession = session;
-					if (!activeSession) {
-						const newSession = await ctx.context.internalAdapter.createSession(
-							user.user.id,
-						);
-						if (!newSession) {
-							throw APIError.from(
-								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							);
-						}
-						activeSession = {
-							session: newSession,
-							user: user.user,
-						};
-					}
-					const updatedUser =
-						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
-							email: parsed.updateTo,
-							emailVerified: true,
-						});
-					if (ctx.context.options.emailVerification?.afterEmailVerification) {
-						await ctx.context.options.emailVerification.afterEmailVerification(
-							updatedUser,
-							ctx.request,
-						);
-					}
-					await setSessionCookie(ctx, {
-						session: activeSession.session,
-						user: {
-							...activeSession.user,
-							email: parsed.updateTo,
-							emailVerified: true,
-						},
-					});
+					const updatedUser = await completeChangeEmailVerification(
+						ctx,
+						user,
+						parsed.email,
+						parsed.updateTo,
+						session,
+					);
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
@@ -540,6 +632,107 @@ export const verifyEmail = createAuthEndpoint(
 		return ctx.json({
 			status: true,
 			user: null,
+		});
+	},
+);
+
+export const changeEmailPreview = createAuthEndpoint(
+	"/change-email/preview",
+	{
+		method: "GET",
+		query: z.object({
+			token: z.string().meta({
+				description: "The token to preview the pending email change",
+			}),
+		}),
+		metadata: {
+			openapi: {
+				description:
+					"Preview a pending email change without applying it. Used by explicit confirmation mode.",
+				responses: {
+					"200": {
+						description: "The pending email change, not yet applied",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										email: {
+											type: "string",
+											description: "The current email address",
+										},
+										newEmail: {
+											type: "string",
+											description: "The email address the change would apply",
+										},
+									},
+									required: ["email", "newEmail"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { email, updateTo } = await resolveChangeEmailVerificationToken(
+			ctx,
+			ctx.query.token,
+		);
+		return ctx.json({ email, newEmail: updateTo });
+	},
+);
+
+export const changeEmailConfirm = createAuthEndpoint(
+	"/change-email/confirm",
+	{
+		method: "POST",
+		body: z.object({
+			token: z.string().meta({
+				description: "The token to confirm the pending email change",
+			}),
+		}),
+		metadata: {
+			openapi: {
+				description:
+					"Confirm and apply a pending email change. Used by explicit confirmation mode.",
+				responses: {
+					"200": {
+						description: "Email successfully changed",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: { type: "boolean" },
+										user: {
+											type: "object",
+											$ref: "#/components/schemas/User",
+										},
+									},
+									required: ["status", "user"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { user, email, updateTo, session } =
+			await resolveChangeEmailVerificationToken(ctx, ctx.body.token);
+		const updatedUser = await completeChangeEmailVerification(
+			ctx,
+			user,
+			email,
+			updateTo,
+			session,
+		);
+		return ctx.json({
+			status: true,
+			user: parseUserOutput(ctx.context.options, updatedUser),
 		});
 	},
 );

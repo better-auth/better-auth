@@ -117,6 +117,118 @@ describe("updateUser", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10748
+	 */
+	describe("changeEmail explicit confirmation mode", () => {
+		it("second hop (after confirming from the old address) uses an app URL, preview/confirm apply it", async () => {
+			let confirmationToken = "";
+			let capturedUrl = "";
+			let capturedToken = "";
+			const { client, auth, testUser, db, signInWithTestUser } =
+				await getTestInstance({
+					trustedOrigins: ["https://app.example.com"],
+					emailVerification: {
+						async sendVerificationEmail({ url, token }) {
+							capturedUrl = url;
+							capturedToken = token;
+						},
+					},
+					user: {
+						changeEmail: {
+							enabled: true,
+							confirmationMode: "explicit",
+							async sendChangeEmailConfirmation({ token }) {
+								confirmationToken = token;
+							},
+						},
+					},
+				});
+			const { headers, runWithUser } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			const newEmail = "explicit-new-email@email.com";
+			await runWithUser(async () => {
+				await client.changeEmail({
+					newEmail,
+					callbackURL: "https://app.example.com/account",
+				});
+			});
+			expect(confirmationToken).not.toBe("");
+
+			// Clicking the (non-destructive) confirmation link sends the second,
+			// destructive verification email -- its URL must be app-owned. The
+			// real link carries callbackURL as a query param (set above via
+			// changeEmail's own callbackURL), so simulate that here too.
+			await runWithUser(async () => {
+				await client.verifyEmail({
+					query: {
+						token: confirmationToken,
+						callbackURL: "https://app.example.com/account",
+					},
+				});
+			});
+			expect(capturedUrl.startsWith("https://app.example.com/account")).toBe(
+				true,
+			);
+			expect(capturedUrl).not.toContain("/verify-email");
+			expect(capturedUrl).toContain(`token=${capturedToken}`);
+
+			// Previewing must not change the email.
+			const preview = await auth.api.changeEmailPreview({
+				query: { token: capturedToken },
+			});
+			expect(preview).toMatchObject({ email: testUser.email, newEmail });
+			const stillOld = await client.getSession({ fetchOptions: { headers } });
+			expect(stillOld.data?.user.email).toBe(testUser.email);
+
+			// Confirming actually applies it.
+			const confirmed = await auth.api.changeEmailConfirm({
+				body: { token: capturedToken },
+			});
+			expect(confirmed.status).toBe(true);
+			expect(confirmed.user?.email).toBe(newEmail);
+			const updated = await client.getSession({ fetchOptions: { headers } });
+			expect(updated.data?.user.email).toBe(newEmail);
+		});
+
+		it("direct verification link (no confirmation configured) also uses an app URL", async () => {
+			let capturedUrl = "";
+			const { client, testUser, db, signInWithTestUser } =
+				await getTestInstance({
+					emailVerification: {
+						async sendVerificationEmail({ url }) {
+							capturedUrl = url;
+						},
+					},
+					user: {
+						changeEmail: { enabled: true, confirmationMode: "explicit" },
+					},
+				});
+			const { runWithUser } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+
+			await runWithUser(async () => {
+				await client.changeEmail({
+					newEmail: "explicit-direct@email.com",
+					callbackURL: "https://app.example.com/account",
+				});
+			});
+			expect(capturedUrl.startsWith("https://app.example.com/account")).toBe(
+				true,
+			);
+			expect(capturedUrl).not.toContain("/verify-email");
+		});
+	});
+
 	it("should update the user's password", async () => {
 		const { client, testUser, signInWithTestUser } = await getTestInstance();
 		const { runWithUser } = await signInWithTestUser();
@@ -777,6 +889,62 @@ describe("delete user", async () => {
 			});
 			expect(remaining.length).toBe(0);
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10748
+	 */
+	it("explicit confirmation mode: previews without deleting, only /confirm applies it", async () => {
+		let capturedUrl = "";
+		let capturedToken = "";
+		const { client, auth, signInWithTestUser, testUser } =
+			await getTestInstance({
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ url, token }) {
+							capturedUrl = url;
+							capturedToken = token;
+						},
+					},
+				},
+			});
+		const { headers, runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.deleteUser({
+				password: testUser.password,
+				callbackURL: "https://app.example.com/settings",
+			});
+			expect(res.data).toMatchObject({ success: true });
+		});
+
+		// The emailed link is app-owned in explicit mode, not better-auth's own
+		// GET callback -- visiting it must not be destructive on its own.
+		expect(capturedUrl.startsWith("https://app.example.com/settings")).toBe(
+			true,
+		);
+		expect(capturedUrl).not.toContain("/delete-user/callback");
+		expect(capturedUrl).toContain(`token=${capturedToken}`);
+
+		const preview = await auth.api.deleteUserPreview({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(preview.user).toBeDefined();
+		const stillThere = await client.getSession({ fetchOptions: { headers } });
+		expect(stillThere.data).toBeDefined();
+
+		const confirmed = await auth.api.deleteUserConfirm({
+			body: { token: capturedToken },
+			headers,
+		});
+		expect(confirmed).toMatchObject({
+			success: true,
+			message: "User deleted",
+		});
+		const gone = await client.getSession({ fetchOptions: { headers } });
+		expect(gone.data).toBeNull();
 	});
 
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
