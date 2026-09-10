@@ -9,7 +9,6 @@ import type { User } from "../../../types";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
 import type { InferOrganization, Member } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -19,42 +18,62 @@ const transferOwnershipTokenValueSchema = z.object({
 	newOwnerMemberId: z.string(),
 });
 
+function parseTransferOwnershipTokenValue(raw: string) {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		return null;
+	}
+	const result = transferOwnershipTokenValueSchema.safeParse(parsed);
+	return result.success ? result.data : null;
+}
+
 /**
- * Re-validates a pending ownership-transfer token: session, the current
- * owner's membership, and the `member:update` permission (or creator
- * shortcut) are all rechecked here because they may have changed since the
- * confirmation email was sent. The target member is also rechecked so a
- * membership change after the email was sent (e.g. the target left, or was
- * promoted by another route) can't be replayed against a stale target.
- * `consume: true` burns the single-use token; `consume: false` only peeks it.
+ * Ownership transfer only ever moves `creatorRole` off of someone who
+ * currently holds it, onto someone who doesn't -- the same invariant
+ * `update-member-role` enforces when a role change targets the creator
+ * role (only an existing creator may grant or take it), rather than the
+ * generic `member:update` permission a plain admin also holds. Checking
+ * `member:update` here instead (as an earlier version of this endpoint
+ * did) would let any admin nominate a new owner while leaving the actual
+ * owner untouched, minting an extra owner nobody with real authority
+ * approved.
+ */
+function isCreator(role: string, creatorRole: string) {
+	return role
+		.split(",")
+		.map((r) => r.trim())
+		.includes(creatorRole);
+}
+
+/**
+ * Re-validates a pending ownership-transfer token *without consuming it*:
+ * session, the current owner's role, and the target's eligibility are all
+ * checked here because they may have changed since the confirmation email
+ * was sent. Used by all three endpoints. The callback and confirm endpoints
+ * additionally call `consumeTransferOwnershipToken` immediately before
+ * applying the swap -- burning the token here instead would let an
+ * unauthenticated or unauthorized visit (an email scanner following the
+ * link with no session, for instance) permanently invalidate it before the
+ * real owner ever gets a chance to use it.
  */
 async function resolveTransferOwnershipToken<O extends OrganizationOptions>(
 	ctx: GenericEndpointContext,
 	options: O,
 	token: string,
-	{ consume }: { consume: boolean },
 ) {
 	const identifier = `transfer-ownership-${token}`;
-	const verification = consume
-		? await ctx.context.internalAdapter.consumeVerificationValue(identifier)
-		: await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (!verification || (!consume && verification.expiresAt < new Date())) {
+	const verification =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!verification || verification.expiresAt < new Date()) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	// Parsed as JSON (not a delimited string) so an id that happens to
-	// contain the delimiter character can't shift the split.
-	let parsedValue: unknown;
-	try {
-		parsedValue = JSON.parse(verification.value);
-	} catch {
+	const tokenValue = parseTransferOwnershipTokenValue(verification.value);
+	if (!tokenValue) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	const tokenValue = transferOwnershipTokenValueSchema.safeParse(parsedValue);
-	if (!tokenValue.success) {
-		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
-	}
-	const { organizationId, currentOwnerMemberId, newOwnerMemberId } =
-		tokenValue.data;
+	const { organizationId, currentOwnerMemberId, newOwnerMemberId } = tokenValue;
 	// Ownership transfer is sensitive: bypass the cookie cache on stateful
 	// deployments so a revoked-but-cached session cannot complete it even
 	// when paired with a valid transfer-ownership token.
@@ -74,17 +93,9 @@ async function resolveTransferOwnershipToken<O extends OrganizationOptions>(
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
 	const creatorRole = options.creatorRole || "owner";
-	const canTransfer = await hasPermission(
-		{
-			role: currentOwner.role,
-			permissions: { member: ["update"] },
-			organizationId,
-			options,
-			allowCreatorAllPermissions: true,
-		},
-		ctx,
-	);
-	if (!canTransfer) {
+	// Re-check the caller still holds creatorRole now, not just at the time
+	// the email was sent: it may have been reassigned since.
+	if (!isCreator(currentOwner.role, creatorRole)) {
 		throw APIError.from(
 			"FORBIDDEN",
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_TRANSFER_OWNERSHIP_OF_THIS_ORGANIZATION,
@@ -97,7 +108,7 @@ async function resolveTransferOwnershipToken<O extends OrganizationOptions>(
 			ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 		);
 	}
-	if (newOwnerMember.role.split(",").includes(creatorRole)) {
+	if (isCreator(newOwnerMember.role, creatorRole)) {
 		throw APIError.from(
 			"BAD_REQUEST",
 			ORGANIZATION_ERROR_CODES.TARGET_MEMBER_IS_ALREADY_THE_OWNER,
@@ -124,6 +135,40 @@ async function resolveTransferOwnershipToken<O extends OrganizationOptions>(
 		currentOwner: { ...currentOwner, user: currentOwnerUser },
 		newOwner: { ...newOwnerMember, user: newOwnerUser },
 	};
+}
+
+/**
+ * Atomically consumes the transfer-ownership token, once every check in
+ * `resolveTransferOwnershipToken` has already passed. This is the only
+ * point that burns the single-use token, so two concurrent callbacks with
+ * the same token can still complete the swap at most once, while an
+ * unauthorized peek never destroys it. Re-validates the consumed row still
+ * matches what was already checked, in case it changed in the gap between
+ * the two calls.
+ */
+async function consumeTransferOwnershipToken(
+	ctx: GenericEndpointContext,
+	token: string,
+	expected: {
+		organizationId: string;
+		currentOwnerMemberId: string;
+		newOwnerMemberId: string;
+	},
+) {
+	const identifier = `transfer-ownership-${token}`;
+	const verification =
+		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
+	const tokenValue = verification
+		? parseTransferOwnershipTokenValue(verification.value)
+		: null;
+	if (
+		!tokenValue ||
+		tokenValue.organizationId !== expected.organizationId ||
+		tokenValue.currentOwnerMemberId !== expected.currentOwnerMemberId ||
+		tokenValue.newOwnerMemberId !== expected.newOwnerMemberId
+	) {
+		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
+	}
 }
 
 /**
@@ -236,8 +281,11 @@ export const transferOwnership = <O extends OrganizationOptions>(
 					creatorRole,
 					currentOwner,
 					newOwner,
-				} = await resolveTransferOwnershipToken(ctx, options, ctx.body.token, {
-					consume: true,
+				} = await resolveTransferOwnershipToken(ctx, options, ctx.body.token);
+				await consumeTransferOwnershipToken(ctx, ctx.body.token, {
+					organizationId,
+					currentOwnerMemberId: currentOwner.id,
+					newOwnerMemberId: newOwner.id,
 				});
 				const result = await performTransferOwnership(
 					ctx,
@@ -277,17 +325,12 @@ export const transferOwnership = <O extends OrganizationOptions>(
 				);
 			}
 
-			const canTransfer = await hasPermission(
-				{
-					role: currentOwner.role,
-					permissions: { member: ["update"] },
-					organizationId,
-					options: ctx.context.orgOptions,
-					allowCreatorAllPermissions: true,
-				},
-				ctx,
-			);
-			if (!canTransfer) {
+			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
+			// Only a current owner may give up or reassign the creator role --
+			// the generic member:update permission (which a plain admin also
+			// holds) is not enough, same as update-member-role's own rule for
+			// touching the creator role.
+			if (!isCreator(currentOwner.role, creatorRole)) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_TRANSFER_OWNERSHIP_OF_THIS_ORGANIZATION,
@@ -309,8 +352,7 @@ export const transferOwnership = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_CANNOT_TRANSFER_OWNERSHIP_TO_YOURSELF,
 				);
 			}
-			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
-			if (newOwnerMember.role.split(",").includes(creatorRole)) {
+			if (isCreator(newOwnerMember.role, creatorRole)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.TARGET_MEMBER_IS_ALREADY_THE_OWNER,
@@ -440,8 +482,11 @@ export const transferOwnershipCallback = <O extends OrganizationOptions>(
 				creatorRole,
 				currentOwner,
 				newOwner,
-			} = await resolveTransferOwnershipToken(ctx, options, ctx.query.token, {
-				consume: true,
+			} = await resolveTransferOwnershipToken(ctx, options, ctx.query.token);
+			await consumeTransferOwnershipToken(ctx, ctx.query.token, {
+				organizationId,
+				currentOwnerMemberId: currentOwner.id,
+				newOwnerMemberId: newOwner.id,
 			});
 			const result = await performTransferOwnership(
 				ctx,
@@ -486,9 +531,7 @@ export const transferOwnershipPreview = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const { organization, currentOwner, newOwner } =
-				await resolveTransferOwnershipToken(ctx, options, ctx.query.token, {
-					consume: false,
-				});
+				await resolveTransferOwnershipToken(ctx, options, ctx.query.token);
 			return ctx.json({ organization, currentOwner, newOwner });
 		},
 	);
@@ -525,8 +568,11 @@ export const transferOwnershipConfirm = <O extends OrganizationOptions>(
 				creatorRole,
 				currentOwner,
 				newOwner,
-			} = await resolveTransferOwnershipToken(ctx, options, ctx.body.token, {
-				consume: true,
+			} = await resolveTransferOwnershipToken(ctx, options, ctx.body.token);
+			await consumeTransferOwnershipToken(ctx, ctx.body.token, {
+				organizationId,
+				currentOwnerMemberId: currentOwner.id,
+				newOwnerMemberId: newOwner.id,
 			});
 			const result = await performTransferOwnership(
 				ctx,
