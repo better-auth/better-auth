@@ -506,7 +506,7 @@
     "@types/react-dom": "catalog:react19",
     "happy-dom": "^20.8.9",
     "msw": "^2.14.6",
-    "next": "^16.2.11",
+    "next": "^16.3.4",
     "oauth2-mock-server": "^9.0.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
