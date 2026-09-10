@@ -940,7 +940,10 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteUserSessions: async (userId: string) => {
+		deleteUserSessions: async (
+			userId: string,
+			deletionOptions?: { throwOnVeto?: boolean },
+		) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
 			if (secondaryStorage) {
 				if (!options.session?.storeSessionInDatabase) {
@@ -951,6 +954,10 @@ export const createInternalAdapter = (
 					const endedSessions = await endPreservedSessions([
 						{ field: "userId", value: userId },
 					]);
+					if (endedSessions === null && deletionOptions?.throwOnVeto)
+						throw new BetterAuthError(
+							"Session deletion was vetoed by a database hook",
+						);
 					if (endedSessions !== null) {
 						await queueCachedUserSessionDeletion(userId, sessionReferences);
 					}
@@ -967,6 +974,10 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
+			if (deletedSessions === null && deletionOptions?.throwOnVeto)
+				throw new BetterAuthError(
+					"Session deletion was vetoed by a database hook",
+				);
 			if (deletedSessions !== null) {
 				await queueCachedUserSessionDeletion(userId, sessionReferences);
 			}
@@ -1097,6 +1108,37 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
+			return user;
+		},
+		updateUserIf: async (userId, data, conditions) => {
+			const where: Where[] = [{ field: "id", value: userId }, ...conditions];
+			const user = await updateWithHooks<User>(
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
+				where,
+				"user",
+				{
+					executeMainFn: false,
+					fn: async (set) =>
+						(await getCurrentAdapter(adapter)).incrementOne<User>({
+							model: "user",
+							where,
+							increment: {},
+							set,
+						}),
+				},
+			);
+			if (!user) return null;
 			await queueAfterTransactionHook(() => refreshUserSessions(user), {
 				onError(error) {
 					logger.error(

@@ -152,6 +152,7 @@ export function getWithHooks(
 						where,
 					})
 				: customUpdated;
+		if (!updated) return null;
 
 		for (const { source, hooks } of hooksEntries) {
 			const toRun = hooks[model]?.update?.after;

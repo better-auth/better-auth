@@ -443,6 +443,42 @@ describe("drizzle-adapter", () => {
 			});
 		}
 
+		it("does not update or reread a MySQL user after a set-only guard misses", async () => {
+			const limit = vi.fn().mockResolvedValue([]);
+			const lock = vi.fn().mockReturnValue({ limit });
+			const where = vi.fn().mockReturnValue({ for: lock });
+			const select = vi
+				.fn()
+				.mockReturnValue({ from: vi.fn().mockReturnValue({ where }) });
+			const update = vi.fn();
+			const tx = { select, update };
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				transaction: vi.fn(
+					async (fn: (connection: typeof tx) => Promise<unknown>) => fn(tx),
+				),
+			};
+			const adapter = drizzleAdapter(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+			expect(
+				await adapter.incrementOne({
+					model: "user",
+					where: [
+						{ field: "id", value: "user-1" },
+						{ field: "email", value: "old@example.com" },
+					],
+					increment: {},
+					set: { email: "new@example.com" },
+				}),
+			).toBeNull();
+			expect(db.transaction).toHaveBeenCalledOnce();
+			expect(lock).toHaveBeenCalledWith("update");
+			expect(limit).toHaveBeenCalledWith(1);
+			expect(select).toHaveBeenCalledOnce();
+			expect(update).not.toHaveBeenCalled();
+		});
+
 		it("compiles each increment to a `column + delta` expression", async () => {
 			const { db, calls } = createIncrementDb([{ id: "user-1", attempts: 4 }]);
 			const adapter = createAdapter(db);
@@ -469,7 +505,7 @@ describe("drizzle-adapter", () => {
 				chunks.some((chunk) => is(chunk, Param) && chunk.value === 3),
 			).toBe(true);
 			// The guard runs on the SELECT that picks one id (one predicate here);
-			// the UPDATE is pinned to that single id, not the raw guard clause.
+			// the UPDATE is pinned to that single id and rechecks the guard.
 			expect(calls.selectGuard).toHaveLength(1);
 			expect(calls.whereArgs).toHaveLength(1);
 		});
@@ -510,18 +546,19 @@ describe("drizzle-adapter", () => {
 			expect(result).toEqual({ id: "user-1", attempts: 5 });
 
 			// The non-unique guard is applied to the SELECT, which is capped to one
-			// row; the UPDATE never receives the raw guard.
+			// row; the UPDATE also rechecks its mutable guards.
 			expect(db.select).toHaveBeenCalledTimes(1);
 			expect(calls.selectGuard).toHaveLength(1);
 
-			// The UPDATE is guarded by a single `id IN (<one-row subquery>)`
-			// predicate, not the original multi-row clause.
+			// The UPDATE combines the pinned id with the original guards.
 			expect(calls.whereArgs).toHaveLength(1);
 			const updateGuard = calls.whereArgs?.[0];
 			expect(is(updateGuard, SQL)).toBe(true);
 			// The pinned predicate embeds the single-id subquery, proving the update
 			// targets only the one selected row.
-			expect((updateGuard as SQL).queryChunks).toContain(targetIds);
+			const chunks = (value: unknown): unknown[] =>
+				is(value, SQL) ? value.queryChunks.flatMap(chunks) : [value];
+			expect(chunks(updateGuard)).toContain(targetIds);
 		});
 
 		it("returns null when the guard matches no row", async () => {

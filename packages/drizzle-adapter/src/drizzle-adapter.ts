@@ -1115,7 +1115,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return null;
 					}
 					// Pin the update to one selected id so a non-unique guard mutates at
-					// most one row, mirroring consumeOne's single-row selection.
+					// most one row. Recheck mutable guards after a concurrent row update.
 					const targetIds = db
 						.select({ id: idColumn })
 						.from(schemaModel)
@@ -1124,7 +1124,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const updated = await db
 						.update(schemaModel)
 						.set(assignments)
-						.where(inArray(idColumn, targetIds))
+						.where(and(inArray(idColumn, targetIds), ...clause))
 						.returning();
 					return (updated[0] as any) ?? null;
 				},

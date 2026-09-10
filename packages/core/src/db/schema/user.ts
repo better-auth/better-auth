@@ -18,6 +18,14 @@ export const userSchema = coreSchema.extend({
 
 export type BaseUser = z.infer<typeof userSchema>;
 
+type PendingEmailFields<Options> = Options extends {
+	changeEmail: { enabled: false };
+}
+	? {}
+	: Options extends { changeEmail: { strategy: "verification-table" } }
+		? { pendingEmail?: string | null }
+		: {};
+
 /**
  * User schema type used by better-auth, note that it's possible that user could have additional fields
  */
@@ -26,6 +34,7 @@ export type User<
 	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
 > = Prettify<
 	BaseUser &
+		PendingEmailFields<DBOptions> &
 		InferDBFieldsFromOptions<DBOptions> &
 		InferDBFieldsFromPlugins<"user", Plugins>
 >;

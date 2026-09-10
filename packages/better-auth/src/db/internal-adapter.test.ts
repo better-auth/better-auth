@@ -2464,3 +2464,131 @@ describe("internal adapter test", async () => {
 		});
 	});
 });
+
+/** @see https://github.com/better-auth/better-auth/pull/8916 */
+describe("guarded user updates", () => {
+	it.each([
+		"mismatch",
+		"veto",
+	] as const)("leaves hooks and cached sessions unchanged after %s", async (failure) => {
+		const store = new Map<string, string>();
+		const after = vi.fn();
+		const before = vi.fn(async () =>
+			failure === "veto" ? (false as const) : undefined,
+		);
+		const options = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(store),
+			databaseHooks: { user: { update: { before, after } } },
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(options)).runMigrations();
+		const { internalAdapter, adapter } = await init(options);
+		const user = await internalAdapter.createUser(
+			{ name: "Original", email: "guard@example.com" },
+			{ method: "test" },
+		);
+		await internalAdapter.createSession(user.id);
+		const snapshot = new Map(store);
+		const updated = await internalAdapter.updateUserIf(
+			user.id,
+			{ name: "Rejected" },
+			[
+				{
+					field: "email",
+					value: failure === "mismatch" ? "wrong@example.com" : user.email,
+				},
+			],
+		);
+		expect(updated).toBeNull();
+		expect(before).toHaveBeenCalledOnce();
+		expect(after).not.toHaveBeenCalled();
+		expect(store).toEqual(snapshot);
+		expect(
+			await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			}),
+		).toMatchObject({ name: "Original" });
+	});
+
+	it("applies hook transformations and refreshes renamed fields only after commit", async () => {
+		const store = new Map<string, string>();
+		const after = vi.fn();
+		const options = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(store),
+			user: { fields: { email: "email_address" } },
+			databaseHooks: {
+				user: {
+					update: {
+						before: async () => ({ data: { name: "Transformed" } }),
+						after,
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(options)).runMigrations();
+		const { internalAdapter, adapter } = await init(options);
+		const user = await internalAdapter.createUser(
+			{ name: "Original", email: "guard@example.com" },
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const cached = store.get(session.token);
+		await runWithTransaction(adapter, async () => {
+			expect(
+				await internalAdapter.updateUserIf(
+					user.id,
+					{ email: "NEW@EXAMPLE.COM" },
+					[{ field: "email", value: user.email }],
+				),
+			).toMatchObject({ name: "Transformed", email: "new@example.com" });
+			expect(store.get(session.token)).toBe(cached);
+			expect(after).not.toHaveBeenCalled();
+		});
+		expect(after).toHaveBeenCalledOnce();
+		expect(after.mock.calls[0]?.[0]).toMatchObject({
+			name: "Transformed",
+			email: "new@example.com",
+		});
+		expect(JSON.parse(store.get(session.token)!)).toMatchObject({
+			user: { name: "Transformed", email: "new@example.com" },
+		});
+	});
+
+	it("discards guarded update hooks and cache writes when the transaction rolls back", async () => {
+		const store = new Map<string, string>();
+		const after = vi.fn();
+		const options = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(store),
+			databaseHooks: { user: { update: { after } } },
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(options)).runMigrations();
+		const { internalAdapter, adapter } = await init(options);
+		const user = await internalAdapter.createUser(
+			{ name: "Original", email: "guard@example.com" },
+			{ method: "test" },
+		);
+		await internalAdapter.createSession(user.id);
+		const snapshot = new Map(store);
+		await expect(
+			runWithTransaction(adapter, async () => {
+				expect(
+					await internalAdapter.updateUserIf(user.id, { name: "Rolled back" }, [
+						{ field: "email", value: user.email },
+					]),
+				).toMatchObject({ name: "Rolled back" });
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		expect(after).not.toHaveBeenCalled();
+		expect(store).toEqual(snapshot);
+		expect(
+			await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			}),
+		).toMatchObject({ name: "Original" });
+	});
+});

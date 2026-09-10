@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getAuthTables, getAuthTablesWithResolvedIndexes } from "../get-tables";
 import type { AccountKey } from "../schema/account";
 import {
 	createLocalAccountIssuer,
 	createOAuthAccountIssuer,
 } from "../schema/account";
+import type { User } from "../schema/user";
 import type { SecondaryStorage } from "../type";
 
 const secondaryStorageStub: SecondaryStorage = {
@@ -403,4 +404,70 @@ describe("getAuthTables", () => {
 			expect(tables[accountUserIdRef!.model]!.fields.email).toBeDefined();
 		});
 	});
+});
+
+describe("email change strategy fields", () => {
+	it.each([
+		undefined,
+		{ enabled: true, strategy: "jwt" as const },
+		{ enabled: false, strategy: "verification-table" as const },
+	])("omits pending fields without opting in: %o", (changeEmail) => {
+		const { user } = getAuthTables({ user: { changeEmail } });
+		expect(user!.fields).not.toHaveProperty("pendingEmail");
+		expect(user!.fields).not.toHaveProperty("pendingEmailRequestId");
+	});
+
+	it("maps both nullable fields and keeps the request identity private", () => {
+		const { user } = getAuthTables({
+			user: {
+				changeEmail: { enabled: true, strategy: "verification-table" },
+				fields: {
+					pendingEmail: "pending_email",
+					pendingEmailRequestId: "pending_email_request_id",
+				},
+			},
+		});
+		expect(user!.fields.pendingEmail).toMatchObject({
+			type: "string",
+			required: false,
+			input: false,
+			fieldName: "pending_email",
+		});
+		expect(user!.fields.pendingEmailRequestId).toMatchObject({
+			type: "string",
+			required: false,
+			input: false,
+			returned: false,
+			fieldName: "pending_email_request_id",
+		});
+	});
+});
+
+/** @see https://github.com/better-auth/better-auth/pull/8916 */
+it("infers pending email for a separately declared mutable configuration", () => {
+	const changeEmail = {
+		enabled: true,
+		strategy: "verification-table" as const,
+	};
+	expectTypeOf(changeEmail.enabled).toEqualTypeOf<boolean>();
+	expectTypeOf<
+		User<{ changeEmail: typeof changeEmail }>["pendingEmail"]
+	>().toEqualTypeOf<string | null | undefined>();
+	expect(
+		getAuthTables({ user: { changeEmail } }).user?.fields.pendingEmail,
+	).toBeDefined();
+});
+
+/** @see https://github.com/better-auth/better-auth/pull/8916 */
+it("does not infer pending email for an explicitly disabled strategy", () => {
+	const changeEmail = {
+		enabled: false,
+		strategy: "verification-table",
+	} as const;
+	expectTypeOf<User<{ changeEmail: typeof changeEmail }>>().not.toHaveProperty(
+		"pendingEmail",
+	);
+	expect(
+		getAuthTables({ user: { changeEmail } }).user?.fields.pendingEmail,
+	).toBeUndefined();
 });

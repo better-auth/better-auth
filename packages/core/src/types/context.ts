@@ -193,7 +193,10 @@ export interface InternalAdapter<
 	/**
 	 * Delete every session belonging to a user.
 	 */
-	deleteUserSessions(userId: string): Promise<void>;
+	deleteUserSessions(
+		userId: string,
+		options?: { throwOnVeto?: boolean },
+	): Promise<void>;
 
 	/**
 	 * Delete sessions by their session tokens.
@@ -234,6 +237,13 @@ export interface InternalAdapter<
 		email: string,
 		data: Partial<User & Record<string, any>>,
 	): Promise<User & T>;
+
+	/** Update a user only while every database condition still matches. */
+	updateUserIf(
+		userId: string,
+		data: Partial<User> & Record<string, unknown>,
+		conditions: Where[],
+	): Promise<User | null>;
 
 	updatePassword(userId: string, password: string): Promise<void>;
 

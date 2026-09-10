@@ -63,11 +63,25 @@ export const inferAdditionalFields = <
 					version: string;
 					schema: {
 						user: {
-							fields: Opts["user"] extends {
+							fields: (Opts["user"] extends {
 								additionalFields: infer U;
 							}
 								? U
-								: {};
+								: {}) &
+								(Opts["user"] extends {
+									changeEmail: {
+										enabled: true;
+										strategy: "verification-table";
+									};
+								}
+									? {
+											pendingEmail: {
+												type: "string";
+												required: false;
+												input: false;
+											};
+										}
+									: {});
 						};
 						session: {
 							fields: Opts["session"] extends {

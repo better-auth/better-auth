@@ -914,7 +914,10 @@ export type BetterAuthOptions = {
 	 * User configuration
 	 */
 	user?:
-		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
+		| (BetterAuthDBOptions<
+				"user",
+				keyof BaseUser | "pendingEmail" | "pendingEmailRequestId"
+		  > & {
 				/**
 				 * Gate which identities Better Auth admits. Called just before
 				 * `create-user`, `link-account`, and (for OAuth) `sign-in`, across
@@ -967,9 +970,88 @@ export type BetterAuthOptions = {
 					) => Promise<void>;
 					/**
 					 * Update the email without verification if the user is not verified.
+					 * Only applies to the default `"jwt"` strategy.
 					 * @default false
 					 */
 					updateEmailWithoutVerification?: boolean;
+					/**
+					 * How a pending email change is stored and verified.
+					 *
+					 * - `"jwt"` — the change is carried in a signed token in the
+					 *   verification URL and applied through `/verify-email`. Nothing is
+					 *   persisted until the user clicks the link.
+					 * - `"verification-table"` — the change is persisted in the
+					 *   `verification` table and surfaced as `user.pendingEmail`, verified
+					 *   through a dedicated `/verify-email-change/:userId/:token` endpoint,
+					 *   and can be cancelled via `/cancel-email-change`. The token is
+					 *   consumed atomically, so it cannot be replayed.
+					 *
+					 * `"verification-table"` requires `changeEmail.sendVerificationEmail`
+					 * and adds nullable `pendingEmail` and private `pendingEmailRequestId`
+					 * fields to the user table. Only the latest request can be applied,
+					 * including repeated requests for the same address.
+					 *
+					 * @default "jwt"
+					 */
+					strategy?: "jwt" | "verification-table";
+					/**
+					 * Send the verification email for an email change.
+					 *
+					 * Only used when `strategy` is `"verification-table"`. Unlike
+					 * `emailVerification.sendVerificationEmail`, this callback is dedicated
+					 * to email changes, so the template and the copy can differ from
+					 * sign-up verification and no request-URL sniffing is needed to tell
+					 * the two flows apart.
+					 *
+					 * @param data the data object, `user.email` is the requested new email
+					 * @param request the request object
+					 */
+					sendVerificationEmail?: (
+						data: {
+							user: User;
+							url: string;
+							token: string;
+						},
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * Revoke every other session once an email change is applied.
+					 *
+					 * Only used when `strategy` is `"verification-table"`.
+					 * Requires a transaction-capable database adapter with transactions
+					 * enabled and no secondary storage. A veto or failed session replacement
+					 * rolls back the email, token consumption and session changes together.
+					 *
+					 * @default false
+					 */
+					revokeOtherSessions?: boolean;
+					/**
+					 * A callback triggered when a user requests an email change.
+					 *
+					 * Only used when `strategy` is `"verification-table"`.
+					 */
+					onChangeEmailRequested?: (
+						data: { user: User; newEmail: string },
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * A callback triggered when an email change is verified and applied.
+					 *
+					 * Only used when `strategy` is `"verification-table"`.
+					 */
+					onChangeEmailCompleted?: (
+						data: { user: User; oldEmail: string; newEmail: string },
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * A callback triggered when a pending email change is cancelled.
+					 *
+					 * Only used when `strategy` is `"verification-table"`.
+					 */
+					onChangeEmailCancelled?: (
+						data: { user: User },
+						request?: Request,
+					) => Promise<void>;
 				};
 				/**
 				 * User deletion configuration

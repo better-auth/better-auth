@@ -117,6 +117,120 @@ await authClient.changeEmail({
 });
 ```
 
+#### Verification Strategy
+
+By default the pending change is carried in a signed token in the verification URL and
+applied through `/verify-email`. Nothing is persisted until the user clicks the link, which
+means there is no way to show a pending address or to cancel a request.
+
+Set `strategy: "verification-table"` to store the pending change instead:
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            strategy: "verification-table", // default: "jwt"
+            sendVerificationEmail: async ({ user, url }, request) => {
+                // `user.email` is the requested new address
+                await sendEmail({
+                    to: user.email,
+                    subject: "Confirm your new email address",
+                    text: `Confirm your new address: ${url}`,
+                });
+            },
+        },
+    },
+})
+```
+
+What this changes:
+
+* **`user.pendingEmail`** holds the address awaiting confirmation, so your UI can show it.
+  The strategy adds nullable `pendingEmail` and `pendingEmailRequestId` string columns to
+  the user table. Run your migration before enabling it. `pendingEmailRequestId` is internal:
+  it is never accepted from client input or returned in public user/session responses.
+  Both names can be mapped through `user.fields`.
+* **A dedicated `sendVerificationEmail`** — separate from
+  `emailVerification.sendVerificationEmail`, so the email-change template and copy no longer
+  have to be shared with sign-up verification, and no request-URL inspection is needed to
+  tell the two flows apart.
+* **Verification runs through `/verify-email-change/:userId/:token`**, which consumes the
+  verification row atomically. A verification link cannot be replayed.
+* **`/cancel-email-change`** discards a pending change and clears `pendingEmail`.
+
+<Callout>
+  `sendChangeEmailConfirmation` and `updateEmailWithoutVerification` apply to the default
+  `"jwt"` strategy. The `"verification-table"` strategy replaces the confirmation email with
+  its own `sendVerificationEmail` and a cancellable pending state.
+</Callout>
+
+Only the **latest request** can be applied, including repeated requests for the same address.
+The request identity is checked atomically when updating the user, so cancellation or a newer
+request that wins before that update prevents the older link from changing the address.
+Verification rows remain independent and expire normally, including with hashed identifiers.
+The public pending address records the request, not address availability or successful email
+delivery. Occupied addresses and delivery failures receive the same public response and pending
+state. No email is sent to an occupied address. Delivery errors are logged on the server while
+the pending request remains visible, so the UI can offer retry or cancel without disclosing
+whether another account owns that address.
+Delivery uses `advanced.backgroundTasks.handler` when configured. Without a handler it is awaited,
+so matching response bodies alone do not guarantee indistinguishable response timing.
+An expired link leaves the pending address visible so the user can request another email.
+
+Verifying an email change does not sign an anonymous visitor in. An authenticated visitor keeps
+their session (or receives a replacement when `revokeOtherSessions` is enabled). A browser signed
+in to another account is rejected without consuming the link or replacing its session.
+Sensitive operations read the authoritative session store even when cookie caching is enabled.
+A revoked cached session is treated as anonymous during verification and cannot cancel a request.
+Request and cancellation responses refresh the public pending state in the existing session cookie.
+If the requested address is taken before confirmation, the pending request is cleared and the link
+is consumed. The response invalidates the session cache, including chunked cookies, while preserving
+the session token and remember-me choice. The next session read fetches current state from storage
+instead of accepting a newly signed cache for a session that might have been revoked concurrently.
+
+When upgrading an earlier preview of this strategy, add the nullable `pendingEmailRequestId`
+column. Existing pending links do not carry a request identity and are rejected; users must
+request a new link. The default JWT strategy is unchanged.
+
+To infer `pendingEmail` on the client, use `inferAdditionalFields<typeof auth>()` in your client
+plugins, as described in [additional fields](/docs/concepts/database#additional-fields).
+
+Optional extras under this strategy:
+
+```ts
+changeEmail: {
+    enabled: true,
+    strategy: "verification-table",
+    sendVerificationEmail: async ({ user, url }) => { /* ... */ },
+    // Sign other devices out once the new address is confirmed
+    revokeOtherSessions: true,
+    onChangeEmailRequested: async ({ user, newEmail }) => { /* audit */ },
+    onChangeEmailCompleted: async ({ user, oldEmail, newEmail }) => { /* notify */ },
+    onChangeEmailCancelled: async ({ user }) => { /* audit */ },
+}
+```
+
+These lifecycle callbacks receive the current user after persistence. Completion is notified after optional session revocation and any authenticated session replacement. Synchronous throws and rejected promises from callbacks are logged without interrupting the security operation. A database hook that vetoes cancellation returns `FAILED_TO_UPDATE_USER` and does not notify cancellation.
+
+`revokeOtherSessions: true` requires database transactions to be enabled in the adapter and does not
+support `secondaryStorage`. The request is rejected before changing pending state when these
+requirements are not met. For example, enable `transaction: true` in the Prisma or Drizzle adapter
+configuration. Verification then consumes the link, changes the email, revokes sessions and creates
+any replacement in one database transaction. A deletion veto or failed replacement rolls these
+changes back without emitting a completion callback, and the same link can be retried. Cookies
+are updated only after commit. Hooks that rewrite the requested final state cannot announce a
+successful completion.
+
+Email-change lifecycle callbacks and the verification sender each receive an independent HTTP
+request clone when available, so reading the body in one does not consume it for another.
+
+Cancelling a pending change from the client:
+
+```ts
+await authClient.cancelEmailChange();
+```
+
 ### Change Password
 
 A user's password isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use one of the following approaches:
