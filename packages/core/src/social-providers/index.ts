@@ -16,6 +16,7 @@ import { kakao } from "./kakao";
 import { kick } from "./kick";
 import { line } from "./line";
 import { linear } from "./linear";
+import { link } from "./link";
 import { linkedin } from "./linkedin";
 import { microsoft } from "./microsoft-entra-id";
 import { naver } from "./naver";
@@ -56,6 +57,7 @@ export const socialProviders = {
 	dropbox,
 	kick,
 	linear,
+	link,
 	linkedin,
 	gitlab,
 	tiktok,
@@ -111,6 +113,7 @@ export * from "./kakao";
 export * from "./kick";
 export * from "./line";
 export * from "./linear";
+export * from "./link";
 export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";

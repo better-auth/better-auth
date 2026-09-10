@@ -257,6 +257,19 @@ export const authenticationIcons = {
 			/>
 		</svg>
 	),
+	authenticationLink: () => (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			width="1.2em"
+			height="1.2em"
+			viewBox="0 0 32 32"
+		>
+			<path
+				fill="currentColor"
+				d="M15.1444 5.99969H10c1.0009 4.18001 3.9234 7.75331 7.5799 10.00001-3.6632 2.2467-6.579 5.82-7.5799 10h5.1444c1.2745-3.8667 4.8042-7.2267 9.1413-7.9133v-4.18c-4.3438-.68-7.8735-4.04004-9.1413-7.90671Z"
+			/>
+		</svg>
+	),
 	authenticationLinkedIn: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

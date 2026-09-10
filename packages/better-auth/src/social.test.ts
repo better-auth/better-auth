@@ -6,6 +6,7 @@ import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	CloudflareProfile,
 	GoogleProfile,
+	LinkProfile,
 	MicrosoftEntraIDProfile,
 	RailwayProfile,
 	VercelProfile,
@@ -3135,6 +3136,151 @@ describe("Cloudflare Provider", () => {
 		// Name is composed from first_name/last_name; only first_name is present.
 		expect(session.data?.user.name).toBe("First");
 		expect(userInfoRequestCount).toBe(0);
+	});
+});
+
+describe("Link Provider", () => {
+	beforeAll(() => {
+		mswServer.use(
+			http.post("https://login.link.com/auth/token", async ({ request }) => {
+				expect(request.headers.get("authorization")).toBe(
+					"Bearer pk_test_link",
+				);
+
+				const params = new URLSearchParams(await request.text());
+				expect(params.get("grant_type")).toBe("authorization_code");
+				expect(params.get("client_id")).toBe("link-test-client-id");
+				expect(params.get("client_secret")).toBe("link-test-client-secret");
+				expect(params.get("redirect_uri")).toBeDefined();
+				expect(params.get("code_verifier")).toBeTruthy();
+
+				return HttpResponse.json({
+					access_token: "link_access_token",
+					refresh_token: "link_refresh_token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "payment_methods.agentic userinfo:read",
+				});
+			}),
+			http.get("https://api.link.com/userinfo", async ({ request }) => {
+				expect(request.headers.get("authorization")).toBe(
+					"Bearer link_access_token",
+				);
+				return HttpResponse.json({
+					email: "link@test.com",
+					name: "Link User",
+					first_name: "Link",
+					last_name: "User",
+					phone: "+15555550123",
+				} satisfies LinkProfile);
+			}),
+		);
+	});
+
+	it("should configure Link provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				link: {
+					clientId: "link-test-client-id",
+					clientSecret: "link-test-client-secret",
+					publishableKey: "pk_test_link",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const linkProvider = ctx.socialProviders.find((p) => p.id === "link");
+
+		expect(linkProvider).toBeDefined();
+		expect(linkProvider?.id).toBe("link");
+		expect(linkProvider?.name).toBe("Link");
+	});
+
+	it("should initiate Link OAuth with payment access and mandatory PKCE", async () => {
+		const authorizationDetails = JSON.stringify([
+			{ type: "source", actions: ["read_balances"] },
+		]);
+		const { client } = await getTestInstance({
+			socialProviders: {
+				link: {
+					clientId: "link-test-client-id",
+					clientSecret: "link-test-client-secret",
+					publishableKey: "pk_test_link",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "link",
+			callbackURL: "/dashboard",
+			additionalParams: {
+				authorization_details: authorizationDetails,
+			},
+		});
+
+		expect(signInRes.data?.redirect).toBe(true);
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.origin).toBe("https://login.link.com");
+		expect(authUrl.pathname).toBe("/auth");
+		expect(authUrl.searchParams.get("key")).toBe("pk_test_link");
+		expect(authUrl.searchParams.get("scope")).toBe(
+			"payment_methods.agentic userinfo:read",
+		);
+		expect(authUrl.searchParams.get("code_challenge")).toBeTruthy();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+		expect(authUrl.searchParams.get("authorization_details")).toBe(
+			authorizationDetails,
+		);
+	});
+
+	it("should complete Link OAuth and use immutable email as account identity", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					link: {
+						clientId: "link-test-client-id",
+						clientSecret: "link-test-client-secret",
+						publishableKey: "pk_test_link",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "link",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/link", {
+			query: { state, code: "link_test_code" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				expect(context.response.headers.get("location")).toContain("/welcome");
+				cookieSetter(headers)(context);
+			},
+		});
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.email).toBe("link@test.com");
+		expect(session.data?.user.name).toBe("Link User");
+		expect(session.data?.user.emailVerified).toBe(false);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("link");
+		expect(accounts[0]?.accountId).toBe("link@test.com");
 	});
 });
 

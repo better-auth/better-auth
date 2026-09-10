@@ -1,0 +1,99 @@
+---
+icon: authenticationLink
+sidebarBadge: "New"
+title: Link
+description: Link provider setup and usage.
+---
+
+Link's hosted OAuth flow lets your application connect a user's Link account and obtain access to agentic payment methods. This integration is intended for hosted applications with a secure backend. See Stripe's [hosted Link OAuth guide](https://docs.stripe.com/agentic-commerce/link-cli/oauth) for the complete protocol contract.
+
+<Steps>
+  <Step>
+    ### Get your Link credentials
+
+    Link hosted OAuth requires a confidential OAuth client and a Stripe publishable key.
+
+    1. [Contact Stripe](https://stripe.com/contact/sales) to request a confidential Link OAuth client for your hosted application
+    2. Register your callback URL with the client. For local development, the default callback is `http://localhost:3000/api/auth/callback/link`. For production, use your application URL, for example `https://example.com/api/auth/callback/link`
+    3. Store the Link `clientId` and `clientSecret` securely on your server
+    4. Get the Stripe publishable key associated with the integration from the [Stripe Dashboard](https://dashboard.stripe.com/apikeys)
+
+    If you change Better Auth's base path, update the registered callback URL accordingly.
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    Add `link` to `socialProviders` with all three required credentials:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            link: { // [!code highlight]
+                clientId: process.env.LINK_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.LINK_CLIENT_SECRET as string, // [!code highlight]
+                publishableKey: process.env.STRIPE_PUBLISHABLE_KEY as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
+
+    Better Auth automatically uses PKCE with `S256`. For authorization-code exchange, refresh, and revocation requests, it sends the Stripe publishable key as a bearer token and the Link client credentials in the form body.
+  </Step>
+</Steps>
+
+## Usage
+
+### Connect a Link account
+
+Start the Link authorization flow with `signIn.social`:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient()
+
+await authClient.signIn.social({
+    provider: "link",
+})
+```
+
+The default authorization request asks for these scopes:
+
+| Scope | Access |
+| --- | --- |
+| `payment_methods.agentic` | Create spend requests for one-time-use payment credentials |
+| `userinfo:read` | Read basic Link account information and check user eligibility |
+
+Requesting `payment_methods.agentic` allows a server-side agent to use the resulting access token with the Link API or [Link CLI](https://github.com/stripe/link-cli). Retrieve the token using Better Auth's [`getAccessToken`](/docs/concepts/oauth#get-access-token) API and keep it on your trusted backend.
+
+<Callout type="warn">
+  A Link access token with payment-method access is sensitive. Do not place it in client-side code, logs, URLs, or agent transcripts. If you invoke Link CLI from your backend, inject it through `LINK_ACCESS_TOKEN` at runtime.
+</Callout>
+
+## Options
+
+For the options shared by all social providers, see [Provider Options](/docs/concepts/oauth#provider-options).
+
+### Scopes
+
+Add scopes using the `scope` option. Better Auth combines them with the two default scopes and removes duplicates.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        link: {
+            clientId: process.env.LINK_CLIENT_ID as string,
+            clientSecret: process.env.LINK_CLIENT_SECRET as string,
+            publishableKey: process.env.STRIPE_PUBLISHABLE_KEY as string,
+            scope: ["another:scope"], // [!code highlight]
+        },
+    },
+})
+```
+
+Only request scopes enabled for your Link OAuth client. Link requires at least one scope, and Better Auth rejects a scope-less authorization request. Removing `userinfo:read` prevents Better Auth from loading the email required to create or identify a user.
