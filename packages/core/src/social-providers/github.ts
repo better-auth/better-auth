@@ -10,10 +10,10 @@ import { authorizationCodeRequest } from "../oauth2/validate-authorization-code"
 
 export interface GithubProfile {
 	login: string;
-	id: string;
+	id: number;
 	node_id: string;
 	avatar_url: string;
-	gravatar_id: string;
+	gravatar_id: string | null;
 	url: string;
 	html_url: string;
 	followers_url: string;
@@ -27,31 +27,38 @@ export interface GithubProfile {
 	received_events_url: string;
 	type: string;
 	site_admin: boolean;
-	name: string;
-	company: string;
-	blog: string;
-	location: string;
+	name: string | null;
+	company: string | null;
+	blog: string | null;
+	location: string | null;
 	email: string | null;
-	hireable: boolean;
-	bio: string;
-	twitter_username: string;
-	public_repos: string;
-	public_gists: string;
-	followers: string;
-	following: string;
+	hireable: boolean | null;
+	bio: string | null;
+	twitter_username: string | null;
+	public_repos: number;
+	public_gists: number;
+	followers: number;
+	following: number;
 	created_at: string;
 	updated_at: string;
-	private_gists: string;
-	total_private_repos: string;
-	owned_private_repos: string;
-	disk_usage: string;
-	collaborators: string;
-	two_factor_authentication: boolean;
-	plan: {
+	/** Present only on the authenticated `GET /user` response. */
+	private_gists?: number;
+	/** Present only on the authenticated `GET /user` response. */
+	total_private_repos?: number;
+	/** Present only on the authenticated `GET /user` response. */
+	owned_private_repos?: number;
+	/** Present only on the authenticated `GET /user` response. */
+	disk_usage?: number;
+	/** Present only on the authenticated `GET /user` response. */
+	collaborators?: number;
+	/** Present only on the authenticated `GET /user` response. */
+	two_factor_authentication?: boolean;
+	/** Present only on the authenticated `GET /user` response. */
+	plan?: {
 		name: string;
-		space: string;
-		private_repos: string;
-		collaborators: string;
+		space: number;
+		private_repos: number;
+		collaborators: number;
 	};
 }
 
