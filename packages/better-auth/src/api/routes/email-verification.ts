@@ -262,11 +262,18 @@ type ActiveSession = NonNullable<MaybeSession>;
  * organization deletion, ownership transfer) -- unlike the instant
  * `/verify-email` GET callback, which is a direct link click and is allowed
  * to arrive with no session, this pair never is.
+ *
+ * Also re-checks `user.changeEmail.enabled`, since it may have been turned
+ * off after this token was issued -- a still-valid token must not be able
+ * to apply an email change the feature flag now forbids.
  */
 async function resolveChangeEmailVerificationToken(
 	ctx: GenericEndpointContext,
 	token: string,
 ) {
+	if (!ctx.context.options.user?.changeEmail?.enabled) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED);
+	}
 	let jwt: JWTVerifyResult<JWTPayload>;
 	try {
 		jwt = await jwtVerify(token, new TextEncoder().encode(ctx.context.secret), {

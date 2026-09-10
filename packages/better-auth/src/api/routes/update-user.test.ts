@@ -340,6 +340,63 @@ describe("updateUser", async () => {
 			});
 			expect((user as { email: string } | null)?.email).toBe(testUser.email);
 		});
+
+		/**
+		 * `user.changeEmail.enabled` may be turned off after a token was
+		 * already issued -- an admin reacting to abuse, for instance. A
+		 * still-unexpired token must not be able to apply the change anyway
+		 * once the feature has been disabled.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10748
+		 */
+		it("rejects preview and confirm once changeEmail is disabled after the token was issued", async () => {
+			let capturedToken = "";
+			// Held onto directly so it can be mutated below: this exact object
+			// is what `ctx.context.options.user.changeEmail` reads from on
+			// every request, so flipping `enabled` after the instance is
+			// created is equivalent to a config change taking effect on the
+			// next request, with no server restart.
+			const changeEmailOptions: { enabled: boolean; confirmationMode: "explicit" } =
+				{ enabled: true, confirmationMode: "explicit" };
+			const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capturedToken = token;
+					},
+				},
+				user: { changeEmail: changeEmailOptions },
+			});
+			const { headers } = await signInWithTestUser();
+			await db.update({
+				model: "user",
+				update: { emailVerified: true },
+				where: [{ field: "email", value: testUser.email }],
+			});
+			await auth.api.changeEmail({
+				body: { newEmail: "disabled-after-send@email.com" },
+				headers,
+			});
+			expect(capturedToken.length).toBeGreaterThan(0);
+
+			// Disabled after the email was already sent.
+			changeEmailOptions.enabled = false;
+
+			await expect(
+				auth.api.changeEmailPreview({ query: { token: capturedToken }, headers }),
+			).rejects.toThrow();
+			await expect(
+				auth.api.changeEmailConfirm({
+					body: { token: capturedToken },
+					headers,
+				}),
+			).rejects.toThrow();
+
+			const user = await db.findOne({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			expect((user as { email: string } | null)?.email).toBe(testUser.email);
+		});
 	});
 
 	it("should update the user's password", async () => {
