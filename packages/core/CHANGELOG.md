@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.6.31
+
+### Patch Changes
+
+- [#11228](https://github.com/better-auth/better-auth/pull/11228) [`0e58f97`](https://github.com/better-auth/better-auth/commit/0e58f97aa11829447fee63532a98d44a0e847c8c) Thanks [@better-release](https://github.com/apps/better-release)! - Add `experimental.instrumentation.enabled` to disable Better Auth OpenTelemetry span creation per auth instance. Instrumentation remains enabled by default and independent of usage reporting.
+
 ## 1.6.30
 
 ### Patch Changes

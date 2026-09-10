@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.6.31
+
+### Patch Changes
+
+- [#11228](https://github.com/better-auth/better-auth/pull/11228) [`0e58f97`](https://github.com/better-auth/better-auth/commit/0e58f97aa11829447fee63532a98d44a0e847c8c) Thanks [@better-release](https://github.com/apps/better-release)! - Add `experimental.instrumentation.enabled` to disable Better Auth OpenTelemetry span creation per auth instance. Instrumentation remains enabled by default and independent of usage reporting.
+
+- Updated dependencies [[`0e58f97`](https://github.com/better-auth/better-auth/commit/0e58f97aa11829447fee63532a98d44a0e847c8c)]:
+  - @better-auth/core@1.6.31
+  - @better-auth/drizzle-adapter@1.6.31
+  - @better-auth/kysely-adapter@1.6.31
+  - @better-auth/memory-adapter@1.6.31
+  - @better-auth/mongo-adapter@1.6.31
+  - @better-auth/prisma-adapter@1.6.31
+  - @better-auth/telemetry@1.6.31
+
 ## 1.6.30
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @better-auth/drizzle-adapter
 
+## 1.6.31
+
+### Patch Changes
+
+- Updated dependencies [[`0e58f97`](https://github.com/better-auth/better-auth/commit/0e58f97aa11829447fee63532a98d44a0e847c8c)]:
+  - @better-auth/core@1.6.31
+
 ## 1.6.30
 
 ### Patch Changes

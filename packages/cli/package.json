@@ -1,6 +1,6 @@
 {
   "name": "auth",
-  "version": "1.6.30",
+  "version": "1.6.31",
   "description": "The CLI for Better Auth",
   "type": "module",
   "license": "MIT",
