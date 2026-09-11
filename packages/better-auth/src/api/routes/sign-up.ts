@@ -304,6 +304,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					});
 				};
 
+				const shouldSendVerificationEmail =
+					ctx.context.options.emailVerification?.sendOnSignUp ??
+					ctx.context.options.emailAndPassword.requireEmailVerification;
+
 				const dbUser =
 					await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
 				if (dbUser?.user) {
@@ -313,9 +317,72 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					if (shouldReturnGenericDuplicateResponse) {
 						/**
 						 * Hash the password to reduce timing differences
-						 * between existing and non-existing emails.
+						 * between existing and non-existing emails. When the pending
+						 * claim below is replaced, the hash is reused for the new
+						 * credential.
 						 */
-						await ctx.context.password.hash(password);
+						const hash = await ctx.context.password.hash(password);
+						/**
+						 * Under `requireEmailVerification` an unverified row is a pending
+						 * claim with no proven owner, not a real account. Replace the
+						 * stale claim with the latest registrant's — strip the row's
+						 * unproven access (accounts and sessions) and link the new
+						 * credential — then issue the same verification email a fresh
+						 * sign-up would. Otherwise a mailbox owner's verification, which
+						 * resolves the row by email, would land on credentials set by
+						 * whoever registered the address first.
+						 *
+						 * @see https://github.com/better-auth/better-auth/issues/11023
+						 */
+						if (
+							ctx.context.options.emailAndPassword.requireEmailVerification &&
+							!dbUser.user.emailVerified
+						) {
+							const accounts = await ctx.context.internalAdapter.findAccounts(
+								dbUser.user.id,
+							);
+							for (const account of accounts) {
+								await ctx.context.internalAdapter.deleteAccount(account.id);
+							}
+							await ctx.context.internalAdapter.deleteUserSessions(
+								dbUser.user.id,
+							);
+							const claimedUser = await ctx.context.internalAdapter.updateUser(
+								dbUser.user.id,
+								{
+									name,
+									image: image ?? null,
+									...additionalUserFields,
+								},
+							);
+							await ctx.context.internalAdapter.linkAccount({
+								userId: dbUser.user.id,
+								providerId: "credential",
+								accountId: dbUser.user.id,
+								password: hash,
+							});
+							if (
+								shouldSendVerificationEmail &&
+								ctx.context.options.emailVerification?.sendVerificationEmail
+							) {
+								const token = await createEmailVerificationToken(
+									ctx.context.secret,
+									claimedUser.email,
+									undefined,
+									ctx.context.options.emailVerification?.expiresIn,
+								);
+								const callbackURL = _callbackURL
+									? encodeURIComponent(_callbackURL)
+									: encodeURIComponent("/");
+								const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+								await ctx.context.runInBackgroundOrAwait(
+									ctx.context.options.emailVerification.sendVerificationEmail(
+										{ user: claimedUser, url, token },
+										safeCloneRequest(ctx.request),
+									),
+								);
+							}
+						}
 						if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
 							await ctx.context.runInBackgroundOrAwait(
 								ctx.context.options.emailAndPassword.onExistingUserSignUp(
@@ -389,9 +456,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					accountId: createdUser.id,
 					password: hash,
 				});
-				const shouldSendVerificationEmail =
-					ctx.context.options.emailVerification?.sendOnSignUp ??
-					ctx.context.options.emailAndPassword.requireEmailVerification;
 				if (shouldSendVerificationEmail) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,

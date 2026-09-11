@@ -2711,3 +2711,80 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
+
+/**
+ * Regression coverage for pre-registration account takeover. The
+ * email-verification OTP row is keyed by address (`email-verification-otp-
+ * <email>`), so a code proves mailbox control but verifies whichever user row
+ * occupies the address. When a second sign-up for the same address was
+ * silently dropped by the anti-enumeration path, the mailbox owner's code
+ * verified the *earlier* registrant's account — with
+ * `autoSignInAfterVerification` even signing the victim into it — while the
+ * pre-registered credential kept working and the victim could never register
+ * the address again. Re-registering an unverified address now replaces the
+ * pending claim (stale accounts and sessions stripped, new credential
+ * linked), so the code verifies the latest claim.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11023
+ */
+describe("email-otp verify-email against a replaced pending claim", () => {
+	it("verifies the latest claim, not the pre-registered one", async () => {
+		let sentOtp = "";
+		const { auth, client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					autoSignInAfterVerification: true,
+				},
+				plugins: [
+					emailOTP({
+						overrideDefaultEmailVerification: true,
+						async sendVerificationOTP({ otp: _otp }) {
+							sentOtp = _otp;
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: { plugins: [emailOTPClient()] },
+			},
+		);
+		const email = "victim-otp-claim@test.com";
+
+		// Attacker pre-registers the victim's address; the code goes to the
+		// victim's mailbox.
+		await auth.api.signUpEmail({
+			body: { email, password: "attacker-password1", name: "Mallory" },
+		});
+
+		// The victim registers the same address: the response stays synthetic,
+		// but the pending claim is replaced with theirs and a fresh code issued.
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+		expect(res.token).toBeNull();
+
+		const verified = await client.emailOtp.verifyEmail({
+			email,
+			otp: sentOtp,
+		});
+		expect(verified.data?.status).toBe(true);
+		expect(verified.data?.token).toBeTruthy();
+
+		// The mailbox owner's credential works; the pre-registered one is dead.
+		const victimSignIn = await auth.api.signInEmail({
+			body: { email, password: "victim-password2" },
+			asResponse: true,
+		});
+		expect(victimSignIn.status).toBe(200);
+		const attackerSignIn = await auth.api.signInEmail({
+			body: { email, password: "attacker-password1" },
+			asResponse: true,
+		});
+		expect(attackerSignIn.status).toBe(401);
+	});
+});
