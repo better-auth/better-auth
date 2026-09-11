@@ -456,7 +456,7 @@ describe("release notes command security", () => {
 		);
 	});
 
-	it("uses versioned maintenance branches", () => {
+	it("selects release channels by branch", () => {
 		const releaseChannel = getStep(
 			getJob(releaseWorkflow, "release"),
 			"Resolve release channel",
@@ -465,6 +465,36 @@ describe("release notes command security", () => {
 			getJob(releaseWorkflow, "release"),
 			"Create Release Pull Request or Publish",
 		);
+		expect(releaseChannel.run).toContain(
+			[
+				'if [[ "$REF" == "main" ]]; then',
+				'  echo "publish_command=pnpm ci:release --tag latest" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=true" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'elif [[ "$REF" =~ ^v([0-9]+)\\.([0-9]+)\\.x$ ]]; then',
+				'  TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
+				'  echo "publish_command=pnpm ci:release --tag $TAG" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=false" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'elif [ "$REF" = "next" ]; then',
+				'  echo "publish_command=pnpm ci:release" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=false" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(publish.with).toHaveProperty(
+			"publish",
+			expect.stringContaining("release-channel.outputs.publish_command"),
+		);
+		expect(publish.env).not.toHaveProperty("NPM_CONFIG_TAG");
+	});
+
+	it("uses versioned maintenance branches", () => {
 		const authorize = getStep(
 			getJob(commandWorkflow, "generate"),
 			"Authorize command and resolve PR",
@@ -476,18 +506,6 @@ describe("release notes command security", () => {
 
 		expect(releaseWorkflow.content).toContain("'v*.*.x'");
 		expect(releaseWorkflow.content).not.toContain("release/**");
-		expect(releaseChannel.run).toContain("^v([0-9]+)\\.([0-9]+)\\.x$");
-		expect(releaseChannel.run).toContain(
-			'TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
-		);
-		expect(releaseChannel.run).toContain(
-			"publish_command=pnpm ci:release --tag $TAG",
-		);
-		expect(publish.with).toHaveProperty(
-			"publish",
-			expect.stringContaining("release-channel.outputs.publish_command"),
-		);
-		expect(publish.env).not.toHaveProperty("NPM_CONFIG_TAG");
 		expect(authorize.run).toContain("^v[0-9]+\\.[0-9]+\\.x$");
 		expect(prDetails.run).toContain('"$HEAD_REF" == v*.*.x');
 		expect(verifyChangesetsWorkflow.content).toContain("'v*.*.x'");
