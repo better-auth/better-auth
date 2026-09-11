@@ -1,4 +1,5 @@
 import type {
+	Awaitable,
 	BetterAuthCookie,
 	BetterAuthCookies,
 	BetterAuthOptions,
@@ -591,6 +592,24 @@ export const getSessionCookie = (
 	return null;
 };
 
+type CookieCacheVersion =
+	| string
+	| ((
+			session: CookieCachePayload["session"],
+			user: CookieCachePayload["user"],
+	  ) => Awaitable<string>);
+
+async function matchesVersion(
+	payload: CookieCachePayload,
+	version: CookieCacheVersion,
+) {
+	const expectedVersion =
+		typeof version === "string"
+			? version
+			: await version(payload.session, payload.user);
+	return (payload.version || "1") === expectedVersion;
+}
+
 export const getCookieCache = async <
 	S extends CookieCachePayload = CookieCachePayload,
 >(
@@ -609,16 +628,7 @@ export const getCookieCache = async <
 							audience?: string;
 					  }
 					| undefined;
-				version?:
-					| string
-					| ((
-							session: CookieCachePayload["session"],
-							user: CookieCachePayload["user"],
-					  ) => string)
-					| ((
-							session: CookieCachePayload["session"],
-							user: CookieCachePayload["user"],
-					  ) => Promise<string>);
+				version?: CookieCacheVersion;
 		  }
 		| undefined,
 ) => {
@@ -666,18 +676,6 @@ export const getCookieCache = async <
 	}
 
 	if (sessionData) {
-		const validateVersion = async (payload: CookieCachePayload) => {
-			if (!config?.version) return true;
-			const cookieVersion = payload.version || "1";
-			let expectedVersion = "1";
-			if (typeof config.version === "string") {
-				expectedVersion = config.version;
-			} else if (typeof config.version === "function") {
-				const result = config.version(payload.session, payload.user);
-				expectedVersion = isPromise(result) ? await result : result;
-			}
-			return cookieVersion === expectedVersion;
-		};
 		const strategy = config?.strategy || "compact";
 
 		if (strategy === "jwe") {
@@ -694,15 +692,15 @@ export const getCookieCache = async <
 				"better-auth-session",
 			);
 			const payload = parseCookieCachePayload(decoded);
+			if (!payload) return null;
 
-			if (payload) {
-				if (!(await validateVersion(payload))) return null;
-				if (isEmbeddedSessionExpired(payload.session)) {
-					return null;
-				}
-				return payload as S;
+			if (config?.version) {
+				const versionMatches = await matchesVersion(payload, config.version);
+				if (!versionMatches) return null;
 			}
-			return null;
+			if (isEmbeddedSessionExpired(payload.session)) return null;
+
+			return payload as S;
 		} else if (strategy === "jwt") {
 			const jwks = config?.jwt?.jwks;
 			let payload: CookieCachePayload | null;
@@ -721,15 +719,15 @@ export const getCookieCache = async <
 				const decoded = await verifySecretJWT<unknown>(sessionData, secret);
 				payload = parseCookieCachePayload(decoded);
 			}
+			if (!payload) return null;
 
-			if (payload) {
-				if (!(await validateVersion(payload))) return null;
-				if (isEmbeddedSessionExpired(payload.session)) {
-					return null;
-				}
-				return payload as S;
+			if (config?.version) {
+				const versionMatches = await matchesVersion(payload, config.version);
+				if (!versionMatches) return null;
 			}
-			return null;
+			if (isEmbeddedSessionExpired(payload.session)) return null;
+
+			return payload as S;
 		} else {
 			const secret = config?.secret || env.BETTER_AUTH_SECRET;
 			if (!secret) {
@@ -759,7 +757,10 @@ export const getCookieCache = async <
 			if (!payload) {
 				return null;
 			}
-			if (!(await validateVersion(payload))) return null;
+			if (config?.version) {
+				const versionMatches = await matchesVersion(payload, config.version);
+				if (!versionMatches) return null;
+			}
 
 			// The compact strategy carries no `exp` claim, so the outer cache window
 			// and the embedded session lifetime must be checked explicitly (the
