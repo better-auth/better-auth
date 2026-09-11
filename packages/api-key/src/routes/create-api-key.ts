@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { getSessionFromCtx } from "better-auth/api";
+import { getAuthoritativeSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
@@ -294,9 +294,10 @@ export function createApiKey({
 			// session deletion performed when a user is banned — would
 			// otherwise still be accepted within the cookie-cache window,
 			// letting it mint a fresh key that outlives the revoked session.
-			const session = await getSessionFromCtx(ctx, {
-				disableCookieCache: true,
-			});
+			// `getAuthoritativeSessionFromCtx` also clears a session an earlier
+			// hook memoized on the context, which would otherwise satisfy this
+			// read from the cookie cache and defeat the bypass.
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 			const isClientRequest = ctx.request || ctx.headers;
 
 			// if this endpoint was being called from the client,
