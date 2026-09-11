@@ -666,6 +666,18 @@ export const getCookieCache = async <
 	}
 
 	if (sessionData) {
+		const validateVersion = async (payload: CookieCachePayload) => {
+			if (!config?.version) return true;
+			const cookieVersion = payload.version || "1";
+			let expectedVersion = "1";
+			if (typeof config.version === "string") {
+				expectedVersion = config.version;
+			} else if (typeof config.version === "function") {
+				const result = config.version(payload.session, payload.user);
+				expectedVersion = isPromise(result) ? await result : result;
+			}
+			return cookieVersion === expectedVersion;
+		};
 		const strategy = config?.strategy || "compact";
 
 		if (strategy === "jwe") {
@@ -684,20 +696,7 @@ export const getCookieCache = async <
 			const payload = parseCookieCachePayload(decoded);
 
 			if (payload) {
-				// Validate version if provided
-				if (config?.version) {
-					const cookieVersion = payload.version || "1";
-					let expectedVersion = "1";
-					if (typeof config.version === "string") {
-						expectedVersion = config.version;
-					} else if (typeof config.version === "function") {
-						const result = config.version(payload.session, payload.user);
-						expectedVersion = isPromise(result) ? await result : result;
-					}
-					if (cookieVersion !== expectedVersion) {
-						return null;
-					}
-				}
+				if (!(await validateVersion(payload))) return null;
 				if (isEmbeddedSessionExpired(payload.session)) {
 					return null;
 				}
@@ -724,20 +723,7 @@ export const getCookieCache = async <
 			}
 
 			if (payload) {
-				// Validate version if provided
-				if (config?.version) {
-					const cookieVersion = payload.version || "1";
-					let expectedVersion = "1";
-					if (typeof config.version === "string") {
-						expectedVersion = config.version;
-					} else if (typeof config.version === "function") {
-						const result = config.version(payload.session, payload.user);
-						expectedVersion = isPromise(result) ? await result : result;
-					}
-					if (cookieVersion !== expectedVersion) {
-						return null;
-					}
-				}
+				if (!(await validateVersion(payload))) return null;
 				if (isEmbeddedSessionExpired(payload.session)) {
 					return null;
 				}
@@ -773,20 +759,7 @@ export const getCookieCache = async <
 			if (!payload) {
 				return null;
 			}
-			// Validate version if provided
-			if (config?.version) {
-				const cookieVersion = payload.version || "1";
-				let expectedVersion = "1";
-				if (typeof config.version === "string") {
-					expectedVersion = config.version;
-				} else if (typeof config.version === "function") {
-					const result = config.version(payload.session, payload.user);
-					expectedVersion = isPromise(result) ? await result : result;
-				}
-				if (cookieVersion !== expectedVersion) {
-					return null;
-				}
-			}
+			if (!(await validateVersion(payload))) return null;
 
 			// The compact strategy carries no `exp` claim, so the outer cache window
 			// and the embedded session lifetime must be checked explicitly (the
