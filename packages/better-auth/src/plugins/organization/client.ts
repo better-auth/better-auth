@@ -249,7 +249,15 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path === "/sign-out" || path.startsWith("/organization");
+					return (
+						path === "/sign-out" ||
+						path === "/sign-in/email" ||
+						path === "/sign-up/email" ||
+						path === "/verify-email" ||
+						path === "/update-session" ||
+						path === "/delete-user" ||
+						path.startsWith("/organization")
+					);
 				},
 				signal: "$activeOrgSignal",
 			},
