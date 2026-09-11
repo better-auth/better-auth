@@ -339,6 +339,9 @@ export interface OrganizationOptions {
 					fields?: {
 						[key in keyof Omit<TeamMember, "id"> | "membershipKey"]?: string;
 					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
 				};
 				organizationRole?: {
 					modelName?: string;
