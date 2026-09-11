@@ -15,6 +15,6 @@ export const docsVersionSources = {
 	"1.6": {
 		contentDirectory: "_generated/docs/v1-6",
 		editBranch: "v1.6.x",
-		commitSha: "3dac8247a6f2df15c0a7149a9e7b424d38591964",
+		commitSha: "886311168d86a75496f4e2bc339a6e5516a13d08",
 	},
 } as const satisfies Record<DocsVersionId, DocsVersionSource>;

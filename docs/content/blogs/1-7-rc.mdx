@@ -159,7 +159,6 @@ export const auth = betterAuth({
 
 | Change                                                    | What to do                                                                                                                                           |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Account identity is scoped by issuer                      | Backfill `issuer` and `accountId`, resolve collisions, then add the unique `(issuer, accountId)` index before deploying.                             |
 | Microsoft accounts use the stable `oid` claim             | Replace each existing Microsoft account's old `sub` identifier with its verified directory `oid` before adding the account index.                    |
 | SIWE derives identity from the signed message             | Remove wallet and chain fields from nonce requests; return an 8-to-250-character alphanumeric nonce from a custom `getNonce`.                        |
 | Protected resources replace `validAudiences`              | Move each audience into `resources`, link clients to resources, and run the schema migration.                                                        |
@@ -262,7 +261,6 @@ Before applying the 1.7 schema, complete any manual preparation for account iden
 | If you use                                     | What to expect                                                                                               |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Basic Better Auth setup                        | Usually the `@rc` install and reviewed schema changes                                                        |
-| Existing external account rows                 | Backfill issuer-scoped identities and resolve collisions before applying the account index                   |
 | Social login, generic OAuth, One Tap, or SIWE  | New login-client behavior, including Microsoft `oid`, addressless SIWE nonces, and Google One Tap            |
 | `@better-auth/oauth-provider`                  | Client-data preparation plus resources, DPoP, back-channel logout, `max_age`, and safer OAuth checks         |
 | MCP                                            | A package move to `@better-auth/mcp`, official v2 clients or servers, new endpoint paths, and schema changes |

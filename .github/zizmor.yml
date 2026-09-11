@@ -16,8 +16,8 @@ rules:
       # labels can be applied to fork PRs.
       - auto-label.yml
       # Intentional: creates backports for already-merged PRs or maintainer
-      # slash commands. Checkout persists no credentials; the action receives
-      # an explicit token and does not execute fork PR code.
+      # slash commands. The pinned action retains a scoped token to push the
+      # generated branch but does not execute checked-out repository code.
       - backport.yml
   use-trusted-publishing:
     ignore:

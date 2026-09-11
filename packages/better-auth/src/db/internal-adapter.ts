@@ -13,7 +13,6 @@ import {
 	runWithTransaction,
 	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
@@ -1000,19 +999,32 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findAccountOwnerByKey: async ({ issuer, accountId }) => {
-			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
-				Account & { user: User | null }
-			>({
+		findAccountOwnerByKey: async ({ providerId, accountId }) => {
+			const accountsWithUsers = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account & { user: User | null }>({
 				model: "account",
 				where: [
-					{ field: "issuer", value: issuer },
-					{ field: "accountId", value: accountId },
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "accountId",
+						value: accountId,
+					},
 				],
+				limit: 2,
 				join: {
 					user: true,
 				},
 			});
+			if (accountsWithUsers.length > 1) {
+				throw new BetterAuthError(
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
+				);
+			}
+			const accountWithUser = accountsWithUsers[0];
 			if (!accountWithUser) return null;
 			const { user, ...account } = accountWithUser;
 			return user
@@ -1140,12 +1152,14 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
-					{ field: "providerId", value: "credential" },
 					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
+						field: "providerId",
+						value: "credential",
 					},
-					{ field: "accountId", value: userId },
+					{
+						field: "accountId",
+						value: userId,
+					},
 				],
 				"account",
 				undefined,
@@ -1171,25 +1185,33 @@ export const createInternalAdapter = (
 				where: [
 					{ field: "userId", value: userId },
 					{ field: "providerId", value: "credential" },
-					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
-					},
 					{ field: "accountId", value: userId },
 				],
 			});
 		},
-		findAccountByKey: async ({ issuer, accountId }) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{ field: "issuer", value: issuer },
-						{ field: "accountId", value: accountId },
-					],
-				},
-			);
-			return account;
+		findAccountByKey: async ({ providerId, accountId }) => {
+			const accounts = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account>({
+				model: "account",
+				limit: 2,
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "accountId",
+						value: accountId,
+					},
+				],
+			});
+			if (accounts.length > 1) {
+				throw new BetterAuthError(
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
+				);
+			}
+			return accounts[0] ?? null;
 		},
 		findAccountByUserId: async (userId: string) => {
 			const account = await (

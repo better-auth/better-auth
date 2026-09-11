@@ -193,6 +193,61 @@ export const __schema = schema;
 		});
 	});
 
+	describe("prisma schema problems the generator cannot fix", () => {
+		const existing = (issuer: string) => `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id        String   @id
+  accountId String
+  ${issuer}
+  createdAt DateTime @default(now())
+}
+`;
+		const generate = async (schemaPrisma: string) => {
+			const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-prisma-"));
+			const file = path.join(tmpDir, "schema.prisma");
+			fs.writeFileSync(file, schemaPrisma);
+			try {
+				return await generatePrismaSchema({
+					file,
+					adapter: prismaAdapter(
+						{},
+						{ provider: "postgresql" },
+					)({} as BetterAuthOptions),
+					options: { database: prismaAdapter({}, { provider: "postgresql" }) },
+				});
+			} finally {
+				fs.rmSync(tmpDir, { recursive: true, force: true });
+			}
+		};
+
+		it("reports a required column Better Auth never writes", async () => {
+			const { schemaProblems } = await generate(existing("issuer    String"));
+			expect(schemaProblems).toHaveLength(1);
+			expect(schemaProblems?.[0]).toContain(
+				'Column "issuer" on table "Account" is required but Better Auth never writes it',
+			);
+			expect(schemaProblems?.[0]).toContain("Remove it from the Prisma schema");
+		});
+
+		it("accepts an optional or defaulted extra column", async () => {
+			expect(
+				(await generate(existing("issuer    String?"))).schemaProblems,
+			).toEqual([]);
+			expect(
+				(await generate(existing('issuer    String @default("")')))
+					.schemaProblems,
+			).toEqual([]);
+		});
+	});
+
 	it("should generate prisma schema", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",

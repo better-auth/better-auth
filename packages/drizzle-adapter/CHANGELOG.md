@@ -1,5 +1,19 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.4
+
+### Patch Changes
+
+- [#11213](https://github.com/better-auth/better-auth/pull/11213) [`b905bfe`](https://github.com/better-auth/better-auth/commit/b905bfe3d97de3c88fc31f7f2820531702df583e) Thanks [@bytaesu](https://github.com/bytaesu)! - Run schema validation for the Drizzle Relations v2 adapter, including configurations that provide only relations, so schema mismatches are reported during initialization.
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11179](https://github.com/better-auth/better-auth/pull/11179) [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate Drizzle schema objects and generated Prisma client models during initialization, including in production, and report mismatches with guidance for fixing them. These checks do not query the database and cannot detect unapplied migrations.
+
+  For Prisma clients whose model metadata omits nullability, `auth generate` reports required fields that Better Auth never writes by reading the existing Prisma schema. Set `advanced.database.validateSchema: false` to disable runtime validation.
+
 ## 1.7.2
 
 ### Patch Changes
