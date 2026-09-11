@@ -76,6 +76,7 @@ describe("Admin plugin", async () => {
 		signInWithUser,
 		cookieSetter,
 		customFetchImpl,
+		testUser,
 	} = await getTestInstance(
 		{
 			trustedOrigins: ["https://frontend.example.com"],
@@ -840,6 +841,102 @@ describe("Admin plugin", async () => {
 	};
 
 	const impersonateHeaders = new Headers();
+	it("should reject bearer-authenticated impersonation", async () => {
+		const target = await client.admin.createUser(
+			{
+				name: "Bearer Impersonation Target",
+				email: "bearer-impersonation-target@mail.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		let bearerToken = "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: (ctx) => {
+					bearerToken = ctx.response.headers.get("set-auth-token") || "";
+				},
+			},
+		);
+
+		const res = await client.admin.impersonateUser(
+			{
+				userId: target.data?.user.id || "",
+			},
+			{
+				headers: new Headers({
+					authorization: `Bearer ${bearerToken}`,
+				}),
+			},
+		);
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_WITH_BEARER.code,
+		);
+		const sessions = await client.admin.listUserSessions(
+			{
+				userId: target.data?.user.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessions.data?.sessions).toHaveLength(0);
+	});
+
+	it("should allow cookie-authenticated impersonation with an invalid bearer header", async () => {
+		const {
+			client: cookieOnlyClient,
+			signInWithTestUser: signInCookieOnlyTestUser,
+		} = await getTestInstance(
+			{
+				plugins: [admin({ defaultRole: "admin" })],
+			},
+			{
+				clientOptions: {
+					plugins: [adminClient()],
+				},
+				testUser: {
+					name: "Cookie Admin",
+					email: "cookie-admin@mail.com",
+				},
+			},
+		);
+		const { headers: cookieHeaders } = await signInCookieOnlyTestUser();
+		const target = await cookieOnlyClient.admin.createUser(
+			{
+				name: "Invalid Bearer Header Target",
+				email: "invalid-bearer-header-target@mail.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: cookieHeaders,
+			},
+		);
+		const headers = new Headers(cookieHeaders);
+		headers.set("authorization", "Bearer invalid.token");
+
+		const res = await cookieOnlyClient.admin.impersonateUser(
+			{
+				userId: target.data?.user.id || "",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user?.id).toBe(target.data?.user.id);
+	});
+
 	it("should allow admins to impersonate user", async () => {
 		const userToImpersonate = await client.signUp.email(data);
 		const session = await client.getSession({

@@ -5,6 +5,7 @@ import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 import { setRequestCookie } from "../../cookies/cookie-utils";
 import { PACKAGE_VERSION } from "../../version";
+import { setBearerAuthenticated } from "./state";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -98,6 +99,7 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						} catch {
 							return;
 						}
+						await setBearerAuthenticated(true);
 						const existingHeaders = (c.request?.headers ||
 							c.headers) as Headers;
 						const headers = new Headers({
