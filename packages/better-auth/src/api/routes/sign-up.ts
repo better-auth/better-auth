@@ -354,10 +354,21 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 								sessions.length === 0 &&
 								accounts.every((a) => a.providerId === "credential");
 							if (isPendingCredentialClaim) {
+								/**
+								 * Snapshot the fields about to be overwritten so a failed
+								 * replace can restore them on adapters without rollback.
+								 */
+								const previousUserFields: Record<string, unknown> = {
+									name: dbUser.user.name,
+									image: dbUser.user.image ?? null,
+								};
+								for (const key of Object.keys(additionalUserFields ?? {})) {
+									previousUserFields[key] = (
+										dbUser.user as Record<string, unknown>
+									)[key];
+								}
+								let claimAccount: { id: string } | undefined;
 								try {
-									for (const account of accounts) {
-										await ctx.context.internalAdapter.deleteAccount(account.id);
-									}
 									const claimedUser =
 										await ctx.context.internalAdapter.updateUser(
 											dbUser.user.id,
@@ -367,13 +378,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												...additionalUserFields,
 											},
 										);
-									const claimAccount =
-										await ctx.context.internalAdapter.linkAccount({
-											userId: dbUser.user.id,
-											providerId: "credential",
-											accountId: dbUser.user.id,
-											password: hash,
-										});
+									for (const account of accounts) {
+										await ctx.context.internalAdapter.deleteAccount(account.id);
+									}
+									claimAccount = await ctx.context.internalAdapter.linkAccount({
+										userId: dbUser.user.id,
+										providerId: "credential",
+										accountId: dbUser.user.id,
+										password: hash,
+									});
 									if (
 										shouldSendVerificationEmail &&
 										ctx.context.options.emailVerification?.sendVerificationEmail
@@ -398,16 +411,26 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									}
 								} catch (error) {
 									/**
-									 * On adapters without transaction support the deletes
-									 * above are not rolled back; restore the stripped
-									 * accounts on a best-effort basis so a mid-flight
-									 * failure cannot orphan the pending claim.
+									 * On adapters without transaction support the
+									 * mutations above are not rolled back; drop a
+									 * partially-installed credential, then restore the
+									 * stripped accounts and previous fields so a
+									 * mid-flight failure cannot orphan the pending
+									 * claim or strand it with two credentials.
 									 */
+									if (claimAccount) {
+										await ctx.context.internalAdapter
+											.deleteAccount(claimAccount.id)
+											.catch(() => {});
+									}
 									for (const account of accounts) {
 										await ctx.context.internalAdapter
 											.linkAccount(account)
 											.catch(() => {});
 									}
+									await ctx.context.internalAdapter
+										.updateUser(dbUser.user.id, previousUserFields)
+										.catch(() => {});
 									throw error;
 								}
 							}

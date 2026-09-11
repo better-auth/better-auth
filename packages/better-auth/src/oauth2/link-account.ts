@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
-import { createEmailVerificationToken } from "../api";
+import { createEmailVerificationToken, getVerificationClaim } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { Account, User } from "../types";
@@ -539,16 +539,13 @@ async function dispatchVerificationEmail(
 	}
 	const send = async () => {
 		try {
-			const accounts = await c.context.internalAdapter.findAccounts(user.id);
-			const credentialAccount = accounts.find(
-				(a) => a.providerId === "credential",
-			);
+			const { claimId } = await getVerificationClaim(c, user.id);
 			const token = await createEmailVerificationToken(
 				c.context.secret,
 				user.email,
 				undefined,
 				c.context.options.emailVerification?.expiresIn,
-				{ claimId: credentialAccount?.id ?? user.id },
+				{ claimId },
 			);
 			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 				callbackURL || "/",

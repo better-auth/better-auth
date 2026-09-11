@@ -14,6 +14,21 @@ import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
+/**
+ * Resolve the pending claim a verification proof is bound to: the row's
+ * credential account when it has one, otherwise the user row itself (e.g. a
+ * social-only account pending verification).
+ */
+export async function getVerificationClaim(
+	ctx: GenericEndpointContext,
+	userId: string,
+) {
+	const credentialAccount = (
+		await ctx.context.internalAdapter.findAccounts(userId)
+	).find((a) => a.providerId === "credential");
+	return { credentialAccount, claimId: credentialAccount?.id ?? userId };
+}
+
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
@@ -61,14 +76,13 @@ export async function sendVerificationEmailFn(
 	 * the row itself when it has none — so a proof issued for a superseded
 	 * pending claim cannot verify a later one.
 	 */
-	const accounts = await ctx.context.internalAdapter.findAccounts(user.id);
-	const credentialAccount = accounts.find((a) => a.providerId === "credential");
+	const { claimId } = await getVerificationClaim(ctx, user.id);
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
-		{ claimId: credentialAccount?.id ?? user.id },
+		{ claimId },
 	);
 	const callbackURL = ctx.body.callbackURL
 		? encodeURIComponent(ctx.body.callbackURL)
@@ -503,13 +517,8 @@ export const verifyEmail = createAuthEndpoint(
 		 * credential to predate the token's `iat` (second granularity), so a
 		 * link issued before a claim was replaced still cannot verify it.
 		 */
-		const accounts = await ctx.context.internalAdapter.findAccounts(
-			user.user.id,
-		);
-		const credentialAccount = accounts.find(
-			(a) => a.providerId === "credential",
-		);
-		const currentClaimId = credentialAccount?.id ?? user.user.id;
+		const { claimId: currentClaimId, credentialAccount } =
+			await getVerificationClaim(ctx, user.user.id);
 		const claimSuperseded = parsed.claimId
 			? parsed.claimId !== currentClaimId
 			: !!credentialAccount &&

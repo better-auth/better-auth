@@ -811,6 +811,50 @@ describe("sign-up re-registration replaces unverified claims", async () => {
 		});
 		expect(victimSignIn.status).toBe(200);
 	});
+
+	it("does not replace a pending credential claim that has an active session", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const email = "pending-with-session@test.com";
+
+		// A claim that already holds a live session is in use — not a
+		// disposable pending registration.
+		const pendingUser = await ctx.internalAdapter.createUser(
+			{ email, name: "Pending", emailVerified: false },
+			{ method: "email-password" },
+		);
+		const credential = await ctx.internalAdapter.linkAccount({
+			userId: pendingUser.id,
+			providerId: "credential",
+			accountId: pendingUser.id,
+			password: "hashed-placeholder",
+		});
+		await ctx.internalAdapter.createSession(pendingUser.id, false);
+		expect(
+			await ctx.internalAdapter.listSessions(pendingUser.id, {
+				onlyActiveSessions: true,
+			}),
+		).not.toHaveLength(0);
+
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "new-password1", name: "New Claim" },
+		});
+		expect(res.token).toBeNull();
+
+		const accounts = await ctx.internalAdapter.findAccounts(pendingUser.id);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]!.id).toBe(credential.id);
+	});
 });
 
 describe("sign-up CSRF protection", async () => {
