@@ -575,11 +575,18 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				}
 
 				if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+					const accounts = await ctx.context.internalAdapter.findAccounts(
+						user.id,
+					);
+					const credentialAccount = accounts.find(
+						(a) => a.providerId === "credential",
+					);
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
 						user.email,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
+						{ claimId: credentialAccount?.id ?? user.id },
 					);
 					const callbackURL = ctx.body.callbackURL
 						? encodeURIComponent(ctx.body.callbackURL)

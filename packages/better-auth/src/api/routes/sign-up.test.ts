@@ -657,6 +657,106 @@ describe("sign-up re-registration replaces unverified claims", async () => {
 		});
 		expect(wrongSignIn.status).toBe(401);
 	});
+
+	it("rejects a verification token bound to a superseded claim", async () => {
+		const sentTokens: string[] = [];
+		const { auth, client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						sentTokens.push(token);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const email = "superseded-claim@test.com";
+
+		// Victim registers first, then the attacker re-registers before the
+		// victim verifies — superseding the victim's pending claim.
+		await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+		await auth.api.signUpEmail({
+			body: { email, password: "attacker-password1", name: "Mallory" },
+		});
+		expect(sentTokens).toHaveLength(2);
+
+		// The proof issued for the superseded claim fails loudly instead of
+		// verifying the newer claim and signing the prover into it.
+		const stale = await client.verifyEmail({
+			query: { token: sentTokens[0]! },
+		});
+		expect(stale.error?.status).toBe(401);
+
+		// The victim can still reclaim: re-register, then the proof bound to
+		// their claim verifies it.
+		await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+		const current = await client.verifyEmail({
+			query: { token: sentTokens[2]! },
+		});
+		expect(current.data?.status).toBe(true);
+		const victimSignIn = await auth.api.signInEmail({
+			body: { email, password: "victim-password2" },
+			asResponse: true,
+		});
+		expect(victimSignIn.status).toBe(200);
+		const attackerSignIn = await auth.api.signInEmail({
+			body: { email, password: "attacker-password1" },
+			asResponse: true,
+		});
+		expect(attackerSignIn.status).toBe(401);
+	});
+
+	it("does not replace claims on rows holding non-credential accounts", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const email = "social-unverified@test.com";
+
+		// An unverified row carrying a social link is a real account pending
+		// verification, not a disposable pending claim.
+		const socialUser = await ctx.internalAdapter.createUser(
+			{
+				email,
+				name: "Social User",
+				emailVerified: false,
+			},
+			{ method: "oauth" },
+		);
+		await ctx.internalAdapter.linkAccount({
+			userId: socialUser.id,
+			providerId: "github",
+			accountId: "gh-42",
+		});
+
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "new-password1", name: "New Claim" },
+		});
+		expect(res.token).toBeNull();
+
+		const accounts = await ctx.internalAdapter.findAccounts(socialUser.id);
+		expect(accounts.some((a) => a.providerId === "github")).toBe(true);
+		expect(accounts.some((a) => a.providerId === "credential")).toBe(false);
+	});
 });
 
 describe("sign-up CSRF protection", async () => {

@@ -56,11 +56,19 @@ export async function sendVerificationEmailFn(
 			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 		);
 	}
+	/**
+	 * Bind the token to the row's current claim — the credential account, or
+	 * the row itself when it has none — so a proof issued for a superseded
+	 * pending claim cannot verify a later one.
+	 */
+	const accounts = await ctx.context.internalAdapter.findAccounts(user.id);
+	const credentialAccount = accounts.find((a) => a.providerId === "credential");
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
+		{ claimId: credentialAccount?.id ?? user.id },
 	);
 	const callbackURL = ctx.body.callbackURL
 		? encodeURIComponent(ctx.body.callbackURL)
@@ -319,6 +327,7 @@ export const verifyEmail = createAuthEndpoint(
 			email: z.email(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
+			claimId: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
@@ -485,6 +494,24 @@ export const verifyEmail = createAuthEndpoint(
 				status: true,
 				user: null,
 			});
+		}
+		/**
+		 * A proof bound to a pending claim can only verify that claim. When the
+		 * row's credential has since been replaced by a newer sign-up, reject
+		 * the stale token rather than verifying a claim the prover did not
+		 * make.
+		 */
+		if (parsed.claimId) {
+			const accounts = await ctx.context.internalAdapter.findAccounts(
+				user.user.id,
+			);
+			const credentialAccount = accounts.find(
+				(a) => a.providerId === "credential",
+			);
+			const currentClaimId = credentialAccount?.id ?? user.user.id;
+			if (parsed.claimId !== currentClaimId) {
+				return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
+			}
 		}
 		if (ctx.context.options.emailVerification?.beforeEmailVerification) {
 			await ctx.context.options.emailVerification.beforeEmailVerification(

@@ -539,11 +539,16 @@ async function dispatchVerificationEmail(
 	}
 	const send = async () => {
 		try {
+			const accounts = await c.context.internalAdapter.findAccounts(user.id);
+			const credentialAccount = accounts.find(
+				(a) => a.providerId === "credential",
+			);
 			const token = await createEmailVerificationToken(
 				c.context.secret,
 				user.email,
 				undefined,
 				c.context.options.emailVerification?.expiresIn,
+				{ claimId: credentialAccount?.id ?? user.id },
 			);
 			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 				callbackURL || "/",
