@@ -6,6 +6,16 @@ on:
       - main
       - next
       - 'v*.*.x'
+  workflow_call:
+    inputs:
+      use_shared_tooling:
+        description: Use release tooling from the called workflow revision
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      RELEASE_APP_PRIVATE_KEY:
+        required: true
   workflow_dispatch:
     inputs:
       snapshot:
@@ -33,8 +43,7 @@ jobs:
     timeout-minutes: 45
     environment: Release
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       id-token: write
     env:
       # The release bot's auto-commit must not be gated by the local pre-commit hooks.
@@ -43,7 +52,6 @@ jobs:
       - name: Generate App Token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        if: vars.RELEASE_APP_ID != ''
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
@@ -54,7 +62,16 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout shared release tooling
+        if: inputs.use_shared_tooling
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .release-tooling
+          persist-credentials: false
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
@@ -65,6 +82,31 @@ jobs:
           package-manager-cache: false
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Install shared release tooling
+        if: inputs.use_shared_tooling
+        run: pnpm --dir .release-tooling install --frozen-lockfile --filter @better-auth/release-tooling
+
+      - name: Resolve release tooling
+        env:
+          USE_SHARED_TOOLING: ${{ inputs.use_shared_tooling }}
+        run: |
+          if [ "$USE_SHARED_TOOLING" = "true" ]; then
+            echo "/.release-tooling/" >> .git/info/exclude
+            TOOLING_ROOT="$GITHUB_WORKSPACE/.release-tooling/packages/release-tooling"
+          else
+            TOOLING_ROOT="$GITHUB_WORKSPACE/packages/release-tooling"
+          fi
+
+          if [ ! -f "$TOOLING_ROOT/src/commands/release-notes.ts" ]; then
+            echo "::error::Release tooling is unavailable"
+            exit 1
+          fi
+
+          {
+            echo "RELEASE_NOTES_COMMAND=$TOOLING_ROOT/src/commands/release-notes.ts"
+            echo "RELEASE_NOTES_COMMENT_COMMAND=$TOOLING_ROOT/src/commands/release-notes-comment.ts"
+          } >> "$GITHUB_ENV"
 
       - name: Guard next branch pre-release state
         id: guard
@@ -97,7 +139,7 @@ jobs:
         id: release-candidate
         run: |
           CURRENT_VERSION=$(jq -r '.version' packages/better-auth/package.json)
-          pnpm --filter @better-auth/release-tooling release-notes candidate \
+          node "$RELEASE_NOTES_COMMAND" candidate \
             --version "$CURRENT_VERSION" \
             --branch "$GITHUB_SHA"
 
@@ -105,7 +147,7 @@ jobs:
         id: approved-notes
         if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.release-candidate.outputs.version }}
           VERSION_COMMIT: ${{ steps.release-candidate.outputs.version_commit }}
           RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
@@ -135,13 +177,8 @@ jobs:
             exit 1
           fi
           COMMENTS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" | jq -s 'add')
-          if [ -n "$RELEASE_APP_ID" ]; then
-            COMMENT=$(echo "$COMMENTS" | jq -c --arg app "$RELEASE_APP_ID" \
-              '[.[] | select((.performed_via_github_app.id | tostring) == $app) | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
-          else
-            COMMENT=$(echo "$COMMENTS" | jq -c \
-              '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
-          fi
+          COMMENT=$(echo "$COMMENTS" | jq -c --arg app "$RELEASE_APP_ID" \
+            '[.[] | select((.performed_via_github_app.id | tostring) == $app) | select(.body | startswith("<!-- better-auth-release-notes:v1 -->"))] | sort_by(.updated_at) | last // empty')
           if [ -z "$COMMENT" ]; then
             {
               echo "### Approved release notes are missing"
@@ -155,7 +192,7 @@ jobs:
           COMMENT_FILE="$RUNNER_TEMP/release-notes-comment.md"
           NOTES_FILE="$RUNNER_TEMP/release-notes-approved.md"
           echo "$COMMENT" | jq -r '.body' > "$COMMENT_FILE"
-          pnpm --filter @better-auth/release-tooling release-notes:comment extract \
+          node "$RELEASE_NOTES_COMMENT_COMMAND" extract \
             --version "$VERSION" \
             --head "$PR_HEAD_SHA" \
             --comment "$COMMENT_FILE" \
@@ -182,8 +219,8 @@ jobs:
       - name: Reject release commits with pending changesets
         if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true'
         run: |
-          if pnpm --filter @better-auth/release-tooling release-notes \
-            check-changesets --branch "$GITHUB_SHA"; then
+          if node "$RELEASE_NOTES_COMMAND" check-changesets \
+            --branch "$GITHUB_SHA"; then
             exit 0
           fi
 
@@ -209,14 +246,14 @@ jobs:
           createGithubReleases: false
           prDraft: always
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
 
       - name: Rename release PR with version
         if: steps.changesets.outputs.pullRequestNumber
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
         run: |
           PR_DATA=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName,headRefOid)
@@ -242,7 +279,7 @@ jobs:
       - name: Create GitHub Release
         if: steps.guard.outputs.skip != 'true' && steps.release-candidate.outputs.release == 'true' && steps.changesets.outputs.hasChangesets == 'false'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.release-candidate.outputs.version }}
           RELEASE_COMMIT: ${{ steps.approved-notes.outputs.release_commit }}
           NOTES_FILE: ${{ steps.approved-notes.outputs.notes_path }}
@@ -273,7 +310,7 @@ jobs:
       - name: Sync main to next via PR
         if: github.ref_name == 'main'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git fetch origin next || { echo "next branch does not exist, skipping"; exit 0; }
 

@@ -19,7 +19,6 @@ describe("database userId fields", () => {
 		const result = accountSchema.safeParse({
 			id: "account-id",
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: "account-id",
 		});
 
