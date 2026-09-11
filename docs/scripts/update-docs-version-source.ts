@@ -35,18 +35,16 @@ export function updateDocsVersionSource(
 	const previousCommitSha = source.commitSha;
 	if (previousCommitSha === commitSha) return null;
 
-	const currentEntry = `\t\teditBranch: ${JSON.stringify(editBranch)},\n\t\tcommitSha: ${JSON.stringify(previousCommitSha)},`;
-	const nextEntry = `\t\teditBranch: ${JSON.stringify(editBranch)},\n\t\tcommitSha: ${JSON.stringify(commitSha)},`;
-	const entryIndex = content.indexOf(currentEntry);
-	if (
-		entryIndex === -1 ||
-		content.indexOf(currentEntry, entryIndex + currentEntry.length) !== -1
-	) {
-		throw new Error(`Expected one source entry for ${editBranch}`);
+	const assignment = new RegExp(
+		`(commitSha\\s*:\\s*)${JSON.stringify(previousCommitSha)}`,
+		"g",
+	);
+	if (content.match(assignment)?.length !== 1) {
+		throw new Error(`Expected one commitSha entry for ${editBranch}`);
 	}
 
 	return {
-		content: content.replace(currentEntry, nextEntry),
+		content: content.replace(assignment, `$1${JSON.stringify(commitSha)}`),
 		previousCommitSha,
 		releaseLine: version.releaseLine,
 	};

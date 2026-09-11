@@ -1,28 +1,29 @@
 name: Sync Versioned Documentation
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
     branches:
       # Match editBranch values with a pinned commitSha in `docs/lib/docs-version-sources.ts`.
       - "v*.*.x"
-    paths:
-      - "docs/content/docs/**"
-      - "packages/better-auth/package.json"
 
 permissions: {}
 
 concurrency:
-  group: sync-version-docs-${{ github.ref_name }}
+  group: sync-version-docs-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
   sync:
-    if: github.repository_owner == 'better-auth' && vars.RELEASE_APP_ID != ''
+    if: >
+      github.repository_owner == 'better-auth' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      vars.RELEASE_APP_ID != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
       - name: Generate App Token
         id: app-token
@@ -47,26 +48,43 @@ jobs:
       - name: Update documentation source
         id: update
         env:
-          SOURCE_BRANCH: ${{ github.ref_name }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: node docs/scripts/update-docs-version-source.ts "$SOURCE_BRANCH" "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Create or update draft PR
+      - name: Check source changes
+        id: changes
         if: steps.update.outputs.changed == 'true'
+        env:
+          PREVIOUS_SHA: ${{ steps.update.outputs.previous_sha }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch --quiet --no-tags --depth=1 origin "$PREVIOUS_SHA" "$SOURCE_SHA"
+          CHANGED_FILES=$(git diff --name-only "$PREVIOUS_SHA" "$SOURCE_SHA" -- \
+            docs/content/docs \
+            packages/better-auth/package.json)
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update draft PR
+        if: steps.changes.outputs.relevant == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.app-token.outputs.token }}
           base: main
-          branch: docs-sync/${{ github.ref_name }}
+          branch: docs-sync/${{ github.event.workflow_run.head_branch }}
           add-paths: docs/lib/docs-version-sources.ts
           commit-message: "docs: sync v${{ steps.update.outputs.release_line }} documentation"
           sign-commits: true
           title: "docs: sync v${{ steps.update.outputs.release_line }} documentation"
           draft: always-true
           body: |
-            Updates the v${{ steps.update.outputs.release_line }} documentation snapshot after changes landed on `${{ github.ref_name }}`.
+            Updates the v${{ steps.update.outputs.release_line }} documentation snapshot after changes landed on `${{ github.event.workflow_run.head_branch }}`.
 
-            - Source revision: [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-            - Compare: [Compare with the current snapshot](https://github.com/${{ github.repository }}/compare/${{ steps.update.outputs.previous_sha }}...${{ github.sha }})
+            - Source revision: [`${{ github.event.workflow_run.head_sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha }})
+            - Compare: [Compare with the current snapshot](https://github.com/${{ github.repository }}/compare/${{ steps.update.outputs.previous_sha }}...${{ github.event.workflow_run.head_sha }})
 
             Review the source changes and documentation preview, then merge this PR when ready.
