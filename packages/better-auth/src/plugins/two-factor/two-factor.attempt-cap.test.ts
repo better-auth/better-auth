@@ -157,9 +157,11 @@ describe("two-factor security: TOTP enforces a per-challenge attempt cap", async
 			where: [{ field: "userId", value: userId }],
 			update: { secret: validSecret },
 		});
+		// Enrollment already consumed the current step's code (TOTPs are
+		// single-use), so mint the next step's — still inside the ±1 window.
 		const ok = await verifyTotp(
 			challengeHeaders,
-			await createOTP(secret).totp(),
+			await createOTP(secret).hotp(Math.floor(Date.now() / 30_000) + 1),
 		);
 		expect(ok.status).toBe(200);
 	});

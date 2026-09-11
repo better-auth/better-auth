@@ -533,6 +533,13 @@ export const twoFactorTableFields = [
 			"When the account lockout expires; null when the account is not locked.",
 		isOptional: true,
 	},
+	{
+		name: "lastUsedStep",
+		type: "number",
+		description:
+			"The most recently consumed TOTP time step; rejects reused codes (RFC 6238 §5.2).",
+		isOptional: true,
+	},
 ];
 
 <DatabaseTable name="twoFactor" fields={twoFactorTableFields} />

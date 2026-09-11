@@ -4,7 +4,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import { symmetricDecrypt } from "../../../crypto";
+import { constantTimeEqual, symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
@@ -17,6 +17,7 @@ import type {
 } from "../types";
 import {
 	assertTwoFactorNotLocked,
+	consumeTOTPStep,
 	recordTwoFactorFailure,
 	resetTwoFactorFailures,
 	verifyTwoFactor,
@@ -297,21 +298,63 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 				: null;
 			let status: boolean;
+			let matchedStep: number | null = null;
 			try {
 				const decrypted = await symmetricDecrypt({
 					key: ctx.context.secretConfig,
 					data: twoFactor.secret,
 				});
-				status = await createOTP(decrypted, {
+				const otp = createOTP(decrypted, {
 					period: opts.period,
 					digits: opts.digits,
-				}).verify(ctx.body.code);
+				});
+				// Walk the same ±1 window the OTP util's verify() uses, but capture
+				// which step matched so one-time use can be enforced. The counter is
+				// snapshotted once so a period boundary mid-loop cannot shift the
+				// window, and every candidate is checked with a constant-time
+				// compare — no early exit, matching the util's verify().
+				const counter = Math.floor(Date.now() / (opts.period * 1000));
+				for (let i = -1; i <= 1; i++) {
+					const candidateStep = counter + i;
+					const candidate = await otp.hotp(candidateStep);
+					if (constantTimeEqual(ctx.body.code, candidate)) {
+						matchedStep = candidateStep;
+					}
+				}
+				status = matchedStep !== null;
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
 				await attempt?.restore();
 				throw error;
 			}
 			if (!status) {
+				await attempt?.recordFailure();
+				if (isSignIn) {
+					await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+				}
+				return invalid("INVALID_CODE");
+			}
+			// RFC 6238 §5.2 one-time use: claim the matched step before a session
+			// is issued. This applies on both paths — the sign-in challenge is
+			// consumed by valid() but only blocks replay against that challenge,
+			// and the step-up path has no challenge at all. A replayed code (the
+			// same step, or an older step still inside the window) loses the
+			// guarded write and is rejected; doing it before valid() also means
+			// two concurrent verifications of one code cannot each mint a session.
+			let stepConsumed: boolean;
+			try {
+				stepConsumed = await consumeTOTPStep(
+					ctx,
+					twoFactorTable,
+					twoFactor,
+					matchedStep!,
+				);
+			} catch (error) {
+				// A server error must not spend the slot.
+				await attempt?.restore();
+				throw error;
+			}
+			if (!stepConsumed) {
 				await attempt?.recordFailure();
 				if (isSignIn) {
 					await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);

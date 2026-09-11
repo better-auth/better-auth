@@ -55,6 +55,16 @@ export const schema = {
 				input: false,
 				returned: false,
 			},
+			// The most recent TOTP time step consumed by a successful
+			// verification. Verification rejects any candidate step <= this
+			// value, enforcing RFC 6238 §5.2 one-time use. Nullable so
+			// pre-migration rows are treated as "no step consumed yet".
+			lastUsedStep: {
+				type: "number",
+				required: false,
+				input: false,
+				returned: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
