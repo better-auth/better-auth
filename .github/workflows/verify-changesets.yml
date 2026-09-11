@@ -14,4 +14,4 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    uses: better-auth/better-auth/.github/workflows/verify-changesets.yml@0e02187ab45a903c66986fc5e28cddd37185147b
+    uses: better-auth/better-auth/.github/workflows/verify-changesets.yml@9ca15f3726275f31d86cbd0a8cf21fea64441634

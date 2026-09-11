@@ -32,7 +32,7 @@
   "linked": [],
   "access": "public",
   "privatePackages": false,
-  "baseBranch": "main",
+  "baseBranch": "v1.6.x",
   "updateInternalDependencies": "patch",
   "bumpVersionsWithWorkspaceProtocolOnly": true,
   "ignore": [],
