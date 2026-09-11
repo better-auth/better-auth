@@ -10,6 +10,6 @@ jobs:
   draft:
     permissions:
       pull-requests: write
-    uses: better-auth/better-auth/.github/workflows/release-notes-draft.yml@0e02187ab45a903c66986fc5e28cddd37185147b
+    uses: better-auth/better-auth/.github/workflows/release-notes-draft.yml@9ca15f3726275f31d86cbd0a8cf21fea64441634
     secrets:
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
