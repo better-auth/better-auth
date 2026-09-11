@@ -120,6 +120,9 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (opts.requireVerification) {
 				if (!user.phoneNumberVerified) {
 					const otp = generateOTP(opts.otpLength);
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						phoneNumber,
+					);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: phoneNumber,
@@ -279,6 +282,9 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			}
 
 			const code = generateOTP(opts.otpLength);
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				ctx.body.phoneNumber,
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: ctx.body.phoneNumber,
@@ -609,6 +615,11 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 						);
 					}
+				} else {
+					throw APIError.from(
+						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
+					);
 				}
 			} else {
 				user =
@@ -713,6 +724,9 @@ export const requestPasswordResetPhoneNumber = (
 				],
 			});
 			const code = generateOTP(opts.otpLength);
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				`${ctx.body.phoneNumber}-request-password-reset`,
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
