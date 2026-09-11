@@ -10,7 +10,7 @@ import {
 	ATTR_CONTEXT,
 	ATTR_DB_COLLECTION_NAME,
 	ATTR_HOOK_TYPE,
-	withSpan,
+	createWithSpan,
 } from "@better-auth/core/instrumentation";
 
 export type DatabaseHooksEntry = {
@@ -56,6 +56,7 @@ export function getWithHooks(
 		hooks: DatabaseHooksEntry[];
 	},
 ) {
+	const withSpan = createWithSpan(ctx.options);
 	const hooksEntries = ctx.hooks;
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,

@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { getAuthTables, getAuthTablesWithResolvedIndexes } from "../get-tables";
-import type { AccountKey } from "../schema/account";
-import {
-	createLocalAccountIssuer,
-	createOAuthAccountIssuer,
-} from "../schema/account";
 import type { SecondaryStorage } from "../type";
 
 const secondaryStorageStub: SecondaryStorage = {
@@ -16,49 +11,6 @@ const secondaryStorageStub: SecondaryStorage = {
 };
 
 describe("getAuthTables", () => {
-	it.each([
-		undefined,
-		"issuer",
-		"provider-id",
-	] as const)("keeps the required issuer schema for the %s identity strategy", (identityStrategy) => {
-		const tables = getAuthTables({
-			...(identityStrategy && { account: { identityStrategy } }),
-		});
-
-		expect(tables.account?.fields.issuer).toMatchObject({ required: true });
-		expect(tables.account?.fields.accountId).toMatchObject({ required: true });
-		expect(tables.account?.indexes).toContainEqual({
-			fields: ["issuer", "accountId"],
-			unique: true,
-		});
-	});
-
-	it("creates a local account key without changing the provider account id", () => {
-		const credentialAccountKey: AccountKey = {
-			issuer: createLocalAccountIssuer("credential"),
-			accountId: "user-id",
-		};
-
-		expect(credentialAccountKey).toEqual({
-			issuer: "local:credential",
-			accountId: "user-id",
-		});
-	});
-
-	it("escapes provider IDs in synthetic account issuers", () => {
-		expect(createLocalAccountIssuer("credential")).toBe("local:credential");
-		expect(createOAuthAccountIssuer("google")).toBe("local:oauth:google");
-		expect(createLocalAccountIssuer("oauth:google")).toBe(
-			"local:oauth%3Agoogle",
-		);
-		expect(createOAuthAccountIssuer("team/google%prod")).toBe(
-			"local:oauth:team%2Fgoogle%25prod",
-		);
-		expect(createLocalAccountIssuer("oauth:google")).not.toBe(
-			createOAuthAccountIssuer("google"),
-		);
-	});
-
 	it("should use correct field name for refreshTokenExpiresAt", () => {
 		const tables = getAuthTables({
 			account: {
@@ -117,27 +69,23 @@ describe("getAuthTables", () => {
 		expect(accessTokenExpiresAtField.fieldName).toBe("accessTokenExpiresAt");
 	});
 
-	it("defines the issuer-scoped account key with configured field names", () => {
+	it("keys accounts by provider id and account id with configured field names", () => {
 		const tables = getAuthTables({
 			account: {
 				fields: {
-					issuer: "identity_issuer",
 					accountId: "provider_subject",
 					providerId: "provider_alias",
 				},
 			},
 		});
 
-		expect(tables.account?.fields.issuer?.fieldName).toBe("identity_issuer");
 		expect(tables.account?.fields.accountId?.fieldName).toBe(
 			"provider_subject",
 		);
 		expect(tables.account?.fields.providerId?.fieldName).toBe("provider_alias");
+		expect(tables.account?.fields.issuer).toBeUndefined();
 		expect(tables.account?.fields.providerAccountId).toBeUndefined();
-		expect(tables.account?.indexes).toContainEqual({
-			fields: ["issuer", "accountId"],
-			unique: true,
-		});
+		expect(tables.account?.indexes).toBeUndefined();
 	});
 
 	it("should propagate compound indexes from plugin schemas", () => {

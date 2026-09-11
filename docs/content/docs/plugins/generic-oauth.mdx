@@ -29,7 +29,6 @@ Every aspect of the OAuth flow can be overridden:
 | Provider requires extra token parameters                       | `tokenUrlParams`                                             |
 | Provider requires custom HTTP headers                          | `discoveryHeaders`, `authorizationHeaders`                   |
 | Provider does not support OIDC discovery                       | Set `authorizationUrl`, `tokenUrl`, `userInfoUrl` explicitly |
-| Provider configurations share one identity namespace           | Set the same `accountIssuer`                                 |
 | Provider uses a non-standard immutable user identifier         | Set `accountSubject`                                         |
 | Provider rejects PKCE                                          | Set `pkce: false`                                            |
 
@@ -214,9 +213,6 @@ interface GenericOAuthConfig {
   accountSubject?: (
     context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
   ) => string | number | Promise<string | number>;
-  accountIssuer?:
-    | string
-    | ((context: OAuthAccountKeyContext<GenericOAuthUserInfo>) => string | Promise<string>);
   discoveryUrl?: string;
   requireIdTokenVerification?: boolean;
   authorizationUrl?: string;
@@ -247,13 +243,7 @@ interface GenericOAuthConfig {
 
 `mapProfileToUser` cannot set the account subject. This keeps local profile mapping separate from account recognition.
 
-**accountIssuer**: (Optional) The stable authority namespace paired with the provider account subject. A discovery provider uses its discovered issuer by default. Set this field when an explicit-endpoint provider has an issuer, when multiple provider configurations represent the same authority, or when a verified profile determines a tenant-specific issuer. Without discovery or `accountIssuer`, Better Auth uses `local:oauth:<encoded providerId>`, where the provider ID segment is percent-encoded.
-
-The resolver receives verified provider data. Derive a dynamic issuer only from a claim or profile value established by the provider verification flow; never use a request parameter, email domain, or other caller-controlled value.
-
-Provider configurations with the same `accountIssuer` and subject deduplicate one external identity. They share one account row and token set; aliases do not create independent grants or provider lifecycle records.
-
-**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in. Discovery providers also bind the `id_token` to the authorization request with a server-generated OIDC `nonce` and reject a callback whose `id_token` does not echo it. Better Auth skips a provider when discovery cannot establish its issuer or returns invalid verification metadata, while keeping other authentication features available. A skipped provider is retried when the auth instance is recreated. Providers that do not require ID-token verification can use `accountIssuer` and explicit endpoints as a fallback when discovery is temporarily unavailable.
+**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in. Discovery providers also bind the `id_token` to the authorization request with a server-generated OIDC `nonce` and reject a callback whose `id_token` does not echo it. Better Auth skips a provider when discovery returns invalid verification metadata, or when discovery leaves no usable authorization endpoint or token exchange after applying explicit endpoints and `getToken`, while keeping other authentication features available. A skipped provider is retried when the auth instance is recreated. Explicit endpoints act as a fallback while discovery is temporarily unavailable.
 
 **requireIdTokenVerification**: (Optional) Require discovery to provide a usable issuer and `jwks_uri` before registering the provider. Enable this when `accountSubject` or `getUserInfo` derives identity from ID-token claims. If configured discovery is unavailable or incomplete, Better Auth skips the provider instead of falling back to unverified token decoding. Without `discoveryUrl`, missing verification metadata remains an invalid static configuration and initialization fails. The `microsoftEntraId` helper enables this automatically.
 

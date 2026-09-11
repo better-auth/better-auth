@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.7.2",
+  "version": "1.7.4",
   "description": "Testing utilities for Better Auth adapter development",
   "type": "module",
   "license": "MIT",
@@ -49,6 +49,6 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "better-auth": "workspace:^",
-    "vitest": "catalog:vitest"
+    "vitest": "^4.0.0 || ^5.0.0"
   }
 }
