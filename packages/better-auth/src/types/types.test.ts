@@ -447,4 +447,36 @@ describe("any-poisoning guards", () => {
 		expectTypeOf<Codes>().not.toBeAny();
 		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
 	});
+
+	/**
+	 * Callbacks that receive the user from the database should expose
+	 * `user.additionalFields` on their param types, matching what the
+	 * callbacks get at runtime.
+	 * https://github.com/better-auth/better-auth/issues/11192
+	 */
+	it("email callbacks should expose additionalFields on the user param", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					locale: {
+						type: "string",
+						required: false,
+						defaultValue: "en",
+					},
+				},
+			},
+			emailVerification: {
+				sendVerificationEmail: async ({ user }) => {
+					expectTypeOf(user.locale).toBeAny();
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+				sendResetPassword: async ({ user }) => {
+					expectTypeOf(user.locale).toBeAny();
+				},
+			},
+		});
+		expectTypeOf<typeof auth.$Infer.Session.user>().toHaveProperty("locale");
+	});
 });
