@@ -331,16 +331,38 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											}
 										}
 
-										// Reuse a customer matched by email only when the email is
-										// verified and it is not already associated with a
-										// different user. Otherwise create a new one.
+										// A verified email can reclaim a matching customer whose
+										// stored owner is not in the database.
 										if (stripeCustomer) {
-											const ownerId = customerMetadata.get(
-												stripeCustomer.metadata,
-											).userId;
-											const ownedByOther = !!ownerId && ownerId !== user.id;
-											if (ownedByOther || !user.emailVerified) {
+											if (!user.emailVerified) {
 												stripeCustomer = undefined;
+											} else {
+												const ownerId =
+													stripeCustomer.metadata?.[
+														customerMetadata.keys.userId
+													];
+												const owner =
+													ownerId && ownerId !== user.id
+														? await ctx.context.internalAdapter.findUserById(
+																ownerId,
+															)
+														: null;
+												if (owner) {
+													stripeCustomer = undefined;
+												} else {
+													stripeCustomer = await client.customers.update(
+														stripeCustomer.id,
+														{
+															metadata: customerMetadata.set(
+																{
+																	userId: user.id,
+																	customerType: "user",
+																},
+																stripeCustomer.metadata,
+															),
+														},
+													);
+												}
 											}
 										}
 
@@ -453,6 +475,37 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										ctx.context.logger.error(
 											`Failed to sync email to Stripe customer: ${e.message}`,
 											e,
+										);
+									}
+								},
+							},
+							delete: {
+								async after(user: User & WithStripeCustomerId, ctx) {
+									if (!ctx || !user.stripeCustomerId) return;
+
+									try {
+										const stripeCustomer = await client.customers.retrieve(
+											user.stripeCustomerId,
+										);
+										if (stripeCustomer.deleted) {
+											ctx.context.logger.warn(
+												`Stripe customer ${user.stripeCustomerId} was already deleted, cannot unlink from user ${user.id}`,
+											);
+											return;
+										}
+
+										await client.customers.update(user.stripeCustomerId, {
+											metadata: {
+												[customerMetadata.keys.userId]: "",
+											},
+										});
+										ctx.context.logger.info(
+											`Unlinked Stripe customer ${user.stripeCustomerId} from deleted user ${user.id}`,
+										);
+									} catch (error) {
+										ctx.context.logger.error(
+											`Failed to unlink Stripe customer ${user.stripeCustomerId} from deleted user ${user.id}`,
+											error,
 										);
 									}
 								},
