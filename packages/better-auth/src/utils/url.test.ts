@@ -290,6 +290,27 @@ describe("getBaseURL", () => {
 
 			expect(result).toBe("https://api.v1.staging.example.com/auth");
 		});
+
+		/**
+		 * RFC 1035 §2.3.4: max FQDN is 253 chars (+1 optional trailing dot); add 6 for port (e.g. ":65535").
+		 * This O(1) length guard structurally eliminates ReDoS attacks by preventing
+		 * pathological inputs from ever reaching the regex evaluation.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/8898
+		 */
+		it("should reject overly long host headers to prevent ReDoS", () => {
+			const longHost = "a".repeat(261);
+			const request = new Request("http://localhost:3000/test", {
+				headers: {
+					"x-forwarded-host": longHost,
+					"x-forwarded-proto": "https",
+				},
+			});
+
+			const result = getBaseURL(undefined, "/auth", request, false, true);
+
+			expect(result).toBe("http://localhost:3000/auth");
+		});
 	});
 });
 
