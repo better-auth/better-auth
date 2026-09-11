@@ -106,11 +106,27 @@ export interface EmailOTPOptions {
 	 * @default {
 	 *  enabled: false,
 	 *  verifyCurrentEmail: false,
+	 *  informEmailTaken: "never"
 	 * }
 	 */
 	changeEmail?: {
 		enabled?: boolean;
 		verifyCurrentEmail?: boolean;
+		/**
+		 * Controls how `requestEmailChange` behaves when the requested new email
+		 * is already registered to another account.
+		 *
+		 * - `"never"` (default) — The OTP is discarded and `requestEmailChange()` silently returns `{ success: true }`.
+		 *    This does not inform that the email is already in use, preventing email enumeration.
+		 * - `"immediate"` — The OTP is discarded and `requestEmailChange()` immediately returns a `400` error with message `"Email is already taken"`.
+		 *    This may pose an email enumeration risk if exposed to the client.
+		 * - `"deferred"` — The OTP is still sent to the new email address and `requestEmailChange()` returns `{ success: true }`.
+		 *    The conflict is surfaced after the user successfully submits the OTP via `changeEmail()`, returning a `400` error with message `"Email is already taken"`.
+		 *    This prevents email enumeration at the cost of an additional email being sent to the new address.
+		 *
+		 * @default "never"
+		 */
+		informEmailTaken?: "never" | "immediate" | "deferred";
 	};
 	/**
 	 * Override the default email verification to use email otp instead
