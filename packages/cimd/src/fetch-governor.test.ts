@@ -377,6 +377,31 @@ describe("CIMD metadata fetch governor", () => {
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(3);
 	});
 
+	it("does not evict active per-client state after its interval expires", async () => {
+		let now = 1_800_000_000_000;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const harness = await createGovernorHarness({ minimumFetchInterval: 1 }, 1);
+		const firstClientId = "https://active-state.example/a.json";
+		const secondClientId = "https://active-state.example/b.json";
+		const firstResponse = deferred<Response>();
+		harness.responders.set(firstClientId, () => firstResponse.promise);
+		harness.responders.set(secondClientId, () => {
+			throw new Error("network failed");
+		});
+
+		const first = harness.authorize(firstClientId);
+		await vi.waitFor(() => {
+			expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+		});
+		now += 1_000;
+
+		expect((await harness.authorize(secondClientId)).status).toBe(429);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+
+		firstResponse.reject(new Error("network failed"));
+		expect((await first).status).toBeGreaterThanOrEqual(400);
+	});
+
 	it("does not evict a live per-origin budget at capacity", async () => {
 		let now = 1_800_000_000_000;
 		vi.spyOn(Date, "now").mockImplementation(() => now);

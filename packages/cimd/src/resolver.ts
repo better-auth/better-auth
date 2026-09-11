@@ -342,6 +342,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				candidateClientId,
 				candidateLastFetchStartAtMs,
 			] of lastFetchStartAtMsByClientId) {
+				if (inFlightResolutionByClientId.has(candidateClientId)) {
+					continue;
+				}
 				if (
 					fetchPolicy.minimumFetchIntervalMs > 0 &&
 					nowMs - candidateLastFetchStartAtMs <
