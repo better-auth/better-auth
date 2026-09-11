@@ -49,6 +49,13 @@ export async function onCheckoutSessionCompleted(
 		if (checkoutSession.mode === "setup" || !options.subscription?.enabled) {
 			return;
 		}
+
+		// check for those who use stripe as a subscription as well as one-time-payment
+		// plugin. stripe sets the subscription = null when it is a one time payment.
+		if (!checkoutSession.subscription) {
+			return;
+		}
+
 		const subscription = await client.subscriptions.retrieve(
 			checkoutSession.subscription as string,
 		);
