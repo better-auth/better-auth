@@ -496,22 +496,27 @@ export const verifyEmail = createAuthEndpoint(
 			});
 		}
 		/**
-		 * A proof bound to a pending claim can only verify that claim. When the
-		 * row's credential has since been replaced by a newer sign-up, reject
-		 * the stale token rather than verifying a claim the prover did not
-		 * make.
+		 * A proof may only verify the pending claim it was issued for. Tokens
+		 * minted after claim binding carry `claimId` — the row's credential
+		 * account — and are rejected when a newer sign-up has since replaced
+		 * it. Legacy claim-less tokens fall back to requiring the current
+		 * credential to predate the token's `iat` (second granularity), so a
+		 * link issued before a claim was replaced still cannot verify it.
 		 */
-		if (parsed.claimId) {
-			const accounts = await ctx.context.internalAdapter.findAccounts(
-				user.user.id,
-			);
-			const credentialAccount = accounts.find(
-				(a) => a.providerId === "credential",
-			);
-			const currentClaimId = credentialAccount?.id ?? user.user.id;
-			if (parsed.claimId !== currentClaimId) {
-				return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
-			}
+		const accounts = await ctx.context.internalAdapter.findAccounts(
+			user.user.id,
+		);
+		const credentialAccount = accounts.find(
+			(a) => a.providerId === "credential",
+		);
+		const currentClaimId = credentialAccount?.id ?? user.user.id;
+		const claimSuperseded = parsed.claimId
+			? parsed.claimId !== currentClaimId
+			: !!credentialAccount &&
+				Math.floor(new Date(credentialAccount.createdAt).getTime() / 1000) >
+					(jwt.payload.iat ?? 0);
+		if (claimSuperseded) {
+			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		if (ctx.context.options.emailVerification?.beforeEmailVerification) {
 			await ctx.context.options.emailVerification.beforeEmailVerification(

@@ -2,6 +2,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { admin } from "../../plugins/admin/admin";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { createEmailVerificationToken } from "./email-verification";
 
 describe("sign-up with custom fields", async () => {
 	const mockFn = vi.fn();
@@ -756,6 +757,59 @@ describe("sign-up re-registration replaces unverified claims", async () => {
 		const accounts = await ctx.internalAdapter.findAccounts(socialUser.id);
 		expect(accounts.some((a) => a.providerId === "github")).toBe(true);
 		expect(accounts.some((a) => a.providerId === "credential")).toBe(false);
+	});
+
+	it("rejects a claim-less legacy link whose claim was replaced after issuance", async () => {
+		const sentTokens: string[] = [];
+		const { auth, client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						sentTokens.push(token);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const email = "legacy-claim-less@test.com";
+
+		// Attacker pre-registers the victim's address.
+		await auth.api.signUpEmail({
+			body: { email, password: "attacker-password1", name: "Mallory" },
+		});
+
+		// A link issued before claim binding (e.g. pre-upgrade) has no
+		// claimId. The victim then re-registers, replacing the claim —
+		// `iat` is second granularity, so force a boundary crossing.
+		const legacyToken = await createEmailVerificationToken(ctx.secret, email);
+		await new Promise((resolve) => setTimeout(resolve, 1100));
+		await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+
+		const stale = await client.verifyEmail({
+			query: { token: legacyToken },
+		});
+		expect(stale.error?.status).toBe(401);
+
+		// The claim-bound link issued for the victim's registration still
+		// verifies normally.
+		const current = await client.verifyEmail({
+			query: { token: sentTokens[1]! },
+		});
+		expect(current.data?.status).toBe(true);
+		const victimSignIn = await auth.api.signInEmail({
+			body: { email, password: "victim-password2" },
+			asResponse: true,
+		});
+		expect(victimSignIn.status).toBe(200);
 	});
 });
 
