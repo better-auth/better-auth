@@ -23,9 +23,8 @@ export async function getVerificationClaim(
 	ctx: GenericEndpointContext,
 	userId: string,
 ) {
-	const credentialAccount = (
-		await ctx.context.internalAdapter.findAccounts(userId)
-	).find((a) => a.providerId === "credential");
+	const credentialAccount =
+		await ctx.context.internalAdapter.findCredentialAccount(userId);
 	return { credentialAccount, claimId: credentialAccount?.id ?? userId };
 }
 
