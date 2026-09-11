@@ -593,12 +593,6 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				);
 			}
-			if (organizationId === session.session.activeOrganizationId) {
-				/**
-				 * If the organization is deleted, we set the active organization to null
-				 */
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
 
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
@@ -614,6 +608,12 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				);
 			}
 			await adapter.deleteOrganization(organizationId);
+			if (organizationId === session.session.activeOrganizationId) {
+				/**
+				 * If the organization is deleted, we set the active organization to null
+				 */
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			}
 			if (options?.organizationHooks?.afterDeleteOrganization) {
 				await options.organizationHooks.afterDeleteOrganization(
 					{
