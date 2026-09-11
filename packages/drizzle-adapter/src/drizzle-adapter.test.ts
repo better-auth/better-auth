@@ -7,7 +7,9 @@ import {
 	timestamp,
 } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
+import type { DB } from "./drizzle-adapter";
 import { drizzleAdapter } from "./drizzle-adapter";
+import { drizzleAdapter as drizzleRelationsV2Adapter } from "./relations-v2";
 
 describe("drizzle-adapter", () => {
 	it("should create drizzle adapter", () => {
@@ -21,6 +23,33 @@ describe("drizzle-adapter", () => {
 		};
 		const adapter = drizzleAdapter(db, config);
 		expect(adapter).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11258
+	 */
+	describe("lazy database initialization", () => {
+		it.for([
+			{ relations: "Relations v1", createAdapter: drizzleAdapter },
+			{
+				relations: "Relations v2",
+				createAdapter: drizzleRelationsV2Adapter,
+			},
+		])("should not initialize a lazy database during $relations adapter construction", ({
+			createAdapter,
+		}) => {
+			const db = new Proxy({} as DB, {
+				get() {
+					throw new Error("DATABASE_URL is not set");
+				},
+			});
+
+			expect(() =>
+				createAdapter(db, { provider: "pg" })({
+					secret: "test-secret-that-is-at-least-32-chars-long!!",
+				}),
+			).not.toThrow();
+		});
 	});
 
 	it("should use unique column fallback for MySQL creates without an id", async () => {
