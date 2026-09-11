@@ -317,8 +317,11 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				for (let i = -1; i <= 1; i++) {
 					const candidateStep = counter + i;
 					const candidate = await otp.hotp(candidateStep);
+					// Keep the earliest match: on a (rare) collision across adjacent
+					// steps, pinning the older step makes a replayed code fail the
+					// consumption guard below rather than spend the fresh one.
 					if (constantTimeEqual(ctx.body.code, candidate)) {
-						matchedStep = candidateStep;
+						matchedStep ??= candidateStep;
 					}
 				}
 				status = matchedStep !== null;
