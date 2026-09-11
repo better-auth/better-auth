@@ -53,10 +53,10 @@ export function installDependencies({
 			installCommand = "pnpm add";
 			break;
 		case "bun":
-			installCommand = "bun install";
+			installCommand = "bun add";
 			break;
 		case "yarn":
-			installCommand = "yarn install";
+			installCommand = "yarn add";
 			break;
 		default:
 			throw new Error("Invalid package manager");
