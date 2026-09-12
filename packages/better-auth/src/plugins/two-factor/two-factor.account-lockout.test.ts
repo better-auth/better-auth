@@ -5,7 +5,7 @@ import type {
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
@@ -138,8 +138,12 @@ async function setup(
 			asResponse: true,
 		});
 	}
-	function correctTotp() {
-		return createOTP(secret).totp();
+	function correctTotp(stepOffset = 0) {
+		// stepOffset mints a code for a later step: enrollment and each
+		// successful verification consume their step (TOTPs are single-use),
+		// so a second success inside the same window needs the next step's
+		// code, which the ±1 acceptance window still admits.
+		return createOTP(secret).hotp(Math.floor(Date.now() / 30_000) + stepOffset);
 	}
 	async function failOtpOnce(): Promise<Response> {
 		const challengeHeaders = await startChallenge();
@@ -308,7 +312,7 @@ describe("two-factor: account-level lockout across challenges", () => {
 				401,
 			);
 		}
-		const ok = await verifyTotp(await startChallenge(), await correctTotp());
+		const ok = await verifyTotp(await startChallenge(), await correctTotp(1));
 		expect(ok.status).toBe(200);
 
 		// Two more failures must not lock: the counter restarted from zero, so the
@@ -318,11 +322,20 @@ describe("two-factor: account-level lockout across challenges", () => {
 				401,
 			);
 		}
-		const stillOpen = await verifyTotp(
-			await startChallenge(),
-			await correctTotp(),
-		);
-		expect(stillOpen.status).toBe(200);
+		// Both in-window steps around "now" are already consumed (enrollment and
+		// the success above), so the second success must land in a fresh step —
+		// advancing two steps guarantees the clock moves past every burned step.
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			vi.setSystemTime(Date.now() + 61_000);
+			const stillOpen = await verifyTotp(
+				await startChallenge(),
+				await correctTotp(),
+			);
+			expect(stillOpen.status).toBe(200);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("releases the lock once its window elapses", async () => {
@@ -351,7 +364,7 @@ describe("two-factor: account-level lockout across challenges", () => {
 
 		const released = await verifyTotp(
 			await startChallenge(),
-			await correctTotp(),
+			await correctTotp(1),
 		);
 		expect(released.status).toBe(200);
 	});
@@ -367,7 +380,7 @@ describe("two-factor: account-level lockout across challenges", () => {
 				401,
 			);
 		}
-		const ok = await verifyTotp(await startChallenge(), await correctTotp());
+		const ok = await verifyTotp(await startChallenge(), await correctTotp(1));
 		expect(ok.status).toBe(200);
 	});
 
@@ -388,7 +401,7 @@ describe("two-factor: account-level lockout across challenges", () => {
 		expect((await verifyTotp(await startChallenge(), "000000")).status).toBe(
 			401,
 		);
-		const ok = await verifyTotp(await startChallenge(), await correctTotp());
+		const ok = await verifyTotp(await startChallenge(), await correctTotp(1));
 		expect(ok.status).toBe(200);
 	});
 
