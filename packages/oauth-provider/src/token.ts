@@ -537,32 +537,24 @@ export async function invalidateRefreshFamily(
 	ctx: GenericEndpointContext,
 	clientId: string,
 	userId: string,
+	referenceId?: string,
 ) {
-	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
-		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
+	const where = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+		...(referenceId !== undefined
+			? [{ field: "referenceId", value: referenceId }]
+			: []),
+	];
+
+	await ctx.context.adapter.deleteMany({
+		model: "oauthAccessToken",
+		where,
 	});
-	if (refreshTokens.length) {
-		await ctx.context.adapter.deleteMany({
-			model: "oauthAccessToken",
-			where: [
-				{
-					field: "refreshId",
-					operator: "in",
-					value: refreshTokens.map((r) => r.id),
-				},
-			],
-		});
-	}
+
 	await ctx.context.adapter.deleteMany({
 		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
+		where,
 	});
 }
 
