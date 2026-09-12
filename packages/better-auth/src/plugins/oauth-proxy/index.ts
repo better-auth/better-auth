@@ -24,7 +24,10 @@ import {
 	toOAuthProfileRecord,
 } from "../../oauth2/account-key";
 import { redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	handleOAuthUserInfo,
+	linkOAuthAccount,
+} from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
@@ -118,6 +121,7 @@ const passthroughPayloadSchema = z.looseObject({
 		}).shape,
 	),
 	profile: z.record(z.string(), z.unknown()).optional(),
+	scopes: z.array(z.string()).optional(),
 	state: z.string().min(1),
 	callbackURL: z.string().min(1),
 	newUserURL: z.string().optional(),
@@ -234,7 +238,24 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			if (!stateData) {
 				throw redirectOnError(ctx, errorURL, "state_mismatch");
 			}
-
+			if (stateData.link) {
+				const linkResult = await linkOAuthAccount(ctx, {
+					link: stateData.link,
+					userInfo: payload.userInfo,
+					account: payload.account,
+					profile: payload.profile ?? {},
+					scopes: payload.scopes ?? payload.account.scope?.split(","),
+				});
+				if (!linkResult.linked) {
+					throw redirectOnError(
+						ctx,
+						errorURL,
+						linkResult.error.code,
+						linkResult.error.message,
+					);
+				}
+				throw ctx.redirect(payload.callbackURL);
+			}
 			let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 			try {
 				result = await handleOAuthUserInfo(ctx, {
@@ -339,7 +360,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			before: [
 				{
 					matcher(context) {
-						return !!context.path?.startsWith("/sign-in/social");
+						return (
+							!!context.path?.startsWith("/sign-in/social") ||
+							context.path === "/link-social"
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
@@ -562,6 +586,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								emailVerified: userInfo.emailVerified,
 							},
 							profile: providerProfile,
+							scopes: tokens.scopes,
 							account: {
 								...accountKey,
 								accessToken: tokens.accessToken,
@@ -597,7 +622,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return !!context.path?.startsWith("/sign-in/social");
+						return (
+							!!context.path?.startsWith("/sign-in/social") ||
+							context.path === "/link-social"
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
