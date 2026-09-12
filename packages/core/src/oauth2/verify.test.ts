@@ -117,6 +117,47 @@ describe("verifyBearerToken", () => {
 		}
 	}
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10856
+	 */
+	it("should verify locally with a function jwks source without fetching", async () => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const jwksSource = vi.fn(async () => ({ keys: [publicJWK] }));
+
+		const payload = await verifyBearerToken(token, {
+			verifyOptions: { issuer, audience },
+			jwksUrl: jwksSource,
+		});
+
+		expect(payload.sub).toBe("user-123");
+		expect(jwksSource).toHaveBeenCalledOnce();
+		expect(mockedFetch).not.toHaveBeenCalled();
+	});
+
+	it("should forward jwksCacheKey so a function jwks source is fetched once", async () => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const jwksCacheKey = {};
+		let sourceCalls = 0;
+
+		// A fresh closure per call, like per-request callers do.
+		for (let i = 0; i < 2; i++) {
+			const payload = await verifyBearerToken(token, {
+				verifyOptions: { issuer, audience },
+				jwksUrl: async () => {
+					sourceCalls++;
+					return { keys: [publicJWK] };
+				},
+				jwksCacheKey,
+			});
+			expect(payload.sub).toBe("user-123");
+		}
+
+		expect(sourceCalls).toBe(1);
+		expect(mockedFetch).not.toHaveBeenCalled();
+	});
+
 	it("should report every missing scope in one insufficient_scope failure", async () => {
 		// RFC 6750 §3.1: one scope per challenge would cost the user a browser
 		// round-trip for each missing scope.

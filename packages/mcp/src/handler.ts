@@ -9,7 +9,7 @@ import {
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
-import type { JWTPayload, JWTVerifyOptions } from "jose";
+import type { JSONWebKeySet, JWTPayload, JWTVerifyOptions } from "jose";
 
 export interface McpProtectedRequestHandlerOptions {
 	/** Expected authorization-server issuer for the access token. */
@@ -21,8 +21,19 @@ export interface McpProtectedRequestHandlerOptions {
 	 * authoritative from the top-level fields.
 	 */
 	jwtVerifyOptions?: Omit<JWTVerifyOptions, "issuer" | "audience">;
-	/** URL of the authorization server's JSON Web Key Set. */
-	jwksUrl?: string;
+	/**
+	 * Source of the authorization server's JSON Web Key Set: its URL, or a
+	 * function resolving the key set in-process. Prefer the function form when
+	 * the resource server is co-located with the authorization server — an HTTP
+	 * self-fetch can be impossible there (Cloudflare Workers cannot request
+	 * their own origin by default).
+	 */
+	jwksUrl?: string | (() => Promise<JSONWebKeySet | undefined>);
+	/**
+	 * Stable object to cache the result of a function `jwksUrl` source under.
+	 * Without it, a function source is fetched on every verification.
+	 */
+	jwksCacheKey?: object;
 	/** Remote introspection settings for opaque or remotely checked tokens. */
 	remoteVerify?: {
 		introspectUrl: string;
@@ -143,6 +154,7 @@ export const createMcpProtectedRequestHandler = (
 			audience: options.audience,
 		},
 		jwksUrl: options.jwksUrl,
+		jwksCacheKey: options.jwksCacheKey,
 		remoteVerify: options.remoteVerify,
 		requiredScopes: options.requiredScopes,
 		isScopeSatisfied: options.isScopeSatisfied,
