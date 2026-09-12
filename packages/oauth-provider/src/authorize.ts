@@ -21,6 +21,7 @@ import {
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
+	toBase64Url,
 } from "./signed-query";
 import { getSupportedClaims } from "./standard-claims";
 import type {
@@ -1077,6 +1078,6 @@ async function signParams(
 		canonicalizeOAuthQueryParams(params).toString(),
 		ctx.context.secret,
 	);
-	params.set("sig", signature);
+	params.set("sig", toBase64Url(signature));
 	return params.toString();
 }
