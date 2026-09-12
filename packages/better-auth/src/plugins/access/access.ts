@@ -108,6 +108,7 @@ export function role<
 	TAuthorizeStatements extends Statements = TRoleStatements,
 >(
 	statements: TRoleStatements,
+	options?: { scope?: "organization" | "team" | "both" }
 ): Role<ExactRoleStatements<TRoleStatements>, TAuthorizeStatements> {
 	return {
 		authorize(
@@ -152,6 +153,7 @@ export function role<
 			};
 		},
 		statements,
+		scope: options?.scope
 	};
 }
 
@@ -161,8 +163,9 @@ export function createAccessControl<const TStatements extends Statements>(
 	return {
 		newRole<const TRoleStatements extends Statements>(
 			statements: RoleInput<TStatements, TRoleStatements>,
+			options?: { scope?: "organization" | "team" | "both" }
 		) {
-			return role<TRoleStatements, TStatements>(statements);
+			return role<TRoleStatements, TStatements>(statements, options);
 		},
 		statements: s,
 	};

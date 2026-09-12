@@ -222,7 +222,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						}
 						const result = await adapter.addTeamMemberWithLimit({
 							userId: user.id,
-							teamId,
+							teamId: teamId as string,
+							role: Array.isArray(ctx.context.orgOptions.teams?.defaultRole)
+								? ctx.context.orgOptions.teams.defaultRole.join(",")
+								: ctx.context.orgOptions.teams?.defaultRole || "member",
 							maximumMembersPerTeam,
 						});
 						if (result.status === "limitReached") {
@@ -234,7 +237,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 					} else {
 						await adapter.findOrCreateTeamMember({
 							userId: user.id,
-							teamId,
+							teamId: teamId as string,
+							role: Array.isArray(ctx.context.orgOptions.teams?.defaultRole)
+								? ctx.context.orgOptions.teams.defaultRole.join(",")
+								: ctx.context.orgOptions.teams?.defaultRole || "member",
 						});
 					}
 				} catch (error) {
