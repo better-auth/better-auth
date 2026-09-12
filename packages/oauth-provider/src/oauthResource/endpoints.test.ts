@@ -145,6 +145,35 @@ describe("resource admin CRUD", () => {
 		expect(fetched.allowedScopes).toEqual(["read"]); // untouched
 	});
 
+	/**
+	 * The body schema accepts `allowedScopes: null`, which a scalar-list
+	 * column cannot store. Clearing the allowlist persists `[]`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10867
+	 */
+	it("update clearing allowedScopes persists an empty array", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		await instance.auth.api.adminCreateOAuthResource({
+			body: {
+				identifier: "https://api.example.com/clear-scopes",
+				allowedScopes: ["read"],
+			},
+			headers,
+		});
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier: "https://api.example.com/clear-scopes" },
+			body: { allowedScopes: null },
+			headers,
+		})) as OAuthResource;
+		expect(updated.allowedScopes).toEqual([]);
+		const fetched = (await instance.auth.api.adminGetOAuthResource({
+			params: { identifier: "https://api.example.com/clear-scopes" },
+			headers,
+		})) as OAuthResource;
+		expect(fetched.allowedScopes).toEqual([]);
+	});
+
 	it("update on a missing identifier returns 404", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
