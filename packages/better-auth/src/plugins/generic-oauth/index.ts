@@ -240,8 +240,31 @@ export const genericOAuth = <const ID extends string>(
 								);
 								continue;
 							}
+							const remoteJWKS = createRemoteJWKSet(jwksUrl);
+							const secretBytes =
+								typeof c.clientSecret === "string" && c.clientSecret.length > 0
+									? new TextEncoder().encode(c.clientSecret)
+									: null;
 							idTokenConfig = {
-								jwks: createRemoteJWKSet(jwksUrl),
+								jwks: async (protectedHeader, token) => {
+									if (
+										protectedHeader.alg === "HS256" ||
+										protectedHeader.alg === "HS384" ||
+										protectedHeader.alg === "HS512"
+									) {
+										if (
+											secretBytes &&
+											Array.isArray(signingAlgs) &&
+											signingAlgs.includes(protectedHeader.alg)
+										) {
+											return secretBytes;
+										}
+										throw new Error(
+											`Provider "${c.providerId}": cannot verify ${protectedHeader.alg} id_token with discovery metadata`,
+										);
+									}
+									return remoteJWKS(protectedHeader, token);
+								},
 								issuer: discovered.issuer,
 								audience: c.clientId,
 								algorithms: isOidc ? signingAlgs : undefined,
