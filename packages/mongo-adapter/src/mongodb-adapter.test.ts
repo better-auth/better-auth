@@ -12,6 +12,37 @@ describe("mongodb-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10925
+	 */
+	it("does not call abortTransaction when commitTransaction itself throws, so the real commit error propagates", async () => {
+		const commitError = new Error("commit failed: write conflict");
+		const abortTransaction = vi
+			.fn()
+			.mockRejectedValue(
+				new Error(
+					"Cannot call abortTransaction after calling commitTransaction",
+				),
+			);
+		const session = {
+			startTransaction: vi.fn(),
+			commitTransaction: vi.fn().mockRejectedValue(commitError),
+			abortTransaction,
+			endSession: vi.fn().mockResolvedValue(undefined),
+		};
+		const client = { startSession: vi.fn(() => session) } as any;
+		const db = { collection: vi.fn() } as any;
+
+		const adapter = mongodbAdapter(db, { client })({});
+		const transaction = adapter.options!.adapterConfig.transaction as (
+			cb: (adapter: unknown) => Promise<unknown>,
+		) => Promise<unknown>;
+
+		await expect(transaction(async () => "ok")).rejects.toThrow(commitError);
+		expect(abortTransaction).not.toHaveBeenCalled();
+		expect(session.endSession).toHaveBeenCalledOnce();
+	});
+
 	it("creates configured compound indexes before the first write", async () => {
 		let resolveIndexSetup: (indexName: string) => void = () => {};
 		const indexSetup = new Promise<string>((resolve) => {
