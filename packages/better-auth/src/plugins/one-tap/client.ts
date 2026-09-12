@@ -259,7 +259,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						async function callback(idToken: string) {
 							const res = await $fetch("/one-tap/callback", {
 								method: "POST",
-								body: { idToken, callbackURL: opts?.callbackURL },
+								body: {
+									idToken,
+									callbackURL: opts?.callbackURL,
+									nonce: opts?.nonce,
+								},
 								...opts?.fetchOptions,
 								...fetchOptions,
 							});
@@ -314,7 +318,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					async function callback(idToken: string) {
 						const res = await $fetch("/one-tap/callback", {
 							method: "POST",
-							body: { idToken, callbackURL: opts?.callbackURL },
+							body: {
+								idToken,
+								callbackURL: opts?.callbackURL,
+								nonce: opts?.nonce,
+							},
 							...opts?.fetchOptions,
 							...fetchOptions,
 						});

@@ -55,6 +55,19 @@ const oneTapCallbackBodySchema = z.object({
 			description: "URL to redirect to after a successful sign-in",
 		})
 		.optional(),
+	/**
+	 * The nonce the client passed to `google.accounts.id.initialize`. Google
+	 * embeds it in the ID token's `nonce` claim; forwarding it lets
+	 * `verifyGoogleIdToken` confirm the token was minted for this sign-in
+	 * attempt instead of replayed.
+	 */
+	nonce: z
+		.string()
+		.meta({
+			description:
+				"Nonce passed to the Google One Tap API, verified against the ID token's nonce claim",
+		})
+		.optional(),
 });
 
 export const oneTap = (options?: OneTapOptions | undefined) =>
@@ -99,7 +112,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					},
 				},
 				async (ctx) => {
-					const { idToken } = ctx.body;
+					const { idToken, nonce } = ctx.body;
 					const googleProvider =
 						typeof ctx.context.options.socialProviders?.google === "function"
 							? await ctx.context.options.socialProviders?.google()
@@ -119,6 +132,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					const payload = (await verifyGoogleIdToken({
 						token: idToken,
 						audience,
+						nonce,
 					})) as Partial<GoogleProfile> | null;
 					if (!payload) {
 						throw new APIError("BAD_REQUEST", {
