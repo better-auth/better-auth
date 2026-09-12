@@ -100,6 +100,7 @@ describe("verifyBearerToken", () => {
 	async function expectUnauthorized(
 		promise: Promise<unknown>,
 		message = "invalid access token",
+		body?: Record<string, unknown>,
 	) {
 		try {
 			await promise;
@@ -112,6 +113,7 @@ describe("verifyBearerToken", () => {
 				message,
 				body: {
 					message,
+					...body,
 				},
 			});
 		}
@@ -436,6 +438,51 @@ describe("verifyBearerToken", () => {
 				verifyOptions: { issuer, audience },
 			}),
 			"token expired",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10857
+	 */
+	it("should report a rejected token with the invalid_token error code", async () => {
+		// RFC 6750 §3: a request that presented a token which then failed is
+		// answered with `invalid_token`. Without the code a resource server
+		// cannot tell a rejected token from credentials that were never sent.
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(
+			privateKey,
+			kid,
+			{},
+			Math.floor(Date.now() / 1000) - 60,
+		);
+		mockJWKSResponse(publicJWK);
+
+		await expectUnauthorized(
+			verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+			"token expired",
+			{ error: "invalid_token", error_description: "token expired" },
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10857
+	 */
+	it("should report a token it cannot verify with the invalid_token error code", async () => {
+		// A malformed bearer token is neither a JWS this server can verify nor an
+		// opaque token any introspection endpoint was configured for, so it ends
+		// with no payload. A token was still presented, and it still failed.
+		mockJWKSResponse();
+
+		await expectUnauthorized(
+			verifyBearerToken("not-a-jwt", {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+			"no token payload",
+			{ error: "invalid_token", error_description: "no token payload" },
 		);
 	});
 
