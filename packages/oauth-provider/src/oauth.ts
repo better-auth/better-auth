@@ -801,14 +801,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The URI to redirect to, either with an authorization code or an error. May be absolute or a server-relative page path.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -846,20 +851,25 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Continues OAuth2 authorization flow",
 							responses: {
 								"200": {
-									description: "Consent processed successfully",
+									description: "Authorization flow continued successfully",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The URI to redirect to, either with an authorization code or an error. May be absolute or a server-relative page path.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
