@@ -1,12 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { DatabaseConnection, Dialect } from "kysely";
-import {
-	PostgresAdapter,
-	PostgresIntrospector,
-	PostgresQueryCompiler,
-} from "kysely";
+import type { DatabaseConnection, Dialect, TableMetadata } from "kysely";
+import { PostgresAdapter, PostgresQueryCompiler } from "kysely";
 import { describe, expect, it } from "vitest";
 import { organization } from "../plugins/organization";
 import { getMigrations, UnsafeMigrationError } from "./get-migration";
@@ -856,11 +852,7 @@ describe("get-migration: schema problems the migration cannot fix", () => {
 	});
 });
 
-/**
- * A PostgreSQL connection that reports an empty database, so every configured
- * model is planned as a new table and the compiled plan can be read back.
- */
-function createEmptyPostgresDialect() {
+function createPostgresDialect(tables: TableMetadata[] = []) {
 	const executed: string[] = [];
 	const connection: DatabaseConnection = {
 		async executeQuery(compiledQuery) {
@@ -884,7 +876,17 @@ function createEmptyPostgresDialect() {
 			async releaseConnection() {},
 			async destroy() {},
 		}),
-		createIntrospector: (database) => new PostgresIntrospector(database),
+		createIntrospector: () => ({
+			async getSchemas() {
+				return [];
+			},
+			async getTables() {
+				return tables;
+			},
+			async getMetadata() {
+				return { tables };
+			},
+		}),
 		createQueryCompiler: () => new PostgresQueryCompiler(),
 	};
 	return { dialect, executed };
@@ -892,7 +894,7 @@ function createEmptyPostgresDialect() {
 
 describe("get-migration: configured PostgreSQL schema", () => {
 	it("qualifies every planned statement with the configured schema", async () => {
-		const { dialect } = createEmptyPostgresDialect();
+		const { dialect } = createPostgresDialect();
 		const config: BetterAuthOptions = {
 			database: { dialect, schemaName: "auth", type: "postgres" },
 		};
@@ -904,12 +906,14 @@ describe("get-migration: configured PostgreSQL schema", () => {
 		expect(migration).toContain('create table "auth"."user"');
 		expect(migration).toContain('create table "auth"."session"');
 		expect(migration).toContain('references "auth"."user" ("id")');
-		expect(migration).toMatch(/create index "\w+" on "auth"\."session"/);
-		expect(migration).not.toMatch(/create table "\w+" \(/);
+		expect(migration).toContain(
+			'create index "session_userId_idx" on "auth"."session"',
+		);
+		expect(migration).not.toContain('create table "user"');
 	});
 
 	it("creates the schema before the tables that live in it", async () => {
-		const { dialect, executed } = createEmptyPostgresDialect();
+		const { dialect, executed } = createPostgresDialect();
 		const config: BetterAuthOptions = {
 			database: { dialect, schemaName: "auth", type: "postgres" },
 		};
@@ -928,7 +932,7 @@ describe("get-migration: configured PostgreSQL schema", () => {
 	});
 
 	it("leaves the plan unqualified when no schema is configured", async () => {
-		const { dialect } = createEmptyPostgresDialect();
+		const { dialect } = createPostgresDialect();
 		const config: BetterAuthOptions = {
 			database: { dialect, type: "postgres" },
 		};
@@ -939,5 +943,23 @@ describe("get-migration: configured PostgreSQL schema", () => {
 		expect(migration).not.toContain("create schema");
 		expect(migration).toContain('create table "user"');
 		expect(migration).toContain('references "user" ("id")');
+	});
+
+	it("ignores tables from other schemas", async () => {
+		const { dialect } = createPostgresDialect([
+			{
+				columns: [],
+				isView: false,
+				name: "user",
+				schema: "public",
+			},
+		]);
+		const config: BetterAuthOptions = {
+			database: { dialect, schemaName: "auth", type: "postgres" },
+		};
+
+		const { toBeCreated } = await getMigrations(config);
+
+		expect(toBeCreated.map(({ table }) => table)).toContain("user");
 	});
 });

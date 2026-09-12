@@ -193,6 +193,20 @@ describe("createKyselyAdapter schema namespace", () => {
 		);
 	});
 
+	it("preserves a dotted schema name as one PostgreSQL identifier", async () => {
+		const { kysely } = await createKyselyAdapter({
+			database: {
+				dialect: postgresDialect(),
+				schemaName: "tenant.auth",
+				type: "postgres",
+			},
+		});
+
+		expect(kysely!.selectFrom("user").select("id").compile().sql).toBe(
+			'select "id" from "tenant.auth"."user"',
+		);
+	});
+
 	it("leaves statements unqualified when no schema is configured", async () => {
 		const { kysely, schemaName } = await createKyselyAdapter({
 			database: { dialect: postgresDialect(), type: "postgres" },
@@ -218,8 +232,6 @@ describe("createKyselyAdapter schema namespace", () => {
 		);
 	});
 
-	// Only PostgreSQL migration inspection is schema-aware, so an accepted
-	// schema on another dialect would create the tables somewhere else.
 	it("refuses a schema on a dialect that does not support it", async () => {
 		await expect(
 			createKyselyAdapter({
