@@ -9,6 +9,7 @@ import type {
 	OAuthResourceInput,
 	Scope,
 } from "./types";
+import { isMissingTableError, isUniqueConstraintError } from "./utils/db-errors";
 
 /**
  * Source-of-truth list of asymmetric JWS algorithms supported by the JWT
@@ -802,18 +803,6 @@ function buildSeedUpdate(
 	return update;
 }
 
-/**
- * Pattern matched against adapter errors to detect the "table not yet
- * created" case — i.e. migrations haven't been run. When matched, the
- * caller treats the seed as deferred (will retry on first resource access).
- *
- * Covers SQLite ("no such table"), Postgres ("relation X does not exist"),
- * and MySQL ("Table X does not exist" / contracted form).
- */
-// cspell:ignore-next-line doesn
-const MISSING_TABLE_PATTERN =
-	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist/i;
-
 interface SeedState {
 	completed: boolean;
 	promise: Promise<void> | null;
@@ -922,8 +911,7 @@ export async function seedResources(
 				where: [{ field: "identifier", value: input.identifier }],
 			});
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			if (MISSING_TABLE_PATTERN.test(message)) {
+			if (isMissingTableError(err)) {
 				logger.debug(
 					"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
 				);
@@ -940,17 +928,25 @@ export async function seedResources(
 					data: buildSeedRow(input, now),
 				});
 			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				// Race with a concurrent boot — another process inserted between
-				// our findOne and create. The UNIQUE constraint protects us; treat
-				// the conflict as a no-op so init doesn't fail.
-				if (/unique|duplicate|UNIQUE/i.test(message)) {
+				// Race with a concurrent boot — another process inserted
+				// between our findOne and create. The UNIQUE constraint
+				// protects us; treat the conflict as a no-op so init
+				// doesn't fail.
+				//
+				// Skipping is correct in every seed mode, not just
+				// insertOnly: a race can only happen when findOne saw no
+				// row, so the winner just inserted a row built by
+				// buildSeedRow from the same config. buildSeedUpdate in
+				// "overwrite" mode is that same row minus identifier and
+				// createdAt, and "merge" writes a subset of it, so the
+				// update we skip would rewrite what is already there.
+				if (isUniqueConstraintError(err)) {
 					logger.debug(
 						`oauth-provider: resource ${input.identifier} already inserted by a concurrent process — skipping.`,
 					);
 					continue;
 				}
-				if (MISSING_TABLE_PATTERN.test(message)) {
+				if (isMissingTableError(err)) {
 					logger.debug(
 						"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
 					);
