@@ -655,8 +655,15 @@ export async function getMigrations(
 
 	let tableMetadata = allTableMetadata;
 	if (dbType === "postgres") {
+		/**
+		 * Kysely 0.28 does not expose `isForeign`, while 0.29 adds foreign table metadata.
+		 * @see https://github.com/kysely-org/kysely/pull/1494
+		 */
 		tableMetadata = allTableMetadata.filter(
-			(table) => table.schema === currentSchema && !table.isView,
+			(table) =>
+				table.schema === currentSchema &&
+				!table.isView &&
+				!("isForeign" in table && table.isForeign),
 		);
 		logger.debug(
 			`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((table) => table.name).join(", ") || "(none)"}`,
