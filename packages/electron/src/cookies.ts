@@ -1,4 +1,8 @@
-import { cookieNameRegex, parseSetCookieHeader } from "better-auth/cookies";
+import {
+	cookieNameRegex,
+	parseSetCookieHeader,
+	stripSecureCookiePrefix,
+} from "better-auth/cookies";
 
 interface StoredCookie {
 	value: string;
@@ -121,10 +125,8 @@ export function hasBetterAuthCookies(
 
 	// Check if any cookie is a better-auth cookie
 	for (const name of cookies.keys()) {
-		// Remove __Secure- prefix if present for comparison
-		const nameWithoutSecure = name.startsWith("__Secure-")
-			? name.slice(9)
-			: name;
+		// Remove __Secure- / __Host- prefix if present for comparison
+		const nameWithoutSecure = stripSecureCookiePrefix(name);
 
 		// Check against all provided prefixes
 		for (const prefix of prefixes) {

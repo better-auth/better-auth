@@ -105,6 +105,35 @@ export const auth = betterAuth({
 })
 ```
 
+### `__Host-` Prefix
+
+Secure cookies are named with the `__Secure-` prefix. Set `useHostCookiePrefix` to use the [`__Host-` prefix](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#cookie_prefixes) instead. Browsers only accept a `__Host-` cookie when it is `Secure`, has `Path=/`, and carries no `Domain` attribute, so a cookie set by a sibling subdomain can never collide with your session cookie. Use it when tenants live on subdomains of one registrable domain.
+
+`useHostCookiePrefix` forces secure cookies and cannot be combined with `useSecureCookies: false`, `crossSubDomainCookies`, or a custom cookie `path`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    advanced: {
+        useHostCookiePrefix: true
+    }
+})
+```
+
+Switching renames the cookies, so existing `__Secure-` sessions are no longer read and signed-in users sign in again once. For a seamless cutover, set `migrateSecureCookies: true`: existing `__Secure-` cookies are still accepted and are re-issued as `__Host-` cookies on their next request, with the old copies expired. While that migration is on, a visitor who has no `__Host-` cookie yet is still exposed to a `__Secure-` cookie planted by a sibling subdomain, so turn it off once existing sessions have rolled over (after `session.expiresIn`):
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    advanced: {
+        useHostCookiePrefix: {
+            enabled: true,
+            migrateSecureCookies: true // remove after session.expiresIn
+        }
+    }
+})
+```
+
 ## Safari, ITP, and Cross-Domain Setups
 
 Safari includes a privacy feature called Intelligent Tracking Prevention (ITP) that blocks third-party cookies.
