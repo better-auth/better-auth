@@ -821,8 +821,8 @@ export const createAdapterFactory =
 				logger.error(`Failed to query fallback join for model ${modelName}:`, {
 					where,
 					limit: joinConfig.limit,
+					error,
 				});
-				console.error(error);
 				throw error;
 			}
 			return result;
