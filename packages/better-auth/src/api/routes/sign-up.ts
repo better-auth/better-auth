@@ -304,6 +304,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					});
 				};
 
+				const shouldSendVerificationEmail =
+					ctx.context.options.emailVerification?.sendOnSignUp ??
+					ctx.context.options.emailAndPassword.requireEmailVerification;
+
 				const dbUser =
 					await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
 				if (dbUser?.user) {
@@ -313,9 +317,124 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					if (shouldReturnGenericDuplicateResponse) {
 						/**
 						 * Hash the password to reduce timing differences
-						 * between existing and non-existing emails.
+						 * between existing and non-existing emails. When the pending
+						 * claim below is replaced, the hash is reused for the new
+						 * credential.
 						 */
-						await ctx.context.password.hash(password);
+						const hash = await ctx.context.password.hash(password);
+						/**
+						 * Under `requireEmailVerification` an unverified row holding only a
+						 * credential account is a pending claim with no proven owner, not
+						 * a real account. Replace the stale claim with the latest
+						 * registrant's — drop the previous credential and link the new
+						 * one — then issue the same verification email a fresh sign-up
+						 * would, bound to the new claim so an earlier proof can no longer
+						 * verify it. Otherwise a mailbox owner's verification, which
+						 * resolves the row by email, would land on credentials set by
+						 * whoever registered the address first.
+						 *
+						 * Rows carrying other accounts (e.g. social links) or live
+						 * sessions are real accounts pending verification, not
+						 * disposable claims, so they are left untouched.
+						 *
+						 * @see https://github.com/better-auth/better-auth/issues/11023
+						 */
+						if (
+							ctx.context.options.emailAndPassword.requireEmailVerification &&
+							!dbUser.user.emailVerified
+						) {
+							const accounts = await ctx.context.internalAdapter.findAccounts(
+								dbUser.user.id,
+							);
+							const sessions = await ctx.context.internalAdapter.listSessions(
+								dbUser.user.id,
+								{ onlyActiveSessions: true },
+							);
+							const isPendingCredentialClaim =
+								sessions.length === 0 &&
+								accounts.every((a) => a.providerId === "credential");
+							if (isPendingCredentialClaim) {
+								/**
+								 * Snapshot the fields about to be overwritten so a failed
+								 * replace can restore them on adapters without rollback.
+								 */
+								const previousUserFields: Record<string, unknown> = {
+									name: dbUser.user.name,
+									image: dbUser.user.image ?? null,
+								};
+								for (const key of Object.keys(additionalUserFields ?? {})) {
+									previousUserFields[key] = (
+										dbUser.user as Record<string, unknown>
+									)[key];
+								}
+								let claimAccount: { id: string } | undefined;
+								try {
+									const claimedUser =
+										await ctx.context.internalAdapter.updateUser(
+											dbUser.user.id,
+											{
+												name,
+												image: image ?? null,
+												...additionalUserFields,
+											},
+										);
+									for (const account of accounts) {
+										await ctx.context.internalAdapter.deleteAccount(account.id);
+									}
+									claimAccount = await ctx.context.internalAdapter.linkAccount({
+										userId: dbUser.user.id,
+										providerId: "credential",
+										accountId: dbUser.user.id,
+										password: hash,
+									});
+									if (
+										shouldSendVerificationEmail &&
+										ctx.context.options.emailVerification?.sendVerificationEmail
+									) {
+										const token = await createEmailVerificationToken(
+											ctx.context.secret,
+											claimedUser.email,
+											undefined,
+											ctx.context.options.emailVerification?.expiresIn,
+											{ claimId: claimAccount.id },
+										);
+										const callbackURL = _callbackURL
+											? encodeURIComponent(_callbackURL)
+											: encodeURIComponent("/");
+										const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+										await ctx.context.runInBackgroundOrAwait(
+											ctx.context.options.emailVerification.sendVerificationEmail(
+												{ user: claimedUser, url, token },
+												safeCloneRequest(ctx.request),
+											),
+										);
+									}
+								} catch (error) {
+									/**
+									 * On adapters without transaction support the
+									 * mutations above are not rolled back; drop a
+									 * partially-installed credential, then restore the
+									 * stripped accounts and previous fields so a
+									 * mid-flight failure cannot orphan the pending
+									 * claim or strand it with two credentials.
+									 */
+									if (claimAccount) {
+										await ctx.context.internalAdapter
+											.deleteAccount(claimAccount.id)
+											.catch(() => {});
+									}
+									for (const account of accounts) {
+										await ctx.context.internalAdapter
+											.linkAccount(account)
+											.catch(() => {});
+									}
+									await ctx.context.internalAdapter
+										.updateUser(dbUser.user.id, previousUserFields)
+										.catch(() => {});
+									throw error;
+								}
+							}
+						}
 						if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
 							await ctx.context.runInBackgroundOrAwait(
 								ctx.context.options.emailAndPassword.onExistingUserSignUp(
@@ -383,21 +502,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					);
 				}
-				await ctx.context.internalAdapter.linkAccount({
+				const claimAccount = await ctx.context.internalAdapter.linkAccount({
 					userId: createdUser.id,
 					providerId: "credential",
 					accountId: createdUser.id,
 					password: hash,
 				});
-				const shouldSendVerificationEmail =
-					ctx.context.options.emailVerification?.sendOnSignUp ??
-					ctx.context.options.emailAndPassword.requireEmailVerification;
 				if (shouldSendVerificationEmail) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
 						createdUser.email,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
+						{ claimId: claimAccount.id },
 					);
 					const callbackURL = body.callbackURL
 						? encodeURIComponent(body.callbackURL)
