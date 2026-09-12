@@ -621,22 +621,11 @@ export async function getMigrations(
 			`PostgreSQL migration: Using schema '${currentSchema}' (from search_path)`,
 		);
 
-		// Verify the schema exists
 		try {
-			const schemaCheck = await sql<{
-				schema_name?: string;
-				schemaName?: string;
-			}>`
-				SELECT schema_name
-				FROM information_schema.schemata
-				WHERE schema_name = ${currentSchema}
-			`.execute(db);
-
-			const schemaExists =
-				schemaCheck.rows[0]?.schema_name ?? schemaCheck.rows[0]?.schemaName;
-			if (!schemaExists) {
+			const schemas = await db.introspection.getSchemas();
+			if (!schemas.some(({ name }) => name === currentSchema)) {
 				logger.warn(
-					`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
+					`Schema '${currentSchema}' does not exist. Create it before running migrations or check your database configuration.`,
 				);
 			}
 		} catch (error) {
@@ -664,40 +653,14 @@ export async function getMigrations(
 		currentSchema,
 	);
 
-	// Filter introspected tables to the schema used by unqualified migrations.
 	let tableMetadata = allTableMetadata;
 	if (dbType === "postgres") {
-		// Get tables with their schema information
-		try {
-			const tablesInSchema = await sql<{
-				table_name?: string;
-				tableName?: string;
-			}>`
-				SELECT table_name
-				FROM information_schema.tables
-				WHERE table_schema = ${currentSchema}
-				AND table_type = 'BASE TABLE'
-			`.execute(db);
-
-			const tableNamesInSchema = new Set(
-				tablesInSchema.rows.map((row) => row.table_name ?? row.tableName),
-			);
-
-			// Filter to only tables that exist in the target schema
-			tableMetadata = allTableMetadata.filter(
-				(table) =>
-					table.schema === currentSchema && tableNamesInSchema.has(table.name),
-			);
-
-			logger.debug(
-				`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((t) => t.name).join(", ") || "(none)"}`,
-			);
-		} catch (error) {
-			logger.warn(
-				`Could not filter tables by schema. Using all discovered tables. Error: ${error instanceof Error ? error.message : String(error)}`,
-			);
-			// Fall back to using all tables if schema filtering fails
-		}
+		tableMetadata = allTableMetadata.filter(
+			(table) => table.schema === currentSchema && !table.isView,
+		);
+		logger.debug(
+			`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((table) => table.name).join(", ") || "(none)"}`,
+		);
 	} else if (dbType === "mssql") {
 		tableMetadata = allTableMetadata.filter(
 			(table) => table.schema === currentSchema,
