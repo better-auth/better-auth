@@ -56,21 +56,11 @@ export function getKyselyDatabaseType(
 	return null;
 }
 
-/**
- * Resolves the configured database schema (namespace) for Better Auth's tables.
- *
- * Only PostgreSQL is supported: the other dialects Better Auth ships with
- * either have no schema namespaces (SQLite) or need migration inspection that
- * is not schema-aware yet (MySQL, MSSQL), so an ignored `schemaName` would
- * silently create the tables somewhere else.
- *
- * @throws {BetterAuthError} when a schema is configured for another dialect.
- */
-function getKyselySchemaName(
+function checkSchemaName(
 	schemaName: string | undefined,
 	databaseType: KyselyDatabaseType | null,
-): string | undefined {
-	if (schemaName === undefined) return undefined;
+): void {
+	if (schemaName === undefined) return;
 	if (typeof schemaName !== "string" || schemaName.length === 0) {
 		throw new BetterAuthError(
 			"`database.schemaName` must be a non-empty schema name.",
@@ -81,7 +71,6 @@ function getKyselySchemaName(
 			`\`database.schemaName\` is only supported on PostgreSQL, but the configured database type is "${databaseType ?? "unknown"}".`,
 		);
 	}
-	return schemaName;
 }
 
 export const createKyselyAdapter = async (config: BetterAuthOptions) => {
@@ -98,7 +87,8 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	if ("db" in db) {
-		const schemaName = getKyselySchemaName(db.schemaName, db.type);
+		const schemaName = db.schemaName;
+		checkSchemaName(schemaName, db.type);
 		return {
 			kysely: schemaName ? db.db.withSchema(schemaName) : db.db,
 			databaseType: db.type,
@@ -109,7 +99,8 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	if ("dialect" in db) {
-		const schemaName = getKyselySchemaName(db.schemaName, db.type);
+		const schemaName = db.schemaName;
+		checkSchemaName(schemaName, db.type);
 		const kysely = new Kysely<any>({ dialect: db.dialect });
 		return {
 			kysely: schemaName ? kysely.withSchema(schemaName) : kysely,
