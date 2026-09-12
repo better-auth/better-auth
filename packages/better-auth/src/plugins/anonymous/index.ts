@@ -89,8 +89,9 @@ declare module "@better-auth/core" {
 
 async function getAnonUserEmail(
 	options: AnonymousOptions | undefined,
+	name: string,
 ): Promise<string> {
-	const customEmail = await options?.generateRandomEmail?.();
+	const customEmail = await options?.generateRandomEmail?.({ name });
 	if (customEmail) {
 		const validation = z.email().safeParse(customEmail);
 		if (!validation.success) {
@@ -163,8 +164,8 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						);
 					}
 
-					const email = await getAnonUserEmail(options);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
+					const email = await getAnonUserEmail(options, name);
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{
 							email,
