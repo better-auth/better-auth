@@ -215,14 +215,14 @@ The plugin passes Microsoft's [Entra SCIM Validator](https://learn.microsoft.com
 
 ## Users
 
-| Method   | Path                     | Result                                                                                 |
-| -------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `POST`   | `/scim/v2/Users`         | Creates a SCIM User and creates or explicitly links a Better Auth User. Returns `201`. |
-| `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                               |
-| `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                              |
-| `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.         |
-| `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `200` with the updated resource.              |
-| `DELETE` | `/scim/v2/Users/:userId` | Deletes the SCIM resource while preserving the Better Auth User. Returns `204`.        |
+| Method   | Path                     | Result                                                                                        |
+| -------- | ------------------------ | --------------------------------------------------------------------------------------------- |
+| `POST`   | `/scim/v2/Users`         | Creates a SCIM User (`201`), or restores an inactive User with the same `externalId` (`200`). |
+| `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                                      |
+| `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                                     |
+| `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.                |
+| `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `200` with the updated resource.                     |
+| `DELETE` | `/scim/v2/Users/:userId` | Deletes the SCIM resource while preserving the Better Auth User. Returns `204`.               |
 
 Deleting a User also removes its direct Group memberships and projected grants, updates the affected Groups, and reconciles lifecycle and access state. When `externalId` is present, the plugin preserves the link needed to attach a later reprovisioned resource to the same Better Auth User.
 
