@@ -203,19 +203,26 @@ Better Auth provides a `useSession` hook to easily access session data on the cl
 <Tabs items={["React", "Vue","Svelte", "Solid", "Vanilla"]} defaultValue="react">
   <Tab value="React">
     ```tsx title="user.tsx"
+    import { Suspense } from "react"
     import { authClient } from "@/lib/auth-client" // import the auth client // [!code highlight] 
 
-    export function User(){
-
-        const { // [!code highlight]
+    function User() {
+        const {
             data: session, // [!code highlight]
-            isPending, //loading state // [!code highlight]
             error, //error object // [!code highlight]
             refetch //refetch the session
         } = authClient.useSession() // [!code highlight]
 
         return (
             //...
+        )
+    }
+
+    export function UserWithFallback() {
+        return (
+            <Suspense fallback={<div>Loading...</div>}>
+                <User />
+            </Suspense>
         )
     }
     ```

@@ -4,6 +4,7 @@ import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
+import { kAuthQueryResource } from "./query";
 import { createSessionRefreshManager } from "./session-refresh";
 import type { SessionQueryParams } from "./types";
 
@@ -113,14 +114,30 @@ export function getSessionAtom(
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => fetchSession(queryParams);
 
-	const session: SessionAtom = atom<AuthQueryState<SessionData>>({
+	const session = atom<AuthQueryState<SessionData>>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
 		refetch,
-	});
+	}) as SessionAtom;
 	withEquality(session, isSessionAtomEqual);
+
+	let hasSettledInitialFetch = false;
+	let didRequestSuspensePromise = false;
+	let resolveInitialFetch:
+		| ((state: AuthQueryState<SessionData>) => void)
+		| undefined;
+	const suspensePromise = new Promise<AuthQueryState<SessionData>>(
+		(resolve) => {
+			resolveInitialFetch = resolve;
+		},
+	);
+	const settleInitialFetch = () => {
+		if (hasSettledInitialFetch) return;
+		hasSettledInitialFetch = true;
+		resolveInitialFetch?.(session.value);
+	};
 
 	const executeSessionFetch = async (
 		signal: AbortSignal,
@@ -177,6 +194,7 @@ export function getSessionAtom(
 					isRefetching: false,
 					refetch,
 				});
+				settleInitialFetch();
 				return "failed";
 			}
 
@@ -195,6 +213,7 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			settleInitialFetch();
 			return outcome;
 		} catch (fetchError) {
 			if (signal.aborted) {
@@ -208,6 +227,7 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			settleInitialFetch();
 			return "failed";
 		}
 	};
@@ -260,16 +280,37 @@ export function getSessionAtom(
 		return fetchSession();
 	};
 
+	session[kAuthQueryResource] = {
+		getPromise() {
+			didRequestSuspensePromise = true;
+			void fetchSessionOnMount();
+			return suspensePromise;
+		},
+		shouldSuspend() {
+			if (!hasSettledInitialFetch && !session.value.isPending) {
+				settleInitialFetch();
+			}
+			return !hasSettledInitialFetch;
+		},
+	};
+
 	let broadcastSessionUpdate: (
 		trigger: "signout" | "getSession" | "updateUser",
 	) => void = () => {};
+	let hasMounted = false;
 
 	onMount(session, () => {
 		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		const isRemount = hasMounted;
+		hasMounted = true;
 
-		if (!isServer()) {
+		if (!isServer() && (isRemount || !didRequestSuspensePromise)) {
 			timeoutId = setTimeout(() => {
-				void fetchSessionOnMount();
+				// A render can start a Suspense request after mounting but before
+				// this timer runs. That request already performs the initial fetch.
+				if (isRemount || !didRequestSuspensePromise) {
+					void fetchSessionOnMount();
+				}
 			}, 0);
 		}
 

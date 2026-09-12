@@ -475,8 +475,8 @@ describe("type", () => {
 				session: Session;
 			} | null;
 			error: BetterFetchError | null;
-			isPending: boolean;
 		}>();
+		expectTypeOf<ReturnedSession>().not.toHaveProperty("isPending");
 	});
 	it("should infer hydrateSession react", () => {
 		const client = createReactClient({
@@ -504,6 +504,9 @@ describe("type", () => {
 			},
 		});
 		expectTypeOf(client.useComputedAtom).toEqualTypeOf<() => number>();
+		expectTypeOf<ReturnType<typeof client.useQueryAtom>>().not.toHaveProperty(
+			"isPending",
+		);
 	});
 	it("should infer resolved hooks solid", () => {
 		const client = createSolidClient({
@@ -823,12 +826,12 @@ describe("type", () => {
 				};
 				session: Session;
 			} | null;
-			isPending: boolean;
 			error: BetterFetchError | null;
 			refetch: (
 				queryParams?: { query?: SessionQueryParams } | undefined,
 			) => void;
 		}>();
+		expectTypeOf<UseSessionReturn>().not.toHaveProperty("isPending");
 	});
 
 	it("should support refetch with query parameters - solid", () => {

@@ -99,18 +99,26 @@ In addition to the standard methods, the client provides hooks to easily access 
   <Tab value="React">
     ```tsx title="user.tsx"
     //make sure you're using the react client
+    import { Suspense } from "react"
     import { createAuthClient } from "better-auth/react"
     const { useSession } = createAuthClient() // [!code highlight]
 
-    export function User() {
+    function User() {
         const {
             data: session,
-            isPending, //loading state
             error, //error object 
             refetch //refetch the session
         } = useSession()
         return (
             //...
+        )
+    }
+
+    export function UserWithFallback() {
+        return (
+            <Suspense fallback={<div>Loading...</div>}>
+                <User />
+            </Suspense>
         )
     }
     ```
@@ -202,6 +210,11 @@ In addition to the standard methods, the client provides hooks to easily access 
     ```
   </Tab>
 </Tabs>
+
+<Callout type="info">
+  Suspense-enabled React hooks require React 19 or newer. In a Server Component,
+  await `auth.api.getSession` instead of using the React client hook.
+</Callout>
 
 ### Fetch Options
 
@@ -407,14 +420,30 @@ await authClient.signIn.email({
 })
 ```
 
-Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return an `isPending` property to indicate if the request is still pending.
+React hooks like `useSession` suspend while their initial request is pending. Wrap the component that calls the hook in a [`Suspense`](https://react.dev/reference/react/Suspense) boundary to provide its loading UI. Other framework clients continue to expose `isPending`.
 
-```ts
+React query hooks render only in the browser. During server rendering, the nearest Suspense boundary renders its fallback without reading the client query or starting a request. In a Server Component, await `auth.api.getSession({ headers })` with the incoming request's headers instead.
+
+When React DOM provides [`browser`](https://react.dev/reference/react-dom/browser), Better Auth calls `use(browser())` before reading the query. This API is currently available in React Canary and Experimental. On stable React 19, Better Auth uses a server error to leave the Suspense fallback in place and retry in the browser. This compatibility path is reported to React's `onError` and `onRecoverableError` callbacks; the native `browser()` path uses `onBrowserBailout` instead. Ordinary plugin atoms that do not fetch data remain server-renderable.
+
+```tsx
+import { Suspense } from "react"
 import { useSession } from "@/lib/auth-client"
 
-const { data, error, isPending } = useSession()
-if (error) {
-    //handle error
+function User() {
+    const { data, error } = useSession()
+    if (error) {
+        //handle error
+    }
+    //...
+}
+
+export function UserWithFallback() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <User />
+        </Suspense>
+    )
 }
 ```
 
@@ -462,7 +491,7 @@ if(error?.code){
 
 ### SSR Hydration
 
-With SSR frameworks like Next.js, Nuxt, or SvelteKit, `useSession` fetches the session on the client, causing a loading flash. Pass the server-fetched session to `hydrateSession` and use it as a fallback so the first render has data on both the server and the client:
+With SSR frameworks, `useSession` fetches the session on the client. In React, pass the server-fetched session to `hydrateSession` and render it in the Suspense fallback so the initial HTML has session content while the browser takes over:
 
 ```tsx title="page.tsx (server component)"
 import { auth } from "@/lib/auth"
@@ -481,16 +510,27 @@ export default async function Page() {
 "use client"
 
 import { authClient } from "@/lib/auth-client"
+import { Suspense } from "react"
 
 type Props = {
     initialSession: typeof authClient.$Infer.Session | null
 }
 
 export function SessionCard({ initialSession }: Props) {
-    authClient.hydrateSession(initialSession)
-    const { data, isPending, isRefetching } = authClient.useSession()
-    const session = isPending && !isRefetching ? initialSession : data
+    return (
+        <Suspense fallback={<SessionContent session={initialSession} />}>
+            <ClientSessionCard initialSession={initialSession} />
+        </Suspense>
+    )
+}
 
+function ClientSessionCard({ initialSession }: Props) {
+    authClient.hydrateSession(initialSession)
+    const { data } = authClient.useSession()
+    return <SessionContent session={data} />
+}
+
+function SessionContent({ session }: { session: Props["initialSession"] }) {
     if (!session) return <p>Not signed in</p>
     return <pre>{JSON.stringify(session, null, 2)}</pre>
 }
@@ -499,6 +539,8 @@ export function SessionCard({ initialSession }: Props) {
 <Callout>
   * Only the first non-null call to `hydrateSession` takes effect.
   * Passing `null` is safe. It will be ignored and `useSession` will fetch as usual.
+  * `hydrateSession` does not write to the shared client atom on the server. The
+    Suspense fallback renders the server-provided session directly.
 </Callout>
 
 ### Plugins

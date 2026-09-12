@@ -114,20 +114,25 @@ If you would like to view a completed example, you can check out the <Link href=
     Here's a quick example 😎
 
     ```tsx title="src/popup.tsx"
+    import { Suspense } from "react"
     import { authClient } from "./auth/auth-client"
 
-
-    function IndexPopup() {
-        const {data, isPending, error} = authClient.useSession();
-        if(isPending){
-            return <>Loading...</>
-        }
+    function PopupSession() {
+        const {data, error} = authClient.useSession();
         if(error){
             return <>Error: {error.message}</>
         }
         if(data){
             return <>Signed in as {data.user.name}</>
         }
+    }
+
+    function IndexPopup() {
+        return (
+            <Suspense fallback={<>Loading...</>}>
+                <PopupSession />
+            </Suspense>
+        )
     }
 
     export default IndexPopup;
