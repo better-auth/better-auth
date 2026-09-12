@@ -176,7 +176,7 @@ export async function handleOAuthUserInfo(
 					},
 					source: { ...source, action: "link-account" },
 				});
-				const createdAccount = await c.context.internalAdapter.linkAccount({
+				const newlyLinkedAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: account.accountId,
 					userId: dbUser.user.id,
@@ -187,7 +187,7 @@ export async function handleOAuthUserInfo(
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
 				});
-				if (!createdAccount) {
+				if (!newlyLinkedAccount) {
 					return {
 						error: "unable to link account",
 						data: null,
@@ -195,9 +195,10 @@ export async function handleOAuthUserInfo(
 				}
 				if (
 					requireExactAccountBinding &&
-					(createdAccount.accountId !== account.accountId ||
-						createdAccount.providerId !== account.providerId ||
-						createdAccount.userId !== dbUser.user.id)
+					(newlyLinkedAccount.issuer !== account.issuer ||
+						newlyLinkedAccount.accountId !== account.accountId ||
+						newlyLinkedAccount.providerId !== account.providerId ||
+						newlyLinkedAccount.userId !== dbUser.user.id)
 				) {
 					throw new APIError("CONFLICT", {
 						code: "account_hook_binding_conflict",
@@ -206,8 +207,8 @@ export async function handleOAuthUserInfo(
 				}
 				if (c.context.options.account?.storeAccountCookie) {
 					if (opts.deferNonDatabaseWrites)
-						pendingAccountCookie = createdAccount;
-					else await setAccountCookie(c, createdAccount);
+						pendingAccountCookie = newlyLinkedAccount;
+					else await setAccountCookie(c, newlyLinkedAccount);
 				}
 			} catch (e) {
 				if (isAPIError(e)) {
