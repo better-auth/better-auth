@@ -91,129 +91,104 @@ export const auth = betterAuth({
 
 ## Use a non-default schema
 
-In most cases, the default schema is `public`. To have Better Auth use a
-non-default schema (e.g., `auth`) for its tables, you have several options:
+PostgreSQL uses the `public` schema by default. You can select another schema explicitly with `database.schemaName` or configure PostgreSQL's `search_path`.
 
-### Option 1: Set search\_path in connection string (Recommended)
+When both are configured, Better Auth uses `database.schemaName`. Other unqualified queries continue to use the connection's `search_path`.
 
-Append the `options` parameter to your connection URI:
+### Set `database.schemaName`
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
+<Tabs items={["Kysely dialect", "Kysely instance"]}>
+  <Tab value="Kysely dialect">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { PostgresDialect } from "kysely";
+    import { Pool } from "pg";
 
-export const auth = betterAuth({
-  database: new Pool({
-    connectionString: "postgres://user:password@localhost:5432/database?options=-c search_path=auth",
-  }),
-});
-```
+    export const auth = betterAuth({
+      database: {
+        dialect: new PostgresDialect({
+          pool: new Pool({
+            connectionString: "postgres://user:password@localhost:5432/database",
+          }),
+        }),
+        type: "postgres",
+        schemaName: "auth", // [!code highlight]
+      },
+    });
+    ```
+  </Tab>
 
-URL-encode if needed: `?options=-c%20search_path%3Dauth`.
+  <Tab value="Kysely instance">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { db } from "./database";
 
-### Option 2: Set search\_path using Pool options
+    export const auth = betterAuth({
+      database: {
+        db,
+        type: "postgres",
+        schemaName: "auth", // [!code highlight]
+      },
+    });
+    ```
+  </Tab>
+</Tabs>
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
+The schema applies to runtime queries and CLI migrations. `npx auth@latest migrate` creates it when needed and ignores same-named tables in other schemas.
 
-export const auth = betterAuth({
-  database: new Pool({
-    host: "localhost",
-    port: 5432,
-    user: "postgres",
-    password: "password",
-    database: "my-db",
-    options: "-c search_path=auth",
-  }),
-});
-```
-
-### Option 3: Set default schema for database user
-
-Set the PostgreSQL user's default schema:
-
-```sql
-ALTER USER your_user SET search_path TO auth;
-```
-
-After setting this, reconnect to apply the changes.
-
-### Option 4: Set the schema name
-
-Pass the `schemaName` option together with your dialect:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { PostgresDialect } from "kysely";
-import { Pool } from "pg";
-
-export const auth = betterAuth({
-  database: {
-    dialect: new PostgresDialect({
-      pool: new Pool({
-        connectionString: "postgres://user:password@localhost:5432/database",
-      }),
-    }),
-    type: "postgres",
-    schemaName: "auth",
-  },
-});
-```
-
-Run `npx auth@latest generate` to generate a migration file for the specified schema.
+`npx auth@latest generate` starts the generated migration by creating the schema:
 
 ```sql
 create schema if not exists "auth";
-
-create table "auth"."user" (...);
-create table "auth"."session" (..., "userId" text not null references "auth"."user" ("id") on delete cascade);
-...
 ```
 
-### Prerequisites
+All subsequent statements use schema-qualified table names, such as `"auth"."user"`.
 
-Before using a non-default schema, ensure:
+The PostgreSQL role used by Better Auth must be able to create the schema and its tables. Otherwise, create the schema and grant access to that role before running `npx auth@latest migrate`.
 
-1. **The schema exists:**
-   ```sql
-   CREATE SCHEMA IF NOT EXISTS auth;
-   ```
+### Set `search_path`
 
-2. **The user has appropriate permissions:**
-   ```sql
-   GRANT ALL PRIVILEGES ON SCHEMA auth TO your_user;
-   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO your_user;
-   ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO your_user;
-   ```
+Use PostgreSQL's `search_path` instead when passing a `pg.Pool` directly, or when every unqualified query on the connection should use the same schema.
 
-### How it works
+When using `search_path`, the Better Auth CLI expects the schema to already exist. Create it and grant access to the connection role before running `npx auth@latest migrate`.
 
-The Better Auth CLI migration system automatically detects your configured `search_path`:
+<Tabs items={["Pool options", "Connection string"]}>
+  <Tab value="Pool options">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { Pool } from "pg";
 
-* When running `npx auth migrate`, it inspects only the tables in your configured schema
-* Tables in other schemas (e.g., `public`) are ignored, preventing conflicts
-* All new tables are created in your specified schema
+    export const auth = betterAuth({
+      database: new Pool({
+        connectionString: "postgres://user:password@localhost:5432/database",
+        options: "-c search_path=auth",
+      }),
+    });
+    ```
+  </Tab>
 
-### Troubleshooting
+  <Tab value="Connection string">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { Pool } from "pg";
 
-<Callout type="warning">
-  **Issue:** "relation does not exist" error during migration
+    export const auth = betterAuth({
+      database: new Pool({
+        connectionString: "postgres://user:password@localhost:5432/database?options=-c%20search_path%3Dauth",
+      }),
+    });
+    ```
+  </Tab>
+</Tabs>
 
-  **Solution:** This usually means the schema doesn't exist or the user lacks permissions. Create the schema and grant permissions as shown above.
-</Callout>
+To make the schema the default when a PostgreSQL role connects to a specific database:
 
-<Callout type="info">
-  **Verifying your schema configuration:**
+```sql
+ALTER ROLE your_role IN DATABASE your_database
+SET search_path TO auth;
+```
 
-  You can verify which schema Better Auth will use by checking the `search_path`:
-
-  ```sql
-  SHOW search_path;
-  ```
-
-  This should return your custom schema (e.g., `auth`) as the first value.
-</Callout>
+Reconnect after changing this default. Run `SHOW search_path` to verify the active value.
 
 ## Additional Information
 
