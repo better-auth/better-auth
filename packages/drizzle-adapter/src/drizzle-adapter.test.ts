@@ -29,13 +29,22 @@ describe("drizzle-adapter", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11258
 	 */
 	describe("lazy database initialization", () => {
-		it.for([
-			{ relations: "Relations v1", createAdapter: drizzleAdapter },
+		const adapterFactories = [
+			{
+				relations: "Relations v1",
+				createAdapter: drizzleAdapter,
+				relationMetadata: { schema: {} },
+			},
 			{
 				relations: "Relations v2",
 				createAdapter: drizzleRelationsV2Adapter,
+				relationMetadata: { relations: {} },
 			},
-		])("should not initialize a lazy database during $relations adapter construction", ({
+		] as const;
+
+		it.for(
+			adapterFactories,
+		)("should not initialize a lazy database during $relations adapter construction", ({
 			createAdapter,
 		}) => {
 			const db = new Proxy({} as DB, {
@@ -49,6 +58,58 @@ describe("drizzle-adapter", () => {
 					secret: "test-secret-that-is-at-least-32-chars-long!!",
 				}),
 			).not.toThrow();
+		});
+
+		it.for(
+			adapterFactories,
+		)("should support a first $relations joined read inside a transaction", async ({
+			createAdapter,
+			relationMetadata,
+		}) => {
+			const findFirst = vi.fn().mockResolvedValue(null);
+			const transactionDatabase = new Proxy(
+				{
+					query: { user: { findFirst } },
+				} as DB,
+				{
+					get(target, property, receiver) {
+						if (property === "_") {
+							throw new Error("Transaction metadata should not be read");
+						}
+						return Reflect.get(target, property, receiver);
+					},
+				},
+			);
+			const database = {
+				_: relationMetadata,
+				transaction: (callback: (transactionDatabase: DB) => unknown) =>
+					callback(transactionDatabase),
+			} as DB;
+			const user = pgTable("user", { id: text("id") });
+			const adapter = createAdapter(database, {
+				provider: "pg",
+				schema: { user },
+				transaction: true,
+			})({
+				advanced: {
+					database: { joins: true, validateSchema: false },
+				},
+			});
+
+			if (!adapter.transaction) {
+				throw new Error("Transaction support should be enabled");
+			}
+
+			await expect(
+				adapter.transaction((transactionAdapter) =>
+					transactionAdapter.findOne({
+						model: "user",
+						where: [],
+						join: { session: true },
+					}),
+				),
+			).resolves.toBeNull();
+			expect(findFirst).toHaveBeenCalledOnce();
 		});
 	});
 

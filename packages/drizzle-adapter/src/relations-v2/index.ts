@@ -276,6 +276,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
 	let relationKeysByModel: RelationKeysByModel | undefined;
+	const getRelationKeysByModel = () =>
+		(relationKeysByModel ??= buildRelationKeysByModel(db._?.relations));
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
@@ -725,8 +727,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const renamedJoinResults: { key: string; target: string }[] = [];
-							const relationKeys = (relationKeysByModel ??=
-								buildRelationKeysByModel(db._?.relations)).get(queryModel);
+							const relationKeys = getRelationKeysByModel().get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
 							for (const [joinModel, joinAttr] of joinEntries) {
@@ -814,8 +815,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const renamedJoinResults: { key: string; target: string }[] = [];
-							const relationKeys = (relationKeysByModel ??=
-								buildRelationKeysByModel(db._?.relations)).get(queryModel);
+							const relationKeys = getRelationKeysByModel().get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
 							for (const [joinModel, joinAttr] of joinEntries) {
