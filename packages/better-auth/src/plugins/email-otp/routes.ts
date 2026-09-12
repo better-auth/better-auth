@@ -27,6 +27,26 @@ const types = [
 ] as const;
 
 /**
+ * Delivers the OTP through `sendVerificationOTP`. With a background task
+ * handler configured the send is deferred as before, so the response does not
+ * wait for the email provider and a failed send is only logged. Without one
+ * the send is awaited directly, so a failed send reaches the caller instead of
+ * being reported as a success (see #11107).
+ */
+async function sendOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	data: Parameters<RequiredEmailOTPOptions["sendVerificationOTP"]>[0],
+): Promise<void> {
+	const send = opts.sendVerificationOTP(data, ctx);
+	if (ctx.context.options.advanced?.backgroundTasks?.handler) {
+		await ctx.context.runInBackgroundOrAwait(send);
+		return;
+	}
+	await send;
+}
+
+/**
  * Resolves the OTP to send: reuses an existing one if possible,
  * otherwise generates and stores a new one.
  *
@@ -158,9 +178,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				return ctx.json({ success: true });
 			}
 
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
-			);
+			await sendOTP(ctx, opts, { email, otp, type: ctx.body.type });
 			return ctx.json({ success: true });
 		},
 	);
@@ -777,16 +795,7 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					success: true,
 				});
 			}
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: "forget-password",
-					},
-					ctx,
-				),
-			);
+			await sendOTP(ctx, opts, { email, otp, type: "forget-password" });
 			return ctx.json({
 				success: true,
 			});
@@ -869,16 +878,7 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 					success: true,
 				});
 			}
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: "forget-password",
-					},
-					ctx,
-				),
-			);
+			await sendOTP(ctx, opts, { email, otp, type: "forget-password" });
 			return ctx.json({
 				success: true,
 			});
@@ -1129,16 +1129,7 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email: newEmail,
-						otp,
-						type: "change-email",
-					},
-					ctx,
-				),
-			);
+			await sendOTP(ctx, opts, { email: newEmail, otp, type: "change-email" });
 			return ctx.json({
 				success: true,
 			});
