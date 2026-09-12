@@ -15,6 +15,7 @@ import {
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import { isValidEmail } from "../../utils/email";
 import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
@@ -421,8 +422,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			}
 
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.email().safeParse(email);
-			if (!isValidEmail.success) {
+			if (!(await isValidEmail(email, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
@@ -643,8 +643,7 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				}
 				if (hasDataKey("email")) {
 					const email = String(updateData.email).toLowerCase();
-					const isValidEmail = z.email().safeParse(email);
-					if (!isValidEmail.success) {
+					if (!(await isValidEmail(email, ctx.context.options))) {
 						throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 					}
 					const existUser =
