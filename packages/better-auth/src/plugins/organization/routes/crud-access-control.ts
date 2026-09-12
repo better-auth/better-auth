@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { Where } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
@@ -10,7 +14,7 @@ import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import type { Member, OrganizationRole } from "../schema";
+import type { Invitation, Member, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
@@ -23,6 +27,21 @@ type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 
 const normalizeRoleName = (role: string) => role.toLowerCase();
 const DEFAULT_MAXIMUM_ROLES_PER_ORGANIZATION = Number.POSITIVE_INFINITY;
+
+/**
+ * Replace a single role token inside a comma-separated role field.
+ * Uses exact token match so renaming `admin` does not affect `superadmin`.
+ */
+const replaceRoleNameInField = (
+	roleField: string,
+	oldRoleName: string,
+	newRoleName: string,
+) =>
+	roleField
+		.split(",")
+		.map((role) => role.trim())
+		.map((role) => (role === oldRoleName ? newRoleName : role))
+		.join(",");
 
 const getAdditionalFields = <
 	O extends OrganizationOptions,
@@ -1071,20 +1090,47 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? { permission: JSON.stringify(updateData.permission) }
 					: {}),
 			};
-			// Scoped by organization + role: updateMany applies the multi-clause
-			// filter portably, where a multi-clause `update` does not across adapters.
-			await ctx.context.adapter.updateMany({
-				model: "organizationRole",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-						operator: "eq",
-						connector: "AND",
-					},
-					condition,
-				],
-				update,
+			const oldRoleName = role.role;
+			const renamedRoleName = updateData.role;
+			const shouldCascadeRename =
+				!!renamedRoleName && renamedRoleName !== oldRoleName;
+
+			// Keep organizationRole rename + member/invitation cascade atomic so a
+			// mid-cascade failure cannot leave orphaned role-name references.
+			await runWithTransaction(ctx.context.adapter, async () => {
+				const adapter = await getCurrentAdapter(ctx.context.adapter);
+				// Scoped by organization + role: updateMany applies the multi-clause
+				// filter portably, where a multi-clause `update` does not across adapters.
+				await adapter.updateMany({
+					model: "organizationRole",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						condition,
+					],
+					update,
+				});
+
+				if (shouldCascadeRename) {
+					await cascadeRoleNameRename({
+						organizationId,
+						oldRoleName,
+						newRoleName: renamedRoleName,
+						adapter,
+					});
+					// Re-scan once so concurrent assignments that became visible under
+					// read-committed isolation are still rewritten before commit.
+					await cascadeRoleNameRename({
+						organizationId,
+						oldRoleName,
+						newRoleName: renamedRoleName,
+						adapter,
+					});
+				}
 			});
 
 			// -----
@@ -1100,6 +1146,84 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 		},
 	);
 };
+
+async function cascadeRoleNameRename({
+	organizationId,
+	oldRoleName,
+	newRoleName,
+	adapter,
+}: {
+	organizationId: string;
+	oldRoleName: string;
+	newRoleName: string;
+	adapter: Awaited<ReturnType<typeof getCurrentAdapter>>;
+}) {
+	const members = await adapter.findMany<Member>({
+		model: "member",
+		where: [
+			{
+				field: "organizationId",
+				value: organizationId,
+				operator: "eq",
+				connector: "AND",
+			},
+			{
+				field: "role",
+				value: oldRoleName,
+				operator: "contains",
+			},
+		],
+	});
+	for (const member of members) {
+		const memberRoles = member.role.split(",").map((r) => r.trim());
+		if (!memberRoles.includes(oldRoleName)) continue;
+		await adapter.update({
+			model: "member",
+			where: [
+				{
+					field: "id",
+					value: member.id,
+				},
+			],
+			update: {
+				role: replaceRoleNameInField(member.role, oldRoleName, newRoleName),
+			},
+		});
+	}
+
+	const invitations = await adapter.findMany<Invitation>({
+		model: "invitation",
+		where: [
+			{
+				field: "organizationId",
+				value: organizationId,
+				operator: "eq",
+				connector: "AND",
+			},
+			{
+				field: "role",
+				value: oldRoleName,
+				operator: "contains",
+			},
+		],
+	});
+	for (const invitation of invitations) {
+		const invitationRoles = invitation.role.split(",").map((r) => r.trim());
+		if (!invitationRoles.includes(oldRoleName)) continue;
+		await adapter.update({
+			model: "invitation",
+			where: [
+				{
+					field: "id",
+					value: invitation.id,
+				},
+			],
+			update: {
+				role: replaceRoleNameInField(invitation.role, oldRoleName, newRoleName),
+			},
+		});
+	}
+}
 
 async function checkForInvalidResources({
 	ac,
