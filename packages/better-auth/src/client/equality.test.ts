@@ -74,6 +74,55 @@ describe("isJsonEqual", () => {
 	it("returns false for array vs object", () => {
 		expect(isJsonEqual([], {})).toBe(false);
 	});
+
+	it("returns true for dates with the same instant", () => {
+		expect(
+			isJsonEqual(
+				new Date("2026-01-01T00:00:00.000Z"),
+				new Date("2026-01-01T00:00:00.000Z"),
+			),
+		).toBe(true);
+	});
+
+	it("returns false for dates with different instants", () => {
+		expect(
+			isJsonEqual(
+				new Date("2026-01-01T00:00:00.000Z"),
+				new Date("2026-01-02T00:00:00.000Z"),
+			),
+		).toBe(false);
+	});
+
+	it("returns true for session-shaped data holding equal dates", () => {
+		// The client parser revives ISO strings into `Date` instances, so the
+		// session payload compared by the equality gate always contains dates.
+		// Without date support every refetch looks like a change and the gate
+		// never aborts, defeating the re-render suppression it exists for.
+		const build = () => ({
+			user: { id: "1", createdAt: new Date("2026-01-01T00:00:00.000Z") },
+			session: { id: "s1", expiresAt: new Date("2026-01-08T00:00:00.000Z") },
+		});
+		expect(isJsonEqual(build(), build())).toBe(true);
+	});
+
+	it("does not treat a date as equal to a non-date", () => {
+		const date = new Date("2026-01-01T00:00:00.000Z");
+		expect(isJsonEqual(date, "2026-01-01T00:00:00.000Z")).toBe(false);
+		expect(isJsonEqual(date, {})).toBe(false);
+	});
+
+	it("returns true for two invalid dates", () => {
+		expect(isJsonEqual(new Date("nope"), new Date("also nope"))).toBe(true);
+	});
+
+	it("compares dates nested in arrays", () => {
+		expect(
+			isJsonEqual(
+				[new Date("2026-01-01T00:00:00.000Z")],
+				[new Date("2026-01-01T00:00:00.000Z")],
+			),
+		).toBe(true);
+	});
 });
 
 describe("withEquality", () => {
