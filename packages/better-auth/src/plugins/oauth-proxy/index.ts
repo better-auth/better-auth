@@ -644,7 +644,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 
 						const { url: providerURL } = signInResponse;
-						if (typeof providerURL !== "string") {
+						if (typeof providerURL !== "string" || providerURL.length === 0) {
 							return;
 						}
 

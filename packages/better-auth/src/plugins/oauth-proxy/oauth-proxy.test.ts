@@ -135,6 +135,7 @@ describe("oauth-proxy", async () => {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
+				verifyIdToken: async () => true,
 			},
 		};
 
@@ -269,6 +270,38 @@ describe("oauth-proxy", async () => {
 			expect(googleAccount?.scope).toBe("openid,profile");
 			expect(sessionsAfter.map((session) => session.id)).toEqual(
 				sessionsBefore.map((session) => session.id),
+			);
+		});
+
+		it("links an account directly with an ID token", async () => {
+			const { auth, client, signInWithTestUser } = await getTestInstance({
+				baseURL: "http://preview.example.com",
+				plugins: [oAuthProxy({ productionURL: "http://localhost:3000" })],
+				socialProviders,
+				account: {
+					accountLinking: { allowDifferentEmails: true },
+				},
+			});
+			const { headers, user } = await signInWithTestUser();
+
+			const result = await client.linkSocial(
+				{
+					provider: "google",
+					idToken: { token: testIdToken },
+				},
+				{ headers },
+			);
+
+			expect(result.error).toBeNull();
+			expect(result.data).toMatchObject({
+				status: true,
+				redirect: false,
+			});
+
+			const context = await auth.$context;
+			const accounts = await context.internalAdapter.findAccounts(user.id);
+			expect(accounts.some((account) => account.providerId === "google")).toBe(
+				true,
 			);
 		});
 	});
