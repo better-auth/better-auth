@@ -10,7 +10,9 @@ import { parseUserOutput } from "../../db/schema";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
+import { storeOTP, verifyStoredOTP } from "./otp-token";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
+import { splitAtLastColon } from "./utils";
 
 export type RequiredPhoneNumberOptions = PhoneNumberOptions & {
 	expiresIn: number;
@@ -121,7 +123,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (!user.phoneNumberVerified) {
 					const otp = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: otp,
+						value: `${await storeOTP(ctx, opts, otp)}:0`,
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -280,7 +282,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}:0`,
+				value: `${await storeOTP(ctx, opts, code)}:0`,
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
@@ -714,7 +716,7 @@ export const requestPasswordResetPhoneNumber = (
 			});
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}:0`,
+				value: `${await storeOTP(ctx, opts, code)}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
@@ -880,7 +882,7 @@ async function verifyPhoneNumberOTP(
 
 	const allowedAttempts = opts?.allowedAttempts ?? 3;
 	const peekedAttempts = parseVerificationAttempts(
-		existing.value.split(":")[1],
+		splitAtLastColon(existing.value)[1],
 	);
 	if (peekedAttempts >= allowedAttempts) {
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
@@ -898,7 +900,7 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 
-	const [otpValue, rawAttempts] = consumed.value.split(":");
+	const [otpValue, rawAttempts] = splitAtLastColon(consumed.value);
 	const attempts = parseVerificationAttempts(rawAttempts);
 	if (attempts >= allowedAttempts) {
 		throw APIError.from(
@@ -906,7 +908,7 @@ async function verifyPhoneNumberOTP(
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 		);
 	}
-	if (otpValue !== providedCode) {
+	if (!(await verifyStoredOTP(ctx, opts, otpValue, providedCode))) {
 		await ctx.context.internalAdapter.createVerificationValue({
 			value: `${otpValue}:${attempts + 1}`,
 			identifier,
