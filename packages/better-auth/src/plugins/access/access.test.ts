@@ -224,4 +224,37 @@ describe("access", () => {
 			error: 'unauthorized to access resource "project"',
 		});
 	});
+
+	// Resource names arrive from the request body, typed as
+	// `z.record(z.string(), z.array(z.string()))`, so a caller can name any
+	// string, including one inherited from `Object.prototype`. A plain index
+	// lookup resolves those to a truthy function rather than `undefined`, which
+	// slips past the unknown-resource branch.
+	it.each([
+		"constructor",
+		"toString",
+		"valueOf",
+		"hasOwnProperty",
+		"__proto__",
+	])("should deny the inherited object member %s instead of throwing", (resource) => {
+		const response = role1.authorize({ [resource]: ["create"] } as never);
+
+		expect(response.success).toBe(false);
+	});
+
+	it("should report an inherited object member as an unknown resource", () => {
+		expect(role1.authorize({ constructor: ["create"] } as never)).toEqual({
+			success: false,
+			error: "You are not allowed to access resource: constructor",
+		});
+	});
+
+	it("should not authorize an inherited object member under the OR connector", () => {
+		const response = role1.authorize(
+			{ constructor: ["create"] } as never,
+			"OR",
+		);
+
+		expect(response.success).toBe(false);
+	});
 });
