@@ -129,14 +129,50 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		});
 	};
 
+	// Bumped on init/cleanup so a stale coalesce closure cannot resume after a later init.
+	let initGeneration = 0;
+
 	const setupSignalSubscription = () => {
+		// Coalesce $sessionSignal bursts. fetchSession() cancels any in-flight
+		// /get-session, so calling it on every notify aborts work the server already
+		// finished. While a refetch is running, only remember that another signal
+		// arrived and run one trailing fetch after settle.
+		let signalFlight: Promise<void> | null = null;
+		let trailingSignal = false;
+		const generation = initGeneration;
+
 		state.unsubscribeSignal = sessionSignal.listen(() => {
-			void fetchSession();
+			if (signalFlight !== null) {
+				trailingSignal = true;
+				return;
+			}
+
+			const run = async () => {
+				do {
+					trailingSignal = false;
+					await fetchSession();
+					// Stop if cleaned up or initialized again during the in-flight fetch.
+					// Generation check blocks a stale trailing resume after a later init
+					// (shared state.isInitialized alone is not enough).
+				} while (
+					trailingSignal &&
+					state.isInitialized &&
+					generation === initGeneration
+				);
+			};
+
+			const flight = run().finally(() => {
+				if (signalFlight === flight) {
+					signalFlight = null;
+				}
+			});
+			signalFlight = flight;
 		});
 	};
 
 	const init = () => {
 		if (state.isInitialized) return;
+		initGeneration += 1;
 		state.isInitialized = true;
 
 		setupPolling();
@@ -185,6 +221,9 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.cleanupOnlineSetup();
 			state.cleanupOnlineSetup = undefined;
 		}
+		// Invalidate pending trailing coalesce work from this lifecycle before
+		// flipping isInitialized, so a later init cannot resume it.
+		initGeneration += 1;
 		state.isInitialized = false;
 		state.lastSessionRequest = 0;
 	};
