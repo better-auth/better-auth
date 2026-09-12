@@ -7,10 +7,11 @@ on:
     types:
       - completed
     branches:
-      # Match editBranch values with a pinned commitSha in `docs/lib/docs-version-sources.ts`.
+      # Match editBranch values with a pinned commitSha in `docs/lib/docs-version-sources.json`.
       - "v*.*.x"
 
-permissions: {}
+permissions:
+  contents: read
 
 concurrency:
   group: sync-version-docs-${{ github.event.workflow_run.head_branch }}
@@ -20,25 +21,17 @@ jobs:
   sync:
     if: >
       github.repository_owner == 'better-auth' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.conclusion == 'success' &&
       vars.RELEASE_APP_ID != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Generate App Token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ vars.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: main
           persist-credentials: false
-          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -69,6 +62,16 @@ jobs:
             echo "relevant=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Generate App Token
+        id: app-token
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create or update draft PR
         if: steps.changes.outputs.relevant == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
@@ -76,7 +79,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           base: main
           branch: docs-sync/${{ github.event.workflow_run.head_branch }}
-          add-paths: docs/lib/docs-version-sources.ts
+          add-paths: docs/lib/docs-version-sources.json
           commit-message: "docs: sync v${{ steps.update.outputs.release_line }} documentation"
           sign-commits: true
           title: "docs: sync v${{ steps.update.outputs.release_line }} documentation"

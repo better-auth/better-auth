@@ -1,21 +1,20 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { docsVersionSources } from "../lib/docs-version-sources.ts";
 import { docsVersions } from "../lib/docs-versions.ts";
 
 const commitShaPattern = /^[0-9a-f]{40}$/;
-const sourceFilePath = fileURLToPath(
-	new URL("../lib/docs-version-sources.ts", import.meta.url),
+const sourcesFilePath = fileURLToPath(
+	new URL("../lib/docs-version-sources.json", import.meta.url),
 );
 
-export interface DocsVersionSourceUpdate {
-	content: string;
+interface DocsVersionSourceUpdate {
+	serializedSources: string;
 	previousCommitSha: string;
 	releaseLine: string;
 }
 
-export function updateDocsVersionSource(
-	content: string,
+function getDocsVersionSourceUpdate(
 	editBranch: string,
 	commitSha: string,
 ): DocsVersionSourceUpdate | null {
@@ -35,16 +34,13 @@ export function updateDocsVersionSource(
 	const previousCommitSha = source.commitSha;
 	if (previousCommitSha === commitSha) return null;
 
-	const assignment = new RegExp(
-		`(commitSha\\s*:\\s*)${JSON.stringify(previousCommitSha)}`,
-		"g",
-	);
-	if (content.match(assignment)?.length !== 1) {
-		throw new Error(`Expected one commitSha entry for ${editBranch}`);
-	}
+	const updatedSources = {
+		...docsVersionSources,
+		[versionId]: { ...source, commitSha },
+	};
 
 	return {
-		content: content.replace(assignment, `$1${JSON.stringify(commitSha)}`),
+		serializedSources: `${JSON.stringify(updatedSources, null, 2)}\n`,
 		previousCommitSha,
 		releaseLine: version.releaseLine,
 	};
@@ -58,14 +54,13 @@ async function main() {
 		);
 	}
 
-	const content = await readFile(sourceFilePath, "utf8");
-	const update = updateDocsVersionSource(content, editBranch, commitSha);
+	const update = getDocsVersionSourceUpdate(editBranch, commitSha);
 	if (!update) {
 		console.log("changed=false");
 		return;
 	}
 
-	await writeFile(sourceFilePath, update.content);
+	await writeFile(sourcesFilePath, update.serializedSources);
 	console.log("changed=true");
 	console.log(`release_line=${update.releaseLine}`);
 	console.log(`previous_sha=${update.previousCommitSha}`);
