@@ -4,7 +4,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
@@ -82,7 +82,7 @@ function resolveRegistrationResponseTypes(
 
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
-	defaultApplicationType: "web" | null = "web",
+	defaultApplicationType: "web" | "native" | null = "web",
 ): OAuthClientRegistrationMetadata {
 	const grantTypes = resolveRegistrationGrantTypes(client);
 	return {
@@ -97,6 +97,33 @@ function applyOAuthClientRegistrationDefaults(
 	};
 }
 
+function isNonHttpRedirectUri(redirectUri: string): boolean {
+	try {
+		const protocol = new URL(redirectUri).protocol;
+		return protocol !== "http:" && protocol !== "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Server-owned default for dynamic registrations that omit `application_type`.
+ * `"infer"` classifies as native only when every redirect URI is a
+ * non-http(s) scheme; a sent `application_type` is never overridden because
+ * `applyOAuthClientRegistrationDefaults` only fills the absent field.
+ */
+function resolveDynamicRegistrationDefaultApplicationType(
+	opts: OAuthOptions<Scope[]>,
+	client: OAuthClientRegistrationMetadata,
+): "web" | "native" {
+	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
+	if (configured !== "infer") return configured;
+	const redirectUris = client.redirect_uris ?? [];
+	return redirectUris.length > 0 && redirectUris.every(isNonHttpRedirectUri)
+		? "native"
+		: "web";
+}
+
 const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
 	"file:",
 	"ftp:",
@@ -104,6 +131,8 @@ const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
 	"javascript:",
 	"data:",
 	"vbscript:",
+	"ws:",
+	"wss:",
 ]);
 
 function invalidRedirectUri(description: string): never {
@@ -227,10 +256,10 @@ function validateClientRedirectUri(
 
 	if (
 		FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) ||
-		!isReverseDomainPrivateUseRedirectUri(url)
+		!isNativePrivateUseRedirectUri(url)
 	) {
 		invalidRedirectUri(
-			`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`,
+			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with an authority: ${redirectUri}`,
 		);
 	}
 }
@@ -345,7 +374,11 @@ export async function checkOAuthClient(
 		settings?.registrationSource === "clientMetadataDocument";
 	const clientWithDefaults = applyOAuthClientRegistrationDefaults(
 		client,
-		isClientMetadataDocument ? null : "web",
+		isClientMetadataDocument
+			? null
+			: settings?.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(opts, client)
+				: "web",
 	);
 	const tokenEndpointAuthMethod =
 		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
@@ -399,7 +432,8 @@ export async function checkOAuthClient(
 		// A CIMD document may omit application_type. Preserve that absence in
 		// storage while validating against the safe union of web and native
 		// redirect forms. The native validator is that union: non-loopback HTTPS,
-		// exact loopback HTTP, or an authority-free private-use scheme.
+		// exact loopback HTTP, an authority-free reverse-domain private-use
+		// scheme, or a host-bearing non-reserved custom scheme.
 		validateClientRedirectUri(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
@@ -760,7 +794,14 @@ async function persistOAuthClientRegistration(
 			: input.metadata;
 	const body = applyOAuthClientRegistrationDefaults(
 		registrationMetadata,
-		input.registrationSource === "clientMetadataDocument" ? null : "web",
+		input.registrationSource === "clientMetadataDocument"
+			? null
+			: input.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(
+						opts,
+						registrationMetadata,
+					)
+				: "web",
 	);
 
 	// Determine whether registration request for public client
