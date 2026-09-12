@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { Db } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
 import { describe, expect, it, vi } from "vitest";
@@ -533,5 +534,76 @@ describe("uuid support", () => {
 
 		expect(result).not.toBeNull();
 		expect((result as Record<string, unknown>).id).toBe(uuid);
+	});
+});
+
+/**
+ * When the driver and the adapter resolve different `bson` module instances
+ * (CJS vs ESM entry point), driver values fail `instanceof` against the
+ * adapter's classes and must be recognized structurally instead.
+ * @see https://github.com/better-auth/better-auth/issues/11065
+ */
+describe("ids from a different bson instance", () => {
+	const hex = "000000000000000000000001";
+	const uuid = "550e8400-e29b-41d4-a716-446655440000";
+	const foreignObjectId = { _bsontype: "ObjectId", toHexString: () => hex };
+	const foreignUUID = {
+		_bsontype: "Binary",
+		sub_type: 4,
+		toHexString: () => uuid,
+		toString: () => uuid,
+	};
+
+	function createAdapterReturning(
+		document: Record<string, unknown>,
+		generateId?: "uuid",
+	) {
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => [document]),
+		}));
+		const db = { collection: vi.fn(() => ({ aggregate })) } as unknown as Db;
+		const adapter = mongodbAdapter(db, { transaction: false })({
+			advanced: { database: generateId ? { generateId } : {} },
+		} as unknown as BetterAuthOptions);
+		return { adapter, aggregate };
+	}
+
+	it("normalizes a foreign ObjectId to its hex string", async () => {
+		const { adapter } = createAdapterReturning({
+			_id: foreignObjectId,
+			email: "example@example.test",
+		});
+		const user = await adapter.findOne<{ id: unknown }>({
+			model: "user",
+			where: [],
+		});
+		expect(user?.id).toBe(hex);
+	});
+
+	it("normalizes a foreign UUID to its string form", async () => {
+		const { adapter } = createAdapterReturning(
+			{ _id: foreignUUID, email: "example@example.test" },
+			"uuid",
+		);
+		const user = await adapter.findOne<{ id: unknown }>({
+			model: "user",
+			where: [],
+		});
+		expect(user?.id).toBe(uuid);
+	});
+
+	it("accepts a foreign ObjectId as a where clause value", async () => {
+		const { adapter, aggregate } = createAdapterReturning({
+			_id: foreignObjectId,
+			email: "example@example.test",
+		});
+		await adapter.findOne({
+			model: "user",
+			where: [{ field: "id", value: foreignObjectId as unknown as string }],
+		});
+		expect(aggregate).toHaveBeenCalledWith(
+			expect.arrayContaining([{ $match: { _id: foreignObjectId } }]),
+			expect.anything(),
+		);
 	});
 });
