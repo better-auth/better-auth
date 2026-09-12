@@ -301,21 +301,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 					method: "GET",
 					query: magicLinkVerifyQuerySchema,
 					use: [
-						originCheck((ctx) => {
-							return ctx.query.callbackURL
-								? decodeURIComponent(ctx.query.callbackURL)
-								: "/";
-						}),
-						originCheck((ctx) => {
-							return ctx.query.newUserCallbackURL
-								? decodeURIComponent(ctx.query.newUserCallbackURL)
-								: "/";
-						}),
-						originCheck((ctx) => {
-							return ctx.query.errorCallbackURL
-								? decodeURIComponent(ctx.query.errorCallbackURL)
-								: "/";
-						}),
+						originCheck((ctx) => ctx.query.callbackURL || "/"),
+						originCheck((ctx) => ctx.query.newUserCallbackURL || "/"),
+						originCheck((ctx) => ctx.query.errorCallbackURL || "/"),
 					],
 					requireHeaders: true,
 					metadata: {
@@ -351,15 +339,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 					// new URL("http://localhost:3001/hello", "http://localhost:3000").toString()
 					// Returns http://localhost:3001/hello
 					const callbackURL = new URL(
-						ctx.query.callbackURL
-							? decodeURIComponent(ctx.query.callbackURL)
-							: "/",
+						ctx.query.callbackURL || "/",
 						ctx.context.baseURL,
 					).toString();
 					const errorCallbackURL = new URL(
-						ctx.query.errorCallbackURL
-							? decodeURIComponent(ctx.query.errorCallbackURL)
-							: callbackURL,
+						ctx.query.errorCallbackURL || callbackURL,
 						ctx.context.baseURL,
 					);
 
@@ -378,9 +362,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}
 
 					const newUserCallbackURL = new URL(
-						ctx.query.newUserCallbackURL
-							? decodeURIComponent(ctx.query.newUserCallbackURL)
-							: callbackURL,
+						ctx.query.newUserCallbackURL || callbackURL,
 						ctx.context.baseURL,
 					).toString();
 					const storedToken = await storeToken(ctx, token);
