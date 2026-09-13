@@ -124,7 +124,14 @@ export const enrollEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		if (!ctx.context.options.user?.enrollment?.enabled) {
+		const enrollment = ctx.context.options.user?.enrollment;
+		if (!enrollment?.enabled || !enrollment.sendEnrollmentVerification) {
+			// Checked together so a half-configured `user.enrollment` (enabled
+			// without sendEnrollmentVerification) 404s uniformly for every
+			// caller, the same as fully disabled -- branching only on `enabled`
+			// would have let the response differ (200 vs the create-then-throw
+			// below) depending on whether the email already has a verified
+			// account, breaking the anti-enumeration guarantee below.
 			throw APIError.fromStatus("NOT_FOUND");
 		}
 		const email = ctx.body.email.toLowerCase();
@@ -200,7 +207,8 @@ export const enrollEmailCallback = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		if (!ctx.context.options.user?.enrollment?.enabled) {
+		const enrollment = ctx.context.options.user?.enrollment;
+		if (!enrollment?.enabled || !enrollment.sendEnrollmentVerification) {
 			throw APIError.fromStatus("NOT_FOUND");
 		}
 		const { password } = ctx.body;

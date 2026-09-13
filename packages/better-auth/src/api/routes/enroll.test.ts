@@ -273,4 +273,35 @@ describe("enroll", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 	});
+
+	/**
+	 * Found in an independent re-review: `enrollment.enabled` without
+	 * `sendEnrollmentVerification` is valid at the type level, and the
+	 * handler used to only check `enabled` -- letting it create a pending
+	 * user, then fail creating the token with a 400. A verified existing
+	 * email still got the generic 200, so the response code alone leaked
+	 * whether the email had an account: a real anti-enumeration break.
+	 */
+	it("responds not found -- uniformly, for every email -- when enrollment is enabled but misconfigured", async () => {
+		const { client, testUser, db } = await getTestInstance({
+			user: { enrollment: { enabled: true } },
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+			update: { emailVerified: true },
+		});
+
+		const forVerified = await client.enroll({ email: testUser.email });
+		const forNew = await client.enroll({ email: "half-configured@example.com" });
+
+		expect(forVerified.error?.status).toBe(404);
+		expect(forNew.error?.status).toBe(404);
+
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "half-configured@example.com" }],
+		});
+		expect(users).toHaveLength(0);
+	});
 });

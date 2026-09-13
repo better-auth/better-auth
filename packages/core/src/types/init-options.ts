@@ -81,6 +81,7 @@ export type ValidateUserInfoMethod =
 	| "siwe"
 	| "phone-number"
 	| "admin"
+	| "enroll"
 	| (string & {});
 
 /** OAuth-specific provisioning context; present only when `method` is `"oauth"`. */
