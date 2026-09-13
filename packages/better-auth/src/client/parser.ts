@@ -64,7 +64,7 @@ function parseISODate(value: string): Date | null {
 			parseInt(hour!, 10),
 			parseInt(minute!, 10),
 			parseInt(second!, 10),
-			ms ? parseInt(ms.padEnd(3, "0"), 10) : 0,
+			ms ? parseInt(ms.slice(0, 3).padEnd(3, "0"), 10) : 0,
 		),
 	);
 
