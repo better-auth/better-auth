@@ -556,39 +556,73 @@ describe("enroll", async () => {
 	});
 
 	/**
-	 * Found in automated PR review (cubic): a name given at /enroll was
-	 * only ever applied when creating a brand-new user, never when
-	 * reclaiming an existing unverified one -- so the real owner of a
-	 * pre-squatted email stayed stuck with whatever name the prior
-	 * occupant had set, unless they also passed a name at
-	 * /enroll/callback.
+	 * Found in a follow-up review (Greptile) on the callbackURL fix
+	 * above: naively appending "?token=..." produces a second "?"
+	 * instead of "&" when callbackURL already carries its own query
+	 * string, yielding a malformed URL the app's router can't parse.
 	 */
-	it("applies a name given at /enroll to a reclaimed pre-existing unverified user", async () => {
-		let token = "";
+	it("appends the token with & when callbackURL already has a query string", async () => {
+		let capturedUrl = "";
 		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth",
 			user: {
 				enrollment: {
 					enabled: true,
 					async sendEnrollmentVerification(data) {
-						token = data.token;
+						capturedUrl = data.url;
 					},
 				},
 			},
 		});
+		await client.enroll({
+			email: "callback-url-with-query@example.com",
+			callbackURL: "/finish-enrollment?ref=email",
+		});
+		const parsed = new URL(capturedUrl);
+		expect(parsed.pathname).toBe("/finish-enrollment");
+		expect(parsed.searchParams.get("ref")).toBe("email");
+		expect(parsed.searchParams.get("token")).not.toBeNull();
+		expect(capturedUrl).not.toContain("??");
+		expect((capturedUrl.match(/\?/g) ?? []).length).toBe(1);
+	});
+
+	/**
+	 * A follow-up finding (Greptile) on an earlier fix attempt: applying
+	 * `ctx.body.name` to a *reclaimed* existing row at /enroll -- meant
+	 * to fix a real complaint (a real owner ends up with a pre-squatter's
+	 * name unless they also pass one at /enroll/callback) -- introduced
+	 * a worse problem: /enroll has no proof of ownership at all (it's the
+	 * anti-enumeration-gated initiation step, callable by anyone for any
+	 * email), so it let an unauthenticated caller rename someone else's
+	 * pending user before that person had so much as received the
+	 * email. Reverted: /enroll never touches an existing row's name.
+	 * The real owner can still set their name safely once they actually
+	 * prove ownership, at /enroll/callback.
+	 */
+	it("does not let an unauthenticated /enroll call rename an existing unverified user", async () => {
+		const { client } = await getTestInstance({
+			user: {
+				enrollment: {
+					enabled: true,
+					sendEnrollmentVerification: async () => {},
+				},
+			},
+		});
 		await client.signUp.email({
-			email: "reclaim-with-name@example.com",
-			password: "attacker-password-123",
-			name: "attacker",
+			email: "no-unproven-rename@example.com",
+			password: "original-password-123",
+			name: "Original Name",
 		});
 
 		await client.enroll({
-			email: "reclaim-with-name@example.com",
-			name: "Real Owner",
+			email: "no-unproven-rename@example.com",
+			name: "Attacker Chosen Name",
 		});
-		const res = await client.enroll.callback({
-			token,
-			password: "real-owner-password-123",
+
+		const signIn = await client.signIn.email({
+			email: "no-unproven-rename@example.com",
+			password: "original-password-123",
 		});
-		expect(res.data?.user.name).toBe("Real Owner");
+		expect(signIn.data?.user.name).toBe("Original Name");
 	});
 });

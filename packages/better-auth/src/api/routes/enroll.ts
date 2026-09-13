@@ -90,14 +90,21 @@ export async function createEnrollmentToken(
 	if (opts.onTokenCreated) {
 		await opts.onTokenCreated(token, expiresAt);
 	}
-	const url = opts.callbackURL
-		? `${new URL(opts.callbackURL, ctx.context.baseURL).toString()}?token=${token}`
-		: `${ctx.context.baseURL}/enroll/callback?token=${token}`;
+	// `URL` + `searchParams.set`, not string concatenation: callbackURL may
+	// already carry its own query string (e.g. "/finish?ref=email"), and
+	// naively appending "?token=..." would produce a second "?" instead
+	// of "&". Resolved against baseURL's origin the same way magic link
+	// resolves its own callback URLs.
+	const enrollmentUrl = new URL(
+		opts.callbackURL || "/enroll/callback",
+		ctx.context.baseURL,
+	);
+	enrollmentUrl.searchParams.set("token", token);
 	await ctx.context.runInBackgroundOrAwait(
 		enrollment.sendEnrollmentVerification(
 			{
 				user: opts.user,
-				url,
+				url: enrollmentUrl.toString(),
 				token,
 				invitation: opts.invitation,
 			},
@@ -185,7 +192,16 @@ export const enroll = createAuthEndpoint(
 			return ctx.json({ status: true });
 		}
 
-		let user =
+		// `name` is intentionally only applied when creating a brand-new
+		// row, never to an existing one being reclaimed: /enroll has no
+		// proof of ownership at all (it's the anti-enumeration-gated
+		// initiation step, callable by anyone for any email), so applying
+		// caller-supplied data to someone else's pending row here -- before
+		// they've so much as received the email, let alone proven they
+		// control it -- would let an unauthenticated caller rename an
+		// unrelated pending user. The real owner can still set their name
+		// once they actually prove ownership, at /enroll/callback.
+		const user =
 			existing?.user ??
 			(await ctx.context.internalAdapter.createUser(
 				{
@@ -195,17 +211,6 @@ export const enroll = createAuthEndpoint(
 				},
 				{ method: "enroll" },
 			));
-
-		// A name given here on a *reclaimed* row (existing.user, not freshly
-		// created) was otherwise silently discarded: `createUser` above
-		// already applies it for a new row, but reusing an existing
-		// unverified one skipped it entirely, leaving the real owner stuck
-		// with whatever name a previous occupant of the row set.
-		if (existing?.user && ctx.body.name && ctx.body.name !== user.name) {
-			user = await ctx.context.internalAdapter.updateUser(user.id, {
-				name: ctx.body.name,
-			});
-		}
 
 		await createEnrollmentToken(ctx, { user, callbackURL: ctx.body.callbackURL });
 		return ctx.json({ status: true });
