@@ -19,6 +19,7 @@ async function boot(
 		failure?: Error | null;
 		mode?: OAuthOptions<Scope[]>["resourceSeedMode"];
 		existing?: boolean;
+		identifierValidator?: OAuthOptions<Scope[]>["identifierValidator"];
 	} = {},
 ) {
 	const store = {
@@ -52,6 +53,7 @@ async function boot(
 		consentPage: "/consent",
 		resources: [{ identifier: resource, name: "Configured name" }],
 		resourceSeedMode: options.mode,
+		identifierValidator: options.identifierValidator,
 		clientRegistrationDefaultResources: [resource],
 		allowDynamicClientRegistration: true,
 		allowUnauthenticatedClientRegistration: true,
@@ -151,6 +153,31 @@ describe("resource seed failure during auth initialization", () => {
 		expect(disabled.status).toBe(400);
 		expect(await disabled.json()).toMatchObject({ error: "invalid_target" });
 		expect(store.oauthClientResource).toHaveLength(1);
+	});
+
+	it.each([
+		"sync",
+		"async",
+	])("preserves %s validator exceptions", async (kind) => {
+		const failure = new Error("Invalid validator configuration");
+		await expect(
+			boot({
+				failure: null,
+				identifierValidator: () => {
+					if (kind === "async") return Promise.reject(failure);
+					throw failure;
+				},
+			}),
+		).rejects.toBe(failure);
+	});
+
+	it("continues to skip identifiers rejected by the validator", async () => {
+		const { auth, store } = await boot({
+			failure: null,
+			identifierValidator: () => false,
+		});
+		await expect(auth.$context).resolves.toBeDefined();
+		expect(store.oauthResource).toHaveLength(0);
 	});
 
 	it("shares the retry among concurrent resource accesses", async () => {
