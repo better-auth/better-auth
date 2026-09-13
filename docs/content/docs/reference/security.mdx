@@ -308,6 +308,8 @@ Better Auth prevents email enumeration on the sign-up and change-email endpoints
 
 See [Email and Password — Email Enumeration Protection](/docs/authentication/email-password#email-enumeration-protection) for configuration details.
 
+The `/enroll` endpoint applies the same posture unconditionally: it always returns a generic `200` response regardless of whether the email is already registered and verified. See [Enrollment](/docs/concepts/users-accounts#enrollment).
+
 ## Reporting Vulnerabilities
 
 If you discover a security vulnerability in Better Auth, please report it via [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories/new). We address all reports promptly, and credits will be given for validated discoveries.
