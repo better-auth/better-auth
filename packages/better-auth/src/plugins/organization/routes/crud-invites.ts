@@ -1,12 +1,17 @@
-import type { GenerateIdFn, LiteralString } from "@better-auth/core";
+import type {
+	GenerateIdFn,
+	GenericEndpointContext,
+	LiteralString,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api/routes";
+import { createEnrollmentToken, getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import type { User } from "../../../types";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
@@ -19,6 +24,7 @@ import type {
 	InferOrganizationRolesFromOption,
 	Invitation,
 	Member,
+	Organization,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -127,6 +133,87 @@ const shouldRequireVerifiedEmailForInvitationIdAction = ({
 		databaseGenerateId,
 	});
 };
+
+/**
+ * Sends whichever email fits the invited email's current state: the
+ * normal invitation email for an email that already belongs to a
+ * verified account, or -- when `user.enrollment` is fully configured --
+ * a single enrollment email for an email with no account yet, or one
+ * that only has an unverified account (e.g. pre-squatted by someone else
+ * via sign-up). Sending both would leave a dead `acceptInvitation` link
+ * in the invite email, since a not-yet-enrolled invitee has no way to
+ * authenticate into it yet; `sendEnrollmentVerification` receives the
+ * invitation context so a single email can carry both the "you've been
+ * invited" framing and the account-setup action.
+ *
+ * A partially configured `user.enrollment` (`enabled` without
+ * `sendEnrollmentVerification`) intentionally falls back to the normal
+ * invitation email rather than throwing: this runs on every invite to a
+ * not-yet-registered email, so a misconfiguration here shouldn't break
+ * an org's existing invite flow the way it fails loud for admin's
+ * explicit, per-call `sendEnrollmentEmail`.
+ */
+async function sendInvitationOrEnrollmentEmail<O extends OrganizationOptions>(
+	ctx: GenericEndpointContext,
+	options: O,
+	params: {
+		invitation: Invitation;
+		organization: Organization;
+		inviter: Member & { user: User };
+	},
+) {
+	const enrollment = ctx.context.options.user?.enrollment;
+	if (enrollment?.enabled && enrollment.sendEnrollmentVerification) {
+		const existing = await ctx.context.internalAdapter.findUserByEmail(
+			params.invitation.email,
+		);
+		if (!existing || !existing.user.emailVerified) {
+			const user =
+				existing?.user ??
+				(await ctx.context.internalAdapter.createUser(
+					{
+						email: params.invitation.email,
+						name: "",
+						emailVerified: false,
+					},
+					{ method: "enroll" },
+				));
+			const enrolled = await createEnrollmentToken(ctx, {
+				user,
+				invitation: {
+					organizationName: params.organization.name,
+					inviterEmail: params.inviter.user.email,
+				},
+			});
+			// Second, independent verification row keyed by the same token:
+			// core owns and consumes `enroll:${token}` with no knowledge of
+			// organizations; this plugin-owned row is how the after-hook in
+			// organization.ts finds the invitation to accept once /enroll/callback
+			// finishes, without core ever depending on the organization plugin.
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: params.invitation.id,
+				identifier: `enroll-invitation:${enrolled.token}`,
+				expiresAt: enrolled.expiresAt,
+			});
+			return;
+		}
+	}
+	if (options.sendInvitationEmail) {
+		await ctx.context.runInBackgroundOrAwait(
+			options.sendInvitationEmail(
+				{
+					id: params.invitation.id,
+					role: params.invitation.role as string,
+					email: params.invitation.email.toLowerCase(),
+					organization: params.organization,
+					inviter: params.inviter,
+					invitation: params.invitation,
+				},
+				ctx.request,
+			),
+		);
+	}
+}
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -397,24 +484,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					expiresAt: newExpiresAt,
 				};
 
-				if (ctx.context.orgOptions.sendInvitationEmail) {
-					await ctx.context.runInBackgroundOrAwait(
-						ctx.context.orgOptions.sendInvitationEmail(
-							{
-								id: updatedInvitation.id!,
-								role: updatedInvitation.role! as string,
-								email: updatedInvitation.email!.toLowerCase(),
-								organization: organization,
-								inviter: {
-									...member,
-									user: session.user,
-								},
-								invitation: updatedInvitation as unknown as Invitation,
-							},
-							ctx.request,
-						),
-					);
-				}
+				await sendInvitationOrEnrollmentEmail(ctx, option, {
+					invitation: updatedInvitation as unknown as Invitation,
+					organization,
+					inviter: { ...(member as Member), user: session.user },
+				});
 
 				return ctx.json(updatedInvitation as unknown as InferInvitation<O>);
 			}
@@ -579,24 +653,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				user: session.user,
 			});
 
-			if (ctx.context.orgOptions.sendInvitationEmail) {
-				await ctx.context.runInBackgroundOrAwait(
-					ctx.context.orgOptions.sendInvitationEmail(
-						{
-							id: invitation.id,
-							role: invitation.role,
-							email: invitation.email.toLowerCase(),
-							organization: organization,
-							inviter: {
-								...(member as Member),
-								user: session.user,
-							},
-							invitation,
-						},
-						ctx.request,
-					),
-				);
-			}
+			await sendInvitationOrEnrollmentEmail(ctx, option, {
+				invitation,
+				organization,
+				inviter: { ...(member as Member), user: session.user },
+			});
 
 			// Run afterCreateInvitation hook
 			if (option?.organizationHooks?.afterCreateInvitation) {
@@ -1239,6 +1300,109 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				organizationName: organization.name,
 				organizationSlug: organization.slug,
 				inviterEmail: member.user.email,
+			});
+		},
+	);
+
+const getInvitationPreviewQuerySchema = z.object({
+	id: z.string().meta({
+		description: "The ID of the invitation to preview",
+	}),
+});
+
+/**
+ * Unauthenticated counterpart to `getInvitation`, for an invitee who
+ * doesn't have an account yet and so cannot hold a session -- e.g. an
+ * app rendering "you've been invited to {organizationName} by
+ * {inviterEmail}" before the invitee completes enrollment. Protected by
+ * the invitation id being unguessable rather than a session/email match,
+ * so it deliberately returns only display fields: no invitee email, no
+ * internal ids.
+ */
+export const getInvitationPreview = <O extends OrganizationOptions>(
+	options: O,
+) =>
+	createAuthEndpoint(
+		"/organization/get-invitation-preview",
+		{
+			method: "GET",
+			use: [orgMiddleware],
+			query: getInvitationPreviewQuerySchema,
+			metadata: {
+				openapi: {
+					operationId: "getOrganizationInvitationPreview",
+					description:
+						"Get non-sensitive display fields for a pending invitation, without requiring a session",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											organizationName: { type: "string" },
+											organizationSlug: { type: "string" },
+											inviterEmail: { type: "string" },
+											role: { type: "string" },
+											status: { type: "string" },
+											expiresAt: { type: "string" },
+										},
+										required: [
+											"organizationName",
+											"organizationSlug",
+											"inviterEmail",
+											"role",
+											"status",
+											"expiresAt",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const invitation = await adapter.findInvitationById(ctx.query.id);
+			if (
+				!invitation ||
+				invitation.status !== "pending" ||
+				invitation.expiresAt < new Date()
+			) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+			const member = await adapter.findMemberByOrgId({
+				userId: invitation.inviterId,
+				organizationId: invitation.organizationId,
+			});
+			if (!member) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+			return ctx.json({
+				organizationName: organization.name,
+				organizationSlug: organization.slug,
+				inviterEmail: member.user.email,
+				role: invitation.role,
+				status: invitation.status,
+				expiresAt: invitation.expiresAt,
 			});
 		},
 	);

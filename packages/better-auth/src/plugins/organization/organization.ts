@@ -1,5 +1,12 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
+import type {
+	AuthContext,
+	BetterAuthPlugin,
+	HookEndpointContext,
+} from "@better-auth/core";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
@@ -25,6 +32,7 @@ import {
 	cancelInvitation,
 	createInvitation,
 	getInvitation,
+	getInvitationPreview,
 	listInvitations,
 	listUserInvitations,
 	rejectInvitation,
@@ -106,6 +114,7 @@ export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<Options>;
+	hooks?: BetterAuthPlugin["hooks"];
 };
 
 export interface OrganizationCreator {
@@ -150,6 +159,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	cancelInvitation: ReturnType<typeof cancelInvitation<O>>;
 	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
 	getInvitation: ReturnType<typeof getInvitation<O>>;
+	getInvitationPreview: ReturnType<typeof getInvitationPreview<O>>;
 	rejectInvitation: ReturnType<typeof rejectInvitation<O>>;
 	listInvitations: ReturnType<typeof listInvitations<O>>;
 	getActiveMember: ReturnType<typeof getActiveMember<O>>;
@@ -321,6 +331,7 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	hooks?: BetterAuthPlugin["hooks"];
 };
 
 /**
@@ -373,6 +384,7 @@ export function organization<
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	hooks?: BetterAuthPlugin["hooks"];
 };
 export function organization<
 	O extends OrganizationOptions & {
@@ -407,6 +419,7 @@ export function organization<
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	hooks?: BetterAuthPlugin["hooks"];
 };
 export function organization<
 	O extends OrganizationOptions & {
@@ -439,11 +452,14 @@ export function organization<
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	hooks?: BetterAuthPlugin["hooks"];
 };
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
 ): DefaultOrganizationPlugin<O>;
-export function organization<O extends OrganizationOptions>(options?: O) {
+export function organization<O extends OrganizationOptions>(
+	options?: O,
+): BetterAuthPlugin {
 	const opts = (options || {}) as O;
 	let endpoints = {
 		/**
@@ -622,6 +638,22 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-invitation)
 		 */
 		getInvitation: getInvitation(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-invitation-preview`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getInvitationPreview`
+		 *
+		 * **client:**
+		 * `authClient.organization.getInvitationPreview`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-invitation-preview)
+		 */
+		getInvitationPreview: getInvitationPreview(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -1250,6 +1282,59 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
 			hasPermission: createHasPermission(opts),
+		},
+		hooks: {
+			after: [
+				{
+					matcher: (context: HookEndpointContext) =>
+						context.path === "/enroll/callback",
+					handler: createAuthMiddleware(async (ctx) => {
+						// An invite-linked enroll carries its invitationId in a
+						// second, organization-owned verification row keyed by the
+						// same token core just consumed (see
+						// sendInvitationOrEnrollmentEmail in crud-invites.ts) -- core
+						// never learns about organizations, and this plugin never
+						// touches core's own `enroll:${token}` row.
+						const newSession = ctx.context.newSession;
+						const token = (ctx.body as { token?: string } | undefined)
+							?.token;
+						if (!newSession || !token) {
+							return;
+						}
+						const pending =
+							await ctx.context.internalAdapter.consumeVerificationValue(
+								`enroll-invitation:${token}`,
+							);
+						if (!pending) {
+							return;
+						}
+						try {
+							//@ts-expect-error - internal composition, mirrors how
+							// deleteUser composes deleteUserCallback in update-user.ts
+							await api.acceptInvitation({
+								...ctx,
+								context: {
+									...ctx.context,
+									session: {
+										user: newSession.user,
+										session: newSession.session,
+									},
+								},
+								body: { invitationId: pending.value },
+							});
+						} catch (error) {
+							// The enrolled account was already created successfully;
+							// don't fail that response over a secondary step (e.g. the
+							// invitation expired or the org hit its membership limit
+							// in the meantime).
+							ctx.context.logger.error(
+								"Failed to accept invitation after enrollment; the enrolled account was still created",
+								error,
+							);
+						}
+					}),
+				},
+			],
 		},
 		schema: {
 			...(schema as BetterAuthPluginDBSchema),

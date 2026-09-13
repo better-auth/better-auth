@@ -1,5 +1,5 @@
 import type { BetterAuthOptions, GenerateIdFn } from "@better-auth/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { organization } from "../organization";
@@ -904,5 +904,230 @@ describe("invitation teamId must belong to the invitation's organization", async
 
 		expect(list.data).toBeNull();
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
+	});
+});
+
+type EnrollmentEmailData = {
+	user: { id: string; email: string };
+	token: string;
+	invitation?: { organizationName: string; inviterEmail: string };
+};
+
+describe("organization invitations integrate with passwordless enrollment", async () => {
+	function setup(
+		sendEnrollmentVerification?: (data: EnrollmentEmailData) => Promise<void>,
+	) {
+		return getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification:
+							sendEnrollmentVerification ?? (async () => {}),
+					},
+				},
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+	}
+
+	async function createOrg(
+		client: Awaited<ReturnType<typeof setup>>["client"],
+		signInWithTestUser: Awaited<ReturnType<typeof setup>>["signInWithTestUser"],
+	) {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Acme",
+			slug: "acme",
+			fetchOptions: { headers },
+		});
+		return { headers, orgId: org.data!.id };
+	}
+
+	it("sends only the enrollment email, with invitation context, for an email with no account yet", async () => {
+		const sendInvitationEmail = vi.fn();
+		let enrollmentData: EnrollmentEmailData | undefined;
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							enrollmentData = data;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "brand-new@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(sendInvitationEmail).not.toHaveBeenCalled();
+		expect(enrollmentData?.user.email).toBe("brand-new@example.com");
+		expect(enrollmentData?.invitation).toMatchObject({
+			organizationName: "Acme",
+			inviterEmail: "test@test.com",
+		});
+	});
+
+	it("sends the normal invitation email for an email that already has a verified account", async () => {
+		const sendInvitationEmail = vi.fn();
+		const sendEnrollmentVerification = vi.fn();
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: { enrollment: { enabled: true, sendEnrollmentVerification } },
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.signUp.email({
+			email: "verified@example.com",
+			password: "verified-password-123",
+			name: "Verified",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "verified@example.com" }],
+			update: { emailVerified: true },
+		});
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "verified@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(sendInvitationEmail).toHaveBeenCalledOnce();
+		expect(sendEnrollmentVerification).not.toHaveBeenCalled();
+	});
+
+	it("still sends the enrollment email, reusing the row, for an email pre-squatted by an unverified sign-up", async () => {
+		const sendInvitationEmail = vi.fn();
+		let enrollmentData: EnrollmentEmailData | undefined;
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							enrollmentData = data;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const signUpRes = await client.signUp.email({
+			email: "squatted@example.com",
+			password: "attacker-password-123",
+			name: "attacker",
+		});
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "squatted@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(sendInvitationEmail).not.toHaveBeenCalled();
+		expect(enrollmentData?.user.id).toBe(signUpRes.data!.user.id);
+
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "squatted@example.com" }],
+		});
+		expect(users).toHaveLength(1);
+	});
+
+	it("getInvitationPreview returns non-sensitive display fields without a session", async () => {
+		const { client, auth, signInWithTestUser } = await setup();
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "previewed@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await auth.api.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview).toMatchObject({
+			organizationName: "Acme",
+			inviterEmail: "test@test.com",
+			role: "member",
+			status: "pending",
+		});
+		expect(preview).not.toHaveProperty("email");
+		expect(preview).not.toHaveProperty("id");
+		expect(preview).not.toHaveProperty("organizationId");
+	});
+
+	it("getInvitationPreview rejects an unknown invitation id", async () => {
+		const { auth } = await setup();
+		await expect(
+			auth.api.getInvitationPreview({ query: { id: "does-not-exist" } }),
+		).rejects.toThrow();
+	});
+
+	it("completing enrollment for an invite-linked token also accepts the invitation atomically", async () => {
+		let token = "";
+		const { client, signInWithTestUser, db } = await setup(async (data) => {
+			token = data.token;
+		});
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "auto-accept@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		expect(token.length).toBe(32);
+
+		const res = await client.enroll.callback({
+			token,
+			password: "auto-accept-password-123",
+		});
+		expect(res.data?.user.email).toBe("auto-accept@example.com");
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: orgId },
+				{ field: "userId", value: res.data!.user.id },
+			],
+		});
+		expect(members).toHaveLength(1);
+
+		const invitations = await db.findMany({
+			model: "invitation",
+			where: [{ field: "organizationId", value: orgId }],
+		});
+		expect(
+			(invitations as { status: string }[]).every(
+				(i) => i.status === "accepted",
+			),
+		).toBe(true);
 	});
 });
