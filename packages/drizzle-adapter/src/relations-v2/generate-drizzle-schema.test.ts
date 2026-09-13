@@ -77,6 +77,36 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10947
+	 */
+	it("treats fields with omitted required as not null", async () => {
+		const { code = "" } = await generate({
+			plugins: [
+				{
+					id: "required-fields-test",
+					schema: {
+						testTable: {
+							fields: {
+								implicitRequired: { type: "string" },
+								explicitRequired: { type: "string", required: true },
+								explicitOptional: { type: "string", required: false },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		expect(code).toContain(
+			"implicitRequired: text('implicit_required').notNull()",
+		);
+		expect(code).toContain(
+			"explicitRequired: text('explicit_required').notNull()",
+		);
+		expect(code).not.toMatch(/explicitOptional:.*\.notNull\(\)/);
+	});
+
 	test("generates compound indexes with physical field names", async () => {
 		const { code = "" } = await generateFor("mysql", {
 			plugins: [
