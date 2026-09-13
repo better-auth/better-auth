@@ -984,6 +984,54 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 	});
 
 	/**
+	 * Found in automated PR review (both cubic and Greptile flagged the
+	 * same issue independently): the enroll-invitation linkage row used
+	 * to be created after createEnrollmentToken returned, i.e. after the
+	 * enrollment email was already dispatched (fire-and-forget when
+	 * background task handling is configured). Asserting the linkage
+	 * exists from inside sendEnrollmentVerification itself proves it is
+	 * now written before the email that carries the token is sent, not
+	 * after -- so nothing that receives the token, however quickly, can
+	 * ever observe it before the linkage exists.
+	 */
+	it("creates the invitation linkage before the enrollment email is sent, not after", async () => {
+		let linkageExistsWhenEmailIsSent = false;
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							const rows = await db.findMany({
+								model: "verification",
+								where: [
+									{
+										field: "identifier",
+										value: `enroll-invitation:${data.token}`,
+									},
+								],
+							});
+							linkageExistsWhenEmailIsSent = rows.length === 1;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "ordering-check@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(linkageExistsWhenEmailIsSent).toBe(true);
+	});
+
+	/**
 	 * By design, unlike self-service /enroll (see
 	 * enroll.test.ts's "name requirement for self-service enrollment"):
 	 * the inviter only supplies an email, the invitee's name is never
@@ -1412,6 +1460,52 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 		const invite = await client.organization.inviteMember({
 			organizationId: orgId,
 			email: "guessable-id@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data).toBeNull();
+		expect(preview.error?.status).toBe(400);
+	});
+
+	/**
+	 * Found in automated PR review (both cubic and Greptile flagged the
+	 * same issue independently): requireEmailVerificationOnInvitation is
+	 * documented as relaxing the *session-based* email-verification
+	 * requirement on acceptInvitation/rejectInvitation/getInvitation --
+	 * those endpoints still have a session + recipient-email match to
+	 * fall back on. getInvitationPreview has neither, so honoring an
+	 * explicit `false` here (as the shared
+	 * shouldRequireVerifiedEmailForInvitationIdAction helper does) would
+	 * let a developer's choice to relax those *other* endpoints also
+	 * strip this endpoint's only protection against predictable ids.
+	 */
+	it("still refuses non-opaque ids even when requireEmailVerificationOnInvitation is explicitly false", async () => {
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				advanced: { database: { generateId: "serial" } },
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [
+					organization({
+						sendInvitationEmail: async () => {},
+						requireEmailVerificationOnInvitation: false,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "still-guarded@example.com",
 			role: "member",
 			fetchOptions: { headers },
 		});

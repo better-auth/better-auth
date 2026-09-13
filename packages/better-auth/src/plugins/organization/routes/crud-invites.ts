@@ -178,7 +178,7 @@ async function sendInvitationOrEnrollmentEmail<O extends OrganizationOptions>(
 					},
 					{ method: "enroll" },
 				));
-			const enrolled = await createEnrollmentToken(ctx, {
+			await createEnrollmentToken(ctx, {
 				user,
 				invitation: {
 					organizationName: params.organization.name,
@@ -189,16 +189,21 @@ async function sendInvitationOrEnrollmentEmail<O extends OrganizationOptions>(
 				// joining a team is unnecessary friction they can complete
 				// their profile after they're in.
 				requireName: false,
-			});
-			// Second, independent verification row keyed by the same token:
-			// core owns and consumes `enroll:${token}` with no knowledge of
-			// organizations; this plugin-owned row is how the after-hook in
-			// organization.ts finds the invitation to accept once /enroll/callback
-			// finishes, without core ever depending on the organization plugin.
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: params.invitation.id,
-				identifier: `enroll-invitation:${enrolled.token}`,
-				expiresAt: enrolled.expiresAt,
+				// Second, independent verification row keyed by the same
+				// token: core owns and consumes `enroll:${token}` with no
+				// knowledge of organizations; this plugin-owned row is how
+				// the after-hook in organization.ts finds the invitation to
+				// accept once /enroll/callback finishes, without core ever
+				// depending on the organization plugin. Created here, before
+				// the email is dispatched, so the linkage always exists by
+				// the time the token could possibly reach anyone.
+				onTokenCreated: async (token, expiresAt) => {
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: params.invitation.id,
+						identifier: `enroll-invitation:${token}`,
+						expiresAt,
+					});
+				},
 			});
 			return;
 		}
@@ -1379,9 +1384,18 @@ export const getInvitationPreview = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			// Deliberately NOT shouldRequireVerifiedEmailForInvitationIdAction:
+			// that helper lets requireEmailVerificationOnInvitation: false
+			// override the opacity check unconditionally, which is safe for
+			// acceptInvitation/rejectInvitation/getInvitation (they still have
+			// a session + recipient-email match as a fallback) but not here --
+			// this endpoint has no session at all, so an explicit `false`
+			// meant to relax the *other* endpoints' extra verified-email
+			// requirement would otherwise also strip this one's only
+			// protection. Check id opacity directly, independent of that
+			// option.
 			if (
-				shouldRequireVerifiedEmailForInvitationIdAction({
-					organizationOptions: ctx.context.orgOptions,
+				!hasBuiltInOpaqueInvitationIdGeneration({
 					advancedGenerateId: getAdvancedGenerateId(
 						ctx.context.options.advanced,
 					),
