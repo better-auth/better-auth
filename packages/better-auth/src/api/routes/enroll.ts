@@ -105,12 +105,19 @@ export async function createEnrollmentToken(
 	// contrast, is a path on the *app*, unrelated to the API's own path
 	// prefix, so it only needs baseURL's origin.
 	const realBaseURL = new URL(ctx.context.baseURL);
+	// A configured baseURL with an explicit path (unlike the bare-origin
+	// case, which framework code always normalizes) is used verbatim,
+	// trailing slash included -- see withPath() in utils/url.ts, which
+	// only trims it away when appending its own default "/api/auth".
+	// Stripped here too, or a trailing slash produces a doubled "//"
+	// before "/enroll/callback".
+	const basePath =
+		realBaseURL.pathname === "/"
+			? ""
+			: realBaseURL.pathname.replace(/\/+$/, "");
 	const enrollmentUrl = opts.callbackURL
 		? new URL(opts.callbackURL, realBaseURL.origin)
-		: new URL(
-				`${realBaseURL.pathname === "/" ? "" : realBaseURL.pathname}/enroll/callback`,
-				realBaseURL.origin,
-			);
+		: new URL(`${basePath}/enroll/callback`, realBaseURL.origin);
 	enrollmentUrl.searchParams.set("token", token);
 	await ctx.context.runInBackgroundOrAwait(
 		enrollment.sendEnrollmentVerification(

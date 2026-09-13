@@ -657,6 +657,34 @@ describe("enroll", async () => {
 	});
 
 	/**
+	 * Found independently by both Greptile and cubic on the fix above: a
+	 * configured baseURL with an explicit path is used verbatim, trailing
+	 * slash included (see withPath() in utils/url.ts) -- so a baseURL
+	 * like "http://localhost:3000/api/auth/" produced a doubled
+	 * "...api/auth//enroll/callback", which the mounted route doesn't
+	 * match either.
+	 */
+	it("doesn't double the slash when baseURL's own path already ends in one", async () => {
+		let capturedUrl = "";
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth/",
+			user: {
+				enrollment: {
+					enabled: true,
+					async sendEnrollmentVerification(data) {
+						capturedUrl = data.url;
+					},
+				},
+			},
+		});
+		await client.enroll({ email: "default-link-trailing-slash@example.com" });
+		expect(capturedUrl).toMatch(
+			/^http:\/\/localhost:3000\/api\/auth\/enroll\/callback\?token=/,
+		);
+		expect(capturedUrl).not.toContain("//enroll");
+	});
+
+	/**
 	 * A follow-up finding (Greptile) on an earlier fix attempt: applying
 	 * `ctx.body.name` to a *reclaimed* existing row at /enroll -- meant
 	 * to fix a real complaint (a real owner ends up with a pre-squatter's
