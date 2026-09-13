@@ -184,6 +184,11 @@ async function sendInvitationOrEnrollmentEmail<O extends OrganizationOptions>(
 					organizationName: params.organization.name,
 					inviterEmail: params.inviter.user.email,
 				},
+				// The inviter only supplies an email; the invitee's name is
+				// never collected up front, and asking for it to finish
+				// joining a team is unnecessary friction they can complete
+				// their profile after they're in.
+				requireName: false,
 			});
 			// Second, independent verification row keyed by the same token:
 			// core owns and consumes `enroll:${token}` with no knowledge of

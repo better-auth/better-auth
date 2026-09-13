@@ -38,6 +38,13 @@ export async function createEnrollmentToken(
 			organizationName: string;
 			inviterEmail: string;
 		};
+		/**
+		 * Whether `/enroll/callback` must end up with a non-empty name for
+		 * this user before it completes.
+		 *
+		 * @default true
+		 */
+		requireName?: boolean;
 	},
 ): Promise<{ token: string; expiresAt: Date }> {
 	const enrollment = ctx.context.options.user?.enrollment;
@@ -54,7 +61,10 @@ export async function createEnrollmentToken(
 		"sec",
 	);
 	await ctx.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify({ email: opts.user.email }),
+		value: JSON.stringify({
+			email: opts.user.email,
+			requireName: opts.requireName,
+		}),
 		identifier: `enroll:${token}`,
 		expiresAt,
 	});
@@ -73,21 +83,21 @@ export async function createEnrollmentToken(
 	return { token, expiresAt };
 }
 
-const enrollEmailBodySchema = z.object({
+const enrollBodySchema = z.object({
 	email: z.email(),
 	name: z.string().optional(),
 	callbackURL: z.string().optional(),
 });
 
-export const enrollEmail = createAuthEndpoint(
+export const enroll = createAuthEndpoint(
 	"/enroll",
 	{
 		method: "POST",
-		body: enrollEmailBodySchema,
+		body: enrollBodySchema,
 		use: [originCheck((ctx) => ctx.body.callbackURL)],
 		metadata: {
 			openapi: {
-				operationId: "enrollEmail",
+				operationId: "enroll",
 				description:
 					"Start passwordless enrollment: prove ownership of an email, then set a password",
 				requestBody: {
@@ -167,20 +177,20 @@ export const enrollEmail = createAuthEndpoint(
 	},
 );
 
-const enrollEmailCallbackBodySchema = z.object({
+const enrollCallbackBodySchema = z.object({
 	token: z.string(),
 	password: z.string().nonempty(),
 	name: z.string().optional(),
 });
 
-export const enrollEmailCallback = createAuthEndpoint(
+export const enrollCallback = createAuthEndpoint(
 	"/enroll/callback",
 	{
 		method: "POST",
-		body: enrollEmailCallbackBodySchema,
+		body: enrollCallbackBodySchema,
 		metadata: {
 			openapi: {
-				operationId: "enrollEmailCallback",
+				operationId: "enrollCallback",
 				description:
 					"Complete enrollment: consume the token, set a password, and sign in",
 				requestBody: {
@@ -231,7 +241,10 @@ export const enrollEmailCallback = createAuthEndpoint(
 		if (!verification) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
-		const { email } = JSON.parse(verification.value) as { email: string };
+		const { email, requireName } = JSON.parse(verification.value) as {
+			email: string;
+			requireName?: boolean;
+		};
 		const existing = await ctx.context.internalAdapter.findUserByEmail(email);
 		if (!existing) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
@@ -260,6 +273,16 @@ export const enrollEmailCallback = createAuthEndpoint(
 				name: ctx.body.name,
 			});
 			user.name = ctx.body.name;
+		}
+
+		// A name given at /enroll already satisfies this -- it's only
+		// checked here, at the end of the flow, so a name provided at
+		// either step is accepted and neither step demands it twice.
+		if (requireName !== false && !user.name) {
+			throw APIError.from("BAD_REQUEST", {
+				message: "A name is required to complete enrollment",
+				code: "NAME_REQUIRED",
+			});
 		}
 
 		const hash = await ctx.context.password.hash(password);

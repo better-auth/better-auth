@@ -1365,7 +1365,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/enroll": {
       "post": {
         "description": "Start passwordless enrollment: prove ownership of an email, then set a password",
-        "operationId": "enrollEmail",
+        "operationId": "enroll",
         "parameters": [],
         "requestBody": {
           "content": {
@@ -1519,7 +1519,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/enroll/callback": {
       "post": {
         "description": "Complete enrollment: consume the token, set a password, and sign in",
-        "operationId": "enrollEmailCallback",
+        "operationId": "enrollCallback",
         "parameters": [],
         "requestBody": {
           "content": {
