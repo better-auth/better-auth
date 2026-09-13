@@ -436,6 +436,21 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
+			// Validated before creating anything: createEnrollmentToken throws
+			// the same error later, but only after the user already exists,
+			// which would leave a passwordless, unreachable, orphaned user row
+			// behind a failed request.
+			if (!ctx.body.password && ctx.body.sendEnrollmentEmail) {
+				const enrollment = ctx.context.options.user?.enrollment;
+				if (!enrollment?.enabled || !enrollment.sendEnrollmentVerification) {
+					throw APIError.from("BAD_REQUEST", {
+						message:
+							"user.enrollment must be configured with sendEnrollmentVerification to use sendEnrollmentEmail",
+						code: "ENROLLMENT_NOT_CONFIGURED",
+					});
+				}
+			}
+
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {

@@ -2595,8 +2595,8 @@ describe("admin createUser sendEnrollmentEmail", async () => {
 		expect(sendEnrollmentVerification).not.toHaveBeenCalled();
 	});
 
-	it("rejects the request when enrollment isn't configured", async () => {
-		const { client, signInWithTestUser } = await getTestInstance(
+	it("rejects the request when enrollment isn't configured, without creating a user", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance(
 			{ plugins: [admin()], databaseHooks: adminBootstrapHooks },
 			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
 		);
@@ -2613,6 +2613,15 @@ describe("admin createUser sendEnrollmentEmail", async () => {
 		);
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("ENROLLMENT_NOT_CONFIGURED");
+
+		// Found in an independent re-review: the config was validated after
+		// createUser already ran, leaving a passwordless, unreachable,
+		// orphaned user row behind the 400.
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "unconfigured@email.com" }],
+		});
+		expect(users).toHaveLength(0);
 	});
 });
 
