@@ -1301,16 +1301,28 @@ export function organization<O extends OrganizationOptions>(
 						if (!newSession || !token) {
 							return;
 						}
+						// Peeked, not consumed, here: the core /enroll/callback token
+						// this identifier is keyed alongside can only ever complete
+						// once, so there is no race to guard against, and leaving
+						// this row in place on a failed accept below means the
+						// linkage isn't silently destroyed by a transient failure.
+						const identifier = `enroll-invitation:${token}`;
 						const pending =
-							await ctx.context.internalAdapter.consumeVerificationValue(
-								`enroll-invitation:${token}`,
+							await ctx.context.internalAdapter.findVerificationValue(
+								identifier,
 							);
-						if (!pending) {
+						if (!pending || pending.expiresAt < new Date()) {
 							return;
 						}
 						try {
-							//@ts-expect-error - internal composition, mirrors how
-							// deleteUser composes deleteUserCallback in update-user.ts
+							// Internal composition (same idea as deleteUser calling
+							// deleteUserCallback directly in update-user.ts, though
+							// that pair has no session middleware to satisfy): the
+							// injected `context.session` is exactly what
+							// orgSessionMiddleware/sessionMiddleware would have
+							// produced from real request headers, so acceptInvitation
+							// runs unmodified against it.
+							//@ts-expect-error - ctx here isn't a real request context
 							await api.acceptInvitation({
 								...ctx,
 								context: {
@@ -1322,13 +1334,20 @@ export function organization<O extends OrganizationOptions>(
 								},
 								body: { invitationId: pending.value },
 							});
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								identifier,
+							);
 						} catch (error) {
 							// The enrolled account was already created successfully;
 							// don't fail that response over a secondary step (e.g. the
 							// invitation expired or the org hit its membership limit
-							// in the meantime).
+							// in the meantime). The invitation itself is untouched by
+							// a failure here (acceptInvitation only flips its status
+							// after every check passes), so it stays "pending" and
+							// the now-signed-in user can still accept it through the
+							// normal invitation flow.
 							ctx.context.logger.error(
-								"Failed to accept invitation after enrollment; the enrolled account was still created",
+								"Failed to accept invitation after enrollment; the enrolled account was still created, and the invitation is still pending",
 								error,
 							);
 						}

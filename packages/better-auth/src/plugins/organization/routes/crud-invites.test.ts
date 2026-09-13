@@ -1208,4 +1208,67 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 			auth.api.getInvitationPreview({ query: { id: invitationId } }),
 		).rejects.toThrow();
 	});
+
+	/**
+	 * Found in an independent re-review: the auto-accept hook peeked and
+	 * consumed its linking row before calling acceptInvitation, so a
+	 * legitimate failure there (membership limit reached) burned the
+	 * linkage with no way to retry it. Enrollment must still succeed --
+	 * the account is real and correctly set up -- and since
+	 * acceptInvitation only flips the invitation to "accepted" after every
+	 * check passes, it must still be sitting there "pending" for the
+	 * now-signed-in user to accept normally afterward.
+	 */
+	it("still completes enrollment when the auto-accept fails for a legitimate reason (membership limit)", async () => {
+		let token = "";
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+				plugins: [
+					organization({
+						sendInvitationEmail: async () => {},
+						membershipLimit: 1,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "no-room@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		expect(token.length).toBe(32);
+
+		const completed = await client.enroll.callback({
+			token,
+			password: "no-room-password-123",
+		});
+		expect(completed.data?.user.email).toBe("no-room@example.com");
+
+		const [invitation] = await db.findMany({
+			model: "invitation",
+			where: [{ field: "id", value: String(invite.data!.id) }],
+		});
+		expect((invitation as { status: string }).status).toBe("pending");
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: orgId },
+				{ field: "userId", value: completed.data!.user.id },
+			],
+		});
+		expect(members).toHaveLength(0);
+	});
 });
