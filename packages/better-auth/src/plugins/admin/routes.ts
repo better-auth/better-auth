@@ -8,7 +8,11 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "../../api";
+import {
+	createEnrollmentToken,
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+} from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -249,6 +253,10 @@ const createUserBodySchema = z.object({
 		description:
 			"The password of the user. If not provided, the user will be created without a credential account (useful for magic link or social login only users).",
 	}),
+	sendEnrollmentEmail: z.boolean().optional().meta({
+		description:
+			"Send a passwordless-enrollment email so the user can set their own password and sign in. Only meaningful when `password` is omitted; requires `user.enrollment` to be configured.",
+	}),
 	name: z.string().meta({
 		description: "The name of the user",
 	}),
@@ -324,6 +332,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					body: {} as {
 						email: string;
 						password?: string | undefined;
+						sendEnrollmentEmail?: boolean | undefined;
 						name: string;
 						role?:
 							| (InferAdminRolesFromOption<O> | InferAdminRolesFromOption<O>[])
@@ -466,6 +475,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					password: hashedPassword,
 					userId: user.id,
 				});
+			} else if (ctx.body.sendEnrollmentEmail) {
+				await createEnrollmentToken(ctx, { user });
 			}
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,

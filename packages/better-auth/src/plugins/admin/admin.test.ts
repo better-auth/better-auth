@@ -2515,6 +2515,107 @@ describe("admin createUser validateUserInfo provisioning gate", async () => {
 	});
 });
 
+describe("admin createUser sendEnrollmentEmail", async () => {
+	// Bootstraps the signed-in test user as an admin via the same trick the
+	// validateUserInfo provisioning-gate tests above use, so createUser's
+	// own authorization check passes.
+	const asAdmin = (extra?: Record<string, unknown>) => ({
+		testUser: { name: "Admin" },
+		...extra,
+	});
+	const adminBootstrapHooks = {
+		user: {
+			create: {
+				before: async (user: { name: string }) => ({
+					data: {
+						...user,
+						...(user.name === "Admin" ? { role: "admin" } : {}),
+					},
+				}),
+			},
+		},
+	};
+
+	it("sends the enrollment email when password is omitted", async () => {
+		let sentTo = "";
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							sentTo = data.user.email;
+						},
+					},
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		const res = await client.admin.createUser(
+			{
+				name: "Enrolled User",
+				email: "enrolled@email.com",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("enrolled@email.com");
+		expect(sentTo).toBe("enrolled@email.com");
+	});
+
+	it("does not send an enrollment email when a password is provided", async () => {
+		const sendEnrollmentVerification = vi.fn();
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: { enabled: true, sendEnrollmentVerification },
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		await client.admin.createUser(
+			{
+				name: "Password User",
+				email: "withpassword@email.com",
+				password: "test123456",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(sendEnrollmentVerification).not.toHaveBeenCalled();
+	});
+
+	it("rejects the request when enrollment isn't configured", async () => {
+		const { client, signInWithTestUser } = await getTestInstance(
+			{ plugins: [admin()], databaseHooks: adminBootstrapHooks },
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		const res = await client.admin.createUser(
+			{
+				name: "Unconfigured User",
+				email: "unconfigured@email.com",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("ENROLLMENT_NOT_CONFIGURED");
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/pull/10187
  */
