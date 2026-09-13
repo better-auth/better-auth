@@ -1271,4 +1271,44 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 		});
 		expect(members).toHaveLength(0);
 	});
+
+	/**
+	 * Found in a security review: getInvitationPreview has no session to
+	 * gate on, unlike acceptInvitation/rejectInvitation/getInvitation, so
+	 * it relied entirely on invitation ids being unguessable. Under a
+	 * non-opaque id (serial, DB-assigned, or a predictable custom
+	 * generator) they aren't, letting an unauthenticated caller enumerate
+	 * small integers to harvest org names and inviters' real emails --
+	 * the exact exposure class GHSA-fmh4-wcc4-5jm3 already fixed for the
+	 * other three by-ID invitation endpoints.
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3
+	 */
+	it("getInvitationPreview refuses to serve when invitation ids are not opaque", async () => {
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				advanced: { database: { generateId: "serial" } },
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "guessable-id@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data).toBeNull();
+		expect(preview.error?.status).toBe(400);
+	});
 });

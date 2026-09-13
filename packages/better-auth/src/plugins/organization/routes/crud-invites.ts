@@ -1318,6 +1318,15 @@ const getInvitationPreviewQuerySchema = z.object({
  * the invitation id being unguessable rather than a session/email match,
  * so it deliberately returns only display fields: no invitee email, no
  * internal ids.
+ *
+ * That protection only holds when invitation ids are actually
+ * unguessable. Under a non-default `generateId` (`"serial"`, `false`, or
+ * a predictable custom function) they aren't, so this reuses the same
+ * `shouldRequireVerifiedEmailForInvitationIdAction` config
+ * `acceptInvitation`/`rejectInvitation`/`getInvitation` already gate on
+ * for exactly this reason (see GHSA-fmh4-wcc4-5jm3) -- there's no
+ * session here to require a verified email from, so a "should gate"
+ * result refuses the preview outright instead.
  */
 export const getInvitationPreview = <O extends OrganizationOptions>(
 	options: O,
@@ -1365,6 +1374,25 @@ export const getInvitationPreview = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			if (
+				shouldRequireVerifiedEmailForInvitationIdAction({
+					organizationOptions: ctx.context.orgOptions,
+					advancedGenerateId: getAdvancedGenerateId(
+						ctx.context.options.advanced,
+					),
+					databaseGenerateId: ctx.context.options.advanced?.database?.generateId,
+				})
+			) {
+				// Non-opaque invitation ids (serial, DB-assigned, or a
+				// predictable custom generator) are guessable, and there's no
+				// session here to require a verified email from instead -- so,
+				// unlike the by-ID endpoints that can fall back to that check,
+				// this one has no safe way to serve the preview at all.
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const invitation = await adapter.findInvitationById(ctx.query.id);
 			if (

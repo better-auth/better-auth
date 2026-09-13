@@ -1032,6 +1032,10 @@ To get an invitation you can use the `organization.getInvitation` function provi
 
 Unlike `getInvitation`, this does **not** require a session -- useful for an invite-preview page shown to someone who doesn't have an account yet and so can't be signed in. It returns only non-sensitive display fields: the invitee's own email, and internal ids, are omitted. It's protected by the invitation id being unguessable rather than a session/email match, so treat invitation ids the same way you'd treat any other unauthenticated-but-unguessable-token link.
 
+<Callout type="warn">
+  With a non-default `advanced.database.generateId` (`"serial"`, `false`, or a predictable custom function), invitation ids are not unguessable, and this endpoint has no session to fall back on the way `getInvitation`/`acceptInvitation`/`rejectInvitation` do. In that case it refuses to serve the preview at all, following the same `requireEmailVerificationOnInvitation` config those endpoints use.
+</Callout>
+
 <APIMethod path="/organization/get-invitation-preview" method="GET">
   ```ts
   type getInvitationPreview = {
