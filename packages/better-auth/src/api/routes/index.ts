@@ -1,6 +1,7 @@
 export * from "./account";
 export * from "./callback";
 export * from "./email-verification";
+export * from "./enroll";
 export * from "./error";
 export * from "./ok";
 export * from "./password";
