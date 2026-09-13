@@ -521,9 +521,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 			// Seed `oauthResource` rows from plugin config. Idempotent and
 			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
-			// is empty. Tolerates
-			// "table not yet created" errors and defers to lazy-seed.
-			await seedResources(ctx, opts);
+			// is empty. A failed seed must not leave the shared auth context
+			// permanently rejected; resource access retries through seedResourcesOnce.
+			try {
+				await seedResources(ctx, opts);
+			} catch (error) {
+				ctx.logger.warn(
+					"oauth-provider: startup resource seed failed; deferring resource seed to first access.",
+					error,
+				);
+			}
 
 			// Record which default applied to `enforcePerClientResources` so
 			// admins can see it in startup logs. Pure resolution lives in
