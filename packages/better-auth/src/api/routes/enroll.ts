@@ -93,12 +93,24 @@ export async function createEnrollmentToken(
 	// `URL` + `searchParams.set`, not string concatenation: callbackURL may
 	// already carry its own query string (e.g. "/finish?ref=email"), and
 	// naively appending "?token=..." would produce a second "?" instead
-	// of "&". Resolved against baseURL's origin the same way magic link
-	// resolves its own callback URLs.
-	const enrollmentUrl = new URL(
-		opts.callbackURL || "/enroll/callback",
-		ctx.context.baseURL,
-	);
+	// of "&".
+	//
+	// The default (no callbackURL) and the caller-supplied case resolve
+	// differently on purpose: with no callbackURL, the link must point at
+	// this same API's own /enroll/callback route, so it has to keep
+	// baseURL's path (e.g. "/api/auth") -- resolving "/enroll/callback"
+	// as an absolute path against the full baseURL would instead replace
+	// that path outright, same as magic-link's own verify URL falls back
+	// to when it builds its default. A caller-supplied callbackURL, by
+	// contrast, is a path on the *app*, unrelated to the API's own path
+	// prefix, so it only needs baseURL's origin.
+	const realBaseURL = new URL(ctx.context.baseURL);
+	const enrollmentUrl = opts.callbackURL
+		? new URL(opts.callbackURL, realBaseURL.origin)
+		: new URL(
+				`${realBaseURL.pathname === "/" ? "" : realBaseURL.pathname}/enroll/callback`,
+				realBaseURL.origin,
+			);
 	enrollmentUrl.searchParams.set("token", token);
 	await ctx.context.runInBackgroundOrAwait(
 		enrollment.sendEnrollmentVerification(

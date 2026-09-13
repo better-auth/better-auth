@@ -628,6 +628,35 @@ describe("enroll", async () => {
 	});
 
 	/**
+	 * A follow-up finding (Greptile) on the callbackURL fix above: with
+	 * no callbackURL at all -- the case admin.createUser's
+	 * sendEnrollmentEmail and the organization invite flow both actually
+	 * use -- resolving "/enroll/callback" as an absolute path against
+	 * the full baseURL replaced baseURL's own path outright instead of
+	 * extending it, so a baseURL like "http://localhost:3000/api/auth"
+	 * produced "http://localhost:3000/enroll/callback": a link that
+	 * points outside the mounted auth routes and 404s.
+	 */
+	it("keeps baseURL's own path prefix in the default enrollment link", async () => {
+		let capturedUrl = "";
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth",
+			user: {
+				enrollment: {
+					enabled: true,
+					async sendEnrollmentVerification(data) {
+						capturedUrl = data.url;
+					},
+				},
+			},
+		});
+		await client.enroll({ email: "default-link-prefix@example.com" });
+		expect(capturedUrl).toMatch(
+			/^http:\/\/localhost:3000\/api\/auth\/enroll\/callback\?token=/,
+		);
+	});
+
+	/**
 	 * A follow-up finding (Greptile) on an earlier fix attempt: applying
 	 * `ctx.body.name` to a *reclaimed* existing row at /enroll -- meant
 	 * to fix a real complaint (a real owner ends up with a pre-squatter's
