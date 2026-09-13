@@ -928,6 +928,10 @@ To invite users to an organization, you can use the `invite` function provided b
     invitation is sent.
 </Callout>
 
+<Callout type="info">
+  If the invited email has no account yet -- or only an unverified one -- and [`user.enrollment`](/docs/concepts/users-accounts#enrollment) is configured, `createInvitation` sends a single enrollment email instead of the normal invitation email, with the organization name and inviter's email embedded so it can read as an invite. Completing enrollment with that link sets the user's password, verifies their email, signs them in, **and** accepts the invitation in the same step -- no separate "accept invitation" call needed, and no name required either: unlike self-service enrollment, joining through an invitation never requires a name, since the inviter never had one to give. `sendInvitationEmail` is only used when the invited email already belongs to a verified account.
+</Callout>
+
 ### Accept Invitation
 
 When a user receives an invitation email, they can click on the invitation link to accept the invitation. The invitation link should include the invitation ID, which will be used to accept the invitation.
@@ -1023,6 +1027,25 @@ To get an invitation you can use the `organization.getInvitation` function provi
   Getting an invitation by ID follows the same email-verification policy as
   accepting invitations by ID.
 </Callout>
+
+### Get Invitation Preview
+
+Unlike `getInvitation`, this does **not** require a session -- useful for an invite-preview page shown to someone who doesn't have an account yet and so can't be signed in. It returns only non-sensitive display fields: the invitee's own email, and internal ids, are omitted. It's protected by the invitation id being unguessable rather than a session/email match, so treat invitation ids the same way you'd treat any other unauthenticated-but-unguessable-token link.
+
+<Callout type="warn">
+  With a non-default `advanced.database.generateId` (`"serial"`, `false`, or a predictable custom function), invitation ids are not unguessable, and this endpoint has no session to fall back on the way `getInvitation`/`acceptInvitation`/`rejectInvitation` do. In that case it refuses to serve the preview at all, following the same `requireEmailVerificationOnInvitation` config those endpoints use.
+</Callout>
+
+<APIMethod path="/organization/get-invitation-preview" method="GET">
+  ```ts
+  type getInvitationPreview = {
+      /**
+       * The ID of the invitation to preview.  
+       */
+      id: string = "invitation-id"
+  }
+  ```
+</APIMethod>
 
 ### List Invitations
 

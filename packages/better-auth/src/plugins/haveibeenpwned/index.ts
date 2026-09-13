@@ -74,7 +74,7 @@ export interface HaveIBeenPwnedOptions {
 	/**
 	 * Paths to check for password
 	 *
-	 * @default ["/sign-up/email", "/change-password", "/reset-password", "/email-otp/reset-password", "/phone-number/reset-password", "/admin/create-user", "/admin/set-user-password"]
+	 * @default ["/sign-up/email", "/change-password", "/reset-password", "/email-otp/reset-password", "/phone-number/reset-password", "/admin/create-user", "/admin/set-user-password", "/enroll/callback"]
 	 */
 	paths?: string[];
 	/**
@@ -94,6 +94,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 		"/phone-number/reset-password",
 		"/admin/create-user",
 		"/admin/set-user-password",
+		"/enroll/callback",
 	];
 
 	return {

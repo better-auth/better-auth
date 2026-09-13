@@ -412,6 +412,12 @@ export const auth = betterAuth({
 			afterDelete: async (user) => {
 				// Perform cleanup after user deletion
 			}
+		},
+		enrollment: {
+			enabled: true,
+			sendEnrollmentVerification: async ({ user, url, token, invitation }) => {
+				// Send enrollment verification
+			}
 		}
 	},
 })
@@ -422,6 +428,7 @@ export const auth = betterAuth({
 * `additionalFields`: Additional fields for the user table
 * `changeEmail`: Configuration for changing email
 * `deleteUser`: Configuration for user deletion
+* `enrollment`: Configuration for passwordless enrollment (see [Enrollment](/docs/concepts/users-accounts#enrollment))
 
 ## `session`
 

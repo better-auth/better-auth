@@ -8,7 +8,11 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "../../api";
+import {
+	createEnrollmentToken,
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+} from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -249,6 +253,10 @@ const createUserBodySchema = z.object({
 		description:
 			"The password of the user. If not provided, the user will be created without a credential account (useful for magic link or social login only users).",
 	}),
+	sendEnrollmentEmail: z.boolean().optional().meta({
+		description:
+			"Send a passwordless-enrollment email so the user can set their own password and sign in. Only meaningful when `password` is omitted; requires `user.enrollment` to be configured.",
+	}),
 	name: z.string().meta({
 		description: "The name of the user",
 	}),
@@ -324,6 +332,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					body: {} as {
 						email: string;
 						password?: string | undefined;
+						sendEnrollmentEmail?: boolean | undefined;
 						name: string;
 						role?:
 							| (InferAdminRolesFromOption<O> | InferAdminRolesFromOption<O>[])
@@ -427,6 +436,21 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
+			// Validated before creating anything: createEnrollmentToken throws
+			// the same error later, but only after the user already exists,
+			// which would leave a passwordless, unreachable, orphaned user row
+			// behind a failed request.
+			if (!ctx.body.password && ctx.body.sendEnrollmentEmail) {
+				const enrollment = ctx.context.options.user?.enrollment;
+				if (!enrollment?.enabled || !enrollment.sendEnrollmentVerification) {
+					throw APIError.from("BAD_REQUEST", {
+						message:
+							"user.enrollment must be configured with sendEnrollmentVerification to use sendEnrollmentEmail",
+						code: "ENROLLMENT_NOT_CONFIGURED",
+					});
+				}
+			}
+
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {
@@ -466,6 +490,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					password: hashedPassword,
 					userId: user.id,
 				});
+			} else if (ctx.body.sendEnrollmentEmail) {
+				await createEnrollmentToken(ctx, { user });
 			}
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,

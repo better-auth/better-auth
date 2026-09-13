@@ -396,6 +396,86 @@ export const auth = betterAuth({
 });
 ```
 
+## Enrollment
+
+Every other way a user account can come into existence either requires a password up front (`signUpEmail`) or doesn't need one because a different party already proved identity (OAuth, magic link, email OTP). Enrollment fills the gap: prove ownership of an email first, then let the user set a password — instead of the other way around.
+
+It's disabled by default. Enable it by configuring `user.enrollment` with a `sendEnrollmentVerification` function:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other config
+    user: {
+        enrollment: { // [!code highlight]
+            enabled: true, // [!code highlight]
+            sendEnrollmentVerification: async ( // [!code highlight]
+                {
+                    user,   // The pending user object
+                    url,    // The auto-generated URL for the enroll callback
+                    token,  // The verification token (can be used to generate a custom URL)
+                    invitation, // Present when an organization invited this email; see the organization plugin docs
+                },
+                request  // The original request object (optional)
+            ) => {
+                // Your email sending logic here
+            }, // [!code highlight]
+        }, // [!code highlight]
+    },
+});
+```
+
+### Starting Enrollment
+
+Call `authClient.enroll` with the email to enroll:
+
+```ts
+import { authClient } from "@/lib/auth-client"
+
+await authClient.enroll({
+    email: "user@example.com",
+    name: "Jane Doe", // optional here -- see "Completing Enrollment" below
+    callbackURL: "/finish-enrollment", // optional, embedded in the emailed url
+});
+```
+
+This always returns a generic success response, whether or not the email already belongs to a verified account — the same anti-enumeration posture as `requestPasswordReset`. Under the hood:
+
+* If no user exists for the email, Better Auth creates a pending user (`emailVerified: false`, no credential account) and sends the enrollment email.
+* If a user already exists but is unverified — for example, someone else pre-registered that email without ever verifying it — Better Auth still sends the enrollment email, so the real owner can reclaim it.
+* If a user already exists and is already verified, nothing is sent.
+
+### Completing Enrollment
+
+The app's own page (whatever `sendEnrollmentVerification`'s `url` points to, or a custom page you build using `token`) collects a password and calls `authClient.enroll.callback`:
+
+```ts
+import { authClient } from "@/lib/auth-client"
+
+const { data, error } = await authClient.enroll.callback({
+    token,
+    password: "a-strong-password",
+    name: "Jane Doe", // required, unless already given to `enroll` above
+});
+```
+
+On success, this sets the password, marks the email verified, and signs the user in — returning a session the same way `signUpEmail` does.
+
+<Callout type="info">
+  A name is required by the time enrollment completes — the same guarantee `signUpEmail` gives — but it's only checked once, against whatever name the user ends up with. It doesn't matter which of the two calls supplied it: give it at `enroll`, at `enroll.callback`, or split however your UI collects it. Omitting it from both fails with `NAME_REQUIRED`.
+
+  The one exception is enrollment started by an [organization invitation](/docs/plugins/organization#send-invitation): the inviter only supplies an email, so a name is never required to finish joining.
+</Callout>
+
+<Callout type="info">
+  If the pending row picked up a credential account or sessions between the enrollment email being sent and the callback being completed — for instance, an attacker raced to sign up with the same email first — completing enrollment strips that access before handing the account to whoever just proved the mailbox. This is the same guarantee magic link and email OTP already give their own passwordless sign-ins.
+</Callout>
+
+### Admin And Organization Integration
+
+Enrollment is also the mechanism behind [`admin.createUser`'s `sendEnrollmentEmail`](/docs/plugins/admin#api-method-admin-create-user) and the [organization plugin's invitation flow](/docs/plugins/organization#send-invitation) for invitees who don't have an account yet. Both are opt-in and only apply when `user.enrollment` is configured — existing behavior is unchanged otherwise.
+
 ## Accounts
 
 Better Auth supports multiple authentication methods through providers such as email and password, Google, or an enterprise identity provider. Each method linked to a user is stored as an account.

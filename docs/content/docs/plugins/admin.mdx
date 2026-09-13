@@ -90,9 +90,15 @@ Allows an admin to create a new user.
        */
       email: string = "user@example.com"
       /**
-       * The password of the user. 
+       * The password of the user. If not provided, the user is created without a credential account.
        */
-      password: string = "some-secure-password"
+      password?: string = "some-secure-password"
+      /**
+       * Send a passwordless-enrollment email so the user can set their own password and sign in.
+       * Only meaningful when `password` is omitted; requires `user.enrollment` to be configured.
+       * @see /docs/concepts/users-accounts#enrollment
+       */
+      sendEnrollmentEmail?: boolean = false
       /**
        * The name of the user. 
        */

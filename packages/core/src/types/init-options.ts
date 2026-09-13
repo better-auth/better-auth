@@ -81,6 +81,7 @@ export type ValidateUserInfoMethod =
 	| "siwe"
 	| "phone-number"
 	| "admin"
+	| "enroll"
 	| (string & {});
 
 /** OAuth-specific provisioning context; present only when `method` is `"oauth"`. */
@@ -1012,6 +1013,54 @@ export type BetterAuthOptions = {
 					 * @default 1 day (60 * 60 * 24) in seconds
 					 */
 					deleteTokenExpiresIn?: number;
+				};
+				/**
+				 * Passwordless enrollment configuration.
+				 *
+				 * A single primitive for "prove you own this mailbox, then set a
+				 * password" -- used by the core `/enroll` endpoint, and reusable by
+				 * any plugin (admin, organization) that provisions a user without a
+				 * password up front and wants the same verify-then-complete flow
+				 * instead of building its own.
+				 */
+				enrollment?: {
+					/**
+					 * Enable passwordless enrollment.
+					 */
+					enabled?: boolean;
+					/**
+					 * Send the enrollment verification email.
+					 *
+					 * if this is not set, `/enroll` and `/enroll/callback` respond
+					 * as not found, and plugin integrations (e.g. `admin.createUser`'s
+					 * `sendEnrollmentEmail`) reject the request explicitly.
+					 * @param data the data object
+					 * @param request the request object
+					 */
+					sendEnrollmentVerification?: (
+						data: {
+							user: User;
+							url: string;
+							token: string;
+							/**
+							 * Present when this enrollment was initiated on the invitee's
+							 * behalf by another party (e.g. an organization invitation),
+							 * so the email can be worded as an invite instead of a plain
+							 * sign-up confirmation.
+							 */
+							invitation?: {
+								organizationName: string;
+								inviterEmail: string;
+							};
+						},
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * The expiration time for the enroll token.
+					 *
+					 * @default 7 days (60 * 60 * 24 * 7) in seconds
+					 */
+					enrollTokenExpiresIn?: number;
 				};
 		  })
 		| undefined;

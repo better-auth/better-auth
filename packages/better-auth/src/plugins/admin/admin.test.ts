@@ -2515,6 +2515,195 @@ describe("admin createUser validateUserInfo provisioning gate", async () => {
 	});
 });
 
+describe("admin createUser sendEnrollmentEmail", async () => {
+	// Bootstraps the signed-in test user as an admin via the same trick the
+	// validateUserInfo provisioning-gate tests above use, so createUser's
+	// own authorization check passes.
+	const asAdmin = (extra?: Record<string, unknown>) => ({
+		testUser: { name: "Admin" },
+		...extra,
+	});
+	const adminBootstrapHooks = {
+		user: {
+			create: {
+				before: async (user: { name: string }) => ({
+					data: {
+						...user,
+						...(user.name === "Admin" ? { role: "admin" } : {}),
+					},
+				}),
+			},
+		},
+	};
+
+	it("sends the enrollment email when password is omitted", async () => {
+		let sentTo = "";
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							sentTo = data.user.email;
+						},
+					},
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		const res = await client.admin.createUser(
+			{
+				name: "Enrolled User",
+				email: "enrolled@email.com",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("enrolled@email.com");
+		expect(sentTo).toBe("enrolled@email.com");
+	});
+
+	/**
+	 * admin.createUser always requires `name`, so this default guard
+	 * rarely matters in practice -- but nothing stops an admin from
+	 * passing an empty string, and the enrolled user shouldn't end up
+	 * with a blank name just because the admin left it blank.
+	 */
+	it("still requires a name to complete enrollment if the admin left it blank", async () => {
+		let token = "";
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		await client.admin.createUser(
+			{
+				name: "",
+				email: "blank-name@email.com",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+
+		// The single-use token is consumed by this attempt regardless of the
+		// outcome (same as any other post-consumption check on this
+		// endpoint, e.g. an already-verified row) -- providing a name would
+		// require a fresh token, which enroll.test.ts's self-service tests
+		// already cover.
+		const blocked = await client.enroll.callback({
+			token,
+			password: "blank-name-password-123",
+		});
+		expect(blocked.error?.code).toBe("NAME_REQUIRED");
+	});
+
+	it("does not send an enrollment email when a password is provided", async () => {
+		const sendEnrollmentVerification = vi.fn();
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: { enabled: true, sendEnrollmentVerification },
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		await client.admin.createUser(
+			{
+				name: "Password User",
+				email: "withpassword@email.com",
+				password: "test123456",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(sendEnrollmentVerification).not.toHaveBeenCalled();
+	});
+
+	it("rejects the request when enrollment isn't configured, without creating a user", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{ plugins: [admin()], databaseHooks: adminBootstrapHooks },
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		const res = await client.admin.createUser(
+			{
+				name: "Unconfigured User",
+				email: "unconfigured@email.com",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("ENROLLMENT_NOT_CONFIGURED");
+
+		// Found in an independent re-review: the config was validated after
+		// createUser already ran, leaving a passwordless, unreachable,
+		// orphaned user row behind the 400.
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "unconfigured@email.com" }],
+		});
+		expect(users).toHaveLength(0);
+	});
+
+	it("creates a plain passwordless user with no email and no account when sendEnrollmentEmail is omitted", async () => {
+		const sendEnrollmentVerification = vi.fn();
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: { enabled: true, sendEnrollmentVerification },
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		const res = await client.admin.createUser(
+			{
+				name: "Plain Passwordless User",
+				email: "plain-passwordless@email.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("plain-passwordless@email.com");
+		expect(sendEnrollmentVerification).not.toHaveBeenCalled();
+
+		const accounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: res.data!.user.id }],
+		});
+		expect(accounts).toHaveLength(0);
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/pull/10187
  */

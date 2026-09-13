@@ -1,5 +1,5 @@
 import type { BetterAuthOptions, GenerateIdFn } from "@better-auth/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { organization } from "../organization";
@@ -904,5 +904,765 @@ describe("invitation teamId must belong to the invitation's organization", async
 
 		expect(list.data).toBeNull();
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
+	});
+});
+
+type EnrollmentEmailData = {
+	user: { id: string; email: string };
+	token: string;
+	invitation?: { organizationName: string; inviterEmail: string };
+};
+
+describe("organization invitations integrate with passwordless enrollment", async () => {
+	function setup(
+		sendEnrollmentVerification?: (data: EnrollmentEmailData) => Promise<void>,
+	) {
+		return getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification:
+							sendEnrollmentVerification ?? (async () => {}),
+					},
+				},
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+	}
+
+	async function createOrg(
+		client: Awaited<ReturnType<typeof setup>>["client"],
+		signInWithTestUser: Awaited<ReturnType<typeof setup>>["signInWithTestUser"],
+	) {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Acme",
+			slug: "acme",
+			fetchOptions: { headers },
+		});
+		return { headers, orgId: org.data!.id };
+	}
+
+	it("sends only the enrollment email, with invitation context, for an email with no account yet", async () => {
+		const sendInvitationEmail = vi.fn();
+		let enrollmentData: EnrollmentEmailData | undefined;
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							enrollmentData = data;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "brand-new@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(sendInvitationEmail).not.toHaveBeenCalled();
+		expect(enrollmentData?.user.email).toBe("brand-new@example.com");
+		expect(enrollmentData?.invitation).toMatchObject({
+			organizationName: "Acme",
+			inviterEmail: "test@test.com",
+		});
+	});
+
+	/**
+	 * Found in automated PR review (both cubic and Greptile flagged the
+	 * same issue independently): the enroll-invitation linkage row used
+	 * to be created after createEnrollmentToken returned, i.e. after the
+	 * enrollment email was already dispatched (fire-and-forget when
+	 * background task handling is configured). Asserting the linkage
+	 * exists from inside sendEnrollmentVerification itself proves it is
+	 * now written before the email that carries the token is sent, not
+	 * after -- so nothing that receives the token, however quickly, can
+	 * ever observe it before the linkage exists.
+	 */
+	it("creates the invitation linkage before the enrollment email is sent, not after", async () => {
+		let linkageExistsWhenEmailIsSent = false;
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							const rows = await db.findMany({
+								model: "verification",
+								where: [
+									{
+										field: "identifier",
+										value: `enroll-invitation:${data.token}`,
+									},
+								],
+							});
+							linkageExistsWhenEmailIsSent = rows.length === 1;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "ordering-check@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(linkageExistsWhenEmailIsSent).toBe(true);
+	});
+
+	/**
+	 * By design, unlike self-service /enroll (see
+	 * enroll.test.ts's "name requirement for self-service enrollment"):
+	 * the inviter only supplies an email, the invitee's name is never
+	 * collected up front, and completing the invite shouldn't demand one
+	 * just to finish joining a team.
+	 */
+	it("completes enrollment for an invite without ever requiring a name", async () => {
+		let token = "";
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "no-name-needed@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const res = await client.enroll.callback({
+			token,
+			password: "no-name-needed-password-123",
+		});
+		expect(res.error).toBeNull();
+		expect(res.data?.user.email).toBe("no-name-needed@example.com");
+	});
+
+	it("sends the normal invitation email for an email that already has a verified account", async () => {
+		const sendInvitationEmail = vi.fn();
+		const sendEnrollmentVerification = vi.fn();
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: { enrollment: { enabled: true, sendEnrollmentVerification } },
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.signUp.email({
+			email: "verified@example.com",
+			password: "verified-password-123",
+			name: "Verified",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "verified@example.com" }],
+			update: { emailVerified: true },
+		});
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "verified@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(sendInvitationEmail).toHaveBeenCalledOnce();
+		expect(sendEnrollmentVerification).not.toHaveBeenCalled();
+	});
+
+	it("still sends the enrollment email, reusing the row, for an email pre-squatted by an unverified sign-up", async () => {
+		const sendInvitationEmail = vi.fn();
+		let enrollmentData: EnrollmentEmailData | undefined;
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							enrollmentData = data;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const signUpRes = await client.signUp.email({
+			email: "squatted@example.com",
+			password: "attacker-password-123",
+			name: "attacker",
+		});
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "squatted@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		expect(sendInvitationEmail).not.toHaveBeenCalled();
+		expect(enrollmentData?.user.id).toBe(signUpRes.data!.user.id);
+
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "squatted@example.com" }],
+		});
+		expect(users).toHaveLength(1);
+	});
+
+	it("getInvitationPreview returns non-sensitive display fields without a session", async () => {
+		const { client, auth, signInWithTestUser } = await setup();
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "previewed@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await auth.api.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview).toMatchObject({
+			organizationName: "Acme",
+			inviterEmail: "test@test.com",
+			role: "member",
+			status: "pending",
+		});
+		expect(preview).not.toHaveProperty("email");
+		expect(preview).not.toHaveProperty("id");
+		expect(preview).not.toHaveProperty("organizationId");
+	});
+
+	it("getInvitationPreview rejects an unknown invitation id", async () => {
+		const { auth } = await setup();
+		await expect(
+			auth.api.getInvitationPreview({ query: { id: "does-not-exist" } }),
+		).rejects.toThrow();
+	});
+
+	it("completing enrollment for an invite-linked token also accepts the invitation atomically", async () => {
+		let token = "";
+		const { client, signInWithTestUser, db } = await setup(async (data) => {
+			token = data.token;
+		});
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "auto-accept@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		expect(token.length).toBe(32);
+
+		const res = await client.enroll.callback({
+			token,
+			password: "auto-accept-password-123",
+		});
+		expect(res.data?.user.email).toBe("auto-accept@example.com");
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: orgId },
+				{ field: "userId", value: res.data!.user.id },
+			],
+		});
+		expect(members).toHaveLength(1);
+
+		const invitations = await db.findMany({
+			model: "invitation",
+			where: [{ field: "organizationId", value: orgId }],
+		});
+		expect(
+			(invitations as { status: string }[]).every(
+				(i) => i.status === "accepted",
+			),
+		).toBe(true);
+	});
+
+	it("resending an invitation to a not-yet-registered email also sends only the enrollment email", async () => {
+		const sendInvitationEmail = vi.fn();
+		let enrollmentCallCount = 0;
+		let lastToken = "";
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							enrollmentCallCount++;
+							lastToken = data.token;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "resend-me@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		const firstToken = lastToken;
+
+		const resendRes = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "resend-me@example.com",
+			role: "member",
+			resend: true,
+			fetchOptions: { headers },
+		});
+
+		expect(resendRes.error).toBeNull();
+		expect(sendInvitationEmail).not.toHaveBeenCalled();
+		expect(enrollmentCallCount).toBe(2);
+		expect(lastToken).not.toBe(firstToken);
+
+		// Only one pending user was created, not one per resend.
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "resend-me@example.com" }],
+		});
+		expect(users).toHaveLength(1);
+
+		// The newest token still completes enrollment and accepts the invite.
+		const completed = await client.enroll.callback({
+			token: lastToken,
+			password: "resend-password-123",
+		});
+		expect(completed.data?.user.email).toBe("resend-me@example.com");
+	});
+
+	it("the pre-resend token still completes enrollment and auto-accepts the invitation", async () => {
+		let firstToken = "";
+		let lastToken = "";
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							if (!firstToken) {
+								firstToken = data.token;
+							} else {
+								lastToken = data.token;
+							}
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "old-token-wins@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "old-token-wins@example.com",
+			role: "member",
+			resend: true,
+			fetchOptions: { headers },
+		});
+		expect(firstToken.length).toBe(32);
+		expect(lastToken.length).toBe(32);
+
+		// Use the FIRST (pre-resend) token, not the newest one.
+		const completed = await client.enroll.callback({
+			token: firstToken,
+			password: "old-token-password-123",
+		});
+		expect(completed.data?.user.email).toBe("old-token-wins@example.com");
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: orgId },
+				{ field: "userId", value: completed.data!.user.id },
+			],
+		});
+		expect(members).toHaveLength(1);
+
+		const [invitation] = await db.findMany({
+			model: "invitation",
+			where: [{ field: "id", value: String(invite.data!.id) }],
+		});
+		expect((invitation as { status: string }).status).toBe("accepted");
+
+		// The now-stale newest token is a dead link: the account it targets
+		// is already enrolled and verified, so the core "already verified
+		// elsewhere" guard rejects it rather than linking a second
+		// credential account.
+		const staleAttempt = await client.enroll.callback({
+			token: lastToken,
+			password: "should-not-matter-123",
+		});
+		expect(staleAttempt.error?.status).toBe(400);
+	});
+
+	it("getInvitationPreview rejects an invitation that is no longer pending", async () => {
+		const { client, auth, signInWithTestUser } = await setup();
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "already-accepted@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		const invitationId = String(invite.data!.id);
+
+		await client.organization.cancelInvitation({
+			invitationId,
+			fetchOptions: { headers },
+		});
+
+		await expect(
+			auth.api.getInvitationPreview({ query: { id: invitationId } }),
+		).rejects.toThrow();
+	});
+
+	/**
+	 * Found in an independent re-review: the auto-accept hook peeked and
+	 * consumed its linking row before calling acceptInvitation, so a
+	 * legitimate failure there (membership limit reached) burned the
+	 * linkage with no way to retry it. Enrollment must still succeed --
+	 * the account is real and correctly set up -- and since
+	 * acceptInvitation only flips the invitation to "accepted" after every
+	 * check passes, it must still be sitting there "pending" for the
+	 * now-signed-in user to accept normally afterward.
+	 */
+	it("still completes enrollment when the auto-accept fails for a legitimate reason (membership limit)", async () => {
+		let token = "";
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+				plugins: [
+					organization({
+						sendInvitationEmail: async () => {},
+						membershipLimit: 1,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "no-room@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		expect(token.length).toBe(32);
+
+		const completed = await client.enroll.callback({
+			token,
+			password: "no-room-password-123",
+		});
+		expect(completed.data?.user.email).toBe("no-room@example.com");
+
+		const [invitation] = await db.findMany({
+			model: "invitation",
+			where: [{ field: "id", value: String(invite.data!.id) }],
+		});
+		expect((invitation as { status: string }).status).toBe("pending");
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: orgId },
+				{ field: "userId", value: completed.data!.user.id },
+			],
+		});
+		expect(members).toHaveLength(0);
+	});
+
+	/**
+	 * Found in automated PR review (cubic): the linkage row lookup itself
+	 * sat outside the try/catch guarding acceptInvitation, so a transient
+	 * failure there (e.g. the adapter call erroring) threw uncaught and
+	 * failed the whole /enroll/callback response -- even though the
+	 * account and session it's reporting on already exist and can't be
+	 * recreated, since the core enrollment token is already spent.
+	 */
+	it("still completes enrollment when the invitation linkage lookup itself fails", async () => {
+		let token = "";
+		const { client, signInWithTestUser, auth } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "lookup-fails@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		expect(token.length).toBe(32);
+
+		const context = await auth.$context;
+		const original =
+			context.internalAdapter.findVerificationValue.bind(
+				context.internalAdapter,
+			);
+		vi.spyOn(context.internalAdapter, "findVerificationValue").mockImplementation(
+			(identifier: string) => {
+				if (identifier.startsWith("enroll-invitation:")) {
+					throw new Error("database unavailable");
+				}
+				return original(identifier);
+			},
+		);
+
+		const completed = await client.enroll.callback({
+			token,
+			password: "lookup-fails-password-123",
+		});
+		expect(completed.data?.user.email).toBe("lookup-fails@example.com");
+	});
+
+	/**
+	 * Found in a security review: getInvitationPreview has no session to
+	 * gate on, unlike acceptInvitation/rejectInvitation/getInvitation, so
+	 * it relied entirely on invitation ids being unguessable. Under a
+	 * non-opaque id (serial, DB-assigned, or a predictable custom
+	 * generator) they aren't, letting an unauthenticated caller enumerate
+	 * small integers to harvest org names and inviters' real emails --
+	 * the exact exposure class GHSA-fmh4-wcc4-5jm3 already fixed for the
+	 * other three by-ID invitation endpoints.
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3
+	 */
+	it("getInvitationPreview refuses to serve when invitation ids are not opaque", async () => {
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				advanced: { database: { generateId: "serial" } },
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "guessable-id@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data).toBeNull();
+		expect(preview.error?.status).toBe(400);
+	});
+
+	/**
+	 * Found in automated PR review (both cubic and Greptile flagged the
+	 * same issue independently): requireEmailVerificationOnInvitation is
+	 * documented as relaxing the *session-based* email-verification
+	 * requirement on acceptInvitation/rejectInvitation/getInvitation --
+	 * those endpoints still have a session + recipient-email match to
+	 * fall back on. getInvitationPreview has neither, so honoring an
+	 * explicit `false` here (as the shared
+	 * shouldRequireVerifiedEmailForInvitationIdAction helper does) would
+	 * let a developer's choice to relax those *other* endpoints also
+	 * strip this endpoint's only protection against predictable ids.
+	 */
+	it("still refuses non-opaque ids even when requireEmailVerificationOnInvitation is explicitly false", async () => {
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				advanced: { database: { generateId: "serial" } },
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [
+					organization({
+						sendInvitationEmail: async () => {},
+						requireEmailVerificationOnInvitation: false,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "still-guarded@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data).toBeNull();
+		expect(preview.error?.status).toBe(400);
+	});
+
+	/**
+	 * Found in automated PR review (cubic): an adapter-level
+	 * `customIdGenerator` (e.g. `prismaAdapter(client, {
+	 * customIdGenerator })`) is a third source of id generation, entirely
+	 * separate from `advanced.database.generateId` -- and this codebase
+	 * has no way to verify whether it happens to produce opaque ids, so
+	 * its mere presence must be treated the same as an explicit
+	 * `advanced.database.generateId` function: not proven opaque.
+	 */
+	it("refuses to serve when the adapter itself has a custom id generator, regardless of advanced.database.generateId", async () => {
+		const { client, signInWithTestUser, auth } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const context = await auth.$context;
+		context.adapter.options = {
+			...context.adapter.options,
+			adapterConfig: {
+				...context.adapter.options?.adapterConfig,
+				customIdGenerator: () => "predictable-id",
+			},
+		} as typeof context.adapter.options;
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "adapter-custom-id@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data).toBeNull();
+		expect(preview.error?.status).toBe(400);
+	});
+
+	/**
+	 * Found independently by both Greptile and cubic on the fix above:
+	 * getIdField's actual precedence (packages/core/src/db/adapter/get-id-field.ts)
+	 * has an explicit "uuid" win over the adapter's own customIdGenerator,
+	 * which is only ever reached when databaseGenerateId is unset. A
+	 * customIdGenerator that's configured but never actually invoked
+	 * because "uuid" already wins shouldn't disqualify otherwise-opaque
+	 * UUID ids.
+	 */
+	it("still serves when advanced.database.generateId is \"uuid\", even with an (unused) adapter custom id generator", async () => {
+		const { client, signInWithTestUser, auth } = await getTestInstance(
+			{
+				advanced: { database: { generateId: "uuid" } },
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const context = await auth.$context;
+		context.adapter.options = {
+			...context.adapter.options,
+			adapterConfig: {
+				...context.adapter.options?.adapterConfig,
+				customIdGenerator: () => "predictable-id",
+			},
+		} as typeof context.adapter.options;
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "uuid-wins@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data?.organizationName).toBe("Acme");
 	});
 });
