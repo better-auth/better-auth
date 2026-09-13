@@ -2623,6 +2623,38 @@ describe("admin createUser sendEnrollmentEmail", async () => {
 		});
 		expect(users).toHaveLength(0);
 	});
+
+	it("creates a plain passwordless user with no email and no account when sendEnrollmentEmail is omitted", async () => {
+		const sendEnrollmentVerification = vi.fn();
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: { enabled: true, sendEnrollmentVerification },
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		const res = await client.admin.createUser(
+			{
+				name: "Plain Passwordless User",
+				email: "plain-passwordless@email.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("plain-passwordless@email.com");
+		expect(sendEnrollmentVerification).not.toHaveBeenCalled();
+
+		const accounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: res.data!.user.id }],
+		});
+		expect(accounts).toHaveLength(0);
+	});
 });
 
 /**

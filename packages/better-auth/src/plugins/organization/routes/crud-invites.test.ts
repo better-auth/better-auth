@@ -1188,6 +1188,78 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 		expect(completed.data?.user.email).toBe("resend-me@example.com");
 	});
 
+	it("the pre-resend token still completes enrollment and auto-accepts the invitation", async () => {
+		let firstToken = "";
+		let lastToken = "";
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							if (!firstToken) {
+								firstToken = data.token;
+							} else {
+								lastToken = data.token;
+							}
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "old-token-wins@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "old-token-wins@example.com",
+			role: "member",
+			resend: true,
+			fetchOptions: { headers },
+		});
+		expect(firstToken.length).toBe(32);
+		expect(lastToken.length).toBe(32);
+
+		// Use the FIRST (pre-resend) token, not the newest one.
+		const completed = await client.enroll.callback({
+			token: firstToken,
+			password: "old-token-password-123",
+		});
+		expect(completed.data?.user.email).toBe("old-token-wins@example.com");
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: orgId },
+				{ field: "userId", value: completed.data!.user.id },
+			],
+		});
+		expect(members).toHaveLength(1);
+
+		const [invitation] = await db.findMany({
+			model: "invitation",
+			where: [{ field: "id", value: String(invite.data!.id) }],
+		});
+		expect((invitation as { status: string }).status).toBe("accepted");
+
+		// The now-stale newest token is a dead link: the account it targets
+		// is already enrolled and verified, so the core "already verified
+		// elsewhere" guard rejects it rather than linking a second
+		// credential account.
+		const staleAttempt = await client.enroll.callback({
+			token: lastToken,
+			password: "should-not-matter-123",
+		});
+		expect(staleAttempt.error?.status).toBe(400);
+	});
+
 	it("getInvitationPreview rejects an invitation that is no longer pending", async () => {
 		const { client, auth, signInWithTestUser } = await setup();
 		const { headers, orgId } = await createOrg(client, signInWithTestUser);

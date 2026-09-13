@@ -172,6 +172,53 @@ describe("enroll", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	it("should reject a password longer than the configured maximum", async () => {
+		let token = "";
+		const { client } = await getTestInstance({
+			user: {
+				enrollment: {
+					enabled: true,
+					async sendEnrollmentVerification(data) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		await client.enroll({ email: "longpass@example.com" });
+		const res = await client.enroll.callback({
+			token,
+			// Default emailAndPassword.maxPasswordLength is 128.
+			password: "a".repeat(129),
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should reject a naturally expired token", async () => {
+		let token = "";
+		const { client, db } = await getTestInstance({
+			user: {
+				enrollment: {
+					enabled: true,
+					async sendEnrollmentVerification(data) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		await client.enroll({ email: "expired@example.com" });
+		await db.update({
+			model: "verification",
+			where: [{ field: "identifier", value: `enroll:${token}` }],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+
+		const res = await client.enroll.callback({
+			token,
+			password: "expired-password-1234",
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
 	/**
 	 * Reuses the same guarantee magic-link/email-otp already give their own
 	 * passwordless sign-ins: an emailVerified:false row that accrued a
