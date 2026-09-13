@@ -15,6 +15,7 @@ export const SOCIAL_PROVIDERS = [
 	"kick",
 	"line",
 	"linear",
+	"link",
 	"linkedin",
 	"microsoft",
 	"naver",
@@ -146,6 +147,13 @@ export const SOCIAL_PROVIDER_CONFIGS: Record<SocialProvider, ProviderConfig> = {
 		options: [
 			{ name: "clientId", envVar: "LINEAR_CLIENT_ID" },
 			{ name: "clientSecret", envVar: "LINEAR_CLIENT_SECRET" },
+		],
+	},
+	link: {
+		options: [
+			{ name: "clientId", envVar: "LINK_CLIENT_ID" },
+			{ name: "clientSecret", envVar: "LINK_CLIENT_SECRET" },
+			{ name: "publishableKey", envVar: "STRIPE_PUBLISHABLE_KEY" },
 		],
 	},
 	linkedin: {

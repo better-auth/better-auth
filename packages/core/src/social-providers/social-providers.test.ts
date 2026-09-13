@@ -47,6 +47,7 @@ describe("OAuth account identity contract", () => {
 		domain: "test.auth.us-east-1.amazoncognito.com",
 		region: "us-east-1",
 		userPoolId: "us-east-1_test",
+		publishableKey: "pk_test_link",
 	};
 	const providers: OAuthProvider[] = [
 		socialProviders.apple(providerOptions),
@@ -64,6 +65,7 @@ describe("OAuth account identity contract", () => {
 		socialProviders.kick(providerOptions),
 		socialProviders.line(providerOptions),
 		socialProviders.linear(providerOptions),
+		socialProviders.link(providerOptions),
 		socialProviders.linkedin(providerOptions),
 		socialProviders.microsoft(providerOptions),
 		socialProviders.naver(providerOptions),
