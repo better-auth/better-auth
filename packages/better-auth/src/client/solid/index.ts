@@ -61,9 +61,7 @@ export type SolidAuthClient<Option extends BetterAuthClientOptions> =
 	UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			hydrateSession: (
-				session: NonNullable<ClientSession<Option>> | null,
-			) => void;
+			hydrateSession(session: NonNullable<ClientSession<Option>> | null): void;
 			useSession: () => Accessor<{
 				data: ClientSession<Option>;
 				isPending: boolean;

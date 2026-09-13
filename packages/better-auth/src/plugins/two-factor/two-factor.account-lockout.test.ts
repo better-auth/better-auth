@@ -1,7 +1,12 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it } from "vitest";
+import { memoryAdapter } from "../../adapters/memory-adapter";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -18,11 +23,71 @@ import { recordTwoFactorFailure } from "./verify-two-factor";
  * successful verification.
  */
 
-async function setup(accountLockout?: TwoFactorOptions["accountLockout"]) {
+function createDbWithoutAtomicMethods() {
+	const database = memoryAdapter({
+		user: [],
+		session: [],
+		account: [],
+		verification: [],
+		twoFactor: [],
+	});
+	return (options: BetterAuthOptions) => {
+		const native = database(options);
+		return createAdapterFactory({
+			config: { adapterId: "legacy-memory" },
+			adapter: () => ({
+				create: ({ model, data }) =>
+					native.create({ model, data, forceAllowId: true }),
+				findOne: ({ model, where, select }) =>
+					native.findOne({ model, where, select }),
+				findMany: async <T>({
+					model,
+					where,
+					limit,
+					offset,
+					sortBy,
+					select,
+				}: Parameters<DBAdapter["findMany"]>[0]) =>
+					(await native.findMany({
+						model,
+						where,
+						limit,
+						offset,
+						sortBy,
+						select,
+					})) as T[],
+				update: ({ model, where, update }) =>
+					native.update({
+						model,
+						where,
+						update: update as Record<string, unknown>,
+					}),
+				updateMany: native.updateMany,
+				delete: native.delete,
+				deleteMany: native.deleteMany,
+				count: native.count,
+			}),
+		})(options);
+	};
+}
+
+async function setup(
+	accountLockout?: TwoFactorOptions["accountLockout"],
+	database?: BetterAuthOptions["database"],
+) {
+	let otp = "";
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
+		...(database ? { database } : {}),
 		plugins: [
-			twoFactor({ accountLockout, otpOptions: { sendOTP: async () => {} } }),
+			twoFactor({
+				accountLockout,
+				otpOptions: {
+					sendOTP: async (data) => {
+						otp = data.otp;
+					},
+				},
+			}),
 		],
 	});
 	const { headers } = await signInWithTestUser();
@@ -96,10 +161,72 @@ async function setup(accountLockout?: TwoFactorOptions["accountLockout"]) {
 		verifyBackup,
 		correctTotp,
 		failOtpOnce,
+		getOtp: () => otp,
 	};
 }
 
 describe("two-factor: account-level lockout across challenges", () => {
+	/** @see https://cwe.mitre.org/data/definitions/307.html */
+	it("enforces account lockout through legacy adapter fallbacks", async () => {
+		const { startChallenge, verifyBackup, backupCodes } = await setup(
+			{ maxFailedAttempts: 3 },
+			createDbWithoutAtomicMethods(),
+		);
+		const challenges = await Promise.all(
+			Array.from({ length: 3 }, () => startChallenge()),
+		);
+		const failures = await Promise.all(
+			challenges.map((headers) => verifyBackup(headers, "0000-0000")),
+		);
+		expect(failures.map((response) => response.status)).toEqual([
+			401, 401, 401,
+		]);
+		expect(
+			(await verifyBackup(await startChallenge(), backupCodes[0]!)).status,
+		).toBe(429);
+	});
+	/** @see https://cwe.mitre.org/data/definitions/362.html */
+	it("consumes an email OTP once through legacy adapter fallbacks", async () => {
+		const { auth, startChallenge, getOtp } = await setup(
+			undefined,
+			createDbWithoutAtomicMethods(),
+		);
+		const headers = await startChallenge();
+		await auth.api.sendTwoFactorOTP({ body: {}, headers });
+		const code = getOtp();
+		expect(code).toMatch(/^\d{6}$/);
+		const responses = await Promise.all(
+			[0, 1].map(() =>
+				auth.api.verifyTwoFactorOTP({
+					body: { code },
+					headers,
+					asResponse: true,
+				}),
+			),
+		);
+		expect(
+			responses.filter((response) => response.status === 200),
+		).toHaveLength(1);
+		expect(
+			responses.filter(
+				(response) => response.status >= 400 && response.status < 500,
+			),
+		).toHaveLength(1);
+	});
+	/** @see https://cwe.mitre.org/data/definitions/362.html */
+	it("allows a backup code to be consumed once through legacy adapter fallbacks", async () => {
+		const { startChallenge, verifyBackup, backupCodes } = await setup(
+			undefined,
+			createDbWithoutAtomicMethods(),
+		);
+		const challenges = await Promise.all([startChallenge(), startChallenge()]);
+		const responses = await Promise.all(
+			challenges.map((headers) => verifyBackup(headers, backupCodes[0]!)),
+		);
+		expect(responses.map((response) => response.status).sort()).toEqual([
+			200, 409,
+		]);
+	});
 	it("locks the account after failures accumulate across separate challenges", async () => {
 		const { startChallenge, verifyTotp, correctTotp } = await setup({
 			maxFailedAttempts: 3,

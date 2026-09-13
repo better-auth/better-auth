@@ -466,9 +466,9 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 * race-safe primitive for consuming single-use credentials
 	 * (verification tokens, authorization codes, one-time tokens).
 	 *
-	 * Always defined on the factory-wrapped adapter. The underlying
-	 * `CustomAdapter` must implement this natively; there is no portable
-	 * fallback that can guarantee cross-process single-use semantics.
+	 * Always defined on the factory-wrapped adapter. Without a native method,
+	 * the factory uses a snapshot-guarded delete and requires an exact affected
+	 * row count. The adapter must evaluate the condition and deletion atomically.
 	 */
 	consumeOne: <T>(data: { model: string; where: Where[] }) => Promise<T | null>;
 	/**
@@ -490,9 +490,11 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 * primitive for guarded counter updates (e.g. decrementing a remaining-uses
 	 * counter only while it is still positive).
 	 *
-	 * Always defined on the factory-wrapped adapter. The underlying
-	 * `CustomAdapter` must implement this natively; there is no portable
-	 * fallback that can guarantee guarded counter semantics across runtimes.
+	 * Always defined on the factory-wrapped adapter. Without a native method,
+	 * the factory uses bounded compare-and-swap retries. Contention exhaustion
+	 * throws rather than returning null. Conditional writes must be atomic.
+	 * A no-op may return the read snapshot without writing. A non-null result
+	 * alone does not establish exclusive ownership of the row.
 	 */
 	incrementOne: <T>(data: {
 		model: string;
@@ -587,19 +589,21 @@ export interface CustomAdapter {
 		where: CleanedWhere[];
 	}) => Promise<number>;
 	/**
-	 * Native atomic single-row consume.
+	 * Optional native atomic single-row consume.
+	 *
 	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,
 	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the
 	 * strongest race-safety guarantee. Implementations must delete at most
 	 * one matching row.
 	 */
-	consumeOne: <T>(data: {
+	consumeOne?: <T>(data: {
 		model: string;
 		where: CleanedWhere[];
 	}) => Promise<T | null>;
 	/**
-	 * Native atomic guarded counter mutation. Applies
-	 * `field = field + delta` for each entry in `increment` (negative deltas
+	 * Optional native atomic guarded counter mutation.
+	 *
+	 * Applies `field = field + delta` for each entry in `increment` (negative deltas
 	 * decrement), with `where` acting as both selector and guard and `set`
 	 * assigning absolute values in the same operation. Returns the updated row,
 	 * or `null` when the guard matched no row.
@@ -608,7 +612,7 @@ export interface CustomAdapter {
 	 * RETURNING *`) gives one round trip and the strongest race-safety
 	 * guarantee.
 	 */
-	incrementOne: <T>(data: {
+	incrementOne?: <T>(data: {
 		model: string;
 		where: CleanedWhere[];
 		increment: Record<string, number>;

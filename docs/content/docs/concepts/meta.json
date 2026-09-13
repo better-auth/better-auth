@@ -1,0 +1,20 @@
+{
+  "title": "Concepts",
+  "icon": "concepts",
+  "pages": [
+    "api",
+    "cli",
+    "client",
+    "cookies",
+    "database",
+    "email",
+    "hooks",
+    "plugins",
+    "oauth",
+    "rate-limit",
+    "session-management",
+    "typescript",
+    "users-accounts",
+    "..."
+  ]
+}

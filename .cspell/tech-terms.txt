@@ -5,6 +5,15 @@ yocto
 numberid
 dbgenerated
 dflt
+seqno
+MyISAM
+attnum
+attrelid
+indisunique
+indisvalid
+indexrelid
+indnkeyatts
+ordinality
 undim
 timestamptz
 nvarchar
@@ -59,6 +68,7 @@ GHEOF
 denoland
 zizmor
 zizmorcore
+artipacked
 IMDS
 WHATWG
 CIMD
@@ -73,3 +83,4 @@ pjpeg
 styl
 vbscript
 unvalidated
+describedby

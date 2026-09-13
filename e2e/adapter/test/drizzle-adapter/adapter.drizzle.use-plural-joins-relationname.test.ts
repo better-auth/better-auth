@@ -66,21 +66,28 @@ const verifications = sqliteTable("verifications", {
 	updatedAt: integer("updatedAt", { mode: "timestamp" }),
 });
 
-/** Current main CLI usePlural output: plural many-to-one keys (`users`). */
-const usersRelationsCliMain = relations(users, ({ many }) => ({
+/** Current CLI output: plural reverse keys and singular forward keys. */
+const usersRelationsGenerated = relations(users, ({ many }) => ({
 	sessions: many(sessions),
 	accounts: many(accounts),
 }));
 
-const accountsRelationsCliMain = relations(accounts, ({ one }) => ({
+const accountsRelationsGenerated = relations(accounts, ({ one }) => ({
+	user: one(users, {
+		fields: [accounts.userId],
+		references: [users.id],
+	}),
+}));
+
+const accountsRelationsLegacy = relations(accounts, ({ one }) => ({
 	users: one(users, {
 		fields: [accounts.userId],
 		references: [users.id],
 	}),
 }));
 
-const sessionsRelationsCliMain = relations(sessions, ({ one }) => ({
-	users: one(users, {
+const sessionsRelationsGenerated = relations(sessions, ({ one }) => ({
+	user: one(users, {
 		fields: [sessions.userId],
 		references: [users.id],
 	}),
@@ -238,16 +245,16 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 		expect(session?.impersonator).toBeNull();
 	});
 
-	it("clean CLI usePlural relations work with usePlural + joins (control)", async () => {
+	it("resolves generated relation keys with usePlural", async () => {
 		const db = drizzle(sqliteDb, {
 			schema: {
 				users,
 				sessions,
 				accounts,
 				verifications,
-				usersRelationsCliMain,
-				accountsRelationsCliMain,
-				sessionsRelationsCliMain,
+				usersRelationsGenerated,
+				accountsRelationsGenerated,
+				sessionsRelationsGenerated,
 			},
 		});
 
@@ -257,6 +264,9 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 				sessions,
 				accounts,
 				verifications,
+				usersRelationsGenerated,
+				accountsRelationsGenerated,
+				sessionsRelationsGenerated,
 			},
 			provider: "sqlite",
 			usePlural: true,
@@ -288,5 +298,111 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 		});
 
 		expect(accountWithUser?.user?.id).toBe("u1");
+
+		const accountsWithUser = await adapter.findMany<Account & { user: User }>({
+			model: "account",
+			where: [{ field: "id", value: "a1" }],
+			join: {
+				user: true,
+			},
+		});
+
+		expect(accountsWithUser[0]?.user?.id).toBe("u1");
+	});
+
+	it("resolves generated relation keys from Drizzle metadata", async () => {
+		const db = drizzle(sqliteDb, {
+			schema: {
+				users,
+				accounts,
+				usersRelationsGenerated,
+				accountsRelationsGenerated,
+			},
+		});
+
+		const adapter = drizzleAdapter(db, {
+			provider: "sqlite",
+			usePlural: true,
+		})({
+			advanced: { database: { joins: true } },
+		});
+
+		const account = await adapter.findOne<Account & { user: User }>({
+			model: "account",
+			where: [{ field: "id", value: "a1" }],
+			join: { user: true },
+		});
+
+		expect(account?.user.id).toBe("u1");
+	});
+
+	it("resolves relation keys when schema and query model names differ", async () => {
+		const db = drizzle(sqliteDb, {
+			schema: {
+				usersTable: users,
+				accountsTable: accounts,
+				usersRelationsGenerated,
+				accountsRelationsGenerated,
+			},
+		});
+
+		const adapter = drizzleAdapter(db, {
+			schema: {
+				users,
+				accounts,
+				usersRelationsGenerated,
+				accountsRelationsGenerated,
+			},
+			provider: "sqlite",
+			usePlural: true,
+		})({
+			advanced: { database: { joins: true } },
+		});
+
+		const account = await adapter.findOne<Account & { user: User }>({
+			model: "account",
+			where: [{ field: "id", value: "a1" }],
+			join: { user: true },
+		});
+
+		expect(account?.user.id).toBe("u1");
+	});
+
+	it("supports legacy plural forward relation keys with usePlural", async () => {
+		const db = drizzle(sqliteDb, {
+			schema: {
+				users,
+				sessions,
+				accounts,
+				verifications,
+				usersRelationsGenerated,
+				accountsRelationsLegacy,
+				sessionsRelationsGenerated,
+			},
+		});
+
+		const adapter = drizzleAdapter(db, {
+			schema: {
+				users,
+				sessions,
+				accounts,
+				verifications,
+				usersRelationsGenerated,
+				accountsRelationsLegacy,
+				sessionsRelationsGenerated,
+			},
+			provider: "sqlite",
+			usePlural: true,
+		})({
+			advanced: { database: { joins: true } },
+		});
+
+		const account = await adapter.findOne<Account & { user: User }>({
+			model: "account",
+			where: [{ field: "id", value: "a1" }],
+			join: { user: true },
+		});
+
+		expect(account?.user.id).toBe("u1");
 	});
 });

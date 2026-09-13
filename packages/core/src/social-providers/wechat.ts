@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
 import { RESERVED_AUTHORIZATION_PARAMS_SET } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 /**
  * WeChat user profile information
@@ -205,17 +206,16 @@ export const wechat = (options: WeChatOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
+			const userId = profile.unionid || profile.openid || openid;
 			return {
 				user: {
 					name: profile.nickname,
-					// WeChat does not return an email, and the OAuth callback rejects a
-					// missing one, so the default sign-in would always fail. Synthesize a
-					// stable, non-routable placeholder (RFC 2606 `.invalid`) keyed to the
-					// user's WeChat id, left unverified. Applications that collect a real
-					// email override it via `mapProfileToUser`.
 					email:
 						profile.email ||
-						`${profile.unionid || profile.openid || openid}@wechat.invalid`,
+						createPlaceholderEmail({
+							identifier: userId,
+							namespace: "wechat",
+						}),
 					image: profile.headimgurl,
 					emailVerified: false,
 					...userMap,

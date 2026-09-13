@@ -1,9 +1,10 @@
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { kyselyAdapter } from "@better-auth/kysely-adapter";
-import { testAdapter } from "@better-auth/test-utils/adapter";
+import { createTestSuite, testAdapter } from "@better-auth/test-utils/adapter";
 import { getMigrations } from "better-auth/db/migration";
 import { Kysely, MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
-import { assert } from "vitest";
+import { assert, expect } from "vitest";
 import {
 	authFlowTestSuite,
 	caseInsensitiveTestSuite,
@@ -23,6 +24,97 @@ const mysqlDB = createPool({
 const kyselyDB = new Kysely({
 	dialect: new MysqlDialect(mysqlDB),
 });
+
+const mysqlMigrationIndexTestSuite = createTestSuite(
+	"mysql migration index introspection",
+	{},
+	() => ({
+		/**
+		 * @see https://dev.mysql.com/doc/refman/8.4/en/information-schema-columns-table.html
+		 */
+		"uses the column byte length when validating an index": async () => {
+			const tableName = "mysql_index_byte_length_subject";
+			const indexName = "mysql_byte_length_subject_idx";
+			const options = {
+				database: mysqlDB,
+				plugins: [
+					{
+						id: "mysql-index-byte-length",
+						schema: {
+							mysqlIndexByteLengthSubject: {
+								modelName: tableName,
+								fields: {
+									subject: { type: "string" },
+								},
+								indexes: [{ fields: ["subject"], name: indexName }],
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			} satisfies BetterAuthOptions;
+
+			await mysqlDB.query(`
+				CREATE TABLE \`${tableName}\` (
+					\`id\` varchar(191) NOT NULL,
+					\`subject\` varchar(1000) CHARACTER SET latin1 NOT NULL,
+					PRIMARY KEY (\`id\`)
+				) ENGINE=InnoDB
+			`);
+			try {
+				const migrations = await getMigrations(options);
+				expect(await migrations.compileMigrations()).toContain(
+					`create index \`${indexName}\` on \`${tableName}\` (\`subject\`)`,
+				);
+				await migrations.runMigrations();
+			} finally {
+				await mysqlDB.query(`DROP TABLE \`${tableName}\``);
+			}
+		},
+
+		/**
+		 * @see https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+		 */
+		"rejects a disabled MyISAM index": async () => {
+			const tableName = "mysql_disabled_index_subject";
+			const indexName = "mysql_disabled_subject_idx";
+			const options = {
+				database: mysqlDB,
+				plugins: [
+					{
+						id: "mysql-disabled-index",
+						schema: {
+							mysqlDisabledIndexSubject: {
+								modelName: tableName,
+								fields: {
+									subject: { type: "string" },
+								},
+								indexes: [{ fields: ["subject"], name: indexName }],
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			} satisfies BetterAuthOptions;
+
+			await mysqlDB.query(`
+				CREATE TABLE \`${tableName}\` (
+					\`id\` varchar(191) NOT NULL,
+					\`subject\` varchar(191) NOT NULL,
+					PRIMARY KEY (\`id\`),
+					INDEX \`${indexName}\` (\`subject\`)
+				) ENGINE=MyISAM
+			`);
+			try {
+				await expect(getMigrations(options)).resolves.toBeDefined();
+				await mysqlDB.query(`ALTER TABLE \`${tableName}\` DISABLE KEYS`);
+				await expect(getMigrations(options)).rejects.toThrow(
+					`Database index "${indexName}" on table "${tableName}" does not match the configured fields and uniqueness.`,
+				);
+			} finally {
+				await mysqlDB.query(`DROP TABLE \`${tableName}\``);
+			}
+		},
+	}),
+);
 
 const { execute } = await testAdapter({
 	adapter: () =>
@@ -53,6 +145,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		mysqlMigrationIndexTestSuite(),
 		caseInsensitiveTestSuite({
 			disableTests: {
 				"findOne - eq with mode sensitive (default) should not match different case": true,

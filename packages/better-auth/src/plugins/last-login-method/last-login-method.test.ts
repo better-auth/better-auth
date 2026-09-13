@@ -15,6 +15,8 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { emailOTP } from "../email-otp";
+import { emailOTPClient } from "../email-otp/client";
 import { genericOAuth } from "../generic-oauth/index";
 import { magicLink } from "../magic-link";
 import { magicLinkClient } from "../magic-link/client";
@@ -127,6 +129,45 @@ describe("lastLoginMethod", async () => {
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+	});
+
+	it("should set the last login method cookie for email OTP", async () => {
+		const otp = "123456";
+		const { client, cookieSetter, testUser } = await getTestInstance(
+			{
+				plugins: [
+					lastLoginMethod(),
+					emailOTP({
+						generateOTP: () => otp,
+						async sendVerificationOTP() {},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient(), emailOTPClient()],
+				},
+			},
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+
+		const headers = new Headers();
+		await client.signIn.emailOtp(
+			{
+				email: testUser.email,
+				otp,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBe("email-otp");
 	});
 
 	it("should set the last login method cookie for siwe", async () => {
