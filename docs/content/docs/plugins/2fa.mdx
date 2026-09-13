@@ -262,6 +262,10 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
   ```
 </APIMethod>
 
+<Callout type="warn">
+  Treat the TOTP URI as a secret. It contains the user's email and the shared secret used to generate TOTP codes. Render the QR code locally in the browser rather than sending the URI to a third-party QR service.
+</Callout>
+
 **Example: Using React**
 
 Once you have the TOTP URI, you can use it to generate a QR code for the user to scan with their authenticator app.
@@ -285,14 +289,6 @@ export default function UserCard({ password }: { password: string }){
    )
 }
 ```
-
-<Callout type="warn">
-  The TOTP URI contains the shared secret, and the account name inside it is the user's email, so both sit in the same string. Render the QR in the browser, as the example above does: handing the URI to a hosted QR image service puts the secret and the email in a query string bound for a third party, where they reach that service's access logs. TOTP secrets do not expire on their own, so anything that can read those logs can generate valid codes for as long as the enrollment lasts.
-</Callout>
-
-<Callout>
-  By default the issuer for TOTP is set to the app name provided in the auth config or if not provided it will be set to `Better Auth`. You can override this by passing `issuer` to the plugin config.
-</Callout>
 
 #### Verifying TOTP
 
