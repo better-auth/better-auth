@@ -35,10 +35,6 @@ describe.runIf(isPostgresAvailable)(
 		const customSchemaPool = new Pool({
 			connectionString: `${CONNECTION_STRING}?options=-c search_path=${customSchema}`,
 		});
-		const customSchemaKysely = new Kysely({
-			dialect: new PostgresDialect({ pool: customSchemaPool }),
-			plugins: [new CamelCasePlugin()],
-		});
 
 		beforeAll(async () => {
 			// Setup: Create custom schema and a table in public schema
@@ -94,6 +90,15 @@ describe.runIf(isPostgresAvailable)(
 		 * @see https://github.com/better-auth/better-auth/issues/7926
 		 */
 		it("should detect custom schema with CamelCasePlugin enabled", async () => {
+			const executedSql: string[] = [];
+			const customSchemaKysely = new Kysely({
+				dialect: new PostgresDialect({ pool: customSchemaPool }),
+				log(event) {
+					if (event.level === "query") executedSql.push(event.query.sql);
+				},
+				plugins: [new CamelCasePlugin()],
+			});
+
 			// Create a user table in the custom schema so it should be detected as existing
 			await customSchemaPool.query(`
 				CREATE TABLE IF NOT EXISTS ${customSchema}.user (
@@ -130,6 +135,9 @@ describe.runIf(isPostgresAvailable)(
 				// Other tables should still need to be created
 				const sessionTable = toBeCreated.find((t) => t.table === "session");
 				expect(sessionTable).toBeDefined();
+				expect(executedSql).not.toContainEqual(
+					expect.stringContaining("information_schema.tables"),
+				);
 			} finally {
 				// Cleanup: drop the user table so subsequent tests are not affected
 				await customSchemaPool.query(
