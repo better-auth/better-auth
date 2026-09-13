@@ -138,13 +138,10 @@ interface DatabaseIndexDefinition {
 }
 
 interface DatabaseColumnRow {
-	characterMaximumLength?: number | string | null;
-	CHARACTER_MAXIMUM_LENGTH?: number | string | null;
 	columnName?: string;
 	COLUMN_NAME?: string;
-	dataType?: string;
-	DATA_TYPE?: string;
-	maxLength?: number | string;
+	maxIndexBytes?: number | string | null;
+	MAX_INDEX_BYTES?: number | string | null;
 	tableName?: string;
 	TABLE_NAME?: string;
 }
@@ -152,6 +149,12 @@ interface DatabaseColumnRow {
 interface DatabaseColumnBound {
 	maxIndexBytes: number | null;
 }
+
+type MigrationTarget<
+	DatabaseType extends KyselyDatabaseType = KyselyDatabaseType,
+> = DatabaseType extends "postgres" | "mssql"
+	? { type: DatabaseType; schema: string }
+	: { type: DatabaseType };
 
 function createDatabaseIndexKey(tableName: string, indexName: string) {
 	return `${getPortableDatabaseIdentifierKey(tableName)}\u0000${getPortableDatabaseIdentifierKey(indexName)}`;
@@ -211,8 +214,7 @@ function toDatabaseIndexMap(indexes: readonly DatabaseIndexMetadata[]) {
 
 async function getDatabaseIndexMap(
 	db: Kysely<unknown>,
-	dbType: KyselyDatabaseType,
-	schemaName: string,
+	target: MigrationTarget,
 	tableNames: readonly string[],
 	introspectIndexes: DatabaseIndexIntrospector | undefined,
 ) {
@@ -222,9 +224,10 @@ async function getDatabaseIndexMap(
 	}
 
 	let rows: readonly DatabaseIndexRow[];
-	if (dbType === "sqlite") {
-		rows = (
-			await sql<DatabaseIndexRow>`
+	switch (target.type) {
+		case "sqlite":
+			rows = (
+				await sql<DatabaseIndexRow>`
 				SELECT
 					tables.name AS "tableName",
 					index_list.name AS "indexName",
@@ -237,10 +240,11 @@ async function getDatabaseIndexMap(
 				INNER JOIN pragma_index_info(index_list.name) AS index_info
 				WHERE tables.type = 'table'
 			`.execute(db)
-		).rows;
-	} else if (dbType === "postgres") {
-		rows = (
-			await sql<DatabaseIndexRow>`
+			).rows;
+			break;
+		case "postgres":
+			rows = (
+				await sql<DatabaseIndexRow>`
 				SELECT
 					table_class.relname AS "tableName",
 					index_class.relname AS "indexName",
@@ -262,14 +266,15 @@ async function getDatabaseIndexMap(
 				LEFT JOIN pg_attribute AS index_attribute
 					ON index_attribute.attrelid = table_class.oid
 					AND index_attribute.attnum = index_column.attribute_number
-				WHERE table_namespace.nspname = ${schemaName}
+				WHERE table_namespace.nspname = ${target.schema}
 					AND table_class.relkind = 'r'
 					AND index_column.ordinality <= index_data.indnkeyatts
 			`.execute(db)
-		).rows;
-	} else if (dbType === "mysql") {
-		rows = (
-			await sql<DatabaseIndexRow>`
+			).rows;
+			break;
+		case "mysql":
+			rows = (
+				await sql<DatabaseIndexRow>`
 				SELECT
 					table_name AS tableName,
 					index_name AS indexName,
@@ -281,10 +286,11 @@ async function getDatabaseIndexMap(
 				FROM information_schema.statistics
 				WHERE table_schema = DATABASE()
 			`.execute(db)
-		).rows;
-	} else {
-		rows = (
-			await sql<DatabaseIndexRow>`
+			).rows;
+			break;
+		case "mssql":
+			rows = (
+				await sql<DatabaseIndexRow>`
 				SELECT
 					tables.name AS "tableName",
 					indexes.name AS "indexName",
@@ -305,11 +311,12 @@ async function getDatabaseIndexMap(
 				INNER JOIN sys.columns AS columns
 					ON columns.object_id = index_columns.object_id
 					AND columns.column_id = index_columns.column_id
-				WHERE table_schemas.name = ${schemaName}
+				WHERE table_schemas.name = ${target.schema}
 					AND indexes.name IS NOT NULL
 					AND index_columns.key_ordinal > 0
 			`.execute(db)
-		).rows;
+			).rows;
+			break;
 	}
 
 	const indexMetadata = new Map<string, DatabaseIndexMetadata>();
@@ -380,74 +387,57 @@ async function getDatabaseIndexMap(
 
 async function getDatabaseColumnBounds(
 	db: Kysely<unknown>,
-	dbType: KyselyDatabaseType,
-	schemaName: string,
+	target: MigrationTarget,
 ) {
-	if (dbType !== "mysql" && dbType !== "mssql") {
-		return new Map<string, DatabaseColumnBound>();
-	}
-
 	let rows: readonly DatabaseColumnRow[];
-	if (dbType === "mysql") {
-		rows = (
-			await sql<DatabaseColumnRow>`
+	switch (target.type) {
+		case "postgres":
+		case "sqlite":
+			return new Map<string, DatabaseColumnBound>();
+		case "mysql":
+			rows = (
+				await sql<DatabaseColumnRow>`
 				SELECT
 					table_name AS tableName,
 					column_name AS columnName,
-					data_type AS dataType,
-					character_maximum_length AS characterMaximumLength
+					character_octet_length AS maxIndexBytes
 				FROM information_schema.columns
 				WHERE table_schema = DATABASE()
 			`.execute(db)
-		).rows;
-	} else {
-		rows = (
-			await sql<DatabaseColumnRow>`
+			).rows;
+			break;
+		case "mssql":
+			rows = (
+				await sql<DatabaseColumnRow>`
 				SELECT
 					tables.name AS "tableName",
 					columns.name AS "columnName",
-					types.name AS "dataType",
-					columns.max_length AS "maxLength"
+					columns.max_length AS "maxIndexBytes"
 				FROM sys.columns AS columns
 				INNER JOIN sys.tables AS tables
 					ON tables.object_id = columns.object_id
 				INNER JOIN sys.schemas AS table_schemas
 					ON table_schemas.schema_id = tables.schema_id
-				INNER JOIN sys.types AS types
-					ON types.user_type_id = columns.user_type_id
-				WHERE table_schemas.name = ${schemaName}
+				WHERE table_schemas.name = ${target.schema}
 			`.execute(db)
-		).rows;
+			).rows;
+			break;
 	}
 
-	return new Map(
-		rows.flatMap((row) => {
-			const table = row.tableName ?? row.TABLE_NAME;
-			const column = row.columnName ?? row.COLUMN_NAME;
-			const dataType = (row.dataType ?? row.DATA_TYPE)?.toLowerCase();
-			if (!table || !column || !dataType) return [];
+	const bounds = new Map<string, DatabaseColumnBound>();
+	for (const row of rows) {
+		const table = row.tableName ?? row.TABLE_NAME;
+		const column = row.columnName ?? row.COLUMN_NAME;
+		if (!table || !column) continue;
 
-			if (dbType === "mysql") {
-				const characterLength =
-					row.characterMaximumLength ?? row.CHARACTER_MAXIMUM_LENGTH;
-				const maxIndexBytes =
-					characterLength === null || characterLength === undefined
-						? null
-						: Number(characterLength) * 4;
-				return [
-					[createDatabaseColumnKey(table, column), { maxIndexBytes }] as const,
-				];
-			}
-
-			const maxLength = Number(row.maxLength ?? -1);
-			return [
-				[
-					createDatabaseColumnKey(table, column),
-					{ maxIndexBytes: maxLength < 0 ? null : maxLength },
-				] as const,
-			];
-		}),
-	);
+		const maxIndexBytes = Number(
+			row.maxIndexBytes ?? row.MAX_INDEX_BYTES ?? -1,
+		);
+		bounds.set(createDatabaseColumnKey(table, column), {
+			maxIndexBytes: maxIndexBytes < 0 ? null : maxIndexBytes,
+		});
+	}
+	return bounds;
 }
 
 function assertExistingTableIndexFits({
@@ -616,101 +606,77 @@ export async function getMigrations(
 		process.exit(1);
 	}
 
-	let currentSchema = dbType === "mssql" ? await getMssqlSchema(db) : "public";
-	if (dbType === "postgres") {
-		currentSchema = schemaName ?? (await getPostgresSchema(db));
-		logger.debug(
-			`PostgreSQL migration: Using schema '${currentSchema}' (${schemaName ? "from database.schemaName" : "from search_path"})`,
-		);
-
-		// Verify the schema exists
-		try {
-			const schemaCheck = await sql<{
-				schema_name?: string;
-				schemaName?: string;
-			}>`
-				SELECT schema_name
-				FROM information_schema.schemata
-				WHERE schema_name = ${currentSchema}
-			`.execute(db);
-
-			const schemaExists =
-				schemaCheck.rows[0]?.schema_name ?? schemaCheck.rows[0]?.schemaName;
-			if (!schemaExists) {
-				if (schemaName) {
-					logger.debug(
-						`Schema '${currentSchema}' does not exist yet. The migration creates it before creating tables.`,
-					);
-				} else {
-					logger.warn(
-						`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
-					);
-				}
-			}
-		} catch (error) {
+	const allTableMetadata = await db.introspection.getTables();
+	let target: MigrationTarget;
+	let tableMetadata = allTableMetadata;
+	switch (dbType) {
+		case "postgres": {
+			const schema = schemaName ?? (await getPostgresSchema(db));
+			target = { type: "postgres", schema };
 			logger.debug(
-				`Could not verify schema existence: ${error instanceof Error ? error.message : String(error)}`,
+				`PostgreSQL migration: Using schema '${schema}' (${schemaName ? "from database.schemaName" : "from search_path"})`,
 			);
+
+			try {
+				const schemas = await db.introspection.getSchemas();
+				if (!schemas.some(({ name }) => name === schema)) {
+					if (schemaName) {
+						logger.debug(
+							`Schema '${schema}' does not exist yet. The migration creates it before creating tables.`,
+						);
+					} else {
+						logger.warn(
+							`Schema '${schema}' does not exist. Create it before running migrations or check your database configuration.`,
+						);
+					}
+				}
+			} catch (error) {
+				logger.debug(
+					`Could not verify schema existence: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+
+			/**
+			 * Kysely 0.28 does not expose `isForeign`, while 0.29 adds foreign table metadata.
+			 * @see https://github.com/kysely-org/kysely/pull/1494
+			 */
+			tableMetadata = allTableMetadata.filter(
+				(table) =>
+					table.schema === schema &&
+					!table.isView &&
+					!("isForeign" in table && table.isForeign),
+			);
+			logger.debug(
+				`Found ${tableMetadata.length} table(s) in schema '${schema}': ${tableMetadata.map((table) => table.name).join(", ") || "(none)"}`,
+			);
+			break;
 		}
-	} else if (dbType === "mssql") {
-		logger.debug(
-			`SQL Server migration: Using schema '${currentSchema}' (from the current user's default schema)`,
-		);
+		case "mssql": {
+			const schema = await getMssqlSchema(db);
+			target = { type: "mssql", schema };
+			logger.debug(
+				`SQL Server migration: Using schema '${schema}' (from the current user's default schema)`,
+			);
+			tableMetadata = allTableMetadata.filter(
+				(table) => table.schema === schema,
+			);
+			break;
+		}
+		case "mysql":
+			target = { type: "mysql" };
+			break;
+		case "sqlite":
+			target = { type: "sqlite" };
+			break;
 	}
 
-	const allTableMetadata = await db.introspection.getTables();
 	const databaseIndexMap = await getDatabaseIndexMap(
 		db,
-		dbType,
-		currentSchema,
+		target,
 		allTableMetadata.map((table) => table.name),
 		introspectIndexes,
 	);
-	const databaseColumnBounds = await getDatabaseColumnBounds(
-		db,
-		dbType,
-		currentSchema,
-	);
-
-	// Filter introspected tables to the schema used by unqualified migrations.
-	let tableMetadata = allTableMetadata;
-	if (dbType === "postgres") {
-		// Get tables with their schema information
-		try {
-			const tablesInSchema = await sql<{
-				table_name?: string;
-				tableName?: string;
-			}>`
-				SELECT table_name
-				FROM information_schema.tables
-				WHERE table_schema = ${currentSchema}
-				AND table_type = 'BASE TABLE'
-			`.execute(db);
-
-			const tableNamesInSchema = new Set(
-				tablesInSchema.rows.map((row) => row.table_name ?? row.tableName),
-			);
-
-			// Filter to only tables that exist in the target schema
-			tableMetadata = allTableMetadata.filter(
-				(table) =>
-					table.schema === currentSchema && tableNamesInSchema.has(table.name),
-			);
-
-			logger.debug(
-				`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((t) => t.name).join(", ") || "(none)"}`,
-			);
-		} catch (error) {
-			logger.warn(
-				`Could not filter tables by schema. Using all discovered tables. Error: ${error instanceof Error ? error.message : String(error)}`,
-			);
-			// Fall back to using all tables if schema filtering fails
-		}
-	} else if (dbType === "mssql") {
-		tableMetadata = allTableMetadata.filter(
-			(table) => table.schema === currentSchema,
-		);
-	}
+	const databaseColumnBounds = await getDatabaseColumnBounds(db, target);
 	// Columns the migration cannot fix: required, without a default, and never
 	// written by Better Auth. Reported so the CLI stops before an insert fails.
 	const schemaProblems = diffSchema(

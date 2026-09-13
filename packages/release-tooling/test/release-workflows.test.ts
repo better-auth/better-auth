@@ -456,11 +456,45 @@ describe("release notes command security", () => {
 		);
 	});
 
-	it("uses versioned maintenance branches", () => {
-		const npmTag = getStep(
+	it("selects release channels by branch", () => {
+		const releaseChannel = getStep(
 			getJob(releaseWorkflow, "release"),
-			"Determine npm dist-tag",
+			"Resolve release channel",
 		);
+		const publish = getStep(
+			getJob(releaseWorkflow, "release"),
+			"Create Release Pull Request or Publish",
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'if [[ "$REF" == "main" ]]; then',
+				'  echo "publish_command=pnpm ci:release --tag latest" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=true" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'elif [[ "$REF" =~ ^v([0-9]+)\\.([0-9]+)\\.x$ ]]; then',
+				'  TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
+				'  echo "publish_command=pnpm ci:release --tag $TAG" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=false" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'elif [ "$REF" = "next" ]; then',
+				'  echo "publish_command=pnpm ci:release" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=false" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(publish.with).toHaveProperty(
+			"publish",
+			expect.stringContaining("release-channel.outputs.publish_command"),
+		);
+		expect(publish.env).not.toHaveProperty("NPM_CONFIG_TAG");
+	});
+
+	it("uses versioned maintenance branches", () => {
 		const authorize = getStep(
 			getJob(commandWorkflow, "generate"),
 			"Authorize command and resolve PR",
@@ -472,10 +506,6 @@ describe("release notes command security", () => {
 
 		expect(releaseWorkflow.content).toContain("'v*.*.x'");
 		expect(releaseWorkflow.content).not.toContain("release/**");
-		expect(npmTag.run).toContain("^v([0-9]+)\\.([0-9]+)\\.x$");
-		expect(npmTag.run).toContain(
-			'TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
-		);
 		expect(authorize.run).toContain("^v[0-9]+\\.[0-9]+\\.x$");
 		expect(prDetails.run).toContain('"$HEAD_REF" == v*.*.x');
 		expect(verifyChangesetsWorkflow.content).toContain("'v*.*.x'");
@@ -639,8 +669,13 @@ describe("release publication security", () => {
 			"RELEASE_COMMIT",
 			expect.stringContaining("approved-notes.outputs.release_commit"),
 		);
+		expect(createRelease.env).toHaveProperty(
+			"GITHUB_LATEST",
+			expect.stringContaining("release-channel.outputs.github_latest"),
+		);
 		expect(createRelease.run).toContain('gh release create "$TAG"');
 		expect(createRelease.run).toContain('--target "$RELEASE_COMMIT"');
+		expect(createRelease.run).toContain('--latest="$GITHUB_LATEST"');
 		expect(createRelease.run).not.toContain('COMMIT_SHA="${GITHUB_SHA}"');
 	});
 
