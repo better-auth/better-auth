@@ -983,6 +983,45 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 		});
 	});
 
+	/**
+	 * By design, unlike self-service /enroll (see
+	 * enroll.test.ts's "name requirement for self-service enrollment"):
+	 * the inviter only supplies an email, the invitee's name is never
+	 * collected up front, and completing the invite shouldn't demand one
+	 * just to finish joining a team.
+	 */
+	it("completes enrollment for an invite without ever requiring a name", async () => {
+		let token = "";
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "no-name-needed@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const res = await client.enroll.callback({
+			token,
+			password: "no-name-needed-password-123",
+		});
+		expect(res.error).toBeNull();
+		expect(res.data?.user.email).toBe("no-name-needed@example.com");
+	});
+
 	it("sends the normal invitation email for an email that already has a verified account", async () => {
 		const sendInvitationEmail = vi.fn();
 		const sendEnrollmentVerification = vi.fn();

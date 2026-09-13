@@ -435,7 +435,7 @@ import { authClient } from "@/lib/auth-client"
 
 await authClient.enroll({
     email: "user@example.com",
-    name: "Jane Doe", // optional
+    name: "Jane Doe", // optional here -- see "Completing Enrollment" below
     callbackURL: "/finish-enrollment", // optional, embedded in the emailed url
 });
 ```
@@ -456,11 +456,17 @@ import { authClient } from "@/lib/auth-client"
 const { data, error } = await authClient.enroll.callback({
     token,
     password: "a-strong-password",
-    name: "Jane Doe", // optional
+    name: "Jane Doe", // required, unless already given to `enroll` above
 });
 ```
 
 On success, this sets the password, marks the email verified, and signs the user in — returning a session the same way `signUpEmail` does.
+
+<Callout type="info">
+  A name is required by the time enrollment completes — the same guarantee `signUpEmail` gives — but it's only checked once, against whatever name the user ends up with. It doesn't matter which of the two calls supplied it: give it at `enroll`, at `enroll.callback`, or split however your UI collects it. Omitting it from both fails with `NAME_REQUIRED`.
+
+  The one exception is enrollment started by an [organization invitation](/docs/plugins/organization#send-invitation): the inviter only supplies an email, so a name is never required to finish joining.
+</Callout>
 
 <Callout type="info">
   If the pending row picked up a credential account or sessions between the enrollment email being sent and the callback being completed — for instance, an attacker raced to sign up with the same email first — completing enrollment strips that access before handing the account to whoever just proved the mailbox. This is the same guarantee magic link and email OTP already give their own passwordless sign-ins.

@@ -2568,6 +2568,53 @@ describe("admin createUser sendEnrollmentEmail", async () => {
 		expect(sentTo).toBe("enrolled@email.com");
 	});
 
+	/**
+	 * admin.createUser always requires `name`, so this default guard
+	 * rarely matters in practice -- but nothing stops an admin from
+	 * passing an empty string, and the enrolled user shouldn't end up
+	 * with a blank name just because the admin left it blank.
+	 */
+	it("still requires a name to complete enrollment if the admin left it blank", async () => {
+		let token = "";
+		const { client, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: adminBootstrapHooks,
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			},
+			{ clientOptions: { plugins: [adminClient()] }, ...asAdmin() },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		await client.admin.createUser(
+			{
+				name: "",
+				email: "blank-name@email.com",
+				sendEnrollmentEmail: true,
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+
+		// The single-use token is consumed by this attempt regardless of the
+		// outcome (same as any other post-consumption check on this
+		// endpoint, e.g. an already-verified row) -- providing a name would
+		// require a fresh token, which enroll.test.ts's self-service tests
+		// already cover.
+		const blocked = await client.enroll.callback({
+			token,
+			password: "blank-name-password-123",
+		});
+		expect(blocked.error?.code).toBe("NAME_REQUIRED");
+	});
+
 	it("does not send an enrollment email when a password is provided", async () => {
 		const sendEnrollmentVerification = vi.fn();
 		const { client, signInWithTestUser } = await getTestInstance(

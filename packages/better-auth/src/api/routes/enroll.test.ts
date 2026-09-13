@@ -142,6 +142,7 @@ describe("enroll", async () => {
 		const first = await client.enroll.callback({
 			token,
 			password: "onetime-password-1234",
+			name: "Onetime",
 		});
 		expect(first.data?.token).toBeDefined();
 
@@ -281,8 +282,16 @@ describe("enroll", async () => {
 		await client.enroll({ email: "racer@example.com" });
 
 		const [first, second] = await Promise.all([
-			client.enroll.callback({ token, password: "racer-password-1234" }),
-			client.enroll.callback({ token, password: "racer-password-1234" }),
+			client.enroll.callback({
+				token,
+				password: "racer-password-1234",
+				name: "Racer",
+			}),
+			client.enroll.callback({
+				token,
+				password: "racer-password-1234",
+				name: "Racer",
+			}),
 		]);
 		const successes = [first, second].filter((r) => r.data);
 		const failures = [first, second].filter((r) => r.error);
@@ -350,5 +359,82 @@ describe("enroll", async () => {
 			where: [{ field: "email", value: "half-configured@example.com" }],
 		});
 		expect(users).toHaveLength(0);
+	});
+
+	/**
+	 * A name is required to complete self-service enrollment -- the same
+	 * guarantee signUpEmail already gives -- but the requirement is
+	 * checked once, at the end of the flow, against whatever name the
+	 * user ends up with. It doesn't matter which of the two steps
+	 * supplied it, or whether the user was ever asked for it in a
+	 * request that also needed a name for a different reason (e.g. an
+	 * organization invitation, which never requires one at all -- see
+	 * crud-invites.test.ts).
+	 */
+	describe("name requirement for self-service enrollment", () => {
+		it("rejects completion when no name was ever given", async () => {
+			let token = "";
+			const { client } = await getTestInstance({
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			});
+			await client.enroll({ email: "no-name-anywhere@example.com" });
+			const res = await client.enroll.callback({
+				token,
+				password: "no-name-password-123",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("NAME_REQUIRED");
+		});
+
+		it("accepts a name given only at /enroll (initiation)", async () => {
+			let token = "";
+			const { client } = await getTestInstance({
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			});
+			await client.enroll({
+				email: "named-at-start@example.com",
+				name: "Given At Start",
+			});
+			const res = await client.enroll.callback({
+				token,
+				password: "named-at-start-password-123",
+			});
+			expect(res.data?.user.name).toBe("Given At Start");
+		});
+
+		it("accepts a name given only at /enroll/callback (completion)", async () => {
+			let token = "";
+			const { client } = await getTestInstance({
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			});
+			await client.enroll({ email: "named-at-end@example.com" });
+			const res = await client.enroll.callback({
+				token,
+				password: "named-at-end-password-123",
+				name: "Given At End",
+			});
+			expect(res.data?.user.name).toBe("Given At End");
+		});
 	});
 });

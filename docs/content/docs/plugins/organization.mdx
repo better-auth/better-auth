@@ -929,7 +929,7 @@ To invite users to an organization, you can use the `invite` function provided b
 </Callout>
 
 <Callout type="info">
-  If the invited email has no account yet -- or only an unverified one -- and [`user.enrollment`](/docs/concepts/users-accounts#enrollment) is configured, `createInvitation` sends a single enrollment email instead of the normal invitation email, with the organization name and inviter's email embedded so it can read as an invite. Completing enrollment with that link sets the user's password, verifies their email, signs them in, **and** accepts the invitation in the same step -- no separate "accept invitation" call needed. `sendInvitationEmail` is only used when the invited email already belongs to a verified account.
+  If the invited email has no account yet -- or only an unverified one -- and [`user.enrollment`](/docs/concepts/users-accounts#enrollment) is configured, `createInvitation` sends a single enrollment email instead of the normal invitation email, with the organization name and inviter's email embedded so it can read as an invite. Completing enrollment with that link sets the user's password, verifies their email, signs them in, **and** accepts the invitation in the same step -- no separate "accept invitation" call needed, and no name required either: unlike self-service enrollment, joining through an invitation never requires a name, since the inviter never had one to give. `sendInvitationEmail` is only used when the invited email already belongs to a verified account.
 </Callout>
 
 ### Accept Invitation
