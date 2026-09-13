@@ -399,7 +399,7 @@ async function getDatabaseColumnBounds(
 				SELECT
 					table_name AS tableName,
 					column_name AS columnName,
-					character_maximum_length * 4 AS maxIndexBytes
+					character_octet_length AS maxIndexBytes
 				FROM information_schema.columns
 				WHERE table_schema = DATABASE()
 			`.execute(db)
