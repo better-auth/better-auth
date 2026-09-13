@@ -528,6 +528,47 @@ describe("enroll", async () => {
 	});
 
 	/**
+	 * Found in automated PR review: the password hash ran before the
+	 * token's validity was even checked, so a flood of requests carrying
+	 * garbage or expired tokens (paired with any password of valid
+	 * length) could force the server to spend CPU on the deliberately
+	 * expensive KDF for every single one.
+	 */
+	it("never hashes the password for an invalid token", async () => {
+		let hashCalls = 0;
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					password: {
+						async hash(password) {
+							hashCalls++;
+							return `hashed:${password}`;
+						},
+						async verify() {
+							return true;
+						},
+					},
+				},
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const invalid = await client.enroll.callback({
+			token: "not-a-real-token",
+			password: "irrelevant-password-123",
+			name: "Someone",
+		});
+		expect(invalid.error?.code).toBe("INVALID_TOKEN");
+		expect(hashCalls).toBe(0);
+	});
+
+	/**
 	 * Found in automated PR review: `callbackURL` was accepted and
 	 * origin-checked but never used -- the emailed `url` always pointed
 	 * at `/enroll/callback`, a POST-only endpoint that can never be the

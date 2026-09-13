@@ -271,13 +271,6 @@ export const enrollCallback = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
-		// Hashed before anything destructive below, the same way
-		// signUpEmail hashes before creating the user: a plugin that wraps
-		// password hashing to reject it (e.g. a breach check) must fail
-		// here, before the token is consumed or any prior access is
-		// stripped -- not after, with no way back.
-		const hash = await ctx.context.password.hash(password);
-
 		// Peeked, not consumed, until every precondition below passes.
 		// Consuming first and then failing on a later check (a missing
 		// name, a stale token) would burn the single-use token and, once
@@ -317,6 +310,16 @@ export const enrollCallback = createAuthEndpoint(
 				code: "NAME_REQUIRED",
 			});
 		}
+
+		// Hashed only now -- after every cheap, non-destructive check
+		// above already passed, so a flood of requests carrying garbage
+		// or expired tokens can't force the server to spend CPU on the
+		// deliberately expensive password KDF -- but still before the
+		// token is consumed or any prior access is stripped, the same way
+		// signUpEmail hashes before creating the user: a plugin that
+		// wraps password hashing to reject it (e.g. a breach check) must
+		// fail here, not after, with no way back.
+		const hash = await ctx.context.password.hash(password);
 
 		// Only now, with every precondition satisfied, actually consume
 		// the token: the first caller to reach this point wins, every
