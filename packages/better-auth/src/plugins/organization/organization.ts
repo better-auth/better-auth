@@ -1307,14 +1307,22 @@ export function organization<O extends OrganizationOptions>(
 						// this row in place on a failed accept below means the
 						// linkage isn't silently destroyed by a transient failure.
 						const identifier = `enroll-invitation:${token}`;
-						const pending =
-							await ctx.context.internalAdapter.findVerificationValue(
-								identifier,
-							);
-						if (!pending || pending.expiresAt < new Date()) {
-							return;
-						}
 						try {
+							// The lookup itself lives inside this same try: the
+							// enrolled account and session already exist by this
+							// point, so a transient failure here (e.g. the
+							// adapter call itself erroring) must be caught and
+							// logged the same as a failed acceptInvitation below,
+							// not left to throw uncaught and fail a response
+							// whose actual account-creation work already
+							// succeeded and can't be retried (the token is spent).
+							const pending =
+								await ctx.context.internalAdapter.findVerificationValue(
+									identifier,
+								);
+							if (!pending || pending.expiresAt < new Date()) {
+								return;
+							}
 							// Internal composition (same idea as deleteUser calling
 							// deleteUserCallback directly in update-user.ts, though
 							// that pair has no session middleware to satisfy): the

@@ -1432,6 +1432,61 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 	});
 
 	/**
+	 * Found in automated PR review (cubic): the linkage row lookup itself
+	 * sat outside the try/catch guarding acceptInvitation, so a transient
+	 * failure there (e.g. the adapter call erroring) threw uncaught and
+	 * failed the whole /enroll/callback response -- even though the
+	 * account and session it's reporting on already exist and can't be
+	 * recreated, since the core enrollment token is already spent.
+	 */
+	it("still completes enrollment when the invitation linkage lookup itself fails", async () => {
+		let token = "";
+		const { client, signInWithTestUser, auth } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "lookup-fails@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		expect(token.length).toBe(32);
+
+		const context = await auth.$context;
+		const original =
+			context.internalAdapter.findVerificationValue.bind(
+				context.internalAdapter,
+			);
+		vi.spyOn(context.internalAdapter, "findVerificationValue").mockImplementation(
+			(identifier: string) => {
+				if (identifier.startsWith("enroll-invitation:")) {
+					throw new Error("database unavailable");
+				}
+				return original(identifier);
+			},
+		);
+
+		const completed = await client.enroll.callback({
+			token,
+			password: "lookup-fails-password-123",
+		});
+		expect(completed.data?.user.email).toBe("lookup-fails@example.com");
+	});
+
+	/**
 	 * Found in a security review: getInvitationPreview has no session to
 	 * gate on, unlike acceptInvitation/rejectInvitation/getInvitation, so
 	 * it relied entirely on invitation ids being unguessable. Under a
