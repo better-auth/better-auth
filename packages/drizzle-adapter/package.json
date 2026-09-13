@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "bugs": {
     "url": "https://github.com/better-auth/better-auth/issues"
   },

@@ -1,5 +1,24 @@
 # better-auth
 
+## 1.7.5
+
+### Patch Changes
+
+- [#11209](https://github.com/better-auth/better-auth/pull/11209) [`8d37cc3`](https://github.com/better-auth/better-auth/commit/8d37cc3b7732a04908b28d8abb7f010a286d6c43) Thanks [@siam923](https://github.com/siam923)! - Remove the unused optional `better-sqlite3` peer dependency to prevent installation conflicts.
+
+- [#11272](https://github.com/better-auth/better-auth/pull/11272) [`348fc26`](https://github.com/better-auth/better-auth/commit/348fc26c9904d800cd471947ba98abb5e8431b60) Thanks [@bytaesu](https://github.com/bytaesu)! - Use MySQL's reported byte lengths when validating indexes on existing string columns.
+
+- [#11270](https://github.com/better-auth/better-auth/pull/11270) [`133f6a2`](https://github.com/better-auth/better-auth/commit/133f6a27175ba21193742564d94aebfc9ec89920) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent PostgreSQL migrations from treating tables in other schemas or views in the active schema as Better Auth tables.
+
+- Updated dependencies [[`e18bc83`](https://github.com/better-auth/better-auth/commit/e18bc83172dca1804f0c5c3eff41d65e2849c557)]:
+  - @better-auth/drizzle-adapter@1.7.5
+  - @better-auth/core@1.7.5
+  - @better-auth/kysely-adapter@1.7.5
+  - @better-auth/memory-adapter@1.7.5
+  - @better-auth/mongo-adapter@1.7.5
+  - @better-auth/prisma-adapter@1.7.5
+  - @better-auth/telemetry@1.7.5
+
 ## 1.7.4
 
 ### Patch Changes
