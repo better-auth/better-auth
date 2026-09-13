@@ -242,4 +242,35 @@ describe("enroll", async () => {
 		expect(successes).toHaveLength(1);
 		expect(failures).toHaveLength(1);
 	});
+
+	it("rejects a stale token whose row was already verified through a different path", async () => {
+		let token = "";
+		const { client, db } = await getTestInstance({
+			user: {
+				enrollment: {
+					enabled: true,
+					async sendEnrollmentVerification(data) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		await client.enroll({ email: "verified-elsewhere@example.com" });
+		expect(token.length).toBe(32);
+
+		// Simulate the row being verified through an unrelated path (e.g. an
+		// OAuth sign-in landing on the same email) between the enrollment
+		// email being sent and the callback being completed.
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "verified-elsewhere@example.com" }],
+			update: { emailVerified: true },
+		});
+
+		const res = await client.enroll.callback({
+			token,
+			password: "irrelevant-password-123",
+		});
+		expect(res.error?.status).toBe(400);
+	});
 });

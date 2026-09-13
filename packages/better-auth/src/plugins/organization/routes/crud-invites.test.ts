@@ -1130,4 +1130,82 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 			),
 		).toBe(true);
 	});
+
+	it("resending an invitation to a not-yet-registered email also sends only the enrollment email", async () => {
+		const sendInvitationEmail = vi.fn();
+		let enrollmentCallCount = 0;
+		let lastToken = "";
+		const { client, signInWithTestUser, db } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							enrollmentCallCount++;
+							lastToken = data.token;
+						},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "resend-me@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		const firstToken = lastToken;
+
+		const resendRes = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "resend-me@example.com",
+			role: "member",
+			resend: true,
+			fetchOptions: { headers },
+		});
+
+		expect(resendRes.error).toBeNull();
+		expect(sendInvitationEmail).not.toHaveBeenCalled();
+		expect(enrollmentCallCount).toBe(2);
+		expect(lastToken).not.toBe(firstToken);
+
+		// Only one pending user was created, not one per resend.
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "resend-me@example.com" }],
+		});
+		expect(users).toHaveLength(1);
+
+		// The newest token still completes enrollment and accepts the invite.
+		const completed = await client.enroll.callback({
+			token: lastToken,
+			password: "resend-password-123",
+		});
+		expect(completed.data?.user.email).toBe("resend-me@example.com");
+	});
+
+	it("getInvitationPreview rejects an invitation that is no longer pending", async () => {
+		const { client, auth, signInWithTestUser } = await setup();
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "already-accepted@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		const invitationId = String(invite.data!.id);
+
+		await client.organization.cancelInvitation({
+			invitationId,
+			fetchOptions: { headers },
+		});
+
+		await expect(
+			auth.api.getInvitationPreview({ query: { id: invitationId } }),
+		).rejects.toThrow();
+	});
 });
