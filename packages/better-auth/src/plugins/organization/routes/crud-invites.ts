@@ -109,21 +109,26 @@ const getAdvancedGenerateId = (
 const hasBuiltInOpaqueInvitationIdGeneration = ({
 	advancedGenerateId,
 	databaseGenerateId,
+	adapterCustomIdGenerator,
 }: {
 	advancedGenerateId: GenerateIdFn | undefined;
 	databaseGenerateId: ConfiguredGenerateIdOption;
+	adapterCustomIdGenerator: ((props: { model: string }) => string) | undefined;
 }) =>
 	advancedGenerateId === undefined &&
+	adapterCustomIdGenerator === undefined &&
 	(databaseGenerateId === undefined || databaseGenerateId === "uuid");
 
 const shouldRequireVerifiedEmailForInvitationIdAction = ({
 	organizationOptions,
 	advancedGenerateId,
 	databaseGenerateId,
+	adapterCustomIdGenerator,
 }: {
 	organizationOptions: OrganizationOptions;
 	advancedGenerateId: GenerateIdFn | undefined;
 	databaseGenerateId: ConfiguredGenerateIdOption;
+	adapterCustomIdGenerator: ((props: { model: string }) => string) | undefined;
 }) => {
 	if (organizationOptions.requireEmailVerificationOnInvitation !== undefined) {
 		return organizationOptions.requireEmailVerificationOnInvitation;
@@ -131,8 +136,20 @@ const shouldRequireVerifiedEmailForInvitationIdAction = ({
 	return !hasBuiltInOpaqueInvitationIdGeneration({
 		advancedGenerateId,
 		databaseGenerateId,
+		adapterCustomIdGenerator,
 	});
 };
+
+/**
+ * The adapter-level id generator (e.g. `prismaAdapter(client, {
+ * customIdGenerator })`) is a third source of id generation, separate
+ * from `advanced.database.generateId`, and this codebase has no way to
+ * inspect whether it happens to produce opaque ids -- so, like an
+ * explicit `advanced.database.generateId` function, its mere presence
+ * is treated as "not proven opaque".
+ */
+const getAdapterCustomIdGenerator = (ctx: GenericEndpointContext) =>
+	ctx.context.adapter.options?.adapterConfig?.customIdGenerator;
 
 /**
  * Sends whichever email fits the invited email's current state: the
@@ -759,6 +776,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					),
 					databaseGenerateId:
 						ctx.context.options.advanced?.database?.generateId,
+					adapterCustomIdGenerator: getAdapterCustomIdGenerator(ctx),
 				}) &&
 				!session.user.emailVerified
 			) {
@@ -1006,6 +1024,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 					),
 					databaseGenerateId:
 						ctx.context.options.advanced?.database?.generateId,
+					adapterCustomIdGenerator: getAdapterCustomIdGenerator(ctx),
 				}) &&
 				!session.user.emailVerified
 			) {
@@ -1277,6 +1296,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					),
 					databaseGenerateId:
 						ctx.context.options.advanced?.database?.generateId,
+					adapterCustomIdGenerator: getAdapterCustomIdGenerator(ctx),
 				}) &&
 				!session.user.emailVerified
 			) {
@@ -1400,6 +1420,7 @@ export const getInvitationPreview = <O extends OrganizationOptions>(
 						ctx.context.options.advanced,
 					),
 					databaseGenerateId: ctx.context.options.advanced?.database?.generateId,
+					adapterCustomIdGenerator: getAdapterCustomIdGenerator(ctx),
 				})
 			) {
 				// Non-opaque invitation ids (serial, DB-assigned, or a

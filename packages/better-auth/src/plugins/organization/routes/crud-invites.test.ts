@@ -1571,4 +1571,51 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 		expect(preview.data).toBeNull();
 		expect(preview.error?.status).toBe(400);
 	});
+
+	/**
+	 * Found in automated PR review (cubic): an adapter-level
+	 * `customIdGenerator` (e.g. `prismaAdapter(client, {
+	 * customIdGenerator })`) is a third source of id generation, entirely
+	 * separate from `advanced.database.generateId` -- and this codebase
+	 * has no way to verify whether it happens to produce opaque ids, so
+	 * its mere presence must be treated the same as an explicit
+	 * `advanced.database.generateId` function: not proven opaque.
+	 */
+	it("refuses to serve when the adapter itself has a custom id generator, regardless of advanced.database.generateId", async () => {
+		const { client, signInWithTestUser, auth } = await getTestInstance(
+			{
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const context = await auth.$context;
+		context.adapter.options = {
+			...context.adapter.options,
+			adapterConfig: {
+				...context.adapter.options?.adapterConfig,
+				customIdGenerator: () => "predictable-id",
+			},
+		} as typeof context.adapter.options;
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "adapter-custom-id@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data).toBeNull();
+		expect(preview.error?.status).toBe(400);
+	});
 });
