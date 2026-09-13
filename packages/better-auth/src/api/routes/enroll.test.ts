@@ -437,4 +437,158 @@ describe("enroll", async () => {
 			expect(res.data?.user.name).toBe("Given At End");
 		});
 	});
+
+	/**
+	 * Found in automated PR review (both cubic and Greptile flagged the
+	 * same root cause independently): the token was consumed and
+	 * revokeUnprovenAccountAccess had already stripped the row's prior
+	 * access before the name requirement was checked. A caller who
+	 * omitted the name lost the token and any prior credential with no
+	 * way back, since a fresh /enroll for the now-verified email issues
+	 * no new token at all (anti-enumeration). Name and password are now
+	 * fully validated against a peeked (non-consumed) token before
+	 * anything destructive happens.
+	 */
+	describe("a failed completion never strands the account", () => {
+		it("rejecting a missing name leaves the token's row untouched, retryable via a fresh /enroll", async () => {
+			let token = "";
+			const { client, db } = await getTestInstance({
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			});
+			await client.enroll({ email: "recoverable@example.com" });
+			const firstToken = token;
+
+			const blocked = await client.enroll.callback({
+				token: firstToken,
+				password: "recoverable-password-123",
+			});
+			expect(blocked.error?.code).toBe("NAME_REQUIRED");
+
+			const users = await db.findMany({
+				model: "user",
+				where: [{ field: "email", value: "recoverable@example.com" }],
+			});
+			const user = users[0] as { emailVerified: boolean; id: string };
+			expect(user.emailVerified).toBe(false);
+			const accounts = await db.findMany({
+				model: "account",
+				where: [{ field: "userId", value: user.id }],
+			});
+			expect(accounts).toHaveLength(0);
+
+			// A fresh /enroll call for the same (still unverified) email
+			// issues a new token, since the row was never touched.
+			await client.enroll({ email: "recoverable@example.com" });
+			expect(token).not.toBe(firstToken);
+
+			const completed = await client.enroll.callback({
+				token,
+				password: "recoverable-password-123",
+				name: "Recovered",
+			});
+			expect(completed.data?.user.email).toBe("recoverable@example.com");
+		});
+
+		it("the original token still works after a failed completion, once retried with a name", async () => {
+			let token = "";
+			const { client } = await getTestInstance({
+				user: {
+					enrollment: {
+						enabled: true,
+						async sendEnrollmentVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			});
+			await client.enroll({ email: "same-token-retry@example.com" });
+
+			const blocked = await client.enroll.callback({
+				token,
+				password: "same-token-retry-password-123",
+			});
+			expect(blocked.error?.code).toBe("NAME_REQUIRED");
+
+			// Nothing was consumed: the *same* token, with a name added,
+			// completes normally.
+			const completed = await client.enroll.callback({
+				token,
+				password: "same-token-retry-password-123",
+				name: "Retried",
+			});
+			expect(completed.data?.user.name).toBe("Retried");
+		});
+	});
+
+	/**
+	 * Found in automated PR review: `callbackURL` was accepted and
+	 * origin-checked but never used -- the emailed `url` always pointed
+	 * at `/enroll/callback`, a POST-only endpoint that can never be the
+	 * target of a clicked link.
+	 */
+	it("embeds callbackURL, resolved against baseURL's origin, in the emailed url", async () => {
+		let capturedUrl = "";
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth",
+			user: {
+				enrollment: {
+					enabled: true,
+					async sendEnrollmentVerification(data) {
+						capturedUrl = data.url;
+					},
+				},
+			},
+		});
+		await client.enroll({
+			email: "callback-url@example.com",
+			callbackURL: "/finish-enrollment",
+		});
+		expect(capturedUrl).toMatch(
+			/^http:\/\/localhost:3000\/finish-enrollment\?token=/,
+		);
+	});
+
+	/**
+	 * Found in automated PR review (cubic): a name given at /enroll was
+	 * only ever applied when creating a brand-new user, never when
+	 * reclaiming an existing unverified one -- so the real owner of a
+	 * pre-squatted email stayed stuck with whatever name the prior
+	 * occupant had set, unless they also passed a name at
+	 * /enroll/callback.
+	 */
+	it("applies a name given at /enroll to a reclaimed pre-existing unverified user", async () => {
+		let token = "";
+		const { client } = await getTestInstance({
+			user: {
+				enrollment: {
+					enabled: true,
+					async sendEnrollmentVerification(data) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		await client.signUp.email({
+			email: "reclaim-with-name@example.com",
+			password: "attacker-password-123",
+			name: "attacker",
+		});
+
+		await client.enroll({
+			email: "reclaim-with-name@example.com",
+			name: "Real Owner",
+		});
+		const res = await client.enroll.callback({
+			token,
+			password: "real-owner-password-123",
+		});
+		expect(res.data?.user.name).toBe("Real Owner");
+	});
 });

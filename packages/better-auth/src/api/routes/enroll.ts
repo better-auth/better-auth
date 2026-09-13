@@ -45,6 +45,25 @@ export async function createEnrollmentToken(
 		 * @default true
 		 */
 		requireName?: boolean;
+		/**
+		 * The app's own page that collects the password and calls
+		 * `/enroll/callback` -- `/enroll/callback` itself is POST-only and
+		 * takes a password, so it can never be the target of a clicked
+		 * link. Resolved against `baseURL`'s origin the same way magic
+		 * link resolves its own callback URLs. Falls back to a
+		 * `/enroll/callback?token=...` placeholder when omitted; that
+		 * placeholder is not a usable link on its own and is meant to be
+		 * replaced by the app's own URL built from `token`.
+		 */
+		callbackURL?: string;
+		/**
+		 * Called after the enroll token is persisted but before the
+		 * enrollment email is sent, so a caller that needs its own record
+		 * keyed by this token (e.g. the organization plugin's invitation
+		 * linkage) can create it before the token is reachable by anyone
+		 * who receives the email.
+		 */
+		onTokenCreated?: (token: string, expiresAt: Date) => Promise<void>;
 	},
 ): Promise<{ token: string; expiresAt: Date }> {
 	const enrollment = ctx.context.options.user?.enrollment;
@@ -68,7 +87,12 @@ export async function createEnrollmentToken(
 		identifier: `enroll:${token}`,
 		expiresAt,
 	});
-	const url = `${ctx.context.baseURL}/enroll/callback?token=${token}`;
+	if (opts.onTokenCreated) {
+		await opts.onTokenCreated(token, expiresAt);
+	}
+	const url = opts.callbackURL
+		? `${new URL(opts.callbackURL, ctx.context.baseURL).toString()}?token=${token}`
+		: `${ctx.context.baseURL}/enroll/callback?token=${token}`;
 	await ctx.context.runInBackgroundOrAwait(
 		enrollment.sendEnrollmentVerification(
 			{
@@ -161,7 +185,7 @@ export const enroll = createAuthEndpoint(
 			return ctx.json({ status: true });
 		}
 
-		const user =
+		let user =
 			existing?.user ??
 			(await ctx.context.internalAdapter.createUser(
 				{
@@ -172,7 +196,18 @@ export const enroll = createAuthEndpoint(
 				{ method: "enroll" },
 			));
 
-		await createEnrollmentToken(ctx, { user });
+		// A name given here on a *reclaimed* row (existing.user, not freshly
+		// created) was otherwise silently discarded: `createUser` above
+		// already applies it for a new row, but reusing an existing
+		// unverified one skipped it entirely, leaving the real owner stuck
+		// with whatever name a previous occupant of the row set.
+		if (existing?.user && ctx.body.name && ctx.body.name !== user.name) {
+			user = await ctx.context.internalAdapter.updateUser(user.id, {
+				name: ctx.body.name,
+			});
+		}
+
+		await createEnrollmentToken(ctx, { user, callbackURL: ctx.body.callbackURL });
 		return ctx.json({ status: true });
 	},
 );
@@ -231,17 +266,26 @@ export const enrollCallback = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
-		// Consume the single-use enroll token before any write so two
-		// concurrent callbacks with the same token can only complete once:
-		// the first caller wins, every racer gets null.
-		const verification =
-			await ctx.context.internalAdapter.consumeVerificationValue(
-				`enroll:${ctx.body.token}`,
-			);
-		if (!verification) {
+		// Hashed before anything destructive below, the same way
+		// signUpEmail hashes before creating the user: a plugin that wraps
+		// password hashing to reject it (e.g. a breach check) must fail
+		// here, before the token is consumed or any prior access is
+		// stripped -- not after, with no way back.
+		const hash = await ctx.context.password.hash(password);
+
+		// Peeked, not consumed, until every precondition below passes.
+		// Consuming first and then failing on a later check (a missing
+		// name, a stale token) would burn the single-use token and, once
+		// revokeUnprovenAccountAccess below has already run, strip the
+		// row's prior credential with no way back: a fresh /enroll call
+		// for an already-verified email issues no new token at all.
+		const identifier = `enroll:${ctx.body.token}`;
+		const pending =
+			await ctx.context.internalAdapter.findVerificationValue(identifier);
+		if (!pending || pending.expiresAt < new Date()) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
-		const { email, requireName } = JSON.parse(verification.value) as {
+		const { email, requireName } = JSON.parse(pending.value) as {
 			email: string;
 			requireName?: boolean;
 		};
@@ -255,6 +299,26 @@ export const enrollCallback = createAuthEndpoint(
 			// was issued. Treat the token as stale rather than linking a
 			// second credential account onto an account someone else already
 			// proved ownership of.
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+		}
+
+		// A name given at /enroll already satisfies this -- it's only
+		// checked once, against whichever name the user would end up
+		// with, so a name provided at either step is accepted and neither
+		// step demands it twice.
+		if (requireName !== false && !(ctx.body.name || existing.user.name)) {
+			throw APIError.from("BAD_REQUEST", {
+				message: "A name is required to complete enrollment",
+				code: "NAME_REQUIRED",
+			});
+		}
+
+		// Only now, with every precondition satisfied, actually consume
+		// the token: the first caller to reach this point wins, every
+		// concurrent racer gets null.
+		const verification =
+			await ctx.context.internalAdapter.consumeVerificationValue(identifier);
+		if (!verification) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 
@@ -275,17 +339,6 @@ export const enrollCallback = createAuthEndpoint(
 			user.name = ctx.body.name;
 		}
 
-		// A name given at /enroll already satisfies this -- it's only
-		// checked here, at the end of the flow, so a name provided at
-		// either step is accepted and neither step demands it twice.
-		if (requireName !== false && !user.name) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "A name is required to complete enrollment",
-				code: "NAME_REQUIRED",
-			});
-		}
-
-		const hash = await ctx.context.password.hash(password);
 		await ctx.context.internalAdapter.linkAccount({
 			userId: user.id,
 			providerId: "credential",
