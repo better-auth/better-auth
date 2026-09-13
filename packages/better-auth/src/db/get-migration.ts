@@ -33,6 +33,7 @@ import type {
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
 	CreateIndexBuilder,
+	CreateSchemaBuilder,
 	CreateTableBuilder,
 	Kysely,
 	RawBuilder,
@@ -588,6 +589,7 @@ export async function getMigrations(
 		kysely: db,
 		databaseType: dbType,
 		introspectIndexes,
+		schemaName,
 	} = await createKyselyAdapter(config);
 
 	if (!dbType) {
@@ -609,18 +611,24 @@ export async function getMigrations(
 	let tableMetadata = allTableMetadata;
 	switch (dbType) {
 		case "postgres": {
-			const schema = await getPostgresSchema(db);
+			const schema = schemaName ?? (await getPostgresSchema(db));
 			target = { type: "postgres", schema };
 			logger.debug(
-				`PostgreSQL migration: Using schema '${schema}' (from search_path)`,
+				`PostgreSQL migration: Using schema '${schema}' (${schemaName ? "from database.schemaName" : "from search_path"})`,
 			);
 
 			try {
 				const schemas = await db.introspection.getSchemas();
 				if (!schemas.some(({ name }) => name === schema)) {
-					logger.warn(
-						`Schema '${schema}' does not exist. Create it before running migrations or check your database configuration.`,
-					);
+					if (schemaName) {
+						logger.debug(
+							`Schema '${schema}' does not exist yet. The migration creates it before creating tables.`,
+						);
+					} else {
+						logger.warn(
+							`Schema '${schema}' does not exist. Create it before running migrations or check your database configuration.`,
+						);
+					}
 				}
 			} catch (error) {
 				logger.debug(
@@ -815,9 +823,14 @@ export async function getMigrations(
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
+		| CreateSchemaBuilder
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
+
+	if (schemaName && toBeCreated.length > 0) {
+		migrations.push(db.schema.createSchema(schemaName).ifNotExists());
+	}
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
 	const useNumberId = config.advanced?.database?.generateId === "serial";

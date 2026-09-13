@@ -1,6 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { DatabaseConnection, Dialect, TableMetadata } from "kysely";
+import { PostgresAdapter, PostgresQueryCompiler } from "kysely";
 import { describe, expect, it } from "vitest";
 import { organization } from "../plugins/organization";
 import { getMigrations, UnsafeMigrationError } from "./get-migration";
@@ -847,5 +849,117 @@ describe("get-migration: schema problems the migration cannot fix", () => {
 			...accountPlanField,
 		});
 		expect(configured.schemaProblems).toEqual([]);
+	});
+});
+
+function createPostgresDialect(tables: TableMetadata[] = []) {
+	const executed: string[] = [];
+	const connection: DatabaseConnection = {
+		async executeQuery(compiledQuery) {
+			executed.push(compiledQuery.sql);
+			return { rows: [] };
+		},
+		async *streamQuery() {
+			throw new Error("The migration plan must not stream queries");
+		},
+	};
+	const dialect: Dialect = {
+		createAdapter: () => new PostgresAdapter(),
+		createDriver: () => ({
+			async init() {},
+			async acquireConnection() {
+				return connection;
+			},
+			async beginTransaction() {},
+			async commitTransaction() {},
+			async rollbackTransaction() {},
+			async releaseConnection() {},
+			async destroy() {},
+		}),
+		createIntrospector: () => ({
+			async getSchemas() {
+				return [];
+			},
+			async getTables() {
+				return tables;
+			},
+			async getMetadata() {
+				return { tables };
+			},
+		}),
+		createQueryCompiler: () => new PostgresQueryCompiler(),
+	};
+	return { dialect, executed };
+}
+
+describe("get-migration: configured PostgreSQL schema", () => {
+	it("qualifies every planned statement with the configured schema", async () => {
+		const { dialect } = createPostgresDialect();
+		const config: BetterAuthOptions = {
+			database: { dialect, schemaName: "auth", type: "postgres" },
+		};
+
+		const { compileMigrations } = await getMigrations(config);
+		const migration = await compileMigrations();
+
+		expect(migration).toContain('create schema if not exists "auth"');
+		expect(migration).toContain('create table "auth"."user"');
+		expect(migration).toContain('create table "auth"."session"');
+		expect(migration).toContain('references "auth"."user" ("id")');
+		expect(migration).toContain(
+			'create index "session_userId_idx" on "auth"."session"',
+		);
+		expect(migration).not.toContain('create table "user"');
+	});
+
+	it("creates the schema before the tables that live in it", async () => {
+		const { dialect, executed } = createPostgresDialect();
+		const config: BetterAuthOptions = {
+			database: { dialect, schemaName: "auth", type: "postgres" },
+		};
+
+		const { runMigrations } = await getMigrations(config);
+		await runMigrations();
+
+		const createSchema = executed.findIndex((statement) =>
+			statement.startsWith('create schema if not exists "auth"'),
+		);
+		const createUser = executed.findIndex((statement) =>
+			statement.startsWith('create table "auth"."user"'),
+		);
+		expect(createSchema).toBeGreaterThanOrEqual(0);
+		expect(createSchema).toBeLessThan(createUser);
+	});
+
+	it("leaves the plan unqualified when no schema is configured", async () => {
+		const { dialect } = createPostgresDialect();
+		const config: BetterAuthOptions = {
+			database: { dialect, type: "postgres" },
+		};
+
+		const { compileMigrations } = await getMigrations(config);
+		const migration = await compileMigrations();
+
+		expect(migration).not.toContain("create schema");
+		expect(migration).toContain('create table "user"');
+		expect(migration).toContain('references "user" ("id")');
+	});
+
+	it("ignores tables from other schemas", async () => {
+		const { dialect } = createPostgresDialect([
+			{
+				columns: [],
+				isView: false,
+				name: "user",
+				schema: "public",
+			},
+		]);
+		const config: BetterAuthOptions = {
+			database: { dialect, schemaName: "auth", type: "postgres" },
+		};
+
+		const { toBeCreated } = await getMigrations(config);
+
+		expect(toBeCreated.map(({ table }) => table)).toContain("user");
 	});
 });
