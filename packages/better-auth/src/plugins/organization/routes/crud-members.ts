@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx, sessionMiddleware } from "../../../api";
+import { getSessionFromCtx } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
 import { defaultRoles } from "../access/statement";
@@ -17,6 +17,7 @@ import type {
 	InferOrganizationRolesFromOption,
 	Member,
 } from "../schema";
+import { clearActiveOrganizationFromSessions } from "../session";
 import type { OrganizationOptions } from "../types";
 
 const baseMemberSchema = z.object({
@@ -445,19 +446,16 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
+			await clearActiveOrganizationFromSessions(
+				ctx,
+				toBeRemovedMember.userId,
+				organizationId,
+			);
 			await adapter.deleteMember({
 				memberId: toBeRemovedMember.id,
 				organizationId: organizationId,
 				userId: toBeRemovedMember.userId,
 			});
-			if (
-				session.user.id === toBeRemovedMember.userId &&
-				session.session.activeOrganizationId ===
-					toBeRemovedMember.organizationId
-			) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-
 			// Run afterRemoveMember hook
 			if (options?.organizationHooks?.afterRemoveMember) {
 				await options?.organizationHooks.afterRemoveMember({
@@ -524,26 +522,44 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 									schema: {
 										type: "object",
 										properties: {
-											member: {
+											id: {
+												type: "string",
+											},
+											userId: {
+												type: "string",
+											},
+											organizationId: {
+												type: "string",
+											},
+											role: {
+												type: "string",
+											},
+											user: {
 												type: "object",
 												properties: {
 													id: {
 														type: "string",
 													},
-													userId: {
+													name: {
 														type: "string",
 													},
-													organizationId: {
+													email: {
 														type: "string",
 													},
-													role: {
-														type: "string",
+													image: {
+														type: ["string", "null"],
 													},
 												},
-												required: ["id", "userId", "organizationId", "role"],
+												required: ["id", "name", "email", "image"],
 											},
 										},
-										required: ["member"],
+										required: [
+											"id",
+											"userId",
+											"organizationId",
+											"role",
+											"user",
+										],
 									},
 								},
 							},
@@ -731,6 +747,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					message: "User not found",
 				});
 			}
+			const updatedMemberUser = {
+				id: userBeingUpdated.id,
+				name: userBeingUpdated.name,
+				email: userBeingUpdated.email,
+				image: userBeingUpdated.image,
+			};
 
 			const previousRole = toBeUpdatedMember.role;
 			const newRole = parseRoles(roleToSet);
@@ -768,7 +790,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						});
 					}
 
-					return ctx.json(updatedMember);
+					return ctx.json({ ...updatedMember, user: updatedMemberUser });
 				}
 			}
 
@@ -793,7 +815,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			return ctx.json(updatedMember);
+			return ctx.json({ ...updatedMember, user: updatedMemberUser });
 		},
 	);
 
@@ -875,7 +897,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			method: "POST",
 			body: leaveOrganizationBodySchema,
 			requireHeaders: true,
-			use: [sessionMiddleware, orgMiddleware],
+			use: [orgSessionMiddleware, orgMiddleware],
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
@@ -913,14 +935,16 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 			}
+			await clearActiveOrganizationFromSessions(
+				ctx,
+				session.user.id,
+				ctx.body.organizationId,
+			);
 			await adapter.deleteMember({
 				memberId: member.id,
 				organizationId: ctx.body.organizationId,
 				userId: session.user.id,
 			});
-			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
 			return ctx.json(member);
 		},
 	);
