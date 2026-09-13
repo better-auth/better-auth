@@ -1618,4 +1618,51 @@ describe("organization invitations integrate with passwordless enrollment", asyn
 		expect(preview.data).toBeNull();
 		expect(preview.error?.status).toBe(400);
 	});
+
+	/**
+	 * Found independently by both Greptile and cubic on the fix above:
+	 * getIdField's actual precedence (packages/core/src/db/adapter/get-id-field.ts)
+	 * has an explicit "uuid" win over the adapter's own customIdGenerator,
+	 * which is only ever reached when databaseGenerateId is unset. A
+	 * customIdGenerator that's configured but never actually invoked
+	 * because "uuid" already wins shouldn't disqualify otherwise-opaque
+	 * UUID ids.
+	 */
+	it("still serves when advanced.database.generateId is \"uuid\", even with an (unused) adapter custom id generator", async () => {
+		const { client, signInWithTestUser, auth } = await getTestInstance(
+			{
+				advanced: { database: { generateId: "uuid" } },
+				user: {
+					enrollment: {
+						enabled: true,
+						sendEnrollmentVerification: async () => {},
+					},
+				},
+				plugins: [organization({ sendInvitationEmail: async () => {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers, orgId } = await createOrg(client, signInWithTestUser);
+
+		const context = await auth.$context;
+		context.adapter.options = {
+			...context.adapter.options,
+			adapterConfig: {
+				...context.adapter.options?.adapterConfig,
+				customIdGenerator: () => "predictable-id",
+			},
+		} as typeof context.adapter.options;
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "uuid-wins@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		const preview = await client.organization.getInvitationPreview({
+			query: { id: String(invite.data!.id) },
+		});
+		expect(preview.data?.organizationName).toBe("Acme");
+	});
 });

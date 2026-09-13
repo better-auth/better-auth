@@ -116,8 +116,14 @@ const hasBuiltInOpaqueInvitationIdGeneration = ({
 	adapterCustomIdGenerator: ((props: { model: string }) => string) | undefined;
 }) =>
 	advancedGenerateId === undefined &&
-	adapterCustomIdGenerator === undefined &&
-	(databaseGenerateId === undefined || databaseGenerateId === "uuid");
+	// getIdField's actual precedence (see packages/core/src/db/adapter/get-id-field.ts):
+	// an explicit "uuid" always wins over the adapter's own customIdGenerator, which
+	// is only ever reached as a fallback when databaseGenerateId is unset -- so a
+	// configured customIdGenerator disqualifies opacity only in that fallback case,
+	// never when "uuid" is already forcing crypto.randomUUID() regardless.
+	(databaseGenerateId === "uuid" ||
+		(databaseGenerateId === undefined &&
+			adapterCustomIdGenerator === undefined));
 
 const shouldRequireVerifiedEmailForInvitationIdAction = ({
 	organizationOptions,
