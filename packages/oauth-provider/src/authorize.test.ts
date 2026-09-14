@@ -8,7 +8,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import * as z from "zod";
-import { validateIssuerUrl } from "./authorize";
+import { formatErrorURL, validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import {
@@ -82,6 +82,20 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 		expect(
 			validateIssuerUrl("http://auth.example.com:8080/path?query=1#hash"),
 		).toBe("https://auth.example.com:8080/path");
+	});
+});
+
+describe("formatErrorURL", () => {
+	it("should append query errors before the URL fragment", () => {
+		expect(
+			formatErrorURL(
+				"/error?source=oauth#retry",
+				"invalid_request",
+				"Missing parameter",
+			),
+		).toBe(
+			"/error?source=oauth&error=invalid_request&error_description=Missing+parameter#retry",
+		);
 	});
 });
 

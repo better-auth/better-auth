@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { BetterAuthError } from "@better-auth/core/error";
 import { Command } from "commander";
 import { ai } from "./commands/ai";
 import { createAdmin } from "./commands/create-admin";
@@ -37,10 +38,14 @@ async function main() {
 		.description("Better Auth CLI")
 		.action(() => program.help());
 
-	program.parse();
+	await program.parseAsync();
 }
 
 main().catch((error) => {
-	console.error("Error running Better Auth CLI:", error);
+	if (error instanceof BetterAuthError) {
+		console.error(error.message);
+	} else {
+		console.error("Error running Better Auth CLI:", error);
+	}
 	process.exit(1);
 });

@@ -4,13 +4,17 @@ import { noopOpenTelemetryAPI } from "./noop";
 let openTelemetryAPIPromise: Promise<void> | undefined;
 let openTelemetryAPI: OpenTelemetryAPI | undefined;
 
+async function loadOpenTelemetryAPI(): Promise<void> {
+	try {
+		openTelemetryAPI = await import("@opentelemetry/api");
+	} catch {
+		// OpenTelemetry is an optional peer dependency.
+	}
+}
+
 export function getOpenTelemetryAPI(): OpenTelemetryAPI {
 	if (!openTelemetryAPIPromise) {
-		openTelemetryAPIPromise = import("@opentelemetry/api")
-			.then((mod) => {
-				openTelemetryAPI = mod;
-			})
-			.catch(() => /* ignore failures */ undefined);
+		openTelemetryAPIPromise = loadOpenTelemetryAPI();
 	}
 
 	return openTelemetryAPI ?? noopOpenTelemetryAPI;

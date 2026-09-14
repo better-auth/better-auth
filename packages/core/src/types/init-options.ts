@@ -1,6 +1,5 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -28,10 +27,12 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
+import type { D1Database } from "./database";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
+
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
@@ -471,6 +472,17 @@ export type BetterAuthAdvancedOptions = {
 				 * @default false
 				 */
 				joins?: boolean;
+				/**
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database; Drizzle and Prisma inspect
+				 * local schema metadata without opening a connection.
+				 * Set `false` to disable runtime schema validation.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
@@ -639,6 +651,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 				| {
 						/**
@@ -669,6 +691,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 		  )
 		| undefined;
@@ -1784,6 +1816,26 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debug?: boolean;
+		  }
+		| undefined;
+	/**
+	 * Experimental features.
+	 */
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
 		  }
 		| undefined;
 };
