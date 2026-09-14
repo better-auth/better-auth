@@ -1,5 +1,11 @@
 # @better-auth/cimd
 
+## 1.7.5
+
+### Patch Changes
+
+- [#11161](https://github.com/better-auth/better-auth/pull/11161) [`753c2d1`](https://github.com/better-auth/better-auth/commit/753c2d19f77c07749f24f0dcacab2f88dc88484c) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow CIMD clients with valid metadata that cannot be cached to make consecutive OAuth requests while retaining failed-fetch backoff and origin/global fetch limits.
+
 ## 1.7.4
 
 ## 1.7.3

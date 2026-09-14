@@ -1,5 +1,28 @@
 # better-auth
 
+## 1.7.5
+
+### Patch Changes
+
+- [#11283](https://github.com/better-auth/better-auth/pull/11283) [`e56c45b`](https://github.com/better-auth/better-auth/commit/e56c45bddb8ca859175a47ab345b6c6dcc6da5d7) Thanks [@bytaesu](https://github.com/bytaesu)! - Log Cloudflare Turnstile error codes and binding mismatches on the server so CAPTCHA verification failures can be diagnosed.
+
+- [#11209](https://github.com/better-auth/better-auth/pull/11209) [`8d37cc3`](https://github.com/better-auth/better-auth/commit/8d37cc3b7732a04908b28d8abb7f010a286d6c43) Thanks [@siam923](https://github.com/siam923)! - Remove the unused optional `better-sqlite3` peer dependency to prevent installation conflicts.
+
+- [#11272](https://github.com/better-auth/better-auth/pull/11272) [`348fc26`](https://github.com/better-auth/better-auth/commit/348fc26c9904d800cd471947ba98abb5e8431b60) Thanks [@bytaesu](https://github.com/bytaesu)! - Use MySQL's reported byte lengths when validating indexes on existing string columns.
+
+- [#11203](https://github.com/better-auth/better-auth/pull/11203) [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8) Thanks [@dshukertjr](https://github.com/dshukertjr)! - Add a `database.schemaName` option for direct PostgreSQL connections. When set, the adapter and the CLI qualify every statement with that schema, so `auth generate` writes a schema-qualified migration that creates the schema before its tables instead of relying on the connection's `search_path`.
+
+- [#11270](https://github.com/better-auth/better-auth/pull/11270) [`133f6a2`](https://github.com/better-auth/better-auth/commit/133f6a27175ba21193742564d94aebfc9ec89920) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent PostgreSQL migrations from treating tables in other schemas or views in the active schema as Better Auth tables.
+
+- Updated dependencies [[`e18bc83`](https://github.com/better-auth/better-auth/commit/e18bc83172dca1804f0c5c3eff41d65e2849c557), [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8), [`dae97ed`](https://github.com/better-auth/better-auth/commit/dae97ed932a084a11faa96a2e1abf052fc85d2ea)]:
+  - @better-auth/drizzle-adapter@1.7.5
+  - @better-auth/kysely-adapter@1.7.5
+  - @better-auth/core@1.7.5
+  - @better-auth/memory-adapter@1.7.5
+  - @better-auth/mongo-adapter@1.7.5
+  - @better-auth/prisma-adapter@1.7.5
+  - @better-auth/telemetry@1.7.5
+
 ## 1.7.4
 
 ### Patch Changes
