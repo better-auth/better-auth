@@ -1,5 +1,13 @@
 # @better-auth/i18n
 
+## 1.6.33
+
+### Patch Changes
+
+- Updated dependencies [[`ecc4e0d`](https://github.com/better-auth/better-auth/commit/ecc4e0df7b1311dbe4fb4946a3d6d94397e6c5b8)]:
+  - @better-auth/core@1.6.33
+  - better-auth@1.6.33
+
 ## 1.6.32
 
 ### Patch Changes
