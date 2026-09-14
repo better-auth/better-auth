@@ -8,6 +8,7 @@ import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
+import { isValidEmail } from "../../../utils/email";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -245,8 +246,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.email().safeParse(email);
-			if (!isValidEmail.success) {
+			if (!(await isValidEmail(email, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 

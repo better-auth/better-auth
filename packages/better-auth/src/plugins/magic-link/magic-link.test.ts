@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { User } from "../../types";
 import { magicLink } from ".";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
@@ -18,15 +19,16 @@ describe("magic link", async () => {
 		token: "",
 		url: "",
 	};
-	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
-		plugins: [
-			magicLink({
-				async sendMagicLink(data) {
-					verificationEmail = data;
-				},
-			}),
-		],
-	});
+	const { customFetchImpl, testUser, sessionSetter, db } =
+		await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
 
 	const client = createAuthClient({
 		plugins: [magicLinkClient()],
@@ -82,6 +84,25 @@ describe("magic link", async () => {
 		expect(response.data?.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
+	});
+
+	it("should normalize a mixed-case email before issuing and verifying a magic link", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email.toUpperCase(),
+		});
+
+		expect(verificationEmail.email).toBe(testUser.email);
+
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+		});
+
+		const users = await db.findMany<User>({ model: "user" });
+		expect(users).toHaveLength(1);
+		expect(response.data?.user.id).toBe(users[0]?.id);
+		expect(response.data?.user.email).toBe(testUser.email);
 	});
 
 	it("should reject new-user magic link verify when validateUserInfo returns error", async () => {

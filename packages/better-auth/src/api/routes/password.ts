@@ -4,6 +4,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { getDate } from "../../utils/date";
+import { emailSchema } from "../../utils/email";
 import { validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { sensitiveSessionMiddleware } from "./session";
@@ -40,7 +41,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			/**
 			 * The email address of the user to send a password reset email to.
 			 */
-			email: z.email().meta({
+			email: emailSchema.meta({
 				description:
 					"The email address of the user to send a password reset email to",
 			}),
