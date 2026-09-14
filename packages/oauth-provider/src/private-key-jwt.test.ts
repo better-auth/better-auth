@@ -17,6 +17,7 @@ import type {
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import {
+	consumeClientAssertion,
 	isPrivateHostname,
 	verifyClientAssertion,
 } from "./utils/client-assertion";
@@ -768,6 +769,50 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(result2.error?.status).toBeGreaterThanOrEqual(400);
 		expect(result2.error?.status).toBeLessThan(500);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10862
+	 */
+	it("should reject reused jti when database ids are uuids", async () => {
+		const uuidOptions = {
+			loginPage: "/login",
+			consentPage: "/consent",
+		} satisfies OAuthOptions<Scope[]>;
+		const uuidInstance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			advanced: { database: { generateId: "uuid" } },
+			plugins: [jwt(), oauthProvider(uuidOptions)],
+		});
+		const context = await uuidInstance.auth.$context;
+		const assertion = {
+			namespace: "private_key_jwt:uuid-client",
+			payload: {
+				aud: tokenEndpoint,
+				exp: Math.floor(Date.now() / 1000) + 120,
+				jti: crypto.randomUUID(),
+			},
+			expectedAudience: tokenEndpoint,
+		};
+
+		await consumeClientAssertion(
+			{ context } as unknown as GenericEndpointContext,
+			uuidOptions,
+			assertion,
+		);
+		await expect(
+			consumeClientAssertion(
+				{ context } as unknown as GenericEndpointContext,
+				uuidOptions,
+				assertion,
+			),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion jti has already been used",
+			},
+		});
 	});
 
 	it("should reject concurrent reuse of the same jti", async () => {
