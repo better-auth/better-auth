@@ -317,3 +317,46 @@ export async function resetTwoFactorFailures(
 		update: { failedVerificationCount: 0, lockedUntil: null },
 	});
 }
+
+/**
+ * Atomically record `step` as the consumed TOTP time step on the twoFactor row,
+ * enforcing RFC 6238 §5.2 one-time use. Returns `true` when this caller consumed
+ * the step, `false` when the step was already consumed (replay).
+ *
+ * The guarded `incrementOne` doubles as the check and the write: the update only
+ * lands while `lastUsedStep < step`, so concurrent submissions of the same code
+ * cannot both succeed, and a delayed replay of an older in-window step is
+ * rejected by monotonicity.
+ *
+ * Rows predating the column (and rows that have never verified) store
+ * NULL/absent, which never satisfies `<`; those are claimed by a second guarded
+ * write against `lastUsedStep IS NULL`. A concurrent racer loses both guards:
+ * once the winner commits, the field is neither NULL nor below the step.
+ */
+export async function consumeTOTPStep(
+	ctx: GenericEndpointContext,
+	twoFactorTable: string,
+	twoFactor: TwoFactorTable,
+	step: number,
+): Promise<boolean> {
+	const claimed = await ctx.context.adapter.incrementOne<TwoFactorTable>({
+		model: twoFactorTable,
+		where: [
+			{ field: "id", value: twoFactor.id },
+			{ field: "lastUsedStep", operator: "lt", value: step },
+		],
+		increment: {},
+		set: { lastUsedStep: step },
+	});
+	if (claimed) return true;
+	const claimedFresh = await ctx.context.adapter.incrementOne<TwoFactorTable>({
+		model: twoFactorTable,
+		where: [
+			{ field: "id", value: twoFactor.id },
+			{ field: "lastUsedStep", value: null },
+		],
+		increment: {},
+		set: { lastUsedStep: step },
+	});
+	return claimedFresh !== null;
+}

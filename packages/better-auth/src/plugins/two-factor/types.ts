@@ -109,4 +109,5 @@ export interface TwoFactorTable {
 	verified: boolean;
 	failedVerificationCount?: number;
 	lockedUntil?: Date | null;
+	lastUsedStep?: number | null;
 }

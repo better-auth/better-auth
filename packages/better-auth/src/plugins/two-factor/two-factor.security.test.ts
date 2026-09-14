@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -490,7 +490,12 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		});
 
 		const sessionsBefore = await countSessions();
-		const freshCode = await createOTP(secret).totp();
+		// The enrollment verify above already consumed the current step's code
+		// (TOTPs are single-use), so mint the next step's — still inside the ±1
+		// acceptance window.
+		const freshCode = await createOTP(secret).hotp(
+			Math.floor(Date.now() / 30_000) + 1,
+		);
 		const res = await auth.api.verifyTOTP({
 			body: { code: freshCode },
 			headers: challengeHeaders,
@@ -518,28 +523,38 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 	});
 
 	it("two concurrent verifications of the same challenge yield exactly one session", async () => {
-		const challengeHeaders = await startChallenge();
-		const sessionsBefore = await countSessions();
-		const code = await createOTP(secret).totp();
+		// Enrollment and the expired-challenge test each consumed a step (TOTPs
+		// are single-use — a valid code burns its step even when the challenge
+		// later fails), so advance the clock two steps to reach an unconsumed
+		// step before minting a code.
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(Date.now() + 61_000);
+		try {
+			const challengeHeaders = await startChallenge();
+			const sessionsBefore = await countSessions();
+			const code = await createOTP(secret).totp();
 
-		const [first, second] = await Promise.all([
-			auth.api.verifyTOTP({
-				body: { code },
-				headers: challengeHeaders,
-				asResponse: true,
-			}),
-			auth.api.verifyTOTP({
-				body: { code },
-				headers: challengeHeaders,
-				asResponse: true,
-			}),
-		]);
+			const [first, second] = await Promise.all([
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeHeaders,
+					asResponse: true,
+				}),
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeHeaders,
+					asResponse: true,
+				}),
+			]);
 
-		const statuses = [first.status, second.status].sort();
-		expect(statuses).toEqual([200, 401]);
+			const statuses = [first.status, second.status].sort();
+			expect(statuses).toEqual([200, 401]);
 
-		const sessionsAfter = await countSessions();
-		expect(sessionsAfter.length).toBe(sessionsBefore.length + 1);
+			const sessionsAfter = await countSessions();
+			expect(sessionsAfter.length).toBe(sessionsBefore.length + 1);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 
@@ -729,5 +744,173 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		// the consume and never reach session creation, so at most one 200.
 		const successCount = results.filter((res) => res.status === 200).length;
 		expect(successCount).toBeLessThanOrEqual(1);
+	});
+});
+
+/**
+ * Regression coverage for TOTP one-time use (RFC 6238 §5.2 / OWASP ASVS 5.0
+ * §6.5.1). Verification used to be stateless: a code that passed once stayed
+ * valid for the rest of its ~90s acceptance window — the step-up
+ * (active-session) path accepted it repeatedly, and the sign-in path accepted
+ * it again under a fresh challenge, because only the challenge row was
+ * consumed. The twoFactor row now records the last consumed time step and the
+ * verify endpoint claims the matched step with an atomic guarded write before
+ * issuing a session, so a code works exactly once — sequentially or under
+ * concurrency. Each test enrolls its own instance so the persisted
+ * `lastUsedStep` cannot leak between cases.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10387
+ */
+describe("two-factor security: TOTP codes are single-use (RFC 6238 §5.2)", () => {
+	async function setupTotpUser() {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor({ skipVerificationOnEnable: true })],
+		});
+		const { headers } = await signInWithTestUser();
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		// skipVerificationOnEnable activates 2FA immediately and rotates the
+		// session, so use the cookies from the enable response going forward.
+		const sessionHeaders = convertSetCookieToCookie(enableRes.headers);
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		const userId = dbUser?.id as string;
+		const row = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: row!.secret,
+		});
+		return { auth, secret, sessionHeaders, testUser };
+	}
+
+	async function freshChallenge(
+		auth: Awaited<ReturnType<typeof setupTotpUser>>["auth"],
+		testUser: Awaited<ReturnType<typeof setupTotpUser>>["testUser"],
+	): Promise<Headers> {
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		return convertSetCookieToCookie(res.headers);
+	}
+
+	it("rejects a code reused on the step-up (active session) path", async () => {
+		const { auth, secret, sessionHeaders } = await setupTotpUser();
+		const code = await createOTP(secret).totp();
+
+		const first = await auth.api.verifyTOTP({
+			body: { code },
+			headers: sessionHeaders,
+			asResponse: true,
+		});
+		expect(first.status).toBe(200);
+
+		const replay = await auth.api.verifyTOTP({
+			body: { code },
+			headers: sessionHeaders,
+			asResponse: true,
+		});
+		expect(replay.status).toBe(401);
+		const json = (await replay.json()) as { message: string };
+		expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+	});
+
+	it("accepts a step-up code exactly once across repeated attempts", async () => {
+		const { auth, secret, sessionHeaders } = await setupTotpUser();
+		const code = await createOTP(secret).totp();
+
+		// The reported repro accepted the same code 3/3 times on the step-up
+		// path; it must now succeed exactly once.
+		const results = await Promise.all(
+			[0, 1, 2].map(() =>
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: sessionHeaders,
+					asResponse: true,
+				}),
+			),
+		);
+		expect(results.filter((res) => res.status === 200)).toHaveLength(1);
+	});
+
+	it("rejects a code reused across fresh sign-in challenges", async () => {
+		const { auth, secret, testUser } = await setupTotpUser();
+		const code = await createOTP(secret).totp();
+
+		const first = await auth.api.verifyTOTP({
+			body: { code },
+			headers: await freshChallenge(auth, testUser),
+			asResponse: true,
+		});
+		expect(first.status).toBe(200);
+
+		// A new challenge used to re-accept the same code because only the
+		// challenge row was consumed; the consumed step now rejects the replay.
+		const replay = await auth.api.verifyTOTP({
+			body: { code },
+			headers: await freshChallenge(auth, testUser),
+			asResponse: true,
+		});
+		expect(replay.status).toBe(401);
+		const json = (await replay.json()) as { message: string };
+		expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+	});
+
+	it("concurrent sign-in challenges with the same code mint at most one session", async () => {
+		const { auth, secret, testUser } = await setupTotpUser();
+		const code = await createOTP(secret).totp();
+
+		const [challengeA, challengeB] = await Promise.all([
+			freshChallenge(auth, testUser),
+			freshChallenge(auth, testUser),
+		]);
+		const results = await Promise.all([
+			auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeA,
+				asResponse: true,
+			}),
+			auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeB,
+				asResponse: true,
+			}),
+		]);
+		expect(results.filter((res) => res.status === 200)).toHaveLength(1);
+	});
+
+	it("still accepts a code from the next step inside the window", async () => {
+		const { auth, secret, sessionHeaders } = await setupTotpUser();
+
+		// Burn the current step, then prove the guard is not over-blocking: a
+		// code for the following step is still within the ±1 acceptance window
+		// and must verify.
+		const current = await createOTP(secret).totp();
+		const first = await auth.api.verifyTOTP({
+			body: { code: current },
+			headers: sessionHeaders,
+			asResponse: true,
+		});
+		expect(first.status).toBe(200);
+
+		const nextStepCode = await createOTP(secret).hotp(
+			Math.floor(Date.now() / 30_000) + 1,
+		);
+		const res = await auth.api.verifyTOTP({
+			body: { code: nextStepCode },
+			headers: sessionHeaders,
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
 	});
 });
