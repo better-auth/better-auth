@@ -14,6 +14,20 @@ import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
+/**
+ * Resolve the pending claim a verification proof is bound to: the row's
+ * credential account when it has one, otherwise the user row itself (e.g. a
+ * social-only account pending verification).
+ */
+export async function getVerificationClaim(
+	ctx: GenericEndpointContext,
+	userId: string,
+) {
+	const credentialAccount =
+		await ctx.context.internalAdapter.findCredentialAccount(userId);
+	return { credentialAccount, claimId: credentialAccount?.id ?? userId };
+}
+
 export async function createEmailVerificationToken(
 	secret: string,
 	email: string,
@@ -56,11 +70,18 @@ export async function sendVerificationEmailFn(
 			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 		);
 	}
+	/**
+	 * Bind the token to the row's current claim — the credential account, or
+	 * the row itself when it has none — so a proof issued for a superseded
+	 * pending claim cannot verify a later one.
+	 */
+	const { claimId } = await getVerificationClaim(ctx, user.id);
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
+		{ claimId },
 	);
 	const callbackURL = ctx.body.callbackURL
 		? encodeURIComponent(ctx.body.callbackURL)
@@ -319,6 +340,7 @@ export const verifyEmail = createAuthEndpoint(
 			email: z.email(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
+			claimId: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
@@ -485,6 +507,24 @@ export const verifyEmail = createAuthEndpoint(
 				status: true,
 				user: null,
 			});
+		}
+		/**
+		 * A proof may only verify the pending claim it was issued for. Tokens
+		 * minted after claim binding carry `claimId` — the row's credential
+		 * account — and are rejected when a newer sign-up has since replaced
+		 * it. Legacy claim-less tokens fall back to requiring the current
+		 * credential to predate the token's `iat` (second granularity), so a
+		 * link issued before a claim was replaced still cannot verify it.
+		 */
+		const { claimId: currentClaimId, credentialAccount } =
+			await getVerificationClaim(ctx, user.user.id);
+		const claimSuperseded = parsed.claimId
+			? parsed.claimId !== currentClaimId
+			: !!credentialAccount &&
+				Math.floor(new Date(credentialAccount.createdAt).getTime() / 1000) >
+					(jwt.payload.iat ?? 0);
+		if (claimSuperseded) {
+			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		if (ctx.context.options.emailVerification?.beforeEmailVerification) {
 			await ctx.context.options.emailVerification.beforeEmailVerification(
