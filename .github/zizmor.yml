@@ -19,6 +19,9 @@ rules:
       # slash commands. The pinned action retains a scoped token to push the
       # generated branch but does not execute checked-out repository code.
       - backport.yml
+      # Intentional: runs trusted code from main and validates the triggering
+      # branch and commit before creating a token. It never executes that revision.
+      - sync-version-docs.yml
   use-trusted-publishing:
     ignore:
       # Intentional: pkg.pr.new publishes ephemeral PR preview packages, not npm

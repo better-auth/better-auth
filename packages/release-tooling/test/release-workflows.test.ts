@@ -16,6 +16,15 @@ const workflowValueSchema = z.union([
 	z.null(),
 ]);
 
+const workflowCallSchema = z.union([
+	z.null(),
+	z.looseObject({
+		secrets: z
+			.record(z.string(), z.looseObject({ required: z.boolean() }))
+			.optional(),
+	}),
+]);
+
 const workflowStepSchema = z.looseObject({
 	if: z.string().optional(),
 	name: z.string().optional(),
@@ -36,6 +45,11 @@ const workflowJobSchema = z.looseObject({
 });
 
 const workflowSchema = z.looseObject({
+	on: z
+		.looseObject({
+			workflow_call: workflowCallSchema.optional(),
+		})
+		.optional(),
 	concurrency: z
 		.looseObject({
 			group: z.string(),
@@ -442,11 +456,45 @@ describe("release notes command security", () => {
 		);
 	});
 
-	it("uses versioned maintenance branches", () => {
-		const npmTag = getStep(
+	it("selects release channels by branch", () => {
+		const releaseChannel = getStep(
 			getJob(releaseWorkflow, "release"),
-			"Determine npm dist-tag",
+			"Resolve release channel",
 		);
+		const publish = getStep(
+			getJob(releaseWorkflow, "release"),
+			"Create Release Pull Request or Publish",
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'if [[ "$REF" == "main" ]]; then',
+				'  echo "publish_command=pnpm ci:release --tag latest" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=true" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'elif [[ "$REF" =~ ^v([0-9]+)\\.([0-9]+)\\.x$ ]]; then',
+				'  TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
+				'  echo "publish_command=pnpm ci:release --tag $TAG" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=false" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(releaseChannel.run).toContain(
+			[
+				'elif [ "$REF" = "next" ]; then',
+				'  echo "publish_command=pnpm ci:release" >> "$GITHUB_OUTPUT"',
+				'  echo "github_latest=false" >> "$GITHUB_OUTPUT"',
+			].join("\n"),
+		);
+		expect(publish.with).toHaveProperty(
+			"publish",
+			expect.stringContaining("release-channel.outputs.publish_command"),
+		);
+		expect(publish.env).not.toHaveProperty("NPM_CONFIG_TAG");
+	});
+
+	it("uses versioned maintenance branches", () => {
 		const authorize = getStep(
 			getJob(commandWorkflow, "generate"),
 			"Authorize command and resolve PR",
@@ -458,10 +506,6 @@ describe("release notes command security", () => {
 
 		expect(releaseWorkflow.content).toContain("'v*.*.x'");
 		expect(releaseWorkflow.content).not.toContain("release/**");
-		expect(npmTag.run).toContain("^v([0-9]+)\\.([0-9]+)\\.x$");
-		expect(npmTag.run).toContain(
-			'TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"',
-		);
 		expect(authorize.run).toContain("^v[0-9]+\\.[0-9]+\\.x$");
 		expect(prDetails.run).toContain('"$HEAD_REF" == v*.*.x');
 		expect(verifyChangesetsWorkflow.content).toContain("'v*.*.x'");
@@ -501,6 +545,44 @@ describe("release notes command security", () => {
 });
 
 describe("release publication security", () => {
+	it("requires the release App key from reusable release callers", () => {
+		expect(releaseWorkflow.workflow.on?.workflow_call).toMatchObject({
+			secrets: {
+				RELEASE_APP_PRIVATE_KEY: {
+					required: true,
+				},
+			},
+		});
+	});
+
+	it("exposes release policy workflows to pinned maintenance callers", () => {
+		for (const file of [
+			releaseWorkflow,
+			draftWorkflow,
+			verifyChangesetsWorkflow,
+		]) {
+			expect(file.workflow.on?.workflow_call).not.toBeUndefined();
+		}
+	});
+
+	it("loads release tooling from the called workflow revision", () => {
+		const release = getJob(releaseWorkflow, "release");
+		const checkout = getStep(release, "Checkout shared release tooling");
+		const resolve = getStep(release, "Resolve release tooling");
+		const detect = getStep(release, "Detect release commit");
+
+		expect(checkout.if).toContain("inputs.use_shared_tooling");
+		expect(checkout.with).toMatchObject({
+			repository: "${{ job.workflow_repository }}",
+			ref: "${{ job.workflow_sha }}",
+			path: ".release-tooling",
+			"persist-credentials": false,
+		});
+		expect(resolve.run).toContain(".git/info/exclude");
+		expect(resolve.run).toContain("RELEASE_NOTES_COMMAND");
+		expect(detect.run).toContain('node "$RELEASE_NOTES_COMMAND" candidate');
+	});
+
 	it("rejects stale release merge groups before publication", () => {
 		const mergeGuard = getStep(
 			getJob(ciWorkflow, "lint"),
@@ -527,7 +609,7 @@ describe("release publication security", () => {
 		expect(approvalIndex).toBeGreaterThan(-1);
 		expect(publishIndex).toBeGreaterThan(approvalIndex);
 		expect(release.steps[approvalIndex]?.run).toContain(
-			"release-notes:comment extract",
+			'node "$RELEASE_NOTES_COMMENT_COMMAND" extract',
 		);
 	});
 
@@ -552,7 +634,7 @@ describe("release publication security", () => {
 			"Detect release commit",
 		);
 
-		expect(detect.run).toContain("release-notes candidate");
+		expect(detect.run).toContain('node "$RELEASE_NOTES_COMMAND" candidate');
 		expect(detect.run).toContain('--branch "$GITHUB_SHA"');
 		expect(detect.run).not.toContain("github.event.before");
 	});
@@ -587,8 +669,13 @@ describe("release publication security", () => {
 			"RELEASE_COMMIT",
 			expect.stringContaining("approved-notes.outputs.release_commit"),
 		);
+		expect(createRelease.env).toHaveProperty(
+			"GITHUB_LATEST",
+			expect.stringContaining("release-channel.outputs.github_latest"),
+		);
 		expect(createRelease.run).toContain('gh release create "$TAG"');
 		expect(createRelease.run).toContain('--target "$RELEASE_COMMIT"');
+		expect(createRelease.run).toContain('--latest="$GITHUB_LATEST"');
 		expect(createRelease.run).not.toContain('COMMIT_SHA="${GITHUB_SHA}"');
 	});
 
@@ -608,7 +695,7 @@ describe("release publication security", () => {
 			"if",
 			expect.stringContaining("release-candidate.outputs.release == 'true'"),
 		);
-		expect(guard.run).toContain("check-changesets --branch");
+		expect(guard.run).toContain('"$RELEASE_NOTES_COMMAND" check-changesets');
 		expect(guard.run).toContain("GITHUB_STEP_SUMMARY");
 		expect(guard.run).toContain("Revert this release merge");
 		expect(guard.run).toContain("exit 1");
@@ -633,19 +720,25 @@ describe("release publication security", () => {
 		expect(promote.run).toContain("Do not manually mark it ready");
 	});
 
-	it("does not grant issue write access to the publisher", () => {
+	it("publishes only through the scoped release App", () => {
 		const release = getJob(releaseWorkflow, "release");
 		const token = getStep(release, "Generate App Token");
+		const approvedNotes = getStep(release, "Resolve approved release notes");
 
 		expect(release.permissions).toEqual({
-			contents: "write",
-			"pull-requests": "write",
+			contents: "read",
 			"id-token": "write",
 		});
+		expect(token.if).toBeUndefined();
 		expect(appTokenPermissions(token)).toEqual({
 			"permission-contents": "write",
 			"permission-pull-requests": "write",
 		});
+		expect(releaseWorkflow.content).not.toContain(
+			"steps.app-token.outputs.token || secrets.GITHUB_TOKEN",
+		);
+		expect(approvedNotes.run).toContain("performed_via_github_app.id");
+		expect(approvedNotes.run).not.toContain("github-actions[bot]");
 	});
 
 	it("scopes the promotion App token to its required permissions", () => {

@@ -25,10 +25,52 @@ const kyselyDB = new Kysely({
 	dialect: new MysqlDialect(mysqlDB),
 });
 
-const mysqlDisabledIndexTestSuite = createTestSuite(
+const mysqlMigrationIndexTestSuite = createTestSuite(
 	"mysql migration index introspection",
 	{},
 	() => ({
+		/**
+		 * @see https://dev.mysql.com/doc/refman/8.4/en/information-schema-columns-table.html
+		 */
+		"uses the column byte length when validating an index": async () => {
+			const tableName = "mysql_index_byte_length_subject";
+			const indexName = "mysql_byte_length_subject_idx";
+			const options = {
+				database: mysqlDB,
+				plugins: [
+					{
+						id: "mysql-index-byte-length",
+						schema: {
+							mysqlIndexByteLengthSubject: {
+								modelName: tableName,
+								fields: {
+									subject: { type: "string" },
+								},
+								indexes: [{ fields: ["subject"], name: indexName }],
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			} satisfies BetterAuthOptions;
+
+			await mysqlDB.query(`
+				CREATE TABLE \`${tableName}\` (
+					\`id\` varchar(191) NOT NULL,
+					\`subject\` varchar(1000) CHARACTER SET latin1 NOT NULL,
+					PRIMARY KEY (\`id\`)
+				) ENGINE=InnoDB
+			`);
+			try {
+				const migrations = await getMigrations(options);
+				expect(await migrations.compileMigrations()).toContain(
+					`create index \`${indexName}\` on \`${tableName}\` (\`subject\`)`,
+				);
+				await migrations.runMigrations();
+			} finally {
+				await mysqlDB.query(`DROP TABLE \`${tableName}\``);
+			}
+		},
+
 		/**
 		 * @see https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
 		 */
@@ -103,7 +145,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
-		mysqlDisabledIndexTestSuite(),
+		mysqlMigrationIndexTestSuite(),
 		caseInsensitiveTestSuite({
 			disableTests: {
 				"findOne - eq with mode sensitive (default) should not match different case": true,
