@@ -251,6 +251,9 @@ export const createOrganization = <O extends OrganizationOptions>(
 				teamMember = await adapter.findOrCreateTeamMember({
 					teamId: defaultTeam.id,
 					userId: user.id,
+					role: Array.isArray(options.teams?.defaultRole)
+						? options.teams.defaultRole.join(",")
+						: options.teams?.defaultRole || "member",
 				});
 
 				if (options?.organizationHooks?.afterCreateTeam) {
