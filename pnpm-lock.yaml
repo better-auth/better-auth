@@ -1289,9 +1289,6 @@ importers:
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.4.2
-      '@cloudflare/workers-types':
-        specifier: ^4.20250121.0
-        version: 4.20260226.1
       kysely:
         specifier: 'catalog:'
         version: 0.29.2

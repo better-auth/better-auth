@@ -59,7 +59,6 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250121.0",
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
     "kysely": "catalog:",
