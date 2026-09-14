@@ -224,24 +224,82 @@ describe("captcha", async () => {
 			expect(res.error?.status).toBe(500);
 		});
 
-		it("Should return 403 in case of a validation failure", async () => {
-			mockBetterFetch.mockResolvedValue({
-				data: {
-					success: false,
-					"error-codes": ["invalid-input-response"],
-				},
-			});
-			const res = await client.signIn.email({
-				email: "test@test.com",
-				password: "test123456",
-				fetchOptions: {
-					headers: {
-						"x-captcha-response": "captcha-token",
+		/**
+		 * @see https://developers.cloudflare.com/turnstile/get-started/server-side-validation/#best-practices
+		 */
+		describe("Siteverify failures", () => {
+			it("returns a generic 403", async () => {
+				mockBetterFetch.mockResolvedValue({
+					data: {
+						success: false,
+						"error-codes": ["invalid-input-response"],
 					},
-				},
+				});
+				const res = await client.signIn.email({
+					email: "test@test.com",
+					password: "test123456",
+					fetchOptions: {
+						headers: {
+							"x-captcha-response": "captcha-token",
+						},
+					},
+				});
+
+				expect(res.error?.status).toBe(403);
+				expect(res.error?.code).toBe("VERIFICATION_FAILED");
+				expect(res.error?.message).toBe("Captcha verification failed");
 			});
 
-			expect(res.error?.status).toBe(403);
+			it("logs diagnostics without sensitive response fields", async () => {
+				const log = vi.fn();
+				const { client } = await getTestInstance({
+					logger: { log },
+					plugins: [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: "xx-secret-key",
+						}),
+					],
+				});
+				mockBetterFetch.mockResolvedValue({
+					data: {
+						success: false,
+						"error-codes": ["invalid-input-response"],
+						hostname: "example.com",
+						action: "login",
+						cdata: "private-custom-data",
+						metadata: {
+							ephemeral_id: "private-device-id",
+						},
+					},
+				});
+
+				await client.signIn.email({
+					email: "test@test.com",
+					password: "test123456",
+					fetchOptions: {
+						headers: {
+							"x-captcha-response": "captcha-token",
+						},
+					},
+				});
+
+				expect(log).toHaveBeenCalledWith(
+					"warn",
+					"Cloudflare Turnstile verification failed",
+					expect.objectContaining({
+						provider: "cloudflare-turnstile",
+						reason: "siteverify_rejected",
+						errorCodes: ["invalid-input-response"],
+						hostname: "example.com",
+						action: "login",
+					}),
+				);
+
+				const loggedDetails = log.mock.calls[0]?.[2];
+				expect(loggedDetails).not.toHaveProperty("cdata");
+				expect(loggedDetails).not.toHaveProperty("metadata");
+			});
 		});
 	});
 
@@ -638,7 +696,9 @@ describe("captcha", async () => {
 
 	describe("action and hostname binding", async () => {
 		it("rejects a Turnstile token whose action does not match expectedAction", async () => {
+			const log = vi.fn();
 			const { client } = await getTestInstance({
+				logger: { log },
 				plugins: [
 					captcha({
 						provider: "cloudflare-turnstile",
@@ -656,10 +716,22 @@ describe("captcha", async () => {
 				fetchOptions: { headers: { "x-captcha-response": "token" } },
 			});
 			expect(res.error?.status).toBe(403);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				"Cloudflare Turnstile verification failed",
+				expect.objectContaining({
+					provider: "cloudflare-turnstile",
+					reason: "action_mismatch",
+					expectedAction: "login",
+					actualAction: "signup",
+				}),
+			);
 		});
 
 		it("rejects a Turnstile token from a hostname outside allowedHostnames", async () => {
+			const log = vi.fn();
 			const { client } = await getTestInstance({
+				logger: { log },
 				plugins: [
 					captcha({
 						provider: "cloudflare-turnstile",
@@ -677,6 +749,16 @@ describe("captcha", async () => {
 				fetchOptions: { headers: { "x-captcha-response": "token" } },
 			});
 			expect(res.error?.status).toBe(403);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				"Cloudflare Turnstile verification failed",
+				expect.objectContaining({
+					provider: "cloudflare-turnstile",
+					reason: "hostname_mismatch",
+					allowedHostnames: ["myapp.com"],
+					actualHostname: "untrusted.example",
+				}),
+			);
 		});
 
 		it("rejects a reCAPTCHA v3 token whose action does not match expectedAction", async () => {
