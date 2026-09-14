@@ -24,6 +24,13 @@ export interface LoginResult {
 	token: string;
 }
 
+/** Options for creating a session with the test auth helpers. */
+export interface TestAuthOptions {
+	userId: string;
+	/** Additional session fields. Standard session fields are ignored. */
+	session?: Record<string, unknown>;
+}
+
 export interface TestHelpers {
 	// Factories
 	createUser(overrides?: Partial<User> & Record<string, unknown>): User;
@@ -45,9 +52,11 @@ export interface TestHelpers {
 	deleteOrganization?(orgId: string): Promise<void>;
 
 	// Auth helpers
-	login(opts: { userId: string }): Promise<LoginResult>;
-	getAuthHeaders(opts: { userId: string }): Promise<Headers>;
-	getCookies(opts: { userId: string; domain?: string }): Promise<TestCookie[]>;
+	login(opts: TestAuthOptions): Promise<LoginResult>;
+	getAuthHeaders(opts: TestAuthOptions): Promise<Headers>;
+	getCookies(
+		opts: TestAuthOptions & { domain?: string },
+	): Promise<TestCookie[]>;
 
 	// OTP capture (when captureOTP: true)
 	getOTP?(identifier: string): string | undefined;

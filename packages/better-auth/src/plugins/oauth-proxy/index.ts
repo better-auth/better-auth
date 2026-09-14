@@ -563,7 +563,6 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							},
 							profile: providerProfile,
 							account: {
-								providerId: provider.id,
 								...accountKey,
 								accessToken: tokens.accessToken,
 								refreshToken: tokens.refreshToken,

@@ -335,7 +335,6 @@ export const callbackOAuth = createAuthEndpoint(
 			} else {
 				const newAccount = await c.context.internalAdapter.createAccount({
 					userId: link.userId,
-					providerId: provider.id,
 					...accountKey,
 					...tokens,
 					accessToken: await setTokenUtil(tokens.accessToken, c.context),
@@ -364,7 +363,6 @@ export const callbackOAuth = createAuthEndpoint(
 			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
 		const accountData = {
-			providerId: provider.id,
 			...accountKey,
 			...tokens,
 			scope: tokens.scopes?.join(","),

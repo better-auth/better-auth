@@ -5,7 +5,7 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
-    "hono": "^4.12.34"
+    "hono": "^4.13.7"
   },
   "devDependencies": {
     "vitest": "catalog:vitest",
@@ -16,6 +16,7 @@
     "e2e:smoke": "pnpm run check && vitest run",
     "dev": "wrangler dev",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
+    "typecheck:consumer": "tsc --noEmit --project tsconfig.json",
+    "typecheck:skip-lib-check-false": "tsc --noEmit --project tsconfig.skip-lib-check-false.json"
   }
 }

@@ -174,7 +174,15 @@ export async function runReleaseNotes(
 			);
 			return;
 		case "rewrite":
-			await rewriteReleaseNotes(operation.contextPath, operation.outputPath);
+			setOutput(
+				"fallbacks",
+				JSON.stringify(
+					await rewriteReleaseNotes(
+						operation.contextPath,
+						operation.outputPath,
+					),
+				),
+			);
 			return;
 		case "collect":
 			if (!collection)

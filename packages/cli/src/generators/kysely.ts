@@ -19,9 +19,10 @@ export const generateKyselySchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const { compileMigrations, unsafeChanges } = await getMigrations(options, {
-		throwOnUnsafe: false,
-	});
+	const { compileMigrations, unsafeChanges, schemaProblems } =
+		await getMigrations(options, {
+			throwOnUnsafe: false,
+		});
 	const migrations = await compileMigrations();
 	const code = migrations.trim() === ";" ? "" : migrations;
 	return {
@@ -29,6 +30,7 @@ export const generateKyselySchema: SchemaGenerator = async ({
 			? `${commentBanner(unsafeChanges)}${code}`
 			: code,
 		unsafeChanges,
+		schemaProblems,
 		fileName:
 			file ||
 			`./better-auth_migrations/${new Date()

@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Icons as frameworkIcons } from "@/components/docs/icons";
+import { Icons as frameworkIcons } from "@/components/icons";
 import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
 
 export const providerIcons: Record<string, () => ReactNode> = {
@@ -1127,7 +1127,7 @@ export function IntegrationsSection() {
 					const customIcon = featuredIcons[fw.name];
 					const fallbackIcon =
 						frameworkIcons[fw.icon as keyof typeof frameworkIcons];
-					const renderIcon = customIcon || fallbackIcon;
+					const Icon = customIcon || fallbackIcon;
 					return (
 						<Link
 							key={fw.name}
@@ -1135,7 +1135,7 @@ export function IntegrationsSection() {
 							className="group flex items-center gap-3 py-2.5 border-b border-dashed border-foreground/[0.06] last:border-b-0 hover:bg-foreground/[0.02] -mx-2 px-2 transition-colors"
 						>
 							<span className="text-foreground/80 dark:text-foreground/70 group-hover:text-foreground/95 transition-colors [&_svg]:w-5 [&_svg]:h-5 shrink-0">
-								{renderIcon?.()}
+								{Icon && <Icon />}
 							</span>
 							<span className="text-[13px] font-medium text-foreground/90 dark:text-foreground/80 group-hover:text-foreground transition-colors shrink-0 w-20">
 								{fw.name}
@@ -1166,8 +1166,7 @@ export function IntegrationsSection() {
 				</p>
 				<div className="flex flex-wrap gap-1.5">
 					{moreFrameworks.map((fw) => {
-						const iconFn =
-							frameworkIcons[fw.icon as keyof typeof frameworkIcons];
+						const Icon = frameworkIcons[fw.icon];
 						return (
 							<Link
 								key={fw.name}
@@ -1175,7 +1174,7 @@ export function IntegrationsSection() {
 								className="group inline-flex items-center gap-1.5 px-2 py-1 border border-foreground/[0.1] hover:border-foreground/[0.2] hover:bg-foreground/[0.03] transition-colors"
 							>
 								<span className="text-foreground/75 dark:text-foreground/65 group-hover:text-foreground transition-colors [&_svg]:w-3 [&_svg]:h-3">
-									{iconFn?.()}
+									<Icon />
 								</span>
 								<span className="text-[9px] font-mono text-foreground/75 dark:text-foreground/65 group-hover:text-foreground transition-colors">
 									{fw.name}

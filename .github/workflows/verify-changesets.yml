@@ -8,6 +8,7 @@ on:
       - next
       - 'v*.*.x'
   merge_group:
+  workflow_call:
 
 permissions: {}
 

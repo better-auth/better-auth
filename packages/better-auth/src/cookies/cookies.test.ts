@@ -2077,6 +2077,26 @@ describe("Cookie header without whitespace after semicolon", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11119
+ */
+describe("getChunkedCookie", () => {
+	it.each([
+		"better-auth.session_data.0junk",
+		"better-auth.session_data.nested.0",
+		"better-auth.session_data.01",
+		"better-auth.session_data.-1",
+	])("ignores non-canonical chunk name %s", (name) => {
+		const headers = new Headers({ cookie: `${name}=chunk` });
+		const ctx = {
+			getCookie: () => undefined,
+			headers,
+		} as unknown as Parameters<typeof getChunkedCookie>[0];
+
+		expect(getChunkedCookie(ctx, "better-auth.session_data")).toBeNull();
+	});
+});
+
 describe("parseCookies validation", () => {
 	it("returns empty map for empty header", () => {
 		expect(parseCookies("").size).toBe(0);

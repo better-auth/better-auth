@@ -471,6 +471,17 @@ export type BetterAuthAdvancedOptions = {
 				 * @default false
 				 */
 				joins?: boolean;
+				/**
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database; Drizzle and Prisma inspect
+				 * local schema metadata without opening a connection.
+				 * Set `false` to disable runtime schema validation.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
@@ -1784,6 +1795,26 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debug?: boolean;
+		  }
+		| undefined;
+	/**
+	 * Experimental features.
+	 */
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
 		  }
 		| undefined;
 };

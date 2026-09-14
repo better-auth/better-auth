@@ -407,6 +407,16 @@ describe("trusted origins", () => {
 			);
 		});
 
+		it("should reject control characters in custom-scheme URLs", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: ["myapp://callback"],
+			});
+
+			await expect(
+				isTrustedOrigin(`myapp://callback?${"#".repeat(10_000)}\n\n`),
+			).resolves.toBe(false);
+		});
+
 		it("should match custom-scheme with empty host (myapp:/)", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
 				trustedOrigins: ["myapp:/"],

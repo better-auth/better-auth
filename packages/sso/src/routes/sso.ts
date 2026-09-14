@@ -1735,7 +1735,6 @@ async function handleOIDCCallback(
 						idToken: tokenResponse.idToken,
 						accessToken: tokenResponse.accessToken,
 						refreshToken: tokenResponse.refreshToken,
-						issuer: accountKey.issuer,
 						accountId: userInfoId,
 						providerId: provider.providerId,
 						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
