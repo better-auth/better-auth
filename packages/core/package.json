@@ -184,9 +184,6 @@
     "nanostores": "^1.0.1"
   },
   "peerDependenciesMeta": {
-    "@cloudflare/workers-types": {
-      "optional": true
-    },
     "@opentelemetry/api": {
       "optional": true
     }
