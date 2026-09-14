@@ -68,7 +68,7 @@ npx auth@latest migrate
 <Callout type="info">
   **Using PostgreSQL with a non-default schema?**
 
-  The migrate command automatically detects your configured `search_path` and creates tables in the correct schema. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
+  Set `database.schemaName` to select the schema explicitly. Otherwise, the migrate command uses the connection's `search_path`. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
 </Callout>
 
 ## Create Admin

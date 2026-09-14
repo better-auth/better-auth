@@ -650,6 +650,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 				| {
 						/**
@@ -680,6 +690,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 		  )
 		| undefined;
