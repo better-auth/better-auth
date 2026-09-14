@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.6.33
+
+### Patch Changes
+
+- [#11291](https://github.com/better-auth/better-auth/pull/11291) [`ecc4e0d`](https://github.com/better-auth/better-auth/commit/ecc4e0df7b1311dbe4fb4946a3d6d94397e6c5b8) Thanks [@better-release](https://github.com/apps/better-release)! - Restore database option type inference for projects that do not use Cloudflare Workers.
+
 ## 1.6.32
 
 ## 1.6.31
