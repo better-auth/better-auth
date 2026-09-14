@@ -809,6 +809,26 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationRequirePKCE?: boolean;
 	/**
+	 * Default `application_type` for dynamic client registrations that omit the
+	 * field.
+	 *
+	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
+	 *   treated as `web`, so custom-scheme redirect URIs are rejected.
+	 * - `"native"`: omitted `application_type` is treated as `native`.
+	 * - `"infer"`: omitted `application_type` is treated as `native` only when
+	 *   every `redirect_uris` entry uses a non-http(s) scheme; otherwise `web`.
+	 *   Lets native MCP clients that omit `application_type` (for example
+	 *   current Cursor builds) register private-use redirects without loosening
+	 *   web-client redirect policy.
+	 *
+	 * An `application_type` the client actually sends is never overridden.
+	 * Applies only to dynamic client registration; managed clients and Client ID
+	 * Metadata Documents are unaffected.
+	 *
+	 * @default "web"
+	 */
+	clientRegistrationDefaultApplicationType?: "web" | "native" | "infer";
+	/**
 	 * How long a dynamically created confidential client
 	 * should last for.
 	 *
