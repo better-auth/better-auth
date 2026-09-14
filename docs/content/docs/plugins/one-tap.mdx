@@ -158,6 +158,18 @@ await authClient.oneTap({
 });
 ```
 
+#### Binding the ID Token with a Nonce
+
+Pass a unique `nonce` per sign-in attempt. It is forwarded to the Google One Tap API (which embeds it in the ID token) and then verified server-side against the token's `nonce` claim, so a captured token cannot be replayed without it:
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+await authClient.oneTap({
+  nonce: crypto.randomUUID()
+});
+```
+
 #### Handling Prompt Dismissals with Exponential Backoff
 
 If the user dismisses or skips the prompt, the plugin will retry showing the One Tap prompt using exponential backoff based on your configured promptOptions.
