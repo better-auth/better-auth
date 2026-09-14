@@ -1318,6 +1318,8 @@ oauthProvider({
 
 Dynamic registration allows for authorized registration of both public and confidential clients.
 
+Requested `grant_types` are narrowed to the grants this server supports and the effective list is returned in the registration response ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). A registration sharing no grant with the server is rejected with `invalid_client_metadata`.
+
 ```ts title="auth.ts"
 oauthProvider({
   allowDynamicClientRegistration: true, // [!code highlight]
