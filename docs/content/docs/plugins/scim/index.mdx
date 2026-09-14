@@ -172,6 +172,8 @@ You can configure several connections. Their credentials remain isolated, while 
 
 When a directory creates a SCIM User, Better Auth creates a User by default, or links one when `identity.resolveUser` returns `link`. The directory can then update the profile, set `active`, or delete the SCIM resource. A SCIM User does not create an authentication account, so the user still needs SSO, a passkey, credentials, or another sign-in method.
 
+If a directory deactivates a user and later creates them again with the same `externalId`, Better Auth restores the inactive SCIM User instead of rejecting the create.
+
 By default, the SCIM source manages the Better Auth User's email and name. The plugin never links an incoming resource to an existing user by email.
 
 ### Link an existing Better Auth User
