@@ -906,3 +906,79 @@ describe("invitation teamId must belong to the invitation's organization", async
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11275
+ */
+describe("organization acceptInvitation session cookie cache", async () => {
+	it("refreshes the cached session with the accepted organization", async () => {
+		const { client, signInWithTestUser, cookieSetter } = await getTestInstance(
+			{
+				session: {
+					cookieCache: {
+						enabled: true,
+						maxAge: 300,
+					},
+				},
+				plugins: [organization()],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Acme",
+			slug: "acme-cookie-cache",
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(org.error).toBeNull();
+
+		const recipient = {
+			email: "invitee-cookie-cache@test.com",
+			password: "password-cookie-cache",
+			name: "Invitee",
+		};
+		await client.signUp.email(recipient);
+		// Sign in capturing the full cookie set, including the `session_data`
+		// cookie cache snapshot, so the pre-accept session is cached.
+		const recipientHeaders = new Headers();
+		await client.signIn.email(
+			{ email: recipient.email, password: recipient.password },
+			{ onSuccess: cookieSetter(recipientHeaders) },
+		);
+		const before = await client.getSession({
+			fetchOptions: { headers: recipientHeaders },
+		});
+		expect(before.data?.session.activeOrganizationId).toBeFalsy();
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: recipient.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(invite.error).toBeNull();
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId: String(invite.data!.id),
+			fetchOptions: {
+				headers: recipientHeaders,
+				onSuccess: cookieSetter(recipientHeaders),
+			},
+		});
+		expect(accept.error).toBeNull();
+		expect(accept.data?.invitation.status).toBe("accepted");
+
+		// The live row is updated ...
+		const live = await client.getSession({
+			query: { disableCookieCache: true },
+			fetchOptions: { headers: recipientHeaders },
+		});
+		expect(live.data?.session.activeOrganizationId).toBe(org.data!.id);
+
+		// ... and so must the cookie cache the client just received.
+		const cached = await client.getSession({
+			fetchOptions: { headers: recipientHeaders },
+		});
+		expect(cached.data?.session.activeOrganizationId).toBe(org.data!.id);
+	});
+});

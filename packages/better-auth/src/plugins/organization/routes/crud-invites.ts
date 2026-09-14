@@ -814,16 +814,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 
 					if (onlyOne) {
 						const teamId = teamIds[0]!;
-						const updatedSession = await adapter.setActiveTeam(
-							session.session.token,
-							teamId,
-							ctx,
-						);
-
-						await setSessionCookie(ctx, {
-							session: updatedSession,
-							user: session.user,
-						});
+						await adapter.setActiveTeam(session.session.token, teamId, ctx);
 					}
 				}
 
@@ -834,11 +825,17 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					createdAt: new Date(),
 				});
 
-				await adapter.setActiveOrganization(
+				// Sign the session cookie from the final session state so the cookie
+				// cache carries the accepted organization (and team) immediately.
+				const updatedSession = await adapter.setActiveOrganization(
 					session.session.token,
 					acceptedI.organizationId,
 					ctx,
 				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 
 				return createdMember;
 			}).catch(async (error) => {
