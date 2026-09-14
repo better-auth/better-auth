@@ -1,5 +1,13 @@
 # @better-auth/i18n
 
+## 1.6.32
+
+### Patch Changes
+
+- Updated dependencies [[`a17efd7`](https://github.com/better-auth/better-auth/commit/a17efd7cf0ce29bea02dfe5924f477e2e12c6466)]:
+  - better-auth@1.6.32
+  - @better-auth/core@1.6.32
+
 ## 1.6.31
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.6.32
+
+### Patch Changes
+
+- [#11286](https://github.com/better-auth/better-auth/pull/11286) [`a17efd7`](https://github.com/better-auth/better-auth/commit/a17efd7cf0ce29bea02dfe5924f477e2e12c6466) Thanks [@better-release](https://github.com/apps/better-release)! - Log Cloudflare Turnstile error codes and binding mismatches on the server so CAPTCHA verification failures can be diagnosed.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.32
+  - @better-auth/drizzle-adapter@1.6.32
+  - @better-auth/kysely-adapter@1.6.32
+  - @better-auth/memory-adapter@1.6.32
+  - @better-auth/mongo-adapter@1.6.32
+  - @better-auth/prisma-adapter@1.6.32
+  - @better-auth/telemetry@1.6.32
+
 ## 1.6.31
 
 ### Patch Changes
