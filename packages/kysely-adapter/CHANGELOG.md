@@ -1,5 +1,12 @@
 # @better-auth/kysely-adapter
 
+## 1.6.32
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.32
+
 ## 1.6.31
 
 ### Patch Changes
