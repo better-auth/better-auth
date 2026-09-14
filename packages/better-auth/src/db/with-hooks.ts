@@ -18,6 +18,37 @@ export type DatabaseHooksEntry = {
 	hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>;
 };
 
+const createdRows = new WeakMap<object, unknown>();
+
+/**
+ * Remembers the row `createWithHooks` had already stored when `error` was
+ * thrown by a later step (the secondary-storage write or a `create.after`
+ * hook), so that a caller can tell such a failure from one the insert itself
+ * raised. A thrown value that cannot be remembered (a primitive) is wrapped in
+ * an error that keeps it as its `cause`.
+ */
+function markCreatedRow(error: unknown, created: unknown): unknown {
+	if (typeof error === "object" && error !== null) {
+		createdRows.set(error, created);
+		return error;
+	}
+	const wrapper = new Error("A step after the row was stored failed", {
+		cause: error,
+	});
+	createdRows.set(wrapper, created);
+	return wrapper;
+}
+
+/**
+ * The row that `createWithHooks` had stored when `error` was thrown, or
+ * `undefined` when the error came from storing it.
+ */
+export function getCreatedRow<T>(error: unknown): T | undefined {
+	return typeof error === "object" && error !== null
+		? (createdRows.get(error) as T | undefined)
+		: undefined;
+}
+
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -67,34 +98,46 @@ export function getWithHooks(
 		}
 
 		let created: any = null;
+		let stored = false;
 		if (!customCreateFn || customCreateFn.executeMainFn) {
 			created = await (await getCurrentAdapter(adapter)).create<T>({
 				model,
 				data: actualData as any,
 				forceAllowId: true,
 			});
-		}
-		if (customCreateFn?.fn) {
-			created = await customCreateFn.fn(created ?? actualData);
+			stored = true;
 		}
 
-		for (const { source, hooks } of hooksEntries) {
-			const toRun = hooks[model]?.create?.after;
-			if (toRun) {
-				await queueAfterTransactionHook(async () => {
-					await withSpan(
-						`db create.after ${model}`,
-						{
-							[ATTR_HOOK_TYPE]: "create.after",
-							[ATTR_DB_COLLECTION_NAME]: model,
-							[ATTR_CONTEXT]: source,
-						},
-						() =>
-							// @ts-expect-error context type mismatch
-							toRun(created as any, context),
-					);
-				});
+		// A failure from here on must be distinguishable from one the insert
+		// raised, but only once the row is actually stored somewhere: the custom
+		// function is the only store when the adapter create was skipped, so its
+		// own failure leaves nothing behind.
+		try {
+			if (customCreateFn?.fn) {
+				created = await customCreateFn.fn(created ?? actualData);
+				stored = true;
 			}
+
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.create?.after;
+				if (toRun) {
+					await queueAfterTransactionHook(async () => {
+						await withSpan(
+							`db create.after ${model}`,
+							{
+								[ATTR_HOOK_TYPE]: "create.after",
+								[ATTR_DB_COLLECTION_NAME]: model,
+								[ATTR_CONTEXT]: source,
+							},
+							() =>
+								// @ts-expect-error context type mismatch
+								toRun(created as any, context),
+						);
+					});
+				}
+			}
+		} catch (error) {
+			throw stored ? markCreatedRow(error, created ?? actualData) : error;
 		}
 
 		return created;
@@ -153,6 +196,12 @@ export function getWithHooks(
 						where,
 					})
 				: customUpdated;
+
+		// A guarded update that matched no row updated nothing, so the after
+		// hooks, which receive the updated row, have nothing to run on.
+		if (!updated) {
+			return updated;
+		}
 
 		for (const { source, hooks } of hooksEntries) {
 			const toRun = hooks[model]?.update?.after;
