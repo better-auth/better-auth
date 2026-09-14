@@ -348,6 +348,38 @@ export type BetterAuthAdvancedOptions = {
 	 */
 	useSecureCookies?: boolean | undefined;
 	/**
+	 * Name cookies with the `__Host-` prefix instead of `__Secure-`.
+	 *
+	 * Browsers only accept `__Host-` cookies that are `Secure`, use `Path=/`
+	 * and carry no `Domain` attribute, so a cookie set from a sibling
+	 * subdomain can never collide with the session cookie. Implies
+	 * `useSecureCookies` and cannot be combined with `crossSubDomainCookies`
+	 * or a custom cookie `path`.
+	 *
+	 * Switching renames the cookies, so existing `__Secure-` sessions are
+	 * no longer read and users sign in again once. Set
+	 * `migrateSecureCookies` for a seamless cutover instead.
+	 *
+	 * @default false
+	 */
+	useHostCookiePrefix?:
+		| boolean
+		| {
+				enabled: boolean;
+				/**
+				 * Keep accepting cookies written under the `__Secure-` prefix and
+				 * re-issue them as `__Host-` on the next request, so existing
+				 * sessions survive the switch. While this is on, a visitor
+				 * without a `__Host-` cookie is still exposed to a planted
+				 * `__Secure-` cookie, so turn it off once existing sessions have
+				 * expired (after `session.expiresIn`).
+				 *
+				 * @default false
+				 */
+				migrateSecureCookies?: boolean | undefined;
+		  }
+		| undefined;
+	/**
 	 * Disable all CSRF protection.
 	 *
 	 * When enabled, this disables:
