@@ -71,7 +71,7 @@ export async function generateState(
 	await setOAuthState(stateData);
 
 	try {
-		return generateGenericState(c, stateData);
+		return await generateGenericState(c, stateData);
 	} catch (error) {
 		c.context.logger.error("Failed to create verification", error);
 		throw new APIError("INTERNAL_SERVER_ERROR", {
