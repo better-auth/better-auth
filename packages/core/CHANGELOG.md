@@ -1,5 +1,13 @@
 # @better-auth/core
 
+## 1.7.4
+
+### Patch Changes
+
+- [#11210](https://github.com/better-auth/better-auth/pull/11210) [`3ff842a`](https://github.com/better-auth/better-auth/commit/3ff842ab7fdf60746b5d7bd8c27becd2d0a79c2e) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent bundlers such as Metro from failing when the optional OpenTelemetry API is not installed.
+
+- [#11224](https://github.com/better-auth/better-auth/pull/11224) [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `experimental.instrumentation.enabled` to disable Better Auth OpenTelemetry span creation per auth instance. Instrumentation remains enabled by default and independent of usage reporting.
+
 ## 1.7.3
 
 ### Patch Changes

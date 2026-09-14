@@ -1,5 +1,11 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.4
+
+### Patch Changes
+
+- [#11213](https://github.com/better-auth/better-auth/pull/11213) [`b905bfe`](https://github.com/better-auth/better-auth/commit/b905bfe3d97de3c88fc31f7f2820531702df583e) Thanks [@bytaesu](https://github.com/bytaesu)! - Run schema validation for the Drizzle Relations v2 adapter, including configurations that provide only relations, so schema mismatches are reported during initialization.
+
 ## 1.7.3
 
 ### Patch Changes

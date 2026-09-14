@@ -640,7 +640,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
     Now that the data is migrated, update your components to use Better Auth. Here's an example for the sign-in component:
 
     ```tsx title="components/auth/sign-in.tsx"
-    import { authClient } from "better-auth/client";
+    import { authClient } from "@/lib/auth-client";
 
     export const SignIn = () => {
       const handleSignIn = async () => {
