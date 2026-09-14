@@ -81,3 +81,78 @@ describe("copySchema indexes", () => {
 		);
 	});
 });
+
+/**
+ * Foreign-key columns must use the same SQL type as the column they reference,
+ * otherwise MySQL/MSSQL reject the FK constraint (e.g. text cannot reference varchar).
+ */
+describe("copySchema foreign-key column types", () => {
+	const sessionSchema = {
+		modelName: "session",
+		fields: [
+			{ fieldName: "id", type: "string", required: true },
+			{
+				fieldName: "userId",
+				type: "string",
+				required: true,
+				index: true,
+				references: { model: "user", field: "id", onDelete: "cascade" },
+			},
+		],
+	} satisfies DBSchema;
+
+	it("matches the id column type for foreign keys in MySQL", () => {
+		const mysql = copySchema(sessionSchema, {
+			dialect: "mysql",
+			mode: "create",
+		}).result;
+
+		expect(mysql).toContain("`id` varchar(36)");
+		expect(mysql).toContain("`userId` varchar(36)");
+		expect(mysql).not.toContain("`userId` text");
+	});
+
+	it("matches the id column type for foreign keys in MSSQL", () => {
+		const mssql = copySchema(sessionSchema, {
+			dialect: "mssql",
+			mode: "create",
+		}).result;
+
+		expect(mssql).toContain("[id] varchar(36)");
+		expect(mssql).toContain("[userId] varchar(36)");
+	});
+
+	it("matches the id column type for foreign keys in PostgreSQL", () => {
+		const postgresql = copySchema(sessionSchema, {
+			dialect: "postgresql",
+			mode: "create",
+		}).result;
+
+		expect(postgresql).toContain('"id" text');
+		expect(postgresql).toContain('"userId" text');
+	});
+
+	it("matches the id column type for foreign keys in Drizzle (MySQL)", () => {
+		const drizzleMysql = copySchema(sessionSchema, {
+			dialect: drizzleResolver({ provider: "mysql" }),
+			mode: "create",
+		}).result;
+
+		expect(drizzleMysql).toContain(
+			't.varchar("id", { length: 36 }).primaryKey()',
+		);
+		expect(drizzleMysql).toContain('t.varchar("user_id", { length: 36 })');
+		expect(drizzleMysql).not.toContain('t.text("user_id")');
+	});
+
+	it("keeps foreign keys as text in Drizzle (pg, sqlite)", () => {
+		for (const provider of ["pg", "sqlite"] as const) {
+			const result = copySchema(sessionSchema, {
+				dialect: drizzleResolver({ provider }),
+				mode: "create",
+			}).result;
+
+			expect(result).toContain('t.text("user_id")');
+		}
+	});
+});
