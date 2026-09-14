@@ -45,3 +45,22 @@ describe("parseJSON", () => {
 		expect(parseJSON("not json", { strict: false })).toBe("not json");
 	});
 });
+
+describe("parseJSON ISO date parsing", () => {
+	it.each([
+		{ name: "millisecond (3 digits)", frac: "123", expectedMs: 123 },
+		{ name: "single digit", frac: "5", expectedMs: 500 },
+		{ name: "two digits", frac: "12", expectedMs: 120 },
+		{ name: "microsecond (6 digits)", frac: "123456", expectedMs: 123 },
+		{ name: "7 digits", frac: "1234567", expectedMs: 123 },
+	])("truncates $name fractional seconds to milliseconds", ({
+		frac,
+		expectedMs,
+	}) => {
+		const value = parseJSON(`"2024-01-01T00:00:00.${frac}Z"`);
+		expect(value).toBeInstanceOf(Date);
+		expect((value as Date).getTime()).toBe(
+			Date.UTC(2024, 0, 1, 0, 0, 0, expectedMs),
+		);
+	});
+});
