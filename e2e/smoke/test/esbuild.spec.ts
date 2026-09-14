@@ -69,6 +69,45 @@ it("build minimal without unexpected imports", async () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/10865
+ */
+it("build organization plugin without zod locales", async () => {
+	const esbuildDir = join(fixturesDir, "esbuild");
+	const buildProcess = spawn(
+		"npx",
+		[
+			"esbuild",
+			"src/organization.ts",
+			"--bundle",
+			"--outfile=dist/organization.js",
+		],
+		{
+			cwd: esbuildDir,
+			stdio: "pipe",
+		},
+	);
+	await new Promise<void>((resolve, reject) => {
+		buildProcess.on("close", (code) => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(
+					new Error(`esbuild organization build failed with code ${code}`),
+				);
+			}
+		});
+	});
+	const outputFile = join(esbuildDir, "dist", "organization.js");
+	const outputContent = await readFile(outputFile, "utf-8");
+	const locales = outputContent.match(/zod\/v4\/locales\/[\w-]+\.js/g) ?? [];
+	assert.deepStrictEqual(
+		[...new Set(locales)],
+		["zod/v4/locales/en.js"],
+		"Built output should only contain the default zod locale",
+	);
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/10366
  */
 it("bundles the Kysely adapter with Kysely 0.29", async () => {
