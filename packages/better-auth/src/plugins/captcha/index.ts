@@ -58,12 +58,10 @@ export const captcha = (options: CaptchaOptions) =>
 					return undefined;
 				}
 
-				// BotId does not require a secret key to be provided, nor a captcha response header
-				// as it uses its own internal verification method, so we handle it first
 				if (options.provider === Providers.VERCEL_BOTID) {
 					return await verifyHandlers.vercelBotId({
 						request,
-						checkBotIdOptions: options.checkBotIdOptions,
+						checkBotId: options.checkBotId,
 						validateRequest: options.validateRequest,
 					});
 				}

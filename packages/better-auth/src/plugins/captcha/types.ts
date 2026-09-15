@@ -1,8 +1,4 @@
 import type { Providers } from "./constants";
-import type {
-	CheckBotIdOptions,
-	ValidateRequestContext,
-} from "./verify-handlers/vercel-botid";
 
 export type Provider = (typeof Providers)[keyof typeof Providers];
 
@@ -56,24 +52,50 @@ export interface CaptchaFoxOptions extends BaseCaptchaOptions {
 	siteKey?: string | undefined;
 }
 
-export interface VercelBotIdOptions
-	extends Pick<BaseCaptchaOptions, "endpoints"> {
+/**
+ * BotID verdict fields available to custom request validation.
+ *
+ * @see https://vercel.com/docs/botid/verified-bots
+ */
+export type BotIdVerification = {
+	isBot: boolean;
+	isVerifiedBot?: boolean | undefined;
+	verifiedBotName?: string | undefined;
+	verifiedBotCategory?: string | undefined;
+};
+
+export type ValidateRequestContext = {
+	request: Request;
+	verification: BotIdVerification;
+};
+
+/**
+ * Protect auth requests with Vercel BotID. The browser must also protect the
+ * same request paths and methods with BotID's client SDK.
+ *
+ * @see https://vercel.com/docs/botid/get-started
+ */
+export interface VercelBotIdOptions {
 	provider: typeof Providers.VERCEL_BOTID;
+	/**
+	 * Auth paths to verify, without the Better Auth base path.
+	 *
+	 * @default ["/sign-up/email", "/sign-in/email", "/request-password-reset"]
+	 */
+	endpoints?: string[] | undefined;
+	/**
+	 * Vercel's server-side check for the current request. Pass `checkBotId` from
+	 * `botid/server`, or wrap it to supply SDK options.
+	 */
+	checkBotId: () => Promise<BotIdVerification>;
 
 	/**
-	 * If you want custom logic to validate the request, you can use this function.
-	 * Return `false` to invalidate the request, and `true` to allow the request to proceed.
+	 * Override the default `isBot === false` decision. Return `true` to allow
+	 * the request, including a verified bot you trust.
 	 *
-	 * Note: Any requests which are invalidated by the `endpoints` will not be checked by this function.
-	 *
-	 * @example
-	 * ```ts
-	 * ({ request, verification }) => {
-	 * 	return verification.isBot === false;
-	 * }
+	 * @see https://vercel.com/docs/botid/verified-bots
 	 */
 	validateRequest?: (ctx: ValidateRequestContext) => boolean | Promise<boolean>;
-	checkBotIdOptions?: CheckBotIdOptions;
 }
 
 export type CaptchaOptions =
