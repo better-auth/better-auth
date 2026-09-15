@@ -69,6 +69,11 @@ export interface OrganizationClientOptions {
 						[key: string]: DBFieldAttribute;
 					};
 				};
+				teamMember?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
 				organizationRole?: {
 					additionalFields?: {
 						[key: string]: DBFieldAttribute;
