@@ -16,6 +16,8 @@
     ·
     <a href="https://github.com/better-auth/better-auth/issues">Issues</a>
   </p>
+
+  <p><strong>English</strong> · <a href="./README.pt-BR.md">Português (Brasil)</a></p>
 </div>
 
 ## Better Auth
