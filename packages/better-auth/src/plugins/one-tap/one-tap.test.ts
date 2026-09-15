@@ -148,53 +148,6 @@ describe("one-tap implicit linking gate", async () => {
 		expect(accounts.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it.each([
-		"issuer",
-		"provider-id",
-	] as const)("stores the account identity under explicit %s strategy", async (identityStrategy) => {
-		verifiedPayload.email = "provider-scoped-one-tap@example.com";
-		verifiedPayload.sub = "provider-scoped-one-tap-subject";
-		const { auth, client } = await getTestInstance(
-			{
-				account: { identityStrategy },
-				socialProviders: {
-					google: {
-						clientId: "test-client",
-						clientSecret: "test-secret",
-						enabled: true,
-					},
-				},
-				plugins: [oneTap()],
-			},
-			{ disableTestUser: true },
-		);
-
-		const response = await client.$fetch("/one-tap/callback", {
-			method: "POST",
-			body: { idToken: "stub-id-token" },
-		});
-
-		expect(response.error).toBeFalsy();
-		const context = await auth.$context;
-		await expect(
-			context.adapter.findOne<{
-				accountId: string;
-				issuer: string;
-				providerId: string;
-			}>({
-				model: "account",
-				where: [{ field: "providerId", value: "google" }],
-			}),
-		).resolves.toMatchObject({
-			accountId: verifiedPayload.sub,
-			issuer:
-				identityStrategy === "provider-id"
-					? "local:oauth:google"
-					: "https://accounts.google.com",
-			providerId: "google",
-		});
-	});
-
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
 	 */
@@ -310,7 +263,6 @@ describe("one-tap implicit linking gate", async () => {
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
-			issuer: "local:github",
 			accountId: verifiedPayload.sub,
 		});
 
@@ -333,7 +285,6 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -378,7 +329,6 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});

@@ -5,29 +5,16 @@ import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
-	MigrationDatabaseConnection,
-	MigrationDatabaseDialect,
-	MigrationDatabaseQueryResult,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	checksSchema,
+	createSchemaCheck,
+	registerSchemaCheck,
+} from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
-
-/** Controls the Prisma interactive transaction used by release migrations. */
-export interface PrismaMigrationTransactionConfig {
-	/**
-	 * Maximum time to wait for Prisma to acquire the transaction.
-	 *
-	 * @default 60000
-	 */
-	maxWait?: number | undefined;
-	/**
-	 * Maximum time the release migration may run inside the transaction.
-	 *
-	 * @default 600000
-	 */
-	timeout?: number | undefined;
-}
+import { findPrismaSchemaProblems, readPrismaDataModel } from "./schema-check";
 
 export interface PrismaConfig {
 	/**
@@ -63,13 +50,6 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
-
-	/**
-	 * Interactive transaction limits for a Better Auth release migration.
-	 *
-	 * These limits do not change normal adapter transactions.
-	 */
-	migrationTransaction?: PrismaMigrationTransactionConfig | undefined;
 }
 
 interface PrismaClient {}
@@ -85,19 +65,9 @@ function isPrismaNotFoundError(e: any): boolean {
 }
 
 type PrismaClientInternal = {
-	$transaction: <Result>(
-		callback: (db: PrismaClient) => Awaitable<Result>,
-		options?: PrismaMigrationTransactionConfig,
-	) => Promise<Result>;
-	$executeRawUnsafe?: (
-		query: string,
-		...parameters: readonly unknown[]
-	) => Promise<number>;
-	$queryRawUnsafe?: (
-		query: string,
-		...parameters: readonly unknown[]
-	) => Promise<unknown>;
-	_runtimeDataModel?: PrismaRuntimeDataModel | undefined;
+	$transaction: (
+		callback: (db: PrismaClient) => Awaitable<any>,
+	) => Promise<any>;
 } & {
 	[model: string]: {
 		create: (data: any) => Promise<any>;
@@ -110,154 +80,8 @@ type PrismaClientInternal = {
 	};
 };
 
-type PrismaRuntimeDataModel = {
-	models: Record<
-		string,
-		{
-			dbName?: string | null | undefined;
-			fields: Array<{
-				dbName?: string | null | undefined;
-				name: string;
-			}>;
-		}
-	>;
-};
-
-const defaultMigrationTransaction = {
-	maxWait: 60_000,
-	timeout: 600_000,
-} satisfies Required<PrismaMigrationTransactionConfig>;
-
-function getPrismaMigrationDialect(
-	provider: PrismaConfig["provider"],
-): MigrationDatabaseDialect | undefined {
-	if (provider === "postgresql" || provider === "cockroachdb")
-		return "postgres";
-	if (provider === "sqlserver") return "mssql";
-	if (provider === "mysql" || provider === "sqlite") return provider;
-	return undefined;
-}
-
-function isReadMigrationQuery(query: string): boolean {
-	return /^\s*(?:SELECT|WITH|PRAGMA|SHOW|EXPLAIN|DESCRIBE)\b/i.test(query);
-}
-
-function getPrismaMigrationRows(
-	rows: unknown,
-): readonly Record<string, unknown>[] {
-	if (!Array.isArray(rows)) return [];
-	return rows.filter(
-		(row): row is Record<string, unknown> =>
-			typeof row === "object" && row !== null,
-	);
-}
-
-function createPrismaMigrationConnection(
-	prisma: PrismaClientInternal,
-	provider: PrismaConfig["provider"],
-	migrationTransaction: PrismaMigrationTransactionConfig,
-	inTransaction = false,
-	runtimeDataModel = prisma._runtimeDataModel,
-): MigrationDatabaseConnection | undefined {
-	const dialect = getPrismaMigrationDialect(provider);
-	if (!dialect) return undefined;
-	const connection: MigrationDatabaseConnection = {
-		dialect,
-		async resolvePhysicalSchema(schema) {
-			if (!runtimeDataModel) {
-				throw new BetterAuthError(
-					"Prisma migration schema resolution requires Prisma runtime model metadata.",
-				);
-			}
-			return Object.fromEntries(
-				Object.entries(schema).map(([schemaKey, table]) => {
-					const modelEntry = Object.entries(runtimeDataModel.models).find(
-						([modelName, model]) =>
-							modelName === table.modelName ||
-							modelName.toLowerCase() === table.modelName.toLowerCase() ||
-							model.dbName === table.modelName,
-					);
-					if (!modelEntry) return [schemaKey, table];
-					const [modelName, model] = modelEntry;
-					const fields = Object.fromEntries(
-						Object.entries(table.fields).map(([fieldKey, field]) => {
-							const prismaFieldName = field.fieldName || fieldKey;
-							const prismaField = model.fields.find(
-								(candidate) => candidate.name === prismaFieldName,
-							);
-							return [
-								fieldKey,
-								{
-									...field,
-									fieldName:
-										prismaField?.dbName || prismaField?.name || prismaFieldName,
-								},
-							];
-						}),
-					);
-					return [
-						schemaKey,
-						{
-							...table,
-							modelName: model.dbName || modelName,
-							fields,
-						},
-					];
-				}),
-			);
-		},
-		async execute(query): Promise<MigrationDatabaseQueryResult> {
-			if (isReadMigrationQuery(query.sql)) {
-				if (!prisma.$queryRawUnsafe) {
-					throw new BetterAuthError(
-						"Prisma migration inspection requires $queryRawUnsafe on the Prisma client.",
-					);
-				}
-				const rows = await prisma.$queryRawUnsafe(
-					query.sql,
-					...query.parameters,
-				);
-				return { rows: getPrismaMigrationRows(rows) };
-			}
-			if (!prisma.$executeRawUnsafe) {
-				throw new BetterAuthError(
-					"Prisma migration execution requires $executeRawUnsafe on the Prisma client.",
-				);
-			}
-			const affectedRows = await prisma.$executeRawUnsafe(
-				query.sql,
-				...query.parameters,
-			);
-			return { numAffectedRows: BigInt(affectedRows), rows: [] };
-		},
-	};
-	if (!inTransaction) {
-		connection.transaction = async (callback) =>
-			prisma.$transaction(async (transactionClient) => {
-				const transactionConnection = createPrismaMigrationConnection(
-					transactionClient as PrismaClientInternal,
-					provider,
-					migrationTransaction,
-					true,
-					runtimeDataModel,
-				);
-				if (!transactionConnection) {
-					throw new BetterAuthError(
-						`Prisma does not expose a SQL migration connection for ${provider}.`,
-					);
-				}
-				return callback(transactionConnection);
-			}, migrationTransaction);
-	}
-	return connection;
-}
-
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
-	const migrationTransaction = {
-		...defaultMigrationTransaction,
-		...config.migrationTransaction,
-	};
 	const createCustomAdapter =
 		(
 			prisma: PrismaClient,
@@ -978,11 +802,6 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		config: {
 			adapterId: "prisma",
 			adapterName: "Prisma Adapter",
-			migrationConnection: createPrismaMigrationConnection(
-				prisma as PrismaClientInternal,
-				config.provider,
-				migrationTransaction,
-			),
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
@@ -1011,6 +830,18 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		const instance = adapter(options);
+		const dataModel = readPrismaDataModel(prisma);
+		if (dataModel && checksSchema(options)) {
+			registerSchemaCheck(
+				instance,
+				createSchemaCheck(
+					async () =>
+						findPrismaSchemaProblems(dataModel, options, config.usePlural),
+					"prisma",
+				),
+			);
+		}
+		return instance;
 	};
 };

@@ -22,11 +22,11 @@ const result = {
 };
 
 describe("resolveOAuthAccountKey", () => {
-	it("uses a synthetic issuer for a provider without an issuer", async () => {
+	it("keys the account by the provider id and the provider subject", async () => {
 		await expect(
 			resolveOAuthAccountKey(createProvider(), tokens, result.data),
 		).resolves.toEqual({
-			issuer: "local:oauth:company-oauth",
+			providerId: "company-oauth",
 			accountId: "provider-subject",
 		});
 	});
@@ -42,78 +42,18 @@ describe("resolveOAuthAccountKey", () => {
 				result.data,
 			),
 		).resolves.toEqual({
-			issuer: "local:oauth:company-oauth",
+			providerId: "company-oauth",
 			accountId,
 		});
 	});
 
-	it("uses a static verified issuer", async () => {
-		await expect(
-			resolveOAuthAccountKey(
-				createProvider({ accountIssuer: "https://idp.example.com" }),
-				tokens,
-				result.data,
-			),
-		).resolves.toEqual({
-			issuer: "https://idp.example.com",
-			accountId: "provider-subject",
-		});
-	});
-
-	it("resolves a tenant-specific issuer from verified provider data", async () => {
-		const accountIssuer = vi.fn(
-			({ profile }: { profile: Record<string, unknown> }) =>
-				`https://login.example.com/${String(profile.tenant)}`,
-		);
-
-		await expect(
-			resolveOAuthAccountKey(
-				createProvider({ accountIssuer }),
-				tokens,
-				result.data,
-			),
-		).resolves.toEqual({
-			issuer: "https://login.example.com/acme",
-			accountId: "provider-subject",
-		});
-		expect(accountIssuer).toHaveBeenCalledWith({
-			tokens,
-			profile: result.data,
-		});
-	});
-
-	it("uses a synthetic provider namespace without evaluating a dynamic issuer", async () => {
-		const accountIssuer = vi.fn(() => {
-			throw new Error("issuer should not be evaluated");
-		});
-
-		await expect(
-			resolveOAuthAccountKey(
-				createProvider({ accountIssuer }),
-				tokens,
-				result.data,
-				"provider-id",
-			),
-		).resolves.toEqual({
-			issuer: "local:oauth:company-oauth",
-			accountId: "provider-subject",
-		});
-		expect(accountIssuer).not.toHaveBeenCalled();
-	});
-
-	it("produces the same identity key for provider aliases of one issuer", async () => {
-		const web = createProvider({
-			id: "company-web",
-			accountIssuer: "https://idp.example.com",
-		});
-		const mobile = createProvider({
-			id: "company-mobile",
-			accountIssuer: "https://idp.example.com",
-		});
+	it("keeps provider aliases as separate account keys", async () => {
+		const web = createProvider({ id: "company-web" });
+		const mobile = createProvider({ id: "company-mobile" });
 
 		await expect(
 			resolveOAuthAccountKey(web, tokens, result.data),
-		).resolves.toEqual(
+		).resolves.not.toEqual(
 			await resolveOAuthAccountKey(mobile, tokens, result.data),
 		);
 	});
@@ -150,33 +90,5 @@ describe("resolveOAuthAccountKey", () => {
 			profile: result.data,
 		});
 		expect(accountSubject.mock.calls[0]?.[0]).not.toHaveProperty("user");
-	});
-
-	it("rejects an explicitly empty account issuer", async () => {
-		await expect(
-			resolveOAuthAccountKey(
-				createProvider({ accountIssuer: " " }),
-				tokens,
-				result.data,
-			),
-		).rejects.toThrow("OAUTH_ACCOUNT_ISSUER_INVALID");
-	});
-
-	it.each([
-		undefined,
-		null,
-		"undefined",
-		"null",
-		42,
-	] as const)("rejects an invalid account issuer returned by a resolver: %j", async (issuer) => {
-		await expect(
-			resolveOAuthAccountKey(
-				createProvider({
-					accountIssuer: (() => issuer) as never,
-				}),
-				tokens,
-				result.data,
-			),
-		).rejects.toThrow("OAUTH_ACCOUNT_ISSUER_INVALID");
 	});
 });

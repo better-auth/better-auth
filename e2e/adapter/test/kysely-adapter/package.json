@@ -8,15 +8,8 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
-    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/scim": "workspace:*",
-    "@better-auth/sso": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "auth": "workspace:*",
-    "better-auth": "workspace:*",
-    "better-auth-1-6-30": "npm:better-auth@1.6.30",
-    "better-auth-1-7-0": "npm:better-auth@1.7.0",
-    "better-auth-scim-1-6-30": "npm:@better-auth/scim@1.6.30",
-    "oauth2-mock-server": "9.0.0"
+    "better-auth": "workspace:*"
   }
 }

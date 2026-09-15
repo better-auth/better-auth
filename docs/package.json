@@ -81,7 +81,7 @@
     "lottie-react": "^2.4.1",
     "lucide-react": "^1.21.0",
     "mermaid": "^11.16.1",
-    "next": "16.3.0",
+    "next": "16.3.4",
     "next-mdx-remote": "^6.0.0",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.0",
@@ -106,7 +106,7 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "catalog:tailwind",
     "typesense": "^3.0.6",
-    "typesense-fumadocs-adapter": "^0.4.1",
+    "typesense-fumadocs-adapter": "^0.4.3",
     "unist-util-visit": "^5.1.0",
     "vaul": "^1.1.2",
     "zod": "catalog:"

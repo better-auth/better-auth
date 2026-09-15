@@ -91,6 +91,8 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 			const run = async () => {
 				const rawContext = await ctx;
+				const pendingSchemaCheck = rawContext.checkSchema?.();
+				if (pendingSchemaCheck) await pendingSchemaCheck;
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;

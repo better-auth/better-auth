@@ -22,6 +22,9 @@ const maxBatchCharacters = 60_000;
 const maxContextCharacters = 500_000;
 const maxOutputTokensPerBatch = 32_000;
 const maxReviewOutputTokensPerBatch = 8_000;
+const defaultFallbackReason = "The rewrite was not approved by review.";
+const invalidCopyFallbackReason =
+	"The rewrite did not pass deterministic copy validation.";
 
 const rewriteInstructions = readFileSync(
 	new URL("./rewrite.prompt.md", import.meta.url),
@@ -140,6 +143,16 @@ function validationFeedback(
 	}
 }
 
+function fallbackReason(
+	reviewFeedback: string | null,
+	copyFeedback: string | null,
+): string {
+	return (
+		reviewFeedback ??
+		(copyFeedback ? invalidCopyFallbackReason : defaultFallbackReason)
+	);
+}
+
 export async function rewriteReleaseNotes(
 	contextPath: string,
 	outputPath: string,
@@ -161,6 +174,7 @@ export async function rewriteReleaseNotes(
 		`Invalid release rewrite context ${contextPath}`,
 	);
 	const acceptedRewrites = new Map<string, GeneratedReleaseRewrites[number]>();
+	const fallbackReasons = new Map<string, string>();
 	for (const batch of buildBatches(context)) {
 		const generated = await generate({
 			model: models.releaseNotes,
@@ -194,9 +208,16 @@ export async function rewriteReleaseNotes(
 			const copyFeedback = validationFeedback(batch, rewrite);
 			if (review.approved && !review.feedback && !copyFeedback) {
 				acceptedRewrites.set(review.id, rewrite);
+				fallbackReasons.delete(review.id);
 			} else {
 				const feedback = review.feedback ?? copyFeedback;
-				if (feedback) feedbackById.set(review.id, feedback);
+				if (feedback) {
+					feedbackById.set(review.id, feedback);
+				}
+				fallbackReasons.set(
+					review.id,
+					fallbackReason(review.feedback, copyFeedback),
+				);
 			}
 		}
 
@@ -242,11 +263,17 @@ export async function rewriteReleaseNotes(
 				repairedRewrites.map((rewrite) => [rewrite.id, rewrite]),
 			);
 			for (const review of repairReviews) {
-				if (!review.approved) continue;
 				const rewrite = repairedById.get(review.id);
 				if (!rewrite) throw new Error(`AI repair ${review.id} is missing`);
-				if (!validationFeedback(repairContext, rewrite)) {
+				const copyFeedback = validationFeedback(repairContext, rewrite);
+				if (review.approved && !review.feedback && !copyFeedback) {
 					acceptedRewrites.set(review.id, rewrite);
+					fallbackReasons.delete(review.id);
+				} else {
+					fallbackReasons.set(
+						review.id,
+						fallbackReason(review.feedback, copyFeedback),
+					);
 				}
 			}
 		} catch (error) {
@@ -263,7 +290,13 @@ export async function rewriteReleaseNotes(
 	const fallbacks = Object.entries(context).flatMap(([id, entry]) =>
 		acceptedRewrites.has(id)
 			? []
-			: [{ title: entry.title, prNumber: entry.prNumber }],
+			: [
+					{
+						title: entry.title,
+						prNumber: entry.prNumber,
+						reason: fallbackReasons.get(id) ?? defaultFallbackReason,
+					},
+				],
 	);
 	if (fallbacks.length > 0) {
 		console.warn(

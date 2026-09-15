@@ -465,7 +465,7 @@ export const auth = betterAuth({
 * **Microsoft Entra ID**: because `email` is tenant-mutable and never verified, use `profile.oid` (immutable, stable within the tenant) as the identity anchor; treat `email` as a profile attribute only. Microsoft's [claims validation guidance](https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation) explicitly warns never to use `email`, `preferred_username`, or `unique_name` for authorization decisions.
 * **Facebook**: without a per-email verification flag, treat every Facebook email as unverified unless you run your own verification challenge.
 
-Better Auth verifies the OAuth or OpenID Connect protocol issuer independently from the namespace it persists for account recognition. Newly generated configurations explicitly use `account.identityStrategy: "provider-id"` and persist a deterministic `local:oauth:<encoded providerId>` issuer namespace. An omitted strategy uses the verified authority as a v1.7 compatibility mode and warns once; explicit `"issuer"` selects the verified authority without a warning. providerId identifies the configured connection; accountId is the provider subject; issuer stores the identity namespace—verified authority under issuer strategy, deterministic provider namespace under provider-id strategy. The linked Better Auth user still requires an email address. Support for users without an email is tracked in [#9124](https://github.com/better-auth/better-auth/issues/9124).
+Better Auth recognizes a returning OAuth account by its stable `(providerId, accountId)` key, but the linked Better Auth user still requires an email address. Support for users without an email is tracked in [#9124](https://github.com/better-auth/better-auth/issues/9124).
 
 ## Provider Options
 

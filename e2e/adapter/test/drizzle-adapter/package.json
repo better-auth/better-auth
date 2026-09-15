@@ -8,10 +8,8 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/drizzle-adapter": "workspace:*",
-    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/scim": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "better-auth": "workspace:*",
-    "better-auth-1-6-30": "npm:better-auth@1.6.30"
+    "better-auth": "workspace:*"
   }
 }

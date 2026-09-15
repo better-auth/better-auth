@@ -4,35 +4,11 @@ import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
-describe("updateUser", async () => {
-	const sendChangeEmail = vi.fn();
-	let emailVerificationToken = "";
-	const { client, testUser, sessionSetter, db, signInWithTestUser } =
-		await getTestInstance({
-			emailVerification: {
-				async sendVerificationEmail({ user, url, token }) {
-					emailVerificationToken = token;
-				},
-			},
-			user: {
-				changeEmail: {
-					enabled: true,
-					sendChangeEmailConfirmation: async ({
-						user,
-						newEmail,
-						url,
-						token,
-					}) => {
-						sendChangeEmail(user, newEmail, url, token);
-					},
-				},
-			},
-		});
-	// Sign in once for all tests in this describe block
-	const { runWithUser: globalRunWithClient } = await signInWithTestUser();
-
+describe("updateUser", () => {
 	it("should update the user's name", async () => {
-		await globalRunWithClient(async () => {
+		const { client, signInWithTestUser } = await getTestInstance();
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const updated = await client.updateUser({
 				name: "newName",
 				image: "https://example.com/image.jpg",
@@ -44,7 +20,11 @@ describe("updateUser", async () => {
 	});
 
 	it("should unset image", async () => {
-		await globalRunWithClient(async () => {
+		const { client, signInWithTestUser } = await getTestInstance(undefined, {
+			testUser: { image: "https://example.com/image.jpg" },
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			await client.updateUser({
 				image: null,
 			});
@@ -53,7 +33,26 @@ describe("updateUser", async () => {
 		});
 	});
 
-	it("should not update user email immediately (default secure flow)", async () => {
+	it("should change email only after confirming both addresses", async () => {
+		let confirmationToken = "";
+		let verificationToken = "";
+		const sendChangeEmailConfirmation = vi.fn(
+			async ({ token }: { token: string }) => {
+				confirmationToken = token;
+			},
+		);
+		const sendVerificationEmail = vi.fn(
+			async ({ token }: { token: string }) => {
+				verificationToken = token;
+			},
+		);
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: { sendVerificationEmail },
+			user: {
+				changeEmail: { enabled: true, sendChangeEmailConfirmation },
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
 		// Ensure user is verified to trigger the confirmation flow
 		await db.update({
 			model: "user",
@@ -69,7 +68,7 @@ describe("updateUser", async () => {
 		});
 
 		const newEmail = "new-email@email.com";
-		await globalRunWithClient(async () => {
+		await runWithUser(async () => {
 			await client.changeEmail({
 				newEmail,
 			});
@@ -78,31 +77,26 @@ describe("updateUser", async () => {
 			expect(sessionRes.data?.user.email).not.toBe(newEmail);
 			expect(sessionRes.data?.user.email).toBe(testUser.email);
 		});
-	});
+		expect(sendChangeEmailConfirmation).toHaveBeenCalledOnce();
+		expect(sendChangeEmailConfirmation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: testUser.email }),
+				newEmail,
+			}),
+			expect.anything(),
+		);
+		expect(confirmationToken).not.toBe("");
 
-	it("should verify email change (flow with confirmation)", async () => {
-		// The previous test triggered changeEmail.
-		// Since testUser is verified, and sendChangeEmailVerification is provided,
-		// it should have sent a confirmation email to the OLD email.
-
-		expect(sendChangeEmail).toHaveBeenCalled();
-		const call = sendChangeEmail.mock.calls[0];
-		const token = call?.[3]; // token is 4th arg
-		if (!token) throw new Error("Token not found");
-
-		await globalRunWithClient(async () => {
-			// 1. Verify the confirmation token (sent to old email)
+		await runWithUser(async () => {
 			const res = await client.verifyEmail({
 				query: {
-					token: token,
+					token: confirmationToken,
 				},
 			});
 			expect(res.data?.status).toBe(true);
 
-			// This should trigger sending verification to the NEW email.
-			// emailVerification.sendVerificationEmail should have been called.
-			// We captured this in emailVerificationToken variable in setup.
-			expect(emailVerificationToken).toBeDefined();
+			expect(sendVerificationEmail).toHaveBeenCalledOnce();
+			expect(verificationToken).not.toBe("");
 
 			// User email should STILL be old email
 			const sessionRes = await client.getSession();
@@ -111,41 +105,43 @@ describe("updateUser", async () => {
 			// 2. Verify the new email token
 			const res2 = await client.verifyEmail({
 				query: {
-					token: emailVerificationToken,
+					token: verificationToken,
 				},
 			});
 			expect(res2.data?.status).toBe(true);
 
 			// NOW user email should be updated
 			const sessionRes2 = await client.getSession();
-			expect(sessionRes2.data?.user.email).toBe("new-email@email.com");
+			expect(sessionRes2.data?.user.email).toBe(newEmail);
 			expect(sessionRes2.data?.user.emailVerified).toBe(true);
 		});
 	});
 
 	it("should update the user's password", async () => {
-		const newEmail = "new-email@email.com"; // User email is now this
-		await globalRunWithClient(async () => {
+		const { client, testUser, signInWithTestUser } = await getTestInstance();
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const updated = await client.changePassword({
 				newPassword: "newPassword",
 				currentPassword: testUser.password,
 				revokeOtherSessions: true,
 			});
-			expect(updated).toBeDefined();
+			expect(updated.data?.token).toEqual(expect.any(String));
 		});
 		const signInRes = await client.signIn.email({
-			email: newEmail,
+			email: testUser.email,
 			password: "newPassword",
 		});
 		expect(signInRes.data?.user).toBeDefined();
 		const signInCurrentPassword = await client.signIn.email({
-			email: testUser.email, // Old email
+			email: testUser.email,
 			password: testUser.password,
 		});
 		expect(signInCurrentPassword.data).toBeNull();
 	});
 
 	it("should update account's updatedAt when changing password", async () => {
+		const { client, sessionSetter, db } = await getTestInstance();
 		const newHeaders = new Headers();
 		await client.signUp.email({
 			name: "Test User",
@@ -219,6 +215,7 @@ describe("updateUser", async () => {
 	});
 
 	it("should not update password if current password is wrong", async () => {
+		const { client, sessionSetter } = await getTestInstance();
 		const newHeaders = new Headers();
 		await client.signUp.email({
 			name: "name",
@@ -244,7 +241,10 @@ describe("updateUser", async () => {
 	});
 
 	it("should revoke other sessions", async () => {
-		await globalRunWithClient(async (headers) => {
+		const { client, testUser, sessionSetter, signInWithTestUser } =
+			await getTestInstance();
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
 			const newHeaders = new Headers();
 			await client.changePassword({
 				newPassword: "newPassword",
@@ -1061,7 +1061,6 @@ describe("change-email rejects confirmation-only config for verified users", asy
 describe("credential identity across email changes", async () => {
 	const { client, db, sessionSetter } = await getTestInstance(
 		{
-			account: { identityStrategy: "issuer" },
 			user: {
 				changeEmail: {
 					enabled: true,
@@ -1094,7 +1093,6 @@ describe("credential identity across email changes", async () => {
 		expect(accountsBefore).toHaveLength(1);
 		expect(accountsBefore[0]).toMatchObject({
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 
@@ -1123,33 +1121,8 @@ describe("credential identity across email changes", async () => {
 		expect(accountsAfter[0]).toMatchObject({
 			id: accountsBefore[0]!.id,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
-	});
-
-	it("stores the credential identity under provider-id strategy", async () => {
-		const { client, db } = await getTestInstance(
-			{ account: { identityStrategy: "provider-id" } },
-			{ disableTestUser: true },
-		);
-		const signUp = await client.signUp.email({
-			name: "Provider ID Credential",
-			email: "provider-id-credential@example.com",
-			password: "credential-password",
-		});
-		expect(signUp.error).toBeNull();
-		const accounts = await db.findMany<Account>({
-			model: "account",
-			where: [{ field: "userId", value: signUp.data!.user.id }],
-		});
-		expect(accounts).toContainEqual(
-			expect.objectContaining({
-				providerId: "credential",
-				issuer: "local:credential",
-				accountId: signUp.data!.user.id,
-			}),
-		);
 	});
 });
 
