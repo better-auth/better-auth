@@ -15,6 +15,7 @@ import { OAuth2Server } from "oauth2-mock-server";
 import {
 	afterAll,
 	afterEach,
+	assert,
 	beforeAll,
 	describe,
 	expect,
@@ -27,6 +28,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecodeJWT } from "../../crypto";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { Account } from "../../types";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
 import { keycloak } from "./providers/keycloak";
@@ -488,6 +490,119 @@ describe("oauth2", async () => {
 		);
 		expect(accessTokenRes.error).toBeNull();
 		expect(accessTokenRes.data?.accessToken).toBeTruthy();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10690
+	 */
+	it("keeps implicit links usable across stateless instances", async () => {
+		const providerA = "test-implicit-link-a";
+		const providerB = "test-implicit-link-b";
+		const sharedEmail = "implicit-link-stateless@test.com";
+		const options = {
+			database: undefined,
+			secret: "stateless-implicit-link-secret-with-32-chars",
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe" as const,
+				},
+			},
+			account: {
+				storeStateStrategy: "cookie" as const,
+				storeAccountCookie: true,
+			},
+			plugins: [
+				genericOAuth({
+					config: [providerA, providerB].map((providerId) => ({
+						providerId,
+						discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+						clientId,
+						clientSecret,
+						pkce: true,
+					})),
+				}),
+			],
+		};
+		const {
+			auth: firstAuth,
+			client,
+			customFetchImpl: firstFetch,
+		} = await getTestInstance(options);
+		const firstContext = await firstAuth.$context;
+		expect(firstContext.options.database).toBeUndefined();
+
+		async function completeSignIn(providerId: string, accountId: string) {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: sharedEmail,
+					name: "Implicit Link User",
+					sub: accountId,
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const stateHeaders = new Headers();
+			const signIn = await client.signIn.social({
+				provider: providerId,
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new-user",
+				fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
+			});
+			assert(signIn.data?.url, "expected an OAuth authorization URL");
+			const callback = await simulateOAuthFlow(
+				signIn.data.url,
+				stateHeaders,
+				firstFetch,
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: callback.headers },
+			});
+			assert(session.data, "expected a session after OAuth callback");
+			return { ...callback, userId: session.data.user.id };
+		}
+
+		const first = await completeSignIn(providerA, "implicit-link-account-a");
+		expect(first.callbackURL).toBe("http://localhost:3000/new-user");
+		const second = await completeSignIn(providerB, "implicit-link-account-b");
+		expect(second.callbackURL).toBe("http://localhost:3000/dashboard");
+		expect(second.userId).toBe(first.userId);
+
+		const accountCookieName = firstContext.authCookies.accountData.name;
+		const accountCookie = parseSetCookieHeader(second.setCookieHeader).get(
+			accountCookieName,
+		);
+		assert(accountCookie?.value, "implicit link must set an account cookie");
+		const linkedAccount = await symmetricDecodeJWT<Account>(
+			accountCookie.value,
+			firstContext.secret,
+			"better-auth-account",
+		);
+		assert(
+			linkedAccount?.accessToken,
+			"linked account cookie must carry a token",
+		);
+		expect(linkedAccount).toMatchObject({
+			providerId: providerB,
+			accountId: "implicit-link-account-b",
+			userId: first.userId,
+		});
+
+		const { auth: secondAuth, client: secondClient } =
+			await getTestInstance(options);
+		const secondContext = await secondAuth.$context;
+		expect(secondContext.options.database).toBeUndefined();
+		expect(
+			await secondContext.internalAdapter.findAccounts(first.userId),
+		).toEqual([]);
+
+		const token = await secondClient.getAccessToken(
+			{ useAccountCookie: true },
+			{ headers: second.headers },
+		);
+		expect(token.error).toBeNull();
+		expect(token.data?.accessToken).toBe(linkedAccount.accessToken);
 	});
 
 	/**
