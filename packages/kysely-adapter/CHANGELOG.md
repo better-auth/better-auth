@@ -1,5 +1,11 @@
 # @better-auth/kysely-adapter
 
+## 1.7.5
+
+### Patch Changes
+
+- [#11203](https://github.com/better-auth/better-auth/pull/11203) [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8) Thanks [@dshukertjr](https://github.com/dshukertjr)! - Add a `database.schemaName` option for direct PostgreSQL connections. When set, the adapter and the CLI qualify every statement with that schema, so `auth generate` writes a schema-qualified migration that creates the schema before its tables instead of relying on the connection's `search_path`.
+
 ## 1.7.4
 
 ## 1.7.3
