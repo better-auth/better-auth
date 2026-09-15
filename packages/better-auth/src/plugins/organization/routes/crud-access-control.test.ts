@@ -176,6 +176,55 @@ describe("dynamic access control", async () => {
 		role: "member",
 	});
 
+	it("does not reveal dynamic role existence to members without update permission", async () => {
+		const { member: targetMember } = await createUser({
+			role: "member",
+		});
+		const roleName = `hidden-role-${crypto.randomUUID()}`;
+		const createdRole = await authClient.organization.createRole(
+			{
+				role: roleName,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#ff0000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(createdRole.error).toBeNull();
+
+		const existingRoleAttempt = await authClient.organization.updateMemberRole(
+			{
+				memberId: targetMember.id,
+				role: roleName,
+			},
+			{
+				headers: normalHeaders,
+			},
+		);
+		const missingRoleAttempt = await authClient.organization.updateMemberRole(
+			{
+				memberId: targetMember.id,
+				role: `missing-role-${crypto.randomUUID()}`,
+			},
+			{
+				headers: normalHeaders,
+			},
+		);
+
+		expect(existingRoleAttempt.error?.status).toBe(403);
+		expect(missingRoleAttempt.error?.status).toBe(403);
+		expect(existingRoleAttempt.error?.message).toBe(
+			missingRoleAttempt.error?.message,
+		);
+		expect(existingRoleAttempt.data).toBeNull();
+		expect(missingRoleAttempt.data).toBeNull();
+	});
+
 	/**
 	 * The following test will:
 	 * - Creation of a new role
@@ -536,7 +585,7 @@ describe("dynamic access control", async () => {
 			},
 		);
 		if (!testRole.data) throw testRole.error;
-		expect(
+		await expect(
 			auth.api.deleteOrgRole({
 				body: { roleName: testRole.data.roleData.role },
 				headers: normalHeaders,
@@ -597,7 +646,9 @@ describe("dynamic access control", async () => {
 	});
 
 	it("should not be allowed to list roles without necessary permissions", async () => {
-		expect(auth.api.listOrgRoles({ headers: normalHeaders })).rejects.toThrow(
+		await expect(
+			auth.api.listOrgRoles({ headers: normalHeaders }),
+		).rejects.toThrow(
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE.message,
 		);
 	});

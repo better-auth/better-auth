@@ -1,3 +1,4 @@
+import type { AuthContext } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -15,6 +16,37 @@ const DEFAULT_TOKEN_PREFIX = "better-auth-token";
 const domainVerificationBodySchema = z.object({
 	providerId: z.string(),
 });
+
+async function completeDomainVerification(
+	adapter: AuthContext["adapter"],
+	provider: {
+		id: string;
+		domain: string;
+	},
+) {
+	// Guarding on `id` and `domain` is what binds the proof to what DNS answered
+	// for. `domainVerified` stays out of the guard: it is nullable for providers
+	// that predate the option, and an equality guard would never match those.
+	const verifiedProvider = await adapter.incrementOne<SSOProvider<SSOOptions>>({
+		model: "ssoProvider",
+		where: [
+			{ field: "id", value: provider.id },
+			{ field: "domain", value: provider.domain },
+		],
+		increment: {},
+		set: {
+			domainVerified: true,
+		},
+	});
+
+	if (!verifiedProvider) {
+		throw new APIError("CONFLICT", {
+			code: "SSO_PROVIDER_CHANGED",
+			message:
+				"SSO provider changed while domain verification was in progress. Reload the provider and try again",
+		});
+	}
+}
 
 export function getVerificationIdentifier(
 	options: SSOOptions,
@@ -109,7 +141,7 @@ export const verifyDomain = (options: SSOOptions) => {
 						},
 						"409": {
 							description:
-								"Domain has already been verified or no pending verification exists",
+								"Domain has already been verified, or the provider changed while verification was in progress",
 						},
 						"502": {
 							description:
@@ -214,13 +246,7 @@ export const verifyDomain = (options: SSOOptions) => {
 			// FIXME(next): this remains a provider-level proof bit. When the next
 			// schema can change, store verification per normalized domain or force
 			// previously verified multi-domain providers through re-verification.
-			await ctx.context.adapter.update<SSOProvider<SSOOptions>>({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: provider.providerId }],
-				update: {
-					domainVerified: true,
-				},
-			});
+			await completeDomainVerification(ctx.context.adapter, provider);
 
 			ctx.setStatus(204);
 			return;

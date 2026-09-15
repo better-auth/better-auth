@@ -4,6 +4,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
+import { getBaseURL, getOrigin } from "../../utils/url";
 
 /**
  * Checks if CSRF should be skipped for backward compatibility.
@@ -225,7 +226,8 @@ async function validateOrigin(
 	if (!headers || !ctx.request) {
 		return;
 	}
-	const originHeader = headers.get("origin") || headers.get("referer") || "";
+	const origin = headers.get("origin");
+	const originHeader = origin || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
 	if (ctx.context.skipCSRFCheck) {
@@ -248,7 +250,25 @@ async function validateOrigin(
 		return;
 	}
 
-	if (!originHeader || originHeader === "null") {
+	// A same-origin form using `no-referrer` can send `Origin: null`.
+	// Fetch Metadata lets us infer the origin from the request target.
+	const canInferOriginFromFetchMetadata =
+		origin === "null" && headers.get("sec-fetch-site") === "same-origin";
+	const inferredBaseURL = canInferOriginFromFetchMetadata
+		? getBaseURL(
+				undefined,
+				ctx.context.options.basePath,
+				ctx.request,
+				false,
+				ctx.context.options.advanced?.trustedProxyHeaders,
+			)
+		: undefined;
+	const inferredOrigin = inferredBaseURL
+		? getOrigin(inferredBaseURL)
+		: undefined;
+	const originToValidate = inferredOrigin ?? originHeader;
+
+	if (!originToValidate || originToValidate === "null") {
 		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 	}
 
@@ -264,12 +284,12 @@ async function validateOrigin(
 			];
 
 	const isTrustedOrigin = trustedOrigins.some((origin) =>
-		matchesOriginPattern(originHeader, origin),
+		matchesOriginPattern(originToValidate, origin),
 	);
 	if (!isTrustedOrigin) {
-		ctx.context.logger.error(`Invalid origin: ${originHeader}`);
+		ctx.context.logger.error(`Invalid origin: ${originToValidate}`);
 		ctx.context.logger.info(
-			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
+			`If it's a valid URL, please add ${originToValidate} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
 		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);

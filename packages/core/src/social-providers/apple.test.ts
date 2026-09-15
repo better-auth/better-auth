@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { GenericEndpointContext } from "../types";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -10,6 +11,7 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import { verifyProviderIdToken } from "../oauth2";
 import { apple } from "./apple";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -46,7 +48,49 @@ function mockAppleJwks(publicJWK: JWK) {
 	} as Awaited<ReturnType<typeof betterFetch>>);
 }
 
-describe("apple.verifyIdToken", () => {
+function codeChallenge(codeVerifier: string) {
+	return createHash("sha256").update(codeVerifier).digest("base64url");
+}
+
+describe("apple.createAuthorizationURL", () => {
+	it("sends a PKCE code challenge when a code verifier is provided", async () => {
+		const verifier = "apple-code-verifier";
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/api/auth/callback/apple",
+			codeVerifier: verifier,
+		});
+
+		expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+		expect(url.searchParams.get("code_challenge")).toBe(
+			codeChallenge(verifier),
+		);
+		expect(url.searchParams.has("code_verifier")).toBe(false);
+	});
+
+	it("omits PKCE parameters when no code verifier is provided", async () => {
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/api/auth/callback/apple",
+			codeVerifier: "",
+		});
+
+		expect(url.searchParams.has("code_challenge_method")).toBe(false);
+		expect(url.searchParams.has("code_challenge")).toBe(false);
+	});
+});
+
+describe("apple id_token verification", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();
 	});
@@ -62,7 +106,9 @@ describe("apple.verifyIdToken", () => {
 			appBundleIdentifier: "com.example.app",
 		});
 
-		await expect(provider.verifyIdToken(token, rawNonce)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, rawNonce),
+		).resolves.toBe(true);
 	});
 
 	it("accepts a hashed token nonce when the request provides the raw native iOS nonce", async () => {
@@ -77,7 +123,9 @@ describe("apple.verifyIdToken", () => {
 			appBundleIdentifier: "com.example.app",
 		});
 
-		await expect(provider.verifyIdToken(token, rawNonce)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, rawNonce),
+		).resolves.toBe(true);
 	});
 
 	it("rejects a mismatched nonce", async () => {
@@ -93,7 +141,31 @@ describe("apple.verifyIdToken", () => {
 		});
 
 		await expect(
-			provider.verifyIdToken(token, "different-nonce"),
+			verifyProviderIdToken(provider, token, "different-nonce"),
 		).resolves.toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/1214
+	 */
+	it("forwards request ctx to a custom verifyIdToken option", async () => {
+		const ctx = {
+			headers: new Headers({ "x-platform": "ios" }),
+		} as GenericEndpointContext;
+		let seenPlatform: string | null = null;
+
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+			verifyIdToken: async (_token, _nonce, requestCtx) => {
+				seenPlatform = requestCtx?.headers?.get("x-platform") ?? null;
+				return seenPlatform === "ios";
+			},
+		});
+
+		await expect(
+			verifyProviderIdToken(provider, "token", "nonce", ctx),
+		).resolves.toBe(true);
+		expect(seenPlatform).toBe("ios");
 	});
 });

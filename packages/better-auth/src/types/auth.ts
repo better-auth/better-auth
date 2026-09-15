@@ -7,6 +7,10 @@ import type { InferPluginContext, InferPluginErrorCodes } from "./plugins";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
+	/**
+	 * Alias for {@link Auth.handler}.
+	 */
+	fetch: (request: Request) => Promise<Response>;
 	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;

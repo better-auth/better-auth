@@ -27,6 +27,11 @@ import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
+type AddPasskeyResponse = Passkey & {
+	session?: Session;
+	user?: User;
+};
+
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
 	{
@@ -149,6 +154,10 @@ export const getPasskeyActions = (
 					 */
 					context?: string | null;
 					/**
+					 * Create a session after successfully registering the passkey.
+					 */
+					createSession?: boolean;
+					/**
 					 * Optional WebAuthn extensions to include during registration.
 					 */
 					extensions?: AuthenticationExtensionsClientInputs;
@@ -205,21 +214,30 @@ export const getPasskeyActions = (
 				useAutoRegister: opts?.useAutoRegister,
 			});
 			const { clientExtensionResults, ...responseBody } = res;
-			const verified = await $fetch<Passkey>("/passkey/verify-registration", {
-				...opts?.fetchOptions,
-				...fetchOpts,
-				body: {
-					response: responseBody,
-					name: opts?.name,
+			const verified = await $fetch<AddPasskeyResponse>(
+				"/passkey/verify-registration",
+				{
+					...opts?.fetchOptions,
+					...fetchOpts,
+					body: {
+						response: responseBody,
+						name: opts?.name,
+						...(opts?.createSession && {
+							createSession: true,
+						}),
+					},
+					method: "POST",
+					throw: false,
 				},
-				method: "POST",
-				throw: false,
-			});
+			);
 
 			if (!verified.data) {
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
+			if (verified.data.session) {
+				$store.notify("$sessionSignal");
+			}
 			if (opts?.returnWebAuthnResponse) {
 				return {
 					...verified,

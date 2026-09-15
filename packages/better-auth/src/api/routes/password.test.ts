@@ -161,6 +161,10 @@ describe("forgot password", async () => {
 			],
 		});
 		expect(updatedAccounts.length).toBe(1);
+		expect(updatedAccounts[0]).toMatchObject({
+			providerId: "credential",
+			accountId: userId,
+		});
 		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
 
 		// Verify updatedAt was refreshed
@@ -262,6 +266,7 @@ describe("forgot password", async () => {
 	});
 
 	it("should expire", async () => {
+		const onPasswordReset = vi.fn();
 		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
@@ -270,6 +275,7 @@ describe("forgot password", async () => {
 					await mockSendEmail();
 				},
 				resetPasswordTokenExpiresIn: 10,
+				onPasswordReset,
 			},
 		});
 		const { runWithUser } = await signInWithTestUser();
@@ -299,6 +305,7 @@ describe("forgot password", async () => {
 			token,
 		});
 		expect(res.data?.status).toBe(true);
+		expect(onPasswordReset).toHaveBeenCalledOnce();
 		await runWithUser(async () => {
 			await client.requestPasswordReset({
 				email: testUser.email,
@@ -311,7 +318,7 @@ describe("forgot password", async () => {
 			newPassword: "new-password",
 			token,
 		});
-		expect(mockOnPasswordReset).toHaveBeenCalled();
+		expect(onPasswordReset).toHaveBeenCalledOnce();
 		expect(res2.error?.status).toBe(400);
 	});
 

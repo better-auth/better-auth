@@ -24,6 +24,26 @@ export function toNextJsHandler(
 	};
 }
 
+type NextHeadersModule = typeof import("next/headers.js");
+
+let nextHeadersModulePromise: Promise<NextHeadersModule> | undefined;
+
+/**
+ * Cache ESM resolution while leaving the request-scoped `headers()` and
+ * `cookies()` calls uncached.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10466
+ */
+const loadNextHeadersModule = () => {
+	nextHeadersModulePromise ??= import("next/headers.js").catch(
+		(error: unknown) => {
+			nextHeadersModulePromise = undefined;
+			throw error;
+		},
+	);
+	return nextHeadersModulePromise;
+};
+
 export const nextCookies = () => {
 	let hasWarned = false;
 
@@ -46,11 +66,9 @@ export const nextCookies = () => {
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
-						let headersStore: Awaited<
-							ReturnType<typeof import("next/headers.js").headers>
-						>;
+						let headersStore: Awaited<ReturnType<NextHeadersModule["headers"]>>;
 						try {
-							const { headers } = await import("next/headers.js");
+							const { headers } = await loadNextHeadersModule();
 							headersStore = await headers();
 						} catch {
 							return;
@@ -89,10 +107,10 @@ export const nextCookies = () => {
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							let cookieHelper: Awaited<
-								ReturnType<typeof import("next/headers.js").cookies>
+								ReturnType<NextHeadersModule["cookies"]>
 							>;
 							try {
-								const { cookies } = await import("next/headers.js");
+								const { cookies } = await loadNextHeadersModule();
 								cookieHelper = await cookies();
 							} catch (error) {
 								if (

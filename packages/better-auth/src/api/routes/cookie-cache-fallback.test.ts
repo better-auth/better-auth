@@ -1,6 +1,140 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseCookies } from "../../cookies";
+import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import { symmetricEncodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11119
+ */
+describe("disabled cookie cache fallback", () => {
+	const secret = "better-auth-retired-cookie-cache-test-secret";
+	const cacheMaxAge = 5 * 60;
+
+	it.each([
+		{
+			mode: "in configuration",
+			cacheEnabled: false,
+			query: undefined,
+			expectedSessionDataMaxAge: 0,
+		},
+		{
+			mode: "for the request",
+			cacheEnabled: true,
+			query: { disableCookieCache: true },
+			expectedSessionDataMaxAge: cacheMaxAge,
+		},
+	])("ignores retired session_data when caching is disabled $mode", async ({
+		cacheEnabled,
+		query,
+		expectedSessionDataMaxAge,
+	}) => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret,
+			advanced: {
+				cookies: {
+					session_token: { name: "custom.session_token" },
+					session_data: { name: "custom.session" },
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: cacheEnabled,
+					strategy: "compact",
+					maxAge: cacheMaxAge,
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const retiredCache = await symmetricEncodeJWT(
+			{ retired: true },
+			secret,
+			"better-auth-session",
+		);
+		headers.set(
+			"cookie",
+			`${headers.get("cookie")}; custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks`,
+		);
+
+		let setCookieHeader = "";
+		const session = await client.getSession({
+			query,
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+		expect(session.data?.user.email).toBe(testUser.email);
+
+		const responseCookies = parseSetCookieHeader(setCookieHeader);
+		expect(responseCookies.get("custom.session")?.["max-age"]).toBe(
+			expectedSessionDataMaxAge,
+		);
+		for (const name of ["custom.session.0", "custom.session.1"]) {
+			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
+		}
+		expect(responseCookies.has("custom.session_token")).toBe(false);
+	});
+
+	it.each([
+		{ state: "missing", sessionTokenCookie: "" },
+		{
+			state: "invalid",
+			sessionTokenCookie: "; custom.session_token=invalid",
+		},
+	])("clears retired session_data when session_token is $state", async ({
+		sessionTokenCookie,
+	}) => {
+		const { client } = await getTestInstance({
+			secret,
+			advanced: {
+				cookies: {
+					session_token: { name: "custom.session_token" },
+					session_data: { name: "custom.session" },
+				},
+			},
+			session: {
+				cookieCache: { enabled: false },
+			},
+		});
+		const retiredCache = await symmetricEncodeJWT(
+			{ retired: true },
+			secret,
+			"better-auth-session",
+		);
+		const headers = new Headers({
+			cookie:
+				`custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks` +
+				sessionTokenCookie,
+		});
+
+		let setCookieHeader = "";
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(session.data).toBeNull();
+		const responseCookies = parseSetCookieHeader(setCookieHeader);
+		for (const name of [
+			"custom.session",
+			"custom.session.0",
+			"custom.session.1",
+		]) {
+			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
+		}
+	});
+});
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/9233
@@ -19,6 +153,7 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
+
 	it("should fall through to session_token DB validation when session_data HMAC fails", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			session: {
@@ -90,6 +225,52 @@ describe("cookieCache HMAC verification failure fallback", async () => {
 
 		expect(session.data).not.toBeNull();
 		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should expire malformed compact session_data and fall through to session_token DB validation", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "compact",
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		const sessionToken = cookies.get("better-auth.session_token");
+		expect(sessionToken).toBeDefined();
+
+		const tampered = new Headers();
+		tampered.set(
+			"cookie",
+			`better-auth.session_data=${btoa("not-json")}; better-auth.session_token=${sessionToken}`,
+		);
+		let setCookieHeader = "";
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: tampered,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+		expect(setCookieHeader).toContain("better-auth.session_data=");
+		expect(setCookieHeader).toContain("Max-Age=0");
 	});
 
 	it("should still return null when both session_data and session_token are invalid", async () => {

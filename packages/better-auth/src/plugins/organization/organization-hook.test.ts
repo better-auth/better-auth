@@ -92,11 +92,8 @@ describe("organization creation in database hooks", async () => {
 		});
 	});
 
-	it("should handle errors gracefully when organization creation fails in hook", async ({
-		skip,
-	}) => {
+	it("keeps the committed user and surfaces a post-commit hook failure as the sign-up response", async () => {
 		let firstUserCreated = false;
-		let errorOnSecondUser: any = null;
 
 		const { auth, client, db } = await getTestInstance({
 			plugins: [organization()],
@@ -125,12 +122,6 @@ describe("organization creation in database hooks", async () => {
 			},
 		});
 
-		if (!db.options?.adapterConfig.transaction) {
-			skip(
-				"Skipping since transactions are enabled and will rollback automatically",
-			);
-		}
-
 		// First user should succeed
 		const result1 = await client.signUp.email({
 			email: "user1-hook@example.com",
@@ -141,18 +132,18 @@ describe("organization creation in database hooks", async () => {
 		expect(result1.data?.user?.email).toBe("user1-hook@example.com");
 		expect(firstUserCreated).toBe(true);
 
-		// Second user should fail due to duplicate org slug
-		try {
-			await client.signUp.email({
-				email: "user2-hook@example.com",
-				password: "password123",
-				name: "User 2",
-			});
-		} catch (error) {
-			errorOnSecondUser = error;
-		}
-
-		expect(errorOnSecondUser).toBeDefined();
+		// The user.create.after hook is queued until after the sign-up
+		// transaction commits, so the second user's row is already durable by
+		// the time its hook's duplicate-slug org creation fails. That failure
+		// re-throws out of runWithTransaction and becomes the sign-up
+		// response itself rather than rolling anything back.
+		const result2 = await client.signUp.email({
+			email: "user2-hook@example.com",
+			password: "password123",
+			name: "User 2",
+		});
+		expect(result2.data).toBeNull();
+		expect(result2.error?.code).toBe("ORGANIZATION_ALREADY_EXISTS");
 
 		// Verify only one organization with our test slug was created
 		const orgs = await db.findMany({
@@ -166,7 +157,8 @@ describe("organization creation in database hooks", async () => {
 		});
 		expect(orgs).toHaveLength(1);
 
-		// Verify only the first user exists (transaction should have rolled back for second user)
+		// The second user's row committed before its hook ran, so it exists
+		// despite the hook's later failure.
 		const users = await db.findMany({
 			model: "user",
 			where: [
@@ -176,7 +168,7 @@ describe("organization creation in database hooks", async () => {
 				},
 			],
 		});
-		expect(users).toHaveLength(0);
+		expect(users).toHaveLength(1);
 	});
 
 	it("should work with multiple async operations in the hook", async () => {

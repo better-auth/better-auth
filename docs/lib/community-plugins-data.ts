@@ -130,10 +130,32 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@alexasomba/better-auth-paystack",
+		name: "better-auth-paystack",
 		url: "https://github.com/alexasomba/better-auth-paystack",
 		description:
-			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+			"Production-ready Paystack billing plugin for Better Auth with native and locally managed subscriptions, one-time payments, organization billing, trials, secure webhooks, automated limits, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-flutterwave",
+		url: "https://github.com/alexasomba/better-auth-flutterwave",
+		description:
+			"Flutterwave plugin for Better Auth — integrates Flutterwave payments, subscriptions, organization billing, marketplace split payments, webhooks, refunds, reconciliation, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-solana-payments",
+		url: "https://github.com/alexasomba/better-auth-solana-payments",
+		description:
+			"One-time Solana payment integration for Better Auth with Solana Pay checkout, server-side transfer verification, payment tracking, organization payments, and more.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
@@ -289,6 +311,90 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "SulimanAbdulrazzaq",
 			github: "SulimanAbdulrazzaq",
 			avatar: "https://github.com/SulimanAbdulrazzaq.png",
+		},
+	},
+	{
+		name: "@marinedotsh/better-auth-referral",
+		url: "https://github.com/marinedotsh/better-auth-referral",
+		description: "A Better Auth plugin for adding user referrals to your app.",
+		author: {
+			name: "Shivam Gupta",
+			github: "shivamrun",
+			avatar: "https://github.com/shivamrun.png",
+		},
+	},
+	{
+		name: "better-auth-instagram",
+		url: "https://github.com/rajatsandeepsen/better-auth-instagram",
+		description: "Instagram Provider for Better Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		name: "better-auth-zoho",
+		url: "https://github.com/rajatsandeepsen/better-auth-zoho",
+		description: "Zoho Provider for Better Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		name: "better-auth-snapchat",
+		url: "https://github.com/rajatsandeepsen/better-auth-snapchat",
+		description: "Snapchat Provider for Better Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		name: "better-inbox",
+		url: "https://github.com/better-inbox/better-inbox",
+		description:
+			"In-app notifications for Better Auth apps. One plugin, one migration, one component — notifications live in your database, addressed to your users.",
+		author: {
+			name: "stewartjarod",
+			github: "stewartjarod",
+			avatar: "https://github.com/stewartjarod.png",
+		},
+	},
+	{
+		name: "better-auth-email-challenge",
+		url: "https://github.com/lapluviosilla/better-auth-email-challenge",
+		description:
+			"Passwordless, multi-device email challenge — one challenge completable by an approval link or OTP, with browser-bound session issuance for safe cross-device sign-in.",
+		author: {
+			name: "lapluviosilla",
+			github: "lapluviosilla",
+			avatar: "https://github.com/lapluviosilla.png",
+		},
+	},
+	{
+		name: "@better-geetest/better-auth-plugin-gt4",
+		url: "https://github.com/typed-sigterm/better-geetest/tree/main/packages/better-auth-plugin-gt4",
+		description:
+			"Integrate GeeTest gt4 bot protection by adding captcha verification for key endpoints.",
+		author: {
+			name: "Typed SIGTERM",
+			github: "typed-sigterm",
+			avatar: "https://github.com/typed-sigterm.png",
+		},
+	},
+	{
+		name: "better-auth-evp",
+		url: "https://github.com/qamarq/better-auth-evp",
+		description:
+			"Email Verification Protocol (Chrome origin trial) plugin - lets a supporting browser verify mailbox ownership in the background and sign the user in, with automatic fallback to any other sign-in method when unsupported.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
 		},
 	},
 ];

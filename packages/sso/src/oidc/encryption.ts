@@ -98,6 +98,10 @@ export async function encryptOIDCConfig(
 	if (!isEncryptionEnabled(deps.ssoOptions)) {
 		return oidcConfig;
 	}
+	// Nothing to encrypt when no secret is present (e.g. private_key_jwt auth).
+	if (oidcConfig.clientSecret === undefined) {
+		return oidcConfig;
+	}
 	const { encryptionFn } = prepareEncryptionFns(
 		deps.authSecret,
 		deps.ssoOptions,

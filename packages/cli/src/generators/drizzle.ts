@@ -1,4 +1,9 @@
 import { existsSync } from "node:fs";
+import {
+	getDatabaseFieldIndexName,
+	getDatabaseIndexStringLength,
+	resolveDatabaseSchemaIndexes,
+} from "@better-auth/core/db/internal";
 import { toSnakeCase } from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
@@ -11,6 +16,23 @@ function convertToSnakeCase(str: string, camelCase?: boolean) {
 	return camelCase ? str : toSnakeCase(str);
 }
 
+function toValidIdentifier(str: string): string {
+	// Convert schema name to a valid JavaScript identifier
+	// Replace hyphens and other non-alphanumeric characters (except underscore) with nothing
+	// Then convert to camelCase
+	let result = str
+		.replace(/[^a-zA-Z0-9_]/g, "")
+		.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+		.replace(/_/g, "") // Remove remaining underscores
+		.replace(/^[0-9]/, "_$&"); // Can't start with a number - must be after underscore removal
+
+	// Ensure first character is lowercase
+	if (result.length > 0 && result[0]!.match(/[A-Z]/)) {
+		result = result[0]!.toLowerCase() + result.slice(1);
+	}
+
+	return result || "schema"; // Fallback if result is empty
+}
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
@@ -20,6 +42,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
 		adapter.options?.provider;
+
+	const schemaName = adapter.options?.schemaName;
 
 	if (!databaseType) {
 		throw new Error(
@@ -32,27 +56,70 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		databaseType,
 		tables,
 		options,
+		schemaName,
 	});
+
+	// Add schema declaration for PostgreSQL when schemaName is provided
+	let schemaVarName: string | undefined;
+	if (databaseType === "pg" && schemaName) {
+		schemaVarName = `${toValidIdentifier(schemaName)}Schema`;
+		if (schemaVarName === "pgSchema") {
+			schemaVarName = "pgCustomSchema";
+		}
+		code += `\nexport const ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n\n`;
+	}
 
 	const getModelName = initGetModelName({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
+	const getSingularModelName = initGetModelName({
+		schema: tables,
+		usePlural: false,
+	});
+
 	const getFieldName = initGetFieldName({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
+	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
+		Object.keys(tables)
+			.filter((tableKey) => !isMigrationDisabled(tableKey))
+			.map((tableKey) => ({
+				fields: tables[tableKey]!.fields,
+				indexes: tables[tableKey]!.indexes,
+				tableName: getModelName(tableKey),
+			})),
+	);
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
-		if (table.disableMigrations) {
+		if (isMigrationDisabled(tableKey)) {
 			continue;
 		}
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
+		const resolvedTableIndexes = resolvedIndexesByTable.get(modelName) ?? [];
 
-		function getType(name: string, field: DBFieldAttribute) {
+		function getType(
+			name: string,
+			field: DBFieldAttribute,
+			tableIndexStringLength?: number | undefined,
+		) {
 			// Not possible to reach, it's here to make typescript happy
 			if (!databaseType) {
 				throw new Error(
@@ -87,9 +154,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (typeof type !== "string") {
 				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
 					return {
-						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						sqlite: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+						mysql: `mysqlEnum('${name}', [${type.map((x) => `'${x}'`).join(", ")}])`,
 					}[databaseType];
 				} else {
 					throw new TypeError(
@@ -104,15 +171,17 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				string: {
 					sqlite: `text('${name}')`,
 					pg: `text('${name}')`,
-					mysql: field.unique
-						? `varchar('${name}', { length: 255 })`
-						: field.references
-							? `varchar('${name}', { length: 36 })`
-							: field.sortable
-								? `varchar('${name}', { length: 255 })`
-								: field.index
+					mysql: tableIndexStringLength
+						? `varchar('${name}', { length: ${tableIndexStringLength} })`
+						: field.unique
+							? `varchar('${name}', { length: 255 })`
+							: field.references
+								? `varchar('${name}', { length: 36 })`
+								: field.sortable
 									? `varchar('${name}', { length: 255 })`
-									: `text('${name}')`,
+									: field.index
+										? `varchar('${name}', { length: 255 })`
+										: `text('${name}')`,
 				},
 				boolean: {
 					sqlite: `integer('${name}', { mode: 'boolean' })`,
@@ -187,7 +256,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
-		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
+		type Index = {
+			type: "uniqueIndex" | "index";
+			name: string;
+			on: readonly string[];
+		};
 
 		const indexes: Index[] = [];
 
@@ -197,7 +270,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			const code: string[] = [`, (table) => [`];
 
 			for (const index of indexes) {
-				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
+				code.push(
+					`  ${index.type}(${JSON.stringify(index.name)}).on(${index.on.map((fieldName) => `table.${fieldName}`).join(", ")}),`,
+				);
 			}
 
 			code.push(`]`);
@@ -205,7 +280,21 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			return code.join("\n");
 		};
 
-		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
+		for (const tableIndex of resolvedTableIndexes) {
+			indexes.push({
+				type: tableIndex.unique ? "uniqueIndex" : "index",
+				name: tableIndex.name,
+				on: tableIndex.columns,
+			});
+		}
+
+		// Determine table function to use based on schema support
+		const tableFunction =
+			databaseType === "pg" && schemaName && schemaVarName
+				? `${schemaVarName}.table`
+				: `${databaseType}Table`;
+
+		const schema = `export const ${modelName} = ${tableFunction}("${convertToSnakeCase(
 			modelName,
 			adapter.options?.camelCase,
 		)}", {
@@ -214,19 +303,24 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						.map((field) => {
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
-							let type = getType(fieldName, attr);
+							let type = getType(
+								fieldName,
+								attr,
+								databaseType === "mysql"
+									? getDatabaseIndexStringLength({
+											columnName: fieldName,
+											dialect: "mysql",
+											fields,
+											indexes: resolvedTableIndexes,
+										})
+									: undefined,
+							);
 
 							if (attr.index && !attr.unique) {
 								indexes.push({
 									type: "index",
-									name: `${modelName}_${fieldName}_idx`,
-									on: fieldName,
-								});
-							} else if (attr.index && attr.unique) {
-								indexes.push({
-									type: "uniqueIndex",
-									name: `${modelName}_${fieldName}_uidx`,
-									on: fieldName,
+									name: getDatabaseFieldIndexName(modelName, fieldName, false),
+									on: [fieldName],
 								});
 							}
 
@@ -277,11 +371,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+							const referencesDisabledModel =
+								attr.references && isMigrationDisabled(attr.references.model);
 
 							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
-								attr.references
+								attr.references && !referencesDisabledModel
 									? `.references(()=> ${getModelName(
 											attr.references.model,
 										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
@@ -298,7 +394,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
-		if (table.disableMigrations) {
+		if (isMigrationDisabled(tableKey)) {
 			continue;
 		}
 		const modelName = getModelName(tableKey);
@@ -319,57 +415,80 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			 */
 			type: "one" | "many";
 			/**
+			 * Disambiguates multiple relations between the same two tables.
+			 */
+			relationName?: string;
+			/**
 			 * Foreign key field name and reference details (only for "one" relations).
 			 */
 			reference?: {
 				field: string;
 				references: string;
-				fieldName: string; // Original field name for generating unique relation export names
 			};
 		};
 
 		const oneRelations: Relation[] = [];
 		const manyRelations: Relation[] = [];
-		// Set to track "many" relations by key to prevent duplicates
-		const manyRelationsSet = new Set<string>();
 
 		// 1. Find all foreign keys in THIS table (creates "one" relations)
 		const fields = Object.entries(table.fields);
 		const foreignFields = fields.filter(([_, field]) => field.references);
+		const foreignFieldCounts = new Map<string, number>();
+		for (const [_, field] of foreignFields) {
+			const referencedModel = getModelName(field.references!.model);
+			foreignFieldCounts.set(
+				referencedModel,
+				(foreignFieldCounts.get(referencedModel) ?? 0) + 1,
+			);
+		}
 
+		const usedOneRelationKeys = new Set<string>();
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			const relationKey = getModelName(referencedModel);
+			if (isMigrationDisabled(referencedModel)) {
+				continue;
+			}
+			const hasMultipleRelations =
+				(foreignFieldCounts.get(getModelName(referencedModel)) ?? 0) > 1;
+			let relationKey = hasMultipleRelations
+				? fieldName.replace(/Id$/, "")
+				: getSingularModelName(referencedModel);
+			// Avoid silent overwrites when stripping `Id` collides
+			// (e.g. `owner` and `ownerId` both become `owner`), including
+			// when field insertion order is `ownerId` then `owner`.
+			if (usedOneRelationKeys.has(relationKey)) {
+				relationKey = fieldName;
+			}
+			if (usedOneRelationKeys.has(relationKey)) {
+				let suffix = 2;
+				while (usedOneRelationKeys.has(`${relationKey}_${suffix}`)) {
+					suffix++;
+				}
+				relationKey = `${relationKey}_${suffix}`;
+			}
+			usedOneRelationKeys.add(relationKey);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 
-			// Create a separate relation for each foreign key
 			oneRelations.push({
 				key: relationKey,
 				model: getModelName(referencedModel),
 				type: "one",
+				relationName: hasMultipleRelations
+					? `${getModelName(tableKey)}_${fieldName}`
+					: undefined,
 				reference: {
 					field: fieldRef,
 					references: referenceRef,
-					fieldName: fieldName,
 				},
 			});
 		}
 
 		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
 		const otherModels = Object.entries(tables).filter(
-			([modelName]) => modelName !== tableKey,
+			([modelName, otherTable]) =>
+				modelName !== tableKey && !otherTable.disableMigrations,
 		);
-
-		// Map to track relations by model name to determine if unique or many
-		const modelRelationsMap = new Map<
-			string,
-			{
-				modelName: string;
-				hasUnique: boolean;
-				hasMany: boolean;
-			}
-		>();
 
 		for (const [modelName, otherTable] of otherModels) {
 			const foreignKeysPointingHere = Object.entries(otherTable.fields).filter(
@@ -380,148 +499,78 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 			if (foreignKeysPointingHere.length === 0) continue;
 
-			// Check if any foreign key is unique
-			const hasUnique = foreignKeysPointingHere.some(
-				([_, field]) => !!field.unique,
-			);
-			const hasMany = foreignKeysPointingHere.some(
-				([_, field]) => !field.unique,
-			);
+			for (const [fieldName, field] of foreignKeysPointingHere) {
+				const relationType = field.unique ? "one" : "many";
+				let relationKey = getModelName(modelName);
 
-			modelRelationsMap.set(modelName, {
-				modelName,
-				hasUnique,
-				hasMany,
-			});
-		}
+				// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
+				/* cspell:disable-next-line */
+				// "sesionss", or "accountss" - double s's.
+				if (
+					!adapter.options?.adapterConfig?.usePlural &&
+					relationType === "many"
+				) {
+					relationKey = `${relationKey}s`;
+				}
 
-		// Add relations, deduplicating by relationKey
-		for (const { modelName, hasMany } of modelRelationsMap.values()) {
-			// Determine relation type: if all are unique, it's "one", otherwise "many"
-			const relationType = hasMany ? "many" : "one";
-			let relationKey = getModelName(modelName);
+				const hasMultipleRelations = foreignKeysPointingHere.length > 1;
+				if (hasMultipleRelations) {
+					relationKey = `${relationKey}By${fieldName.charAt(0).toUpperCase()}${fieldName.slice(1)}`;
+				}
 
-			// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
-			/* cspell:disable-next-line */
-			// "sesionss", or "accountss" - double s's.
-			if (
-				!adapter.options?.adapterConfig?.usePlural &&
-				relationType === "many"
-			) {
-				relationKey = `${relationKey}s`;
-			}
-
-			// Only add if we haven't seen this key before
-			if (!manyRelationsSet.has(relationKey)) {
-				manyRelationsSet.add(relationKey);
 				manyRelations.push({
 					key: relationKey,
 					model: getModelName(modelName),
 					type: relationType,
+					relationName: hasMultipleRelations
+						? `${getModelName(modelName)}_${fieldName}`
+						: undefined,
 				});
 			}
 		}
 
-		// Group "one" relations by referenced model to detect duplicates
-		const relationsByModel = new Map<string, Relation[]>();
-		for (const relation of oneRelations) {
-			if (relation.reference) {
-				const modelKey = relation.key;
-				if (!relationsByModel.has(modelKey)) {
-					relationsByModel.set(modelKey, []);
-				}
-				relationsByModel.get(modelKey)!.push(relation);
-			}
-		}
+		const hasForwardOne = oneRelations.length > 0;
+		const hasReverseOne = manyRelations.some(
+			(relation) => relation.type === "one",
+		);
+		const hasReverseMany = manyRelations.some(
+			(relation) => relation.type === "many",
+		);
+		const hasOne = hasForwardOne || hasReverseOne;
+		const hasMany = hasReverseMany;
 
-		// Separate relations with duplicates (same model) from those without
-		const duplicateRelations: Relation[] = [];
-		const singleRelations: Relation[] = [];
-
-		for (const [_modelKey, relations] of relationsByModel.entries()) {
-			if (relations.length > 1) {
-				// Multiple relations to the same model - these need field-specific naming
-				duplicateRelations.push(...relations);
-			} else {
-				// Single relation to this model - can be combined with others
-				singleRelations.push(relations[0]!);
-			}
-		}
-
-		// Generate field-specific exports for duplicate relations
-		for (const relation of duplicateRelations) {
-			if (relation.reference) {
-				const fieldName = relation.reference.fieldName;
-				const relationExportName = `${modelName}${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}Relations`;
-
-				const tableRelation = `export const ${relationExportName} = relations(${getModelName(
-					table.modelName,
-				)}, ({ one }) => ({
-				${relation.key}: one(${relation.model}, {
+		const renderOneRelation = (relation: Relation) =>
+			relation.reference
+				? ` ${relation.key}: one(${relation.model}, {
 					fields: [${relation.reference.field}],
 					references: [${relation.reference.references}],
-				})
-			}))`;
-
-				relationsString += `\n${tableRelation}\n`;
-			}
-		}
-
-		// Combine all single "one" relations and "many" relations into exports
-		const hasOne = singleRelations.length > 0;
-		const hasMany = manyRelations.length > 0;
-
-		if (hasOne && hasMany) {
-			// Both "one" and "many" relations exist - combine in one export
-			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
-				table.modelName,
-			)}, ({ one, many }) => ({
-				${singleRelations
-					.map((relation) =>
-						relation.reference
-							? ` ${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
+					${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
 				})`
-							: "",
-					)
-					.filter((x) => x !== "")
-					.join(",\n ")}${
-					singleRelations.length > 0 && manyRelations.length > 0 ? "," : ""
-				}
-				${manyRelations
-					.map(({ key, model }) => ` ${key}: many(${model})`)
-					.join(",\n ")}
-			}))`;
+				: "";
 
-			relationsString += `\n${tableRelation}\n`;
-		} else if (hasOne) {
-			// Only "one" relations exist
+		const renderReverseRelation = ({
+			key,
+			model,
+			type,
+			relationName,
+		}: Relation) => {
+			const relationFn = type === "one" ? "one" : "many";
+			return ` ${key}: ${relationFn}(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`;
+		};
+
+		if (hasOne || hasMany) {
+			const helpers = [hasOne ? "one" : null, hasMany ? "many" : null]
+				.filter(Boolean)
+				.join(", ");
+			const relationEntries = [
+				...oneRelations.map(renderOneRelation).filter((x) => x !== ""),
+				...manyRelations.map(renderReverseRelation),
+			].join(",\n ");
+
 			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
 				table.modelName,
-			)}, ({ one }) => ({
-				${singleRelations
-					.map((relation) =>
-						relation.reference
-							? ` ${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
-				})`
-							: "",
-					)
-					.filter((x) => x !== "")
-					.join(",\n ")}
-			}))`;
-
-			relationsString += `\n${tableRelation}\n`;
-		} else if (hasMany) {
-			// Only "many" relations exist
-			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
-				table.modelName,
-			)}, ({ many }) => ({
-				${manyRelations
-					.map(({ key, model }) => ` ${key}: many(${model})`)
-					.join(",\n ")}
+			)}, ({ ${helpers} }) => ({
+				${relationEntries}
 			}))`;
 
 			relationsString += `\n${tableRelation}\n`;
@@ -543,10 +592,12 @@ function generateImport({
 	databaseType,
 	tables,
 	options,
+	schemaName,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
+	schemaName?: string;
 }) {
 	const rootImports: string[] = ["relations"];
 	const coreImports: string[] = [];
@@ -566,7 +617,14 @@ function generateImport({
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
-	coreImports.push(`${databaseType}Table`);
+	// Import pgSchema for PostgreSQL when schemaName is provided
+	if (databaseType === "pg" && schemaName) {
+		coreImports.push("pgSchema");
+	}
+
+	if (!(databaseType === "pg" && schemaName)) {
+		coreImports.push(`${databaseType}Table`);
+	}
 	coreImports.push(
 		databaseType === "mysql"
 			? "varchar, text"
@@ -659,11 +717,15 @@ function generateImport({
 	}
 
 	//handle indexes
-	const hasIndexes = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.index && !field.unique),
+	const hasIndexes = Object.values(tables).some(
+		(table) =>
+			Object.values(table.fields).some(
+				(field) => field.index && !field.unique,
+			) ||
+			(table.indexes?.some((index) => !index.unique) ?? false),
 	);
-	const hasUniqueIndexes = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.unique && field.index),
+	const hasUniqueIndexes = Object.values(tables).some(
+		(table) => table.indexes?.some((index) => index.unique) ?? false,
 	);
 	if (hasIndexes) {
 		coreImports.push("index");

@@ -10,12 +10,14 @@ import { splitAtLastColon } from "./utils";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
+	const generateOTPFn = vi.fn(() => "123456");
 	let otp = "";
 	const { client, testUser, auth } = await getTestInstance(
 		{
 			plugins: [
 				bearer(),
 				emailOTP({
+					generateOTP: generateOTPFn,
 					async sendVerificationOTP({ email, otp: _otp, type }) {
 						otp = _otp;
 						otpFn(email, _otp, type);
@@ -115,6 +117,11 @@ describe("email-otp", async () => {
 		});
 		const userId = created.user!.id;
 		expect(created.user?.emailVerified).toBe(false);
+		await internalAdapter.createAccount({
+			userId,
+			providerId: "google",
+			accountId: "attacker-google",
+		});
 
 		// Precondition: the password is blocked behind the verification gate.
 		await expect(
@@ -132,11 +139,10 @@ describe("email-otp", async () => {
 		const verifiedRow = await internalAdapter.findUserByEmail(email);
 		expect(verifiedRow?.user.emailVerified).toBe(true);
 
-		// The credential is gone, so the password no longer works.
+		// Pre-proof account links are gone, so the password no longer works and
+		// an OAuth link cannot survive the email-owner proof.
 		const accounts = await internalAdapter.findAccounts(userId);
-		expect(
-			accounts.find((account) => account.providerId === "credential"),
-		).toBeUndefined();
+		expect(accounts).toHaveLength(0);
 		await expect(
 			scopedAuth.api.signInEmail({
 				body: { email, password: existingPassword },
@@ -165,6 +171,50 @@ describe("email-otp", async () => {
 			},
 		);
 		expect(newUser.data?.token).toBeDefined();
+	});
+
+	it("should reject sign-up with otp when validateUserInfo returns error", async () => {
+		let blockedOtp = "";
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.method).toBe("email-otp");
+						if ((user.email as string).endsWith("@blocked.com")) {
+							return {
+								error: "email_otp_blocked",
+								errorDescription: "OTP sign-up is not allowed",
+							};
+						}
+					},
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							blockedOtp = _otp;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: "new@blocked.com",
+			type: "sign-in",
+		});
+		const res = await client.signIn.emailOtp({
+			email: "new@blocked.com",
+			otp: blockedOtp,
+		});
+
+		expect(res.error?.code).toBe("email_otp_blocked");
+		expect(res.error?.message).toBe("OTP sign-up is not allowed");
 	});
 
 	it("should sign-up with otp and set name and image", async () => {
@@ -224,7 +274,15 @@ describe("email-otp", async () => {
 			password: "password",
 			name: "test",
 		};
+		generateOTPFn.mockClear();
 		await client.signUp.email(testUser2);
+		expect(generateOTPFn).toHaveBeenCalledWith(
+			{
+				email: testUser2.email,
+				type: "email-verification",
+			},
+			expect.anything(),
+		);
 		expect(otpFn).toHaveBeenCalledWith(
 			testUser2.email,
 			otp,
@@ -247,6 +305,36 @@ describe("email-otp", async () => {
 			password: "changed-password",
 		});
 		expect(data?.user).toBeDefined();
+	});
+
+	it.for([
+		{
+			invalidPassword: "short",
+			validationError: "PASSWORD_TOO_SHORT",
+		},
+		{
+			invalidPassword: "a".repeat(129),
+			validationError: "PASSWORD_TOO_LONG",
+		},
+	])("should preserve OTP after $validationError", async (testCase) => {
+		await client.emailOtp.requestPasswordReset({
+			email: testUser.email,
+		});
+		const passwordResetOtp = otp;
+
+		const invalidReset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: passwordResetOtp,
+			password: testCase.invalidPassword,
+		});
+		expect(invalidReset.error?.code).toBe(testCase.validationError);
+
+		const validReset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: passwordResetOtp,
+			password: "valid-password",
+		});
+		expect(validReset.data?.success).toBe(true);
 	});
 
 	it("should reset password using deprecated forgetPassword endpoint (backward compatibility)", async () => {
@@ -343,6 +431,14 @@ describe("email-otp", async () => {
 			password: "password",
 		});
 		expect(res.data?.token).toBeDefined();
+		const userId = res.data!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			accountId: userId,
+		});
 	});
 
 	it("should fail on invalid email", async () => {
@@ -1098,6 +1194,50 @@ describe("email-otp-verify", async () => {
 		});
 		expect(successRes.data?.success).toBe(true);
 		expect(successRes.error).toBeFalsy();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10603
+	 */
+	it("should return INVALID_OTP regardless of email registration", async () => {
+		const { client: scopedClient, testUser: existingUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP() {},
+							disableSignUp: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+		const registeredResponse = await scopedClient.emailOtp.checkVerificationOtp(
+			{
+				email: existingUser.email,
+				type: "email-verification",
+				otp: "000000",
+			},
+		);
+		const unregisteredResponse =
+			await scopedClient.emailOtp.checkVerificationOtp({
+				email: "non-existent@domain.com",
+				type: "email-verification",
+				otp: "000000",
+			});
+		const invalidOTPError = {
+			status: 400,
+			code: "INVALID_OTP",
+			message: "Invalid OTP",
+		};
+
+		expect(registeredResponse.error).toMatchObject(invalidOTPError);
+		expect(unregisteredResponse.error).toMatchObject(invalidOTPError);
 	});
 
 	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {
@@ -2479,5 +2619,95 @@ describe("email-otp verify-email cookie cache isolation", async () => {
 		});
 		expect(session.data?.user.email).toBe(currentUserEmail);
 		expect(session.data?.user.emailVerified).toBe(false);
+	});
+});
+
+/**
+ * The built-in `/sign-in/email` and `/sign-up/email` routes force-validate the
+ * request `Origin` even on cookieless requests (via `formCsrfMiddleware`). The
+ * email-otp send endpoint must match that behavior so a cookieless cross-origin
+ * POST cannot trigger an outbound verification OTP email to an arbitrary address.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10304
+ */
+describe("email-otp send origin/CSRF protection", async () => {
+	const sendVerificationOTP = vi.fn(async () => {});
+	const { auth, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+		plugins: [
+			emailOTP({
+				sendVerificationOTP,
+			}),
+		],
+	});
+
+	it("should block cross-site navigation to the send endpoint (no cookies)", async () => {
+		sendVerificationOTP.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					type: "sign-in",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it("should reject a cookieless cross-origin POST to the send endpoint", async () => {
+		sendVerificationOTP.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					type: "sign-in",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it("should still allow a cookieless request with no Origin (server-to-server)", async () => {
+		sendVerificationOTP.mockClear();
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: testUser.email,
+					type: "email-verification",
+				}),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).toBe(200);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });

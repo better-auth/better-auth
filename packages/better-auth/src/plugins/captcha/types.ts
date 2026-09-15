@@ -4,6 +4,10 @@ export type Provider = (typeof Providers)[keyof typeof Providers];
 
 export interface BaseCaptchaOptions {
 	secretKey: string;
+	/**
+	 * Paths where captcha verification is enforced. Paths match exactly unless
+	 * they include wildcards, such as `/sign-in/*` or `/sign-in/**`.
+	 */
 	endpoints?: string[] | undefined;
 	siteVerifyURLOverride?: string | undefined;
 }

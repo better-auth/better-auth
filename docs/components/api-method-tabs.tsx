@@ -92,7 +92,7 @@ function ApiMethodTabsContent({
 
 export {
 	ApiMethodTabs,
+	ApiMethodTabsContent,
 	ApiMethodTabsList,
 	ApiMethodTabsTrigger,
-	ApiMethodTabsContent,
 };

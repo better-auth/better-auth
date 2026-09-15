@@ -1,6 +1,7 @@
 import type {
-	EndpointContext,
+	EndpointHandler,
 	EndpointOptions,
+	MiddlewareHandler,
 	StrictEndpoint,
 } from "better-call";
 import {
@@ -11,6 +12,25 @@ import {
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+
+/**
+ * Response headers that forbid any intermediary (proxy, CDN, browser) from
+ * caching a response body. Credential-bearing responses (access/refresh tokens,
+ * ID tokens, client secrets, device codes) must carry them.
+ *
+ * Set `metadata: { noStore: true }` on an endpoint and {@link createAuthEndpoint}
+ * applies these to the responses its handler produces: the success body and any
+ * error the handler throws. A request rejected by schema or media-type
+ * validation before the handler runs is not covered, and carries no credentials
+ * to protect. Spread them into a hand-built `Response` or `APIError`'s headers
+ * for the rare endpoint that constructs its own response.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+ */
+export const NO_STORE_HEADERS = {
+	"Cache-Control": "no-store",
+	Pragma: "no-cache",
+} as const;
 
 /**
  * Better-call's createEndpoint re-throws APIError without exposing the headers
@@ -56,13 +76,47 @@ export const createAuthMiddleware = createMiddleware.create({
 	],
 });
 
-const use = [optionsMiddleware];
+const createEndpointWithAuthContext = createEndpoint.create({
+	use: [optionsMiddleware],
+});
 
-type EndpointHandler<
+type AuthEndpointHandler<
 	Path extends string,
 	Options extends EndpointOptions,
 	R,
-> = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
+> = EndpointHandler<Path, Options, R, AuthContext>;
+
+type PathlessAuthEndpointHandler<
+	Options extends EndpointOptions,
+	R,
+> = AuthEndpointHandler<string, Options, R>;
+
+function wrapEndpointHandler<
+	Path extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	handler: AuthEndpointHandler<Path, Options, R>,
+	options: Options,
+): AuthEndpointHandler<Path, Options, R> {
+	const noStore =
+		(options as { metadata?: { noStore?: boolean } }).metadata?.noStore ===
+		true;
+
+	return async (context) => {
+		if (noStore) {
+			for (const [name, value] of Object.entries(NO_STORE_HEADERS)) {
+				context.setHeader(name, value);
+			}
+		}
+		try {
+			return await runWithEndpointContext(context, () => handler(context));
+		} catch (error) {
+			attachResponseHeadersToAPIError(context.responseHeaders, error);
+			throw error;
+		}
+	};
+}
 
 export function createAuthEndpoint<
 	Path extends string,
@@ -71,64 +125,44 @@ export function createAuthEndpoint<
 >(
 	path: Path,
 	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
+	handler: AuthEndpointHandler<Path, Options, R>,
 ): StrictEndpoint<Path, Options, R>;
+
+export function createAuthEndpoint<
+	InferredPath extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	options: Options,
+	handler: PathlessAuthEndpointHandler<Options, R>,
+): StrictEndpoint<InferredPath, Options, R>;
 
 export function createAuthEndpoint<
 	Path extends string,
 	Options extends EndpointOptions,
 	R,
 >(
-	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R>;
-
-export function createAuthEndpoint<
-	Path extends string,
-	Opts extends EndpointOptions,
-	R,
->(
-	pathOrOptions: Path | Opts,
-	handlerOrOptions: EndpointHandler<Path, Opts, R> | Opts,
-	handlerOrNever?: any,
+	...args:
+		| [
+				path: Path,
+				options: Options,
+				handler: AuthEndpointHandler<Path, Options, R>,
+		  ]
+		| [options: Options, handler: PathlessAuthEndpointHandler<Options, R>]
 ) {
-	const path: Path | undefined =
-		typeof pathOrOptions === "string" ? pathOrOptions : undefined;
-	const options: Opts =
-		typeof handlerOrOptions === "object"
-			? handlerOrOptions
-			: (pathOrOptions as Opts);
-	const handler: EndpointHandler<Path, Opts, R> =
-		typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
-
-	// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-	const wrapped: EndpointHandler<Path, Opts, R> = async (ctx) => {
-		const runtimeCtx = ctx as unknown as { responseHeaders?: Headers };
-		try {
-			return await runWithEndpointContext(ctx as any, () => handler(ctx));
-		} catch (e) {
-			attachResponseHeadersToAPIError(runtimeCtx.responseHeaders, e);
-			throw e;
-		}
-	};
-
-	if (path) {
-		return createEndpoint(
+	if (args.length === 3) {
+		const [path, options, handler] = args;
+		return createEndpointWithAuthContext(
 			path,
-			{
-				...options,
-				use: [...(options?.use || []), ...use],
-			},
-			wrapped,
+			options,
+			wrapEndpointHandler(handler, options),
 		);
 	}
 
-	return createEndpoint(
-		{
-			...options,
-			use: [...(options?.use || []), ...use],
-		},
-		wrapped,
+	const [options, handler] = args;
+	return createEndpointWithAuthContext(
+		options,
+		wrapEndpointHandler(handler, options),
 	);
 }
 
@@ -168,18 +202,22 @@ function withServerOnly<Options extends EndpointOptions>(
  * ```
  */
 createAuthEndpoint.serverOnly = <
-	Path extends string,
+	InferredPath extends string,
 	Options extends EndpointOptions,
 	R,
 >(
 	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R> =>
-	createAuthEndpoint(withServerOnly(options), handler);
+	handler: PathlessAuthEndpointHandler<Options, R>,
+): StrictEndpoint<InferredPath, Options, R> =>
+	createAuthEndpoint<InferredPath, Options, R>(
+		withServerOnly(options),
+		handler,
+	);
 
 export type AuthEndpoint<
 	Path extends string,
 	Opts extends EndpointOptions,
 	R,
 > = ReturnType<typeof createAuthEndpoint<Path, Opts, R>>;
-export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;
+
+export type AuthMiddleware = MiddlewareHandler;

@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "NodeNext",
+    "rootDir": "./src",
     "outDir": "dist",
     "strict": true,
     "verbatimModuleSyntax": true,

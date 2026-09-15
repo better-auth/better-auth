@@ -52,6 +52,13 @@ export function __getBetterAuthGlobal(): BetterAuthGlobal {
 	return (globalThis as any)[symbol] as BetterAuthGlobal;
 }
 
+export function __getCurrentEndpointContext<T>(): T | undefined {
+	const storage = __getBetterAuthGlobal().context.endpointContextAsyncStorage as
+		| AsyncLocalStorage<T>
+		| undefined;
+	return storage?.getStore();
+}
+
 export function getBetterAuthVersion(): string {
 	return __getBetterAuthGlobal().version;
 }

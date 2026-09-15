@@ -55,7 +55,11 @@ export const useAuth = () => {
 		const code_challenge =
 			await oauth.calculatePKCECodeChallenge(code_verifier);
 
-		const authorizationUrl = new URL(as.authorization_endpoint!);
+		if (!as.authorization_endpoint) {
+			throw new Error("Authorization endpoint is not available");
+		}
+
+		const authorizationUrl = new URL(as.authorization_endpoint);
 		authorizationUrl.searchParams.set("client_id", client.client_id);
 		authorizationUrl.searchParams.set("redirect_uri", redirectUri);
 		authorizationUrl.searchParams.set("response_type", "code");
@@ -92,83 +96,97 @@ export const useAuth = () => {
 
 		setHandlingRedirect(true);
 
-		const storage = sessionStorage.getItem(webStorageKey);
-		if (!storage) {
-			console.error("No stored code_verifier and nonce found");
-			return;
-		}
-		sessionStorage.removeItem(webStorageKey);
-		const { code_verifier, state, nonce, redirectUri } = JSON.parse(storage);
-
-		// @ts-expect-error
-		const currentUrl: URL = new URL(window.location);
-		const params = oauth.validateAuthResponse(as, client, currentUrl, state);
-		if (oauth.isOAuth2Error(params)) {
-			console.error("Error Response", params);
-			setHandlingRedirect(false);
-			return;
-		}
-
-		const authorizationResponse = await oauth.authorizationCodeGrantRequest(
-			as,
-			client,
-			params,
-			redirectUri,
-			code_verifier,
-		);
-
-		let challenges: oauth.WWWAuthenticateChallenge[] | undefined;
-		if (
-			(challenges = oauth.parseWwwAuthenticateChallenges(authorizationResponse))
-		) {
-			for (const challenge of challenges) {
-				console.error("WWW-Authenticate Challenge", challenge);
+		try {
+			const storage = sessionStorage.getItem(webStorageKey);
+			if (!storage) {
+				console.error("No stored code_verifier and nonce found");
+				return;
 			}
-			setHandlingRedirect(false);
-			return;
-		}
+			sessionStorage.removeItem(webStorageKey);
+			const storedState: unknown = JSON.parse(storage);
+			if (
+				typeof storedState !== "object" ||
+				storedState === null ||
+				!("code_verifier" in storedState) ||
+				typeof storedState.code_verifier !== "string" ||
+				!("state" in storedState) ||
+				typeof storedState.state !== "string" ||
+				!("nonce" in storedState) ||
+				typeof storedState.nonce !== "string" ||
+				!("redirectUri" in storedState) ||
+				typeof storedState.redirectUri !== "string"
+			) {
+				console.error("Stored authorization state is malformed");
+				return;
+			}
 
-		const authorizationCodeResult =
-			await oauth.processAuthorizationCodeOpenIDResponse(
+			const { code_verifier, state, nonce, redirectUri } = storedState;
+
+			const currentUrl = new URL(window.location.href);
+			const params = oauth.validateAuthResponse(as, client, currentUrl, state);
+			const authorizationResponse = await oauth.authorizationCodeGrantRequest(
 				as,
 				client,
-				authorizationResponse,
-				nonce,
+				oauth.None(),
+				params,
+				redirectUri,
+				code_verifier,
 			);
-		if (oauth.isOAuth2Error(authorizationCodeResult)) {
-			console.error("Error Response", authorizationCodeResult);
-			setHandlingRedirect(false);
-			return;
-		}
+			const authorizationCodeResult =
+				await oauth.processAuthorizationCodeResponse(
+					as,
+					client,
+					authorizationResponse,
+					{ expectedNonce: nonce, requireIdToken: true },
+				);
 
-		console.log("Access Token Response", authorizationCodeResult);
-		const accessToken = authorizationCodeResult.access_token;
-		setAccessToken(accessToken);
-		setIdToken(authorizationCodeResult.id_token);
-		const claims = oauth.getValidatedIdTokenClaims(authorizationCodeResult);
-		console.log("ID Token Claims", claims);
-		const sub = claims.sub;
-
-		// UserInfo Request
-		const response = await oauth.userInfoRequest(as, client, accessToken);
-		if ((challenges = oauth.parseWwwAuthenticateChallenges(response))) {
-			for (const challenge of challenges) {
-				console.error("WWW-Authenticate Challenge", challenge);
+			console.log("Access Token Response", authorizationCodeResult);
+			const accessToken = authorizationCodeResult.access_token;
+			setAccessToken(accessToken);
+			setIdToken(authorizationCodeResult.id_token);
+			const claims = oauth.getValidatedIdTokenClaims(authorizationCodeResult);
+			console.log("ID Token Claims", claims);
+			if (!claims) {
+				console.error("ID Token Claims are missing");
+				return;
 			}
+
+			// UserInfo Request
+			const response = await oauth.userInfoRequest(as, client, accessToken);
+			const user = await oauth.processUserInfoResponse(
+				as,
+				client,
+				claims.sub,
+				response,
+			);
+			console.log("UserInfo Response", user);
+			setUser(user);
+
+			window.history.replaceState(
+				{},
+				document.title,
+				redirectUri || window.location.origin,
+			);
+		} catch (error) {
+			if (
+				error instanceof oauth.AuthorizationResponseError ||
+				error instanceof oauth.ResponseBodyError
+			) {
+				console.error("Error Response", error.cause);
+				return;
+			}
+
+			if (error instanceof oauth.WWWAuthenticateChallengeError) {
+				for (const challenge of error.cause) {
+					console.error("WWW-Authenticate Challenge", challenge);
+				}
+				return;
+			}
+
+			throw error;
+		} finally {
 			setHandlingRedirect(false);
-			return;
 		}
-
-		const user = await oauth.processUserInfoResponse(as, client, sub, response);
-		console.log("UserInfo Response", user);
-		setUser(user);
-
-		setHandlingRedirect(false);
-		window.history.replaceState(
-			{},
-			document.title,
-			redirectUri || window.location.origin,
-		);
 	};
 
 	const logout = () => {
@@ -176,7 +194,11 @@ export const useAuth = () => {
 			return;
 		}
 
-		const endSessionUrl = new URL(as.end_session_endpoint!);
+		if (!as.end_session_endpoint) {
+			throw new Error("End session endpoint is not available");
+		}
+
+		const endSessionUrl = new URL(as.end_session_endpoint);
 		endSessionUrl.searchParams.set(
 			"post_logout_redirect_uri",
 			window.location.origin,

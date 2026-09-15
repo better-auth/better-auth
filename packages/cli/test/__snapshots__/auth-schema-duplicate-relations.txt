@@ -98,7 +98,8 @@ export const test = sqliteTable("test", {
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
-  tests: many(test),
+  testsByUserId: many(test, { relationName: "test_userId" }),
+  testsByManagerId: many(test, { relationName: "test_managerId" }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -115,16 +116,15 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const testUserIdRelations = relations(test, ({ one }) => ({
+export const testRelations = relations(test, ({ one }) => ({
   user: one(user, {
     fields: [test.userId],
     references: [user.id],
+    relationName: "test_userId",
   }),
-}));
-
-export const testManagerIdRelations = relations(test, ({ one }) => ({
-  user: one(user, {
+  manager: one(user, {
     fields: [test.managerId],
     references: [user.id],
+    relationName: "test_managerId",
   }),
 }));

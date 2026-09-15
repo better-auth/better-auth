@@ -6,6 +6,73 @@ import { getTestInstance } from "../../test-utils/test-instance";
  * @see https://github.com/better-auth/better-auth/issues/8969
  */
 describe("Email Verification - Request body consumption bug", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10335
+	 */
+	it("should not fail sign-up when callback request cloning throws", async () => {
+		const originalClone = Request.prototype.clone;
+		const mockSendEmail = vi.fn();
+		let cloneCalls = 0;
+
+		const cloneSpy = vi
+			.spyOn(Request.prototype, "clone")
+			.mockImplementation(function (this: Request) {
+				cloneCalls += 1;
+				if (cloneCalls > 1) {
+					throw new TypeError("unusable");
+				}
+				return originalClone.call(this);
+			});
+
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: true,
+					async sendVerificationEmail({ user }, request) {
+						mockSendEmail(
+							user.email,
+							request?.method,
+							request?.url,
+							await request?.text(),
+						);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		try {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-up/email", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						name: "Test User",
+						email: "clone-throws@example.com",
+						password: "password123",
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(mockSendEmail).toHaveBeenCalledWith(
+				"clone-throws@example.com",
+				"POST",
+				"http://localhost:3000/api/auth/sign-up/email",
+				"",
+			);
+		} finally {
+			cloneSpy.mockRestore();
+		}
+	});
+
 	it("should not throw 'body already consumed' error when sendVerificationEmail callback reads the request", async () => {
 		const mockSendEmail = vi.fn();
 		let requestBodyReadError: Error | null = null;
@@ -120,35 +187,35 @@ describe("Email Verification - Request body consumption bug", () => {
 	});
 });
 
-describe("Email Verification", async () => {
-	const mockSendEmail = vi.fn();
-	let token: string;
-	const { auth, testUser, client, signInWithUser } = await getTestInstance({
-		emailAndPassword: {
-			enabled: true,
-			requireEmailVerification: true,
-		},
-		emailVerification: {
-			async sendVerificationEmail({ user, url, token: _token }) {
-				token = _token;
-				mockSendEmail(user.email, url);
-			},
-		},
-	});
-
+describe("Email Verification", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
 	it("should send a verification email when enabled", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignUp: false,
+				sendVerificationEmail,
+			},
+		});
+
 		await auth.api.sendVerificationEmail({
 			body: {
 				email: testUser.email,
 			},
 		});
-		expect(mockSendEmail).toHaveBeenCalledWith(
-			testUser.email,
-			expect.any(String),
+		expect(sendVerificationEmail).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: testUser.email }),
+				url: expect.any(String),
+			}),
+			undefined,
 		);
 	});
 
@@ -192,15 +259,48 @@ describe("Email Verification", async () => {
 	});
 
 	it("should send a verification email if verification is required and user is not verified", async () => {
-		await signInWithUser(testUser.email, testUser.password);
+		const sendVerificationEmail = vi.fn();
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: { enabled: true, requireEmailVerification: true },
+			emailVerification: {
+				sendOnSignUp: false,
+				sendOnSignIn: true,
+				sendVerificationEmail,
+			},
+		});
 
-		expect(mockSendEmail).toHaveBeenCalledWith(
-			testUser.email,
-			expect.any(String),
+		const result = await client.signIn.email(testUser);
+
+		expect(result.error?.code).toBe("EMAIL_NOT_VERIFIED");
+		expect(sendVerificationEmail).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: testUser.email }),
+				url: expect.any(String),
+			}),
+			expect.anything(),
 		);
 	});
 
 	it("should verify email", async () => {
+		let token = "";
+		const { auth, client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: verificationToken }) {
+					token = verificationToken;
+				},
+			},
+		});
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
 		const res = await client.verifyEmail({
 			query: {
 				token,
@@ -210,6 +310,25 @@ describe("Email Verification", async () => {
 	});
 
 	it("should redirect to callback", async () => {
+		let token = "";
+		const { auth, client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: verificationToken }) {
+					token = verificationToken;
+				},
+			},
+		});
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
 		await client.verifyEmail(
 			{
 				query: {
@@ -227,20 +346,26 @@ describe("Email Verification", async () => {
 	});
 
 	it("should sign after verification", async () => {
-		const { testUser, client, sessionSetter, runWithUser } =
+		let token = "";
+		const { auth, testUser, client, sessionSetter, runWithUser } =
 			await getTestInstance({
 				emailAndPassword: {
 					enabled: true,
 					requireEmailVerification: true,
 				},
 				emailVerification: {
-					async sendVerificationEmail({ user, url, token: _token }) {
-						token = _token;
-						mockSendEmail(user.email, url);
+					sendOnSignUp: false,
+					async sendVerificationEmail({ token: verificationToken }) {
+						token = verificationToken;
 					},
 					autoSignInAfterVerification: true,
 				},
 			});
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
 
 		// Attempt to update user info (should fail before verification)
 		await runWithUser(testUser.email, testUser.password, async () => {
@@ -277,15 +402,16 @@ describe("Email Verification", async () => {
 	});
 
 	it("should use custom expiresIn", async () => {
-		const { auth, client } = await getTestInstance({
+		let token = "";
+		const { auth, client, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
 				requireEmailVerification: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
-					token = _token;
-					mockSendEmail(user.email, url);
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: verificationToken }) {
+					token = verificationToken;
 				},
 				expiresIn: 10,
 			},
@@ -307,15 +433,16 @@ describe("Email Verification", async () => {
 
 	it("should call afterEmailVerification callback when email is verified", async () => {
 		const afterEmailVerificationMock = vi.fn();
-		const { auth, client } = await getTestInstance({
+		let token = "";
+		const { auth, client, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
 				requireEmailVerification: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
-					token = _token;
-					mockSendEmail(user.email, url);
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: verificationToken }) {
+					token = verificationToken;
 				},
 				afterEmailVerification: afterEmailVerificationMock,
 			},
@@ -342,15 +469,16 @@ describe("Email Verification", async () => {
 
 	it("should call beforeEmailVerification callback when email is verified", async () => {
 		const beforeEmailVerificationMock = vi.fn();
-		const { auth, client } = await getTestInstance({
+		let token = "";
+		const { auth, client, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
 				requireEmailVerification: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
-					token = _token;
-					mockSendEmail(user.email, url);
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: verificationToken }) {
+					token = verificationToken;
 				},
 				beforeEmailVerification: beforeEmailVerificationMock,
 			},
@@ -377,15 +505,16 @@ describe("Email Verification", async () => {
 
 	it("should call afterEmailVerification callback when email is verified", async () => {
 		const afterEmailVerificationMock = vi.fn();
+		let token = "";
 		const { auth, client, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
 				requireEmailVerification: true,
 			},
 			emailVerification: {
-				async sendVerificationEmail({ user, url, token: _token }) {
-					token = _token;
-					mockSendEmail(user.email, url);
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: verificationToken }) {
+					token = verificationToken;
 				},
 				afterEmailVerification: afterEmailVerificationMock,
 			},
@@ -414,6 +543,24 @@ describe("Email Verification", async () => {
 		const testEmail = "test+user@example.com";
 		const encodedEmail = encodeURIComponent(testEmail);
 		const callbackURL = `/sign-in?verifiedEmail=${encodedEmail}`;
+		let token = "";
+		const { auth, client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: verificationToken }) {
+					token = verificationToken;
+				},
+			},
+		});
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
 
 		await client.verifyEmail(
 			{
@@ -590,6 +737,16 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 				get(key) {
 					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
 				},
 				delete(key) {
 					store.delete(key);

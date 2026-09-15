@@ -37,7 +37,14 @@ export const polar = (options: PolarOptions) => {
 	return {
 		id: "polar",
 		name: "Polar",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		accountSubject: ({ profile }) => profile.id,
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
@@ -52,6 +59,7 @@ export const polar = (options: PolarOptions) => {
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -96,7 +104,6 @@ export const polar = (options: PolarOptions) => {
 			// We check for it first, then default to false for security consistency.
 			return {
 				user: {
-					id: profile.id,
 					name: profile.public_name || profile.username || "",
 					email: profile.email,
 					image: profile.avatar_url,

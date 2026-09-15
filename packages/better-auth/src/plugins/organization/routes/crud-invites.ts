@@ -9,7 +9,7 @@ import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
-import { getOrgAdapter, resolveMaximumMembersPerTeam } from "../adapter";
+import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -779,15 +779,20 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 							);
 						}
 
-						const maximumMembersPerTeam = await resolveMaximumMembersPerTeam(
-							ctx.context.orgOptions.teams,
-							{
-								teamId,
-								organizationId: acceptedI.organizationId,
-								session,
-							},
-						);
-						if (maximumMembersPerTeam !== undefined) {
+						if (
+							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+							"undefined"
+						) {
+							const maximumMembersPerTeam =
+								typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+								"function"
+									? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+											teamId,
+											session: session,
+											organizationId: acceptedI.organizationId,
+										})
+									: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+
 							const result = await adapter.addTeamMemberWithLimit({
 								teamId,
 								userId: session.user.id,
@@ -842,6 +847,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				await adapter.updateInvitation({
 					invitationId: ctx.body.invitationId,
 					status: "pending",
+					fromStatus: "accepted",
 				});
 				throw error;
 			});
