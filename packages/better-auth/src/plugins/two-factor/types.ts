@@ -86,6 +86,13 @@ export interface TwoFactorOptions {
 				durationSeconds?: number | undefined;
 		  }
 		| undefined;
+	/**
+	 * Additional sign-in endpoint paths that should trigger a two-factor challenge
+	 * when two-factor authentication is enabled on the user account.
+	 *
+	 * Default paths intercepted: `["/sign-in/email", "/sign-in/username", "/sign-in/phone-number"]`
+	 */
+	challengePaths?: string[] | undefined;
 }
 
 export interface UserWithTwoFactor extends User {
