@@ -982,4 +982,54 @@ describe("captcha", async () => {
 			expect(res.error?.status).not.toBe(403);
 		});
 	});
+
+	describe("customFetchImpl", () => {
+		it("forwards a custom fetch implementation to the siteverify call", async () => {
+			const customFetchImpl = vi.fn();
+			const { client, testUser } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						customFetchImpl,
+					}),
+				],
+			});
+			mockBetterFetch.mockResolvedValue({ data: { success: true } });
+
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: { headers: { "x-captcha-response": "token" } },
+			});
+
+			expect(mockBetterFetch).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({ customFetchImpl }),
+			);
+		});
+
+		it("leaves the fetch implementation undefined when none is configured", async () => {
+			const { client, testUser } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+			mockBetterFetch.mockResolvedValue({ data: { success: true } });
+
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: { headers: { "x-captcha-response": "token" } },
+			});
+
+			expect(mockBetterFetch).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({ customFetchImpl: undefined }),
+			);
+		});
+	});
 });

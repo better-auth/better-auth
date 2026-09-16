@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { betterFetch, type FetchEsque } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
 import { CAPTCHA_VERIFY_TIMEOUT_MS } from "../constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
@@ -12,6 +12,7 @@ type Params = {
 	remoteIP?: string | undefined;
 	expectedAction?: string | undefined;
 	allowedHostnames?: string[] | undefined;
+	customFetchImpl?: FetchEsque | undefined;
 };
 
 type SiteVerifyResponse = {
@@ -49,12 +50,14 @@ export const googleRecaptcha = async ({
 	remoteIP,
 	expectedAction,
 	allowedHostnames,
+	customFetchImpl,
 }: Params) => {
 	const response = await betterFetch<SiteVerifyResponse | SiteVerifyV3Response>(
 		siteVerifyURL,
 		{
 			method: "POST",
 			timeout: CAPTCHA_VERIFY_TIMEOUT_MS,
+			customFetchImpl,
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: encodeToURLParams({
 				secret: secretKey,

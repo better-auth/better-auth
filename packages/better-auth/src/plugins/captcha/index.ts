@@ -81,6 +81,7 @@ export const captcha = (options: CaptchaOptions) =>
 					captchaResponse,
 					secretKey: options.secretKey,
 					remoteIP: remoteUserIP,
+					customFetchImpl: options.customFetchImpl,
 				};
 
 				if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {

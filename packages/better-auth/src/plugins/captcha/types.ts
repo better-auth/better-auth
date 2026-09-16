@@ -1,3 +1,4 @@
+import type { FetchEsque } from "@better-fetch/fetch";
 import type { Providers } from "./constants";
 
 export type Provider = (typeof Providers)[keyof typeof Providers];
@@ -10,6 +11,16 @@ export interface BaseCaptchaOptions {
 	 */
 	endpoints?: string[] | undefined;
 	siteVerifyURLOverride?: string | undefined;
+	/**
+	 * Fetch implementation used for the siteverify call. Defaults to the global
+	 * `fetch`.
+	 *
+	 * Supplying one lets a host resolve verification without going through the
+	 * global fetch — a test double, or a runtime whose outbound transport is not
+	 * the global fetch. `siteVerifyURLOverride` can only point the call at a
+	 * different URL, so it cannot take verification off the network.
+	 */
+	customFetchImpl?: FetchEsque | undefined;
 }
 
 export interface GoogleRecaptchaOptions extends BaseCaptchaOptions {
