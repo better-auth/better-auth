@@ -7,6 +7,7 @@ describe("getClientConfig network errors", () => {
 		vi.restoreAllMocks();
 	});
 
+	// @see https://github.com/better-auth/better-auth/issues/11284
 	it("returns network failures as errors and invokes onError", async () => {
 		const onError = vi.fn();
 		const fetchImpl = vi
@@ -30,5 +31,16 @@ describe("getClientConfig network errors", () => {
 				error: expect.objectContaining({ status: 0 }),
 			}),
 		);
+	});
+
+	// @see https://github.com/better-auth/better-auth/issues/11284
+	it("preserves AbortError rejections", async () => {
+		const abortError = new Error("The operation was aborted");
+		abortError.name = "AbortError";
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortError));
+
+		const { $fetch } = getClientConfig();
+
+		await expect($fetch("/test")).rejects.toBe(abortError);
 	});
 });

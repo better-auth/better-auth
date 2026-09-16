@@ -85,7 +85,10 @@ export const getClientConfig = (
 		customFetchImpl: async (input, init) => {
 			try {
 				return await fetch(input, init);
-			} catch {
+			} catch (error) {
+				if (error instanceof Error && error.name === "AbortError") {
+					throw error;
+				}
 				return Response.error();
 			}
 		},
