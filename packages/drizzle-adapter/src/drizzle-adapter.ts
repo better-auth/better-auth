@@ -1216,20 +1216,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
-		if (checksSchema(options)) {
-			registerSchemaCheck(
-				instance,
-				createSchemaCheck(
-					async () =>
-						findDrizzleSchemaProblems(
-							config.schema ?? db._?.fullSchema ?? {},
-							options,
-							config.usePlural,
-						),
-					"drizzle",
+		const schemaCheck = createSchemaCheck(
+			() =>
+				findDrizzleSchemaProblems(
+					config.schema ?? db._?.fullSchema ?? {},
+					options,
+					config.usePlural,
 				),
-			);
-		}
+			"drizzle",
+		);
+		registerSchemaCheck(instance, schemaCheck, {
+			runtimeEnabled: checksSchema(options),
+		});
 		return instance;
 	};
 };

@@ -428,6 +428,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * Absent when the check is disabled or the adapter registers none.
 			 */
 			checkSchema?: SchemaCheck | undefined;
+			/**
+			 * Available for an explicit check even when runtime validation is disabled.
+			 */
+			explicitSchemaCheck?: SchemaCheck | undefined;
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;

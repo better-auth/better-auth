@@ -3,6 +3,7 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import { Command } from "commander";
 import { ai } from "./commands/ai";
+import { checkSchema } from "./commands/check-schema";
 import { createAdmin } from "./commands/create-admin";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
@@ -25,6 +26,7 @@ async function main() {
 	program
 		.addCommand(ai)
 		.addCommand(createAdmin)
+		.addCommand(checkSchema)
 		.addCommand(init)
 		.addCommand(migrate)
 		.addCommand(generate)

@@ -4,6 +4,7 @@ import {
 	createSchemaCheck,
 	invalidateSchemaChecks,
 	registerSchemaCheck,
+	runtimeSchemaCheckFor,
 	schemaCheckFor,
 } from "./schema-check";
 import type { SchemaFinding } from "./schema-diff";
@@ -170,5 +171,16 @@ describe("schema check registry", () => {
 		registerSchemaCheck(adapter, check);
 		expect(schemaCheckFor(adapter)).toBe(check);
 		expect(schemaCheckFor({})).toBeUndefined();
+	});
+
+	it("keeps an explicit check available when runtime validation is disabled", async () => {
+		const adapter = {};
+		const find = vi.fn(async () => []);
+		const check = createSchemaCheck(find, "database");
+		registerSchemaCheck(adapter, check, { runtimeEnabled: false });
+
+		expect(runtimeSchemaCheckFor(adapter)).toBeUndefined();
+		await schemaCheckFor(adapter)?.();
+		expect(find).toHaveBeenCalledOnce();
 	});
 });
