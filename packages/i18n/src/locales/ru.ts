@@ -9,6 +9,7 @@ export const ru: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "Не удалось создать сессию",
 	FAILED_TO_UPDATE_USER: "Не удалось обновить пользователя",
 	FAILED_TO_GET_SESSION: "Не удалось получить сессию",
+	FAILED_TO_DELETE_SESSION: "Не удалось удалить сессию",
 	INVALID_PASSWORD: "Неверный пароль",
 	INVALID_EMAIL: "Недействительный адрес электронной почты",
 	INVALID_EMAIL_OR_PASSWORD: "Неверный адрес электронной почты или пароль",
