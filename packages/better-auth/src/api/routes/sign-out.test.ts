@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import type { GenericOAuthConfig } from "../../plugins/generic-oauth";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-out", async () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	const afterSessionDeleted = vi.fn();
 	const { signInWithTestUser, client } = await getTestInstance({
 		databaseHooks: {
@@ -50,8 +54,41 @@ describe("sign-out", async () => {
 			success: true,
 		});
 		const cookies = parseSetCookieHeader(setCookieHeader);
-		expect(cookies.get("better-auth.session_token")?.value).toBe("");
-		expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(0);
+		expect(cookies.get(context.authCookies.sessionToken.name)?.value).toBe("");
+		expect(
+			cookies.get(context.authCookies.sessionToken.name)?.["max-age"],
+		).toBe(0);
+	});
+
+	it("clears the local session while reporting a session deletion failure", async () => {
+		const instance = await getTestInstance();
+		const { headers } = await instance.signInWithTestUser();
+		const context = await instance.auth.$context;
+		vi.spyOn(context.internalAdapter, "deleteSession").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		let setCookieHeader = "";
+
+		const res = await instance.client.signOut({
+			fetchOptions: {
+				headers,
+				onError(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(res.data).toBeNull();
+		expect(res.error).toMatchObject({
+			status: 500,
+			statusText: "INTERNAL_SERVER_ERROR",
+			code: "FAILED_TO_DELETE_SESSION",
+		});
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get(context.authCookies.sessionToken.name)?.value).toBe("");
+		expect(
+			cookies.get(context.authCookies.sessionToken.name)?.["max-age"],
+		).toBe(0);
 	});
 
 	const baseOAuthConfig = {

@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie } from "../../cookies";
 
@@ -90,14 +91,19 @@ export const signOut = createAuthEndpoint(
 				ctx.context.logger.error("Failed to read session from database", e);
 			}
 		}
-		if (sessionCookieToken) {
-			try {
+		try {
+			if (sessionCookieToken) {
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
-			} catch (e) {
-				ctx.context.logger.error("Failed to delete session from database", e);
 			}
+		} catch (error) {
+			ctx.context.logger.error("Failed to delete session from database", error);
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				BASE_ERROR_CODES.FAILED_TO_DELETE_SESSION,
+			);
+		} finally {
+			deleteSessionCookie(ctx);
 		}
-		deleteSessionCookie(ctx);
 		const providerLogoutResult = await (async () => {
 			try {
 				if (!currentSession) {
