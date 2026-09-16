@@ -38,6 +38,7 @@ import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	setRequestCookie,
+	stripCookieSecurityPrefix,
 	stripSecureCookiePrefix,
 	toCookieOptions,
 } from "./cookie-utils";
@@ -241,6 +242,286 @@ describe("cookie configuration", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10806
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis-22#section-4.1.3
+ */
+describe("cookie security prefixes", () => {
+	it("emits host-only cookies when the host prefix is selected", () => {
+		const cookies = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: { cookieSecurity: "host" },
+		});
+
+		for (const cookie of Object.values(cookies)) {
+			expect(cookie.name).toMatch(/^__Host-/);
+			expect(cookie.attributes).toMatchObject({ secure: true, path: "/" });
+			expect(cookie.attributes.domain).toBeUndefined();
+		}
+	});
+
+	it("emits a valid host-prefixed Set-Cookie field during sign-in", async () => {
+		const { client, testUser } = await getTestInstance({
+			advanced: { cookieSecurity: "host" },
+		});
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{
+				onResponse({ response }) {
+					const header = response.headers.get("set-cookie");
+					expect(header).toContain("__Host-better-auth.session_token=");
+					expect(header).toContain("Secure");
+					expect(header).toContain("Path=/");
+					expect(header).not.toContain("Domain=");
+				},
+			},
+		);
+	});
+
+	it("reads the host-prefixed session through the auth API", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			advanced: { cookieSecurity: "host" },
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(headers.get("cookie")).toContain(
+			"__Host-better-auth.session_token=",
+		);
+		headers.set(
+			"cookie",
+			`better-auth.session_token=attacker; __Secure-better-auth.session_token=attacker; ${headers.get("cookie")}`,
+		);
+		expect(await auth.api.getSession({ headers })).toMatchObject({
+			user: { email: testUser.email },
+		});
+	});
+
+	it("explicit secure mode remains available with cross-subdomain cookies", () => {
+		const cookies = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: {
+				cookieSecurity: "secure",
+				crossSubDomainCookies: { enabled: true, domain: "example.com" },
+			},
+		});
+		expect(cookies.sessionToken).toMatchObject({
+			name: "__Secure-better-auth.session_token",
+			attributes: { secure: true, domain: "example.com" },
+		});
+	});
+
+	it("applies explicit secure mode after custom attributes", () => {
+		const cookies = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: {
+				cookieSecurity: "secure",
+				defaultCookieAttributes: { secure: false },
+			},
+		});
+		expect(cookies.sessionToken.attributes.secure).toBe(true);
+	});
+
+	it("rejects host mode with cross-subdomain cookies", () => {
+		expect(() =>
+			getCookies({
+				database: {} as BetterAuthOptions["database"],
+				advanced: {
+					cookieSecurity: "host",
+					crossSubDomainCookies: {
+						enabled: true,
+						domain: "example.com",
+					},
+				},
+			}),
+		).toThrow();
+	});
+
+	it.each([
+		{ defaultCookieAttributes: { domain: "example.com" } },
+		{ defaultCookieAttributes: { path: "/auth" } },
+		{ defaultCookieAttributes: { secure: false } },
+		{ cookies: { session_token: { attributes: { domain: "example.com" } } } },
+		{ cookies: { session_token: { attributes: { path: "/auth" } } } },
+	])("applies host mode after custom attributes: %j", (advanced) => {
+		const cookies = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: { cookieSecurity: "host", ...advanced },
+		});
+		expect(cookies.sessionToken.attributes).toMatchObject({
+			secure: true,
+			path: "/",
+		});
+		expect(cookies.sessionToken.attributes.domain).toBeUndefined();
+	});
+
+	it("reads only the host-prefixed session when explicitly selected", () => {
+		const headers = new Headers({
+			cookie:
+				"better-auth.session_token=bare; __Secure-better-auth.session_token=secure; __Host-better-auth.session_token=host",
+		});
+		expect(getSessionCookie(headers, { cookieSecurity: "host" })).toBe("host");
+		expect(getSessionCookie(headers, { cookieSecurity: "secure" })).toBe(
+			"secure",
+		);
+		expect(
+			getSessionCookie(
+				new Headers({ cookie: "__Secure-better-auth.session_token=secure" }),
+				{ cookieSecurity: "host" },
+			),
+		).toBeNull();
+	});
+
+	it("reads only the host-prefixed cookie cache when explicitly selected", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: { cookieSecurity: "host" },
+			session: { cookieCache: { enabled: true } },
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(
+			await getCookieCache(headers, {
+				cookieSecurity: "host",
+				secret: "better-auth.secret",
+			}),
+		).toMatchObject({ user: { email: testUser.email } });
+		expect(
+			await getCookieCache(headers, { secret: "better-auth.secret" }),
+		).toBeNull();
+	});
+
+	it.each([
+		["none", "better-auth.session_token", false],
+		["secure", "__Secure-better-auth.session_token", true],
+		["host", "__Host-better-auth.session_token", true],
+	] as const)("resolves %s as one cookie name and Secure policy", (cookieSecurity, name, secure) => {
+		const cookies = getCookies({
+			baseURL: "https://example.com",
+			database: {} as BetterAuthOptions["database"],
+			advanced: { cookieSecurity },
+		});
+		expect(cookies.sessionToken.name).toBe(name);
+		expect(cookies.sessionToken.attributes.secure).toBe(secure);
+	});
+
+	it("keeps legacy secure overrides and names unchanged", () => {
+		const legacyFalse = getCookies({
+			baseURL: "https://example.com",
+			database: {} as BetterAuthOptions["database"],
+			advanced: { useSecureCookies: false },
+		});
+		expect(legacyFalse.sessionToken).toMatchObject({
+			name: "better-auth.session_token",
+			attributes: { secure: false },
+		});
+		const legacyOverride = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: {
+				useSecureCookies: true,
+				defaultCookieAttributes: { secure: false },
+			},
+		});
+		expect(legacyOverride.sessionToken).toMatchObject({
+			name: "__Secure-better-auth.session_token",
+			attributes: { secure: false },
+		});
+	});
+
+	it("keeps none unprefixed when a custom attribute adds Secure", () => {
+		const cookies = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: {
+				cookieSecurity: "none",
+				defaultCookieAttributes: { secure: true },
+			},
+		});
+		expect(cookies.sessionToken).toMatchObject({
+			name: "better-auth.session_token",
+			attributes: { secure: true },
+		});
+	});
+
+	it("separates the application namespace from the security mode", () => {
+		const cookies = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: { cookieNamespace: "myapp", cookieSecurity: "host" },
+		});
+		expect(cookies.sessionToken.name).toBe("__Host-myapp.session_token");
+		const legacy = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: { cookiePrefix: "myapp", useSecureCookies: true },
+		});
+		expect(legacy.sessionToken.name).toBe("__Secure-myapp.session_token");
+	});
+
+	it("keeps custom cookie names independent of the namespace", () => {
+		const cookies = getCookies({
+			database: {} as BetterAuthOptions["database"],
+			advanced: {
+				cookieNamespace: "myapp",
+				cookieSecurity: "host",
+				cookies: { session_token: { name: "session" } },
+			},
+		});
+		expect(cookies.sessionToken.name).toBe("__Host-session");
+	});
+
+	it.each([
+		{ cookieNamespace: "myapp", cookiePrefix: "legacy" },
+		{ cookieSecurity: "host", useSecureCookies: false },
+		{ cookieSecurity: "secure", useSecureCookies: true },
+	] as const)("rejects simultaneous legacy and new options: %j", (advanced) => {
+		expect(() =>
+			getCookies({
+				database: {} as BetterAuthOptions["database"],
+				advanced,
+			}),
+		).toThrow();
+	});
+
+	it("reads only the unprefixed cookie when none is explicit", () => {
+		const headers = new Headers({
+			cookie:
+				"__Secure-better-auth.session_token=secure; better-auth.session_token=bare",
+		});
+		expect(getSessionCookie(headers, { cookieSecurity: "none" })).toBe("bare");
+	});
+
+	it("reads a custom namespace without relying on the deprecated name", () => {
+		const headers = new Headers({
+			cookie: "__Host-myapp.session_token=value",
+		});
+		expect(
+			getSessionCookie(headers, {
+				cookieNamespace: "myapp",
+				cookieSecurity: "host",
+			}),
+		).toBe("value");
+	});
+
+	it("rejects simultaneous legacy and new helper options", async () => {
+		const headers = new Headers({ cookie: "better-auth.session_token=value" });
+		expect(() =>
+			getSessionCookie(headers, {
+				cookieNamespace: "myapp",
+				cookiePrefix: "better-auth",
+			}),
+		).toThrow();
+		await expect(
+			getCookieCache(headers, {
+				cookieSecurity: "host",
+				isSecure: true,
+			}),
+		).rejects.toThrow();
+	});
+});
+
 describe("cookie-utils parseSetCookieHeader", () => {
 	it("handles Expires with commas and multiple cookies", () => {
 		const header =
@@ -349,55 +630,61 @@ describe("cookie-utils parseSetCookieHeader", () => {
 	});
 });
 
-describe("cookie-utils stripSecureCookiePrefix", () => {
+describe("cookie-utils stripCookieSecurityPrefix", () => {
 	it("should strip __Secure- prefix from cookie name", () => {
 		const cookieName = `${SECURE_COOKIE_PREFIX}session_token`;
-		const result = stripSecureCookiePrefix(cookieName);
+		const result = stripCookieSecurityPrefix(cookieName);
 		expect(result).toBe("session_token");
 	});
 
 	it("should strip __Host- prefix from cookie name", () => {
 		const cookieName = `${HOST_COOKIE_PREFIX}session_token`;
-		const result = stripSecureCookiePrefix(cookieName);
+		const result = stripCookieSecurityPrefix(cookieName);
 		expect(result).toBe("session_token");
 	});
 
 	it("should return cookie name unchanged if no prefix", () => {
 		const cookieName = "session_token";
-		const result = stripSecureCookiePrefix(cookieName);
+		const result = stripCookieSecurityPrefix(cookieName);
 		expect(result).toBe("session_token");
 	});
 
 	it("should handle cookie names with prefix-like strings in the middle", () => {
 		const cookieName = "my__Secure-cookie";
-		const result = stripSecureCookiePrefix(cookieName);
+		const result = stripCookieSecurityPrefix(cookieName);
 		expect(result).toBe("my__Secure-cookie");
 	});
 
 	it("should handle empty string", () => {
-		const result = stripSecureCookiePrefix("");
+		const result = stripCookieSecurityPrefix("");
 		expect(result).toBe("");
 	});
 
 	it("should handle cookie names that are exactly the prefix", () => {
-		const secureResult = stripSecureCookiePrefix(SECURE_COOKIE_PREFIX);
+		const secureResult = stripCookieSecurityPrefix(SECURE_COOKIE_PREFIX);
 		expect(secureResult).toBe("");
 
-		const hostResult = stripSecureCookiePrefix(HOST_COOKIE_PREFIX);
+		const hostResult = stripCookieSecurityPrefix(HOST_COOKIE_PREFIX);
 		expect(hostResult).toBe("");
 	});
 
 	it("should prioritize __Secure- prefix over __Host- prefix", () => {
 		// Cookie name starting with __Secure- should strip that prefix
 		const secureCookie = `${SECURE_COOKIE_PREFIX}${HOST_COOKIE_PREFIX}test`;
-		const result = stripSecureCookiePrefix(secureCookie);
+		const result = stripCookieSecurityPrefix(secureCookie);
 		expect(result).toBe(`${HOST_COOKIE_PREFIX}test`);
 	});
 
 	it("should handle cookie names with dots and special characters", () => {
 		const cookieName = `${SECURE_COOKIE_PREFIX}better-auth.session_token`;
-		const result = stripSecureCookiePrefix(cookieName);
+		const result = stripCookieSecurityPrefix(cookieName);
 		expect(result).toBe("better-auth.session_token");
+	});
+
+	it("keeps the deprecated helper as an alias", () => {
+		expect(stripSecureCookiePrefix(`${HOST_COOKIE_PREFIX}session_token`)).toBe(
+			"session_token",
+		);
 	});
 });
 

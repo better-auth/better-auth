@@ -1,6 +1,8 @@
 import type { CookieOptions } from "better-call";
 import type { Session, User } from "../db";
 
+export type CookieSecurity = "none" | "secure" | "host";
+
 export type BetterAuthCookie = { name: string; attributes: CookieOptions };
 
 export type BetterAuthCookies = {
