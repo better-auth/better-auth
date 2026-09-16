@@ -554,6 +554,10 @@ For more details, check out Electron's [Inter-Process Communication](https://www
 
 ## Options
 
+<Callout type="info">
+  `cookiePrefix` is deprecated across all Electron plugins and will be removed in a future minor release. Do not set both options.
+</Callout>
+
 ### Server plugin
 
 #### `codeExpiresIn?`
@@ -580,13 +584,13 @@ electron({
 
 The redirect cookie name is derived by the `clientID`.
 
-#### `cookiePrefix?`
+#### `cookieNamespace?`
 
-The prefix to use for cookies set by the plugin. (defaults to `better-auth`)
+Cookie namespace. Defaults to `better-auth`.
 
 ```ts title="web/auth.ts"
 electron({
-  cookiePrefix: "better-auth",
+  cookieNamespace: "better-auth",
 });
 ```
 
@@ -650,13 +654,13 @@ electronProxyClient({
 });
 ```
 
-#### `cookiePrefix?`
+#### `cookieNamespace?`
 
-The prefix to use for cookies set by the plugin. (defaults to `better-auth`)
+Cookie namespace. Defaults to `better-auth`.
 
 ```ts title="web/auth-client.ts"
 electronProxyClient({
-  cookiePrefix: "better-auth",
+  cookieNamespace: "better-auth",
 });
 ```
 
@@ -735,22 +739,19 @@ electronClient({
 });
 ```
 
-#### `cookiePrefix?`
+#### `cookieNamespace?`
 
-Prefix(es) for server cookie names to filter. (defaults to `better-auth`)
-
-This is used to identify which cookies belong to better-auth to
-prevent infinite refetching when third-party cookies are set.
+Namespace(s) used to identify Better Auth cookies. Defaults to `better-auth`.
 
 ```ts title="electron/auth-client.ts"
 electronClient({
-  cookiePrefix: "better-auth",
+  cookieNamespace: "better-auth",
 });
 ```
 
 ```ts title="electron/auth-client.ts"
 electronClient({
-  cookiePrefix: ["better-auth", "my-app"],
+  cookieNamespace: ["better-auth", "my-app"],
 });
 ```
 
