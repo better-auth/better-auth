@@ -169,25 +169,24 @@ await authClient.signIn.social({
 
 You can also authenticate using `idToken` or `accessToken` from the social provider instead of redirecting the user to the provider's site. See social providers documentation for more details.
 
-## Signout
+## Sign Out
 
-To signout a user, you can use the `signOut` function provided by the client.
+Use `signOut` to end the current session.
 
 ```ts title="user-card.tsx"
-await authClient.signOut();
+const { error } = await authClient.signOut();
+
+if (error) {
+  // Handle the error
+}
 ```
 
-you can pass `fetchOptions` to redirect onSuccess
-
-```ts title="user-card.tsx" 
-await authClient.signOut({
-  fetchOptions: {
-    onSuccess: () => {
-      router.push("/login"); // redirect to login page
-    },
-  },
-});
-```
+<Callout>
+  `signOut` is idempotent, so requests without an active session still succeed.
+  If the server-side session cannot be deleted, the request returns a
+  `FAILED_TO_DELETE_SESSION` error and keeps the local session cookies so the
+  operation can be retried.
+</Callout>
 
 ## Session
 
