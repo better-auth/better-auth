@@ -29,12 +29,21 @@ declare module "@better-auth/core" {
 }
 
 export const electron = (options?: ElectronOptions | undefined) => {
+	if (
+		options?.cookieNamespace !== undefined &&
+		options.cookiePrefix !== undefined
+	) {
+		throw new TypeError(
+			"Use either cookieNamespace or cookiePrefix, not both.",
+		);
+	}
 	const opts = {
 		codeExpiresIn: 300, // 5 minutes
 		redirectCookieExpiresIn: 120, // 2 minutes
-		cookiePrefix: "better-auth",
 		clientID: "electron",
 		...(options || {}),
+		cookieNamespace:
+			options?.cookieNamespace ?? options?.cookiePrefix ?? "better-auth",
 	};
 
 	const hookMatcher = (ctx: HookEndpointContext) => {
@@ -72,7 +81,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_PKCE);
 		}
 
-		const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
+		const redirectCookieName = `${opts.cookieNamespace}.${opts.clientID}`;
 
 		const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
 		const codeExpiresInMs = opts.codeExpiresIn * 1000;
@@ -109,7 +118,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					matcher: (ctx) => !hookMatcher(ctx),
 					handler: createAuthMiddleware(async (ctx) => {
 						const transferCookie = await ctx.getSignedCookie(
-							`${opts.cookiePrefix}.transfer_token`,
+							`${opts.cookieNamespace}.transfer_token`,
 							ctx.context.secret,
 						);
 						if (!ctx.context.newSession?.session || !transferCookie) {

@@ -13,6 +13,7 @@ import { electronClient } from "../src/client";
 import { getCookie } from "../src/cookies";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
+import { electronProxyClient } from "../src/proxy";
 import { fetchUserImage, normalizeUserOutput } from "../src/user";
 import { encodeRedirectToken, it, testUtils } from "./utils";
 
@@ -80,6 +81,29 @@ vi.mock("electron", () => mockElectron);
 
 describe("Electron", () => {
 	const { auth, client, proxyClient, options, customFetchImpl } = testUtils();
+
+	it("supports cookieNamespace with a deprecated cookiePrefix alias", () => {
+		expect(() => electron({ cookieNamespace: "my-app" })).not.toThrow();
+		expect(() => electron({ cookiePrefix: "my-app" })).not.toThrow();
+		expect(() =>
+			electron({ cookieNamespace: "my-app", cookiePrefix: "legacy" }),
+		).toThrow("either cookieNamespace or cookiePrefix");
+
+		expect(() =>
+			electronProxyClient({
+				protocol: "com.example.app",
+				cookieNamespace: "my-app",
+				cookiePrefix: "legacy",
+			}),
+		).toThrow("either cookieNamespace or cookiePrefix");
+		expect(() =>
+			electronClient({
+				...options,
+				cookieNamespace: "my-app",
+				cookiePrefix: "legacy",
+			}),
+		).toThrow("either cookieNamespace or cookiePrefix");
+	});
 
 	async function s256Challenge(verifier: string) {
 		return generateCodeChallenge(verifier);
@@ -1441,7 +1465,7 @@ describe("Electron", () => {
 			);
 		});
 
-		it("should allow independent cookiePrefix configuration", async () => {
+		it("should allow independent cookie namespace matching", async () => {
 			const { hasBetterAuthCookies } = await import("../src/cookies");
 
 			const customCookieHeader = "my-app.session_token=abc; Path=/";
@@ -1453,7 +1477,10 @@ describe("Electron", () => {
 			);
 		});
 
-		it("should support array of cookie prefixes", async () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10806
+		 */
+		it("should support an array of cookie namespaces", async () => {
 			const { hasBetterAuthCookies } = await import("../src/cookies");
 
 			// Test with multiple prefixes - should match any of them
@@ -1488,6 +1515,11 @@ describe("Electron", () => {
 			expect(
 				hasBetterAuthCookies(secureHeader, ["better-auth", "my-app"]),
 			).toBe(true);
+
+			const hostHeader = "__Host-my-app.session_token=abc; Secure; Path=/";
+			expect(hasBetterAuthCookies(hostHeader, ["better-auth", "my-app"])).toBe(
+				true,
+			);
 
 			// Test with empty array (should check for suffixes)
 			const sessionTokenHeader = "session_token=abc; Path=/";

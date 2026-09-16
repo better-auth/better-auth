@@ -6,13 +6,22 @@ import { parseProtocolScheme } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 export const electronProxyClient = (options: ElectronProxyClientOptions) => {
+	if (
+		options.cookieNamespace !== undefined &&
+		options.cookiePrefix !== undefined
+	) {
+		throw new TypeError(
+			"Use either cookieNamespace or cookiePrefix, not both.",
+		);
+	}
 	const opts = {
 		clientID: "electron",
-		cookiePrefix: "better-auth",
 		callbackPath: "/auth/callback",
 		...options,
+		cookieNamespace:
+			options.cookieNamespace ?? options.cookiePrefix ?? "better-auth",
 	};
-	const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
+	const redirectCookieName = `${opts.cookieNamespace}.${opts.clientID}`;
 	const { scheme } = parseProtocolScheme(opts.protocol);
 
 	return {
