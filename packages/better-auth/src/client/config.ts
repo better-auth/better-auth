@@ -82,7 +82,13 @@ export const getClientConfig = (
 				strict: false,
 			});
 		},
-		customFetchImpl: fetch,
+		customFetchImpl: async (input, init) => {
+			try {
+				return await fetch(input, init);
+			} catch {
+				return Response.error();
+			}
+		},
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
