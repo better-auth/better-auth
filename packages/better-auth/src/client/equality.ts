@@ -9,9 +9,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return prototype === Object.prototype || prototype === null;
 }
 
-/** `instanceof` misses dates from another realm, the brand check does not. */
-function isDate(value: unknown): value is Date {
-	return Object.prototype.toString.call(value) === "[object Date]";
+/** Returns the timestamp for genuine dates, including dates from another realm. */
+function getDateTime(value: unknown): number | undefined {
+	try {
+		if (Object.prototype.toString.call(value) !== "[object Date]") return;
+		return Date.prototype.getTime.call(value);
+	} catch {
+		return;
+	}
 }
 
 /**
@@ -27,12 +32,16 @@ function isDate(value: unknown): value is Date {
 export function isJsonEqual(a: unknown, b: unknown): boolean {
 	if (a === b) return true;
 
-	const aIsDate = isDate(a);
-	const bIsDate = isDate(b);
-	if (aIsDate || bIsDate) {
+	const aDateTime = getDateTime(a);
+	const bDateTime = getDateTime(b);
+	if (aDateTime !== undefined || bDateTime !== undefined) {
 		// `Object.is` so two invalid dates (NaN) still compare equal, which
 		// keeps the gate stable instead of reporting a change on every set.
-		return aIsDate && bIsDate && Object.is(a.getTime(), b.getTime());
+		return (
+			aDateTime !== undefined &&
+			bDateTime !== undefined &&
+			Object.is(aDateTime, bDateTime)
+		);
 	}
 
 	if (Array.isArray(a) && Array.isArray(b)) {

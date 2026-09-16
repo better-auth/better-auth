@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { atom } from "nanostores";
 import { describe, expect, it, vi } from "vitest";
 import { isJsonEqual, withEquality } from "./equality";
@@ -82,6 +83,27 @@ describe("isJsonEqual", () => {
 				new Date("2026-01-01T00:00:00.000Z"),
 			),
 		).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10950
+	 */
+	it("compares dates created in another realm", () => {
+		const date: unknown = runInNewContext(
+			'new Date("2026-01-01T00:00:00.000Z")',
+		);
+
+		expect(date).not.toBeInstanceOf(Date);
+		expect(isJsonEqual(date, new Date("2026-01-01T00:00:00.000Z"))).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10950
+	 */
+	it("does not treat a spoofed Date tag as a date", () => {
+		const spoofedDate = { [Symbol.toStringTag]: "Date" };
+
+		expect(isJsonEqual(spoofedDate, new Date(0))).toBe(false);
 	});
 
 	it("returns false for dates with different instants", () => {
