@@ -96,14 +96,14 @@ export const signOut = createAuthEndpoint(
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 			}
 		} catch (error) {
-			ctx.context.logger.error("Failed to delete session from database", error);
+			ctx.context.logger.error("Failed to delete session", error);
 			throw APIError.from(
 				"INTERNAL_SERVER_ERROR",
 				BASE_ERROR_CODES.FAILED_TO_DELETE_SESSION,
 			);
-		} finally {
-			deleteSessionCookie(ctx);
 		}
+		// Clear cookies only after revocation succeeds.
+		deleteSessionCookie(ctx);
 		const providerLogoutResult = await (async () => {
 			try {
 				if (!currentSession) {

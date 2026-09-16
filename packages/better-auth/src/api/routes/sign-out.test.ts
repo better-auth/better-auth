@@ -60,7 +60,7 @@ describe("sign-out", async () => {
 		).toBe(0);
 	});
 
-	it("clears the local session while reporting a session deletion failure", async () => {
+	it("keeps the local session available for retry when deletion fails", async () => {
 		const instance = await getTestInstance();
 		const { headers } = await instance.signInWithTestUser();
 		const context = await instance.auth.$context;
@@ -84,6 +84,29 @@ describe("sign-out", async () => {
 			statusText: "INTERNAL_SERVER_ERROR",
 			code: "FAILED_TO_DELETE_SESSION",
 		});
+		expect(setCookieHeader).toBe("");
+		expect(await instance.auth.api.getSession({ headers })).not.toBeNull();
+	});
+
+	it("treats an already deleted session as a successful sign-out", async () => {
+		const instance = await getTestInstance();
+		const { headers } = await instance.signInWithTestUser();
+		const context = await instance.auth.$context;
+		const session = await instance.auth.api.getSession({ headers });
+		expect.assert(session);
+		await context.internalAdapter.deleteSession(session.session.token);
+		let setCookieHeader = "";
+
+		const res = await instance.client.signOut({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(res.data).toMatchObject({ success: true });
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		expect(cookies.get(context.authCookies.sessionToken.name)?.value).toBe("");
 		expect(
@@ -133,6 +156,45 @@ describe("sign-out", async () => {
 			user,
 		};
 	}
+
+	it("preserves provider logout for a retry after session deletion fails", async () => {
+		const instance = await setupGenericOAuthSignOut({
+			endSessionEndpoint: "https://idp.example.com/logout",
+		});
+		const context = await instance.auth.$context;
+		vi.spyOn(context.internalAdapter, "deleteSession").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		let failedSetCookieHeader = "";
+
+		const failed = await instance.client.signOut({
+			fetchOptions: {
+				headers: instance.headers,
+				onError(context) {
+					failedSetCookieHeader =
+						context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(failed.error?.code).toBe("FAILED_TO_DELETE_SESSION");
+		expect(failedSetCookieHeader).toBe("");
+
+		const retried = await instance.client.signOut({
+			fetchOptions: {
+				headers: instance.headers,
+			},
+		});
+
+		expect(retried.data).toMatchObject({
+			success: true,
+			redirect: true,
+			url: expect.stringContaining("https://idp.example.com/logout"),
+		});
+		expect(new URL(retried.data!.url!).searchParams.get("id_token_hint")).toBe(
+			"id-token",
+		);
+	});
 
 	it("should return provider logout url with id_token_hint", async () => {
 		const { client, headers } = await setupGenericOAuthSignOut({

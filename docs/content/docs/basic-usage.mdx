@@ -182,9 +182,10 @@ if (error) {
 ```
 
 <Callout>
-  `signOut` always clears the local session cookies. It is idempotent, so
-  requests without an active session still succeed. If the server-side session
-  cannot be deleted, the request returns a `FAILED_TO_DELETE_SESSION` error.
+  `signOut` is idempotent, so requests without an active session still succeed.
+  If the server-side session cannot be deleted, the request returns a
+  `FAILED_TO_DELETE_SESSION` error and keeps the local session cookies so the
+  operation can be retried.
 </Callout>
 
 ## Session
