@@ -89,7 +89,7 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount({
+				const createdAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
 					userId: dbUser.user.id,
@@ -100,6 +100,15 @@ export async function handleOAuthUserInfo(
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
 				});
+				if (!createdAccount) {
+					return {
+						error: "unable to link account",
+						data: null,
+					};
+				}
+				if (c.context.options.account?.storeAccountCookie) {
+					await setAccountCookie(c, createdAccount);
+				}
 			} catch (e) {
 				c.context.logger.error("Unable to link account", e);
 				return {
