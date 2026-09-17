@@ -1,8 +1,9 @@
 import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
-import { atom, onMount } from "nanostores";
+import { onMount } from "nanostores";
 import { isJsonEqual, withEquality } from "./equality";
+import { createAuthQueryAtom } from "./query-atom";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection
@@ -50,7 +51,7 @@ export const useAuthQuery = <T>(
 		  )
 		| undefined,
 ) => {
-	const value: AuthQueryAtom<T> = atom({
+	const value: AuthQueryAtom<T> = createAuthQueryAtom<AuthQueryState<T>>({
 		data: null,
 		error: null,
 		isPending: true,
