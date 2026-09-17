@@ -1518,6 +1518,14 @@ describe("phone-number sign-in password length", async () => {
 	});
 
 	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "long-password@test.com",
+				password: "password",
+				name: "Long Password",
+				phoneNumber: "+251911121314",
+			},
+		});
 		hash.mockClear();
 		verify.mockClear();
 
