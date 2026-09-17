@@ -20,6 +20,13 @@ export interface UseStoreOptions<SomeStore> {
 	 * Will re-render components only on specific key changes.
 	 */
 	keys?: StoreKeys<SomeStore>[] | undefined;
+
+	/**
+	 * Returns the value rendered on the server and during hydration. It must
+	 * return the same stable reference in both places, otherwise React reports
+	 * a hydration mismatch. Defaults to the live store value.
+	 */
+	getServerSnapshot?: (() => StoreValue<SomeStore>) | undefined;
 }
 
 /**
@@ -51,7 +58,7 @@ export function useStore<SomeStore extends Store>(
 ): StoreValue<SomeStore> {
 	const snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
 
-	const { keys, deps = [store, keys] } = options;
+	const { keys, deps = [store, keys], getServerSnapshot } = options;
 
 	const subscribe = useCallback((onChange: () => void) => {
 		const emitChange = (value: StoreValue<SomeStore>) => {
@@ -69,5 +76,5 @@ export function useStore<SomeStore extends Store>(
 
 	const get = () => snapshotRef.current as StoreValue<SomeStore>;
 
-	return useSyncExternalStore(subscribe, get, get);
+	return useSyncExternalStore(subscribe, get, getServerSnapshot ?? get);
 }
