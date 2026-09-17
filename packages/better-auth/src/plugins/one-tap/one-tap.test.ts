@@ -820,3 +820,97 @@ describe("oneTapClient types", () => {
 		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10926
+ */
+describe("one-tap nonce verification", async () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+		(verifiedPayload as Record<string, unknown>).nonce = undefined;
+	});
+
+	const googleProvider = {
+		clientId: "test-client",
+		clientSecret: "test-secret",
+		enabled: true,
+	};
+
+	it("accepts a token whose nonce claim matches the request nonce", async () => {
+		verifiedPayload.email = "one-tap-nonce-match@example.com";
+		verifiedPayload.sub = "one-tap-nonce-match-sub";
+		(verifiedPayload as Record<string, unknown>).nonce = "test-nonce";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", nonce: "test-nonce" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.token).toBeTruthy();
+	});
+
+	it("rejects a token whose nonce claim does not match the request nonce", async () => {
+		verifiedPayload.email = "one-tap-nonce-mismatch@example.com";
+		verifiedPayload.sub = "one-tap-nonce-mismatch-sub";
+		(verifiedPayload as Record<string, unknown>).nonce = "expected-nonce";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", nonce: "wrong-nonce" },
+		});
+
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("rejects a token with no nonce claim when the request sends one", async () => {
+		verifiedPayload.email = "one-tap-nonce-absent@example.com";
+		verifiedPayload.sub = "one-tap-nonce-absent-sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", nonce: "test-nonce" },
+		});
+
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("still accepts a token when no nonce is provided", async () => {
+		verifiedPayload.email = "one-tap-no-nonce@example.com";
+		verifiedPayload.sub = "one-tap-no-nonce-sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.token).toBeTruthy();
+	});
+});
