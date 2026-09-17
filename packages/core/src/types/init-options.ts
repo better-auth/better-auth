@@ -27,6 +27,7 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
+import type { CookieSecurity } from "./cookie";
 import type { D1Database } from "./database";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
@@ -345,9 +346,19 @@ export type BetterAuthAdvancedOptions = {
 	 * cookies are secure in production environments. Set this to `true`
 	 * to enforce secure cookies in all environments.
 	 *
-	 * @default false
+	 * @deprecated Use `cookieSecurity: "secure"` or `cookieSecurity: "none"`.
+	 * This option will be removed in a future minor release.
 	 */
 	useSecureCookies?: boolean | undefined;
+	/**
+	 * Select the cookie name prefix and its required attributes.
+	 * Omit for the existing URL and environment-based behavior.
+	 *
+	 * - `"none"` omits the prefix and defaults Secure to false.
+	 * - `"secure"` uses `__Secure-` and Secure.
+	 * - `"host"` uses `__Host-`, Secure, Path=/, and no Domain.
+	 */
+	cookieSecurity?: CookieSecurity | undefined;
 	/**
 	 * Disable all CSRF protection.
 	 *
@@ -427,8 +438,16 @@ export type BetterAuthAdvancedOptions = {
 	 * ```txt
 	 * "appName" -> which defaults to "better-auth"
 	 * ```
+	 * @deprecated Use `cookieNamespace`.
+	 * This option will be removed in a future minor release.
 	 */
 	cookiePrefix?: string | undefined;
+	/**
+	 * Application namespace in default cookie names.
+	 * Custom names in `cookies` override this value.
+	 * @default "better-auth"
+	 */
+	cookieNamespace?: string | undefined;
 	/**
 	 * Database configuration.
 	 */

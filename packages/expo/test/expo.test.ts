@@ -861,7 +861,7 @@ describe("expo with cookieCache", async () => {
 		expect(ctx.options.trustedOrigins).toContain("http://localhost:3000");
 	});
 
-	it("should allow independent cookiePrefix configuration", async () => {
+	it("should allow independent cookie namespace matching", async () => {
 		const { hasBetterAuthCookies } = await import("../src/client");
 
 		const customCookieHeader = "my-app.session_token=abc; Path=/";
@@ -871,7 +871,7 @@ describe("expo with cookieCache", async () => {
 		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
 	});
 
-	it("should support array of cookie prefixes", async () => {
+	it("should support an array of cookie namespaces", async () => {
 		const { hasBetterAuthCookies } = await import("../src/client");
 
 		// Test with multiple prefixes - should match any of them
@@ -907,10 +907,38 @@ describe("expo with cookieCache", async () => {
 			true,
 		);
 
+		const hostHeader = "__Host-my-app.session_token=abc; Secure; Path=/";
+		expect(hasBetterAuthCookies(hostHeader, ["better-auth", "my-app"])).toBe(
+			true,
+		);
+
 		// Test with empty array (should check for suffixes)
 		const sessionTokenHeader = "session_token=abc; Path=/";
 		expect(hasBetterAuthCookies(sessionTokenHeader, [])).toBe(false);
 		expect(hasBetterAuthCookies(sessionTokenHeader, [""])).toBe(true);
+	});
+
+	it("should preserve cookiePrefix as a deprecated alias", () => {
+		const clientStorage = {
+			getItem: () => null,
+			setItem: () => {},
+			getItemAsync: async () => null,
+			setItemAsync: async () => {},
+		};
+
+		expect(() =>
+			expoClient({ storage: clientStorage, cookieNamespace: "my-app" }),
+		).not.toThrow();
+		expect(() =>
+			expoClient({ storage: clientStorage, cookiePrefix: "my-app" }),
+		).not.toThrow();
+		expect(() =>
+			expoClient({
+				storage: clientStorage,
+				cookieNamespace: "my-app",
+				cookiePrefix: "legacy",
+			}),
+		).toThrow("either cookieNamespace or cookiePrefix");
 	});
 
 	/**
@@ -1045,6 +1073,52 @@ describe("expo with cookie storeStateStrategy", async () => {
 		expect(String(url)).toContain("/expo-authorization-proxy");
 		expect(String(url)).toContain("authorizationURL=");
 		expect(String(url)).toContain("oauthState=");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10806
+	 */
+	it("passes host-prefixed OAuth state to the Expo authorization proxy", async () => {
+		const hostStorage = new Map<string, string>();
+		const { client: hostClient } = await getTestInstance(
+			{
+				account: { storeStateStrategy: "cookie" },
+				advanced: { cookieSecurity: "host" },
+				socialProviders: {
+					google: { clientId: "test", clientSecret: "test" },
+				},
+				plugins: [expo(), oAuthProxy()],
+				trustedOrigins: ["better-auth://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							cookieSecurity: "host",
+							storage: {
+								getItem: (key) => hostStorage.get(key) || null,
+								setItem: async (key, value) => hostStorage.set(key, value),
+								getItemAsync: async (key) => hostStorage.get(key) || null,
+								setItemAsync: async (key, value) => {
+									hostStorage.set(key, value);
+								},
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		await hostClient.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		const [url] = fn.mock.calls.at(-1)!;
+		expect(hostStorage.get("better-auth_cookie")).toContain(
+			"__Host-better-auth.oauth_state",
+		);
+		expect(new URL(String(url)).searchParams.get("oauthState")).toBeTruthy();
 	});
 
 	it("should set oauth_state cookie in browser context via expo-authorization-proxy (cookie strategy)", async () => {

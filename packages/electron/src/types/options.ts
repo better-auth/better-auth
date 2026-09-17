@@ -21,9 +21,14 @@ export interface ElectronOptions extends ElectronSharedOptions {
 	 */
 	redirectCookieExpiresIn?: number | undefined;
 	/**
-	 * The prefix to use for cookies set by the plugin.
+	 * The namespace to use for cookies set by the plugin.
 	 *
 	 * @default "better-auth"
+	 */
+	cookieNamespace?: string | undefined;
+	/**
+	 * @deprecated Use `cookieNamespace`.
+	 * This option will be removed in a future minor release.
 	 */
 	cookiePrefix?: string | undefined;
 }

@@ -63,12 +63,21 @@ const storageAdapter = (storage: Storage, sessionKeys: Set<string>) => {
 };
 
 export const electronClient = <O extends ElectronClientOptions>(options: O) => {
+	if (
+		options.cookieNamespace !== undefined &&
+		options.cookiePrefix !== undefined
+	) {
+		throw new TypeError(
+			"Use either cookieNamespace or cookiePrefix, not both.",
+		);
+	}
 	const opts = {
 		storagePrefix: "better-auth",
-		cookiePrefix: "better-auth",
 		channelPrefix: "better-auth",
 		callbackPath: "/auth/callback",
 		...options,
+		cookieNamespace:
+			options.cookieNamespace ?? options.cookiePrefix ?? "better-auth",
 	};
 
 	const { scheme } = parseProtocolScheme(opts.protocol);
@@ -140,7 +149,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 						const setCookie = context.response.headers.get("set-cookie");
 
 						if (setCookie) {
-							if (hasBetterAuthCookies(setCookie, opts.cookiePrefix)) {
+							if (hasBetterAuthCookies(setCookie, opts.cookieNamespace)) {
 								const prevCookie = getDecrypted(cookieName);
 								const toSetCookie = getSetCookie(
 									setCookie || "{}",

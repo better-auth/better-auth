@@ -133,7 +133,7 @@ The state helps prevent CSRF attacks, while PKCE protects against code injection
 
 ## Cookies
 
-Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie.
+`Secure` restricts cookie transport to HTTPS; it does not encrypt the cookie value. Core auth cookies default to `HttpOnly` and `SameSite=Lax`. See [Cookie Security](/docs/concepts/cookies#cookie-security) to configure the policy.
 
 For Cross-Subdomain Cookies, you can set the `crossSubDomainCookies` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
 

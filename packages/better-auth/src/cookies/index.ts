@@ -2,8 +2,8 @@ import type {
 	Awaitable,
 	BetterAuthCookie,
 	BetterAuthCookies,
-	BetterAuthOptions,
 	CookieCachePayload,
+	CookieSecurity,
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
@@ -26,12 +26,10 @@ import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
-import { sec } from "../utils/time";
-import { isDynamicBaseURLConfig } from "../utils/url";
 import { parseCompactCookieCache, parseCookieCachePayload } from "./cache";
 import {
+	COOKIE_SECURITY_PREFIXES,
 	parseCookies,
-	SECURE_COOKIE_PREFIX,
 	splitSetCookieHeader,
 } from "./cookie-utils";
 import { verifySessionCookieJwtWithJwks } from "./jwt";
@@ -41,118 +39,6 @@ import {
 	getAccountCookie,
 	setAccountCookie,
 } from "./session-store";
-
-export function createCookieGetter(options: BetterAuthOptions) {
-	const baseURLString =
-		typeof options.baseURL === "string" ? options.baseURL : undefined;
-	const dynamicProtocol =
-		typeof options.baseURL === "object" && options.baseURL !== null
-			? options.baseURL.protocol
-			: undefined;
-
-	/**
-	 * Determines whether cookies should use the `Secure` flag.
-	 *
-	 * Resolution order:
-	 * 1. `advanced.useSecureCookies` — explicit user override, always wins.
-	 * 2. Dynamic config `protocol: "https"` / `"http"` — honour the explicit setting.
-	 * 3. Static `baseURL` string — check if it starts with `https://`.
-	 * 4. Fallback — `isProduction` (i.e. `NODE_ENV === "production"`).
-	 *
-	 * For dynamic configs with `protocol: "auto"` or unset, the actual
-	 * protocol depends on each incoming request and is unknown at init time,
-	 * so we fall back to step 4.
-	 */
-	const secure =
-		options.advanced?.useSecureCookies !== undefined
-			? options.advanced?.useSecureCookies
-			: dynamicProtocol === "https"
-				? true
-				: dynamicProtocol === "http"
-					? false
-					: baseURLString
-						? baseURLString.startsWith("https://")
-						: isProduction;
-	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
-	const crossSubdomainEnabled =
-		!!options.advanced?.crossSubDomainCookies?.enabled;
-	const domain = crossSubdomainEnabled
-		? options.advanced?.crossSubDomainCookies?.domain ||
-			(baseURLString ? new URL(baseURLString).hostname : undefined)
-		: undefined;
-	if (
-		crossSubdomainEnabled &&
-		!domain &&
-		!isDynamicBaseURLConfig(options.baseURL)
-	) {
-		throw new BetterAuthError(
-			"baseURL is required when crossSubdomainCookies are enabled.",
-		);
-	}
-	function createCookie(
-		cookieName: string,
-		overrideAttributes: Partial<CookieOptions> = {},
-	) {
-		const prefix = options.advanced?.cookiePrefix || "better-auth";
-		const name =
-			options.advanced?.cookies?.[cookieName]?.name ||
-			`${prefix}.${cookieName}`;
-		const attributes =
-			options.advanced?.cookies?.[cookieName]?.attributes ?? {};
-
-		return {
-			name: `${secureCookiePrefix}${name}`,
-			attributes: {
-				secure: !!secureCookiePrefix,
-				sameSite: "lax",
-				path: "/",
-				httpOnly: true,
-				...(crossSubdomainEnabled ? { domain } : {}),
-				...options.advanced?.defaultCookieAttributes,
-				...overrideAttributes,
-				...attributes,
-			},
-		} satisfies BetterAuthCookie;
-	}
-	return createCookie;
-}
-
-export function getCookies(options: BetterAuthOptions) {
-	const createCookie = createCookieGetter(options);
-	const sessionMaxAge = options.session?.expiresIn || sec("7d");
-	const sessionToken = createCookie("session_token", {
-		maxAge: sessionMaxAge,
-	});
-	const sessionData = createCookie("session_data", {
-		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
-	});
-	const accountData = createCookie("account_data", {
-		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
-	});
-	const dontRememberToken = createCookie("dont_remember");
-	return {
-		sessionToken: {
-			name: sessionToken.name,
-			attributes: sessionToken.attributes,
-		},
-		/**
-		 * This cookie is used to store the session data in the cookie
-		 * This is useful for when you want to cache the session in the cookie
-		 */
-		sessionData: {
-			name: sessionData.name,
-			attributes: sessionData.attributes,
-		},
-		dontRememberToken: {
-			name: dontRememberToken.name,
-			attributes: dontRememberToken.attributes,
-		},
-		accountData: {
-			name: accountData.name,
-			attributes: accountData.attributes,
-		},
-	};
-}
 
 export async function setCookieCache(
 	ctx: GenericEndpointContext,
@@ -560,12 +446,26 @@ export const getSessionCookie = (
 	request: Request | Headers,
 	config?:
 		| {
+				/**
+				 * @deprecated Use `cookieNamespace`.
+				 * This option will be removed in a future minor release.
+				 */
 				cookiePrefix?: string;
+				cookieNamespace?: string;
 				cookieName?: string;
 				path?: string;
+				cookieSecurity?: CookieSecurity;
 		  }
 		| undefined,
 ) => {
+	if (
+		config?.cookieNamespace !== undefined &&
+		config.cookiePrefix !== undefined
+	) {
+		throw new BetterAuthError(
+			"Use either cookieNamespace or cookiePrefix, not both.",
+		);
+	}
 	const headers =
 		request instanceof Headers || !("headers" in request)
 			? request
@@ -574,17 +474,23 @@ export const getSessionCookie = (
 	if (!cookies) {
 		return null;
 	}
-	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
-		config || {};
+	const cookieName = config?.cookieName ?? "session_token";
+	const namespace =
+		config?.cookieNamespace ?? config?.cookiePrefix ?? "better-auth";
 	const parsedCookie = parseCookies(cookies);
-	// Prefer __Secure- (HTTPS-only) over a non-secure leftover.
+	// Preserve the legacy __Secure- to bare fallback only when no mode is selected.
+	const selectedPrefix = config?.cookieSecurity
+		? COOKIE_SECURITY_PREFIXES[config.cookieSecurity]
+		: undefined;
 	const getCookie = (name: string) =>
-		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`) ??
-		parsedCookie.get(name);
+		selectedPrefix !== undefined
+			? parsedCookie.get(`${selectedPrefix}${name}`)
+			: (parsedCookie.get(`${COOKIE_SECURITY_PREFIXES.secure}${name}`) ??
+				parsedCookie.get(name));
 
 	const sessionToken =
-		getCookie(`${cookiePrefix}.${cookieName}`) ||
-		getCookie(`${cookiePrefix}-${cookieName}`);
+		getCookie(`${namespace}.${cookieName}`) ||
+		getCookie(`${namespace}-${cookieName}`);
 	if (sessionToken) {
 		return sessionToken;
 	}
@@ -616,9 +522,19 @@ export const getCookieCache = async <
 	request: Request | Headers,
 	config?:
 		| {
+				/**
+				 * @deprecated Use `cookieNamespace`.
+				 * This option will be removed in a future minor release.
+				 */
 				cookiePrefix?: string;
+				cookieNamespace?: string;
 				cookieName?: string;
+				/**
+				 * @deprecated Use `cookieSecurity`.
+				 * This option will be removed in a future minor release.
+				 */
 				isSecure?: boolean;
+				cookieSecurity?: CookieSecurity;
 				secret?: string;
 				strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
 				jwt?:
@@ -632,6 +548,19 @@ export const getCookieCache = async <
 		  }
 		| undefined,
 ) => {
+	if (
+		config?.cookieNamespace !== undefined &&
+		config.cookiePrefix !== undefined
+	) {
+		throw new BetterAuthError(
+			"Use either cookieNamespace or cookiePrefix, not both.",
+		);
+	}
+	if (config?.cookieSecurity !== undefined && config.isSecure !== undefined) {
+		throw new BetterAuthError(
+			"Use either cookieSecurity or isSecure, not both.",
+		);
+	}
 	const headers =
 		request instanceof Headers || !("headers" in request)
 			? request
@@ -640,16 +569,19 @@ export const getCookieCache = async <
 	if (!cookies) {
 		return null;
 	}
-	const { cookieName = "session_data", cookiePrefix = "better-auth" } =
-		config || {};
-	const name =
-		config?.isSecure !== undefined
-			? config.isSecure
-				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`
-			: isProduction
-				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`;
+	const cookieName = config?.cookieName ?? "session_data";
+	const namespace =
+		config?.cookieNamespace ?? config?.cookiePrefix ?? "better-auth";
+	const selectedPrefix = config?.cookieSecurity
+		? COOKIE_SECURITY_PREFIXES[config.cookieSecurity]
+		: undefined;
+	const namePrefix =
+		selectedPrefix !== undefined
+			? selectedPrefix
+			: (config?.isSecure ?? isProduction)
+				? COOKIE_SECURITY_PREFIXES.secure
+				: "";
+	const name = `${namePrefix}${namespace}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 
 	// Check for chunked cookies
@@ -782,6 +714,7 @@ export const getCookieCache = async <
 };
 
 export * from "./cookie-utils";
+export { createCookieGetter, getCookies } from "./options";
 export {
 	createSessionStore,
 	getAccountCookie,
