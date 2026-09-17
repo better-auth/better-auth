@@ -3,6 +3,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type {
 	DBTransactionAdapter,
 	WhereOperator,
@@ -141,15 +142,20 @@ async function createTeamMemberWithKey(
 		teamId: string;
 		userId: string;
 		membershipKey: string;
+		additionalFields?: Record<string, any>;
 	},
 ) {
 	try {
 		const member = await adapter.create<
-			Omit<TeamMember, "id"> & { membershipKey: string },
+			Omit<TeamMember, "id"> & { membershipKey: string } & Record<string, any>,
 			StoredTeamMember
 		>({
 			model: "teamMember",
 			data: {
+				...data.additionalFields,
+				// the identity and audit columns stay authoritative: the row was
+				// validated against these ids before the hook ran, and membershipKey
+				// is the unique index backing find-or-create.
 				teamId: data.teamId,
 				userId: data.userId,
 				membershipKey: data.membershipKey,
@@ -166,13 +172,21 @@ async function createTeamMemberWithKey(
 	}
 }
 
-function stripTeamMembershipKey(member: StoredTeamMember): TeamMember {
+function stripTeamMembershipKey(
+	member: StoredTeamMember,
+	additionalFields?: Record<string, DBFieldAttribute>,
+): TeamMember {
 	const { membershipKey: _membershipKey, ...output } = member;
-	return output;
+	return filterOutputFields(output, additionalFields);
 }
 
-function stripTeamMembershipKeys(members: StoredTeamMember[]): TeamMember[] {
-	return members.map(stripTeamMembershipKey);
+function stripTeamMembershipKeys(
+	members: StoredTeamMember[],
+	additionalFields?: Record<string, DBFieldAttribute>,
+): TeamMember[] {
+	return members.map((member) =>
+		stripTeamMembershipKey(member, additionalFields),
+	);
 }
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
@@ -185,6 +199,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 	const invitationAdditionalFields =
 		options?.schema?.invitation?.additionalFields;
 	const teamAdditionalFields = options?.schema?.team?.additionalFields;
+	const teamMemberAdditionalFields =
+		options?.schema?.teamMember?.additionalFields;
 	return {
 		findOrganizationBySlug: async (
 			slug: string,
@@ -844,7 +860,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					teamAdditionalFields,
 				) as unknown as InferTeam<O>),
 				...(includeTeamMembers
-					? { members: stripTeamMembershipKeys(teamMember ?? []) }
+					? {
+							members: stripTeamMembershipKeys(
+								teamMember ?? [],
+								teamMemberAdditionalFields,
+							),
+						}
 					: {}),
 			} as any;
 		},
@@ -993,7 +1014,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			return stripTeamMembershipKeys(members);
+			return stripTeamMembershipKeys(members, teamMemberAdditionalFields);
 		},
 		countTeamMembers: async (data: { teamId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -1053,12 +1074,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			return member ? stripTeamMembershipKey(member) : null;
+			return member
+				? stripTeamMembershipKey(member, teamMemberAdditionalFields)
+				: null;
 		},
 
 		findOrCreateTeamMember: async (data: {
 			teamId: string;
 			userId: string;
+			additionalFields?: Record<string, any>;
 		}) => {
 			return runWithTransaction(baseAdapter, async () => {
 				const adapter = await getCurrentAdapter(baseAdapter);
@@ -1067,7 +1091,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					...data,
 					membershipKey,
 				});
-				if (existing) return stripTeamMembershipKey(existing);
+				if (existing)
+					return stripTeamMembershipKey(existing, teamMemberAdditionalFields);
 
 				await syncTeamMemberCount(adapter, data.teamId);
 				const result = await createTeamMemberWithKey(adapter, {
@@ -1077,7 +1102,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				if (result.status === "created") {
 					await incrementTeamMemberCount(adapter, data.teamId);
 				}
-				return stripTeamMembershipKey(result.member);
+				return stripTeamMembershipKey(
+					result.member,
+					teamMemberAdditionalFields,
+				);
 			});
 		},
 		/**
@@ -1090,6 +1118,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			teamId: string;
 			userId: string;
 			maximumMembersPerTeam: number;
+			additionalFields?: Record<string, any>;
 		}): Promise<
 			{ status: "added"; member: TeamMember } | { status: "limitReached" }
 		> => {
@@ -1102,7 +1131,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					membershipKey,
 				});
 				if (existing) {
-					return { status: "added", member: stripTeamMembershipKey(existing) };
+					return {
+						status: "added",
+						member: stripTeamMembershipKey(
+							existing,
+							teamMemberAdditionalFields,
+						),
+					};
 				}
 				await syncTeamMemberCount(adapter, data.teamId);
 				const reserved = await reserveTeamSeat(adapter, {
@@ -1118,6 +1153,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						teamId: data.teamId,
 						userId: data.userId,
 						membershipKey,
+						additionalFields: data.additionalFields,
 					});
 				} catch (error) {
 					await releaseTeamSeats(adapter, data.teamId, 1);
@@ -1128,7 +1164,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				}
 				return {
 					status: "added",
-					member: stripTeamMembershipKey(result.member),
+					member: stripTeamMembershipKey(
+						result.member,
+						teamMemberAdditionalFields,
+					),
 				};
 			});
 		},
