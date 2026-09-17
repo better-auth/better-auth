@@ -49,6 +49,7 @@
     "knip": "^6.17.1",
     "lefthook": "^2.1.9",
     "nyc": "^18.0.0",
+    "pkg-pr-new": "0.0.88",
     "publint": "^0.3.21",
     "turbo": "^2.9.18",
     "typescript": "catalog:",

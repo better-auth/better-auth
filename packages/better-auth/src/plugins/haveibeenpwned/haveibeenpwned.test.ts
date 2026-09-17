@@ -7,7 +7,7 @@ import { emailOTP } from "../email-otp";
 import { emailOTPClient } from "../email-otp/client";
 import { phoneNumber } from "../phone-number";
 import { phoneNumberClient } from "../phone-number/client";
-import { haveIBeenPwned } from "./index";
+import { haveIBeenPwned, isPasswordCompromised } from "./index";
 
 /**
  * Stubs the Have I Been Pwned range API so the given password is reported as
@@ -295,6 +295,109 @@ describe("have-i-been-pwned", async () => {
 
 			expect(result.error?.status).toBe(400);
 			expect(result.error?.code).toBe("PASSWORD_COMPROMISED");
+		});
+	});
+});
+
+/**
+ * @see https://haveibeenpwned.com/API/v3#PwnedPasswords
+ */
+describe("isPasswordCompromised", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("should report a compromised password", async () => {
+		const password = "breached-password";
+		await mockBreached(password);
+
+		await expect(isPasswordCompromised(password)).resolves.toBe(true);
+	});
+
+	it("should report a safe password", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response("00000000000000000000000000000000000:1\n", {
+				status: 200,
+			}),
+		);
+
+		await expect(isPasswordCompromised("unique-password")).resolves.toBe(false);
+	});
+
+	it("should ignore padded entries with a zero count", async () => {
+		const password = "padded-password";
+		const hash = (
+			await createHash("SHA-1", "hex").digest(password)
+		).toUpperCase();
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(`${hash.slice(5)}:0\n`, { status: 200 }),
+		);
+
+		await expect(isPasswordCompromised(password)).resolves.toBe(false);
+	});
+
+	it("should match lowercase hash suffixes in CRLF responses", async () => {
+		const password = "compromised-password";
+		const hash = (
+			await createHash("SHA-1", "hex").digest(password)
+		).toUpperCase();
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(`${hash.slice(5).toLowerCase()}:1\r\n`, { status: 200 }),
+		);
+
+		await expect(isPasswordCompromised(password)).resolves.toBe(true);
+	});
+
+	it("should check an empty password", async () => {
+		await mockBreached("");
+
+		await expect(isPasswordCompromised("")).resolves.toBe(true);
+	});
+
+	it("should throw an API error when the service cannot complete the check", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(null, { status: 503 }),
+		);
+
+		await expect(isPasswordCompromised("password")).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: {
+				message: "Failed to check password. Status: 503",
+			},
+		});
+	});
+
+	it("should hide unexpected service errors", async () => {
+		vi.spyOn(globalThis, "fetch").mockRejectedValue(
+			new Error("network unavailable"),
+		);
+
+		await expect(isPasswordCompromised("password")).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: {
+				message: "Failed to check password. Please try again later.",
+			},
+		});
+	});
+
+	it.each([
+		"",
+		"   ",
+		"invalid",
+	])("should reject an invalid compromise count %#", async (compromiseCount) => {
+		const password = "password";
+		const hash = (
+			await createHash("SHA-1", "hex").digest(password)
+		).toUpperCase();
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(`${hash.slice(5)}:${compromiseCount}\n`, { status: 200 }),
+		);
+
+		await expect(isPasswordCompromised(password)).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: {
+				message: "Failed to check password. Please try again later.",
+			},
 		});
 	});
 });

@@ -14,7 +14,6 @@ describe("sign-up with custom fields", async () => {
 			account: {
 				fields: {
 					providerId: "provider_id",
-					issuer: "issuer",
 					accountId: "account_id",
 				},
 			},

@@ -1,6 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -349,7 +348,6 @@ export const setPassword = createAuthEndpoint.serverOnly(
 			await ctx.context.internalAdapter.linkAccount({
 				userId: session.user.id,
 				providerId: "credential",
-				issuer: createLocalAccountIssuer("credential"),
 				accountId: session.user.id,
 				password: passwordHash,
 			});

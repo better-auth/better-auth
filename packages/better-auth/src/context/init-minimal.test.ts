@@ -1,3 +1,5 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import { registerSchemaCheck } from "@better-auth/core/db/internal";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, it } from "vitest";
 import { initMinimal } from "./init-minimal";
@@ -40,5 +42,19 @@ describe("init-minimal (without Kysely)", () => {
 
 		expect(res.adapter.id).toBe("memory");
 		expect(res.adapter.options?.type).toBeUndefined();
+	});
+
+	it("exposes the schema check an adapter registers", async () => {
+		const check = () => undefined;
+		const database = (options: BetterAuthOptions) => {
+			const adapter = memoryAdapter({})(options);
+			registerSchemaCheck(adapter, check);
+			return adapter;
+		};
+		const res = await initMinimal({
+			baseURL: "http://localhost:3000",
+			database,
+		});
+		expect(res.checkSchema).toBe(check);
 	});
 });

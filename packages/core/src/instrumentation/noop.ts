@@ -72,3 +72,24 @@ function createNoopOpenTelemetryAPI(): OpenTelemetryAPI {
 
 export const noopOpenTelemetryAPI: OpenTelemetryAPI =
 	createNoopOpenTelemetryAPI();
+
+/**
+ * Executes a function without creating an OpenTelemetry span.
+ */
+export function noopWithSpan<T>(
+	name: string,
+	attributes: Record<string, string | number | boolean>,
+	fn: () => T,
+): T;
+export function noopWithSpan<T>(
+	name: string,
+	attributes: Record<string, string | number | boolean>,
+	fn: () => Promise<T>,
+): Promise<T>;
+export function noopWithSpan<T>(
+	_name: string,
+	_attributes: Record<string, string | number | boolean>,
+	fn: () => T | Promise<T>,
+): T | Promise<T> {
+	return fn();
+}

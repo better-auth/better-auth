@@ -49,20 +49,6 @@ export interface GenericOAuthConfig<ID extends string = string> {
 		  ) => Awaitable<string | number>)
 		| undefined;
 	/**
-	 * Stable issuer namespace paired with the provider account ID.
-	 *
-	 * Discovery providers use the discovered issuer by default. Set this for
-	 * providers without discovery, provider aliases that share one identity
-	 * namespace, or tenant-specific issuers derived from verified provider data.
-	 * The resolver must not use unverified request input.
-	 */
-	accountIssuer?:
-		| string
-		| ((
-				context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
-		  ) => Awaitable<string>)
-		| undefined;
-	/**
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */

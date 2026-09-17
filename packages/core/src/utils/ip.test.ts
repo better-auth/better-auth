@@ -27,6 +27,8 @@ describe("IP Normalization", () => {
 			expect(isValidIP("not-an-ip")).toBe(false);
 			expect(isValidIP("999.999.999.999")).toBe(false);
 			expect(isValidIP("gggg::1")).toBe(false);
+			expect(isValidIP("::@1\\")).toBe(false);
+			expect(isValidIP("::1\n")).toBe(false);
 		});
 	});
 

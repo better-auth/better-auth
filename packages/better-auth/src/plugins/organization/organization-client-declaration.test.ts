@@ -23,7 +23,7 @@ describe("organizationClient declaration emit with additionalFields", () => {
 	): { dir: string; cleanup: () => void } => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-ts2742-"));
 
-		const pkgDir = path.resolve(__dirname, "../../..");
+		const pkgDir = path.resolve(import.meta.dirname, "../../..");
 		const tsconfig = {
 			compilerOptions: {
 				target: "ES2020",
@@ -100,7 +100,7 @@ export const authClient = createAuthClient({
 
 			try {
 				const tscPath = path.resolve(
-					__dirname,
+					import.meta.dirname,
 					"../../../node_modules/.bin/tsc",
 				);
 				const { stderr } = await execAsync(
@@ -140,7 +140,7 @@ export const authClient = createAuthClient({
 
 			try {
 				const tscPath = path.resolve(
-					__dirname,
+					import.meta.dirname,
 					"../../../node_modules/.bin/tsc",
 				);
 				const { stderr } = await execAsync(

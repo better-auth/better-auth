@@ -29,7 +29,8 @@ describe("migrate base auth instance", () => {
 			config: "test/auth.ts",
 			yes: true,
 		});
-		const signUpRes = await auth.api.signUpEmail({
+		const servingAuth = betterAuth(auth.options);
+		const signUpRes = await servingAuth.api.signUpEmail({
 			body: {
 				name: "test",
 				email: "test@email.com",
