@@ -11,6 +11,7 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { assertPasswordNotTooLong } from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
@@ -455,15 +456,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					}
 
-					const maxPasswordLength =
-						ctx.context.password.config.maxPasswordLength;
-					if (ctx.body.password.length > maxPasswordLength) {
-						ctx.context.logger.warn("Password is too long");
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-						);
-					}
+					assertPasswordNotTooLong(ctx, ctx.body.password);
 
 					const user = await ctx.context.adapter.findOne<
 						User & { username: string; displayUsername: string }

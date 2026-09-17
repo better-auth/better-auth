@@ -14,6 +14,10 @@ import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
@@ -945,14 +949,8 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (ctx.body.password.length < minPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.password.length > maxPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooShort(ctx, ctx.body.password);
+			assertPasswordNotTooLong(ctx, ctx.body.password);
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(

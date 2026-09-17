@@ -23,6 +23,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
+import { assertPasswordNotTooLong } from "../../utils/password";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -523,11 +524,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (password.length > maxPasswordLength) {
-				ctx.context.logger.warn("Password is too long");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooLong(ctx, password);
 			const userRecord = await ctx.context.internalAdapter.findUserByEmail(
 				email.toLowerCase(),
 				{ includeAccounts: true },
