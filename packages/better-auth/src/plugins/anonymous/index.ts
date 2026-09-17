@@ -8,7 +8,6 @@ import {
 } from "@better-auth/core/api";
 import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { generateId } from "@better-auth/core/utils/id";
-import * as z from "zod";
 import {
 	APIError,
 	addOAuthServerContext,
@@ -23,6 +22,7 @@ import {
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
 import type { Session, User } from "../../types";
+import { isValidEmail } from "../../utils/email";
 import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
@@ -89,11 +89,11 @@ declare module "@better-auth/core" {
 
 async function getAnonUserEmail(
 	options: AnonymousOptions | undefined,
+	ctx: GenericEndpointContext,
 ): Promise<string> {
 	const customEmail = await options?.generateRandomEmail?.();
 	if (customEmail) {
-		const validation = z.email().safeParse(customEmail);
-		if (!validation.success) {
+		if (!(await isValidEmail(customEmail, ctx.context.options))) {
 			throw APIError.from(
 				"BAD_REQUEST",
 				ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT,
@@ -163,7 +163,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						);
 					}
 
-					const email = await getAnonUserEmail(options);
+					const email = await getAnonUserEmail(options, ctx);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser(
 						{

@@ -421,6 +421,7 @@ export const auth = betterAuth({
 * `modelName`: The model name for the user (default: `"user"`)
 * `fields`: Map fields to different column names
 * `additionalFields`: Additional fields for the user table
+* `emailValidator`: A synchronous or asynchronous function that replaces the default email syntax validator and receives the email normalized to lowercase
 * `changeEmail`: Configuration for changing email
 * `deleteUser`: Configuration for user deletion
 

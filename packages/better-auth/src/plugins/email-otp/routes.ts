@@ -14,6 +14,7 @@ import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import { isValidEmail } from "../../utils/email";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
@@ -132,8 +133,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.email().safeParse(email);
-			if (!isValidEmail.success) {
+			if (!(await isValidEmail(email, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
@@ -366,8 +366,7 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.email().safeParse(email);
-			if (!isValidEmail.success) {
+			if (!(await isValidEmail(email, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 			const identifier = toOTPIdentifier(ctx.body.type, email);
@@ -484,8 +483,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.email().safeParse(email);
-			if (!isValidEmail.success) {
+			if (!(await isValidEmail(email, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
@@ -648,6 +646,9 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		async (ctx) => {
 			const { email: rawEmail, otp, name, image, ...rest } = ctx.body;
 			const email = rawEmail.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(ctx, opts, toOTPIdentifier("sign-in", email), otp);
@@ -766,6 +767,9 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -858,6 +862,9 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 		async (ctx) => {
 			warnDeprecation();
 			const email = ctx.body.email.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -945,6 +952,9 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
+			if (!(await isValidEmail(email, ctx.context.options))) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (ctx.body.password.length < minPasswordLength) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
@@ -1075,8 +1085,7 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const email = ctx.context.session.user.email.toLowerCase();
 			const newEmail = ctx.body.newEmail.toLowerCase();
-			const isValidEmail = z.email().safeParse(newEmail);
-			if (!isValidEmail.success) {
+			if (!(await isValidEmail(newEmail, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 			if (newEmail === email) {
@@ -1213,8 +1222,7 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const email = session.user.email.toLowerCase();
 			const newEmail = ctx.body.newEmail.toLowerCase();
-			const isValidNewEmail = z.email().safeParse(newEmail);
-			if (!isValidNewEmail.success) {
+			if (!(await isValidEmail(newEmail, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 			if (newEmail === email) {
