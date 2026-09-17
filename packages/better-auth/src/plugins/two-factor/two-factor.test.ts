@@ -1,15 +1,18 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { applySetCookies, parseSetCookieHeader } from "../../cookies";
-import { symmetricDecrypt } from "../../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { generateRandomString } from "../../crypto/random";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { anonymous } from "../anonymous";
 import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
+import type { TOTPOptions } from "./totp";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
 describe("two factor", async () => {
@@ -1767,6 +1770,272 @@ describe("OTP storage modes", async () => {
 				asResponse: true,
 			});
 			expect(verifyRes.status).toBe(200);
+		});
+	});
+});
+
+/**
+ * The TOTP secret is encrypted at rest with XChaCha20-Poly1305, which is not a
+ * FIPS-approved algorithm. `storeSecret` lets a deployment hold the secret in a
+ * validated cryptographic module instead, mirroring the existing `storeOTP` and
+ * `storeBackupCodes` hooks.
+ *
+ * @see https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+ */
+describe("TOTP secret storage", async () => {
+	/**
+	 * AES-256-GCM through WebCrypto, which delegates to the platform's
+	 * cryptographic module. Stands in for a FIPS-constrained deployment; a real
+	 * one would derive the key with HKDF rather than a bare digest.
+	 */
+	const aesGcm = (encryptionKey: string) => {
+		const prefix = "aesgcm$";
+		const getKey = async () =>
+			await crypto.subtle.importKey(
+				"raw",
+				await crypto.subtle.digest(
+					"SHA-256",
+					new TextEncoder().encode(encryptionKey),
+				),
+				{ name: "AES-GCM" },
+				false,
+				["encrypt", "decrypt"],
+			);
+		return {
+			prefix,
+			encrypt: async (data: string) => {
+				const iv = crypto.getRandomValues(new Uint8Array(12));
+				const ciphertext = new Uint8Array(
+					await crypto.subtle.encrypt(
+						{ name: "AES-GCM", iv },
+						await getKey(),
+						new TextEncoder().encode(data),
+					),
+				);
+				const payload = new Uint8Array(iv.length + ciphertext.length);
+				payload.set(iv);
+				payload.set(ciphertext, iv.length);
+				return `${prefix}${btoa(String.fromCharCode(...payload))}`;
+			},
+			decrypt: async (data: string) => {
+				const payload = Uint8Array.from(
+					atob(data.slice(prefix.length)),
+					(char) => char.charCodeAt(0),
+				);
+				return new TextDecoder().decode(
+					await crypto.subtle.decrypt(
+						{ name: "AES-GCM", iv: payload.slice(0, 12) },
+						await getKey(),
+						payload.slice(12),
+					),
+				);
+			},
+		};
+	};
+
+	describe("custom encrypt/decrypt", async () => {
+		const storeSecret = aesGcm("totp-secret-encryption-key");
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor({ totpOptions: { storeSecret } })],
+		});
+		let { headers, user } = await signInWithTestUser();
+
+		const getRow = async () => {
+			const row = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+			});
+			if (!row) throw new Error("No two factor row");
+			return row;
+		};
+
+		it("should store the secret using the custom implementation", async () => {
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password, method: "totp" },
+				headers,
+			});
+			const row = await getRow();
+
+			expect(row.secret.startsWith(storeSecret.prefix)).toBe(true);
+			// The built-in cipher must not have produced the stored value.
+			await expect(
+				symmetricDecrypt({ key: DEFAULT_SECRET, data: row.secret }),
+			).rejects.toThrow();
+			expect(await storeSecret.decrypt(row.secret)).toHaveLength(32);
+		});
+
+		it("should return a TOTP URI built from the custom-encrypted secret", async () => {
+			const row = await getRow();
+			const { totpURI } = await auth.api.getTOTPURI({
+				body: { password: testUser.password },
+				headers,
+			});
+			expect(totpURI).toContain(
+				`secret=${base32.encode(await storeSecret.decrypt(row.secret), {
+					padding: false,
+				})}`,
+			);
+		});
+
+		it("should verify a TOTP code against the custom-encrypted secret", async () => {
+			const row = await getRow();
+			const code = await createOTP(
+				await storeSecret.decrypt(row.secret),
+			).totp();
+			const res = await auth.api.verifyTOTP({
+				body: { code },
+				headers,
+				asResponse: true,
+			});
+			expect(res.status).toBe(200);
+			// Enrollment rotates the session, so refresh the cookies.
+			headers = convertSetCookieToCookie(res.headers);
+		});
+
+		it("should reject a code that does not match the stored secret", async () => {
+			const row = await getRow();
+			const valid = await createOTP(
+				await storeSecret.decrypt(row.secret),
+			).totp();
+			// Derived from the valid code so it cannot coincide with it.
+			const wrong = String((Number(valid) + 1) % 1_000_000).padStart(6, "0");
+			const res = await auth.api.verifyTOTP({
+				body: { code: wrong },
+				headers,
+				asResponse: true,
+			});
+			expect(res.status).not.toBe(200);
+		});
+	});
+
+	/**
+	 * Guards the migration recipe documented in
+	 * docs/content/docs/plugins/2fa.mdx: a secret written before `storeSecret`
+	 * was adopted must still be readable through the fallback, using the same
+	 * secret material the app passes to `betterAuth`.
+	 */
+	describe("documented legacy migration recipe", async () => {
+		const custom = aesGcm("totp-secret-encryption-key");
+		const storeSecret = {
+			encrypt: custom.encrypt,
+			decrypt: async (value: string) =>
+				value.startsWith(custom.prefix)
+					? await custom.decrypt(value)
+					: await symmetricDecrypt({ key: DEFAULT_SECRET, data: value }),
+		};
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor({ totpOptions: { storeSecret } })],
+		});
+		const { headers, user } = await signInWithTestUser();
+
+		it("should verify a secret written by the built-in cipher", async () => {
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password, method: "totp" },
+				headers,
+			});
+			// Stand in for a row enrolled before `storeSecret` was configured.
+			const legacySecret = generateRandomString(32);
+			await db.update({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+				update: {
+					secret: await symmetricEncrypt({
+						key: DEFAULT_SECRET,
+						data: legacySecret,
+					}),
+				},
+			});
+
+			const code = await createOTP(legacySecret).totp();
+			const res = await auth.api.verifyTOTP({
+				body: { code },
+				headers,
+				asResponse: true,
+			});
+			expect(res.status).toBe(200);
+		});
+	});
+
+	describe("partial configuration", () => {
+		it("should reject a storeSecret missing decrypt", () => {
+			const partial = {
+				encrypt: async (secret: string) => secret,
+			} as NonNullable<TOTPOptions["storeSecret"]>;
+			expect(() =>
+				twoFactor({ totpOptions: { storeSecret: partial } }),
+			).toThrow(/both `encrypt` and `decrypt`/);
+		});
+
+		it("should reject an unrecognized storeSecret string", () => {
+			const typo = "encrypt" as NonNullable<TOTPOptions["storeSecret"]>;
+			expect(() => twoFactor({ totpOptions: { storeSecret: typo } })).toThrow(
+				/must be "encrypted"/,
+			);
+		});
+
+		it("should reject a non-serializable storeSecret without a TypeError", () => {
+			// `JSON.stringify` throws on a bigint, so building the error message
+			// must not depend on serializing the value.
+			const bad = BigInt(1) as unknown as NonNullable<
+				TOTPOptions["storeSecret"]
+			>;
+			expect(() => twoFactor({ totpOptions: { storeSecret: bad } })).toThrow(
+				/must be "encrypted"/,
+			);
+		});
+
+		it("should reject a null storeSecret", () => {
+			// `typeof null === "object"`, so this must be rejected before the
+			// `{ encrypt, decrypt }` destructure rather than crashing on it.
+			const nulled = null as unknown as NonNullable<TOTPOptions["storeSecret"]>;
+			expect(() => twoFactor({ totpOptions: { storeSecret: nulled } })).toThrow(
+				/received null/,
+			);
+		});
+
+		it("should reject a storeSecret missing encrypt", () => {
+			const partial = {
+				decrypt: async (secret: string) => secret,
+			} as NonNullable<TOTPOptions["storeSecret"]>;
+			expect(() =>
+				twoFactor({ totpOptions: { storeSecret: partial } }),
+			).toThrow(/both `encrypt` and `decrypt`/);
+		});
+	});
+
+	describe("default storage", async () => {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor({ totpOptions: { storeSecret: "encrypted" } })],
+		});
+		const { headers, user } = await signInWithTestUser();
+
+		it("should use the built-in cipher for the `encrypted` sentinel", async () => {
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password, method: "totp" },
+				headers,
+			});
+			const row = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+			});
+			if (!row) throw new Error("No two factor row");
+
+			const decrypted = await symmetricDecrypt({
+				key: DEFAULT_SECRET,
+				data: row.secret,
+			});
+			expect(decrypted).toHaveLength(32);
+
+			const code = await createOTP(decrypted).totp();
+			const res = await auth.api.verifyTOTP({
+				body: { code },
+				headers,
+				asResponse: true,
+			});
+			expect(res.status).toBe(200);
 		});
 	});
 });
