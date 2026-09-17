@@ -1510,6 +1510,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "description": "Select the current OAuth account from its signed cookie",
                         "enum": [
                           true,
+                          "true",
                         ],
                       },
                       "userId": {
@@ -2648,6 +2649,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "description": "Select the current OAuth account from its signed cookie",
                         "enum": [
                           true,
+                          "true",
                         ],
                       },
                       "userId": {
