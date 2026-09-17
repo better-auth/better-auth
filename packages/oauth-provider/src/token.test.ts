@@ -597,6 +597,33 @@ describe("oauth token - authorization_code", async () => {
 	 * redirect_uri (it delivers the code through it), so a headless code is
 	 * inserted the way authorize.ts persists one to exercise redemption directly.
 	 */
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11035
+	 */
+	it("returns invalid_client for an unknown client_id before checking the code", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					client_id: "unknown-client",
+					client_secret: "secret",
+					code: "not-a-real-code",
+					redirect_uri: redirectUri,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+	});
+
 	describe("redirect_uri conditional (RFC 6749 §4.1.3)", () => {
 		const tokenRequestHeaders = {
 			accept: "application/json",
@@ -944,6 +971,36 @@ describe("oauth token - refresh_token", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11035
+	 */
+	it("returns invalid_client for an unknown client_id before looking up the refresh token", async () => {
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: "not-a-real-refresh-token",
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from("unknown-client:secret").toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
 	it("should refresh token with same scopes, opaque access token", async ({
 		expect,
 	}) => {
@@ -1005,6 +1062,7 @@ describe("oauth token - refresh_token", async () => {
 		const otherClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: ["authorization_code", "refresh_token"],
 				redirect_uris: [otherRedirectUri],
 				application_type: "native",
