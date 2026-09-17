@@ -426,6 +426,12 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
+			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+			if (ctx.body.password && ctx.body.password.length > maxPasswordLength) {
+				ctx.context.logger.warn("Password is too long");
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			}
+
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {

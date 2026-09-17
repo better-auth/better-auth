@@ -2722,3 +2722,37 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 		expect(listUsers.error?.status).toBe(401);
 	});
 });
+
+describe("admin create-user password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [admin()],
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		hash.mockClear();
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					email: "long-password@test.com",
+					password: "x".repeat(129),
+					name: "Long Password",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+	});
+});

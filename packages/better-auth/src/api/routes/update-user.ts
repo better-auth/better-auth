@@ -259,7 +259,10 @@ export const changePassword = createAuthEndpoint(
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
-		if (newPassword.length > maxPasswordLength) {
+		if (
+			newPassword.length > maxPasswordLength ||
+			currentPassword.length > maxPasswordLength
+		) {
 			ctx.context.logger.warn("Password is too long");
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
@@ -471,6 +474,11 @@ export const deleteUser = createAuthEndpoint(
 		const session = ctx.context.session;
 
 		if (ctx.body.password) {
+			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+			if (ctx.body.password.length > maxPasswordLength) {
+				ctx.context.logger.warn("Password is too long");
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			}
 			const account = await ctx.context.internalAdapter.findCredentialAccount(
 				session.user.id,
 			);

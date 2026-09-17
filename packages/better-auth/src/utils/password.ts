@@ -8,6 +8,11 @@ export async function validatePassword(
 		userId: string;
 	},
 ) {
+	const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+	if (data.password.length > maxPasswordLength) {
+		ctx.context.logger.warn("Password is too long");
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+	}
 	const credentialAccount =
 		await ctx.context.internalAdapter.findCredentialAccount(data.userId);
 	const currentPassword = credentialAccount?.password;
@@ -22,10 +27,15 @@ export async function validatePassword(
 }
 
 export async function checkPassword(userId: string, c: GenericEndpointContext) {
+	const password = c.body.password;
+	const maxPasswordLength = c.context.password.config.maxPasswordLength;
+	if (typeof password === "string" && password.length > maxPasswordLength) {
+		c.context.logger.warn("Password is too long");
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+	}
 	const credentialAccount =
 		await c.context.internalAdapter.findCredentialAccount(userId);
 	const currentPassword = credentialAccount?.password;
-	const password = c.body.password;
 	if (!credentialAccount || !currentPassword || !password) {
 		// Same error as a failed verify to avoid credential / account enumeration.
 		if (password) {

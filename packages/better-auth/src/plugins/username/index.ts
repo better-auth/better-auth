@@ -455,6 +455,16 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					}
 
+					const maxPasswordLength =
+						ctx.context.password.config.maxPasswordLength;
+					if (ctx.body.password.length > maxPasswordLength) {
+						ctx.context.logger.warn("Password is too long");
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+						);
+					}
+
 					const user = await ctx.context.adapter.findOne<
 						User & { username: string; displayUsername: string }
 					>({
