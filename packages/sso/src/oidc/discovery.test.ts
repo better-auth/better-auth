@@ -154,7 +154,7 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it("should throw DiscoveryError with discovery_untrusted_origin code for untrusted origins", () => {
+		it("should allow a publicly routable discovery URL that is not a trusted origin", () => {
 			isTrustedOrigin.mockReturnValue(false);
 
 			expect(() =>
@@ -162,12 +162,37 @@ describe("OIDC Discovery", () => {
 					"https://untrusted.com/.well-known/openid-configuration",
 					isTrustedOrigin,
 				),
+			).not.toThrow();
+		});
+
+		it("should throw DiscoveryError with discovery_private_host code for a non-public host that is not a trusted origin", () => {
+			isTrustedOrigin.mockReturnValue(false);
+
+			expect(() =>
+				validateDiscoveryUrl(
+					"https://10.0.0.5/.well-known/openid-configuration",
+					isTrustedOrigin,
+				),
 			).toThrow(
 				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message: `The main discovery endpoint "https://untrusted.com/.well-known/openid-configuration" is not trusted by your trusted origins configuration.`,
+					code: "discovery_private_host",
+					details: expect.objectContaining({
+						endpoint: "discoveryEndpoint",
+						hostname: "10.0.0.5",
+					}),
 				}),
 			);
+		});
+
+		it("should allow a non-public host when it is a trusted origin (internal IdP escape hatch)", () => {
+			isTrustedOrigin.mockReturnValue(true);
+
+			expect(() =>
+				validateDiscoveryUrl(
+					"https://10.0.0.5/.well-known/openid-configuration",
+					isTrustedOrigin,
+				),
+			).not.toThrow();
 		});
 	});
 
@@ -445,142 +470,67 @@ describe("OIDC Discovery", () => {
 			).toThrowError('The url "authorization_endpoint" must be valid');
 		});
 
-		it("should reject with discovery_untrusted_origin code on untrusted discovery urls", () => {
+		it("should allow discovered urls on public hosts that are not trusted origins", () => {
 			const doc = createMockDiscoveryDocument({
 				authorization_endpoint: "/oauth2/authorize",
 				token_endpoint: "/oauth2/token",
 				jwks_uri: "/.well-known/jwks.json",
 				userinfo_endpoint: "/userinfo",
-				revocation_endpoint: "/revoke",
-				end_session_endpoint: "/endsession",
-				introspection_endpoint: "/introspection",
+			});
+
+			const result = normalizeDiscoveryUrls(
+				doc,
+				"https://idp.example.com",
+				() => false,
+			);
+
+			expect(result.token_endpoint).toBe(
+				"https://idp.example.com/oauth2/token",
+			);
+			expect(result.jwks_uri).toBe(
+				"https://idp.example.com/.well-known/jwks.json",
+			);
+		});
+
+		it.each([
+			["token_endpoint", "/oauth2/token"],
+			["authorization_endpoint", "/oauth2/authorize"],
+			["jwks_uri", "/.well-known/jwks.json"],
+			["userinfo_endpoint", "/userinfo"],
+			["revocation_endpoint", "/revoke"],
+			["end_session_endpoint", "/endsession"],
+			["introspection_endpoint", "/introspection"],
+		] as const)("should reject with discovery_private_host code when %s points at a non-public host that is not a trusted origin", (field, path) => {
+			const doc = createMockDiscoveryDocument({
+				[field]: `https://10.0.0.5${path}`,
 			});
 
 			expect(() =>
-				normalizeDiscoveryUrls(
-					doc,
-					"https://idp.example.com",
-					(url) => !url.endsWith("/oauth2/token"),
-				),
+				normalizeDiscoveryUrls(doc, "https://idp.example.com", () => false),
 			).toThrowError(
 				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message:
-						'The token_endpoint "https://idp.example.com/oauth2/token" is not trusted by your trusted origins configuration.',
-					details: {
-						endpoint: "token_endpoint",
-						url: "https://idp.example.com/oauth2/token",
-					},
+					code: "discovery_private_host",
+					details: expect.objectContaining({
+						endpoint: field,
+						url: `https://10.0.0.5${path}`,
+						hostname: "10.0.0.5",
+					}),
 				}),
 			);
+		});
+
+		it("should allow discovered urls on a non-public host when it is a trusted origin", () => {
+			const doc = createMockDiscoveryDocument({
+				issuer: "https://10.0.0.5",
+				authorization_endpoint: "/oauth2/authorize",
+				token_endpoint: "/oauth2/token",
+				jwks_uri: "/.well-known/jwks.json",
+				userinfo_endpoint: "/userinfo",
+			});
 
 			expect(() =>
-				normalizeDiscoveryUrls(
-					doc,
-					"https://idp.example.com",
-					(url) => !url.endsWith("/oauth2/authorize"),
-				),
-			).toThrowError(
-				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message:
-						'The authorization_endpoint "https://idp.example.com/oauth2/authorize" is not trusted by your trusted origins configuration.',
-					details: {
-						endpoint: "authorization_endpoint",
-						url: "https://idp.example.com/oauth2/authorize",
-					},
-				}),
-			);
-
-			expect(() =>
-				normalizeDiscoveryUrls(
-					doc,
-					"https://idp.example.com",
-					(url) => !url.endsWith("/.well-known/jwks.json"),
-				),
-			).toThrowError(
-				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message:
-						'The jwks_uri "https://idp.example.com/.well-known/jwks.json" is not trusted by your trusted origins configuration.',
-					details: {
-						endpoint: "jwks_uri",
-						url: "https://idp.example.com/.well-known/jwks.json",
-					},
-				}),
-			);
-
-			expect(() =>
-				normalizeDiscoveryUrls(
-					doc,
-					"https://idp.example.com",
-					(url) => !url.endsWith("/userinfo"),
-				),
-			).toThrowError(
-				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message:
-						'The userinfo_endpoint "https://idp.example.com/userinfo" is not trusted by your trusted origins configuration.',
-					details: {
-						endpoint: "userinfo_endpoint",
-						url: "https://idp.example.com/userinfo",
-					},
-				}),
-			);
-
-			expect(() =>
-				normalizeDiscoveryUrls(
-					doc,
-					"https://idp.example.com",
-					(url) => !url.endsWith("/revoke"),
-				),
-			).toThrowError(
-				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message:
-						'The revocation_endpoint "https://idp.example.com/revoke" is not trusted by your trusted origins configuration.',
-					details: {
-						endpoint: "revocation_endpoint",
-						url: "https://idp.example.com/revoke",
-					},
-				}),
-			);
-
-			expect(() =>
-				normalizeDiscoveryUrls(
-					doc,
-					"https://idp.example.com",
-					(url) => !url.endsWith("/endsession"),
-				),
-			).toThrowError(
-				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message:
-						'The end_session_endpoint "https://idp.example.com/endsession" is not trusted by your trusted origins configuration.',
-					details: {
-						endpoint: "end_session_endpoint",
-						url: "https://idp.example.com/endsession",
-					},
-				}),
-			);
-
-			expect(() =>
-				normalizeDiscoveryUrls(
-					doc,
-					"https://idp.example.com",
-					(url) => !url.endsWith("/introspection"),
-				),
-			).toThrowError(
-				expect.objectContaining({
-					code: "discovery_untrusted_origin",
-					message:
-						'The introspection_endpoint "https://idp.example.com/introspection" is not trusted by your trusted origins configuration.',
-					details: {
-						endpoint: "introspection_endpoint",
-						url: "https://idp.example.com/introspection",
-					},
-				}),
-			);
+				normalizeDiscoveryUrls(doc, "https://10.0.0.5", () => true),
+			).not.toThrow();
 		});
 	});
 
@@ -1163,33 +1113,31 @@ describe("OIDC Discovery", () => {
 			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
 		});
 
-		it("should throw an error with discovery_untrusted_origin code when the main discovery url is untrusted", async () => {
+		it("should throw an error with discovery_private_host code when the main discovery url is on a non-public host that is not a trusted origin", async () => {
 			isTrustedOrigin.mockReturnValue(false);
 
 			await expect(
-				discoverOIDCConfig({ issuer, isTrustedOrigin }),
+				discoverOIDCConfig({ issuer: "https://10.0.0.5", isTrustedOrigin }),
 			).rejects.toThrow(
 				expect.objectContaining({
 					name: "DiscoveryError",
-					message:
-						'The main discovery endpoint "https://idp.example.com/.well-known/openid-configuration" is not trusted by your trusted origins configuration.',
-					code: "discovery_untrusted_origin",
-					details: {
-						url: "https://idp.example.com/.well-known/openid-configuration",
-					},
+					code: "discovery_private_host",
+					details: expect.objectContaining({
+						endpoint: "discoveryEndpoint",
+						url: "https://10.0.0.5/.well-known/openid-configuration",
+					}),
 				}),
 			);
+			expect(mockBetterFetch).not.toHaveBeenCalled();
 		});
 
-		it("should throw an error with discovery_untrusted_origin code when discovered urls are untrusted", async () => {
-			isTrustedOrigin.mockImplementation((url: string) => {
-				return url.endsWith(".well-known/openid-configuration");
-			});
+		it("should throw an error with discovery_private_host code when a discovered url is on a non-public host that is not a trusted origin", async () => {
+			isTrustedOrigin.mockReturnValue(false);
 
 			const discoveryDoc = createMockDiscoveryDocument({
 				issuer,
 				authorization_endpoint: `${issuer}/oauth2/authorize`,
-				token_endpoint: `${issuer}/oauth2/token`,
+				token_endpoint: "https://10.0.0.5/oauth2/token",
 				jwks_uri: `${issuer}/.well-known/jwks.json`,
 				userinfo_endpoint: `${issuer}/userinfo`,
 			});
@@ -1203,15 +1151,59 @@ describe("OIDC Discovery", () => {
 			).rejects.toThrow(
 				expect.objectContaining({
 					name: "DiscoveryError",
-					message:
-						'The token_endpoint "https://idp.example.com/oauth2/token" is not trusted by your trusted origins configuration.',
-					code: "discovery_untrusted_origin",
-					details: {
+					code: "discovery_private_host",
+					details: expect.objectContaining({
 						endpoint: "token_endpoint",
-						url: "https://idp.example.com/oauth2/token",
-					},
+						url: "https://10.0.0.5/oauth2/token",
+					}),
 				}),
 			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10830
+		 * @see https://github.com/better-auth/better-auth/issues/10831
+		 */
+		describe("public issuers outside trustedOrigins", () => {
+			beforeEach(() => {
+				isTrustedOrigin.mockReturnValue(false);
+			});
+
+			it("should discover a public issuer without a trustedOrigins entry", async () => {
+				lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+				mockBetterFetch.mockResolvedValueOnce({
+					data: createMockDiscoveryDocument({ issuer }),
+					error: null,
+				});
+
+				const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
+
+				expect(result.tokenEndpoint).toBe(`${issuer}/oauth2/token`);
+				expect(lookupMock).toHaveBeenCalledWith("idp.example.com", {
+					all: true,
+				});
+				expect(mockBetterFetch).toHaveBeenCalledTimes(1);
+			});
+
+			it("should resolve the discovery host before fetching and reject internal addresses", async () => {
+				lookupMock.mockResolvedValue([
+					{ address: "169.254.169.254", family: 4 },
+				]);
+
+				await expect(
+					discoverOIDCConfig({ issuer, isTrustedOrigin }),
+				).rejects.toThrow(
+					expect.objectContaining({
+						code: "discovery_private_host",
+						details: expect.objectContaining({
+							endpoint: "discoveryEndpoint",
+							hostname: "idp.example.com",
+							resolved: "169.254.169.254",
+						}),
+					}),
+				);
+				expect(mockBetterFetch).not.toHaveBeenCalled();
+			});
 		});
 	});
 });
@@ -1288,12 +1280,22 @@ describe("ensureRuntimeDiscovery", () => {
 		).rejects.toThrow(DiscoveryError);
 	});
 
-	it("throws DiscoveryError for untrusted origin", async () => {
+	it("throws DiscoveryError for a non-public issuer that is not a trusted origin", async () => {
+		const privateIssuer = "https://10.0.0.5";
 		await expect(
-			ensureRuntimeDiscovery(baseConfig, issuer, () => false),
+			ensureRuntimeDiscovery(
+				{
+					...baseConfig,
+					issuer: privateIssuer,
+					discoveryEndpoint: `${privateIssuer}/.well-known/openid-configuration`,
+				},
+				privateIssuer,
+				() => false,
+			),
 		).rejects.toThrow(
-			expect.objectContaining({ code: "discovery_untrusted_origin" }),
+			expect.objectContaining({ code: "discovery_private_host" }),
 		);
+		expect(betterFetch).not.toHaveBeenCalled();
 	});
 
 	it("rejects a stored endpoint whose DNS resolves to an internal address", async () => {
