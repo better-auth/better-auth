@@ -21,6 +21,32 @@ import {
 	insensitiveStartsWith,
 } from "./query-builders";
 
+/**
+ * Structural checks for BSON ids. The driver may resolve a different `bson`
+ * module instance than the adapter (CJS vs ESM entry point), in which case
+ * its values fail `instanceof` against the adapter's classes.
+ * @see https://github.com/better-auth/better-auth/issues/11065
+ */
+function isObjectIdLike(value: unknown): value is ObjectId {
+	if (typeof value !== "object" || value === null) return false;
+	const { _bsontype, toHexString } = value as Record<string, unknown>;
+	return (
+		(_bsontype === "ObjectId" || _bsontype === "ObjectID") &&
+		typeof toHexString === "function"
+	);
+}
+
+function isUUIDLike(value: unknown): value is UUID {
+	if (typeof value !== "object" || value === null) return false;
+	const { _bsontype, sub_type, toHexString } = value as Record<string, unknown>;
+	// A BSON UUID is a Binary with sub_type 4.
+	return (
+		_bsontype === "Binary" &&
+		sub_type === 4 &&
+		typeof toHexString === "function"
+	);
+}
+
 class MongoAdapterError extends Error {
 	constructor(
 		public code: "INVALID_ID" | "UNSUPPORTED_OPERATOR",
@@ -157,8 +183,8 @@ export const mongodbAdapter = (
 			}
 
 			function isIdInstance(value: unknown): value is ObjectId | UUID {
-				if (useUUIDs) return value instanceof UUID;
-				return value instanceof ObjectId;
+				if (useUUIDs) return isUUIDLike(value);
+				return isObjectIdLike(value);
 			}
 
 			function serializeID({
@@ -801,9 +827,9 @@ export const mongodbAdapter = (
 					if (action !== "create" && action !== "update") {
 						return data;
 					}
-					const IdClass =
-						options.advanced?.database?.generateId === "uuid" ? UUID : ObjectId;
-					if (data instanceof IdClass) {
+					const useUUIDs = options.advanced?.database?.generateId === "uuid";
+					const IdClass = useUUIDs ? UUID : ObjectId;
+					if (useUUIDs ? isUUIDLike(data) : isObjectIdLike(data)) {
 						return data;
 					}
 					if (Array.isArray(data)) {
@@ -841,18 +867,18 @@ export const mongodbAdapter = (
 			},
 			customTransformOutput({ data, field, fieldAttributes }) {
 				if (field === "id" || fieldAttributes.references?.field === "id") {
-					if (data instanceof UUID) {
+					if (isUUIDLike(data)) {
 						return data.toString();
 					}
-					if (data instanceof ObjectId) {
+					if (isObjectIdLike(data)) {
 						return data.toHexString();
 					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
-							if (v instanceof UUID) {
+							if (isUUIDLike(v)) {
 								return v.toString();
 							}
-							if (v instanceof ObjectId) {
+							if (isObjectIdLike(v)) {
 								return v.toHexString();
 							}
 							return v;
