@@ -15,8 +15,10 @@ import type {
 	BetterAuthPlugin,
 	Session,
 	User,
+	Verification,
 } from "../types";
 import { getMigrations } from "./get-migration";
+import { getCreatedRow } from "./with-hooks";
 
 function createStringSecondaryStorage(
 	store: Map<string, string>,
@@ -427,6 +429,460 @@ describe("internal adapter test", async () => {
 		);
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+	});
+
+	it("should delete verification by id with hooks", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: "delete-by-id",
+			value: "delete-by-id",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationById(
+			verification.identifier,
+			verification.id,
+		);
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+		expect(
+			await internalAdapter.findVerificationValue("delete-by-id"),
+		).toBeNull();
+	});
+
+	it("should keep a row stored under the same identifier when deleting by id", async () => {
+		const replaced = await internalAdapter.createVerificationValue({
+			identifier: "delete-by-id-replaced",
+			value: "old",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		await authContext.adapter.delete({
+			model: "verification",
+			where: [{ field: "id", value: replaced.id }],
+		});
+		const current = await internalAdapter.createVerificationValue({
+			identifier: "delete-by-id-replaced",
+			value: "new",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationById(
+			replaced.identifier,
+			replaced.id,
+		);
+		expect(hookVerificationDeleteBefore).not.toHaveBeenCalled();
+		expect(
+			await internalAdapter.findVerificationValue("delete-by-id-replaced"),
+		).toMatchObject({ id: current.id, value: "new" });
+	});
+
+	it("should update verification by id", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: "update-by-id",
+			value: "update-by-id",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		const expiresAt = new Date(Date.now() + 5000);
+
+		const updated = await internalAdapter.updateVerificationById(
+			verification.identifier,
+			verification.id,
+			{ expiresAt },
+		);
+		expect(updated).toMatchObject({ id: verification.id, expiresAt });
+		expect(
+			await internalAdapter.findVerificationValue("update-by-id"),
+		).toMatchObject({ id: verification.id, expiresAt });
+	});
+
+	it("should leave a row stored under the same identifier untouched when updating by id", async () => {
+		const replaced = await internalAdapter.createVerificationValue({
+			identifier: "update-by-id-replaced",
+			value: "old",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+		await authContext.adapter.delete({
+			model: "verification",
+			where: [{ field: "id", value: replaced.id }],
+		});
+		const current = await internalAdapter.createVerificationValue({
+			identifier: "update-by-id-replaced",
+			value: "new",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		const updated = await internalAdapter.updateVerificationById(
+			replaced.identifier,
+			replaced.id,
+			{ expiresAt: new Date(Date.now() + 5000) },
+		);
+		expect(updated).toBeNull();
+		expect(
+			await internalAdapter.findVerificationValue("update-by-id-replaced"),
+		).toMatchObject({ id: current.id, expiresAt: current.expiresAt });
+	});
+
+	it("should evict the cached row instead of rewriting it when updating by id", async () => {
+		const storage = new Map<string, string>();
+		const cachedOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(storage, new Map()),
+			verification: { storeInDatabase: true },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(cachedOpts)).runMigrations();
+		const cachedCtx = await init(cachedOpts);
+		const identifier = "update-by-id-cache-evict";
+		const key = `verification:${identifier}`;
+
+		const replaced = await cachedCtx.internalAdapter.createVerificationValue({
+			identifier,
+			value: "old",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+		await cachedCtx.internalAdapter.deleteVerificationById(
+			identifier,
+			replaced.id,
+		);
+		const current = await cachedCtx.internalAdapter.createVerificationValue({
+			identifier,
+			value: "new",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		// A reader that still holds the replaced row tries to extend it while a
+		// concurrent replacement is cached: the replacement must stay cached.
+		const missed = await cachedCtx.internalAdapter.updateVerificationById(
+			identifier,
+			replaced.id,
+			{ expiresAt: new Date(Date.now() + 60_000) },
+		);
+		expect(missed).toBeNull();
+		expect(JSON.parse(storage.get(key)!)).toMatchObject({ id: current.id });
+
+		// Extending the current row evicts the entry, so no later reader can be
+		// served a row the cache write might have overwritten.
+		const expiresAt = new Date(Date.now() + 60_000);
+		const updated = await cachedCtx.internalAdapter.updateVerificationById(
+			identifier,
+			current.id,
+			{ expiresAt },
+		);
+		expect(updated).toMatchObject({ id: current.id, value: "new" });
+		expect(storage.has(key)).toBe(false);
+		expect(
+			await cachedCtx.internalAdapter.findVerificationValue(identifier),
+		).toMatchObject({ id: current.id, expiresAt });
+	});
+
+	it("should update by id a cached row that is only reachable through the plain key", async () => {
+		const storage = new Map<string, string>();
+		const storageOnlyOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(storage, new Map()),
+			verification: { storeIdentifier: "hashed" as const },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(storageOnlyOpts)).runMigrations();
+		const storageOnlyCtx = await init(storageOnlyOpts);
+		const identifier = "update-by-id-legacy-cache";
+
+		// A row cached before `storeIdentifier` was enabled sits under the plain
+		// key, which is where the reader found it, so that is where it is updated.
+		const legacy = {
+			id: "legacy-id",
+			identifier,
+			value: "legacy:0",
+			expiresAt: new Date(Date.now() + 60_000).toISOString(),
+		};
+		const plainKey = `verification:${identifier}`;
+		storage.set(plainKey, JSON.stringify(legacy));
+
+		const expiresAt = new Date(Date.now() + 120_000);
+		const updated = await storageOnlyCtx.internalAdapter.updateVerificationById(
+			identifier,
+			legacy.id,
+			{ expiresAt },
+		);
+		expect(updated).toMatchObject({ id: legacy.id, value: "legacy:0" });
+		expect(JSON.parse(storage.get(plainKey)!)).toMatchObject({
+			id: legacy.id,
+			value: "legacy:0",
+			expiresAt: expiresAt.toISOString(),
+		});
+	});
+
+	it("should not write a phantom cached row when updating by id misses every key", async () => {
+		const storage = new Map<string, string>();
+		const storageOnlyOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(storage, new Map()),
+			verification: { storeIdentifier: "hashed" as const },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(storageOnlyOpts)).runMigrations();
+		const storageOnlyCtx = await init(storageOnlyOpts);
+		const identifier = "update-by-id-cache-miss";
+
+		const updated = await storageOnlyCtx.internalAdapter.updateVerificationById(
+			identifier,
+			undefined as unknown as string,
+			{ expiresAt: new Date(Date.now() + 120_000) },
+		);
+		expect(updated).toBeNull();
+		expect([...storage.keys()]).toEqual([]);
+	});
+
+	it("should not mark a storage-only write failure as a created row", async () => {
+		const storage = new Map<string, string>();
+		let failWrite = false;
+		const base = createStringSecondaryStorage(storage, new Map());
+		const storageOnlyOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...base,
+				set: async (...args: Parameters<typeof base.set>) => {
+					if (failWrite) throw new Error("cache unavailable");
+					return base.set(...args);
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(storageOnlyOpts)).runMigrations();
+		const storageOnlyCtx = await init(storageOnlyOpts);
+
+		// The cache is the only store here, so its failure stored nothing.
+		failWrite = true;
+		await expect(
+			storageOnlyCtx.internalAdapter.createVerificationValue({
+				identifier: "storage-only-write-failure",
+				value: "unstored:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			}),
+		).rejects.toSatisfy((error: unknown) => getCreatedRow(error) === undefined);
+	});
+
+	it("should report a secondary-storage failure that happens after the row was inserted", async () => {
+		const storage = new Map<string, string>();
+		let failWrite = false;
+		const base = createStringSecondaryStorage(storage, new Map());
+		const mirroredOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...base,
+				set: async (...args: Parameters<typeof base.set>) => {
+					if (failWrite) throw new Error("cache unavailable");
+					return base.set(...args);
+				},
+			},
+			verification: { storeInDatabase: true },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(mirroredOpts)).runMigrations();
+		const mirroredCtx = await init(mirroredOpts);
+
+		failWrite = true;
+		await expect(
+			mirroredCtx.internalAdapter.createVerificationValue({
+				identifier: "create-mirror-failure",
+				value: "mirrored:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			}),
+		).rejects.toSatisfy((error: unknown) => getCreatedRow(error) !== undefined);
+	});
+
+	it("should delete a cached row under a later key so it cannot resurface", async () => {
+		const storage = new Map<string, string>();
+		const cachedOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(storage, new Map()),
+			verification: {
+				storeIdentifier: "hashed" as const,
+				storeInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(cachedOpts)).runMigrations();
+		const cachedCtx = await init(cachedOpts);
+		const identifier = "delete-shadowed-legacy-row";
+		const expiresAt = new Date(Date.now() + 60_000);
+
+		// The legacy row sits under the plain key, a newer row under the hashed one.
+		const legacy = await cachedCtx.adapter.create<Verification>({
+			model: "verification",
+			data: {
+				identifier,
+				value: "legacy:0",
+				expiresAt,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		storage.set(
+			`verification:${identifier}`,
+			JSON.stringify({ ...legacy, expiresAt }),
+		);
+		await cachedCtx.internalAdapter.createVerificationValue({
+			identifier,
+			value: "newer:0",
+			expiresAt,
+		});
+		expect([...storage.keys()]).toHaveLength(2);
+
+		await cachedCtx.internalAdapter.deleteVerificationById(
+			identifier,
+			legacy.id,
+		);
+		expect(storage.has(`verification:${identifier}`)).toBe(false);
+	});
+
+	it("should not address a cached row that a row under an earlier key shadows", async () => {
+		const storage = new Map<string, string>();
+		const storageOnlyOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(storage, new Map()),
+			verification: { storeIdentifier: "hashed" as const },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(storageOnlyOpts)).runMigrations();
+		const storageOnlyCtx = await init(storageOnlyOpts);
+		const identifier = "shadowed-legacy-row";
+		const expiresAt = new Date(Date.now() + 60_000);
+
+		// A legacy row under the plain key, read before a newer row appeared under
+		// the hashed key, which is where every later read resolves.
+		const legacy = {
+			id: "legacy-id",
+			identifier,
+			value: "legacy:0",
+			expiresAt,
+		};
+		storage.set(`verification:${identifier}`, JSON.stringify(legacy));
+		const current =
+			await storageOnlyCtx.internalAdapter.createVerificationValue({
+				identifier,
+				value: "current:0",
+				expiresAt,
+			});
+		expect(
+			await storageOnlyCtx.internalAdapter.findVerificationValue(identifier),
+		).toMatchObject({ id: current.id, value: "current:0" });
+
+		expect(
+			await storageOnlyCtx.internalAdapter.updateVerificationById(
+				identifier,
+				legacy.id,
+				{ expiresAt: new Date(Date.now() + 120_000) },
+			),
+		).toBeNull();
+		expect(
+			JSON.parse(storage.get(`verification:${identifier}`)!),
+		).toMatchObject({ id: legacy.id });
+	});
+
+	it("should give a row kept only in secondary storage an id to address it by", async () => {
+		const storage = new Map<string, string>();
+		const storageOnlyOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(storage, new Map()),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(storageOnlyOpts)).runMigrations();
+		const storageOnlyCtx = await init(storageOnlyOpts);
+		const identifier = "storage-only-id";
+
+		const stored = await storageOnlyCtx.internalAdapter.createVerificationValue(
+			{
+				identifier,
+				value: "stored:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			},
+		);
+		expect(stored.id).toEqual(expect.any(String));
+
+		const expiresAt = new Date(Date.now() + 120_000);
+		const updated = await storageOnlyCtx.internalAdapter.updateVerificationById(
+			identifier,
+			stored.id,
+			{ expiresAt },
+		);
+		expect(updated).toMatchObject({ id: stored.id, value: "stored:0" });
+
+		// A row cached before ids were stored cannot be addressed by one.
+		storage.set(
+			`verification:${identifier}`,
+			JSON.stringify({ identifier, value: "legacy:0", expiresAt }),
+		);
+		expect(
+			await storageOnlyCtx.internalAdapter.updateVerificationById(
+				identifier,
+				stored.id,
+				{ expiresAt },
+			),
+		).toBeNull();
+	});
+
+	it("should run the after-update hook only when updating by id matched a row", async () => {
+		const updateAfter = vi.fn();
+		const hookedOpts = {
+			database: new DatabaseSync(":memory:"),
+			databaseHooks: {
+				verification: {
+					update: {
+						after: async (verification: Verification) => {
+							updateAfter(verification.id);
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(hookedOpts)).runMigrations();
+		const hookedCtx = await init(hookedOpts);
+		const verification =
+			await hookedCtx.internalAdapter.createVerificationValue({
+				identifier: "update-by-id-hooks",
+				value: "update-by-id-hooks",
+				expiresAt: new Date(Date.now() + 1000),
+			});
+
+		const missed = await hookedCtx.internalAdapter.updateVerificationById(
+			verification.identifier,
+			"no-such-id",
+			{ expiresAt: new Date(Date.now() + 5000) },
+		);
+		expect(missed).toBeNull();
+		expect(updateAfter).not.toHaveBeenCalled();
+
+		await hookedCtx.internalAdapter.updateVerificationById(
+			verification.identifier,
+			verification.id,
+			{ expiresAt: new Date(Date.now() + 5000) },
+		);
+		expect(updateAfter).toHaveBeenCalledExactlyOnceWith(verification.id);
+	});
+
+	it("should update by id a row that is only reachable through the plain identifier fallback", async () => {
+		const hashedOpts = {
+			database: new DatabaseSync(":memory:"),
+			verification: { storeIdentifier: "hashed" as const },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(hashedOpts)).runMigrations();
+		const hashedCtx = await init(hashedOpts);
+
+		// A row written before `storeIdentifier` was enabled keeps its plain identifier.
+		const legacy = await hashedCtx.adapter.create<Verification>({
+			model: "verification",
+			data: {
+				identifier: "update-by-id-legacy",
+				value: "legacy",
+				expiresAt: new Date(Date.now() + 1000),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const found = await hashedCtx.internalAdapter.findVerificationValue(
+			"update-by-id-legacy",
+		);
+		expect(found?.id).toBe(legacy.id);
+		const expiresAt = new Date(Date.now() + 5000);
+
+		const updated = await hashedCtx.internalAdapter.updateVerificationById(
+			"update-by-id-legacy",
+			legacy.id,
+			{ expiresAt },
+		);
+		expect(updated).toMatchObject({ id: legacy.id, expiresAt });
 	});
 
 	it("should not call adapter.delete for missing verification record (prevents Prisma P2025)", async () => {
