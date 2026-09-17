@@ -1,4 +1,4 @@
-import { assert, describe, expect, it } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
@@ -1088,5 +1088,48 @@ describe("username with displayUsername disabled and a validator", async () => {
 		expect(res.error).toBeNull();
 		expect(res.data?.user.username).toBe("disabled_validator_user");
 		expect("displayUsername" in (res.data?.user ?? {})).toBe(false);
+	});
+});
+
+describe("username sign-in password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [username()],
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "long-password@test.com",
+				password: "password",
+				name: "Long Password",
+				username: "long_password",
+			},
+		});
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.signInUsername({
+				body: {
+					username: "long_password",
+					password: "x".repeat(129),
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
 	});
 });
