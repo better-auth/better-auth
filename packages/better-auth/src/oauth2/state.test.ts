@@ -95,6 +95,24 @@ describe("parseState error mapping", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10022
+	 */
+	it("appends error parameters before the URL fragment", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("state_invalid", { code: "state_invalid" });
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext(
+			"https://example.com/error?source=oauth#retry",
+		);
+		await parseState(ctx as unknown as GenericEndpointContext).catch(() => {});
+
+		expect(redirectCalls[0]).toBe(
+			"https://example.com/error?source=oauth&error=state_invalid#retry",
+		);
+	});
+
+	/**
 	 * The per-flow `errorCallbackURL` recovered from the state takes precedence
 	 * over the default error page, and the error parameter is appended with the
 	 * correct separator when that URL already carries a query string.
@@ -114,6 +132,22 @@ describe("parseState error mapping", () => {
 
 		expect(redirectCalls[0]).toBe(
 			"/oauth-error?source=expo&error=state_mismatch",
+		);
+	});
+
+	it("falls back to the default error URL when the recovered URL is empty", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("State mismatch", {
+			code: "state_security_mismatch",
+			errorURL: "",
+		});
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext();
+		await parseState(ctx as unknown as GenericEndpointContext).catch(() => {});
+
+		expect(redirectCalls[0]).toBe(
+			"http://localhost:3000/api/auth/error?error=state_mismatch",
 		);
 	});
 });

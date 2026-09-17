@@ -17,6 +17,7 @@ import type { TestHelpers, TestUtilsOptions } from "./types";
 
 export type {
 	LoginResult,
+	TestAuthOptions,
 	TestCookie,
 	TestHelpers,
 	TestUtilsOptions,

@@ -1,5 +1,5 @@
 import { globSync, readFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -20,6 +20,10 @@ import { describe, expect, it } from "vitest";
  */
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+function toPosixPath(path: string): string {
+	return path.split(sep).join("/");
+}
 
 // Adapter implementations own `update`; the test suite exercises it directly;
 // the factory and the with-hooks layer forward an arbitrary caller `where`.
@@ -181,13 +185,13 @@ describe("adapter.update compare-and-swap lock", () => {
 			cwd: repoRoot,
 		})
 			.map((f) => resolve(repoRoot, f))
-			.filter((f) => !EXCLUDED.some((re) => re.test(f)));
+			.filter((f) => !EXCLUDED.some((re) => re.test(toPosixPath(f))));
 
 		const offenders: string[] = [];
 		for (const file of files) {
 			for (const { line, arity } of findViolations(file)) {
 				offenders.push(
-					`${relative(repoRoot, file)}:${line} (where has ${arity} clauses)`,
+					`${toPosixPath(relative(repoRoot, file))}:${line} (where has ${arity} clauses)`,
 				);
 			}
 		}

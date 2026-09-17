@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "./.tmp/prisma-client-base/client";
 import type { Dialect } from "./constants";
 
 export async function generatePrismaSchema(
@@ -12,7 +12,24 @@ export async function generatePrismaSchema(
 	iteration: number,
 	dialect: Dialect,
 ) {
-	const i = async (x: string) => await import(x);
+	const i = async (x: string) => {
+		// Clear the Node.js module cache for the generated schema file to ensure fresh import
+		try {
+			const resolvedPath =
+				typeof require !== "undefined"
+					? require.resolve(x)
+					: new URL(x, import.meta.url).pathname;
+			if (
+				resolvedPath &&
+				typeof resolvedPath === "string" &&
+				typeof require !== "undefined" &&
+				require.cache
+			) {
+				delete require.cache[resolvedPath];
+			}
+		} catch {}
+		return await import(x);
+	};
 	const { generateSchema } = (await i(
 		join(
 			import.meta.dirname,

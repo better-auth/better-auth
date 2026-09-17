@@ -8,6 +8,7 @@ import { Command } from "commander";
 
 interface MCPOptions {
 	cursor?: boolean;
+	codex?: boolean;
 	claudeCode?: boolean;
 	openCode?: boolean;
 	manual?: boolean;
@@ -18,6 +19,8 @@ const REMOTE_MCP_URL = "https://mcp.better-auth.com/mcp";
 async function mcpAction(options: MCPOptions) {
 	if (options.cursor) {
 		await handleCursorAction();
+	} else if (options.codex) {
+		handleCodexAction();
 	} else if (options.claudeCode) {
 		handleClaudeCodeAction();
 	} else if (options.openCode) {
@@ -82,6 +85,32 @@ async function handleCursorAction() {
 			'• Try: "Set up Better Auth with Google login" or "Help me debug my auth"',
 		),
 	);
+}
+
+function handleCodexAction() {
+	console.log(chalk.bold.blue("🤖 Adding Better Auth MCP to Codex..."));
+
+	const command = `codex mcp add better-auth --url ${REMOTE_MCP_URL}`;
+
+	try {
+		execSync(command, { stdio: "inherit" });
+		console.log(chalk.green("\n✓ Codex MCP configured!"));
+	} catch {
+		console.log(
+			chalk.yellow(
+				"\n⚠ Could not automatically add to Codex. Please run this command manually:",
+			),
+		);
+		console.log(chalk.cyan(command));
+	}
+
+	console.log(chalk.bold.white("\n✨ Next Steps:"));
+	console.log(
+		chalk.gray(
+			"• Once configured, ChatGPT desktop, Codex CLI, and the IDE extension share this MCP server",
+		),
+	);
+	console.log(chalk.gray("• Run `codex mcp list` to verify the connection"));
 }
 
 function handleClaudeCodeAction() {
@@ -221,6 +250,7 @@ function showAllOptions() {
 
 	console.log(chalk.bold.white("MCP Clients:"));
 	console.log(chalk.cyan("  --cursor      ") + chalk.gray("Add to Cursor"));
+	console.log(chalk.cyan("  --codex       ") + chalk.gray("Add to Codex"));
 	console.log(
 		chalk.cyan("  --claude-code ") + chalk.gray("Add to Claude Code"),
 	);
@@ -242,6 +272,7 @@ function showAllOptions() {
 export const mcp = new Command("mcp")
 	.description("Add Better Auth MCP server to MCP Clients")
 	.option("--cursor", "Automatically open Cursor with the MCP configuration")
+	.option("--codex", "Add the MCP server to Codex")
 	.option("--claude-code", "Show Claude Code MCP configuration command")
 	.option("--open-code", "Show Open Code MCP configuration")
 	.option("--manual", "Show manual MCP configuration for mcp.json")

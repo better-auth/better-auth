@@ -161,9 +161,17 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				if (attempts >= allowedAttempts) {
 					// Budget spent: cancel the whole challenge so every factor must
 					// start a new sign-in, and clear the now-dead cookie.
-					await ctx.context.internalAdapter
-						.consumeVerificationValue(signedTwoFactorCookie)
-						.catch(() => {});
+					try {
+						await ctx.context.internalAdapter.consumeVerificationValue(
+							signedTwoFactorCookie,
+						);
+					} catch {
+						expireCookie(ctx, twoFactorCookie);
+						throw APIError.from("INTERNAL_SERVER_ERROR", {
+							message: "Failed to invalidate two-factor challenge",
+							code: "FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE",
+						});
+					}
 					expireCookie(ctx, twoFactorCookie);
 					throw APIError.from(
 						"BAD_REQUEST",
@@ -274,10 +282,18 @@ export async function recordTwoFactorFailure(
 		increment: { failedVerificationCount: 1 },
 	});
 	if ((updated?.failedVerificationCount ?? 0) >= maxFailedAttempts) {
-		await ctx.context.adapter.update({
+		await ctx.context.adapter.incrementOne({
 			model: twoFactorTable,
-			where: [{ field: "id", value: twoFactor.id }],
-			update: { lockedUntil: new Date(Date.now() + durationMs) },
+			where: [
+				{ field: "id", value: twoFactor.id },
+				{
+					field: "failedVerificationCount",
+					operator: "gte",
+					value: maxFailedAttempts,
+				},
+			],
+			increment: {},
+			set: { lockedUntil: new Date(Date.now() + durationMs) },
 		});
 	}
 }

@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 
 import { createFetch } from "@better-fetch/fetch";
-import { atom } from "nanostores";
+import { atom, STORE_UNMOUNT_DELAY } from "nanostores";
+import { act, createElement, Suspense } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalFocusManager } from "./focus-manager";
 import { useAuthQuery } from "./query";
+import { createAuthClient as createReactAuthClient } from "./react";
 import { getSessionAtom } from "./session-atom";
 import { createAuthClient } from "./solid";
 import { testClientPlugin } from "./test-plugin";
@@ -20,6 +23,7 @@ describe("useAuthQuery - error handling", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
 		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
 		delete (globalThis as any)[Symbol.for("better-auth:focus-manager")];
 		delete (globalThis as any)[Symbol.for("better-auth:online-manager")];
@@ -270,6 +274,35 @@ describe("useAuthQuery - error handling", () => {
 		unsubscribe();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10015#discussion_r3400409998
+	 */
+	it("should clean up the equality gate when the query atom unmounts", async () => {
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				return new Promise<Response>(() => {});
+			},
+		});
+
+		const $signal = atom(false);
+		const queryAtom = useAuthQuery<{ data: string }>($signal, "/test", $fetch, {
+			method: "GET",
+		});
+
+		const unsubscribe = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		const previousState = queryAtom.get();
+
+		unsubscribe();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		const equalState = { ...previousState };
+		queryAtom.set(equalState);
+
+		expect(queryAtom.get()).toBe(equalState);
+	});
+
 	it("should preserve stale data on 500 server error", async () => {
 		let returnServerError = false;
 
@@ -341,13 +374,16 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBe(initialData);
 	});
 
-	it("should clear loading flags when an unmounted session request is aborted", async () => {
+	it("should allow an unmounted session request to settle", async () => {
 		let fetchSignal: AbortSignal | undefined;
+		let resolveFetch: ((response: Response) => void) | undefined;
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000",
 			customFetchImpl: async (_url, init) => {
 				fetchSignal = init?.signal ?? undefined;
-				return new Promise<Response>(() => {});
+				return new Promise<Response>((resolve) => {
+					resolveFetch = resolve;
+				});
 			},
 		});
 		const { session } = getSessionAtom($fetch);
@@ -359,11 +395,372 @@ describe("useAuthQuery - error handling", () => {
 		expect(session.get().isRefetching).toBe(true);
 
 		unsubscribe();
-		await vi.advanceTimersByTimeAsync(1000);
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
 
-		expect(fetchSignal?.aborted).toBe(true);
-		expect(session.get().isPending).toBe(false);
-		expect(session.get().isRefetching).toBe(false);
+		expect(fetchSignal?.aborted).toBe(false);
+		expect(session.value.isPending).toBe(true);
+		expect(session.value.isRefetching).toBe(true);
+
+		if (!resolveFetch) throw new Error("Session fetch did not start");
+		resolveFetch(new Response(JSON.stringify({ session: null, user: null })));
+		await vi.runAllTimersAsync();
+
+		expect(session.value.isPending).toBe(false);
+		expect(session.value.isRefetching).toBe(false);
+	});
+
+	it("should abort a session request superseded by refetch", async () => {
+		const requests: Array<{
+			resolve: (response: Response) => void;
+			signal: AbortSignal | null;
+		}> = [];
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				return new Promise<Response>((resolve) => {
+					requests.push({ resolve, signal: init?.signal ?? null });
+				});
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		const refetchPromise = session.value.refetch();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(requests).toHaveLength(2);
+		expect(requests[0]?.signal?.aborted).toBe(true);
+		expect(requests[1]?.signal?.aborted).toBe(false);
+
+		for (const request of requests) {
+			request.resolve(
+				new Response(JSON.stringify({ session: null, user: null })),
+			);
+		}
+		await refetchPromise;
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10667
+	 */
+	it("should let a listener refetch supersede the current session request", async () => {
+		const requests: Array<{
+			resolve: (response: Response) => void;
+			signal: AbortSignal | null;
+		}> = [];
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) =>
+				new Promise<Response>((resolve) => {
+					requests.push({ resolve, signal: init?.signal ?? null });
+				}),
+		});
+		const { session } = getSessionAtom($fetch);
+		let refetchPromise: Promise<void> | undefined;
+		const unsubscribe = session.listen((current) => {
+			if (current.isRefetching && !refetchPromise) {
+				refetchPromise = current.refetch();
+			}
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.signal?.aborted).toBe(false);
+
+		requests[0]?.resolve(
+			new Response(JSON.stringify({ session: null, user: null })),
+		);
+		if (!refetchPromise) throw new Error("Listener refetch was not triggered");
+		await refetchPromise;
+		unsubscribe();
+	});
+
+	it("should revalidate session after a settled request is remounted", async () => {
+		let fetchCount = 0;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Response(JSON.stringify({ session: null, user: null }));
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(1);
+
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.runAllTimersAsync();
+
+		expect(fetchCount).toBe(2);
+		unsubscribeSecond();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10667
+	 */
+	it("should deduplicate the initial session request across Suspense retries", async () => {
+		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+		let suspended = true;
+		let resumeRender: (() => void) | undefined;
+		const requests: Array<{
+			resolve: (response: Response) => void;
+			signal: AbortSignal | null;
+		}> = [];
+		const client = createReactAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: (_url, init) => {
+					return new Promise<Response>((resolve) => {
+						requests.push({ resolve, signal: init?.signal ?? null });
+					});
+				},
+			},
+		});
+		const SessionWatcher = () => {
+			client.useSession();
+			if (suspended) {
+				throw new Promise<void>((resolve) => {
+					resumeRender = resolve;
+				});
+			}
+			return null;
+		};
+		const root = createRoot(document.createElement("div"));
+
+		await act(async () => {
+			root.render(
+				createElement(
+					Suspense,
+					{ fallback: null },
+					createElement(SessionWatcher),
+				),
+			);
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		});
+
+		const retry = resumeRender;
+		if (!retry) throw new Error("Suspense retry was not scheduled");
+		suspended = false;
+		await act(async () => retry());
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+
+		const observedRequests = requests.map(({ signal }) => ({
+			aborted: signal?.aborted ?? false,
+		}));
+		await act(async () => {
+			root.unmount();
+			for (const request of requests) {
+				request.resolve(
+					new Response(JSON.stringify({ session: null, user: null })),
+				);
+			}
+			await Promise.resolve();
+		});
+		expect(observedRequests).toEqual([{ aborted: false }]);
+	});
+
+	it("should not refetch a settled session request on a Suspense retry", async () => {
+		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+		let requestCount = 0;
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		let resumeRender: (() => void) | undefined;
+		let suspended = true;
+		const suspendedRender = new Promise<void>((resolve) => {
+			resumeRender = () => {
+				suspended = false;
+				resolve();
+			};
+		});
+		const client = createReactAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async () => {
+					requestCount++;
+					if (requestCount > 1) {
+						return new Response(JSON.stringify({ session: null, user: null }));
+					}
+					return new Promise<Response>((resolve) => {
+						resolveSessionRequest = resolve;
+					});
+				},
+			},
+		});
+		const SessionWatcher = () => {
+			client.useSession();
+			if (suspended) throw suspendedRender;
+			return null;
+		};
+		const root = createRoot(document.createElement("div"));
+
+		await act(async () => {
+			root.render(
+				createElement(
+					Suspense,
+					{ fallback: null },
+					createElement(SessionWatcher),
+				),
+			);
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		});
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		await act(async () =>
+			settleSessionRequest(
+				new Response(JSON.stringify({ session: null, user: null })),
+			),
+		);
+		expect(client.$store.atoms.session!.value.isPending).toBe(false);
+
+		const retrySuspendedRender = resumeRender;
+		if (!retrySuspendedRender) {
+			throw new Error("Suspense retry was not scheduled");
+		}
+		await act(async () => retrySuspendedRender());
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+
+		expect(requestCount).toBe(1);
+
+		await act(async () => root.unmount());
+	});
+
+	it("should retry a failed session request on remount", async () => {
+		let fetchCount = 0;
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				if (fetchCount > 1) {
+					return new Response(JSON.stringify({ session: null, user: null }));
+				}
+				return new Promise<Response>((resolve) => {
+					resolveSessionRequest = resolve;
+				});
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		settleSessionRequest(
+			new Response(JSON.stringify({ message: "Internal Server Error" }), {
+				status: 500,
+			}),
+		);
+		await Promise.resolve();
+
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(fetchCount).toBe(2);
+		unsubscribeSecond();
+	});
+
+	it("should retry an incomplete session refresh on remount", async () => {
+		const methods: string[] = [];
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				const method = init?.method ?? "GET";
+				methods.push(method);
+				if (methods.length === 1) {
+					return new Promise<Response>((resolve) => {
+						resolveSessionRequest = resolve;
+					});
+				}
+				if (method === "POST") throw new Error("Session refresh failed");
+				return new Response(JSON.stringify({ session: null, user: null }));
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		settleSessionRequest(
+			new Response(
+				JSON.stringify({
+					needsRefresh: true,
+					session: {
+						id: "session-1",
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+					user: { id: "user-1" },
+				}),
+			),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(session.value.data?.session.id).toBe("session-1");
+
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(methods).toEqual(["GET", "POST", "GET"]);
+		unsubscribeSecond();
+	});
+
+	it("should revalidate after the session signal changes", async () => {
+		let fetchCount = 0;
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				if (fetchCount > 1) {
+					return new Response(JSON.stringify({ session: null, user: null }));
+				}
+				return new Promise<Response>((resolve) => {
+					resolveSessionRequest = resolve;
+				});
+			},
+		});
+		const { $sessionSignal, session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		settleSessionRequest(
+			new Response(JSON.stringify({ session: null, user: null })),
+		);
+		await Promise.resolve();
+		$sessionSignal.set(!$sessionSignal.get());
+
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(fetchCount).toBe(2);
+		unsubscribeSecond();
 	});
 
 	/**

@@ -1,6 +1,8 @@
 import type { Span } from "@opentelemetry/api";
+import type { BetterAuthOptions } from "../types";
 import { getOpenTelemetryAPI } from "./api";
 import { ATTR_HTTP_RESPONSE_STATUS_CODE } from "./attributes";
+import { noopWithSpan } from "./noop";
 
 const INSTRUMENTATION_SCOPE = "better-auth";
 const INSTRUMENTATION_VERSION = import.meta.env?.BETTER_AUTH_VERSION ?? "1.0.0";
@@ -92,4 +94,13 @@ export function withSpan<T>(
 			throw err;
 		}
 	});
+}
+
+/**
+ * Selects the span runner for an auth instance.
+ */
+export function createWithSpan(options: BetterAuthOptions): typeof withSpan {
+	return options.experimental?.instrumentation?.enabled === false
+		? noopWithSpan
+		: withSpan;
 }

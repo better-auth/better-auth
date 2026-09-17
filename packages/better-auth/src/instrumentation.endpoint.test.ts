@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
 	ATTR_CONTEXT,
@@ -31,7 +31,7 @@ let provider: NodeTracerProvider;
 
 const PLUGIN_ID = "test-plugin";
 
-async function createTestInstance() {
+async function createTestInstance(options: BetterAuthOptions = {}) {
 	const otelPlugin: BetterAuthPlugin = {
 		id: PLUGIN_ID,
 		endpoints: {
@@ -64,6 +64,7 @@ async function createTestInstance() {
 			after: createAuthMiddleware(async () => {}),
 		},
 		plugins: [otelPlugin],
+		...options,
 	});
 }
 
@@ -91,6 +92,62 @@ describe("endpoints instrumentation", () => {
 
 	beforeEach(() => {
 		exporter.reset();
+	});
+
+	it("disables instrumentation per instance while preserving application spans", async () => {
+		const enabled = await createTestInstance();
+		await enabled.client.getSession();
+		await waitForSpan((span) => span.name === "GET /get-session");
+		exporter.reset();
+		const getTracer = vi.spyOn(trace, "getTracer");
+		const disabled = await createTestInstance({
+			experimental: { instrumentation: { enabled: false } },
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (data) => ({ data }),
+						after: async () => {},
+					},
+				},
+			},
+		});
+		const tracer = provider.getTracer("application");
+		await tracer.startActiveSpan("server request", async (span) => {
+			try {
+				const response = await disabled.client.signUp.email({
+					email: "disabled@example.com",
+					password: "password123456",
+					name: "Disabled tracing",
+				});
+				expect(response.error).toBeNull();
+				expect(
+					await disabled.auth.api.getSession({ headers: new Headers() }),
+				).toBeNull();
+				await disabled.auth.$context.then((ctx) =>
+					ctx.adapter.findMany({ model: "user" }),
+				);
+			} finally {
+				span.end();
+			}
+		});
+		expect(getTracer).not.toHaveBeenCalled();
+		getTracer.mockRestore();
+		await provider.forceFlush();
+		expect(exporter.getFinishedSpans().map((span) => span.name)).toEqual([
+			"server request",
+		]);
+
+		exporter.reset();
+		await Promise.all([
+			enabled.client.getSession(),
+			disabled.client.getSession(),
+		]);
+		await provider.forceFlush();
+		expect(
+			exporter
+				.getFinishedSpans()
+				.filter((span) => span.name === "GET /get-session"),
+		).toHaveLength(1);
 	});
 
 	it("emits a parent span for each endpoint", async () => {
