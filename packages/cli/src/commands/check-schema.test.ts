@@ -40,6 +40,19 @@ function useAdapter(adapter: object) {
 }
 
 describe("check-schema", () => {
+	test("rejects a cwd that does not exist", async ({ expect, runCheck }) => {
+		const cwd = fileURLToPath(new URL("missing-directory", import.meta.url));
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const exitCode = await runCheck(cwd);
+
+		expect(getAuth).not.toHaveBeenCalled();
+		expect(error).toHaveBeenCalledWith(
+			`The directory "${cwd}" does not exist.`,
+		);
+		expect(exitCode).toBe(2);
+	});
+
 	test("rejects a cwd that is not a directory", async ({
 		expect,
 		runCheck,
