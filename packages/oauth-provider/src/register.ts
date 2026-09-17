@@ -33,6 +33,7 @@ import type {
 import type { GrantType, OAuthClient } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
+import { isUniqueConstraintError } from "./utils/db-errors";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
 const DEFAULT_REGISTRATION_GRANT_TYPES = [
@@ -1127,36 +1128,6 @@ export async function registerClientMetadataDocument(
 			throw retryError;
 		}
 	}
-}
-
-function isUniqueConstraintError(error: unknown): boolean {
-	if (!error || typeof error !== "object") return false;
-	const candidate = error as {
-		code?: unknown;
-		errno?: unknown;
-		name?: unknown;
-		message?: unknown;
-	};
-	const code = String(candidate.code ?? candidate.errno ?? "");
-	if (
-		[
-			"1062",
-			"11000",
-			"23505",
-			"ER_DUP_ENTRY",
-			"P2002",
-			"SQLITE_CONSTRAINT_UNIQUE",
-		].includes(code)
-	) {
-		return true;
-	}
-	if (candidate.name === "MongoServerError" && candidate.code === 11000) {
-		return true;
-	}
-	return (
-		typeof candidate.message === "string" &&
-		/(?:duplicate|unique constraint|unique key)/i.test(candidate.message)
-	);
 }
 
 export function createOAuthClientEndpoint(
