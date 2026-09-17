@@ -107,22 +107,28 @@ export const customSession = <
 					}).catch((e) => {
 						return null;
 					});
+					/**
+					 * Forwarded before the null check, so that the inner call's
+					 * cookie cleanup (`deleteSessionCookie`) still reaches the
+					 * response when the session is missing or expired.
+					 */
+					if (session?.headers) {
+						for (const cookieStr of session.headers.getSetCookie()) {
+							const parsed = parseSetCookieHeader(cookieStr);
+							parsed.forEach((attrs, name) => {
+								ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
+							});
+						}
+						session.headers.delete("set-cookie");
+
+						session.headers.forEach((value, key) => {
+							ctx.setHeader(key, value);
+						});
+					}
 					if (!session?.response) {
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
-
-					for (const cookieStr of session.headers.getSetCookie()) {
-						const parsed = parseSetCookieHeader(cookieStr);
-						parsed.forEach((attrs, name) => {
-							ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
-						});
-					}
-					session.headers.delete("set-cookie");
-
-					session.headers.forEach((value, key) => {
-						ctx.setHeader(key, value);
-					});
 					return ctx.json(fnResult);
 				},
 			),

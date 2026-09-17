@@ -312,6 +312,63 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10567
+	 */
+	it("should expire the session cookies when the session is no longer valid", async () => {
+		const staleOptions = {
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return { user, session };
+				}),
+			],
+		} satisfies BetterAuthOptions;
+
+		const {
+			auth: staleAuth,
+			client: staleClient,
+			signInWithTestUser: signInWithStaleUser,
+			db,
+		} = await getTestInstance(staleOptions, {
+			clientOptions: {
+				plugins: [customSessionClient<{ options: typeof staleOptions }>()],
+			},
+		});
+
+		const { headers } = await signInWithStaleUser();
+		const activeSession = await staleAuth.api.getSession({ headers });
+		const sessionToken = activeSession?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+
+		// Revoke the backing session row while the client keeps its cookies.
+		await db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+
+		let setCookies: string[] = [];
+		const session = await staleClient.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					setCookies = context.response.headers.getSetCookie();
+				},
+			},
+		});
+
+		expect(session.data).toBeNull();
+
+		const parsedCookies = new Map(
+			setCookies.flatMap((cookieString) =>
+				Array.from(parseSetCookieHeader(cookieString).entries()),
+			),
+		);
+		const expiredSessionToken = parsedCookies.get("better-auth.session_token");
+		expect(expiredSessionToken).toBeDefined();
+		expect(expiredSessionToken?.value).toBe("");
+		expect(expiredSessionToken?.["max-age"]).toBe(0);
+	});
+
 	it.skipIf(globalThis.gc == null)(
 		"should not create memory leaks with multiple plugin instances",
 		async () => {
