@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { AuthContext } from "@better-auth/core";
 import {
 	createSchemaCheck,
@@ -20,9 +21,9 @@ const test = baseTest.extend("runCheck", ({}, { onCleanup }) => {
 		process.exitCode = undefined;
 		vi.mocked(getAuth).mockReset();
 	});
-	return async () => {
+	return async (cwd = process.cwd()) => {
 		await expect(
-			checkSchema.parseAsync(["--cwd", process.cwd()], { from: "user" }),
+			checkSchema.parseAsync(["--cwd", cwd], { from: "user" }),
 		).rejects.toThrow("command exited");
 		return exit.mock.calls[0]?.[0];
 	};
@@ -39,6 +40,20 @@ function useAdapter(adapter: object) {
 }
 
 describe("check-schema", () => {
+	test("rejects a cwd that is not a directory", async ({
+		expect,
+		runCheck,
+	}) => {
+		const cwd = fileURLToPath(import.meta.url);
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const exitCode = await runCheck(cwd);
+
+		expect(getAuth).not.toHaveBeenCalled();
+		expect(error).toHaveBeenCalledWith(`The path "${cwd}" is not a directory.`);
+		expect(exitCode).toBe(2);
+	});
+
 	test("passes when the configured adapter schema matches", async ({
 		expect,
 		runCheck,
