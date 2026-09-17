@@ -1,4 +1,4 @@
-import type { Awaitable } from "@better-auth/core";
+import type { Awaitable, CookieSecurity } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { ElectronSharedOptions } from "./options";
 
@@ -155,6 +155,10 @@ export interface ElectronProxyClientOptions
 	 * This option will be removed in a future minor release.
 	 */
 	cookiePrefix?: string | undefined;
+	/**
+	 * Match the server's explicit `advanced.cookieSecurity` setting.
+	 */
+	cookieSecurity?: CookieSecurity | undefined;
 }
 
 export type * from "../authenticate";

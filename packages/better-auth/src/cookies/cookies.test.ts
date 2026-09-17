@@ -1772,6 +1772,25 @@ describe("Cookie Cache Field Filtering", () => {
 });
 
 describe("Cookie Chunking", () => {
+	/**
+	 * @see https://developer.mozilla.org/en-US/docs/Web/Privacy/Privacy_sandbox/Partitioned_cookies
+	 */
+	it("counts security attributes added during serialization", () => {
+		const options = { partitioned: true, secure: false };
+		const name = "better-auth.session_data.99";
+		const maxCookieSize = 4050;
+		const overhead = serializeCookie(name, "", options).length;
+		const cookie = serializeCookie(
+			name,
+			"x".repeat(maxCookieSize - overhead),
+			options,
+		);
+
+		expect(cookie).toHaveLength(maxCookieSize);
+		expect(cookie).toContain("; Secure; Partitioned");
+		expect(options).toEqual({ partitioned: true, secure: false });
+	});
+
 	it("should chunk cookies when they exceed 4KB", async () => {
 		// Create a large string that will exceed the cookie size limit
 		const largeString = "x".repeat(2000);

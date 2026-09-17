@@ -2,15 +2,18 @@ import { randomBytes } from "node:crypto";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
+import { betterAuth } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { generateCodeChallenge } from "better-auth/oauth2";
+import { oAuthProxy } from "better-auth/plugins";
+import Database from "better-sqlite3";
 import { beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
-import { getCookie } from "../src/cookies";
+import { getCookie, getCookieSecurity } from "../src/cookies";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
 import { electronProxyClient } from "../src/proxy";
@@ -103,6 +106,100 @@ describe("Electron", () => {
 				cookiePrefix: "legacy",
 			}),
 		).toThrow("either cookieNamespace or cookiePrefix");
+	});
+
+	describe("host cookie security", () => {
+		it.each([
+			["electron-auth.electron", "none"],
+			["__Secure-electron-auth.electron", "secure"],
+			["__secure-electron-auth.electron", "secure"],
+			["__Host-electron-auth.electron", "host"],
+			["__HOST-electron-auth.electron", "host"],
+		] as const)("detects %s as %s", (name, security) => {
+			expect(getCookieSecurity(name)).toBe(security);
+		});
+
+		it("applies the host prefix to transfer and redirect cookies", async () => {
+			const hostAuth = betterAuth({
+				baseURL: "https://localhost:3000",
+				database: new Database(":memory:"),
+				emailAndPassword: { enabled: true },
+				advanced: { cookieSecurity: "host" },
+				plugins: [electron({ cookieNamespace: "electron-auth" }), oAuthProxy()],
+				trustedOrigins: ["com.example.app:/"],
+			});
+			const { runMigrations } = await getMigrations(hostAuth.options);
+			await runMigrations();
+			const hostProxyClient = createAuthClient({
+				baseURL: "https://localhost:3000",
+				fetchOptions: {
+					customFetchImpl: (url, init) =>
+						hostAuth.handler(new Request(url.toString(), init)),
+				},
+				plugins: [
+					electronProxyClient({
+						protocol: "com.example.app",
+						cookieNamespace: "electron-auth",
+						cookieSecurity: "host",
+					}),
+				],
+			});
+			const codeVerifier = "host-cookie-verifier";
+			const codeChallenge = await s256Challenge(codeVerifier);
+			let cookieNames: string[] = [];
+
+			const { error } = await hostProxyClient.signUp.email(
+				{
+					email: "host-cookie@test.com",
+					password: "password",
+					name: "Host Cookie",
+				},
+				{
+					query: {
+						client_id: "electron",
+						code_challenge: codeChallenge,
+						state: "host-state",
+					},
+					onResponse({ response }) {
+						cookieNames = [
+							...parseSetCookieHeader(
+								response.headers.get("set-cookie") ?? "",
+							).keys(),
+						];
+					},
+				},
+			);
+
+			expect(error).toBeNull();
+			expect(cookieNames).toContain("__Host-electron-auth.transfer_token");
+			expect(cookieNames).toContain("__Host-electron-auth.electron");
+			expect(cookieNames).not.toContain("electron-auth.transfer_token");
+			expect(cookieNames).not.toContain("electron-auth.electron");
+		});
+
+		it("reads only the configured redirect cookie security mode", () => {
+			const plugin = electronProxyClient({
+				protocol: "com.example.app",
+				cookieNamespace: "electron-auth",
+				cookieSecurity: "host",
+			});
+			const actions = plugin.getActions();
+			vi.stubGlobal("document", {
+				cookie:
+					"electron-auth.electron=attacker; __Secure-electron-auth.electron=attacker; __Host-electron-auth.electron=valid",
+			});
+
+			try {
+				expect(actions.electron.getAuthorizationCode()).toBe("valid");
+				vi.stubGlobal("document", {
+					cookie:
+						"electron-auth.electron=attacker; __Secure-electron-auth.electron=attacker",
+				});
+				expect(actions.electron.getAuthorizationCode()).toBeNull();
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		});
 	});
 
 	async function s256Challenge(verifier: string) {

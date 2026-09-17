@@ -664,6 +664,16 @@ electronProxyClient({
 });
 ```
 
+#### `cookieSecurity?`
+
+Security policy used to read the redirect cookie. Match the server's explicit `advanced.cookieSecurity` value.
+
+```ts title="web/auth-client.ts"
+electronProxyClient({
+  cookieSecurity: "host",
+});
+```
+
 ### Client plugin
 
 #### `signInURL`

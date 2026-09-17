@@ -1,12 +1,22 @@
+import type { CookieSecurity } from "@better-auth/core";
 import {
 	cookieNameRegex,
+	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
+	SECURE_COOKIE_PREFIX,
 	stripCookieSecurityPrefix,
 } from "better-auth/cookies";
 
 interface StoredCookie {
 	value: string;
 	expires: string | null;
+}
+
+export function getCookieSecurity(cookieName: string): CookieSecurity {
+	const name = cookieName.toLowerCase();
+	if (name.startsWith(HOST_COOKIE_PREFIX.toLowerCase())) return "host";
+	if (name.startsWith(SECURE_COOKIE_PREFIX.toLowerCase())) return "secure";
+	return "none";
 }
 
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
