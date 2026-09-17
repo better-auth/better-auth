@@ -2,6 +2,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { admin } from "../../plugins/admin/admin";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { createEmailVerificationToken } from "./email-verification";
 
 describe("sign-up with custom fields", async () => {
 	const mockFn = vi.fn();
@@ -547,6 +548,312 @@ describe("sign-up user enumeration protection", async () => {
 
 		expect(res.token).toBeNull();
 		expect(res.user.email).toBe("new-auto-signin@test.com");
+	});
+});
+
+/**
+ * Under `requireEmailVerification` an unverified row is a pending claim with
+ * no proven owner, not a real account. Re-registering the same address must
+ * replace that stale claim — otherwise a pre-registered attacker's credential
+ * survives, and the mailbox owner's verification proof (which resolves by
+ * email) lands on the attacker's account: the victim verifies, is signed into,
+ * and can never claim an account whose password they don't know.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11023
+ */
+describe("sign-up re-registration replaces unverified claims", async () => {
+	it("replaces the pending claim so the mailbox owner verifies their own credentials", async () => {
+		const sentTokens: string[] = [];
+		const { auth, client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						sentTokens.push(token);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const email = "victim-claim@test.com";
+
+		// Attacker pre-registers the victim's address.
+		await auth.api.signUpEmail({
+			body: { email, password: "attacker-password1", name: "Mallory" },
+		});
+		expect(sentTokens).toHaveLength(1);
+
+		// The victim registers the same address: the response stays synthetic,
+		// but the pending claim is replaced and a fresh verification is issued.
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+		expect(res.token).toBeNull();
+		expect(sentTokens).toHaveLength(2);
+
+		const verifyRes = await client.verifyEmail({
+			query: { token: sentTokens[1]! },
+		});
+		expect(verifyRes.data?.status).toBe(true);
+
+		// The mailbox owner's credential works; the pre-registered one is dead.
+		const victimSignIn = await auth.api.signInEmail({
+			body: { email, password: "victim-password2" },
+			asResponse: true,
+		});
+		expect(victimSignIn.status).toBe(200);
+		const attackerSignIn = await auth.api.signInEmail({
+			body: { email, password: "attacker-password1" },
+			asResponse: true,
+		});
+		expect(attackerSignIn.status).toBe(401);
+	});
+
+	it("does not replace a claim once the address is verified", async () => {
+		const sentTokens: string[] = [];
+		const { auth, client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						sentTokens.push(token);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const email = "verified-claim@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "owner-password1", name: "Owner" },
+		});
+		await client.verifyEmail({ query: { token: sentTokens[0]! } });
+
+		// Re-registering a verified address must not touch the account.
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "other-password9", name: "Other" },
+		});
+		expect(res.token).toBeNull();
+		expect(sentTokens).toHaveLength(1);
+
+		const signIn = await auth.api.signInEmail({
+			body: { email, password: "owner-password1" },
+			asResponse: true,
+		});
+		expect(signIn.status).toBe(200);
+		const wrongSignIn = await auth.api.signInEmail({
+			body: { email, password: "other-password9" },
+			asResponse: true,
+		});
+		expect(wrongSignIn.status).toBe(401);
+	});
+
+	it("rejects a verification token bound to a superseded claim", async () => {
+		const sentTokens: string[] = [];
+		const { auth, client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						sentTokens.push(token);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const email = "superseded-claim@test.com";
+
+		// Victim registers first, then the attacker re-registers before the
+		// victim verifies — superseding the victim's pending claim.
+		await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+		await auth.api.signUpEmail({
+			body: { email, password: "attacker-password1", name: "Mallory" },
+		});
+		expect(sentTokens).toHaveLength(2);
+
+		// The proof issued for the superseded claim fails loudly instead of
+		// verifying the newer claim and signing the prover into it.
+		const stale = await client.verifyEmail({
+			query: { token: sentTokens[0]! },
+		});
+		expect(stale.error?.status).toBe(401);
+
+		// The victim can still reclaim: re-register, then the proof bound to
+		// their claim verifies it.
+		await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+		const current = await client.verifyEmail({
+			query: { token: sentTokens[2]! },
+		});
+		expect(current.data?.status).toBe(true);
+		const victimSignIn = await auth.api.signInEmail({
+			body: { email, password: "victim-password2" },
+			asResponse: true,
+		});
+		expect(victimSignIn.status).toBe(200);
+		const attackerSignIn = await auth.api.signInEmail({
+			body: { email, password: "attacker-password1" },
+			asResponse: true,
+		});
+		expect(attackerSignIn.status).toBe(401);
+	});
+
+	it("does not replace claims on rows holding non-credential accounts", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const email = "social-unverified@test.com";
+
+		// An unverified row carrying a social link is a real account pending
+		// verification, not a disposable pending claim.
+		const socialUser = await ctx.internalAdapter.createUser(
+			{
+				email,
+				name: "Social User",
+				emailVerified: false,
+			},
+			{ method: "oauth" },
+		);
+		await ctx.internalAdapter.linkAccount({
+			userId: socialUser.id,
+			providerId: "github",
+			accountId: "gh-42",
+		});
+
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "new-password1", name: "New Claim" },
+		});
+		expect(res.token).toBeNull();
+
+		const accounts = await ctx.internalAdapter.findAccounts(socialUser.id);
+		expect(accounts.some((a) => a.providerId === "github")).toBe(true);
+		expect(accounts.some((a) => a.providerId === "credential")).toBe(false);
+	});
+
+	it("rejects a claim-less legacy link whose claim was replaced after issuance", async () => {
+		const sentTokens: string[] = [];
+		const { auth, client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						sentTokens.push(token);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const email = "legacy-claim-less@test.com";
+
+		// Attacker pre-registers the victim's address.
+		await auth.api.signUpEmail({
+			body: { email, password: "attacker-password1", name: "Mallory" },
+		});
+
+		// A link issued before claim binding (e.g. pre-upgrade) has no
+		// claimId. The victim then re-registers, replacing the claim —
+		// `iat` is second granularity, so force a boundary crossing.
+		const legacyToken = await createEmailVerificationToken(ctx.secret, email);
+		await new Promise((resolve) => setTimeout(resolve, 1100));
+		await auth.api.signUpEmail({
+			body: { email, password: "victim-password2", name: "Victim" },
+		});
+
+		const stale = await client.verifyEmail({
+			query: { token: legacyToken },
+		});
+		expect(stale.error?.status).toBe(401);
+
+		// The claim-bound link issued for the victim's registration still
+		// verifies normally.
+		const current = await client.verifyEmail({
+			query: { token: sentTokens[1]! },
+		});
+		expect(current.data?.status).toBe(true);
+		const victimSignIn = await auth.api.signInEmail({
+			body: { email, password: "victim-password2" },
+			asResponse: true,
+		});
+		expect(victimSignIn.status).toBe(200);
+	});
+
+	it("does not replace a pending credential claim that has an active session", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const email = "pending-with-session@test.com";
+
+		// A claim that already holds a live session is in use — not a
+		// disposable pending registration.
+		const pendingUser = await ctx.internalAdapter.createUser(
+			{ email, name: "Pending", emailVerified: false },
+			{ method: "email-password" },
+		);
+		const credential = await ctx.internalAdapter.linkAccount({
+			userId: pendingUser.id,
+			providerId: "credential",
+			accountId: pendingUser.id,
+			password: "hashed-placeholder",
+		});
+		await ctx.internalAdapter.createSession(pendingUser.id, false);
+		expect(
+			await ctx.internalAdapter.listSessions(pendingUser.id, {
+				onlyActiveSessions: true,
+			}),
+		).not.toHaveLength(0);
+
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "new-password1", name: "New Claim" },
+		});
+		expect(res.token).toBeNull();
+
+		const accounts = await ctx.internalAdapter.findAccounts(pendingUser.id);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]!.id).toBe(credential.id);
 	});
 });
 
