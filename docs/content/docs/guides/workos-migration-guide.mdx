@@ -645,18 +645,16 @@ Before getting started, let’s review which WorkOS authentication features are 
       </Tab>
 
       <Tab value="Better Auth">
-        ```ts title="app/dashboard/page.tsx"
+        ```tsx title="app/dashboard/page.tsx"
         "use client";
 
+        import { Suspense } from "react";
         import { authClient } from "@/lib/auth-client";
         import { redirect } from "next/navigation";
 
-        const DashboardPage = () => {
-          const { data, error, isPending } = authClient.useSession();
+        const Dashboard = () => {
+          const { data, error } = authClient.useSession();
 
-          if (isPending) {
-            return <div>Pending...</div>;
-          }
           if (!data || error) {
             redirect("/sign-in");
           }
@@ -667,6 +665,12 @@ Before getting started, let’s review which WorkOS authentication features are 
             </div>
           );
         };
+
+        const DashboardPage = () => (
+          <Suspense fallback={<div>Pending...</div>}>
+            <Dashboard />
+          </Suspense>
+        );
 
         export default DashboardPage;
         ```
