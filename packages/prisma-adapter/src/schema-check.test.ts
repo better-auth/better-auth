@@ -53,6 +53,45 @@ describe("findPrismaSchemaProblems", () => {
 		expect(findPrismaSchemaProblems(dataModelFor({}), {})).toEqual([]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11310
+	 */
+	describe("Prisma client model names", () => {
+		it("accepts capitalized custom model names", () => {
+			const options: BetterAuthOptions = {
+				user: { modelName: "Account" },
+				session: { modelName: "Session" },
+				account: { modelName: "AuthIdentity" },
+				verification: { modelName: "Verification" },
+			};
+
+			expect(findPrismaSchemaProblems(dataModelFor(options), options)).toEqual(
+				[],
+			);
+		});
+
+		it("preserves lower-camel plugin model names", () => {
+			const options: BetterAuthOptions = {
+				plugins: [
+					{
+						id: "oauth",
+						schema: {
+							oauthClient: {
+								fields: {
+									clientId: { type: "string" },
+								},
+							},
+						},
+					},
+				],
+			};
+
+			expect(findPrismaSchemaProblems(dataModelFor(options), options)).toEqual(
+				[],
+			);
+		});
+	});
+
 	it("reports a model the client does not expose", () => {
 		const { Account: _account, ...models } = dataModelFor({}).models;
 		expect(findPrismaSchemaProblems({ models }, {})).toEqual([
