@@ -1126,9 +1126,9 @@ async function checkForInvalidRoleName({
 }) {
 	if (role.includes(",")) {
 		ctx.context.logger.error(
-			`[Dynamic Access Control] The role name "${role}" contains a reserved character.`,
+			`[Dynamic Access Control] The role name contains a reserved character.`,
 			{
-				role,
+				role: JSON.stringify(role),
 			},
 		);
 		throw APIError.from(
