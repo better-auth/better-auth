@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Command } from "commander";
@@ -18,9 +19,18 @@ async function checkSchemaAction(input: unknown): Promise<void> {
 		})
 		.parse(input);
 	const cwd = path.resolve(options.cwd);
-	const cwdStat = await stat(cwd).catch(() => undefined);
-	if (!cwdStat) {
-		console.error(`The directory "${cwd}" does not exist.`);
+	let cwdStat: Stats;
+	try {
+		cwdStat = await stat(cwd);
+	} catch (error) {
+		const { code } = error as NodeJS.ErrnoException;
+		if (code === "ENOENT") {
+			console.error(`The directory "${cwd}" does not exist.`);
+		} else {
+			console.error(
+				`Could not access the directory "${cwd}"${code ? ` (${code}).` : "."}`,
+			);
+		}
 		process.exitCode = 2;
 		return;
 	}
