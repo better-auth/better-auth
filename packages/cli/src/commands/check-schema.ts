@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Command } from "commander";
 import * as z from "zod";
@@ -18,8 +18,14 @@ async function checkSchemaAction(input: unknown): Promise<void> {
 		})
 		.parse(input);
 	const cwd = path.resolve(options.cwd);
-	if (!existsSync(cwd)) {
+	const cwdStat = await stat(cwd).catch(() => undefined);
+	if (!cwdStat) {
 		console.error(`The directory "${cwd}" does not exist.`);
+		process.exitCode = 2;
+		return;
+	}
+	if (!cwdStat.isDirectory()) {
+		console.error(`The path "${cwd}" is not a directory.`);
 		process.exitCode = 2;
 		return;
 	}
