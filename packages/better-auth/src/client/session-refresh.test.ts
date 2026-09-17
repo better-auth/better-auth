@@ -221,6 +221,115 @@ describe("session-refresh", () => {
 		manager.cleanup();
 	});
 
+	it("should coalesce overlapping $sessionSignal bursts into a leading fetch plus one trailing fetch", async () => {
+		const sessionSignal = atom(false);
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const mockFetchSession = vi.fn(async () => {
+			await gate;
+		});
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		manager.init();
+
+		// Burst of signals while the first fetch is still in flight.
+		for (let i = 0; i < 7; i++) {
+			sessionSignal.set(!sessionSignal.get());
+		}
+
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+
+		release();
+		await vi.runAllTimersAsync();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		// One leading fetch + one trailing fetch after the burst settles.
+		expect(mockFetchSession).toHaveBeenCalledTimes(2);
+
+		manager.cleanup();
+	});
+
+	it("should not start a second fetch for signals that arrive after cleanup of an in-flight coalesce", async () => {
+		const sessionSignal = atom(false);
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const mockFetchSession = vi.fn(async () => {
+			await gate;
+		});
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		manager.init();
+		sessionSignal.set(!sessionSignal.get());
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+
+		manager.cleanup();
+		sessionSignal.set(!sessionSignal.get());
+		release();
+		await vi.runAllTimersAsync();
+
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("should not resume a stale trailing coalesce after cleanup then init again", async () => {
+		const sessionSignal = atom(false);
+		let releaseFirst!: () => void;
+		const firstGate = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		let fetchCount = 0;
+		const mockFetchSession = vi.fn(async () => {
+			fetchCount += 1;
+			if (fetchCount === 1) {
+				await firstGate;
+			}
+		});
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		manager.init();
+
+		// Leading fetch stays in-flight.
+		sessionSignal.set(!sessionSignal.get());
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+
+		// Queue a trailing refetch in the old subscription closure.
+		sessionSignal.set(!sessionSignal.get());
+
+		// Clean up and init again before the old request settles.
+		manager.cleanup();
+		manager.init();
+
+		// New lifecycle starts its own fetch.
+		sessionSignal.set(!sessionSignal.get());
+		expect(mockFetchSession).toHaveBeenCalledTimes(2);
+
+		// Stale trailing work from the prior lifecycle must not resume.
+		releaseFirst();
+		await vi.runAllTimersAsync();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(mockFetchSession).toHaveBeenCalledTimes(2);
+
+		manager.cleanup();
+	});
+
 	it("should refetch on $sessionSignal even when offline", async () => {
 		const onlineManager = getGlobalOnlineManager();
 		onlineManager.setOnline(false);
