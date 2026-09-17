@@ -61,6 +61,13 @@ export interface OIDCConfig {
 	allowIdpInitiated?: boolean | undefined;
 }
 
+export interface EncryptedOIDCConfig extends Omit<OIDCConfig, "clientSecret"> {
+	clientSecret: {
+		encrypted: true;
+		value: string;
+	};
+}
+
 interface SAMLIdentityProviderMetadataBase {
 	/**
 	 * IdP signing certificate(s). Pass a single PEM string or an array for
@@ -631,6 +638,18 @@ export interface SSOOptions {
 	 * per-provider callback URLs. Can be a path or a full URL.
 	 */
 	redirectURI?: string;
+	/**
+	 * How to store sensitive secrets such as the OIDC clientSecret.
+	 * You can choose "plain", "encrypted" (uses BETTER_AUTH_SECRET), or provide a custom encryptor.
+	 * @default "plain"
+	 */
+	storeSecretAs?:
+		| "plain"
+		| "encrypted"
+		| {
+				encrypt: (value: string) => Promise<string>;
+				decrypt: (value: string) => Promise<string>;
+		  };
 	/**
 	 * Callback to resolve private key material for private_key_jwt authentication.
 	 * Called during token exchange when a provider uses tokenEndpointAuthentication: "private_key_jwt".

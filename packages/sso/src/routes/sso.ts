@@ -43,7 +43,9 @@ import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
 	DiscoveryError,
+	decryptOIDCConfig,
 	discoverOIDCConfig,
+	encryptOIDCConfig,
 	ensureRuntimeDiscovery,
 	fetchOIDCEndpoint,
 	mapDiscoveryErrorToAPIError,
@@ -62,6 +64,7 @@ import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
+	EncryptedOIDCConfig,
 	InferSSOProvider,
 	Member,
 	OIDCConfig,
@@ -562,59 +565,76 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			const buildOIDCConfig = () => {
+			const buildOIDCConfig = async () => {
 				if (!body.oidcConfig) return null;
 
 				if (body.oidcConfig.skipDiscovery) {
-					return JSON.stringify({
-						issuer: body.issuer,
-						clientId: body.oidcConfig.clientId,
-						clientSecret: body.oidcConfig.clientSecret,
-						authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
-						tokenEndpoint: body.oidcConfig.tokenEndpoint,
-						tokenEndpointAuthentication:
-							body.oidcConfig.tokenEndpointAuthentication ||
-							"client_secret_basic",
-						privateKeyId: body.oidcConfig.privateKeyId,
-						privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
-						jwksEndpoint: body.oidcConfig.jwksEndpoint,
-						pkce: body.oidcConfig.pkce,
-						discoveryEndpoint:
-							body.oidcConfig.discoveryEndpoint ||
-							`${body.issuer}/.well-known/openid-configuration`,
-						mapping: body.oidcConfig.mapping,
-						scopes: body.oidcConfig.scopes,
-						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-						overrideUserInfo:
-							ctx.body.overrideUserInfo ||
-							options?.defaultOverrideUserInfo ||
-							false,
-					});
+					return JSON.stringify(
+						await encryptOIDCConfig(
+							{
+								issuer: body.issuer,
+								clientId: body.oidcConfig.clientId,
+								clientSecret: body.oidcConfig.clientSecret,
+								authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+								tokenEndpoint: body.oidcConfig.tokenEndpoint,
+								tokenEndpointAuthentication:
+									body.oidcConfig.tokenEndpointAuthentication ||
+									"client_secret_basic",
+								privateKeyId: body.oidcConfig.privateKeyId,
+								privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
+								jwksEndpoint: body.oidcConfig.jwksEndpoint,
+								pkce: body.oidcConfig.pkce,
+								discoveryEndpoint:
+									body.oidcConfig.discoveryEndpoint ||
+									`${body.issuer}/.well-known/openid-configuration`,
+								mapping: body.oidcConfig.mapping,
+								scopes: body.oidcConfig.scopes,
+								userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+								overrideUserInfo:
+									ctx.body.overrideUserInfo ||
+									options?.defaultOverrideUserInfo ||
+									false,
+							},
+							{
+								authSecret: ctx.context.secret,
+								ssoOptions: options,
+							},
+						),
+					);
+
 				}
 
 				if (!hydratedOIDCConfig) return null;
 
-				return JSON.stringify({
-					issuer: hydratedOIDCConfig.issuer,
-					clientId: body.oidcConfig.clientId,
-					clientSecret: body.oidcConfig.clientSecret,
-					authorizationEndpoint: hydratedOIDCConfig.authorizationEndpoint,
-					tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
-					tokenEndpointAuthentication:
-						hydratedOIDCConfig.tokenEndpointAuthentication,
-					privateKeyId: body.oidcConfig.privateKeyId,
-					privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
-					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
-					pkce: body.oidcConfig.pkce,
-					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
-					mapping: body.oidcConfig.mapping,
-					scopes: body.oidcConfig.scopes,
-					userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
-					overrideUserInfo:
-						ctx.body.overrideUserInfo ||
-						options?.defaultOverrideUserInfo ||
-						false,
-				});
+				return JSON.stringify(
+					await encryptOIDCConfig(
+						{
+							issuer: hydratedOIDCConfig.issuer,
+							clientId: body.oidcConfig.clientId,
+							clientSecret: body.oidcConfig.clientSecret,
+							authorizationEndpoint: hydratedOIDCConfig.authorizationEndpoint,
+							tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
+							tokenEndpointAuthentication:
+								hydratedOIDCConfig.tokenEndpointAuthentication,
+							privateKeyId: body.oidcConfig.privateKeyId,
+							privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
+							jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
+							pkce: body.oidcConfig.pkce,
+							discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
+							mapping: body.oidcConfig.mapping,
+							scopes: body.oidcConfig.scopes,
+							userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
+							overrideUserInfo:
+								ctx.body.overrideUserInfo ||
+								options?.defaultOverrideUserInfo ||
+								false,
+						},
+						{
+							authSecret: ctx.context.secret,
+							ssoOptions: options,
+						},
+					),
+				);
 			};
 
 			if (body.samlConfig) {
@@ -654,6 +674,43 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
+			// Build the (optionally encrypted) OIDC config, then validate on the
+			// plaintext `body` values. `encryptOIDCConfig` wraps `clientSecret`
+			// even when it is absent, so a presence check on the built config is
+			// not reliable — read `clientSecret` from `body.oidcConfig` instead.
+			const builtOidcConfig = await buildOIDCConfig();
+			if (builtOidcConfig) {
+				const { tokenEndpointAuthentication } = JSON.parse(
+					builtOidcConfig,
+				) as {
+					tokenEndpointAuthentication?: string;
+				};
+				if (
+					tokenEndpointAuthentication !== "private_key_jwt" &&
+					!body.oidcConfig?.clientSecret
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+					});
+				}
+				if (
+					tokenEndpointAuthentication === "private_key_jwt" &&
+					!options?.resolvePrivateKey &&
+					!options?.defaultSSO?.some(
+						(p: Record<string, unknown>) =>
+							p.providerId === body.providerId &&
+							"privateKey" in p &&
+							p.privateKey,
+					)
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+					});
+				}
+			}
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -664,40 +721,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					domain: body.domain,
 					domainVerified: false,
 					...additionalFields,
-					oidcConfig: (() => {
-						const config = buildOIDCConfig();
-						if (config) {
-							const parsed = JSON.parse(config) as {
-								tokenEndpointAuthentication?: string;
-								clientSecret?: string;
-							};
-							if (
-								parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
-								!parsed.clientSecret
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"clientSecret is required when using client_secret_basic or client_secret_post authentication",
-								});
-							}
-							if (
-								parsed.tokenEndpointAuthentication === "private_key_jwt" &&
-								!options?.resolvePrivateKey &&
-								!options?.defaultSSO?.some(
-									(p: Record<string, unknown>) =>
-										p.providerId === body.providerId &&
-										"privateKey" in p &&
-										p.privateKey,
-								)
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
-								});
-							}
-						}
-						return config;
-					})(),
+					oidcConfig: builtOidcConfig,
 					samlConfig: body.samlConfig
 						? JSON.stringify({
 								issuer: body.issuer,
@@ -751,14 +775,21 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					}
 				: SSOProviderResponse;
 
+			const storedOidcConfig = safeJsonParse<OIDCConfig | EncryptedOIDCConfig>(
+				provider.oidcConfig as unknown as string,
+			);
+
 			const result = {
 				...filterSSOProviderAdditionalFields(
 					provider as unknown as Record<string, unknown>,
 					options,
 				),
-				oidcConfig: safeJsonParse<OIDCConfig>(
-					provider.oidcConfig as unknown as string,
-				),
+				oidcConfig: storedOidcConfig
+					? await decryptOIDCConfig(storedOidcConfig, {
+							authSecret: ctx.context.secret,
+							ssoOptions: options,
+						})
+					: null,
 				samlConfig: safeJsonParse<SAMLConfig>(
 					provider.samlConfig as unknown as string,
 				),
@@ -851,7 +882,7 @@ const signInSSOBodySchema = z.object({
 		.optional(),
 });
 
-export const signInSSO = (options?: SSOOptions) => {
+export const signInSSO = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sign-in/sso",
 		{
@@ -971,7 +1002,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			const body = ctx.body;
 			let { email, organizationSlug, providerId, domain } = body;
 			if (
-				!options?.defaultSSO?.length &&
+				!options.defaultSSO?.length &&
 				!email &&
 				!organizationSlug &&
 				!domain &&
@@ -1002,7 +1033,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 			}
 			let provider: SSOProvider<SSOOptions> | null = null;
-			if (options?.defaultSSO?.length) {
+			if (options.defaultSSO?.length) {
 				// Find matching default SSO provider by providerId
 				const matchingDefault = providerId
 					? options.defaultSSO.find(
@@ -1037,15 +1068,20 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 			// Try to find provider in database
 			if (!provider) {
-				const parseProvider = (res: SSOProvider<SSOOptions> | null) => {
+				const parseProvider = async (res: SSOProvider<SSOOptions> | null) => {
 					if (!res) return null;
+					const parsedEncryptedOIDCConfig = safeJsonParse<EncryptedOIDCConfig>(
+						res.oidcConfig as unknown as string,
+					);
+					const decryptedOIDCConfig = parsedEncryptedOIDCConfig
+						? await decryptOIDCConfig(parsedEncryptedOIDCConfig, {
+								authSecret: ctx.context.secret,
+								ssoOptions: options,
+							})
+						: undefined;
 					return {
 						...res,
-						oidcConfig: res.oidcConfig
-							? safeJsonParse<OIDCConfig>(
-									res.oidcConfig as unknown as string,
-								) || undefined
-							: undefined,
+						oidcConfig: decryptedOIDCConfig,
 						samlConfig: res.samlConfig
 							? safeJsonParse<SAMLConfig>(
 									res.samlConfig as unknown as string,
@@ -1056,7 +1092,7 @@ export const signInSSO = (options?: SSOOptions) => {
 
 				if (providerId || orgId) {
 					// Exact match for providerId or orgId
-					provider = parseProvider(
+					provider = await parseProvider(
 						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
 							model: "ssoProvider",
 							where: [
@@ -1070,7 +1106,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				} else if (domain) {
 					// For domain lookup, support comma-separated domains
 					// First try exact match (fast path)
-					provider = parseProvider(
+					provider = await parseProvider(
 						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
 							model: "ssoProvider",
 							where: [{ field: "domain", value: domain }],
@@ -1086,7 +1122,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						const matchingProvider = allProviders.find((p) =>
 							domainMatches(domain, p.domain),
 						);
-						provider = parseProvider(matchingProvider ?? null);
+						provider = await parseProvider(matchingProvider ?? null);
 					}
 				}
 			}
@@ -1120,10 +1156,13 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 
 			if (provider.oidcConfig && body.providerType !== "saml") {
+				// `provider.oidcConfig` is already decrypted at this point: DB-sourced
+				// providers pass through `parseProvider` (which decrypts) and
+				// `defaultSSO` providers are in-memory plaintext configs.
 				let config = provider.oidcConfig;
 				try {
 					config = await ensureRuntimeDiscovery(
-						provider.oidcConfig,
+						config,
 						provider.issuer,
 						(url) => ctx.context.isTrustedOrigin(url),
 					);
@@ -1304,7 +1343,7 @@ function getOIDCErrorDescription(error: unknown, fallback: string): string {
  */
 async function handleOIDCCallback(
 	ctx: any,
-	options: SSOOptions | undefined,
+	options: SSOOptions,
 	providerId: string,
 	stateData?: Awaited<ReturnType<typeof parseState>>,
 	parsedProviderReference?: SSOProviderReference,
@@ -1359,7 +1398,7 @@ async function handleOIDCCallback(
 	}
 
 	if (
-		options?.domainVerification?.enabled &&
+		options.domainVerification?.enabled &&
 		!("domainVerified" in provider && provider.domainVerified)
 	) {
 		throw new APIError("UNAUTHORIZED", {
@@ -1372,6 +1411,11 @@ async function handleOIDCCallback(
 	if (!config) {
 		return redirectOIDCError("invalid_provider", "provider not found");
 	}
+
+	config = await decryptOIDCConfig(config, {
+		authSecret: ctx.context.secret,
+		ssoOptions: options,
+	});
 
 	try {
 		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
@@ -1961,7 +2005,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 			if (ctx.query.state === undefined && ctx.query.code) {
 				await bounceIfIdpInitiated(ctx, options, providerId);
 			}
-			return handleOIDCCallback(ctx, options, providerId);
+			return handleOIDCCallback(ctx, options ?? {}, providerId);
 		},
 	);
 };
@@ -1971,7 +2015,7 @@ export const callbackSSO = (options?: SSOOptions) => {
  * Used when `options.redirectURI` is set — the `providerId` is read from
  * the OAuth state instead of the URL path.
  */
-export const callbackSSOShared = (options?: SSOOptions) => {
+export const callbackSSOShared = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback",
 		{
