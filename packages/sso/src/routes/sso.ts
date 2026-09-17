@@ -711,6 +711,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								spMetadata: body.samlConfig.spMetadata,
 								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
 								authnRequestsSigned: body.samlConfig.authnRequestsSigned,
+								forceAuthn: body.samlConfig.forceAuthn,
 								signatureAlgorithm: body.samlConfig.signatureAlgorithm,
 								digestAlgorithm: body.samlConfig.digestAlgorithm,
 								identifierFormat: body.samlConfig.identifierFormat,
@@ -1211,10 +1212,9 @@ export const signInSSO = (options?: SSOOptions) => {
 					{ relayState },
 				);
 				const idp = createIdP(parsedSamlConfig);
-				const loginRequest = sp.createLoginRequest(
-					idp,
-					"redirect",
-				) as BindingContext & {
+				const loginRequest = sp.createLoginRequest(idp, "redirect", {
+					forceAuthn: parsedSamlConfig.forceAuthn,
+				}) as BindingContext & {
 					entityEndpoint: string;
 					type: string;
 					id: string;
