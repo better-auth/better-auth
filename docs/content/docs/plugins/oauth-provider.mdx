@@ -1115,10 +1115,10 @@ The following example uses the organization plugin to automatically redirect to 
 
 ```ts title="auth.ts"
 oauthProvider({
-  scopes: ["openid", "profile", "email", "read:organization"]
+  scopes: ["openid", "profile", "email", "read:organization"],
   postLogin: {
     page: "/select-organization", // [!code highlight]
-    shouldRedirect: async ({ session, scopes, headers }) => { // [!code highlight]
+    shouldRedirect: async ({ session, scopes, headers, isContinue }) => { // [!code highlight]
       const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
       if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
         return false;
@@ -1126,9 +1126,10 @@ oauthProvider({
       const organizations = await auth.api.listOrganizations({
         headers,
       });
-      return organizations.length > 1 || !(
-        organizations.length === 1 && organizations.at(0)?.id === session.activeOrganizationId
-      )
+      const hasActiveOrganization = organizations.some(
+        (organization) => organization.id === session.activeOrganizationId,
+      );
+      return !hasActiveOrganization || (!isContinue && organizations.length > 1);
     },
     consentReferenceId: ({ session, scopes }) => { // [!code highlight]
       if (scopes.includes("read:organization")) {
@@ -1148,7 +1149,9 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, you should call `oauth2Continue`.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`.
+
+`shouldRedirect` runs again on continuation with `isContinue: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinue: false`.
 
 ```ts title="select-organization.ts"
 import { authClient } from "@/lib/auth-client"
@@ -1156,7 +1159,7 @@ import { authClient } from "@/lib/auth-client"
 await authClient.organization.setActive({
   organizationId,
 });
-await client.oauth2.oauth2Continue({
+await authClient.oauth2.continue({
   postLogin: true,
 });
 ```
