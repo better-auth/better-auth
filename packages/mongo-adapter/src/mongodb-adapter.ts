@@ -760,6 +760,7 @@ export const mongodbAdapter = (
 							}
 
 							const session = config.client.startSession();
+							let commitAttempted = false;
 
 							try {
 								session.startTransaction();
@@ -774,10 +775,18 @@ export const mongodbAdapter = (
 
 								const result = await cb(adapter);
 
+								commitAttempted = true;
 								await session.commitTransaction();
 								return result;
 							} catch (err) {
-								await session.abortTransaction();
+								// Once commitTransaction has been called, the driver marks the
+								// session as committed even if the call itself threw, and a
+								// subsequent abortTransaction throws "Cannot call abortTransaction
+								// after calling commitTransaction" instead of the real error.
+								// @see https://github.com/better-auth/better-auth/issues/10925
+								if (!commitAttempted) {
+									await session.abortTransaction();
+								}
 								throw err;
 							} finally {
 								await session.endSession();
