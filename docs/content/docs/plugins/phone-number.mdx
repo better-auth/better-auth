@@ -309,6 +309,57 @@ A function that sends the OTP code to the user's phone number. It takes the phon
 
 The time in seconds after which the OTP code expires. Default is `300` seconds.
 
+### `storeOTP`
+
+The method used to transform the OTP before it is stored by Better Auth's verification layer, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: "hashed",
+})
+```
+
+<Callout>
+  Note: This will not affect the OTP sent to the user. It only affects the stored OTP value. The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config, so if you configure `secondaryStorage`, these verification records can live there instead of the database.
+</Callout>
+
+<Callout type="warn">
+  Pick the mode against your threat model. A phone OTP is short — six digits by default, roughly 20 bits — and `"hashed"` uses a plain SHA-256 with no salt and no secret key, so anyone holding a database dump can enumerate the entire code space offline in negligible time. Treat `"hashed"` as protection against incidental exposure such as logs, screenshots, or a casually browsed backup, not against an attacker who already has your data. Use `"encrypted"`, which keys the value to your server `secret`, when the threat model is a database compromise in which that secret is not also exposed. A longer `otpLength` raises the cost of enumeration but does not change the shape of the problem.
+</Callout>
+
+<Callout type="warn">
+  Stored OTPs do not record which mode produced them, so verification always applies whichever mode is currently configured. Changing `storeOTP` therefore invalidates any OTP issued under the previous mode. Those codes are rejected until they expire (`expiresIn`, five minutes by default) and the user simply requests a new one, so the safest time to change this option is during a deployment where a short window of failed verifications is acceptable.
+</Callout>
+
+Alternatively, you can pass a custom encryptor or hasher to control how the stored OTP value is persisted.
+
+**Custom encryptor**
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: {
+        encrypt: async (otp) => {
+            return myCustomEncryptor(otp);
+        },
+        decrypt: async (otp) => {
+            return myCustomDecryptor(otp);
+        },
+    }
+})
+```
+
+**Custom hasher**
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: {
+        hash: async (otp) => {
+            return myCustomHasher(otp);
+        },
+    }
+})
+```
+
 ### `callbackOnVerification`
 
 A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
