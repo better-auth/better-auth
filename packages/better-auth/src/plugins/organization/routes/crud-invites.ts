@@ -128,6 +128,17 @@ const shouldRequireVerifiedEmailForInvitationIdAction = ({
 	});
 };
 
+const getRenewedInvitationExpiration = (
+	invitationExpiresIn: number | undefined,
+	currentExpiration: Date,
+) => {
+	const defaultExpiration = 60 * 60 * 48;
+	const candidate = getDate(invitationExpiresIn || defaultExpiration, "sec");
+	return new Date(
+		Math.max(candidate.getTime(), currentExpiration.getTime() + 1),
+	);
+};
+
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.invitation?.additionalFields || {},
@@ -349,10 +360,15 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				email: email,
 				organizationId: organizationId,
 			});
+			const existingInvitation = alreadyInvited[0];
+			const existingInvitationExpired =
+				existingInvitation !== undefined &&
+				existingInvitation.expiresAt <= new Date();
 			if (
-				alreadyInvited.length &&
+				existingInvitation &&
 				!ctx.body.resend &&
-				!ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
+				!ctx.context.orgOptions.cancelPendingInvitationsOnReInvite &&
+				!existingInvitationExpired
 			) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -369,41 +385,31 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			// If resend is true and there's an existing invitation, reuse it
-			if (alreadyInvited.length && ctx.body.resend) {
-				const existingInvitation = alreadyInvited[0];
-
-				// Update the invitation's expiration date using the same logic as createInvitation
-				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
-				const newExpiresAt = getDate(
-					ctx.context.orgOptions.invitationExpiresIn || defaultExpiration,
-					"sec",
+			if (existingInvitation && ctx.body.resend) {
+				const newExpiresAt = getRenewedInvitationExpiration(
+					ctx.context.orgOptions.invitationExpiresIn,
+					existingInvitation.expiresAt,
 				);
-
-				await ctx.context.adapter.update({
-					model: "invitation",
-					where: [
-						{
-							field: "id",
-							value: existingInvitation!.id,
-						},
-					],
-					update: {
-						expiresAt: newExpiresAt,
-					},
-				});
-
-				const updatedInvitation = {
-					...existingInvitation,
+				const updatedInvitation = await adapter.updateInvitation({
+					invitationId: existingInvitation.id,
 					expiresAt: newExpiresAt,
-				};
+					fromStatus: "pending",
+					fromExpiresAt: existingInvitation.expiresAt,
+				});
+				if (!updatedInvitation) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+					);
+				}
 
 				if (ctx.context.orgOptions.sendInvitationEmail) {
 					await ctx.context.runInBackgroundOrAwait(
 						ctx.context.orgOptions.sendInvitationEmail(
 							{
-								id: updatedInvitation.id!,
-								role: updatedInvitation.role! as string,
-								email: updatedInvitation.email!.toLowerCase(),
+								id: updatedInvitation.id,
+								role: updatedInvitation.role,
+								email: updatedInvitation.email.toLowerCase(),
 								organization: organization,
 								inviter: {
 									...member,
@@ -416,17 +422,26 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					);
 				}
 
-				return ctx.json(updatedInvitation as unknown as InferInvitation<O>);
+				return ctx.json(updatedInvitation as InferInvitation<O>);
 			}
 
 			if (
-				alreadyInvited.length &&
-				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
+				existingInvitation &&
+				(ctx.context.orgOptions.cancelPendingInvitationsOnReInvite ||
+					existingInvitationExpired)
 			) {
-				await adapter.updateInvitation({
-					invitationId: alreadyInvited[0]!.id,
+				const canceledInvitation = await adapter.updateInvitation({
+					invitationId: existingInvitation.id,
 					status: "canceled",
+					fromStatus: "pending",
+					fromExpiresAt: existingInvitation.expiresAt,
 				});
+				if (!canceledInvitation) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+					);
+				}
 			}
 
 			const invitationLimit =
@@ -612,6 +627,125 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	);
 };
 
+const resendInvitationBodySchema = z.object({
+	invitationId: z.string().meta({
+		description: "The ID of the pending invitation to resend",
+	}),
+});
+
+export const resendInvitation = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/resend-invitation",
+		{
+			method: "POST",
+			body: resendInvitationBodySchema,
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Resend a pending organization invitation by ID",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										$ref: "#/components/schemas/Invitation",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const invitation = await adapter.findInvitationById(
+				ctx.body.invitationId,
+			);
+			if (!invitation || invitation.status !== "pending") {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
+
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: invitation.organizationId,
+			});
+			if (!member) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
+			}
+			const canResend = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: { invitation: ["create"] },
+					organizationId: invitation.organizationId,
+				},
+				ctx,
+			);
+			if (!canResend) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+				);
+			}
+
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const expiresAt = getRenewedInvitationExpiration(
+				ctx.context.orgOptions.invitationExpiresIn,
+				invitation.expiresAt,
+			);
+			const renewedInvitation = await adapter.updateInvitation({
+				invitationId: invitation.id,
+				expiresAt,
+				fromStatus: "pending",
+				fromExpiresAt: invitation.expiresAt,
+			});
+			if (!renewedInvitation) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
+
+			if (ctx.context.orgOptions.sendInvitationEmail) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.orgOptions.sendInvitationEmail(
+						{
+							id: renewedInvitation.id,
+							role: renewedInvitation.role,
+							email: renewedInvitation.email.toLowerCase(),
+							organization,
+							inviter: { ...member, user: session.user },
+							invitation: renewedInvitation as unknown as Invitation,
+						},
+						ctx.request,
+					),
+				);
+			}
+
+			return ctx.json(renewedInvitation as InferInvitation<O>);
+		},
+	);
+
 const acceptInvitationBodySchema = z.object({
 	invitationId: z.string().meta({
 		description: "The ID of the invitation to accept",
@@ -743,6 +877,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
 				fromStatus: "pending",
+				fromExpiresAt: invitation.expiresAt,
 			});
 			if (!acceptedI) {
 				// Another request already accepted this invitation.
@@ -848,6 +983,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					invitationId: ctx.body.invitationId,
 					status: "pending",
 					fromStatus: "accepted",
+					fromExpiresAt: invitation.expiresAt,
 				});
 				throw error;
 			});
@@ -966,12 +1102,20 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			const rejectedI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "rejected",
+				fromStatus: "pending",
+				fromExpiresAt: invitation.expiresAt,
 			});
+			if (!rejectedI) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
 
 			// Run afterRejectInvitation hook
 			if (options?.organizationHooks?.afterRejectInvitation) {
 				await options?.organizationHooks.afterRejectInvitation({
-					invitation: rejectedI || (invitation as unknown as Invitation),
+					invitation: rejectedI as unknown as Invitation,
 					user: session.user,
 					organization,
 				});
@@ -1026,7 +1170,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			const invitation = await adapter.findInvitationById(
 				ctx.body.invitationId,
 			);
-			if (!invitation) {
+			if (!invitation || invitation.status !== "pending") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
@@ -1083,12 +1227,20 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			const canceledI = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "canceled",
+				fromStatus: "pending",
+				fromExpiresAt: invitation.expiresAt,
 			});
+			if (!canceledI) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
 
 			// Run afterCancelInvitation hook
 			if (options?.organizationHooks?.afterCancelInvitation) {
 				await options?.organizationHooks.afterCancelInvitation({
-					invitation: (canceledI as unknown as Invitation) || invitation,
+					invitation: canceledI as unknown as Invitation,
 					cancelledBy: session.user,
 					organization,
 				});
