@@ -1140,7 +1140,7 @@ describe("internal adapter test", async () => {
 		);
 	});
 
-	it("defers secondary session deletion until commit and discards it on rollback", async () => {
+	it("evicts cached sessions inline even within a transaction", async () => {
 		const testMap = new Map<string, string>();
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
@@ -1157,19 +1157,11 @@ describe("internal adapter test", async () => {
 		);
 		const session = await testCtx.internalAdapter.createSession(user.id);
 
-		await expect(
-			runWithTransaction(testCtx.adapter, async () => {
-				await testCtx.internalAdapter.deleteUserSessions(user.id);
-				expect(testMap.has(session.token)).toBe(true);
-				throw new Error("rollback");
-			}),
-		).rejects.toThrow("rollback");
-		expect(testMap.has(session.token)).toBe(true);
-		expect(testMap.has(`active-sessions-${user.id}`)).toBe(true);
-
 		await runWithTransaction(testCtx.adapter, async () => {
 			await testCtx.internalAdapter.deleteUserSessions(user.id);
-			expect(testMap.has(session.token)).toBe(true);
+			// Eviction is inline and awaited: the cached session is gone before
+			// the surrounding transaction commits.
+			expect(testMap.has(session.token)).toBe(false);
 		});
 		expect(testMap.has(session.token)).toBe(false);
 		expect(testMap.has(`active-sessions-${user.id}`)).toBe(false);
@@ -1289,7 +1281,9 @@ describe("internal adapter test", async () => {
 				await testCtx.internalAdapter.deleteUserSessions(user.id);
 				const session = await testCtx.internalAdapter.createSession(user.id);
 
-				expect(testMap.has(previousSession.token)).toBe(true);
+				// Eviction is inline, so the previous session is already gone
+				// before the replacement is created.
+				expect(testMap.has(previousSession.token)).toBe(false);
 				expect(testMap.has(session.token)).toBe(true);
 				return session;
 			},

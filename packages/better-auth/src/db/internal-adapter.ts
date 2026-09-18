@@ -941,23 +941,32 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
-			const sessionReferences = await getActiveSessionReferences(userId);
-			if (secondaryStorage) {
-				if (!options.session?.storeSessionInDatabase) {
-					await queueCachedUserSessionDeletion(userId, sessionReferences);
-					return;
-				}
-				if (ctx.options.session?.preserveSessionInDatabase) {
-					const endedSessions = await endPreservedSessions([
-						{ field: "userId", value: userId },
-					]);
-					if (endedSessions !== null) {
-						await queueCachedUserSessionDeletion(userId, sessionReferences);
-					}
-					return;
-				}
+			if (!secondaryStorage) {
+				await deleteManyWithHooks(
+					[
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+					"session",
+					undefined,
+				);
+				return;
 			}
-			const deletedSessions = await deleteManyWithHooks(
+			const sessionReferences = await getActiveSessionReferences(userId);
+			// Evict the cached sessions first and await it: an eviction failure
+			// rejects before any database row is touched, so a retry can complete
+			// the whole revocation from a fully-intact state.
+			await deleteCachedUserSessions(userId, sessionReferences);
+			if (!options.session?.storeSessionInDatabase) {
+				return;
+			}
+			if (ctx.options.session?.preserveSessionInDatabase) {
+				await endPreservedSessions([{ field: "userId", value: userId }]);
+				return;
+			}
+			await deleteManyWithHooks(
 				[
 					{
 						field: "userId",
@@ -967,9 +976,6 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
-			if (deletedSessions !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
-			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
