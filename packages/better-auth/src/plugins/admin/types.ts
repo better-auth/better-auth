@@ -80,7 +80,7 @@ export interface AdminOptions {
 	 */
 	bannedUserMessage?:
 		| string
-		| ((user: UserWithRole) => Awaitable<string>)
+		| ((user: UserWithRole & Record<string, any>) => Awaitable<string>)
 		| undefined;
 	/**
 	 * Whether to allow impersonating other admins.
