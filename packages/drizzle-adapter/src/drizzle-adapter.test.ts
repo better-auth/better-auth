@@ -551,10 +551,11 @@ describe("drizzle-adapter", () => {
 		/**
 		 * Builds a mock db that mirrors the adapter's single-row update: a
 		 * `select().from().where().limit()` subquery picks one id, then
-		 * `update().set().where().returning()` mutates by that id. Captures the
-		 * `set` payload, the update's `where` args, and the select guard so a test
-		 * can assert the `field = field + delta` expression and that the update is
-		 * pinned to one selected id rather than the raw guard clause.
+		 * `update().set().where().returning()` mutates under the guard AND that
+		 * id. Captures the `set` payload, the update's `where` args, and the
+		 * select guard so a test can assert the `field = field + delta`
+		 * expression and that the update repeats the guard alongside the pinned
+		 * id, rather than trusting the subquery alone.
 		 */
 		function createIncrementDb(returned: unknown[]) {
 			const calls: {
