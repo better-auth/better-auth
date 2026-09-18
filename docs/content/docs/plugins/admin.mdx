@@ -852,7 +852,9 @@ admin({
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: (user) => {
-    return `You have been banned. Reason: ${user.banReason}`;
+    return user.banReason
+      ? `You have been banned. Reason: ${user.banReason}`
+      : "You have been banned.";
   },
 });
 ```
