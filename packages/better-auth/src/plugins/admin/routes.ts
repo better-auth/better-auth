@@ -168,7 +168,9 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 				},
 			);
 			return ctx.json({
-				user: parseUserOutput(ctx.context.options, updatedUser) as UserWithRole,
+				user: parseUserOutput(ctx.context.options, updatedUser, {
+					path: ctx.path,
+				}) as UserWithRole,
 			});
 		},
 	);
@@ -236,7 +238,9 @@ export const getUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
-			return parseUserOutput(ctx.context.options, user) as UserWithRole;
+			return parseUserOutput(ctx.context.options, user, {
+				path: ctx.path,
+			}) as UserWithRole;
 		},
 	);
 
@@ -466,7 +470,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				});
 			}
 			return ctx.json({
-				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
+				user: parseUserOutput(ctx.context.options, user, {
+					path: ctx.path,
+				}) as UserWithRole,
 			});
 		},
 	);
@@ -677,7 +683,9 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 			}
 
 			return ctx.json(
-				parseUserOutput(ctx.context.options, updatedUser) as UserWithRole,
+				parseUserOutput(ctx.context.options, updatedUser, {
+					path: ctx.path,
+				}) as UserWithRole,
 			);
 		},
 	);
@@ -847,7 +855,9 @@ export const listUsers = (opts: AdminOptions) =>
 				);
 				return ctx.json({
 					users: users.map((user) =>
-						parseUserOutput(ctx.context.options, user),
+						parseUserOutput(ctx.context.options, user, {
+							path: ctx.path,
+						}),
 					) as UserWithRole[],
 					total: total,
 					limit: Number(ctx.query?.limit) || undefined,
@@ -1032,7 +1042,9 @@ export const unbanUser = (opts: AdminOptions) =>
 				},
 			);
 			return ctx.json({
-				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
+				user: parseUserOutput(ctx.context.options, user, {
+					path: ctx.path,
+				}) as UserWithRole,
 			});
 		},
 	);
@@ -1158,7 +1170,9 @@ export const banUser = (opts: AdminOptions) =>
 			//revoke all sessions
 			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			return ctx.json({
-				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
+				user: parseUserOutput(ctx.context.options, user, {
+					path: ctx.path,
+				}) as UserWithRole,
 			});
 		},
 	);
@@ -1314,7 +1328,9 @@ export const impersonateUser = (opts: AdminOptions) =>
 			);
 			return ctx.json({
 				session: session,
-				user: parseUserOutput(ctx.context.options, targetUser) as UserWithRole,
+				user: parseUserOutput(ctx.context.options, targetUser, {
+					path: ctx.path,
+				}) as UserWithRole,
 			});
 		},
 	);
@@ -1390,7 +1406,9 @@ export const stopImpersonating = () =>
 			expireCookie(ctx, adminSessionCookie);
 			return ctx.json({
 				session: parseSessionOutput(ctx.context.options, adminSession.session),
-				user: parseUserOutput(ctx.context.options, adminSession.user),
+				user: parseUserOutput(ctx.context.options, adminSession.user, {
+					path: ctx.path,
+				}),
 			});
 		},
 	);
