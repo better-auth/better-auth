@@ -43,6 +43,11 @@ describe("drizzle adapter relations-v2 (pg): incrementOne under contention", () 
 		connectionString: "postgres://user:password@localhost:5432/better_auth",
 		max: CONCURRENT_CALLS,
 	});
+	// The server can drop an idle client between queries; without a handler
+	// node-postgres emits an unhandled 'error' that ends the whole run.
+	pool.on("error", (error) => {
+		console.error("idle client error", error);
+	});
 	const adapter = drizzleAdapter(drizzle({ client: pool }), {
 		provider: "pg",
 		schema: { counters },
