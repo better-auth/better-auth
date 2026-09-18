@@ -1074,10 +1074,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.from(schemaModel)
 						.where(...clause)
 						.limit(1);
+					// The guard is repeated on the UPDATE itself: PostgreSQL re-checks
+					// an UPDATE's own WHERE after waiting on a concurrent writer, but not
+					// an uncorrelated subquery's, so a guard that lives only in
+					// `targetIds` is never re-evaluated (#10557). See the same code in
+					// ../drizzle-adapter.ts.
 					const updated = await db
 						.update(schemaModel)
 						.set(assignments)
-						.where(inArray(idColumn, targetIds))
+						.where(and(...clause, inArray(idColumn, targetIds)))
 						.returning();
 					return (updated[0] as any) ?? null;
 				},
