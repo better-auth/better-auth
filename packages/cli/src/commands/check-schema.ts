@@ -80,7 +80,8 @@ async function checkSchemaAction(input: unknown): Promise<void> {
 		if (
 			error instanceof Error &&
 			"code" in error &&
-			error.code === "SCHEMA_MISMATCH"
+			(error.code === "SCHEMA_MISMATCH" ||
+				error.code === "SCHEMA_MODEL_NAME_CONFLICT")
 		) {
 			console.error(error.message);
 			process.exitCode = 1;

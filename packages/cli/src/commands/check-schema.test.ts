@@ -127,6 +127,28 @@ describe("check-schema", () => {
 		expect(exitCode).toBe(1);
 	});
 
+	test("fails on an ambiguous model name", async ({ expect, runCheck }) => {
+		const adapter = { id: "prisma" };
+		const message =
+			'The modelName "account" configured for "user" conflicts with the existing "account" model. Choose a unique modelName.';
+		const conflict = Object.assign(new Error(message), {
+			code: "SCHEMA_MODEL_NAME_CONFLICT",
+		});
+		registerSchemaCheck(
+			adapter,
+			createSchemaCheck(() => {
+				throw conflict;
+			}, "prisma"),
+		);
+		useAdapter(adapter);
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const exitCode = await runCheck();
+
+		expect(error).toHaveBeenCalledWith(conflict.message);
+		expect(exitCode).toBe(1);
+	});
+
 	test("fails rather than passing an unchecked adapter", async ({
 		expect,
 		runCheck,
