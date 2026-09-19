@@ -849,6 +849,55 @@ describe("secondary storage - deleteUserSessions is fail-closed", () => {
 			).toHaveLength(0);
 		});
 
+		it("rejects on a partial eviction failure and completes on retry", async () => {
+			const store = new Map<string, string>();
+			let deleteCalls = 0;
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(
+					store,
+					() => ++deleteCalls === 2,
+				),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Partial Evict User", email: "partial-evict@test.com" },
+				{ method: "test" },
+			);
+			const firstSession = await internalAdapter.createSession(user.id);
+			const secondSession = await internalAdapter.createSession(user.id);
+			const activeSessionsKey = `active-sessions-${user.id}`;
+
+			// The second cached-token eviction fails: the first key is already
+			// gone, the second is still cached, and the active-session index still
+			// lists both, but no database row has been touched.
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+			expect(store.has(firstSession.token)).not.toBe(
+				store.has(secondSession.token),
+			);
+			expect(store.has(activeSessionsKey)).toBe(true);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(2);
+
+			await internalAdapter.deleteUserSessions(user.id);
+			expect(store.has(firstSession.token)).toBe(false);
+			expect(store.has(secondSession.token)).toBe(false);
+			expect(store.has(activeSessionsKey)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+
 		it("still rejects when the database deletion fails after a successful eviction", async () => {
 			const store = new Map<string, string>();
 			let failDbDelete = true;

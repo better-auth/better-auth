@@ -408,16 +408,25 @@ export const createInternalAdapter = (
 			// the whole deletion from a fully-intact state.
 			await deleteCachedUserSessions(userId, sessionReferences);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-					"session",
-					undefined,
+				const sessionTokens = sessionReferences.map(
+					(reference) => reference.token,
 				);
+				// Delete only the captured revocation set from the database so a
+				// session created during the cache-first await keeps both its cache
+				// entry and its row, instead of a cached session outliving the
+				// database record it referred to. When the cache snapshot is empty,
+				// fall back to the user-wide sweep so database-only sessions are
+				// still cleaned up.
+				const where: Where[] = sessionTokens.length
+					? [
+							{
+								field: "token",
+								value: sessionTokens,
+								operator: "in",
+							},
+						]
+					: [{ field: "userId", value: userId }];
+				await deleteManyWithHooks(where, "session", undefined);
 			}
 			await deleteManyWithHooks(
 				[
@@ -940,20 +949,27 @@ export const createInternalAdapter = (
 			if (!options.session?.storeSessionInDatabase) {
 				return;
 			}
+			const sessionTokens = sessionReferences.map(
+				(reference) => reference.token,
+			);
+			// Match the database work to the captured revocation set only, so a
+			// session created during the cache-first await keeps both its cache
+			// entry and its row. A database-only session (one absent from the cache
+			// snapshot) is swept user-wide as a fallback.
+			const sessionWhere: Where[] = sessionTokens.length
+				? [
+						{
+							field: "token",
+							value: sessionTokens,
+							operator: "in",
+						},
+					]
+				: [{ field: "userId", value: userId }];
 			if (ctx.options.session?.preserveSessionInDatabase) {
-				await endPreservedSessions([{ field: "userId", value: userId }]);
+				await endPreservedSessions(sessionWhere);
 				return;
 			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"session",
-				undefined,
-			);
+			await deleteManyWithHooks(sessionWhere, "session", undefined);
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
