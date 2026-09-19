@@ -502,6 +502,32 @@ describe("github provider", () => {
 	};
 
 	/**
+	 * Matches the authenticated `GET /user` response. These fields are omitted
+	 * when GitHub returns the public profile shape instead.
+	 */
+	const authenticatedOctocatProfile = {
+		...octocatProfile,
+		gravatar_id: null,
+		name: null,
+		company: null,
+		blog: null,
+		location: null,
+		email: "octocat@github.com",
+		private_gists: 81,
+		total_private_repos: 100,
+		owned_private_repos: 100,
+		disk_usage: 10_000,
+		collaborators: 8,
+		two_factor_authentication: true,
+		plan: {
+			name: "Medium",
+			space: 400,
+			private_repos: 20,
+			collaborators: 0,
+		},
+	};
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11040
 	 */
 	it("accepts a real GitHub API user response as GithubProfile", () => {
@@ -512,16 +538,26 @@ describe("github provider", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11040
 	 */
+	it("accepts an authenticated GitHub API user response as GithubProfile", () => {
+		const profile = authenticatedOctocatProfile satisfies GithubProfile;
+		expect(profile.plan?.private_repos).toBe(20);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11040
+	 */
 	it("accepts a custom getUserInfo that returns the raw API response", () => {
 		const provider = github({
 			...credentials,
 			getUserInfo: async () => ({
 				user: {
-					name: octocatProfile.name ?? octocatProfile.login,
-					email: octocatProfile.email,
+					name:
+						authenticatedOctocatProfile.name ??
+						authenticatedOctocatProfile.login,
+					email: authenticatedOctocatProfile.email,
 					emailVerified: false,
 				},
-				data: octocatProfile,
+				data: authenticatedOctocatProfile,
 			}),
 		});
 		expect(provider.id).toBe("github");
