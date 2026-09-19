@@ -2551,7 +2551,10 @@ describe("stripe subscription", () => {
 		expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
 	});
 
-	test("should schedule plan change at period end when scheduleAtPeriodEnd is true", async ({
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11336
+	 */
+	test("should reset the billing cycle anchor for a scheduled plan change", async ({
 		stripeMock,
 		memory,
 		stripeOptions,
@@ -2638,11 +2641,13 @@ describe("stripe subscription", () => {
 			expect.objectContaining({
 				metadata: { source: "@better-auth/stripe" },
 				end_behavior: "release",
-				phases: expect.arrayContaining([
+				phases: [
+					expect.anything(),
 					expect.objectContaining({
+						billing_cycle_anchor: "phase_start",
 						proration_behavior: "none",
 					}),
-				]),
+				],
 			}),
 		);
 		expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalled();

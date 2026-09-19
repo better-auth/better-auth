@@ -861,6 +861,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								{
 									items: newPhaseItems,
 									start_date: currentPhase.end_date,
+									billing_cycle_anchor: "phase_start",
 									proration_behavior: "none",
 								},
 							],
