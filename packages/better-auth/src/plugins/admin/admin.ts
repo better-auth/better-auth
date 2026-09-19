@@ -95,7 +95,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 									}
 									const user = (await ctx.context.internalAdapter.findUserById(
 										session.userId,
-									)) as UserWithRole | null;
+									)) as (UserWithRole & Record<string, unknown>) | null;
 
 									if (user?.banned) {
 										if (
@@ -113,8 +113,14 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											return;
 										}
 
+										const bannedUserMessage = opts.bannedUserMessage;
+										const message =
+											typeof bannedUserMessage === "function"
+												? await bannedUserMessage(user)
+												: bannedUserMessage;
+
 										throw APIError.from("FORBIDDEN", {
-											message: opts.bannedUserMessage,
+											message,
 											code: "BANNED_USER",
 										});
 									}
