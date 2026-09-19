@@ -589,6 +589,11 @@ export const auth = betterAuth({
 });
 ```
 
+A `modelName` cannot reuse another Better Auth model's identifier. For example,
+don't set `user.modelName` to `account`, even if
+`account.modelName` is customized, because Better Auth still uses `account`
+internally to resolve account fields and relations.
+
 <Callout>
   Type inference in your code will still use the original field names (e.g.,
   `user.name`, not `user.full_name`).
