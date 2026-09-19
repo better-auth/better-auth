@@ -569,6 +569,19 @@ const accountSelectionSchema = z.union([
 	}),
 ]);
 
+const accountSelectionQuerySchema = z.union([
+	z.strictObject({
+		accountId: z.string(),
+		userId: z.string().optional(),
+	}),
+	z.strictObject({
+		useAccountCookie: z
+			.union([z.literal(true), z.literal("true")])
+			.transform(() => true),
+		userId: z.string().optional(),
+	}),
+]);
+
 type AccountSelection = { accountId: string } | { useAccountCookie: true };
 
 function matchesAccountSelection(
@@ -1010,7 +1023,7 @@ export const accountInfo = createAuthEndpoint(
 				},
 			},
 		},
-		query: accountSelectionSchema,
+		query: accountSelectionQuerySchema,
 	},
 	async (ctx) => {
 		const { userId } = ctx.query;
