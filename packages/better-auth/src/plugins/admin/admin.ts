@@ -95,7 +95,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 									}
 									const user = (await ctx.context.internalAdapter.findUserById(
 										session.userId,
-									)) as UserWithRole | null;
+									)) as (UserWithRole & Record<string, unknown>) | null;
 
 									if (user?.banned) {
 										if (

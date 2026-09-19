@@ -81,7 +81,7 @@ describe("Admin plugin", async () => {
 			trustedOrigins: ["https://frontend.example.com"],
 			plugins: [
 				admin({
-					bannedUserMessage: (user) =>
+					bannedUserMessage: async (user) =>
 						user.banReason
 							? `Banned: ${user.banReason}`
 							: "Custom banned user message",
@@ -667,7 +667,7 @@ describe("Admin plugin", async () => {
 		);
 	});
 
-	it("should change banned user message", async () => {
+	it("should resolve async banned user message", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
 			password: "test",
