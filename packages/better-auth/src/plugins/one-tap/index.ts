@@ -83,7 +83,7 @@ async function createOneTapNonce(ctx: GenericEndpointContext) {
 		nonceCookie.attributes,
 	);
 
-	return nonce;
+	return { nonce, expiresIn: ONE_TAP_NONCE_TTL_SECONDS };
 }
 
 const oneTapCallbackBodySchema = z.object({
@@ -127,8 +127,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					},
 				},
 				async (ctx) => {
-					const nonce = await createOneTapNonce(ctx);
-					return ctx.json({ nonce });
+					const { nonce, expiresIn } = await createOneTapNonce(ctx);
+					return ctx.json({ nonce, expiresIn });
 				},
 			),
 			oneTapCallback: createAuthEndpoint(

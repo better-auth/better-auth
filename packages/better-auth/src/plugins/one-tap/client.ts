@@ -185,6 +185,28 @@ export interface GoogleOneTapActionOptions
 
 let isRequestInProgress = false;
 
+type OneTapNonceAttempt = {
+	nonce: string;
+	expiresIn: number;
+};
+
+const buttonNonceRefreshTimers = new WeakMap<
+	HTMLElement,
+	ReturnType<typeof setTimeout>
+>();
+
+function clearButtonNonceRefreshTimer(container: HTMLElement): void {
+	const timer = buttonNonceRefreshTimers.get(container);
+	if (timer !== undefined) {
+		clearTimeout(timer);
+		buttonNonceRefreshTimers.delete(container);
+	}
+}
+
+function getButtonNonceRefreshDelayMs(expiresIn: number): number {
+	return Math.max(0, Math.floor(expiresIn * 900));
+}
+
 function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
 }
@@ -246,7 +268,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					const { nonce: _nonce, ...additionalOptions } =
 						options.additionalOptions ?? {};
 
-					const getServerNonce = async () => {
+					const getServerNonce = async (): Promise<OneTapNonceAttempt> => {
 						const nonceFetchOptions = {
 							...opts?.fetchOptions,
 							...fetchOptions,
@@ -258,18 +280,27 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							method: "POST",
 							throw: false,
 						});
-						const nonce = (response.data as { nonce?: unknown } | null)?.nonce;
-						if (response.error || typeof nonce !== "string") {
+						const data = response.data as {
+							nonce?: unknown;
+							expiresIn?: unknown;
+						} | null;
+						const nonce = data?.nonce;
+						const expiresIn = data?.expiresIn;
+						if (
+							response.error ||
+							typeof nonce !== "string" ||
+							typeof expiresIn !== "number" ||
+							!Number.isFinite(expiresIn) ||
+							expiresIn <= 0
+						) {
 							throw new Error("Failed to create a Google One Tap nonce.");
 						}
-						return nonce;
+						return { nonce, expiresIn };
 					};
 
 					// Button mode: render a button instead of showing the prompt
 					if (opts?.button) {
-						let nonce: string;
 						try {
-							nonce = await getServerNonce();
 							await loadGoogleScript();
 						} catch (error) {
 							console.error("Error initializing Google One Tap:", error);
@@ -288,6 +319,12 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							);
 							return;
 						}
+
+						clearButtonNonceRefreshTimer(container);
+						const buttonConfig = opts.button.config ?? {
+							type: "icon",
+						};
+						let isButtonRequestInProgress = false;
 
 						async function callback(idToken: string) {
 							const res = await $fetch("/one-tap/callback", {
@@ -318,31 +355,85 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						const contextValue = context ?? options.context ?? "signin";
 
 						const useFedCM = options.promptOptions?.fedCM !== false;
-						window.google?.accounts.id.initialize({
-							client_id: options.clientId,
-							callback: async (response: { credential: string }) => {
-								try {
-									await callback(response.credential);
-								} catch (error) {
-									console.error("Error during button callback:", error);
-								}
-							},
-							auto_select: autoSelect,
-							cancel_on_tap_outside: cancelOnTapOutside,
-							context: contextValue,
-							ux_mode: opts?.uxMode || "popup",
-							itp_support: true,
-							use_fedcm_for_prompt: useFedCM,
-							...additionalOptions,
-							nonce,
-						});
+						const renderButton = (attempt: OneTapNonceAttempt) => {
+							const googleIdentity = window.google?.accounts.id;
+							if (!googleIdentity) {
+								throw new Error("Google One Tap is not available.");
+							}
 
-						window.google?.accounts.id.renderButton(
-							container,
-							opts.button.config ?? {
-								type: "icon",
-							},
-						);
+							googleIdentity.initialize({
+								client_id: options.clientId,
+								callback: async (response: { credential: string }) => {
+									if (isButtonRequestInProgress) {
+										return;
+									}
+
+									isButtonRequestInProgress = true;
+									clearButtonNonceRefreshTimer(container);
+									try {
+										await callback(response.credential);
+									} catch (error) {
+										console.error("Error during button callback:", error);
+									} finally {
+										isButtonRequestInProgress = false;
+										try {
+											await refreshButton();
+										} catch (error) {
+											console.error(
+												"Error refreshing Google One Tap button:",
+												error,
+											);
+										}
+									}
+								},
+								auto_select: autoSelect,
+								cancel_on_tap_outside: cancelOnTapOutside,
+								context: contextValue,
+								ux_mode: opts?.uxMode || "popup",
+								itp_support: true,
+								use_fedcm_for_prompt: useFedCM,
+								...additionalOptions,
+								nonce: attempt.nonce,
+							});
+
+							container.replaceChildren();
+							googleIdentity.renderButton(container, buttonConfig);
+
+							clearButtonNonceRefreshTimer(container);
+							const refreshTimer = setTimeout(() => {
+								buttonNonceRefreshTimers.delete(container);
+								if (
+									isButtonRequestInProgress ||
+									container.isConnected === false
+								) {
+									return;
+								}
+								void refreshButton().catch((error) => {
+									console.error(
+										"Error refreshing Google One Tap button:",
+										error,
+									);
+								});
+							}, getButtonNonceRefreshDelayMs(attempt.expiresIn));
+							buttonNonceRefreshTimers.set(container, refreshTimer);
+						};
+
+						async function refreshButton() {
+							if (container.isConnected === false) {
+								return;
+							}
+							const attempt = await getServerNonce();
+							if (container.isConnected === false) {
+								return;
+							}
+							renderButton(attempt);
+						}
+
+						try {
+							await refreshButton();
+						} catch (error) {
+							console.error("Error initializing Google One Tap:", error);
+						}
 
 						return;
 					}
@@ -377,7 +468,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					isRequestInProgress = true;
 
 					try {
-						const nonce = await getServerNonce();
+						const { nonce } = await getServerNonce();
 						await loadGoogleScript();
 						await new Promise<void>((resolve, reject) => {
 							let isResolved = false;

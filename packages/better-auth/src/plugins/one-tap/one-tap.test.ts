@@ -45,21 +45,29 @@ const ONE_TAP_NONCE_COOKIE = "better-auth.one_tap_nonce";
 
 async function issueOneTapNonce($fetch: BetterFetch) {
 	const headers = new Headers();
-	const response = await $fetch<{ nonce: string }>("/one-tap/nonce", {
-		method: "POST",
-		onSuccess(context) {
-			const cookies = parseSetCookieHeader(
-				context.response.headers.get("set-cookie") || "",
-			);
-			const nonceCookie = cookies.get(ONE_TAP_NONCE_COOKIE);
-			if (!nonceCookie) {
-				throw new Error("One Tap nonce cookie was not set");
-			}
-			headers.set("cookie", `${ONE_TAP_NONCE_COOKIE}=${nonceCookie.value}`);
-			headers.set("origin", "http://localhost:3000");
+	const response = await $fetch<{ nonce: string; expiresIn: number }>(
+		"/one-tap/nonce",
+		{
+			method: "POST",
+			onSuccess(context) {
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				const nonceCookie = cookies.get(ONE_TAP_NONCE_COOKIE);
+				if (!nonceCookie) {
+					throw new Error("One Tap nonce cookie was not set");
+				}
+				headers.set("cookie", `${ONE_TAP_NONCE_COOKIE}=${nonceCookie.value}`);
+				headers.set("origin", "http://localhost:3000");
+			},
 		},
-	});
-	if (response.error || !response.data?.nonce) {
+	);
+	if (
+		response.error ||
+		!response.data?.nonce ||
+		typeof response.data.expiresIn !== "number" ||
+		response.data.expiresIn <= 0
+	) {
 		throw new Error("Failed to issue a One Tap nonce");
 	}
 	(verifiedPayload as Record<string, unknown>).nonce = response.data.nonce;
@@ -818,19 +826,32 @@ describe("oneTapClient types", () => {
  * @see https://github.com/better-auth/better-auth/issues/10926
  */
 describe("oneTapClient nonce initialization", () => {
-	it("uses the server-issued nonce instead of caller-provided values", async () => {
+	it("uses the server-issued nonce instead of caller-provided values and refreshes button attempts", async () => {
 		type GoogleInitializeConfig = {
 			nonce?: string | undefined;
 			callback: (response: { credential: string }) => Promise<void>;
 		};
 		const initialize = vi.fn((_config: GoogleInitializeConfig) => {});
 		const renderButton = vi.fn();
+		const replaceChildren = vi.fn();
+		const nonces = [
+			{ nonce: "server-issued-nonce", expiresIn: 60 },
+			{ nonce: "refreshed-server-issued-nonce", expiresIn: 60 },
+		];
 		const fetchMock = vi.fn(async (path: string) => {
 			if (path === "/one-tap/nonce") {
-				return { data: { nonce: "server-issued-nonce" }, error: null };
+				const nonce = nonces.shift();
+				if (!nonce) {
+					throw new Error("Unexpected One Tap nonce request");
+				}
+				return { data: nonce, error: null };
 			}
 			return { data: {}, error: null };
 		});
+		const container = {
+			replaceChildren,
+			isConnected: true,
+		} as unknown as HTMLElement;
 		vi.stubGlobal("window", {
 			document: {},
 			googleScriptInitialized: true,
@@ -854,7 +875,7 @@ describe("oneTapClient nonce initialization", () => {
 			);
 			await actions.oneTap({
 				nonce: "caller-provided-nonce",
-				button: { container: {} as HTMLElement },
+				button: { container },
 			});
 
 			expect(fetchMock).toHaveBeenNthCalledWith(
@@ -879,7 +900,84 @@ describe("oneTapClient nonce initialization", () => {
 					},
 				}),
 			);
+			expect(fetchMock).toHaveBeenNthCalledWith(
+				3,
+				"/one-tap/nonce",
+				expect.objectContaining({ method: "POST" }),
+			);
+			expect(initialize).toHaveBeenCalledTimes(2);
+			expect(initialize.mock.calls[1]?.[0]?.nonce).toBe(
+				"refreshed-server-issued-nonce",
+			);
+			expect(renderButton).toHaveBeenCalledTimes(2);
+			expect(replaceChildren).toHaveBeenCalledTimes(2);
 		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("refreshes a rendered button nonce when its attempt expires", async () => {
+		type GoogleInitializeConfig = {
+			nonce?: string | undefined;
+			callback: (response: { credential: string }) => Promise<void>;
+		};
+		vi.useFakeTimers();
+		const initialize = vi.fn((_config: GoogleInitializeConfig) => {});
+		const renderButton = vi.fn();
+		const replaceChildren = vi.fn();
+		const nonces = [
+			{ nonce: "first-server-issued-nonce", expiresIn: 1 },
+			{ nonce: "second-server-issued-nonce", expiresIn: 1 },
+		];
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/one-tap/nonce") {
+				const nonce = nonces.shift();
+				if (!nonce) {
+					throw new Error("Unexpected One Tap nonce request");
+				}
+				return { data: nonce, error: null };
+			}
+			return { data: {}, error: null };
+		});
+		const container = {
+			replaceChildren,
+			isConnected: true,
+		} as unknown as HTMLElement;
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			location: { href: "" },
+			google: {
+				accounts: {
+					id: { initialize, renderButton },
+				},
+			},
+		});
+
+		try {
+			const plugin = oneTapClient({ clientId: "test-client" });
+			const actions = plugin.getActions(
+				fetchMock as unknown as BetterFetch,
+				{} as ClientStore,
+				undefined,
+			);
+			await actions.oneTap({ button: { container } });
+
+			await vi.advanceTimersByTimeAsync(900);
+
+			expect(fetchMock).toHaveBeenNthCalledWith(
+				2,
+				"/one-tap/nonce",
+				expect.objectContaining({ method: "POST" }),
+			);
+			expect(initialize).toHaveBeenCalledTimes(2);
+			expect(initialize.mock.calls[1]?.[0]?.nonce).toBe(
+				"second-server-issued-nonce",
+			);
+			expect(renderButton).toHaveBeenCalledTimes(2);
+			expect(replaceChildren).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
 			vi.unstubAllGlobals();
 		}
 	});
@@ -900,10 +998,9 @@ describe("one-tap nonce verification", async () => {
 		enabled: true,
 	};
 
-	it("rejects a token whose expected nonce is supplied only in the callback body", async () => {
+	it("rejects a callback that has no server-issued nonce cookie even when the body carries a nonce", async () => {
 		verifiedPayload.email = "one-tap-body-nonce@example.com";
 		verifiedPayload.sub = "one-tap-body-nonce-sub";
-		(verifiedPayload as Record<string, unknown>).nonce = "captured-token-nonce";
 
 		const { client } = await getTestInstance({
 			socialProviders: { google: googleProvider },
