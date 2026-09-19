@@ -180,29 +180,6 @@ export const createInternalAdapter = (
 		await secondaryStorage.delete(activeSessionsKey);
 	}
 
-	async function queueCachedUserSessionDeletion(
-		userId: string,
-		sessionReferences?: readonly ActiveSessionReference[],
-	) {
-		if (!secondaryStorage) return;
-
-		// Callers may capture the revocation set before destructive work because a
-		// replacement session created by a later hook must remain active.
-		const references =
-			sessionReferences ?? (await getActiveSessionReferences(userId));
-		await queueAfterTransactionHook(
-			() => deleteCachedUserSessions(userId, references),
-			{
-				onError(error) {
-					logger.error(
-						"Failed to delete committed user sessions from secondary storage",
-						error,
-					);
-				},
-			},
-		);
-	}
-
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -426,6 +403,10 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
+			// Evict the cached sessions first and await it: an eviction failure
+			// rejects before any database row is touched, so a retry can complete
+			// the whole deletion from a fully-intact state.
+			await deleteCachedUserSessions(userId, sessionReferences);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -449,7 +430,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 
-			const deletedUser = await deleteWithHooks(
+			await deleteWithHooks(
 				[
 					{
 						field: "id",
@@ -459,9 +440,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			if (deletedUser !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
-			}
 		},
 		createSession: async (
 			userId: string,
