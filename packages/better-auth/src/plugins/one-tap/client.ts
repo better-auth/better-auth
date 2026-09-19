@@ -159,6 +159,10 @@ export interface GoogleOneTapActionOptions
 	 * This lets you render an alternative UI (e.g. a Google Sign-In button) to restart the process.
 	 */
 	onPromptNotification?: ((notification?: any | undefined) => void) | undefined;
+	/**
+	 * @deprecated Better Auth generates a server-bound nonce for each One Tap
+	 * attempt. This value is ignored and should be removed.
+	 */
 	nonce?: string | undefined;
 	/**
 	 * Button mode configuration. When provided, renders a "Sign In with Google" button
@@ -239,9 +243,38 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						return;
 					}
 
+					const { nonce: _nonce, ...additionalOptions } =
+						options.additionalOptions ?? {};
+
+					const getServerNonce = async () => {
+						const nonceFetchOptions = {
+							...opts?.fetchOptions,
+							...fetchOptions,
+							onSuccess: undefined,
+							onError: undefined,
+						};
+						const response = await $fetch("/one-tap/nonce", {
+							...nonceFetchOptions,
+							method: "POST",
+							throw: false,
+						});
+						const nonce = (response.data as { nonce?: unknown } | null)?.nonce;
+						if (response.error || typeof nonce !== "string") {
+							throw new Error("Failed to create a Google One Tap nonce.");
+						}
+						return nonce;
+					};
+
 					// Button mode: render a button instead of showing the prompt
 					if (opts?.button) {
-						await loadGoogleScript();
+						let nonce: string;
+						try {
+							nonce = await getServerNonce();
+							await loadGoogleScript();
+						} catch (error) {
+							console.error("Error initializing Google One Tap:", error);
+							return;
+						}
 
 						const container =
 							typeof opts.button.container === "string"
@@ -262,7 +295,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								body: {
 									idToken,
 									callbackURL: opts?.callbackURL,
-									nonce: opts?.nonce,
 								},
 								...opts?.fetchOptions,
 								...fetchOptions,
@@ -299,10 +331,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							cancel_on_tap_outside: cancelOnTapOutside,
 							context: contextValue,
 							ux_mode: opts?.uxMode || "popup",
-							nonce: opts?.nonce,
 							itp_support: true,
 							use_fedcm_for_prompt: useFedCM,
-							...options.additionalOptions,
+							...additionalOptions,
+							nonce,
 						});
 
 						window.google?.accounts.id.renderButton(
@@ -321,7 +353,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							body: {
 								idToken,
 								callbackURL: opts?.callbackURL,
-								nonce: opts?.nonce,
 							},
 							...opts?.fetchOptions,
 							...fetchOptions,
@@ -346,6 +377,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					isRequestInProgress = true;
 
 					try {
+						const nonce = await getServerNonce();
 						await loadGoogleScript();
 						await new Promise<void>((resolve, reject) => {
 							let isResolved = false;
@@ -369,13 +401,13 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								cancel_on_tap_outside: cancelOnTapOutside,
 								context: contextValue,
 								ux_mode: opts?.uxMode || "popup",
-								nonce: opts?.nonce,
 								/**
 								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 								 */
 								itp_support: true,
 								use_fedcm_for_prompt: useFedCM,
-								...options.additionalOptions,
+								...additionalOptions,
+								nonce,
 							});
 
 							const handlePrompt = (attempt: number) => {

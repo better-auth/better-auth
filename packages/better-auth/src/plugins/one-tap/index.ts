@@ -1,4 +1,7 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
@@ -8,7 +11,8 @@ import {
 } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { expireCookie, setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
 import { parseUserOutput } from "../../db/schema";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -39,6 +43,49 @@ export interface OneTapOptions {
 	clientId?: string | undefined;
 }
 
+const ONE_TAP_NONCE_COOKIE = "one_tap_nonce";
+const ONE_TAP_NONCE_TTL_SECONDS = 10 * 60;
+
+const oneTapNonceIdentifier = (state: string) => `one-tap-nonce:${state}`;
+
+const createOneTapNonceCookie = (ctx: GenericEndpointContext) =>
+	ctx.context.createAuthCookie(ONE_TAP_NONCE_COOKIE, {
+		maxAge: ONE_TAP_NONCE_TTL_SECONDS,
+	});
+
+/**
+ * Creates the nonce passed to Google and binds it to the browser that initiated
+ * the attempt. The browser only receives the nonce; the opaque state stays in
+ * a signed HttpOnly cookie and identifies a short-lived, single-use record.
+ */
+async function createOneTapNonce(ctx: GenericEndpointContext) {
+	const state = generateRandomString(32);
+	const nonce = generateRandomString(32);
+	const expiresAt = new Date(Date.now() + ONE_TAP_NONCE_TTL_SECONDS * 1000);
+	const verification =
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: oneTapNonceIdentifier(state),
+			value: nonce,
+			expiresAt,
+		});
+
+	if (!verification) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message: "Unable to create One Tap nonce",
+		});
+	}
+
+	const nonceCookie = createOneTapNonceCookie(ctx);
+	await ctx.setSignedCookie(
+		nonceCookie.name,
+		state,
+		ctx.context.secret,
+		nonceCookie.attributes,
+	);
+
+	return nonce;
+}
+
 const oneTapCallbackBodySchema = z.object({
 	idToken: z.string().meta({
 		description:
@@ -55,19 +102,6 @@ const oneTapCallbackBodySchema = z.object({
 			description: "URL to redirect to after a successful sign-in",
 		})
 		.optional(),
-	/**
-	 * The nonce the client passed to `google.accounts.id.initialize`. Google
-	 * embeds it in the ID token's `nonce` claim; forwarding it lets
-	 * `verifyGoogleIdToken` confirm the token was minted for this sign-in
-	 * attempt instead of replayed.
-	 */
-	nonce: z
-		.string()
-		.meta({
-			description:
-				"Nonce passed to the Google One Tap API, verified against the ID token's nonce claim",
-		})
-		.optional(),
 });
 
 export const oneTap = (options?: OneTapOptions | undefined) =>
@@ -75,6 +109,28 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 		id: "one-tap",
 		version: PACKAGE_VERSION,
 		endpoints: {
+			oneTapNonce: createAuthEndpoint(
+				"/one-tap/nonce",
+				{
+					method: "POST",
+					metadata: {
+						openapi: {
+							summary: "Create a One Tap nonce",
+							description:
+								"Creates a short-lived nonce for a Google One Tap sign-in attempt",
+							responses: {
+								200: {
+									description: "One Tap nonce created",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const nonce = await createOneTapNonce(ctx);
+					return ctx.json({ nonce });
+				},
+			),
 			oneTapCallback: createAuthEndpoint(
 				"/one-tap/callback",
 				{
@@ -105,14 +161,41 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 									},
 								},
 								400: {
-									description: "Invalid token",
+									description: "Invalid token or nonce",
 								},
 							},
 						},
 					},
 				},
 				async (ctx) => {
-					const { idToken, nonce } = ctx.body;
+					const { idToken } = ctx.body;
+					const nonceCookie = createOneTapNonceCookie(ctx);
+					const state = await ctx.getSignedCookie(
+						nonceCookie.name,
+						ctx.context.secret,
+					);
+					if (!state) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid or expired One Tap nonce",
+						});
+					}
+					const nonceVerification =
+						await ctx.context.internalAdapter.findVerificationValue(
+							oneTapNonceIdentifier(state),
+						);
+					const nonceExpiresAt = nonceVerification
+						? new Date(nonceVerification.expiresAt).getTime()
+						: 0;
+					if (
+						!nonceVerification ||
+						!Number.isFinite(nonceExpiresAt) ||
+						nonceExpiresAt <= Date.now()
+					) {
+						expireCookie(ctx, nonceCookie);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid or expired One Tap nonce",
+						});
+					}
 					const googleProvider =
 						typeof ctx.context.options.socialProviders?.google === "function"
 							? await ctx.context.options.socialProviders?.google()
@@ -132,7 +215,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					const payload = (await verifyGoogleIdToken({
 						token: idToken,
 						audience,
-						nonce,
+						nonce: nonceVerification.value,
 					})) as Partial<GoogleProfile> | null;
 					if (!payload) {
 						throw new APIError("BAD_REQUEST", {
@@ -144,6 +227,20 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							message: "invalid id token",
 						});
 					}
+					const consumedNonce =
+						await ctx.context.internalAdapter.consumeVerificationValue(
+							oneTapNonceIdentifier(state),
+						);
+					if (
+						!consumedNonce ||
+						consumedNonce.value !== nonceVerification.value
+					) {
+						expireCookie(ctx, nonceCookie);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid or expired One Tap nonce",
+						});
+					}
+					expireCookie(ctx, nonceCookie);
 					// Apply the configured Google hosted domain (`hd`) so One Tap
 					// matches the redirect sign-in flow, which rejects tokens whose
 					// `hd` claim is missing or outside the configured restriction.

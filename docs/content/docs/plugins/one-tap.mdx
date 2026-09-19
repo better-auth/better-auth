@@ -158,17 +158,11 @@ await authClient.oneTap({
 });
 ```
 
-#### Binding the ID Token with a Nonce
+#### Replay Protection
 
-Pass a unique `nonce` per sign-in attempt. It is forwarded to the Google One Tap API (which embeds it in the ID token) and then verified server-side against the token's `nonce` claim, so a captured token cannot be replayed without it:
+`oneTap()` automatically obtains a short-lived nonce from your Better Auth server before it initializes Google One Tap. The server binds that nonce to the browser with a signed, HttpOnly cookie, verifies the ID token's nonce claim, and consumes the sign-in attempt after a successful verification. A captured ID token therefore cannot be replayed from another browser or reused after the attempt succeeds.
 
-```ts
-import { authClient } from "@/lib/auth-client";
-
-await authClient.oneTap({
-  nonce: crypto.randomUUID()
-});
-```
+No nonce configuration is required. Do not pass `nonce` through `oneTap()` or `additionalOptions`; Better Auth ignores caller-provided values so the expected nonce remains server-controlled.
 
 #### Handling Prompt Dismissals with Exponential Backoff
 
