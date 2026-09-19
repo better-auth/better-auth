@@ -100,6 +100,19 @@ describe("diffSchema", () => {
 	});
 });
 
+describe("getExpectedSchema", () => {
+	it("rejects a modelName that collides with another schema key", () => {
+		expect(() =>
+			getExpectedSchema({
+				user: { modelName: "account" },
+				account: { modelName: "authIdentity" },
+			}),
+		).toThrow(
+			'The modelName "account" configured for "user" conflicts with the existing "account" model. Choose a unique modelName.',
+		);
+	});
+});
+
 describe("SchemaMismatchError", () => {
 	it("carries the findings as data and the fixes as text", () => {
 		const error = new SchemaMismatchError([issuerDrift], "database");

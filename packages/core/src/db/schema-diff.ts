@@ -46,6 +46,16 @@ export type ExpectedSchema = Record<
 	}
 >;
 
+class SchemaModelNameConflictError extends BetterAuthError {
+	readonly code = "SCHEMA_MODEL_NAME_CONFLICT";
+
+	constructor(model: string, modelName: string) {
+		super(
+			`The modelName "${modelName}" configured for "${model}" conflicts with the existing "${modelName}" model. Choose a unique modelName.`,
+		);
+	}
+}
+
 /**
  * The tables this configuration writes, keyed the way the adapter addresses
  * them. Tables that share a physical name are merged into one entry.
@@ -55,7 +65,11 @@ export function getExpectedSchema(
 	{ usePlural = false }: { usePlural?: boolean | undefined } = {},
 ): ExpectedSchema {
 	const expected: ExpectedSchema = {};
-	for (const table of Object.values(getAuthTables(options))) {
+	const schema = getAuthTables(options);
+	for (const [model, table] of Object.entries(schema)) {
+		if (table.modelName !== model && Object.hasOwn(schema, table.modelName)) {
+			throw new SchemaModelNameConflictError(model, table.modelName);
+		}
 		const name = usePlural ? `${table.modelName}s` : table.modelName;
 		const entry = (expected[name] ??= { fields: {}, disableMigrations: true });
 		for (const [key, field] of Object.entries(table.fields)) {
