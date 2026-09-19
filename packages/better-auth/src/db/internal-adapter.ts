@@ -180,29 +180,6 @@ export const createInternalAdapter = (
 		await secondaryStorage.delete(activeSessionsKey);
 	}
 
-	async function queueCachedUserSessionDeletion(
-		userId: string,
-		sessionReferences?: readonly ActiveSessionReference[],
-	) {
-		if (!secondaryStorage) return;
-
-		// Callers may capture the revocation set before destructive work because a
-		// replacement session created by a later hook must remain active.
-		const references =
-			sessionReferences ?? (await getActiveSessionReferences(userId));
-		await queueAfterTransactionHook(
-			() => deleteCachedUserSessions(userId, references),
-			{
-				onError(error) {
-					logger.error(
-						"Failed to delete committed user sessions from secondary storage",
-						error,
-					);
-				},
-			},
-		);
-	}
-
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -426,17 +403,30 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
+			// Evict the cached sessions first and await it: an eviction failure
+			// rejects before any database row is touched, so a retry can complete
+			// the whole deletion from a fully-intact state.
+			await deleteCachedUserSessions(userId, sessionReferences);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-					"session",
-					undefined,
+				const sessionTokens = sessionReferences.map(
+					(reference) => reference.token,
 				);
+				// Delete only the captured revocation set from the database so a
+				// session created during the cache-first await keeps both its cache
+				// entry and its row, instead of a cached session outliving the
+				// database record it referred to. When the cache snapshot is empty,
+				// fall back to the user-wide sweep so database-only sessions are
+				// still cleaned up.
+				const where: Where[] = sessionTokens.length
+					? [
+							{
+								field: "token",
+								value: sessionTokens,
+								operator: "in",
+							},
+						]
+					: [{ field: "userId", value: userId }];
+				await deleteManyWithHooks(where, "session", undefined);
 			}
 			await deleteManyWithHooks(
 				[
@@ -449,7 +439,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 
-			const deletedUser = await deleteWithHooks(
+			await deleteWithHooks(
 				[
 					{
 						field: "id",
@@ -459,9 +449,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			if (deletedUser !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
-			}
 		},
 		createSession: async (
 			userId: string,
@@ -941,35 +928,48 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
+			if (!secondaryStorage) {
+				await deleteManyWithHooks(
+					[
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+					"session",
+					undefined,
+				);
+				return;
+			}
 			const sessionReferences = await getActiveSessionReferences(userId);
-			if (secondaryStorage) {
-				if (!options.session?.storeSessionInDatabase) {
-					await queueCachedUserSessionDeletion(userId, sessionReferences);
-					return;
-				}
-				if (ctx.options.session?.preserveSessionInDatabase) {
-					const endedSessions = await endPreservedSessions([
-						{ field: "userId", value: userId },
-					]);
-					if (endedSessions !== null) {
-						await queueCachedUserSessionDeletion(userId, sessionReferences);
-					}
-					return;
-				}
+			// Evict the cached sessions first and await it: an eviction failure
+			// rejects before any database row is touched, so a retry can complete
+			// the whole revocation from a fully-intact state.
+			await deleteCachedUserSessions(userId, sessionReferences);
+			if (!options.session?.storeSessionInDatabase) {
+				return;
 			}
-			const deletedSessions = await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"session",
-				undefined,
+			const sessionTokens = sessionReferences.map(
+				(reference) => reference.token,
 			);
-			if (deletedSessions !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			// Match the database work to the captured revocation set only, so a
+			// session created during the cache-first await keeps both its cache
+			// entry and its row. A database-only session (one absent from the cache
+			// snapshot) is swept user-wide as a fallback.
+			const sessionWhere: Where[] = sessionTokens.length
+				? [
+						{
+							field: "token",
+							value: sessionTokens,
+							operator: "in",
+						},
+					]
+				: [{ field: "userId", value: userId }];
+			if (ctx.options.session?.preserveSessionInDatabase) {
+				await endPreservedSessions(sessionWhere);
+				return;
 			}
+			await deleteManyWithHooks(sessionWhere, "session", undefined);
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
