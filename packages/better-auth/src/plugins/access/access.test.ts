@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { createAccessControl } from "./access";
+import { createAccessControl, role } from "./access";
+import type { Role } from "./types";
+import { hasPermission } from "../admin/has-permission";
 
 describe("access", () => {
 	const statements = {
@@ -223,5 +225,101 @@ describe("access", () => {
 			success: false,
 			error: 'unauthorized to access resource "project"',
 		});
+	});
+});
+
+/**
+ * Permissions must be evaluated against the union of all the roles a user
+ * holds. A user with two roles, each granting a different permission, should
+ * be authorized for the combined set.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/3011
+ */
+describe("access control across multiple roles", () => {
+	const statements = {
+		project: ["create", "read", "update", "delete"],
+		ui: ["view", "edit"],
+	} as const;
+	const ac = createAccessControl(statements);
+
+	const roleA = ac.newRole({ project: ["create"] });
+	const roleB = ac.newRole({ ui: ["view"] });
+
+	// Mirrors how `hasPermissionFn`/`hasPermission` merge the statements of all
+	// of a user's roles into a single set before authorizing.
+	const authorizeAcross = (
+		roles: Role<any>[],
+		permissions: Record<string, string[]>,
+	) => {
+		const mergedStatements: Record<string, string[]> = {};
+		for (const r of roles) {
+			for (const [resource, actions] of Object.entries(r.statements)) {
+				const existing = mergedStatements[resource] ?? [];
+				mergedStatements[resource] = [
+					...new Set([...existing, ...(actions as readonly string[])]),
+				];
+			}
+		}
+		return role(mergedStatements).authorize(permissions);
+	};
+
+	it("should grant a permission set provided across different roles", () => {
+		const response = authorizeAcross([roleA, roleB], {
+			project: ["create"],
+			ui: ["view"],
+		});
+		expect(response.success).toBe(true);
+	});
+
+	it("should fail for a permission that none of the roles grant", () => {
+		const response = authorizeAcross([roleA, roleB], {
+			project: ["delete"],
+		});
+		expect(response.success).toBe(false);
+	});
+
+	it("should still authorize when only a single role is held", () => {
+		const response = authorizeAcross([roleA], { project: ["create"] });
+		expect(response.success).toBe(true);
+
+		const failed = authorizeAcross([roleA], { ui: ["view"] });
+		expect(failed.success).toBe(false);
+	});
+
+	it("the real admin hasPermission merges comma-separated roles", () => {
+		// Exercise the actual exported admin `hasPermission` (not the local helper
+		// above), so a regression in the production merge path is caught rather than
+		// silently passing against a re-implementation. @see #3011
+		const options = { roles: { roleA, roleB } };
+		expect(
+			hasPermission({
+				role: "roleA,roleB",
+				options,
+				permissions: { project: ["create"] },
+			}),
+		).toBe(true);
+		expect(
+			hasPermission({
+				role: "roleA,roleB",
+				options,
+				permissions: { ui: ["view"] },
+			}),
+		).toBe(true);
+		// A permission neither role grants is denied.
+		expect(
+			hasPermission({
+				role: "roleA,roleB",
+				options,
+				permissions: { project: ["delete"] },
+			}),
+		).toBe(false);
+		// A single role only authorizes its own statements.
+		expect(
+			hasPermission({
+				role: "roleA",
+				options,
+				permissions: { ui: ["view"] },
+			}),
+		).toBe(false);
 	});
 });

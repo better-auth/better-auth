@@ -1794,6 +1794,67 @@ describe("access control", async () => {
 });
 
 /**
+ * A user holding several roles should be authorized against the union of those
+ * roles' permissions, even when each individual permission is granted by a
+ * different role.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/3011
+ */
+describe("access control across multiple roles", async () => {
+	const ac = createAccessControl({
+		project: ["create", "read", "update", "delete"],
+		sales: ["create", "read", "update", "delete"],
+		...defaultStatements,
+	});
+	// Two roles that each grant a permission the other does not.
+	const projectManager = ac.newRole({ project: ["create"] });
+	const salesManager = ac.newRole({ sales: ["create"] });
+
+	const { customFetchImpl } = await getTestInstance({
+		plugins: [
+			organization({
+				ac,
+				roles: { projectManager, salesManager },
+			}),
+		],
+	});
+
+	const authClient = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [
+			organizationClient({
+				ac,
+				roles: { projectManager, salesManager },
+			}),
+		],
+		fetchOptions: { customFetchImpl },
+	});
+	const { checkRolePermission } = authClient.organization;
+
+	it("should grant permissions provided by different roles", async () => {
+		const authorized = await checkRolePermission({
+			// comma-separated roles are merged into a single permission set
+			role: "projectManager,salesManager" as "projectManager",
+			permissions: {
+				project: ["create"],
+				sales: ["create"],
+			},
+		});
+		expect(authorized).toBe(true);
+	});
+
+	it("should fail for a permission that none of the roles grant", async () => {
+		const authorized = await checkRolePermission({
+			role: "projectManager,salesManager" as "projectManager",
+			permissions: {
+				project: ["delete"],
+			},
+		});
+		expect(authorized).toBe(false);
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/7822
  */
 describe("dynamic access control should merge DB permissions with built-in roles", async () => {
