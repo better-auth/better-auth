@@ -1,4 +1,7 @@
-import { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
+import {
+	createSafeUrlSchema,
+	SafeUrlSchema,
+} from "@better-auth/core/utils/redirect-uri";
 import * as z from "zod";
 import {
 	claimsRequestInputSchema,
@@ -9,7 +12,7 @@ import {
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
  * redirect-URI scheme policy. See `@better-auth/core/utils/redirect-uri`.
  */
-export { SafeUrlSchema };
+export { createSafeUrlSchema, SafeUrlSchema };
 
 const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
 
@@ -114,38 +117,45 @@ const dpopJktSchema = z
  * Runtime schema for OAuthAuthorizationQuery.
  * Uses passthrough to tolerate fields added by future extensions (PAR, FPA, etc.)
  */
-export const authorizationQuerySchema = z
-	.object({
-		response_type: z
-			.string()
-			.pipe(z.enum(["code"]))
-			.optional(),
-		request: z.string().optional(),
-		request_uri: z.string().optional(),
-		redirect_uri: SafeUrlSchema.optional(),
-		scope: z.string().optional(),
-		state: z.string().optional(),
-		client_id: z.string().min(1, "client_id is required"),
-		prompt: authorizationPromptSchema.optional(),
-		display: z.string().optional(),
-		ui_locales: z.string().optional(),
-		max_age: maxAgeSchema.optional(),
-		acr_values: z.string().optional(),
-		login_hint: z.string().optional(),
-		id_token_hint: z.string().optional(),
-		code_challenge: z.string().optional(),
-		code_challenge_method: z
-			.string()
-			.pipe(z.enum(["S256"]))
-			.optional(),
-		nonce: z.string().optional(),
-		claims: claimsRequestInputSchema.optional(),
-		dpop_jkt: dpopJktSchema.optional(),
-		resource: z
-			.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
-			.optional(),
-	})
-	.passthrough();
+export function createAuthorizationQuerySchema(
+	allowInsecureRedirectUri?: (url: URL) => boolean,
+) {
+	const redirectUriSchema = createSafeUrlSchema(allowInsecureRedirectUri);
+	return z
+		.object({
+			response_type: z
+				.string()
+				.pipe(z.enum(["code"]))
+				.optional(),
+			request: z.string().optional(),
+			request_uri: z.string().optional(),
+			redirect_uri: redirectUriSchema.optional(),
+			scope: z.string().optional(),
+			state: z.string().optional(),
+			client_id: z.string().min(1, "client_id is required"),
+			prompt: authorizationPromptSchema.optional(),
+			display: z.string().optional(),
+			ui_locales: z.string().optional(),
+			max_age: maxAgeSchema.optional(),
+			acr_values: z.string().optional(),
+			login_hint: z.string().optional(),
+			id_token_hint: z.string().optional(),
+			code_challenge: z.string().optional(),
+			code_challenge_method: z
+				.string()
+				.pipe(z.enum(["S256"]))
+				.optional(),
+			nonce: z.string().optional(),
+			claims: claimsRequestInputSchema.optional(),
+			dpop_jkt: dpopJktSchema.optional(),
+			resource: z
+				.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+				.optional(),
+		})
+		.passthrough();
+}
+
+export const authorizationQuerySchema = createAuthorizationQuerySchema();
 
 // redirect_uri stays optional in the stored code: a headless authorization
 // request (e.g. first-party-apps / device-style flows) legitimately omits it,
@@ -153,27 +163,37 @@ export const authorizationQuerySchema = z
 // authorization request carried one. The token endpoint enforces that
 // conditional match; forcing it here would reject valid headless codes as
 // "malformed verification value".
-const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
-	redirect_uri: SafeUrlSchema.optional(),
-	claims: claimsRequestParameterSchema.optional(),
-});
+function createStoredAuthorizationQuerySchema(
+	allowInsecureRedirectUri?: (url: URL) => boolean,
+) {
+	return createAuthorizationQuerySchema(allowInsecureRedirectUri).extend({
+		redirect_uri: createSafeUrlSchema(allowInsecureRedirectUri).optional(),
+		claims: claimsRequestParameterSchema.optional(),
+	});
+}
 
 /**
  * Runtime schema for the authorization code verification value.
  * Validates structure on deserialization from the JSON blob stored in the DB.
  * Uses passthrough so future fields (e.g. from authorization challenge) don't break parsing.
  */
-export const verificationValueSchema = z
-	.object({
-		type: z.literal("authorization_code"),
-		query: storedAuthorizationQuerySchema,
-		sessionId: z.string(),
-		userId: z.string(),
-		referenceId: z.string().optional(),
-		authTime: z.number().optional(),
-		resource: z.array(z.string()).optional(),
-	})
-	.passthrough();
+export function createVerificationValueSchema(
+	allowInsecureRedirectUri?: (url: URL) => boolean,
+) {
+	return z
+		.object({
+			type: z.literal("authorization_code"),
+			query: createStoredAuthorizationQuerySchema(allowInsecureRedirectUri),
+			sessionId: z.string(),
+			userId: z.string(),
+			referenceId: z.string().optional(),
+			authTime: z.number().optional(),
+			resource: z.array(z.string()).optional(),
+		})
+		.passthrough();
+}
+
+export const verificationValueSchema = createVerificationValueSchema();
 
 /**
  * Request body accepted at `POST /oauth2/register` (RFC 7591 §2 client
@@ -188,45 +208,53 @@ export const verificationValueSchema = z
  *
  * @see https://datatracker.ietf.org/doc/html/rfc7591#section-2
  */
-export const clientRegistrationRequestSchema = z.object({
-	redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-	scope: z.string().optional(),
-	client_name: z
-		.string()
-		.refine((value) => value.trim().length > 0, "client_name cannot be empty")
-		.optional(),
-	client_uri: z.string().optional(),
-	logo_uri: z.string().optional(),
-	contacts: z.array(z.string().min(1)).min(1).optional(),
-	tos_uri: z.string().optional(),
-	policy_uri: z.string().optional(),
-	software_id: z.string().optional(),
-	software_version: z.string().optional(),
-	software_statement: z.string().optional(),
-	post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-	backchannel_logout_uri: SafeUrlSchema.optional(),
-	backchannel_logout_session_required: z.boolean().optional(),
-	token_endpoint_auth_method: z.string().trim().min(1).optional(),
-	jwks: clientJwksSchema.optional(),
-	jwks_uri: z.string().optional(),
-	grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
-	response_types: z.array(z.enum(["code"])).optional(),
-	// OIDC Registration §2: classifies redirect URI policy independently of
-	// client authentication.
-	application_type: z.enum(["web", "native"]).optional(),
-	subject_type: z.enum(["public", "pairwise"]).optional(),
-	// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
-	dpop_bound_access_tokens: z.boolean().optional(),
-	// RFC 7591 §2 extension: declare the RFC 8707 resource indicators this client
-	// will request. Each must be a valid resource URI matching an existing
-	// oauthResource row; the registration handler links them on success.
-	resources: z.array(ResourceUriSchema).optional(),
-	skip_consent: z
-		.never({
-			error: "skip_consent cannot be set during dynamic client registration",
-		})
-		.optional(),
-});
+export function createClientRegistrationRequestSchema(
+	allowInsecureRedirectUri?: (url: URL) => boolean,
+) {
+	const redirectUriSchema = createSafeUrlSchema(allowInsecureRedirectUri);
+	return z.object({
+		redirect_uris: z.array(redirectUriSchema).min(1).optional(),
+		scope: z.string().optional(),
+		client_name: z
+			.string()
+			.refine((value) => value.trim().length > 0, "client_name cannot be empty")
+			.optional(),
+		client_uri: z.string().optional(),
+		logo_uri: z.string().optional(),
+		contacts: z.array(z.string().min(1)).min(1).optional(),
+		tos_uri: z.string().optional(),
+		policy_uri: z.string().optional(),
+		software_id: z.string().optional(),
+		software_version: z.string().optional(),
+		software_statement: z.string().optional(),
+		post_logout_redirect_uris: z.array(redirectUriSchema).min(1).optional(),
+		backchannel_logout_uri: redirectUriSchema.optional(),
+		backchannel_logout_session_required: z.boolean().optional(),
+		token_endpoint_auth_method: z.string().trim().min(1).optional(),
+		jwks: clientJwksSchema.optional(),
+		jwks_uri: z.string().optional(),
+		grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
+		response_types: z.array(z.enum(["code"])).optional(),
+		// OIDC Registration §2: classifies redirect URI policy independently of
+		// client authentication.
+		application_type: z.enum(["web", "native"]).optional(),
+		subject_type: z.enum(["public", "pairwise"]).optional(),
+		// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+		dpop_bound_access_tokens: z.boolean().optional(),
+		// RFC 7591 §2 extension: declare the RFC 8707 resource indicators this client
+		// will request. Each must be a valid resource URI matching an existing
+		// oauthResource row; the registration handler links them on success.
+		resources: z.array(ResourceUriSchema).optional(),
+		skip_consent: z
+			.never({
+				error: "skip_consent cannot be set during dynamic client registration",
+			})
+			.optional(),
+	});
+}
+
+export const clientRegistrationRequestSchema =
+	createClientRegistrationRequestSchema();
 
 /**
  * Complete OAuth client metadata document schema shared by registration and

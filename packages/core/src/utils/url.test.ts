@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	createSafeUrlSchema,
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
@@ -159,6 +160,23 @@ describe("SafeUrlSchema", () => {
 			true,
 		);
 		expect(SafeUrlSchema.safeParse("http://127.0.0.1/cb").success).toBe(true);
+	});
+
+	it("lets allowInsecureRedirectUri opt in to non-loopback http", () => {
+		const lan = "http://192.168.1.50:8000/auth/callback";
+		const homelab = "http://myapp.homelab.lan/auth/callback";
+		const other = "http://evil.example/callback";
+		const schema = createSafeUrlSchema(
+			(url) =>
+				url.origin === "http://192.168.1.50:8000" ||
+				url.origin === "http://myapp.homelab.lan",
+		);
+
+		expect(SafeUrlSchema.safeParse(lan).success).toBe(false);
+		expect(schema.safeParse(lan).success).toBe(true);
+		expect(schema.safeParse(homelab).success).toBe(true);
+		expect(schema.safeParse(other).success).toBe(false);
+		expect(schema.safeParse("https://example.com/cb").success).toBe(true);
 	});
 
 	it("rejects redirect URIs with a fragment component", () => {
