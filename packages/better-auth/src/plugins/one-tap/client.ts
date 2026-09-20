@@ -207,6 +207,21 @@ function getButtonNonceRefreshDelayMs(expiresIn: number): number {
 	return Math.max(0, Math.floor(expiresIn * 900));
 }
 
+const BUTTON_NONCE_RETRY_BASE_DELAY_MS = 1000;
+const BUTTON_NONCE_RETRY_MAX_DELAY_MS = 30_000;
+
+/**
+ * A rendered button is unusable once its nonce expires or is consumed, so a
+ * failed refresh has to be retried rather than dropped: otherwise every later
+ * click is rejected until application code calls `oneTap()` again.
+ */
+function getButtonNonceRetryDelayMs(attempt: number): number {
+	return Math.min(
+		BUTTON_NONCE_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1),
+		BUTTON_NONCE_RETRY_MAX_DELAY_MS,
+	);
+}
+
 function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
 }
@@ -307,12 +322,12 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							return;
 						}
 
-						const container =
+						const resolvedContainer =
 							typeof opts.button.container === "string"
 								? document.querySelector<HTMLElement>(opts.button.container)
 								: opts.button.container;
 
-						if (!container) {
+						if (!resolvedContainer) {
 							console.error(
 								"Google One Tap: Button container not found",
 								opts.button.container,
@@ -320,11 +335,17 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							return;
 						}
 
+						// Annotated so the hoisted helpers below see the non-null type;
+						// narrowing does not reach into a function declaration.
+						const container: HTMLElement = resolvedContainer;
+						const isContainerDetached = () => container.isConnected === false;
+
 						clearButtonNonceRefreshTimer(container);
 						const buttonConfig = opts.button.config ?? {
 							type: "icon",
 						};
 						let isButtonRequestInProgress = false;
+						let buttonRefreshInFlight: Promise<void> | null = null;
 
 						async function callback(idToken: string) {
 							const res = await $fetch("/one-tap/callback", {
@@ -383,6 +404,12 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 												"Error refreshing Google One Tap button:",
 												error,
 											);
+											// The nonce just used is consumed, so without a
+											// retry the button would reject every later click.
+											scheduleButtonNonceRefresh(
+												getButtonNonceRetryDelayMs(1),
+												1,
+											);
 										}
 									}
 								},
@@ -399,13 +426,26 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							container.replaceChildren();
 							googleIdentity.renderButton(container, buttonConfig);
 
+							scheduleButtonNonceRefresh(
+								getButtonNonceRefreshDelayMs(attempt.expiresIn),
+							);
+						};
+
+						function scheduleButtonNonceRefresh(delayMs: number, retry = 0) {
 							clearButtonNonceRefreshTimer(container);
 							const refreshTimer = setTimeout(() => {
 								buttonNonceRefreshTimers.delete(container);
-								if (
-									isButtonRequestInProgress ||
-									container.isConnected === false
-								) {
+								if (isContainerDetached()) {
+									return;
+								}
+								if (isButtonRequestInProgress) {
+									// The credential callback refreshes once it settles;
+									// check back instead of dropping the timer, which would
+									// leave the button on a nonce that is about to expire.
+									scheduleButtonNonceRefresh(
+										BUTTON_NONCE_RETRY_BASE_DELAY_MS,
+										retry,
+									);
 									return;
 								}
 								void refreshButton().catch((error) => {
@@ -413,26 +453,43 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 										"Error refreshing Google One Tap button:",
 										error,
 									);
+									if (isContainerDetached()) {
+										return;
+									}
+									const nextRetry = retry + 1;
+									scheduleButtonNonceRefresh(
+										getButtonNonceRetryDelayMs(nextRetry),
+										nextRetry,
+									);
 								});
-							}, getButtonNonceRefreshDelayMs(attempt.expiresIn));
+							}, delayMs);
 							buttonNonceRefreshTimers.set(container, refreshTimer);
-						};
+						}
 
-						async function refreshButton() {
-							if (container.isConnected === false) {
-								return;
-							}
-							const attempt = await getServerNonce();
-							if (container.isConnected === false) {
-								return;
-							}
-							renderButton(attempt);
+						function refreshButton(): Promise<void> {
+							// Collapse overlapping refreshes so a scheduled refresh and a
+							// post-credential refresh cannot render the button twice, with
+							// the slower response clobbering the newer nonce.
+							buttonRefreshInFlight ??= (async () => {
+								if (isContainerDetached()) {
+									return;
+								}
+								const attempt = await getServerNonce();
+								if (isContainerDetached()) {
+									return;
+								}
+								renderButton(attempt);
+							})().finally(() => {
+								buttonRefreshInFlight = null;
+							});
+							return buttonRefreshInFlight;
 						}
 
 						try {
 							await refreshButton();
 						} catch (error) {
 							console.error("Error initializing Google One Tap:", error);
+							scheduleButtonNonceRefresh(getButtonNonceRetryDelayMs(1), 1);
 						}
 
 						return;

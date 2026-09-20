@@ -43,12 +43,21 @@ const verifiedPayload = { ...defaultVerifiedPayload };
 
 const ONE_TAP_NONCE_COOKIE = "better-auth.one_tap_nonce";
 
-async function issueOneTapNonce($fetch: BetterFetch) {
+/**
+ * Pass `existingHeaders` to issue another nonce for the same browser, so the
+ * cookie accumulates outstanding attempts the way a refresh or a second
+ * rendered button would.
+ */
+async function issueOneTapNonce(
+	$fetch: BetterFetch,
+	existingHeaders?: Headers,
+) {
 	const headers = new Headers();
 	const response = await $fetch<{ nonce: string; expiresIn: number }>(
 		"/one-tap/nonce",
 		{
 			method: "POST",
+			headers: existingHeaders,
 			onSuccess(context) {
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
@@ -831,6 +840,10 @@ describe("oneTapClient nonce initialization", () => {
 			nonce?: string | undefined;
 			callback: (response: { credential: string }) => Promise<void>;
 		};
+		// The post-credential refresh arms a new timer for the refreshed attempt.
+		// Fake timers keep that handle from outliving the test and stalling
+		// Vitest's worker teardown.
+		vi.useFakeTimers();
 		const initialize = vi.fn((_config: GoogleInitializeConfig) => {});
 		const renderButton = vi.fn();
 		const replaceChildren = vi.fn();
@@ -912,6 +925,80 @@ describe("oneTapClient nonce initialization", () => {
 			expect(renderButton).toHaveBeenCalledTimes(2);
 			expect(replaceChildren).toHaveBeenCalledTimes(2);
 		} finally {
+			vi.useRealTimers();
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("retries a failed button nonce refresh instead of stranding the button", async () => {
+		type GoogleInitializeConfig = {
+			nonce?: string | undefined;
+			callback: (response: { credential: string }) => Promise<void>;
+		};
+		vi.useFakeTimers();
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const initialize = vi.fn((_config: GoogleInitializeConfig) => {});
+		const renderButton = vi.fn();
+		const replaceChildren = vi.fn();
+		const nonces: ({ nonce: string; expiresIn: number } | "fail")[] = [
+			{ nonce: "first-server-issued-nonce", expiresIn: 1 },
+			"fail",
+			{ nonce: "recovered-server-issued-nonce", expiresIn: 1 },
+		];
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/one-tap/nonce") {
+				const next = nonces.shift();
+				if (!next) {
+					throw new Error("Unexpected One Tap nonce request");
+				}
+				if (next === "fail") {
+					return { data: null, error: { status: 500 } };
+				}
+				return { data: next, error: null };
+			}
+			return { data: {}, error: null };
+		});
+		const container = {
+			replaceChildren,
+			isConnected: true,
+		} as unknown as HTMLElement;
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			location: { href: "" },
+			google: {
+				accounts: {
+					id: { initialize, renderButton },
+				},
+			},
+		});
+
+		try {
+			const plugin = oneTapClient({ clientId: "test-client" });
+			const actions = plugin.getActions(
+				fetchMock as unknown as BetterFetch,
+				{} as ClientStore,
+				undefined,
+			);
+			await actions.oneTap({ button: { container } });
+			expect(initialize).toHaveBeenCalledTimes(1);
+
+			// The scheduled refresh fires and fails.
+			await vi.advanceTimersByTimeAsync(900);
+			expect(initialize).toHaveBeenCalledTimes(1);
+
+			// A retry is armed, so the button recovers rather than staying bound
+			// to a nonce that is about to expire.
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(initialize).toHaveBeenCalledTimes(2);
+			expect(initialize.mock.calls[1]?.[0]?.nonce).toBe(
+				"recovered-server-issued-nonce",
+			);
+		} finally {
+			consoleError.mockRestore();
+			vi.useRealTimers();
 			vi.unstubAllGlobals();
 		}
 	});
@@ -1120,6 +1207,81 @@ describe("one-tap nonce verification", async () => {
 
 		expect(first.error).toBeFalsy();
 		expect(replay.error?.status).toBe(400);
+	});
+
+	it("accepts an earlier attempt after another nonce was issued to the same browser", async () => {
+		verifiedPayload.email = "one-tap-nonce-outstanding@example.com";
+		verifiedPayload.sub = "one-tap-nonce-outstanding-sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+		});
+
+		// A rendered button's nonce, then a second nonce for the same browser —
+		// a refresh landing mid-click, or a second rendered button.
+		const headers = await issueOneTapNonce(client.$fetch);
+		const firstNonce = (verifiedPayload as Record<string, unknown>).nonce;
+		const refreshedHeaders = await issueOneTapNonce(client.$fetch, headers);
+		expect((verifiedPayload as Record<string, unknown>).nonce).not.toBe(
+			firstNonce,
+		);
+
+		// Google minted the credential against the first nonce.
+		(verifiedPayload as Record<string, unknown>).nonce = firstNonce;
+		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+			headers: refreshedHeaders,
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.token).toBeTruthy();
+	});
+
+	it("does not let a consumed attempt replay while a sibling attempt is outstanding", async () => {
+		verifiedPayload.email = "one-tap-nonce-sibling@example.com";
+		verifiedPayload.sub = "one-tap-nonce-sibling-sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+		});
+
+		const headers = await issueOneTapNonce(client.$fetch);
+		const firstNonce = (verifiedPayload as Record<string, unknown>).nonce;
+		const refreshedHeaders = await issueOneTapNonce(client.$fetch, headers);
+		const secondNonce = (verifiedPayload as Record<string, unknown>).nonce;
+
+		(verifiedPayload as Record<string, unknown>).nonce = firstNonce;
+		const first = await client.$fetch<{ token?: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+			headers: refreshedHeaders,
+		});
+		const replay = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+			headers: refreshedHeaders,
+		});
+
+		expect(first.error).toBeFalsy();
+		expect(replay.error?.status).toBe(400);
+
+		// The sibling attempt survives the consumed one.
+		(verifiedPayload as Record<string, unknown>).nonce = secondNonce;
+		const sibling = await client.$fetch<{ token?: string }>(
+			"/one-tap/callback",
+			{
+				method: "POST",
+				body: { idToken: "stub-id-token" },
+				headers: refreshedHeaders,
+			},
+		);
+		expect(sibling.error).toBeFalsy();
 	});
 
 	it("allows only one concurrent callback to consume an attempt", async () => {

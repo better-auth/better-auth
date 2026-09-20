@@ -45,6 +45,12 @@ export interface OneTapOptions {
 
 const ONE_TAP_NONCE_COOKIE = "one_tap_nonce";
 const ONE_TAP_NONCE_TTL_SECONDS = 10 * 60;
+/**
+ * How many attempts a single browser may have in flight at once. A page can
+ * render several One Tap buttons, and a rendered button reissues its nonce on a
+ * timer, so more than one attempt is legitimately outstanding at a time.
+ */
+const ONE_TAP_MAX_OUTSTANDING_NONCES = 3;
 
 const oneTapNonceIdentifier = (state: string) => `one-tap-nonce:${state}`;
 
@@ -52,6 +58,55 @@ const createOneTapNonceCookie = (ctx: GenericEndpointContext) =>
 	ctx.context.createAuthCookie(ONE_TAP_NONCE_COOKIE, {
 		maxAge: ONE_TAP_NONCE_TTL_SECONDS,
 	});
+
+/**
+ * The cookie carries every outstanding state for this browser rather than only
+ * the newest one. Google mints a credential against whichever nonce the button
+ * was rendered with, which is not necessarily the most recently issued: a
+ * scheduled nonce refresh can land between the click and the callback, and a
+ * second rendered button issues its own nonce. A single-value cookie would
+ * strand those credentials and reject a legitimate sign-in.
+ */
+function parseOneTapNonceStates(cookieValue: unknown): string[] {
+	if (typeof cookieValue !== "string" || !cookieValue) {
+		return [];
+	}
+	try {
+		const parsed = JSON.parse(cookieValue);
+		if (Array.isArray(parsed)) {
+			return parsed.filter(
+				(state): state is string => typeof state === "string" && !!state,
+			);
+		}
+	} catch {
+		// Fall through: a cookie issued before this encoding holds a bare state.
+	}
+	return [cookieValue];
+}
+
+async function setOneTapNonceStates(
+	ctx: GenericEndpointContext,
+	states: string[],
+) {
+	const nonceCookie = createOneTapNonceCookie(ctx);
+	if (states.length === 0) {
+		expireCookie(ctx, nonceCookie);
+		return;
+	}
+	await ctx.setSignedCookie(
+		nonceCookie.name,
+		JSON.stringify(states),
+		ctx.context.secret,
+		nonceCookie.attributes,
+	);
+}
+
+async function readOneTapNonceStates(ctx: GenericEndpointContext) {
+	const nonceCookie = createOneTapNonceCookie(ctx);
+	return parseOneTapNonceStates(
+		await ctx.getSignedCookie(nonceCookie.name, ctx.context.secret),
+	);
+}
 
 /**
  * Creates the nonce passed to Google and binds it to the browser that initiated
@@ -75,13 +130,10 @@ async function createOneTapNonce(ctx: GenericEndpointContext) {
 		});
 	}
 
-	const nonceCookie = createOneTapNonceCookie(ctx);
-	await ctx.setSignedCookie(
-		nonceCookie.name,
-		state,
-		ctx.context.secret,
-		nonceCookie.attributes,
+	const states = [...(await readOneTapNonceStates(ctx)), state].slice(
+		-ONE_TAP_MAX_OUTSTANDING_NONCES,
 	);
+	await setOneTapNonceStates(ctx, states);
 
 	return { nonce, expiresIn: ONE_TAP_NONCE_TTL_SECONDS };
 }
@@ -169,29 +221,33 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 				async (ctx) => {
 					const { idToken } = ctx.body;
-					const nonceCookie = createOneTapNonceCookie(ctx);
-					const state = await ctx.getSignedCookie(
-						nonceCookie.name,
-						ctx.context.secret,
-					);
-					if (!state) {
+					const states = await readOneTapNonceStates(ctx);
+					if (states.length === 0) {
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid or expired One Tap nonce",
 						});
 					}
-					const nonceVerification =
-						await ctx.context.internalAdapter.findVerificationValue(
-							oneTapNonceIdentifier(state),
-						);
-					const nonceExpiresAt = nonceVerification
-						? new Date(nonceVerification.expiresAt).getTime()
-						: 0;
-					if (
-						!nonceVerification ||
-						!Number.isFinite(nonceExpiresAt) ||
-						nonceExpiresAt <= Date.now()
-					) {
-						expireCookie(ctx, nonceCookie);
+					// Resolve every attempt this browser still has outstanding. The
+					// first state holding a given nonce wins, so a duplicate value
+					// cannot shadow the record it was issued with.
+					const now = Date.now();
+					const stateByNonce = new Map<string, string>();
+					const liveStates: string[] = [];
+					for (const candidate of states) {
+						const verification =
+							await ctx.context.internalAdapter.findVerificationValue(
+								oneTapNonceIdentifier(candidate),
+							);
+						if (!verification) continue;
+						const expiresAt = new Date(verification.expiresAt).getTime();
+						if (!Number.isFinite(expiresAt) || expiresAt <= now) continue;
+						liveStates.push(candidate);
+						if (!stateByNonce.has(verification.value)) {
+							stateByNonce.set(verification.value, candidate);
+						}
+					}
+					if (stateByNonce.size === 0) {
+						await setOneTapNonceStates(ctx, []);
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid or expired One Tap nonce",
 						});
@@ -212,10 +268,15 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 								"Google client ID is required for One Tap. Set it on the oneTap plugin (clientId) or on socialProviders.google.",
 						});
 					}
+					// The nonce claim is matched against the outstanding set instead of
+					// being pinned to one value. Every candidate was issued to this
+					// browser — the cookie is signed and HttpOnly, so the set is not
+					// attacker-controlled — and each one is a single-use record, so
+					// accepting any of them preserves the replay guarantee while
+					// letting concurrent buttons and nonce refreshes complete.
 					const payload = (await verifyGoogleIdToken({
 						token: idToken,
 						audience,
-						nonce: nonceVerification.value,
 					})) as Partial<GoogleProfile> | null;
 					if (!payload) {
 						throw new APIError("BAD_REQUEST", {
@@ -227,20 +288,32 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							message: "invalid id token",
 						});
 					}
-					const consumedNonce =
-						await ctx.context.internalAdapter.consumeVerificationValue(
-							oneTapNonceIdentifier(state),
-						);
-					if (
-						!consumedNonce ||
-						consumedNonce.value !== nonceVerification.value
-					) {
-						expireCookie(ctx, nonceCookie);
+					const tokenNonce = (payload as { nonce?: unknown }).nonce;
+					const matchedState =
+						typeof tokenNonce === "string"
+							? stateByNonce.get(tokenNonce)
+							: undefined;
+					if (!matchedState) {
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid or expired One Tap nonce",
 						});
 					}
-					expireCookie(ctx, nonceCookie);
+					const remainingStates = liveStates.filter(
+						(candidate) => candidate !== matchedState,
+					);
+					const consumedNonce =
+						await ctx.context.internalAdapter.consumeVerificationValue(
+							oneTapNonceIdentifier(matchedState),
+						);
+					if (!consumedNonce || consumedNonce.value !== tokenNonce) {
+						await setOneTapNonceStates(ctx, remainingStates);
+						throw new APIError("BAD_REQUEST", {
+							message: "Invalid or expired One Tap nonce",
+						});
+					}
+					// Keep any sibling attempt alive: another button on the page may
+					// still be waiting on its own credential.
+					await setOneTapNonceStates(ctx, remainingStates);
 					// Apply the configured Google hosted domain (`hd`) so One Tap
 					// matches the redirect sign-in flow, which rejects tokens whose
 					// `hd` claim is missing or outside the configured restriction.
