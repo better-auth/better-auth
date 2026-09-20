@@ -201,12 +201,21 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						const seatPlanNames = new Set(
 							seatPlans.map((p) => p.name.toLowerCase()),
 						);
-						const dbSub = await ctx.adapter.findOne<Subscription>({
+						// Canceled subscriptions remain in the organization's history.
+						// Select a current subscription before checking its seat plan.
+						const [dbSub] = await ctx.adapter.findMany<Subscription>({
 							model: "subscription",
+							limit: 1,
+							sortBy: { field: "periodStart", direction: "desc" },
 							where: [
 								{
 									field: "referenceId",
 									value: data.organization.id,
+								},
+								{
+									field: "status",
+									operator: "in",
+									value: ["active", "trialing"],
 								},
 							],
 						});
