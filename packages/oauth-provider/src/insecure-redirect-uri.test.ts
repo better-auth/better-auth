@@ -308,9 +308,26 @@ describe("allowInsecureRedirectUri", () => {
 					jwt(),
 				],
 			});
-			const deniedHeaders = new Headers(
-				(await deniedAuth.signInWithTestUser()).headers,
-			);
+			const deniedSession = await deniedAuth.signInWithTestUser();
+			const deniedClient = await deniedAuth.auth.api.adminCreateOAuthClient({
+				headers: deniedSession.headers,
+				body: {
+					redirect_uris: ["https://example.com/callback"],
+					post_logout_redirect_uris: ["https://example.com/logout"],
+					application_type: "web",
+					enable_end_session: true,
+				},
+			});
+			const deniedCtx = await deniedAuth.auth.$context;
+			await deniedCtx.adapter.update({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: deniedClient.client_id }],
+				update: {
+					redirectUris: [lanRedirect],
+					postLogoutRedirectUris: [lanLogout],
+				},
+			});
+			const deniedHeaders = new Headers(deniedSession.headers);
 			deniedHeaders.set("accept", "text/html");
 			const denied = await deniedAuth.customFetchImpl(url.toString(), {
 				method: "GET",
@@ -378,6 +395,37 @@ describe("allowInsecureRedirectUri", () => {
 			);
 			expect(deniedResponse.status).toBe(400);
 			expect(((await deniedResponse.json()) as { error?: string }).error).toBe(
+				"invalid_redirect_uri",
+			);
+		});
+
+		it("does not let the callback allow http on *.localhost native redirects", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				baseURL: authServerBaseURL,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						allowUnauthenticatedClientRegistration: true,
+						allowInsecureRedirectUri: () => true,
+					}),
+				],
+			});
+			const response = await customFetchImpl(
+				`${authServerBaseURL}/api/auth/oauth2/register`,
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						application_type: "native",
+						redirect_uris: ["http://app.localhost/callback"],
+					}),
+				},
+			);
+			expect(response.status).toBe(400);
+			expect(((await response.json()) as { error?: string }).error).toBe(
 				"invalid_redirect_uri",
 			);
 		});

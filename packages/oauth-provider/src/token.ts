@@ -1396,9 +1396,7 @@ async function checkVerificationValue(
 			error: "invalid_grant",
 		});
 	}
-	const parsed = createVerificationValueSchema(
-		opts.allowInsecureRedirectUri,
-	).safeParse(rawValue);
+	const parsed = createVerificationValueSchema().safeParse(rawValue);
 	if (!parsed.success) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "malformed verification value",

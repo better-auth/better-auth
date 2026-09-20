@@ -157,17 +157,44 @@ export function createAuthorizationQuerySchema(
 
 export const authorizationQuerySchema = createAuthorizationQuerySchema();
 
+/**
+ * Stored authorization-code redirect URIs were already checked against the
+ * live HTTPS / `allowInsecureRedirectUri` policy at authorize time. Re-running
+ * that policy on redemption would reject a legitimately issued code if the
+ * operator callback is later removed, differs across nodes, or is
+ * non-deterministic. Keep structural checks only (parseable URI, no fragment,
+ * no dangerous schemes).
+ */
+const storedRedirectUriSchema = z.url().superRefine((val, ctx) => {
+	if (val.includes("#")) {
+		ctx.addIssue({
+			code: "custom",
+			message: "Redirect URI must not contain a fragment component",
+		});
+	}
+	let u: URL;
+	try {
+		u = new URL(val);
+	} catch {
+		return;
+	}
+	if (DANGEROUS_SCHEMES.includes(u.protocol)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "URL cannot use javascript:, data:, or vbscript: scheme",
+		});
+	}
+});
+
 // redirect_uri stays optional in the stored code: a headless authorization
 // request (e.g. first-party-apps / device-style flows) legitimately omits it,
 // and RFC 6749 §4.1.3 only requires it at the token endpoint when the
 // authorization request carried one. The token endpoint enforces that
 // conditional match; forcing it here would reject valid headless codes as
 // "malformed verification value".
-function createStoredAuthorizationQuerySchema(
-	allowInsecureRedirectUri?: (url: URL) => boolean,
-) {
-	return createAuthorizationQuerySchema(allowInsecureRedirectUri).extend({
-		redirect_uri: createSafeUrlSchema(allowInsecureRedirectUri).optional(),
+function createStoredAuthorizationQuerySchema() {
+	return createAuthorizationQuerySchema().extend({
+		redirect_uri: storedRedirectUriSchema.optional(),
 		claims: claimsRequestParameterSchema.optional(),
 	});
 }
@@ -177,13 +204,11 @@ function createStoredAuthorizationQuerySchema(
  * Validates structure on deserialization from the JSON blob stored in the DB.
  * Uses passthrough so future fields (e.g. from authorization challenge) don't break parsing.
  */
-export function createVerificationValueSchema(
-	allowInsecureRedirectUri?: (url: URL) => boolean,
-) {
+export function createVerificationValueSchema() {
 	return z
 		.object({
 			type: z.literal("authorization_code"),
-			query: createStoredAuthorizationQuerySchema(allowInsecureRedirectUri),
+			query: createStoredAuthorizationQuerySchema(),
 			sessionId: z.string(),
 			userId: z.string(),
 			referenceId: z.string().optional(),

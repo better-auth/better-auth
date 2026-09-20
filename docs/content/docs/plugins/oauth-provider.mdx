@@ -1412,8 +1412,11 @@ The same callback applies to authorize, token, logout (`post_logout_redirect_uri
 oauthProvider({
   loginPage: "/sign-in",
   consentPage: "/consent",
-  allowInsecureRedirectUri: (url) =>
-    url.origin === new URL(process.env.FRONTEND_URL!).origin,
+  allowInsecureRedirectUri: (url) => {
+    const frontend = process.env.FRONTEND_URL;
+    if (!frontend) return false;
+    return url.origin === new URL(frontend).origin;
+  },
 })
 ```
 

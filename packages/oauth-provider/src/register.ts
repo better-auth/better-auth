@@ -3,7 +3,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { isLoopbackIP } from "@better-auth/core/utils/host";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
@@ -201,7 +201,9 @@ function validateClientRedirectUri(
 		rawHttpHostname === "[::1]";
 
 	const insecureHttpAllowed =
-		isHttp && !isRedirectLoopback && allowInsecureRedirectUri?.(url) === true;
+		isHttp &&
+		!isLoopbackHost(url.hostname) &&
+		allowInsecureRedirectUri?.(url) === true;
 
 	if (applicationType === "web") {
 		if (insecureHttpAllowed) {

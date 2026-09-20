@@ -177,6 +177,7 @@ describe("SafeUrlSchema", () => {
 		expect(schema.safeParse(homelab).success).toBe(true);
 		expect(schema.safeParse(other).success).toBe(false);
 		expect(schema.safeParse("https://example.com/cb").success).toBe(true);
+		expect(schema.safeParse(`${lan}#token`).success).toBe(false);
 	});
 
 	it("rejects redirect URIs with a fragment component", () => {
