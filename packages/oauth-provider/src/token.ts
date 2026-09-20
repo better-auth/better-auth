@@ -1438,6 +1438,28 @@ async function checkVerificationValue(
 				error: "invalid_grant",
 			});
 		}
+		// Narrowing a consent updates the row in place and keeps its id, so the
+		// record existing is not enough: the grant must still cover what the code
+		// was authorized for. Token authority is derived from the code, so a code
+		// minted before the user removed a scope or resource would otherwise still
+		// mint tokens carrying the authority they just removed.
+		const consentedScopes = (consent.scopes ?? []) as string[];
+		const consentedResources = (consent.resources ?? []) as string[];
+		const codeScopes = (verificationValue.query.scope?.split(" ") ?? []).filter(
+			Boolean,
+		);
+		const codeResources = verificationValue.resource ?? [];
+		if (
+			!codeScopes.every((scope) => consentedScopes.includes(scope)) ||
+			!codeResources.every((codeResource) =>
+				consentedResources.includes(codeResource),
+			)
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "consent no longer covers this authorization",
+				error: "invalid_grant",
+			});
+		}
 	}
 	// RFC 6749 §4.1.3: redirect_uri is bound at the token endpoint only when the
 	// authorization request carried one. Enforce an exact correspondence in both

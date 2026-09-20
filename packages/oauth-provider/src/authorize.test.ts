@@ -1576,13 +1576,13 @@ describe("oauth authorize - authorization code consent binding", async () => {
 	}
 
 	/** Drives authorize -> consent screen -> accept, returning the issued code. */
-	async function authorizeAndConsent(state: string) {
+	async function authorizeAndConsent(state: string, scope = "openid") {
 		const codeVerifier = generateRandomString(43, "a-z", "A-Z", "0-9");
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", oauthClient!.client_id);
 		authUrl.searchParams.set("redirect_uri", redirectUri);
 		authUrl.searchParams.set("response_type", "code");
-		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("scope", scope);
 		authUrl.searchParams.set("state", state);
 		authUrl.searchParams.set(
 			"code_challenge",
@@ -1685,6 +1685,33 @@ describe("oauth authorize - authorization code consent binding", async () => {
 
 		// The code issued under the revoked grant is not, and must not inherit
 		// the replacement consent.
+		const stale = await exchange(pending.code, pending.codeVerifier);
+		expect(stale.data?.access_token).toBeUndefined();
+		expect(stale.error?.status).toBe(400);
+		expect((stale.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	it("rejects a pending code after its consent is narrowed to drop a scope", async () => {
+		const pending = await authorizeAndConsent(
+			"consent-binding-narrowed",
+			"openid profile",
+		);
+		const granted = await findConsent();
+		expect(granted?.scopes).toContain("profile");
+
+		// Narrowing updates the row in place, so the id the code is bound to
+		// still resolves — only the granted authority shrinks.
+		const narrowed = await client.$fetch("/oauth2/update-consent", {
+			method: "POST",
+			body: { id: granted!.id, update: { scopes: ["openid"] } },
+		});
+		expect(narrowed.error).toBeNull();
+		const afterNarrowing = await findConsent();
+		expect(afterNarrowing!.id).toBe(granted!.id);
+		expect(afterNarrowing!.scopes).not.toContain("profile");
+
 		const stale = await exchange(pending.code, pending.codeVerifier);
 		expect(stale.data?.access_token).toBeUndefined();
 		expect(stale.error?.status).toBe(400);
