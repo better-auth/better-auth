@@ -120,18 +120,27 @@ async function resolveOneTapAttempts(
 	states: string[],
 ) {
 	const now = Date.now();
-	const attempts: { state: string; nonce: string }[] = [];
-	for (const state of states) {
-		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(
-				oneTapNonceIdentifier(state),
-			);
-		if (!verification) continue;
-		const expiresAt = new Date(verification.expiresAt).getTime();
-		if (!Number.isFinite(expiresAt) || expiresAt <= now) continue;
-		attempts.push({ state, nonce: verification.value });
-	}
-	return attempts;
+	// Resolved in parallel: the set is bounded by
+	// ONE_TAP_MAX_OUTSTANDING_NONCES, and issuance is serialized per document,
+	// so doing these lookups one at a time would put a full round trip per
+	// outstanding attempt in front of every button's setup.
+	const resolved = await Promise.all(
+		states.map(async (state) => {
+			const verification =
+				await ctx.context.internalAdapter.findVerificationValue(
+					oneTapNonceIdentifier(state),
+				);
+			if (!verification) return undefined;
+			const expiresAt = new Date(verification.expiresAt).getTime();
+			if (!Number.isFinite(expiresAt) || expiresAt <= now) return undefined;
+			return { state, nonce: verification.value };
+		}),
+	);
+	// `Promise.all` preserves input order, so the earliest state still wins.
+	return resolved.filter(
+		(attempt): attempt is { state: string; nonce: string } =>
+			attempt !== undefined,
+	);
 }
 
 async function filterLiveOneTapStates(
