@@ -823,3 +823,181 @@ describe("oneTapClient types", () => {
 		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });
+
+describe("one-tap active mode", async () => {
+	const credentialsGet = vi.fn();
+
+	const stubBrowser = ({ fedCM = true }: { fedCM?: boolean } = {}) => {
+		vi.stubGlobal("window", {
+			document: {},
+			location: { origin: "http://localhost:3000" },
+			...(fedCM ? { IdentityCredential: class {} } : {}),
+		});
+		vi.stubGlobal("navigator", { credentials: { get: credentialsGet } });
+	};
+
+	afterEach(() => {
+		credentialsGet.mockReset();
+		vi.unstubAllGlobals();
+	});
+
+	const getClient = async (mode?: "passive" | "active") =>
+		(
+			await getTestInstance(
+				{
+					socialProviders: {
+						google: { clientId: "test-client", clientSecret: "test-secret" },
+					},
+					plugins: [oneTap()],
+				},
+				{
+					clientOptions: {
+						plugins: [oneTapClient({ clientId: "test-client", mode })],
+					},
+				},
+			)
+		).client;
+
+	it("requests the account chooser in active mode and sends the id token", async () => {
+		const client = await getClient();
+		stubBrowser();
+		credentialsGet.mockResolvedValue({ token: "stub-id-token" });
+
+		await client.oneTap({ mode: "active", fetchOptions: {} });
+
+		expect(credentialsGet).toHaveBeenCalledWith(
+			expect.objectContaining({
+				mediation: "required",
+				identity: expect.objectContaining({
+					mode: "active",
+					context: "signin",
+					providers: [
+						expect.objectContaining({
+							configURL: "https://accounts.google.com/gsi/fedcm.json",
+							clientId: "test-client",
+							params: expect.objectContaining({
+								response_type: "id_token",
+								scope: "email profile openid",
+							}),
+						}),
+					],
+				}),
+			}),
+		);
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Object),
+			expect.objectContaining({ audience: "test-client" }),
+		);
+	});
+
+	it("unwraps the id token when the credential carries a JSON payload", async () => {
+		const client = await getClient();
+		stubBrowser();
+		credentialsGet.mockResolvedValue({
+			token: JSON.stringify({ id_token: "stub-id-token" }),
+		});
+
+		await client.oneTap({ mode: "active", fetchOptions: {} });
+
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Object),
+			expect.objectContaining({ audience: "test-client" }),
+		);
+	});
+
+	it("uses the account chooser when active mode is set on the plugin", async () => {
+		const client = await getClient("active");
+		stubBrowser();
+		credentialsGet.mockResolvedValue({ token: "stub-id-token" });
+
+		await client.oneTap({ fetchOptions: {} });
+
+		expect(credentialsGet).toHaveBeenCalledWith(
+			expect.objectContaining({
+				identity: expect.objectContaining({ mode: "active" }),
+			}),
+		);
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Object),
+			expect.objectContaining({ audience: "test-client" }),
+		);
+	});
+
+	it("falls back to the passive prompt when FedCM is unavailable", async () => {
+		const client = await getClient();
+		stubBrowser({ fedCM: false });
+		vi.stubGlobal("document", {
+			createElement: () => ({}),
+			head: {
+				appendChild: (script: { onerror: () => void }) => script.onerror(),
+			},
+		});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await expect(
+			client.oneTap({ mode: "active", fetchOptions: {} }),
+		).rejects.toThrow("Failed to load Google Identity Services script");
+
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("active mode needs FedCM support"),
+		);
+		expect(credentialsGet).not.toHaveBeenCalled();
+
+		warn.mockRestore();
+		error.mockRestore();
+	});
+
+	it("does not report a failed callback as a dismissed chooser", async () => {
+		const client = await getClient();
+		stubBrowser();
+		credentialsGet.mockResolvedValue({ token: "stub-id-token" });
+		vi.mocked(jwtVerify).mockRejectedValueOnce(new Error("bad signature"));
+		const onPromptNotification = vi.fn();
+
+		await client.oneTap({
+			mode: "active",
+			onPromptNotification,
+			fetchOptions: {},
+		});
+
+		expect(jwtVerify).toHaveBeenCalled();
+		expect(onPromptNotification).not.toHaveBeenCalled();
+	});
+
+	it("reports a chooser that resolves without a credential", async () => {
+		const client = await getClient();
+		stubBrowser();
+		credentialsGet.mockResolvedValue(null);
+		const onPromptNotification = vi.fn();
+
+		await client.oneTap({
+			mode: "active",
+			onPromptNotification,
+			fetchOptions: {},
+		});
+
+		expect(onPromptNotification).toHaveBeenCalled();
+		expect(jwtVerify).not.toHaveBeenCalled();
+	});
+
+	it("reports a dismissed chooser through onPromptNotification", async () => {
+		const client = await getClient();
+		stubBrowser();
+		const dismissed = new Error("NotAllowedError");
+		credentialsGet.mockRejectedValue(dismissed);
+		const onPromptNotification = vi.fn();
+
+		await client.oneTap({
+			mode: "active",
+			onPromptNotification,
+			fetchOptions: {},
+		});
+
+		expect(onPromptNotification).toHaveBeenCalledWith(dismissed);
+		expect(jwtVerify).not.toHaveBeenCalled();
+	});
+});

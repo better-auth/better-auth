@@ -72,6 +72,31 @@ import { authClient } from "@/lib/auth-client";
 await authClient.oneTap(); // [!code highlight]
 ```
 
+#### Active Mode
+
+Prompt mode is passive: the browser decides when to show the prompt and renders it in a corner of the page. Active mode instead opens the browser's centered account chooser, so you can trigger it from your own sign-in button and keep your own styling:
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+await authClient.oneTap({ mode: "active" }); // [!code highlight]
+```
+
+Active mode requires [FedCM](https://developers.google.com/privacy-sandbox/cookies/fedcm) and a user gesture, so call it from a click handler. When the browser has no FedCM support the plugin logs a warning and falls back to the passive prompt.
+
+If the user closes the chooser, or the browser refuses to open it (for example when third-party sign-in is disabled in the browser settings), the promise resolves and `onPromptNotification` receives the `DOMException` the browser rejected with. Use it to fall back to your regular Google sign-in:
+
+```ts
+await authClient.oneTap({
+  mode: "active",
+  onPromptNotification: async () => {
+    await authClient.signIn.social({ provider: "google" });
+  },
+});
+```
+
+If the browser resolves the chooser without handing over a credential instead of rejecting, `onPromptNotification` is called with no argument, so a dismissal is never silent. Only the chooser itself is reported this way. Once it returns a credential, a failing sign-in request rejects the promise as it does in passive mode, so a failed login is never mistaken for a dismissal.
+
 #### Button Mode
 
 To render a "Sign In with Google" button instead of showing the automatic prompt, use the `button` option:
@@ -181,6 +206,7 @@ await authClient.oneTap({
 * `cancelOnTapOutside`: Cancel the One Tap popup when the user taps outside it. Note that this option may not have an effect when FedCM is active, as the browser manages the dismiss behavior. Default is true.
 * `uxMode`: The mode to use for the Google One Tap flow. Can be "popup" or "redirect". Default is "popup".
 * `context`: The context in which the One Tap API should be used. Can be "signin", "signup", or "use". Default is "signin".
+* `mode`: The UI mode for the flow. `"passive"` shows the One Tap prompt in a corner of the page, `"active"` opens the browser's centered account chooser and needs a user gesture. Can be set per call on the `oneTap` action. Default is "passive".
 * `additionalOptions`: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt).
 * `promptOptions`: Configuration for the prompt behavior and exponential backoff:
   * `baseDelay`: Base delay in milliseconds for retries. Default is 1000.
