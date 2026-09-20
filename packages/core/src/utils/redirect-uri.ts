@@ -35,9 +35,9 @@ function refineStructuralUrl(
 	val: string,
 	ctx: z.RefinementCtx,
 ): URL | undefined {
-	let u: URL;
+	let parsedUrl: URL;
 	try {
-		u = new URL(val);
+		parsedUrl = new URL(val);
 	} catch {
 		ctx.addIssue({
 			code: "custom",
@@ -47,7 +47,7 @@ function refineStructuralUrl(
 		return undefined;
 	}
 
-	if (DANGEROUS_URL_SCHEMES.includes(u.protocol)) {
+	if (DANGEROUS_URL_SCHEMES.includes(parsedUrl.protocol)) {
 		ctx.addIssue({
 			code: "custom",
 			message: "URL cannot use javascript:, data:, or vbscript: scheme",
@@ -62,7 +62,7 @@ function refineStructuralUrl(
 		});
 	}
 
-	return u;
+	return parsedUrl;
 }
 
 /**
@@ -99,13 +99,13 @@ export function createSafeUrlSchema(
 	allowInsecureRedirectUri?: AllowInsecureRedirectUri,
 ) {
 	return z.url().superRefine((val, ctx) => {
-		const u = refineStructuralUrl(val, ctx);
-		if (!u) {
+		const parsedUrl = refineStructuralUrl(val, ctx);
+		if (!parsedUrl) {
 			return;
 		}
 
-		if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
-			if (allowInsecureRedirectUri?.(u) === true) {
+		if (parsedUrl.protocol === "http:" && !isLoopbackHost(parsedUrl.host)) {
+			if (allowInsecureRedirectUri?.(parsedUrl) === true) {
 				return;
 			}
 			ctx.addIssue({
