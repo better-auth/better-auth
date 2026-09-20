@@ -1,7 +1,9 @@
 import {
 	createSafeUrlSchema,
+	createStructuralUrlSchema,
 	SafeUrlSchema,
 } from "@better-auth/core/utils/redirect-uri";
+import { DANGEROUS_URL_SCHEMES } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import {
 	claimsRequestInputSchema,
@@ -12,9 +14,7 @@ import {
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
  * redirect-URI scheme policy. See `@better-auth/core/utils/redirect-uri`.
  */
-export { createSafeUrlSchema, SafeUrlSchema };
-
-const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
+export { createSafeUrlSchema, createStructuralUrlSchema, SafeUrlSchema };
 
 /**
  * Validates an RFC 8707 resource indicator. The value must be an absolute URI
@@ -39,7 +39,7 @@ export const ResourceUriSchema = z.string().superRefine((val, ctx) => {
 		});
 		return;
 	}
-	if (DANGEROUS_SCHEMES.includes(new URL(val).protocol)) {
+	if (DANGEROUS_URL_SCHEMES.includes(new URL(val).protocol)) {
 		ctx.addIssue({
 			code: "custom",
 			message: "resource cannot use javascript:, data:, or vbscript: scheme",
@@ -165,26 +165,7 @@ export const authorizationQuerySchema = createAuthorizationQuerySchema();
  * non-deterministic. Keep structural checks only (parseable URI, no fragment,
  * no dangerous schemes).
  */
-const storedRedirectUriSchema = z.url().superRefine((val, ctx) => {
-	if (val.includes("#")) {
-		ctx.addIssue({
-			code: "custom",
-			message: "Redirect URI must not contain a fragment component",
-		});
-	}
-	let u: URL;
-	try {
-		u = new URL(val);
-	} catch {
-		return;
-	}
-	if (DANGEROUS_SCHEMES.includes(u.protocol)) {
-		ctx.addIssue({
-			code: "custom",
-			message: "URL cannot use javascript:, data:, or vbscript: scheme",
-		});
-	}
-});
+const storedRedirectUriSchema = createStructuralUrlSchema();
 
 // redirect_uri stays optional in the stored code: a headless authorization
 // request (e.g. first-party-apps / device-style flows) legitimately omits it,

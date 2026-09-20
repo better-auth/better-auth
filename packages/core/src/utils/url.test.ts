@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	createSafeUrlSchema,
+	createStructuralUrlSchema,
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
@@ -178,6 +179,15 @@ describe("SafeUrlSchema", () => {
 		expect(schema.safeParse(other).success).toBe(false);
 		expect(schema.safeParse("https://example.com/cb").success).toBe(true);
 		expect(schema.safeParse(`${lan}#token`).success).toBe(false);
+	});
+
+	it("structural schema skips https policy but keeps fragment and scheme checks", () => {
+		const schema = createStructuralUrlSchema();
+		expect(schema.safeParse("http://192.168.1.50:8000/cb").success).toBe(true);
+		expect(schema.safeParse("javascript:alert(1)").success).toBe(false);
+		expect(schema.safeParse("http://192.168.1.50:8000/cb#token").success).toBe(
+			false,
+		);
 	});
 
 	it("rejects redirect URIs with a fragment component", () => {

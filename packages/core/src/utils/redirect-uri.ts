@@ -31,6 +31,54 @@ export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
  */
 export type AllowInsecureRedirectUri = (url: URL) => boolean;
 
+function refineStructuralUrl(
+	val: string,
+	ctx: z.RefinementCtx,
+): URL | undefined {
+	let u: URL;
+	try {
+		u = new URL(val);
+	} catch {
+		ctx.addIssue({
+			code: "custom",
+			message: "URL must be parseable",
+			fatal: true,
+		});
+		return undefined;
+	}
+
+	if (DANGEROUS_URL_SCHEMES.includes(u.protocol)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "URL cannot use javascript:, data:, or vbscript: scheme",
+		});
+		return undefined;
+	}
+
+	if (val.includes("#")) {
+		ctx.addIssue({
+			code: "custom",
+			message: "Redirect URI must not contain a fragment component",
+		});
+	}
+
+	return u;
+}
+
+/**
+ * Structural URL checks shared by authorize-time and stored-code schemas:
+ * parseable URI, no fragment, no `javascript:`/`data:`/`vbscript:`. Does not
+ * enforce HTTPS. Use this when the value was already checked against the live
+ * redirect-URI policy (for example an authorization-code verification blob).
+ */
+export function createStructuralUrlSchema() {
+	return z.url().superRefine((val, ctx) => {
+		refineStructuralUrl(val, ctx);
+	});
+}
+
+export const StructuralUrlSchema = createStructuralUrlSchema();
+
 /**
  * Zod schema for OAuth redirect URIs and other developer-supplied URLs that the
  * server stores and later hands back to a browser.
@@ -51,31 +99,9 @@ export function createSafeUrlSchema(
 	allowInsecureRedirectUri?: AllowInsecureRedirectUri,
 ) {
 	return z.url().superRefine((val, ctx) => {
-		let u: URL;
-		try {
-			u = new URL(val);
-		} catch {
-			ctx.addIssue({
-				code: "custom",
-				message: "URL must be parseable",
-				fatal: true,
-			});
-			return z.NEVER;
-		}
-
-		if (DANGEROUS_URL_SCHEMES.includes(u.protocol)) {
-			ctx.addIssue({
-				code: "custom",
-				message: "URL cannot use javascript:, data:, or vbscript: scheme",
-			});
+		const u = refineStructuralUrl(val, ctx);
+		if (!u) {
 			return;
-		}
-
-		if (val.includes("#")) {
-			ctx.addIssue({
-				code: "custom",
-				message: "Redirect URI must not contain a fragment component",
-			});
 		}
 
 		if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
