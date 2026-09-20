@@ -36,6 +36,7 @@ import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
 	OAuthClientAuthenticationRequest,
+	OAuthConsent,
 	OAuthOptions,
 	OAuthProviderApi,
 	OAuthRefreshToken,
@@ -1411,6 +1412,32 @@ async function checkVerificationValue(
 			error_description: "invalid client_id",
 			error: "invalid_grant",
 		});
+	}
+	// A code stays bound to the consent that authorized it. If the user revoked
+	// that consent before redemption, the authorization behind this code no
+	// longer exists, so the code must not mint tokens — and must not inherit a
+	// later replacement grant, which is a distinct row with its own id.
+	// RFC 6749 §5.2: the grant is no longer valid, so `invalid_grant`.
+	if (verificationValue.consentId) {
+		const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [
+				{
+					field: "id",
+					value: verificationValue.consentId,
+				},
+			],
+		});
+		if (
+			!consent ||
+			consent.clientId !== client_id ||
+			consent.userId !== verificationValue.userId
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "consent revoked",
+				error: "invalid_grant",
+			});
+		}
 	}
 	// RFC 6749 §4.1.3: redirect_uri is bound at the token endpoint only when the
 	// authorization request carried one. Enforce an exact correspondence in both

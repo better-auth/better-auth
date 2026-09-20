@@ -1639,6 +1639,14 @@ export interface VerificationValue {
 	resource?: string[];
 	referenceId?: string;
 	authTime?: number;
+	/**
+	 * The consent record that authorized this code.
+	 *
+	 * Redemption requires the record to still exist, so revoking consent also
+	 * invalidates any code issued under it. Absent for codes minted without a
+	 * consent row (`client.skipConsent`), which have nothing to revoke.
+	 */
+	consentId?: string;
 }
 
 /**

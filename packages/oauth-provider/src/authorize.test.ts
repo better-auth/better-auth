@@ -6,6 +6,7 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { base64url } from "jose";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { formatErrorURL, validateIssuerUrl } from "./authorize";
@@ -1510,5 +1511,192 @@ describe("oauth authorize - consented resources", async () => {
 			`iss=${encodeURIComponent(authServerBaseUrl)}`,
 		);
 		expect(callbackRedirectUrl).not.toContain("/consent");
+	});
+});
+
+/**
+ * An authorization code must stay bound to the consent that authorized it.
+ * Revoking that consent has to invalidate codes already issued under it,
+ * otherwise a pending code survives the revocation and can be redeemed against
+ * a later replacement grant.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11318
+ */
+describe("oauth authorize - authorization code consent binding", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const tokenRequestHeaders = {
+		accept: "application/json",
+		"content-type": "application/x-www-form-urlencoded",
+	};
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+			}),
+			jwt(),
+		],
+	});
+
+	const { headers, user } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null = null;
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: false,
+			},
+		});
+		expect(oauthClient?.client_id).toBeDefined();
+		expect(oauthClient?.client_secret).toBeDefined();
+	});
+
+	async function s256Challenge(verifier: string) {
+		const digest = await crypto.subtle.digest(
+			"SHA-256",
+			new TextEncoder().encode(verifier),
+		);
+		return base64url.encode(new Uint8Array(digest));
+	}
+
+	/** Drives authorize -> consent screen -> accept, returning the issued code. */
+	async function authorizeAndConsent(state: string) {
+		const codeVerifier = generateRandomString(43, "a-z", "A-Z", "0-9");
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient!.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", state);
+		authUrl.searchParams.set(
+			"code_challenge",
+			await s256Challenge(codeVerifier),
+		);
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let redirect = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				redirect = context.response.headers.get("Location") || "";
+			},
+		});
+
+		// Once a grant is on file the authorize call issues the code directly,
+		// with no consent screen to accept.
+		if (redirect.startsWith(redirectUri)) {
+			const directCode = new URL(redirect).searchParams.get("code");
+			expect(directCode).toBeTruthy();
+			return { code: directCode!, codeVerifier };
+		}
+
+		const consentRedirectUrl = redirect;
+		expect(consentRedirectUrl).toContain("/consent");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		try {
+			const consentResult = await client.oauth2.consent(
+				{ accept: true },
+				{ throw: true },
+			);
+			const code = new URL(consentResult.url!).searchParams.get("code");
+			expect(code).toBeTruthy();
+			return { code: code!, codeVerifier };
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	}
+
+	function exchange(code: string, codeVerifier: string) {
+		return client.oauth2.token(
+			{
+				code,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				redirect_uri: redirectUri,
+				client_id: oauthClient!.client_id,
+			},
+			{
+				headers: {
+					...tokenRequestHeaders,
+					// The client registers as `client_secret_basic`.
+					authorization: `Basic ${btoa(
+						`${oauthClient!.client_id}:${oauthClient!.client_secret}`,
+					)}`,
+				},
+			},
+		);
+	}
+
+	function findConsent() {
+		return auth.$context.then((context) =>
+			context.adapter.findOne<OAuthConsent<Scope[]>>({
+				model: "oauthConsent",
+				where: [
+					{ field: "clientId", value: oauthClient!.client_id },
+					{ field: "userId", value: user.id },
+				],
+			}),
+		);
+	}
+
+	it("rejects a pending code whose consent was revoked, and still honours the replacement grant", async () => {
+		const pending = await authorizeAndConsent("consent-binding-a");
+		const granted = await findConsent();
+		expect(granted?.id).toBeTruthy();
+
+		// The user removes the grant while the code is still unredeemed.
+		const revoked = await client.$fetch("/oauth2/delete-consent", {
+			method: "POST",
+			body: { id: granted!.id },
+		});
+		expect(revoked.error).toBeNull();
+		expect(await findConsent()).toBeNull();
+
+		// Reconnecting creates a replacement consent, which is a distinct row.
+		const fresh = await authorizeAndConsent("consent-binding-b");
+		const replacement = await findConsent();
+		expect(replacement?.id).toBeTruthy();
+		expect(replacement!.id).not.toBe(granted!.id);
+
+		// The code issued under the replacement grant is redeemable.
+		const accepted = await exchange(fresh.code, fresh.codeVerifier);
+		expect(accepted.error).toBeNull();
+		expect(accepted.data?.access_token).toBeDefined();
+
+		// The code issued under the revoked grant is not, and must not inherit
+		// the replacement consent.
+		const stale = await exchange(pending.code, pending.codeVerifier);
+		expect(stale.data?.access_token).toBeUndefined();
+		expect(stale.error?.status).toBe(400);
+		expect((stale.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	it("still redeems a pending code while its consent is intact", async () => {
+		const pending = await authorizeAndConsent("consent-binding-intact");
+		const tokens = await exchange(pending.code, pending.codeVerifier);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
 	});
 });
