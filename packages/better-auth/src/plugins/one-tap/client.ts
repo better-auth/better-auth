@@ -190,6 +190,31 @@ type OneTapNonceAttempt = {
 	expiresIn: number;
 };
 
+/**
+ * Serializes `/one-tap/nonce` requests across every button on the page.
+ *
+ * The endpoint appends the new attempt to the set already carried by the
+ * nonce cookie, which makes issuance a read-modify-write over browser state.
+ * Two buttons initializing at once would otherwise both read the pre-request
+ * cookie and each write its own successor, so whichever `Set-Cookie` landed
+ * last would silently drop the other button's attempt and reject its
+ * credential with a 400. Awaiting the previous response guarantees the next
+ * request is sent with the updated cookie applied.
+ *
+ * This orders issuance within one document only; separate tabs still race,
+ * but each drives its own flow and the attempt set is per-browser, so a lost
+ * attempt there is bounded by the same cap as any other eviction.
+ */
+let nonceIssuanceChain: Promise<unknown> = Promise.resolve();
+
+function serializeNonceIssuance<T>(request: () => Promise<T>): Promise<T> {
+	const result = nonceIssuanceChain.then(request, request);
+	// Keep the chain alive after a rejection so one failure cannot wedge every
+	// later issuance.
+	nonceIssuanceChain = result.catch(() => {});
+	return result;
+}
+
 const buttonNonceRefreshTimers = new WeakMap<
 	HTMLElement,
 	ReturnType<typeof setTimeout>
@@ -283,35 +308,36 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					const { nonce: _nonce, ...additionalOptions } =
 						options.additionalOptions ?? {};
 
-					const getServerNonce = async (): Promise<OneTapNonceAttempt> => {
-						const nonceFetchOptions = {
-							...opts?.fetchOptions,
-							...fetchOptions,
-							onSuccess: undefined,
-							onError: undefined,
-						};
-						const response = await $fetch("/one-tap/nonce", {
-							...nonceFetchOptions,
-							method: "POST",
-							throw: false,
+					const getServerNonce = (): Promise<OneTapNonceAttempt> =>
+						serializeNonceIssuance(async () => {
+							const nonceFetchOptions = {
+								...opts?.fetchOptions,
+								...fetchOptions,
+								onSuccess: undefined,
+								onError: undefined,
+							};
+							const response = await $fetch("/one-tap/nonce", {
+								...nonceFetchOptions,
+								method: "POST",
+								throw: false,
+							});
+							const data = response.data as {
+								nonce?: unknown;
+								expiresIn?: unknown;
+							} | null;
+							const nonce = data?.nonce;
+							const expiresIn = data?.expiresIn;
+							if (
+								response.error ||
+								typeof nonce !== "string" ||
+								typeof expiresIn !== "number" ||
+								!Number.isFinite(expiresIn) ||
+								expiresIn <= 0
+							) {
+								throw new Error("Failed to create a Google One Tap nonce.");
+							}
+							return { nonce, expiresIn };
 						});
-						const data = response.data as {
-							nonce?: unknown;
-							expiresIn?: unknown;
-						} | null;
-						const nonce = data?.nonce;
-						const expiresIn = data?.expiresIn;
-						if (
-							response.error ||
-							typeof nonce !== "string" ||
-							typeof expiresIn !== "number" ||
-							!Number.isFinite(expiresIn) ||
-							expiresIn <= 0
-						) {
-							throw new Error("Failed to create a Google One Tap nonce.");
-						}
-						return { nonce, expiresIn };
-					};
 
 					// Button mode: render a button instead of showing the prompt
 					if (opts?.button) {

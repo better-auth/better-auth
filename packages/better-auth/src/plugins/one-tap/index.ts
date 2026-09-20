@@ -46,11 +46,13 @@ export interface OneTapOptions {
 const ONE_TAP_NONCE_COOKIE = "one_tap_nonce";
 const ONE_TAP_NONCE_TTL_SECONDS = 10 * 60;
 /**
- * How many attempts a single browser may have in flight at once. A page can
- * render several One Tap buttons, and a rendered button reissues its nonce on a
- * timer, so more than one attempt is legitimately outstanding at a time.
+ * Upper bound on the attempts a single browser may carry at once, so the cookie
+ * cannot grow without limit on a long-lived page. Spent and expired attempts are
+ * pruned on every issuance, so the bound is a backstop rather than a button
+ * limit: it only binds if a page renders more than this many buttons whose
+ * nonces are all still live.
  */
-const ONE_TAP_MAX_OUTSTANDING_NONCES = 3;
+const ONE_TAP_MAX_OUTSTANDING_NONCES = 10;
 
 const oneTapNonceIdentifier = (state: string) => `one-tap-nonce:${state}`;
 
@@ -109,6 +111,39 @@ async function readOneTapNonceStates(ctx: GenericEndpointContext) {
 }
 
 /**
+ * Resolves the states that still map to an unconsumed, unexpired record. The
+ * first state holding a given nonce wins, so a duplicate value cannot shadow
+ * the record it was issued with.
+ */
+async function resolveOneTapAttempts(
+	ctx: GenericEndpointContext,
+	states: string[],
+) {
+	const now = Date.now();
+	const attempts: { state: string; nonce: string }[] = [];
+	for (const state of states) {
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(
+				oneTapNonceIdentifier(state),
+			);
+		if (!verification) continue;
+		const expiresAt = new Date(verification.expiresAt).getTime();
+		if (!Number.isFinite(expiresAt) || expiresAt <= now) continue;
+		attempts.push({ state, nonce: verification.value });
+	}
+	return attempts;
+}
+
+async function filterLiveOneTapStates(
+	ctx: GenericEndpointContext,
+	states: string[],
+) {
+	return (await resolveOneTapAttempts(ctx, states)).map(
+		(attempt) => attempt.state,
+	);
+}
+
+/**
  * Creates the nonce passed to Google and binds it to the browser that initiated
  * the attempt. The browser only receives the nonce; the opaque state stays in
  * a signed HttpOnly cookie and identifies a short-lived, single-use record.
@@ -130,9 +165,14 @@ async function createOneTapNonce(ctx: GenericEndpointContext) {
 		});
 	}
 
-	const states = [...(await readOneTapNonceStates(ctx)), state].slice(
-		-ONE_TAP_MAX_OUTSTANDING_NONCES,
+	// Drop attempts that were already consumed or have expired before applying
+	// the cap, so a still-usable button's attempt is not evicted to make room
+	// for one that no longer exists.
+	const outstanding = await filterLiveOneTapStates(
+		ctx,
+		await readOneTapNonceStates(ctx),
 	);
+	const states = [...outstanding, state].slice(-ONE_TAP_MAX_OUTSTANDING_NONCES);
 	await setOneTapNonceStates(ctx, states);
 
 	return { nonce, expiresIn: ONE_TAP_NONCE_TTL_SECONDS };
@@ -227,23 +267,13 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							message: "Invalid or expired One Tap nonce",
 						});
 					}
-					// Resolve every attempt this browser still has outstanding. The
-					// first state holding a given nonce wins, so a duplicate value
-					// cannot shadow the record it was issued with.
-					const now = Date.now();
+					// Resolve every attempt this browser still has outstanding.
+					const attempts = await resolveOneTapAttempts(ctx, states);
+					const liveStates = attempts.map((attempt) => attempt.state);
 					const stateByNonce = new Map<string, string>();
-					const liveStates: string[] = [];
-					for (const candidate of states) {
-						const verification =
-							await ctx.context.internalAdapter.findVerificationValue(
-								oneTapNonceIdentifier(candidate),
-							);
-						if (!verification) continue;
-						const expiresAt = new Date(verification.expiresAt).getTime();
-						if (!Number.isFinite(expiresAt) || expiresAt <= now) continue;
-						liveStates.push(candidate);
-						if (!stateByNonce.has(verification.value)) {
-							stateByNonce.set(verification.value, candidate);
+					for (const attempt of attempts) {
+						if (!stateByNonce.has(attempt.nonce)) {
+							stateByNonce.set(attempt.nonce, attempt.state);
 						}
 					}
 					if (stateByNonce.size === 0) {

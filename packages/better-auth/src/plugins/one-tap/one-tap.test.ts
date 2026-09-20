@@ -996,8 +996,81 @@ describe("oneTapClient nonce initialization", () => {
 			expect(initialize.mock.calls[1]?.[0]?.nonce).toBe(
 				"recovered-server-issued-nonce",
 			);
+			// The recovery path must re-render, not just re-initialize: a stale
+			// button left on screen would still carry the spent nonce.
+			expect(renderButton).toHaveBeenCalledTimes(2);
+			expect(replaceChildren).toHaveBeenCalledTimes(2);
 		} finally {
 			consoleError.mockRestore();
+			vi.useRealTimers();
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("serializes nonce issuance so concurrent buttons cannot drop each other's attempt", async () => {
+		type GoogleInitializeConfig = {
+			nonce?: string | undefined;
+			callback: (response: { credential: string }) => Promise<void>;
+		};
+		vi.useFakeTimers();
+		const initialize = vi.fn((_config: GoogleInitializeConfig) => {});
+		const renderButton = vi.fn();
+		let inFlight = 0;
+		let maxConcurrent = 0;
+		let issued = 0;
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/one-tap/nonce") {
+				inFlight += 1;
+				maxConcurrent = Math.max(maxConcurrent, inFlight);
+				// Yield so an unserialized caller would overlap here.
+				await Promise.resolve();
+				await Promise.resolve();
+				inFlight -= 1;
+				issued += 1;
+				return {
+					data: { nonce: `nonce-${issued}`, expiresIn: 60 },
+					error: null,
+				};
+			}
+			return { data: {}, error: null };
+		});
+		const makeContainer = () =>
+			({
+				replaceChildren: vi.fn(),
+				isConnected: true,
+			}) as unknown as HTMLElement;
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			location: { href: "" },
+			google: {
+				accounts: {
+					id: { initialize, renderButton },
+				},
+			},
+		});
+
+		try {
+			const plugin = oneTapClient({ clientId: "test-client" });
+			const actions = plugin.getActions(
+				fetchMock as unknown as BetterFetch,
+				{} as ClientStore,
+				undefined,
+			);
+
+			await Promise.all([
+				actions.oneTap({ button: { container: makeContainer() } }),
+				actions.oneTap({ button: { container: makeContainer() } }),
+				actions.oneTap({ button: { container: makeContainer() } }),
+			]);
+
+			// Issuance is a read-modify-write over the nonce cookie, so overlapping
+			// requests would let one response clobber another's stored attempt.
+			expect(maxConcurrent).toBe(1);
+			expect(issued).toBe(3);
+			const nonces = initialize.mock.calls.map((call) => call[0]?.nonce);
+			expect(new Set(nonces).size).toBe(3);
+		} finally {
 			vi.useRealTimers();
 			vi.unstubAllGlobals();
 		}
@@ -1233,6 +1306,34 @@ describe("one-tap nonce verification", async () => {
 			method: "POST",
 			body: { idToken: "stub-id-token" },
 			headers: refreshedHeaders,
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.token).toBeTruthy();
+	});
+
+	it("keeps more than three live attempts outstanding for one browser", async () => {
+		verifiedPayload.email = "one-tap-nonce-many@example.com";
+		verifiedPayload.sub = "one-tap-nonce-many-sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: { google: googleProvider },
+			plugins: [oneTap()],
+		});
+
+		// Four rendered buttons on one page. The oldest must survive: it is still
+		// on screen and Google can mint a credential against it at any time.
+		let headers = await issueOneTapNonce(client.$fetch);
+		const oldestNonce = (verifiedPayload as Record<string, unknown>).nonce;
+		for (let i = 0; i < 3; i++) {
+			headers = await issueOneTapNonce(client.$fetch, headers);
+		}
+
+		(verifiedPayload as Record<string, unknown>).nonce = oldestNonce;
+		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+			headers,
 		});
 
 		expect(res.error).toBeFalsy();
