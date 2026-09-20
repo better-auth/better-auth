@@ -458,7 +458,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				},
 				ctx,
 			);
-			if (!canUpdateOrg) {
+			if (!canUpdateOrg.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
@@ -587,7 +587,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				},
 				ctx,
 			);
-			if (!canDeleteOrg) {
+			if (!canDeleteOrg.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
