@@ -8,6 +8,7 @@ export const PASSKEY_ERROR_CODES = defineErrorCodes({
 	PASSKEY_NOT_FOUND: "Passkey not found",
 	AUTHENTICATION_FAILED: "Authentication failed",
 	UNABLE_TO_CREATE_SESSION: "Unable to create session",
+	USER_NOT_FOUND: "User not found",
 	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
 	PREVIOUSLY_REGISTERED: "Previously registered",
 	REGISTRATION_CANCELLED: "Registration cancelled",

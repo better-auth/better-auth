@@ -47,7 +47,14 @@ export const huggingface = (options: HuggingFaceOptions) => {
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		accountSubject: ({ profile }) => profile.sub,
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
@@ -61,6 +68,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -104,7 +112,6 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.name || profile.preferred_username || "",
 					email: profile.email,
 					image: profile.picture,

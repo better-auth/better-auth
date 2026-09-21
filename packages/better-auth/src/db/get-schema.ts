@@ -1,13 +1,15 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { getAuthTables } from "@better-auth/core/db";
+import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
+import { getAuthTablesWithResolvedIndexes } from "@better-auth/core/db/internal";
 
 export function getSchema(config: BetterAuthOptions) {
-	const tables = getAuthTables(config);
+	const { indexesByTable, tables } = getAuthTablesWithResolvedIndexes(config);
 	const schema: Record<
 		string,
 		{
 			fields: Record<string, DBFieldAttribute>;
+			indexes?: readonly ResolvedDBTableIndex[] | undefined;
 			order: number;
 			disableMigrations?: boolean | undefined;
 		}
@@ -44,6 +46,11 @@ export function getSchema(config: BetterAuthOptions) {
 			order: table.order || Infinity,
 			disableMigrations: table.disableMigrations,
 		};
+	}
+	for (const [tableName, indexes] of indexesByTable) {
+		if (schema[tableName]) {
+			schema[tableName].indexes = indexes;
+		}
 	}
 	return schema;
 }

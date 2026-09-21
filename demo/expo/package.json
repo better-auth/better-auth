@@ -8,6 +8,7 @@
     "dev": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "android": "expo run:android"
   },
@@ -19,6 +20,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.8",
     "@rn-primitives/avatar": "^1.2.0",
+    "@rn-primitives/dialog": "^1.5.2",
     "@rn-primitives/separator": "^1.2.0",
     "@rn-primitives/slot": "^1.2.0",
     "@rn-primitives/types": "^1.2.0",
@@ -41,6 +43,7 @@
     "expo-web-browser": "~55.0.9",
     "nanostores": "^1.1.1",
     "nativewind": "^4.2.2",
+    "lucide-react-native": "^1.26.0",
     "pg": "^8.19.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -61,7 +64,9 @@
     "@babel/preset-env": "^7.29.0",
     "@babel/runtime": "^7.28.6",
     "@types/babel__core": "^7.20.5",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.14",
-    "babel-preset-expo": "~55.0.10"
+    "babel-preset-expo": "~55.0.10",
+    "typescript": "catalog:"
   }
 }

@@ -8,7 +8,13 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	checksSchema,
+	createSchemaCheck,
+	registerSchemaCheck,
+} from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
+import { findPrismaSchemaProblems, readPrismaDataModel } from "./schema-check";
 
 export interface PrismaConfig {
 	/**
@@ -621,9 +627,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
-						// Deletes are idempotent: a missing row (P2025) is a no-op.
-						// Any other failure (constraint, connection, permission) is a
-						// real error and must propagate rather than report success.
+						// Deletes are idempotent: a missing row is a no-op. Any other
+						// failure must propagate instead of reporting success.
 						if (isPrismaNotFoundError(e)) return;
 						throw e;
 					}
@@ -825,6 +830,18 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		const instance = adapter(options);
+		const dataModel = readPrismaDataModel(prisma);
+		if (dataModel && checksSchema(options)) {
+			registerSchemaCheck(
+				instance,
+				createSchemaCheck(
+					async () =>
+						findPrismaSchemaProblems(dataModel, options, config.usePlural),
+					"prisma",
+				),
+			);
+		}
+		return instance;
 	};
 };

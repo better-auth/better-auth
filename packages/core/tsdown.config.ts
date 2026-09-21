@@ -11,6 +11,7 @@ export default defineConfig({
 	entry: [
 		"./src/index.ts",
 		"./src/db/index.ts",
+		"./src/db/internal.ts",
 		"./src/db/adapter/index.ts",
 		"./src/async_hooks/index.ts",
 		"./src/async_hooks/pure.index.ts",

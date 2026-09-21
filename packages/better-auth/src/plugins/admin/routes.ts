@@ -434,15 +434,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
-				...userData,
-				email: email,
-				name: ctx.body.name,
-				role:
-					requestedRole !== undefined
-						? parseRoles(requestedRole as string | string[])
-						: (opts?.defaultRole ?? "user"),
-			});
+			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+				{
+					...userData,
+					email: email,
+					name: ctx.body.name,
+					role:
+						requestedRole !== undefined
+							? parseRoles(requestedRole as string | string[])
+							: (opts?.defaultRole ?? "user"),
+				},
+				{ method: "admin" },
+			);
 
 			if (!user) {
 				throw APIError.from(
@@ -456,8 +459,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ctx.body.password,
 				);
 				await ctx.context.internalAdapter.linkAccount({
-					accountId: user.id,
 					providerId: "credential",
+					accountId: user.id,
 					password: hashedPassword,
 					userId: user.id,
 				});
@@ -1142,11 +1145,13 @@ export const banUser = (opts: AdminOptions) =>
 					banned: true,
 					banReason:
 						ctx.body.banReason || opts?.defaultBanReason || "No reason",
+					// null (not undefined) so a permanent ban clears any expiration
+					// left over from a previous temporary ban.
 					banExpires: ctx.body.banExpiresIn
 						? getDate(ctx.body.banExpiresIn, "sec")
 						: opts?.defaultBanExpiresIn
 							? getDate(opts.defaultBanExpiresIn, "sec")
-							: undefined,
+							: null,
 					updatedAt: new Date(),
 				},
 			);
@@ -1724,10 +1729,8 @@ export const setUserPassword = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
-			const accounts = await ctx.context.internalAdapter.findAccounts(userId);
-			const credentialAccount = accounts.find(
-				(account) => account.providerId === "credential",
-			);
+			const credentialAccount =
+				await ctx.context.internalAdapter.findCredentialAccount(userId);
 			if (credentialAccount) {
 				await ctx.context.internalAdapter.updatePassword(
 					userId,
@@ -1737,7 +1740,7 @@ export const setUserPassword = (opts: AdminOptions) =>
 				await ctx.context.internalAdapter.createAccount({
 					userId,
 					providerId: "credential",
-					accountId: userId,
+					accountId: user.id,
 					password: hashedPassword,
 				});
 			}

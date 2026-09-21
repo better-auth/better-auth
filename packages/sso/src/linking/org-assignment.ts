@@ -48,6 +48,8 @@ type OrganizationAssignmentResult =
 	| "provisioning-disabled"
 	| "unverified-identity";
 
+const VERIFIED_PROVIDER_PAGE_SIZE = 100;
+
 function getEmailDomain(email: string): string | null {
 	const normalizedEmail = email.trim().toLowerCase();
 	const parts = normalizedEmail.split("@");
@@ -69,15 +71,25 @@ async function findVerifiedDomainProviders(
 	ctx: GenericEndpointContext,
 	domain: string,
 ): Promise<SSOProvider<SSOOptions>[]> {
-	const allVerifiedProviders = await ctx.context.adapter.findMany<
-		SSOProvider<SSOOptions>
-	>({
-		model: "ssoProvider",
-		where: [{ field: "domainVerified", value: true }],
-	});
-	return allVerifiedProviders.filter((provider) =>
-		domainMatches(domain, provider.domain),
-	);
+	const matchingProviders: SSOProvider<SSOOptions>[] = [];
+	let offset = 0;
+
+	while (true) {
+		const page = await ctx.context.adapter.findMany<SSOProvider<SSOOptions>>({
+			model: "ssoProvider",
+			where: [{ field: "domainVerified", value: true }],
+			limit: VERIFIED_PROVIDER_PAGE_SIZE,
+			offset,
+			sortBy: { field: "providerId", direction: "asc" },
+		});
+		matchingProviders.push(
+			...page.filter((provider) => domainMatches(domain, provider.domain)),
+		);
+		if (page.length < VERIFIED_PROVIDER_PAGE_SIZE) {
+			return matchingProviders;
+		}
+		offset += page.length;
+	}
 }
 
 async function assignOrganization(
@@ -182,6 +194,7 @@ async function assignOrganization(
 			{ field: "organizationId", value: organizationId },
 			{ field: "email", value: user.email.toLowerCase() },
 			{ field: "status", value: "pending" },
+			{ field: "expiresAt", value: new Date(), operator: "gt" },
 		],
 	});
 	if (pendingInvitation) {

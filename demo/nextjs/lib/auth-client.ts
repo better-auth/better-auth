@@ -2,6 +2,7 @@ import { electronProxyClient } from "@better-auth/electron/proxy";
 import { dashClient } from "@better-auth/infra/client";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { passkeyClient } from "@better-auth/passkey/client";
+import { ssoClient } from "@better-auth/sso/client";
 import { stripeClient } from "@better-auth/stripe/client";
 import {
 	adminClient,
@@ -20,6 +21,7 @@ import type { auth } from "./auth";
 export const authClient = createAuthClient({
 	plugins: [
 		dashClient(),
+		ssoClient(),
 		organizationClient(),
 		twoFactorClient({
 			onTwoFactorRedirect() {

@@ -328,7 +328,7 @@ export interface OrganizationOptions {
 				team?: {
 					modelName?: string;
 					fields?: {
-						[key in keyof Omit<Team, "id">]?: string;
+						[key in keyof Omit<Team, "id"> | "memberCount"]?: string;
 					};
 					additionalFields?: {
 						[key in string]: DBFieldAttribute;
@@ -337,7 +337,7 @@ export interface OrganizationOptions {
 				teamMember?: {
 					modelName?: string;
 					fields?: {
-						[key in keyof Omit<TeamMember, "id">]?: string;
+						[key in keyof Omit<TeamMember, "id"> | "membershipKey"]?: string;
 					};
 				};
 				organizationRole?: {

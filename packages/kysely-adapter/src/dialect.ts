@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { Dialect } from "kysely";
 import {
 	Kysely,
@@ -7,7 +8,7 @@ import {
 	PostgresDialect,
 	SqliteDialect,
 } from "kysely";
-import type { KyselyDatabaseType } from "./types";
+import type { DatabaseIndexIntrospector, KyselyDatabaseType } from "./types";
 
 export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],
@@ -55,6 +56,23 @@ export function getKyselyDatabaseType(
 	return null;
 }
 
+function checkSchemaName(
+	schemaName: string | undefined,
+	databaseType: KyselyDatabaseType | null,
+): void {
+	if (schemaName === undefined) return;
+	if (typeof schemaName !== "string" || schemaName.length === 0) {
+		throw new BetterAuthError(
+			"`database.schemaName` must be a non-empty schema name.",
+		);
+	}
+	if (databaseType !== "postgres") {
+		throw new BetterAuthError(
+			`\`database.schemaName\` is only supported on PostgreSQL, but the configured database type is "${databaseType ?? "unknown"}".`,
+		);
+	}
+}
+
 export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	const db = config.database;
 
@@ -62,31 +80,45 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: null,
 			databaseType: null,
+			introspectIndexes: undefined,
+			schemaName: undefined,
 			transaction: undefined,
 		};
 	}
 
 	if ("db" in db) {
+		const schemaName = db.schemaName;
+		checkSchemaName(schemaName, db.type);
 		return {
-			kysely: db.db,
+			kysely: schemaName ? db.db.withSchema(schemaName) : db.db,
 			databaseType: db.type,
+			introspectIndexes: undefined,
+			schemaName,
 			transaction: db.transaction,
 		};
 	}
 
 	if ("dialect" in db) {
+		const schemaName = db.schemaName;
+		checkSchemaName(schemaName, db.type);
+		const kysely = new Kysely<any>({ dialect: db.dialect });
 		return {
-			kysely: new Kysely<any>({ dialect: db.dialect }),
+			kysely: schemaName ? kysely.withSchema(schemaName) : kysely,
 			databaseType: db.type,
+			introspectIndexes: undefined,
+			schemaName,
 			transaction: db.transaction,
 		};
 	}
 
 	let dialect: Dialect | undefined = undefined;
+	let introspectIndexes: DatabaseIndexIntrospector | undefined = undefined;
+	let transaction: boolean | undefined = undefined;
 
 	const databaseType = getKyselyDatabaseType(db);
 
 	if ("createDriver" in db) {
+		// Caller-supplied dialects have unverified transaction capability; leave undefined.
 		dialect = db;
 	}
 
@@ -94,17 +126,20 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new SqliteDialect({
 			database: db,
 		});
+		transaction = true;
 	}
 
 	if ("getConnection" in db) {
 		// @ts-expect-error - mysql2/promise
 		dialect = new MysqlDialect(db);
+		transaction = true;
 	}
 
 	if ("connect" in db) {
 		dialect = new PostgresDialect({
 			pool: db,
 		});
+		transaction = true;
 	}
 
 	if ("fileControl" in db) {
@@ -112,6 +147,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		dialect = new BunSqliteDialect({
 			database: db,
 		});
+		transaction = true;
 	}
 
 	if ("createSession" in db) {
@@ -141,20 +177,30 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			dialect = new NodeSqliteDialect({
 				database: db,
 			});
+			transaction = true;
 		}
 	}
 
 	// Cloudflare D1
 	if ("batch" in db && "exec" in db && "prepare" in db) {
-		const { D1SqliteDialect } = await import("./d1-sqlite-dialect");
+		const { createD1IndexIntrospector, D1SqliteDialect } = await import(
+			"./d1-sqlite-dialect"
+		);
 		dialect = new D1SqliteDialect({
 			database: db,
 		});
+		introspectIndexes = createD1IndexIntrospector(db);
+		// D1 has no interactive transactions; only its batch() API.
+		transaction = false;
 	}
 
 	return {
 		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
-		transaction: undefined,
+		introspectIndexes,
+		// A raw pool, database handle, or dialect carries no adapter options,
+		// so a schema can only be declared through the object config forms.
+		schemaName: undefined,
+		transaction,
 	};
 };

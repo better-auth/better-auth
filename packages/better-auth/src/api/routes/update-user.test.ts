@@ -4,35 +4,11 @@ import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
-describe("updateUser", async () => {
-	const sendChangeEmail = vi.fn();
-	let emailVerificationToken = "";
-	const { client, testUser, sessionSetter, db, signInWithTestUser } =
-		await getTestInstance({
-			emailVerification: {
-				async sendVerificationEmail({ user, url, token }) {
-					emailVerificationToken = token;
-				},
-			},
-			user: {
-				changeEmail: {
-					enabled: true,
-					sendChangeEmailConfirmation: async ({
-						user,
-						newEmail,
-						url,
-						token,
-					}) => {
-						sendChangeEmail(user, newEmail, url, token);
-					},
-				},
-			},
-		});
-	// Sign in once for all tests in this describe block
-	const { runWithUser: globalRunWithClient } = await signInWithTestUser();
-
+describe("updateUser", () => {
 	it("should update the user's name", async () => {
-		await globalRunWithClient(async () => {
+		const { client, signInWithTestUser } = await getTestInstance();
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const updated = await client.updateUser({
 				name: "newName",
 				image: "https://example.com/image.jpg",
@@ -44,7 +20,11 @@ describe("updateUser", async () => {
 	});
 
 	it("should unset image", async () => {
-		await globalRunWithClient(async () => {
+		const { client, signInWithTestUser } = await getTestInstance(undefined, {
+			testUser: { image: "https://example.com/image.jpg" },
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			await client.updateUser({
 				image: null,
 			});
@@ -53,7 +33,26 @@ describe("updateUser", async () => {
 		});
 	});
 
-	it("should not update user email immediately (default secure flow)", async () => {
+	it("should change email only after confirming both addresses", async () => {
+		let confirmationToken = "";
+		let verificationToken = "";
+		const sendChangeEmailConfirmation = vi.fn(
+			async ({ token }: { token: string }) => {
+				confirmationToken = token;
+			},
+		);
+		const sendVerificationEmail = vi.fn(
+			async ({ token }: { token: string }) => {
+				verificationToken = token;
+			},
+		);
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: { sendVerificationEmail },
+			user: {
+				changeEmail: { enabled: true, sendChangeEmailConfirmation },
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
 		// Ensure user is verified to trigger the confirmation flow
 		await db.update({
 			model: "user",
@@ -69,7 +68,7 @@ describe("updateUser", async () => {
 		});
 
 		const newEmail = "new-email@email.com";
-		await globalRunWithClient(async () => {
+		await runWithUser(async () => {
 			await client.changeEmail({
 				newEmail,
 			});
@@ -78,31 +77,26 @@ describe("updateUser", async () => {
 			expect(sessionRes.data?.user.email).not.toBe(newEmail);
 			expect(sessionRes.data?.user.email).toBe(testUser.email);
 		});
-	});
+		expect(sendChangeEmailConfirmation).toHaveBeenCalledOnce();
+		expect(sendChangeEmailConfirmation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: testUser.email }),
+				newEmail,
+			}),
+			expect.anything(),
+		);
+		expect(confirmationToken).not.toBe("");
 
-	it("should verify email change (flow with confirmation)", async () => {
-		// The previous test triggered changeEmail.
-		// Since testUser is verified, and sendChangeEmailVerification is provided,
-		// it should have sent a confirmation email to the OLD email.
-
-		expect(sendChangeEmail).toHaveBeenCalled();
-		const call = sendChangeEmail.mock.calls[0];
-		const token = call?.[3]; // token is 4th arg
-		if (!token) throw new Error("Token not found");
-
-		await globalRunWithClient(async () => {
-			// 1. Verify the confirmation token (sent to old email)
+		await runWithUser(async () => {
 			const res = await client.verifyEmail({
 				query: {
-					token: token,
+					token: confirmationToken,
 				},
 			});
 			expect(res.data?.status).toBe(true);
 
-			// This should trigger sending verification to the NEW email.
-			// emailVerification.sendVerificationEmail should have been called.
-			// We captured this in emailVerificationToken variable in setup.
-			expect(emailVerificationToken).toBeDefined();
+			expect(sendVerificationEmail).toHaveBeenCalledOnce();
+			expect(verificationToken).not.toBe("");
 
 			// User email should STILL be old email
 			const sessionRes = await client.getSession();
@@ -111,41 +105,43 @@ describe("updateUser", async () => {
 			// 2. Verify the new email token
 			const res2 = await client.verifyEmail({
 				query: {
-					token: emailVerificationToken,
+					token: verificationToken,
 				},
 			});
 			expect(res2.data?.status).toBe(true);
 
 			// NOW user email should be updated
 			const sessionRes2 = await client.getSession();
-			expect(sessionRes2.data?.user.email).toBe("new-email@email.com");
+			expect(sessionRes2.data?.user.email).toBe(newEmail);
 			expect(sessionRes2.data?.user.emailVerified).toBe(true);
 		});
 	});
 
 	it("should update the user's password", async () => {
-		const newEmail = "new-email@email.com"; // User email is now this
-		await globalRunWithClient(async () => {
+		const { client, testUser, signInWithTestUser } = await getTestInstance();
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
 			const updated = await client.changePassword({
 				newPassword: "newPassword",
 				currentPassword: testUser.password,
 				revokeOtherSessions: true,
 			});
-			expect(updated).toBeDefined();
+			expect(updated.data?.token).toEqual(expect.any(String));
 		});
 		const signInRes = await client.signIn.email({
-			email: newEmail,
+			email: testUser.email,
 			password: "newPassword",
 		});
 		expect(signInRes.data?.user).toBeDefined();
 		const signInCurrentPassword = await client.signIn.email({
-			email: testUser.email, // Old email
+			email: testUser.email,
 			password: testUser.password,
 		});
 		expect(signInCurrentPassword.data).toBeNull();
 	});
 
 	it("should update account's updatedAt when changing password", async () => {
+		const { client, sessionSetter, db } = await getTestInstance();
 		const newHeaders = new Headers();
 		await client.signUp.email({
 			name: "Test User",
@@ -219,6 +215,7 @@ describe("updateUser", async () => {
 	});
 
 	it("should not update password if current password is wrong", async () => {
+		const { client, sessionSetter } = await getTestInstance();
 		const newHeaders = new Headers();
 		await client.signUp.email({
 			name: "name",
@@ -244,7 +241,10 @@ describe("updateUser", async () => {
 	});
 
 	it("should revoke other sessions", async () => {
-		await globalRunWithClient(async (headers) => {
+		const { client, testUser, sessionSetter, signInWithTestUser } =
+			await getTestInstance();
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
 			const newHeaders = new Headers();
 			await client.changePassword({
 				newPassword: "newPassword",
@@ -263,6 +263,79 @@ describe("updateUser", async () => {
 			// because revokeOtherSessions should have invalidated it on the server
 			expect(sessionAttempt.data).toBeNull();
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
+	 */
+	it("should preserve the replacement session in secondary storage", async () => {
+		const store = new Map<string, string>();
+		const {
+			client: secondaryStorageClient,
+			testUser: secondaryStorageUser,
+			signInWithTestUser: signInWithSecondaryStorageUser,
+			sessionSetter: setSecondaryStorageSession,
+		} = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+		const { headers: previousSessionHeaders, user: signedInUser } =
+			await signInWithSecondaryStorageUser();
+		const replacementSessionHeaders = new Headers();
+
+		const passwordChange = await secondaryStorageClient.changePassword({
+			newPassword: "new-secondary-storage-password",
+			currentPassword: secondaryStorageUser.password,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers: previousSessionHeaders,
+				onSuccess: setSecondaryStorageSession(replacementSessionHeaders),
+			},
+		});
+
+		expect(passwordChange.data?.token).toBeDefined();
+		const previousSession = await secondaryStorageClient.getSession({
+			fetchOptions: { headers: previousSessionHeaders },
+		});
+		expect(previousSession.data).toBeNull();
+
+		const replacementSession = await secondaryStorageClient.getSession({
+			fetchOptions: {
+				headers: replacementSessionHeaders,
+				throw: true,
+			},
+		});
+		if (!replacementSession) {
+			throw new Error("Replacement session was not created");
+		}
+		expect(replacementSession.user.id).toBe(signedInUser.id);
+		expect(replacementSession.session.token).toBe(passwordChange.data?.token);
+
+		const activeSessions = JSON.parse(
+			store.get(`active-sessions-${signedInUser.id}`) ?? "[]",
+		) as { token: string; expiresAt: number }[];
+		expect(activeSessions).toEqual([
+			expect.objectContaining({ token: passwordChange.data?.token }),
+		]);
 	});
 
 	it("shouldn't pass defaults", async () => {
@@ -332,6 +405,16 @@ describe("updateUser", async () => {
 					get(key) {
 						return store.get(key) || null;
 					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
 					delete(key) {
 						store.delete(key);
 					},
@@ -378,6 +461,16 @@ describe("updateUser", async () => {
 				},
 				get(key) {
 					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
 				},
 				delete(key) {
 					store.delete(key);
@@ -552,6 +645,16 @@ describe("delete user", async () => {
 				},
 				get(key) {
 					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
 				},
 				delete(key) {
 					store.delete(key);
@@ -952,5 +1055,106 @@ describe("change-email rejects confirmation-only config for verified users", asy
 			});
 			expect(res.error?.status).toBe(400);
 		});
+	});
+});
+
+describe("credential identity across email changes", async () => {
+	const { client, db, sessionSetter } = await getTestInstance(
+		{
+			user: {
+				changeEmail: {
+					enabled: true,
+					updateEmailWithoutVerification: true,
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+
+	it("keeps one credential account when the user changes their sign-in email", async () => {
+		const originalEmail = "credential-email-change@example.com";
+		const changedEmail = "changed-credential-email@example.com";
+		const password = "credential-password";
+		const sessionHeaders = new Headers();
+		const signUp = await client.signUp.email({
+			name: "Credential Email Change",
+			email: originalEmail,
+			password,
+			fetchOptions: {
+				onSuccess: sessionSetter(sessionHeaders),
+			},
+		});
+		expect(signUp.error).toBeNull();
+		const userId = signUp.data!.user.id;
+		const accountsBefore = await db.findMany<Account>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accountsBefore).toHaveLength(1);
+		expect(accountsBefore[0]).toMatchObject({
+			providerId: "credential",
+			accountId: userId,
+		});
+
+		const changeEmail = await client.changeEmail({
+			newEmail: changedEmail,
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(changeEmail.data?.status).toBe(true);
+
+		const oldEmailSignIn = await client.signIn.email({
+			email: originalEmail,
+			password,
+		});
+		expect(oldEmailSignIn.data).toBeNull();
+		const changedEmailSignIn = await client.signIn.email({
+			email: changedEmail,
+			password,
+		});
+		expect(changedEmailSignIn.data?.user.id).toBe(userId);
+
+		const accountsAfter = await db.findMany<Account>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accountsAfter).toHaveLength(1);
+		expect(accountsAfter[0]).toMatchObject({
+			id: accountsBefore[0]!.id,
+			providerId: "credential",
+			accountId: userId,
+		});
+	});
+});
+
+describe("setPassword", async () => {
+	it("sets the password on the existing passwordless credential account", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance();
+		const context = await auth.$context;
+		const { headers, user } = await signInWithTestUser();
+		const credentialAccount =
+			await context.internalAdapter.findCredentialAccount(user.id);
+		expect(credentialAccount).toBeTruthy();
+		await context.internalAdapter.updateAccount(credentialAccount!.id, {
+			password: null,
+		});
+
+		await expect(
+			auth.api.setPassword({
+				body: { newPassword: "new-password" },
+				headers,
+			}),
+		).resolves.toMatchObject({ status: true });
+
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		const credentialAccounts = accounts.filter(
+			(account) => account.providerId === "credential",
+		);
+		expect(credentialAccounts).toHaveLength(1);
+		await expect(
+			context.password.verify({
+				hash: credentialAccounts[0]!.password!,
+				password: "new-password",
+			}),
+		).resolves.toBe(true);
 	});
 });

@@ -90,11 +90,6 @@ const pluginMeta: Record<
 		tagline: "Multi-tenant organizations with roles and invitations",
 	},
 	// Enterprise
-	"oidc-provider": {
-		category: "Enterprise",
-		icon: "Globe",
-		tagline: "OpenID Connect provider for federated identity",
-	},
 	"oauth-provider": {
 		category: "Enterprise",
 		icon: "Server",

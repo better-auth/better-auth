@@ -5,7 +5,7 @@ export const CHAT_RATE_LIMIT_MESSAGE =
 	"Too many requests. Please wait a moment and try again.";
 
 const RATE_LIMIT_PATTERN =
-	/rate[_ -]?limit|too many requests|resource_(?:exceeded|exhausted)|quota[_ -]?(?:exceeded|exhausted)|(?:http(?: status)?|status(?: code)?)\s*:?\s*429/i;
+	/rate_limit(?:_(?:error|exceeded|exhausted))?|rate[ -]limit(?:ed|[ -](?:exceeded|exhausted|reached))|too many requests|resource_(?:exceeded|exhausted)|quota[_ -]?(?:exceeded|exhausted)|(?:http(?: status)?|status(?: code)?)\s*:?\s*429/i;
 
 export function getChatErrorMessage(error: unknown): string {
 	const message = error instanceof Error ? error.message : String(error);

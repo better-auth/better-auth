@@ -1,4 +1,6 @@
 ---
+icon: referenceInstrumentation
+sidebarTitle: "Instrumentation"
 title: Instrumentation (Experimental)
 description: Distributed tracing for Better Auth
 ---
@@ -17,6 +19,24 @@ Better Auth uses the OpenTelemetry API to create spans. For traces to be collect
 For setup instructions, see the official OpenTelemetry documentation:
 
 * **[Node.js getting started](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** – Core setup for Node.js apps
+
+## Disable Instrumentation
+
+To prevent Better Auth from creating OpenTelemetry spans, set `experimental.instrumentation.enabled` to `false`:
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  experimental: {
+    instrumentation: {
+      enabled: false,
+    },
+  },
+});
+```
+
+Instrumentation is enabled by default. Disabling it affects only this auth instance, leaving spans from your application and other libraries unchanged.
 
 ## Supported Spans
 
@@ -68,7 +88,7 @@ Middlewares are also supported:
 | ------------------------ | ----------------------------- | ---------------------------------------------- |
 | `db {operation} {model}` | Span for a database operation | All adapter operations (create, findOne, etc.) |
 
-* **Operations:** `create`, `findOne`, `findMany`, `update`, `updateMany`, `delete`, `deleteMany`, `count`
+* **Operations:** `create`, `findOne`, `findMany`, `update`, `updateMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`
 * **Models:** Core models include `user`, `account`, `session`, `verification`, plus plugin-defined models (e.g. `organization`, `rateLimit`).
 * **Attributes:**
   * `db.operation.name` - The database operation name (e.g. `create`)

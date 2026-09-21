@@ -1,12 +1,13 @@
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { decodeJwt } from "jose";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
@@ -26,17 +27,13 @@ function resolveUrl(url: string, baseUrl: string): URL {
 
 describe("PKCE optional - default behavior", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -54,7 +51,7 @@ describe("PKCE optional - default behavior", async () => {
 	let confidentialClient: OAuthClient;
 	let publicClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		// Create confidential client
@@ -62,6 +59,8 @@ describe("PKCE optional - default behavior", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -72,6 +71,7 @@ describe("PKCE optional - default behavior", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "none",
 			},
@@ -153,17 +153,13 @@ describe("PKCE optional - default behavior", async () => {
 
 describe("PKCE optional - per-client opt-out", async () => {
 	const authServerBaseUrl = "http://localhost:3001";
-	const rpBaseUrl = "http://localhost:5001";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -181,7 +177,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 	let confidentialClient: OAuthClient;
 	let publicClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		// Create confidential client with PKCE disabled
@@ -189,6 +185,8 @@ describe("PKCE optional - per-client opt-out", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				require_pkce: false,
 			},
@@ -200,6 +198,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "none",
 			},
@@ -254,7 +253,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			options: {
@@ -279,19 +278,158 @@ describe("PKCE optional - per-client opt-out", async () => {
 	});
 });
 
+describe("PKCE optional - dynamic client registration policy", async () => {
+	const authServerBaseUrl = "http://localhost:3005";
+	const rpBaseUrl = "https://rp.example.com";
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				clientRegistrationRequirePKCE: false,
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+	const unauthenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("confidential DCR client without PKCE should succeed when registration policy disables PKCE", async () => {
+		const registration = await unauthenticatedClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			application_type: "native",
+		});
+		expect(registration.data?.client_id).toBeDefined();
+		expect(registration.data?.client_secret).toBeDefined();
+		expect(registration.data?.token_endpoint_auth_method).toBe(
+			"client_secret_basic",
+		);
+		expect(registration.data?.require_pkce).toBe(false);
+
+		const clientId = registration.data!.client_id;
+		const clientSecret = registration.data!.client_secret!;
+		const state = "dcr-no-pkce";
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", state);
+
+		let consentRedirectUrl = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(consentRedirectUrl).toContain("/consent");
+		expect(consentRedirectUrl).not.toContain("error=");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		const consentResponse = await (async () => {
+			try {
+				return await authenticatedClient.oauth2.consent(
+					{ accept: true },
+					{ headers, throw: true },
+				);
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		})();
+		expect(consentResponse.url).toContain("code=");
+		expect(consentResponse.url).toContain(`state=${state}`);
+
+		const code = new URL(consentResponse.url).searchParams.get("code")!;
+		const { body: tokenBody, headers: tokenHeaders } =
+			await authorizationCodeRequest({
+				code,
+				redirectURI: redirectUri,
+				authentication: "basic",
+				options: {
+					clientId,
+					clientSecret,
+					redirectURI: redirectUri,
+				},
+			});
+
+		const tokenResponse = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{
+				method: "POST",
+				body: tokenBody.toString(),
+				headers: tokenHeaders,
+			},
+		);
+		const tokens = await tokenResponse.json();
+
+		expect(tokenResponse.status).toBe(200);
+		expect(tokens.access_token).toBeDefined();
+		expect(tokens.id_token).toBeDefined();
+	});
+
+	it("public DCR client without PKCE should still fail", async () => {
+		const registration = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "none",
+			redirect_uris: [redirectUri],
+			application_type: "native",
+		});
+		expect(registration.data?.client_id).toBeDefined();
+		expect(registration.data?.token_endpoint_auth_method).toBe("none");
+		expect(registration.data).not.toHaveProperty("public");
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", registration.data!.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "public-dcr-no-pkce");
+
+		let errorRedirect = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirect = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirect).toContain("error=invalid_request");
+		expect(errorRedirect).toContain("pkce+is+required+for+public+clients");
+	});
+});
+
 describe("PKCE optional - offline_access scope", async () => {
 	const authServerBaseUrl = "http://localhost:3002";
-	const rpBaseUrl = "http://localhost:5002";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -308,13 +446,15 @@ describe("PKCE optional - offline_access scope", async () => {
 
 	let confidentialClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		const confResponse = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				require_pkce: false, // Explicitly optional
 			},
@@ -322,8 +462,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		confidentialClient = confResponse;
 	});
 
-	it("offline_access without PKCE should fail even with requirePKCE: false", async () => {
-		// Try to authorize with offline_access but without PKCE
+	it("offline_access without PKCE or OIDC nonce should fail even with requirePKCE: false", async () => {
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", confidentialClient.client_id);
 		authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -340,8 +479,94 @@ describe("PKCE optional - offline_access scope", async () => {
 
 		expect(errorRedirect).toContain("error=invalid_request");
 		expect(errorRedirect).toContain(
-			"pkce+is+required+when+requesting+offline_access+scope",
+			"pkce+or+OIDC+nonce+is+required+when+requesting+offline_access+scope",
 		);
+	});
+
+	it("offline_access without PKCE should succeed for confidential OIDC requests with nonce", async () => {
+		const nonce = "offline-access-nonce";
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: confidentialClient.client_id,
+				clientSecret: confidentialClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			nonce,
+		});
+
+		let callbackUrl = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackUrl).toContain(redirectUri);
+		expect(callbackUrl).toContain("code=");
+		expect(callbackUrl).not.toContain("error=");
+
+		const url = resolveUrl(callbackUrl, authServerBaseUrl);
+		const code = url.searchParams.get("code");
+		expect(code).toBeDefined();
+
+		const { body, headers } = await authorizationCodeRequest({
+			code: code!,
+			redirectURI: redirectUri,
+			options: {
+				clientId: confidentialClient.client_id,
+				clientSecret: confidentialClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokenResponse = await authenticatedClient.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+
+		expect(tokenResponse.data?.access_token).toBeDefined();
+		expect(tokenResponse.data?.id_token).toBeDefined();
+		expect(tokenResponse.data?.refresh_token).toBeDefined();
+		expect(decodeJwt(tokenResponse.data!.id_token!).nonce).toBe(nonce);
+	});
+
+	it("offline_access without PKCE should fail for non-OIDC requests with nonce", async () => {
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: confidentialClient.client_id,
+				clientSecret: confidentialClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: "123",
+			scopes: ["offline_access"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			nonce: "unused-without-openid",
+		});
+
+		let errorRedirect = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirect = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirect).toContain("error=invalid_request");
+		expect(errorRedirect).toContain(
+			"pkce+or+OIDC+nonce+is+required+when+requesting+offline_access+scope",
+		);
+		expect(errorRedirect).not.toContain("code=");
 	});
 
 	it("offline_access with PKCE should succeed", async () => {
@@ -376,7 +601,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		const code = url.searchParams.get("code");
 		expect(code).toBeDefined();
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier,
@@ -404,17 +629,13 @@ describe("PKCE optional - offline_access scope", async () => {
 
 describe("PKCE optional - consistency checks", async () => {
 	const authServerBaseUrl = "http://localhost:3003";
-	const rpBaseUrl = "http://localhost:5003";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -431,13 +652,15 @@ describe("PKCE optional - consistency checks", async () => {
 
 	let confidentialClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		const confResponse = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				require_pkce: false,
 			},
@@ -474,7 +697,7 @@ describe("PKCE optional - consistency checks", async () => {
 		expect(code).toBeDefined();
 
 		// Try to exchange WITHOUT code_verifier (should fail)
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			// Intentionally omit codeVerifier
@@ -522,7 +745,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange WITH code_verifier (should fail)
 		const wrongCodeVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongCodeVerifier,
@@ -578,7 +801,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 		// Try to exchange with WRONG code_verifier
 		const wrongVerifier = generateRandomString(64);
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			code: code!,
 			redirectURI: redirectUri,
 			codeVerifier: wrongVerifier,
@@ -610,7 +833,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 describe("PKCE optional - registration restrictions", async () => {
 	const authServerBaseUrl = "http://localhost:3004";
-	const rpBaseUrl = "http://localhost:5004";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -618,10 +841,6 @@ describe("PKCE optional - registration restrictions", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -637,13 +856,14 @@ describe("PKCE optional - registration restrictions", async () => {
 	});
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	it("admin create endpoint should persist require_pkce", async () => {
 		const pkceDisabledClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				require_pkce: false,
 			},
 		});
@@ -653,6 +873,7 @@ describe("PKCE optional - registration restrictions", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				require_pkce: true,
 			},
 		});
@@ -670,6 +891,7 @@ describe("PKCE optional - registration restrictions", async () => {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				require_pkce: false,
 			},
 		});

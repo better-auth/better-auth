@@ -20,12 +20,7 @@ export interface LastLoginMethodClientConfig {
 		| undefined;
 }
 
-const paths = [
-	"/callback/",
-	"/oauth2/callback/",
-	"/sign-in/email",
-	"/sign-up/email",
-];
+const paths = ["/callback/", "/sign-in/email", "/sign-up/email"];
 const defaultResolveMethod = (url: string | URL) => {
 	const { pathname } = new URL(url.toString(), "http://localhost");
 

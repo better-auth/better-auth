@@ -36,12 +36,14 @@ export const paybin = (options: PaybinOptions) => {
 	return {
 		id: "paybin",
 		name: "Paybin",
+		accountSubject: ({ profile }) => profile.sub,
 		async createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
 			redirectURI,
 			loginHint,
+			additionalParams,
 		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
@@ -67,6 +69,7 @@ export const paybin = (options: PaybinOptions) => {
 				redirectURI,
 				prompt: options.prompt,
 				loginHint,
+				additionalParams,
 			});
 			return url;
 		},
@@ -103,7 +106,6 @@ export const paybin = (options: PaybinOptions) => {
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
-					id: user.sub,
 					name: user.name || user.preferred_username || "",
 					email: user.email,
 					image: user.picture,

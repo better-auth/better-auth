@@ -41,7 +41,12 @@ export default defineConfig({
 	const schemaKey = schemaContent.replace(/\s*output\s*=\s*"[^"]*"\n?/, "");
 
 	const outputMatch = schemaContent.match(/output\s*=\s*"([^"]*)"/);
-	const outputDir = outputMatch ? join(cwd, outputMatch[1]) : null;
+	if (!outputMatch?.[1]) {
+		throw new Error(
+			`Generated Prisma schema has no output path: ${schemaPath}`,
+		);
+	}
+	const outputDir = join(cwd, outputMatch[1]);
 
 	try {
 		execSync(
@@ -58,17 +63,15 @@ export default defineConfig({
 			},
 		);
 
-		if (outputDir) {
-			const prevDir = lastGeneratedDir.get(schemaKey);
-			if (prevDir && fs.existsSync(prevDir)) {
-				fs.cpSync(prevDir, outputDir, { recursive: true });
-			} else {
-				execSync(`${cli} generate --config ${configPath}`, {
-					stdio: "pipe",
-					cwd,
-				});
-				lastGeneratedDir.set(schemaKey, outputDir);
-			}
+		const prevDir = lastGeneratedDir.get(schemaKey);
+		if (prevDir && fs.existsSync(prevDir)) {
+			fs.cpSync(prevDir, outputDir, { recursive: true });
+		} else {
+			execSync(`${cli} generate --config ${configPath}`, {
+				stdio: "pipe",
+				cwd,
+			});
+			lastGeneratedDir.set(schemaKey, outputDir);
 		}
 	} catch (error) {
 		const err = error as { stdout?: Buffer; stderr?: Buffer };

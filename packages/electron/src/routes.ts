@@ -1,11 +1,6 @@
-import { Buffer } from "node:buffer";
-import { timingSafeEqual } from "node:crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import {
@@ -15,9 +10,16 @@ import {
 } from "better-auth/cookies";
 import type { User } from "better-auth/db";
 import { parseUserOutput } from "better-auth/db";
+import { generateCodeChallenge } from "better-auth/oauth2";
 import * as z from "zod";
 import { ELECTRON_ERROR_CODES } from "./error-codes";
 import type { ElectronOptions } from "./types";
+
+type ElectronVerificationValue = {
+	userId: string;
+	codeChallenge: string;
+	state: string;
+};
 
 const electronTokenBodySchema = z.object({
 	token: z.string().nonempty(),
@@ -73,7 +75,7 @@ export const electronToken = (_opts: ElectronOptions) =>
 				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 
-			const tokenRecord = safeJSONParse<Record<string, any>>(token.value);
+			const tokenRecord = safeJSONParse<ElectronVerificationValue>(token.value);
 			if (!tokenRecord) {
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -91,26 +93,10 @@ export const electronToken = (_opts: ElectronOptions) =>
 					ELECTRON_ERROR_CODES.MISSING_CODE_CHALLENGE,
 				);
 			}
-			// Only S256 is accepted. The legacy `plain` comparison is rejected:
-			// in plain mode the verifier equals the challenge, which travels in
-			// the sign-in URL, so the comparison adds nothing for this flow.
-			if (tokenRecord.codeChallengeMethod !== "s256") {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ELECTRON_ERROR_CODES.INVALID_PKCE_METHOD,
-				);
-			}
-			const codeChallenge = Buffer.from(
-				base64Url.decode(tokenRecord.codeChallenge),
-			);
-			const codeVerifier = Buffer.from(
-				await createHash("SHA-256").digest(ctx.body.code_verifier),
-			);
-
-			if (
-				codeChallenge.length !== codeVerifier.length ||
-				!timingSafeEqual(codeChallenge, codeVerifier)
-			) {
+			// PKCE is always S256: the stored challenge is the SHA-256 digest of
+			// the verifier, so a legacy or plaintext challenge fails this check.
+			const codeChallenge = await generateCodeChallenge(ctx.body.code_verifier);
+			if (codeChallenge !== tokenRecord.codeChallenge) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ELECTRON_ERROR_CODES.INVALID_CODE_VERIFIER,
@@ -151,7 +137,6 @@ const electronInitOAuthProxyQuerySchema = z.object({
 	provider: z.string().nonempty(),
 	state: z.string(),
 	code_challenge: z.string(),
-	code_challenge_method: z.string().optional(),
 });
 
 export const electronInitOAuthProxy = (opts: ElectronOptions) =>
@@ -199,52 +184,29 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			},
 		},
 		async (ctx) => {
-			const isSocialProvider = SocialProviderListEnum.safeParse(
-				ctx.query.provider,
-			);
-			if (!isSocialProvider && !ctx.context.getPlugin("generic-oauth")) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
-			}
-
-			// Electron transfers require S256 PKCE; reject any other method
-			// rather than forwarding a downgraded `plain` challenge.
-			if (
-				ctx.query.code_challenge_method &&
-				ctx.query.code_challenge_method.toLowerCase() !== "s256"
-			) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ELECTRON_ERROR_CODES.INVALID_PKCE_METHOD,
-				);
-			}
-
 			const headers = new Headers(ctx.request?.headers);
 			headers.set("origin", new URL(ctx.context.baseURL).origin);
 			let setCookies: string[] = [];
 			const searchParams = new URLSearchParams();
 			searchParams.set("client_id", opts.clientID || "electron");
 			searchParams.set("code_challenge", ctx.query.code_challenge);
-			searchParams.set("code_challenge_method", "S256");
 			searchParams.set("state", ctx.query.state);
 			const res = await betterFetch<{
 				url: string | undefined;
 				redirect: boolean;
 				user?: User & Record<string, any>;
 				token?: string;
-			}>(
-				`${isSocialProvider ? "/sign-in/social" : "/sign-in/oauth2"}?${searchParams.toString()}`,
-				{
-					baseURL: ctx.context.baseURL,
-					method: "POST",
-					body: {
-						provider: ctx.query.provider,
-					},
-					onResponse: (innerCtx) => {
-						setCookies = innerCtx.response.headers.getSetCookie();
-					},
-					headers,
+			}>(`/sign-in/social?${searchParams.toString()}`, {
+				baseURL: ctx.context.baseURL,
+				method: "POST",
+				body: {
+					provider: ctx.query.provider,
 				},
-			);
+				onResponse: (innerCtx) => {
+					setCookies = innerCtx.response.headers.getSetCookie();
+				},
+				headers,
+			});
 
 			if (res.error) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -258,7 +220,6 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 					ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
 				});
 			}
-
 			if (res.data.url && res.data.redirect) {
 				ctx.setHeader("Location", res.data.url);
 				ctx.setStatus(302);
@@ -272,7 +233,6 @@ const electronTransferUserQuerySchema = z.object({
 	client_id: z.string(),
 	state: z.string(),
 	code_challenge: z.string(),
-	code_challenge_method: z.string().optional(),
 });
 const electronTransferUserBodySchema = z.object({
 	callbackURL: z.string().optional(),
@@ -289,7 +249,6 @@ export const electronTransferUser = (
 				client_id: string;
 				state: string;
 				code_challenge: string;
-				code_challenge_method?: string | undefined;
 			},
 		) => Promise<string | null>;
 	},
