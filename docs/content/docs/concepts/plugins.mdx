@@ -88,7 +88,7 @@ export const myPlugin = () => {
 
 ### Register a plugin type
 
-Reusable plugins can register their ID and creator with Better Auth's plugin registry. This enables type-safe discovery through `getPlugin()` and `hasPlugin()`. The `@better-auth/i18n` types also use the registry to discover plugin `$ERROR_CODES`.
+Reusable plugins can register their ID and creator with Better Auth's plugin registry. This allows `getPlugin()` to infer the plugin's exact return type. The `@better-auth/i18n` types also use the registry to discover plugin `$ERROR_CODES`.
 
 Augment `BetterAuthPluginRegistry` in the server plugin module. The registry key must exactly match the plugin's `id`:
 
@@ -107,9 +107,6 @@ Better Auth can now infer the registered plugin instead of returning the generic
 ```ts
 const plugin = ctx.context.getPlugin("my-plugin");
 // ReturnType<typeof myPlugin> | null
-
-const enabled = ctx.context.hasPlugin("my-plugin");
-// true when the auth configuration includes "my-plugin", otherwise boolean
 ```
 
 This registration only affects TypeScript. Users must still include the plugin in their `plugins` array to enable it at runtime. Schema, endpoint, and client inference work independently. Client plugins use `$InferServerPlugin` for those types.
