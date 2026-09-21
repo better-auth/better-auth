@@ -686,6 +686,9 @@ describe("email case insensitivity", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
 describe("sign-in password length", async () => {
 	const hash = vi.fn(async (password: string) => `hashed:${password}`);
 	const verify = vi.fn(

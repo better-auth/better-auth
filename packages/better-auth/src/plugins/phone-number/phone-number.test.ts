@@ -1503,6 +1503,9 @@ describe("phone-number validateUserInfo provisioning gate", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
 describe("phone-number sign-in password length", async () => {
 	const hash = vi.fn(async (password: string) => `hashed:${password}`);
 	const verify = vi.fn(

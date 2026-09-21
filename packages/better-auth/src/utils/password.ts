@@ -77,6 +77,11 @@ export async function shouldRequirePassword(
 	userId: string,
 	allowPasswordless?: boolean,
 ): Promise<boolean> {
+	const password = ctx.body.password;
+	if (typeof password === "string") {
+		assertPasswordNotTooLong(ctx, password);
+	}
+
 	if (!allowPasswordless) {
 		return true;
 	}

@@ -2723,6 +2723,9 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
 describe("admin create-user password length", async () => {
 	const hash = vi.fn(async (password: string) => `hashed:${password}`);
 	const verify = vi.fn(

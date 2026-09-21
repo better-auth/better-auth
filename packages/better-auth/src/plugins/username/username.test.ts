@@ -1091,6 +1091,9 @@ describe("username with displayUsername disabled and a validator", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
 describe("username sign-in password length", async () => {
 	const hash = vi.fn(async (password: string) => `hashed:${password}`);
 	const verify = vi.fn(

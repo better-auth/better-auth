@@ -1159,6 +1159,9 @@ describe("setPassword", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
 describe("password length on verify-only fields", async () => {
 	const hash = vi.fn(async (password: string) => `hashed:${password}`);
 	const verify = vi.fn(
