@@ -728,11 +728,12 @@ export const auth = betterAuth({
 });
 ```
 
-The scope field must be a required, server-owned user additional field
-(`required: true`, `input: false`). Better Auth resolves it for every database
-operation, injects it into scoped records, and adds it to reads, updates, and
-deletes. User email uniqueness becomes composite over the scope field and
-email. Account, session, and verification records are scoped automatically.
+The scope field must be a required, server-owned string user additional field
+(`type: "string"`, `required: true`, `input: false`). Better Auth resolves it
+for every database operation, injects it into scoped records, and adds it to
+reads, updates, and deletes. User email uniqueness becomes composite over the
+scope field and email. Account, session, and verification records are scoped
+automatically, and email-verification tokens are bound to the issuing scope.
 Use `models` for plugin tables that also contain tenant-bound credentials.
 
 Run `npx auth@latest generate` after enabling this option. Existing

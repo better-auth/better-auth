@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
-import { createEmailVerificationToken } from "../api";
+import { createEmailVerificationTokenForUser } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { Account, User } from "../types";
@@ -552,12 +552,7 @@ async function dispatchVerificationEmail(
 	}
 	const send = async () => {
 		try {
-			const token = await createEmailVerificationToken(
-				c.context.secret,
-				user.email,
-				undefined,
-				c.context.options.emailVerification?.expiresIn,
-			);
+			const token = await createEmailVerificationTokenForUser(c, user);
 			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 				callbackURL || "/",
 			)}`;

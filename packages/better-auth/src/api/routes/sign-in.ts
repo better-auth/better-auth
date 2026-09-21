@@ -26,7 +26,7 @@ import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
-import { createEmailVerificationToken } from "./email-verification";
+import { createEmailVerificationTokenForUser } from "./email-verification";
 
 const socialSignInBodySchema = z.object({
 	/**
@@ -579,12 +579,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				}
 
 				if (ctx.context.options?.emailVerification?.sendOnSignIn) {
-					const token = await createEmailVerificationToken(
-						ctx.context.secret,
-						user.email,
-						undefined,
-						ctx.context.options.emailVerification?.expiresIn,
-					);
+					const token = await createEmailVerificationTokenForUser(ctx, user);
 					const callbackURL = ctx.body.callbackURL
 						? encodeURIComponent(ctx.body.callbackURL)
 						: encodeURIComponent("/");

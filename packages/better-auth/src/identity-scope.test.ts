@@ -151,6 +151,96 @@ describe("tenant-scoped identity", async () => {
 		expect(correctTenant.user).toHaveProperty("tenantId", "tenant-a");
 	});
 
+	it("rejects email verification tokens issued by another tenant", async () => {
+		const tokens = new Map<string, string>();
+		const { auth, db } = await getTestInstance(
+			{
+				...tenantOptions(),
+				emailVerification: {
+					sendOnSignUp: true,
+					async sendVerificationEmail({ token, user }) {
+						tokens.set(
+							(user as typeof user & { tenantId: string }).tenantId,
+							token,
+						);
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: { email: sharedEmail, name: "Jane A", password: passwordA },
+		});
+		await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-b"),
+			body: { email: sharedEmail, name: "Jane B", password: passwordB },
+		});
+		expect(
+			await db.findMany<{ emailVerified: boolean; tenantId: string }>({
+				model: "user",
+			}),
+		).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					emailVerified: false,
+					tenantId: "tenant-a",
+				}),
+				expect.objectContaining({
+					emailVerified: false,
+					tenantId: "tenant-b",
+				}),
+			]),
+		);
+
+		await expect(
+			auth.api.verifyEmail({
+				headers: tenantHeaders("tenant-b"),
+				query: { token: tokens.get("tenant-a")! },
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		expect(
+			await db.findMany<{ emailVerified: boolean; tenantId: string }>({
+				model: "user",
+			}),
+		).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					emailVerified: false,
+					tenantId: "tenant-a",
+				}),
+				expect.objectContaining({
+					emailVerified: false,
+					tenantId: "tenant-b",
+				}),
+			]),
+		);
+
+		const verified = await auth.api.verifyEmail({
+			headers: tenantHeaders("tenant-a"),
+			query: { token: tokens.get("tenant-a")! },
+		});
+		expect(verified).toEqual({ status: true, user: null });
+
+		const users = await db.findMany<{
+			emailVerified: boolean;
+			tenantId: string;
+		}>({ model: "user" });
+		expect(users).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					emailVerified: true,
+					tenantId: "tenant-a",
+				}),
+				expect.objectContaining({
+					emailVerified: false,
+					tenantId: "tenant-b",
+				}),
+			]),
+		);
+	});
+
 	it("scopes provider account lookup and linking", async () => {
 		const { auth } = await getTestInstance(tenantOptions(), {
 			disableTestUser: true,

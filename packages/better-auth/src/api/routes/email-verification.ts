@@ -42,6 +42,44 @@ export async function createEmailVerificationToken(
 }
 
 /**
+ * Creates an email-verification token bound to the user's configured identity
+ * scope.
+ *
+ * @internal
+ */
+export async function createEmailVerificationTokenForUser(
+	ctx: GenericEndpointContext,
+	user: User,
+	updateTo?: string | undefined,
+	extraPayload?: Record<string, unknown>,
+) {
+	const identityScopeField = ctx.context.options.user?.identityScope?.field;
+	const identityScope = identityScopeField
+		? (user as User & Record<string, unknown>)[identityScopeField]
+		: undefined;
+	if (
+		identityScopeField &&
+		(typeof identityScope !== "string" || identityScope.length === 0)
+	) {
+		throw APIError.from("INTERNAL_SERVER_ERROR", {
+			code: "MISSING_IDENTITY_SCOPE",
+			message: "The user is missing its identity scope.",
+		});
+	}
+
+	return createEmailVerificationToken(
+		ctx.context.secret,
+		user.email,
+		updateTo,
+		ctx.context.options.emailVerification?.expiresIn,
+		{
+			...extraPayload,
+			...(identityScopeField ? { identityScope } : {}),
+		},
+	);
+}
+
+/**
  * A function to send a verification email to the user
  */
 export async function sendVerificationEmailFn(
@@ -55,12 +93,7 @@ export async function sendVerificationEmailFn(
 			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 		);
 	}
-	const token = await createEmailVerificationToken(
-		ctx.context.secret,
-		user.email,
-		undefined,
-		ctx.context.options.emailVerification?.expiresIn,
-	);
+	const token = await createEmailVerificationTokenForUser(ctx, user);
 	const callbackURL = ctx.body.callbackURL
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
@@ -316,6 +349,7 @@ export const verifyEmail = createAuthEndpoint(
 		}
 		const schema = z.object({
 			email: z.email(),
+			identityScope: z.string().optional(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
 		});
@@ -325,6 +359,14 @@ export const verifyEmail = createAuthEndpoint(
 		);
 		if (!user) {
 			return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
+		}
+		const identityScopeField = ctx.context.options.user?.identityScope?.field;
+		if (
+			identityScopeField &&
+			parsed.identityScope !==
+				(user.user as User & Record<string, unknown>)[identityScopeField]
+		) {
+			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		if (parsed.updateTo) {
 			const session = await getSessionFromCtx(ctx);
@@ -336,11 +378,10 @@ export const verifyEmail = createAuthEndpoint(
 				 * User clicks confirmation -> sends verification to new email
 				 */
 				case "change-email-confirmation": {
-					const newToken = await createEmailVerificationToken(
-						ctx.context.secret,
-						parsed.email,
+					const newToken = await createEmailVerificationTokenForUser(
+						ctx,
+						user.user,
 						parsed.updateTo,
-						ctx.context.options.emailVerification?.expiresIn,
 						{ requestType: "change-email-verification" },
 					);
 					const updateCallbackURL = ctx.query.callbackURL
@@ -439,9 +480,9 @@ export const verifyEmail = createAuthEndpoint(
 							email: parsed.updateTo,
 							emailVerified: false,
 						});
-					const newToken = await createEmailVerificationToken(
-						ctx.context.secret,
-						parsed.updateTo,
+					const newToken = await createEmailVerificationTokenForUser(
+						ctx,
+						updatedUser,
 					);
 					const updateCallbackURL = ctx.query.callbackURL
 						? encodeURIComponent(ctx.query.callbackURL)

@@ -123,6 +123,28 @@ describe("getAuthTables", () => {
 		});
 	});
 
+	it("requires a server-owned string identity scope field", () => {
+		expect(() =>
+			getAuthTables({
+				user: {
+					additionalFields: {
+						tenantId: {
+							type: "number",
+							required: true,
+							input: false,
+						},
+					},
+					identityScope: {
+						field: "tenantId",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "tenantId" must use type: "string", required: true, and input: false.',
+		);
+	});
+
 	it("should use correct field name for refreshTokenExpiresAt", () => {
 		const tables = getAuthTables({
 			account: {

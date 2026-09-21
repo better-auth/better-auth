@@ -13,7 +13,7 @@ import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
-import { createEmailVerificationToken } from "./email-verification";
+import { createEmailVerificationTokenForUser } from "./email-verification";
 
 const signUpEmailBodySchema = z
 	.object({
@@ -395,11 +395,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					ctx.context.options.emailVerification?.sendOnSignUp ??
 					ctx.context.options.emailAndPassword.requireEmailVerification;
 				if (shouldSendVerificationEmail) {
-					const token = await createEmailVerificationToken(
-						ctx.context.secret,
-						createdUser.email,
-						undefined,
-						ctx.context.options.emailVerification?.expiresIn,
+					const token = await createEmailVerificationTokenForUser(
+						ctx,
+						createdUser,
 					);
 					const callbackURL = body.callbackURL
 						? encodeURIComponent(body.callbackURL)

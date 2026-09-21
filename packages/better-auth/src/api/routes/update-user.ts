@@ -8,7 +8,10 @@ import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
 import { originCheck } from "../middlewares";
-import { createEmailVerificationToken } from "./email-verification";
+import {
+	createEmailVerificationToken,
+	createEmailVerificationTokenForUser,
+} from "./email-verification";
 import {
 	getSessionFromCtx,
 	isStateful,
@@ -796,12 +799,10 @@ export const changeEmail = createAuthEndpoint(
 				},
 			});
 			if (canSendVerification) {
-				const token = await createEmailVerificationToken(
-					ctx.context.secret,
-					newEmail,
-					undefined,
-					ctx.context.options.emailVerification?.expiresIn,
-				);
+				const token = await createEmailVerificationTokenForUser(ctx, {
+					...ctx.context.session.user,
+					email: newEmail,
+				});
 				const url = `${
 					ctx.context.baseURL
 				}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
@@ -831,11 +832,10 @@ export const changeEmail = createAuthEndpoint(
 		 * If the email is verified, we need to send a verification email
 		 */
 		if (canSendConfirmation) {
-			const token = await createEmailVerificationToken(
-				ctx.context.secret,
-				ctx.context.session.user.email,
+			const token = await createEmailVerificationTokenForUser(
+				ctx,
+				ctx.context.session.user,
 				newEmail,
-				ctx.context.options.emailVerification?.expiresIn,
 				{
 					requestType: "change-email-confirmation",
 				},
@@ -868,11 +868,10 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
-		const token = await createEmailVerificationToken(
-			ctx.context.secret,
-			ctx.context.session.user.email,
+		const token = await createEmailVerificationTokenForUser(
+			ctx,
+			ctx.context.session.user,
 			newEmail,
-			ctx.context.options.emailVerification?.expiresIn,
 			{
 				requestType: "change-email-verification",
 			},
