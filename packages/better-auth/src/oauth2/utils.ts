@@ -60,5 +60,12 @@ export async function reencryptOAuthToken(
 	ctx: AuthContext,
 ) {
 	if (!token) return token;
-	return setTokenUtil(await decryptOAuthToken(token, ctx), ctx);
+	let plaintext = token;
+	try {
+		plaintext = (await decryptOAuthToken(token, ctx)) ?? token;
+	} catch {
+		// isLikelyEncrypted only inspects the shape, so a plaintext token that
+		// happens to look like ciphertext reaches here; keep it as plaintext.
+	}
+	return setTokenUtil(plaintext, ctx);
 }

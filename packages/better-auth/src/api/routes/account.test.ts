@@ -807,17 +807,63 @@ describe("account", async () => {
 	});
 
 	it("should encrypt the id token", async () => {
-		const accounts = await ctx.adapter.findMany<Account>({
-			model: "account",
-			where: [{ field: "providerId", value: "google" }],
+		const idToken =
+			"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJlbmMtc3ViamVjdCJ9.signature";
+		const {
+			auth: isolatedAuth,
+			client: isolatedClient,
+			signInWithTestUser: signInOnIsolatedInstance,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async () => true,
+				},
+			},
+			account: {
+				accountLinking: { allowDifferentEmails: true },
+				encryptOAuthTokens: true,
+			},
 		});
-		const withIdToken = accounts.filter((account) => account.idToken);
-		expect(withIdToken.length).toBeGreaterThan(0);
-		for (const account of withIdToken) {
-			const plaintext = await decryptOAuthToken(account.idToken!, ctx);
-			expect(plaintext).toBeTruthy();
-			expect(account.idToken).not.toBe(plaintext);
-		}
+		const isolatedContext = await isolatedAuth.$context;
+		const googleProvider = isolatedContext.socialProviders.find(
+			(provider) => provider.id === "google",
+		);
+		assert(googleProvider, "google provider should be configured");
+		const linkedUser = {
+			id: "enc-subject",
+			name: "enc",
+			email: "enc-subject@example.com",
+			sub: "enc-subject",
+			emailVerified: true,
+		};
+		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+			user: linkedUser,
+			data: linkedUser,
+		});
+
+		const { headers } = await signInOnIsolatedInstance();
+		const linked = await isolatedClient.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				idToken: { token: idToken },
+			},
+			{ headers },
+		);
+		expect(linked.error).toBeNull();
+
+		const account = await isolatedContext.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "accountId", value: "enc-subject" }],
+		});
+		assert(account, "linked account should exist");
+		expect(account.idToken).toBeTruthy();
+		expect(account.idToken).not.toBe(idToken);
+		expect(await decryptOAuthToken(account.idToken!, isolatedContext)).toBe(
+			idToken,
+		);
 	});
 
 	it("returns 401 over HTTP when a linked provider resolves an invalid account subject", async () => {

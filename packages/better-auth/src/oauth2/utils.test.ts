@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { symmetricEncrypt } from "../crypto";
-import { decryptOAuthToken, setTokenUtil } from "./utils";
+import { decryptOAuthToken, reencryptOAuthToken, setTokenUtil } from "./utils";
 
 // Mock minimal AuthContext for testing
 function createMockContext(encryptOAuthTokens: boolean): AuthContext {
@@ -160,5 +160,36 @@ describe("setTokenUtil", () => {
 		const decrypted = await decryptOAuthToken(encrypted as string, ctx);
 
 		expect(decrypted).toBe(originalToken);
+	});
+
+	it("should re-encrypt a stored plaintext token", async () => {
+		const ctx = createMockContext(true);
+		const stored = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.signature";
+
+		const encrypted = await reencryptOAuthToken(stored, ctx);
+
+		expect(encrypted).not.toBe(stored);
+		expect(await decryptOAuthToken(encrypted as string, ctx)).toBe(stored);
+	});
+
+	it("should leave an already encrypted token decryptable", async () => {
+		const ctx = createMockContext(true);
+		const stored = (await setTokenUtil("id-token", ctx)) as string;
+
+		const encrypted = await reencryptOAuthToken(stored, ctx);
+
+		expect(await decryptOAuthToken(encrypted as string, ctx)).toBe("id-token");
+	});
+
+	it("should keep a plaintext token that looks like ciphertext", async () => {
+		const ctx = createMockContext(true);
+		// isLikelyEncrypted only checks the shape, so even-length hex plaintext
+		// reaches symmetricDecrypt and throws.
+		const stored = "deadbeefcafe0123";
+
+		const encrypted = await reencryptOAuthToken(stored, ctx);
+
+		expect(encrypted).not.toBe(stored);
+		expect(await decryptOAuthToken(encrypted as string, ctx)).toBe(stored);
 	});
 });
