@@ -25,6 +25,7 @@ import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import {
 	decryptOAuthToken,
 	getOAuthCallbackPath,
+	reencryptOAuthToken,
 	setTokenUtil,
 } from "../../oauth2/utils";
 import {
@@ -336,7 +337,7 @@ export const linkSocialAccount = createAuthEndpoint(
 							c.body.idToken.accessToken,
 							c.context,
 						),
-						idToken: token,
+						idToken: await setTokenUtil(token, c.context),
 						refreshToken: await setTokenUtil(
 							c.body.idToken.refreshToken,
 							c.context,
@@ -397,7 +398,7 @@ export const linkSocialAccount = createAuthEndpoint(
 						c.body.idToken.accessToken,
 						c.context,
 					),
-					idToken: token,
+					idToken: await setTokenUtil(token, c.context),
 					refreshToken: await setTokenUtil(
 						c.body.idToken.refreshToken,
 						c.context,
@@ -890,6 +891,9 @@ export const refreshToken = createAuthEndpoint(
 				refreshToken,
 				ctx.context,
 			);
+			const decryptedIdToken = account.idToken
+				? await decryptOAuthToken(account.idToken, ctx.context)
+				: undefined;
 			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
 				decryptedRefreshToken,
 				ctx,
@@ -905,7 +909,9 @@ export const refreshToken = createAuthEndpoint(
 				refreshToken: resolvedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				idToken: tokens.idToken || account.idToken,
+				idToken: tokens.idToken
+					? await setTokenUtil(tokens.idToken, ctx.context)
+					: await reencryptOAuthToken(account.idToken, ctx.context),
 			};
 			let updatedAccount: Account | null = null;
 
@@ -938,7 +944,7 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				scope: responseScope,
-				idToken: tokens.idToken || account.idToken,
+				idToken: tokens.idToken || decryptedIdToken,
 				providerId: account.providerId,
 				accountId: account.id,
 			});

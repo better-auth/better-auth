@@ -62,4 +62,3 @@ export async function reencryptOAuthToken(
 	if (!token) return token;
 	return setTokenUtil(await decryptOAuthToken(token, ctx), ctx);
 }
-

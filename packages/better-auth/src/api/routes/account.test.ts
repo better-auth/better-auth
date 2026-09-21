@@ -20,6 +20,7 @@ import {
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecodeJWT, symmetricEncodeJWT } from "../../crypto";
+import { decryptOAuthToken } from "../../oauth2/utils";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
@@ -803,6 +804,20 @@ describe("account", async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(3);
 		});
+	});
+
+	it("should encrypt the id token", async () => {
+		const accounts = await ctx.adapter.findMany<Account>({
+			model: "account",
+			where: [{ field: "providerId", value: "google" }],
+		});
+		const withIdToken = accounts.filter((account) => account.idToken);
+		expect(withIdToken.length).toBeGreaterThan(0);
+		for (const account of withIdToken) {
+			const plaintext = await decryptOAuthToken(account.idToken!, ctx);
+			expect(plaintext).toBeTruthy();
+			expect(account.idToken).not.toBe(plaintext);
+		}
 	});
 
 	it("returns 401 over HTTP when a linked provider resolves an invalid account subject", async () => {
