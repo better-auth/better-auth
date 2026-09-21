@@ -42,6 +42,87 @@ describe("getAuthTables", () => {
 		);
 	});
 
+	it("uses composite email uniqueness for tenant-scoped identity", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+						fieldName: "tenant_id",
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					resolve: ({ request }) => request?.headers.get("x-tenant-id") ?? null,
+				},
+			},
+		});
+
+		expect(tables.user?.fields.email?.unique).toBe(false);
+		expect(tables.user?.indexes).toContainEqual({
+			fields: ["tenantId", "email"],
+			unique: true,
+		});
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["tenantId", "issuer", "accountId"],
+			unique: true,
+		});
+		expect(tables.account?.indexes).not.toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+
+		for (const model of ["user", "account", "session", "verification"]) {
+			expect(tables[model]?.fields.tenantId).toMatchObject({
+				fieldName: "tenant_id",
+				required: true,
+				input: false,
+			});
+		}
+	});
+
+	it("adds identity scope to explicitly configured plugin models", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					models: ["passkey"],
+					resolve: ({ request }) => request?.headers.get("x-tenant-id") ?? null,
+				},
+			},
+			plugins: [
+				{
+					id: "passkey",
+					schema: {
+						passkey: {
+							fields: {
+								credentialId: { type: "string", required: true },
+								userId: { type: "string", required: true },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.passkey?.fields.tenantId).toMatchObject({
+			required: true,
+			input: false,
+		});
+		expect(tables.passkey?.indexes).toContainEqual({
+			fields: ["tenantId"],
+		});
+	});
+
 	it("should use correct field name for refreshTokenExpiresAt", () => {
 		const tables = getAuthTables({
 			account: {

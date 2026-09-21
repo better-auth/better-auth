@@ -916,6 +916,38 @@ export type BetterAuthOptions = {
 	user?:
 		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
 				/**
+				 * Scope user identity and related authentication records to a
+				 * request-resolved value. This allows the same email or provider
+				 * account to identify independent users in different tenants.
+				 *
+				 * The scope field must also be declared in `additionalFields` with
+				 * `required: true` and `input: false`. Better Auth injects the
+				 * resolved value and generates a composite unique index over the
+				 * scope field and email.
+				 */
+				identityScope?: {
+					/**
+					 * Logical field from `user.additionalFields` that stores the
+					 * identity scope.
+					 */
+					field: string;
+					/**
+					 * Resolve the scope for the current request. Returning `null`,
+					 * `undefined`, or an empty string fails the operation closed.
+					 */
+					resolve: (context: {
+						headers?: Headers | undefined;
+						request?: Request | undefined;
+					}) => Awaitable<string | null | undefined>;
+					/**
+					 * Plugin model keys that must also be scoped. Core user,
+					 * account, session, and verification models are always scoped.
+					 *
+					 * @example ["passkey", "twoFactor"]
+					 */
+					models?: string[] | undefined;
+				};
+				/**
 				 * Gate which identities Better Auth admits. Called just before
 				 * `create-user`, `link-account`, and (for OAuth) `sign-in`, across
 				 * every authentication method, including stateless setups with no

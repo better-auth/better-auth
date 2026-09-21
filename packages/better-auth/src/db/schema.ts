@@ -53,6 +53,9 @@ function getFields(
 			};
 		}
 	}
+	if (mode === "input" && options.user?.identityScope?.field) {
+		delete schema[options.user.identityScope.field];
+	}
 	tableCache.set(cacheKey, schema);
 	return schema;
 }

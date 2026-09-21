@@ -149,6 +149,38 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 });
 
 describe("get-migration: compound indexes on SQLite", () => {
+	it("generates tenant-scoped user email uniqueness", async () => {
+		const { compileMigrations } = await getMigrations({
+			database: new DatabaseSync(":memory:"),
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+						fieldName: "tenant_id",
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					resolve: ({ request }) => request?.headers.get("x-tenant-id") ?? null,
+				},
+			},
+		});
+
+		const sql = await compileMigrations();
+
+		expect(sql).toContain(
+			'create unique index "user_tenant_id_email_uidx" on "user" ("tenant_id", "email")',
+		);
+		expect(sql).not.toContain(
+			'create unique index "user_email_uidx" on "user" ("email")',
+		);
+		expect(sql).toContain(
+			'create unique index "account_tenant_id_providerId_accountId_uidx" on "account" ("tenant_id", "providerId", "accountId")',
+		);
+	});
+
 	it("rejects duplicate field-level and table-level indexes before creating a table", async () => {
 		await expect(
 			getMigrations({
