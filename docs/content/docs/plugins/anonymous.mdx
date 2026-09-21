@@ -157,7 +157,7 @@ export const auth = betterAuth({
 
 ### `generateRandomEmail`
 
-A custom function to generate email addresses for anonymous users. This allows you to define your own email format. The function can be synchronous or asynchronous.
+A custom function to generate email addresses for anonymous users. This allows you to define your own email format. The function can be synchronous or asynchronous, and receives the generated `name` of the anonymous user so you can derive the email from it.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -166,9 +166,11 @@ import { anonymous } from "better-auth/plugins"
 export const auth = betterAuth({
     plugins: [
         anonymous({
-            generateRandomEmail: () => { // [!code highlight]
+            generateName: () => "Random Name",
+            generateRandomEmail: ({ name }) => { // [!code highlight]
+                const alias = name.replace(" ", "-").toLowerCase() // [!code highlight]
                 const id = crypto.randomUUID() // [!code highlight]
-                return `guest-${id}@example.com` // [!code highlight]
+                return `${alias}-${id}@example.com` // [!code highlight]
             } // [!code highlight]
         })
     ]
@@ -179,6 +181,7 @@ export const auth = betterAuth({
   **Notes:**
 
   * If `generateRandomEmail` is provided, `emailDomainName` is ignored.
+  * The function receives `{ name }`, where `name` is the result of `generateName` (or `"Anonymous"` by default).
   * You are responsible for ensuring the email is unique to avoid conflicts. The returned email must be in a valid format.
 </Callout>
 
@@ -195,7 +198,25 @@ and the `/delete-anonymous-user` endpoint will no longer be accessible to anonym
 
 ### `generateName`
 
-A callback function that is called to generate a name for the anonymous user. Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
+A callback function that is called to generate a name for the anonymous user. Useful if you want to have random names for anonymous users, or if `name` is unique in your database. The function can be synchronous or asynchronous and receives the request context. If not provided, the name defaults to `"Anonymous"`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        anonymous({
+            generateName: () => { // [!code highlight]
+                const id = crypto.randomUUID().slice(0, 8) // [!code highlight]
+                return `Guest ${id}` // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
+```
+
+The generated name is also passed to [`generateRandomEmail`](#generaterandomemail), so you can derive the email address from it.
 
 ## Schema
 
