@@ -24,6 +24,7 @@ import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import {
 	decryptOAuthToken,
+	encryptStoredOAuthToken,
 	getOAuthCallbackPath,
 	setTokenUtil,
 } from "../../oauth2/utils";
@@ -910,7 +911,7 @@ export const refreshToken = createAuthEndpoint(
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				idToken: tokens.idToken
 					? await setTokenUtil(tokens.idToken, ctx.context)
-					: (account.idToken ?? undefined),
+					: await encryptStoredOAuthToken(account.idToken, ctx.context),
 			};
 			let updatedAccount: Account | null = null;
 

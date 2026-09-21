@@ -1,7 +1,11 @@
 import type { AuthContext } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { symmetricEncrypt } from "../crypto";
-import { decryptOAuthToken, setTokenUtil } from "./utils";
+import {
+	decryptOAuthToken,
+	encryptStoredOAuthToken,
+	setTokenUtil,
+} from "./utils";
 
 // Mock minimal AuthContext for testing
 function createMockContext(encryptOAuthTokens: boolean): AuthContext {
@@ -150,6 +154,25 @@ describe("setTokenUtil", () => {
 		expect(result).not.toBe(token);
 		expect(result).toMatch(/^[0-9a-f]+$/i);
 		expect((result as string).length % 2).toBe(0);
+	});
+
+	it("should upgrade a stored plaintext token", async () => {
+		const ctx = createMockContext(true);
+		const stored = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.signature";
+
+		const upgraded = await encryptStoredOAuthToken(stored, ctx);
+
+		expect(upgraded).not.toBe(stored);
+		expect(await decryptOAuthToken(upgraded as string, ctx)).toBe(stored);
+	});
+
+	it("should not touch a stored value that already looks encrypted", async () => {
+		const ctx = createMockContext(true);
+		const stored = (await setTokenUtil("id-token", ctx)) as string;
+
+		// Re-encrypting would need a decrypt first, which throws once the
+		// secret has been rotated and would replace the stored token.
+		expect(await encryptStoredOAuthToken(stored, ctx)).toBe(stored);
 	});
 
 	it("should produce tokens that can be decrypted", async () => {
