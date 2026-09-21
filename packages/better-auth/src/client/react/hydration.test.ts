@@ -2,7 +2,10 @@
 
 import { organizationClient } from "better-auth/client/plugins";
 import { organization } from "better-auth/plugins";
-import { useStore } from "better-auth/react";
+import {
+	createAuthClient as createReactClient,
+	useStore,
+} from "better-auth/react";
 import { getTestInstance } from "better-auth/test";
 import { Window } from "happy-dom";
 import { atom, cleanStores, computed } from "nanostores";
@@ -37,6 +40,59 @@ afterEach(async () => {
  * @see https://github.com/better-auth/better-auth/issues/10972
  */
 describe("React auth query hydration", () => {
+	it("hydrates the generated useSession hook with its server snapshot", async () => {
+		const client = createReactClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(JSON.stringify(null), {
+						headers: { "content-type": "application/json" },
+					}),
+			},
+		});
+		stores.push(client.$store.atoms.session);
+		const renderedPendingStates: boolean[] = [];
+
+		function SaveButton() {
+			const { isPending } = client.useSession();
+			renderedPendingStates.push(isPending);
+			return createElement(
+				"button",
+				{ "aria-disabled": isPending },
+				isPending ? "Loading" : "Save",
+			);
+		}
+
+		const container = document.createElement("div");
+		container.innerHTML = renderToString(createElement(SaveButton));
+		expect(container.innerHTML).toBe(
+			'<button aria-disabled="true">Loading</button>',
+		);
+
+		const earlyContainer = document.createElement("div");
+		const earlyRoot = createRoot(earlyContainer);
+		roots.push(earlyRoot);
+		await act(async () => {
+			earlyRoot.render(createElement(SaveButton));
+			await vi.runAllTimersAsync();
+		});
+		expect(earlyContainer.textContent).toBe("Save");
+
+		renderedPendingStates.length = 0;
+		const onRecoverableError = vi.fn();
+		await act(async () => {
+			roots.push(
+				hydrateRoot(container, createElement(SaveButton), {
+					onRecoverableError,
+				}),
+			);
+		});
+
+		expect(onRecoverableError).not.toHaveBeenCalled();
+		expect(renderedPendingStates[0]).toBe(true);
+		expect(container.textContent).toBe("Save");
+	});
+
 	it.each([
 		"signed in",
 		"signed out",
