@@ -530,7 +530,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 
 export type CleanedWhere = Required<Where>;
 
-export type CustomAdapterModel = {
+export type ModelTarget = {
 	/**
 	 * The physical model or table name used by the database adapter.
 	 */
@@ -546,18 +546,18 @@ export interface CustomAdapter {
 		data,
 		model,
 		select,
-	}: CustomAdapterModel & {
+	}: ModelTarget & {
 		data: T;
 		select?: string[] | undefined;
 	}) => Promise<T>;
 	update: <T>(
-		data: CustomAdapterModel & {
+		data: ModelTarget & {
 			where: CleanedWhere[];
 			update: T;
 		},
 	) => Promise<T | null>;
 	updateMany: (
-		data: CustomAdapterModel & {
+		data: ModelTarget & {
 			where: CleanedWhere[];
 			update: Record<string, any>;
 		},
@@ -567,7 +567,7 @@ export interface CustomAdapter {
 		where,
 		select,
 		join,
-	}: CustomAdapterModel & {
+	}: ModelTarget & {
 		where: CleanedWhere[];
 		select?: string[] | undefined;
 		join?: JoinConfig | undefined;
@@ -580,7 +580,7 @@ export interface CustomAdapter {
 		sortBy,
 		offset,
 		join,
-	}: CustomAdapterModel & {
+	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
 		limit: number;
 		select?: string[] | undefined;
@@ -591,13 +591,13 @@ export interface CustomAdapter {
 	delete: ({
 		model,
 		where,
-	}: CustomAdapterModel & {
+	}: ModelTarget & {
 		where: CleanedWhere[];
 	}) => Promise<void>;
 	deleteMany: ({
 		model,
 		where,
-	}: CustomAdapterModel & {
+	}: ModelTarget & {
 		where: CleanedWhere[];
 	}) => Promise<number>;
 	/**
@@ -609,7 +609,7 @@ export interface CustomAdapter {
 	 * one matching row.
 	 */
 	consumeOne?: <T>(
-		data: CustomAdapterModel & {
+		data: ModelTarget & {
 			where: CleanedWhere[];
 		},
 	) => Promise<T | null>;
@@ -626,7 +626,7 @@ export interface CustomAdapter {
 	 * guarantee.
 	 */
 	incrementOne?: <T>(
-		data: CustomAdapterModel & {
+		data: ModelTarget & {
 			where: CleanedWhere[];
 			increment: Record<string, number>;
 			set?: Record<string, unknown> | undefined;
@@ -635,7 +635,7 @@ export interface CustomAdapter {
 	count: ({
 		model,
 		where,
-	}: CustomAdapterModel & {
+	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
 	}) => Promise<number>;
 	createSchema?:
