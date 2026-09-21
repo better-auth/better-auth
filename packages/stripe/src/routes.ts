@@ -484,16 +484,34 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							}
 						}
 
-						// Reuse a customer matched by email only when the email is
-						// verified and it is not already associated with a different
-						// user. Otherwise create a new one.
+						// A verified email can reclaim a matching customer whose
+						// stored owner is not in the database.
 						if (stripeCustomer) {
-							const ownerId = customerMetadata.get(
-								stripeCustomer.metadata,
-							).userId;
-							const ownedByOther = !!ownerId && ownerId !== user.id;
-							if (ownedByOther || !user.emailVerified) {
+							if (!user.emailVerified) {
 								stripeCustomer = undefined;
+							} else {
+								const ownerId =
+									stripeCustomer.metadata?.[customerMetadata.keys.userId];
+								const owner =
+									ownerId && ownerId !== user.id
+										? await ctx.context.internalAdapter.findUserById(ownerId)
+										: null;
+								if (owner) {
+									stripeCustomer = undefined;
+								} else {
+									stripeCustomer = await client.customers.update(
+										stripeCustomer.id,
+										{
+											metadata: customerMetadata.set(
+												{
+													userId: user.id,
+													customerType: "user",
+												},
+												stripeCustomer.metadata,
+											),
+										},
+									);
+								}
 							}
 						}
 
