@@ -47,25 +47,3 @@ export function getOAuthCallbackPath(provider: {
 		? provider.callbackPath
 		: `/${provider.callbackPath}`;
 }
-
-/**
- * Encrypt a token that was read back from the account table.
- *
- * Rows written before `encryptOAuthTokens` was turned on hold plaintext, so
- * decrypting first normalizes both cases instead of double-encrypting the ones
- * that are already ciphertext.
- */
-export async function reencryptOAuthToken(
-	token: string | null | undefined,
-	ctx: AuthContext,
-) {
-	if (!token) return token;
-	let plaintext = token;
-	try {
-		plaintext = (await decryptOAuthToken(token, ctx)) ?? token;
-	} catch {
-		// isLikelyEncrypted only inspects the shape, so a plaintext token that
-		// happens to look like ciphertext reaches here; keep it as plaintext.
-	}
-	return setTokenUtil(plaintext, ctx);
-}

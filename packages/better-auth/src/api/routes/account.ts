@@ -25,7 +25,6 @@ import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import {
 	decryptOAuthToken,
 	getOAuthCallbackPath,
-	reencryptOAuthToken,
 	setTokenUtil,
 } from "../../oauth2/utils";
 import {
@@ -911,7 +910,7 @@ export const refreshToken = createAuthEndpoint(
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				idToken: tokens.idToken
 					? await setTokenUtil(tokens.idToken, ctx.context)
-					: await reencryptOAuthToken(account.idToken, ctx.context),
+					: (account.idToken ?? undefined),
 			};
 			let updatedAccount: Account | null = null;
 

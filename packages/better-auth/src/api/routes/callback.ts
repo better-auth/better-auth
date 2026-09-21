@@ -24,11 +24,7 @@ import {
 	generateState,
 	parseState,
 } from "../../oauth2/state";
-import {
-	getOAuthCallbackPath,
-	reencryptOAuthToken,
-	setTokenUtil,
-} from "../../oauth2/utils";
+import { getOAuthCallbackPath, setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 import { assertValidUserInfo } from "../../utils/validate-user-info";
@@ -326,9 +322,7 @@ export const callbackOAuth = createAuthEndpoint(
 						providerId: provider.id,
 						accessToken: await setTokenUtil(tokens.accessToken, c.context),
 						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken
-							? await setTokenUtil(tokens.idToken, c.context)
-							: await reencryptOAuthToken(existingAccount.idToken, c.context),
+						idToken: await setTokenUtil(tokens.idToken, c.context),
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 						scope: mergedScope || undefined,
