@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import type { ExpectedSchema } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
-import type { KyselyPlugin } from "kysely";
+import type {
+	CompiledQuery,
+	DatabaseConnection,
+	Dialect,
+	Driver,
+	KyselyPlugin,
+	QueryResult,
+} from "kysely";
 import {
 	CamelCasePlugin,
 	DummyDriver,
@@ -14,6 +22,7 @@ import {
 } from "kysely";
 import { Pool } from "pg";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { NodeSqliteDialect } from "./node-sqlite-dialect";
 import {
 	findSchemaProblems,
 	getPostgresSchema,
@@ -209,6 +218,212 @@ describe("PostgreSQL schema validation", () => {
 				account: { fields: { providerId: { type: "string" } } },
 				session: { fields: { token: { type: "string" } } },
 			}),
+		).resolves.toEqual([]);
+	});
+});
+
+const sqliteUserSchema: ExpectedSchema = {
+	user: { fields: { email: { type: "string" } } },
+};
+
+function sqliteColumn(
+	name: string,
+	options: {
+		type?: string | undefined;
+		notnull?: number | undefined;
+		dflt_value?: string | null | undefined;
+		pk?: number | undefined;
+		cid?: number | undefined;
+	} = {},
+) {
+	return {
+		cid: options.cid ?? 0,
+		name,
+		type: options.type ?? "TEXT",
+		notnull: options.notnull ?? 1,
+		dflt_value: options.dflt_value ?? null,
+		pk: options.pk ?? 0,
+	};
+}
+
+/**
+ * Mimics Cloudflare D1 denying Kysely's sqlite_master / table-valued
+ * PRAGMA catalog reads while still allowing statement-form PRAGMA
+ * introspection.
+ */
+function d1RestrictedSqliteDialect(
+	tables: Record<string, readonly ReturnType<typeof sqliteColumn>[]> = {},
+	options: { denyPragma?: boolean | undefined } = {},
+): Dialect {
+	const executeQuery = async <O>(
+		compiledQuery: CompiledQuery,
+	): Promise<QueryResult<O>> => {
+		const statement = compiledQuery.sql;
+		const deniedCatalog =
+			/sqlite_master|sqlite_schema|pragma_table_info\s*\(/i.test(statement);
+		const pragma = /^\s*PRAGMA\s+table_(?:list|info)\b/i.test(statement);
+		if (deniedCatalog || (options.denyPragma && pragma)) {
+			throw Object.assign(new Error("D1_ERROR: not authorized: SQLITE_AUTH"), {
+				code: "SQLITE_AUTH",
+			});
+		}
+		if (/^\s*PRAGMA\s+table_list\b/i.test(statement)) {
+			return {
+				rows: Object.keys(tables).map((name) => ({
+					schema: "main",
+					name,
+					type: "table",
+				})) as O[],
+			};
+		}
+		const tableInfo = statement.match(
+			/^\s*PRAGMA\s+table_info\s*\(\s*'((?:''|[^'])*)'\s*\)\s*;?\s*$/i,
+		);
+		if (tableInfo?.[1] !== undefined) {
+			const tableName = tableInfo[1].replaceAll("''", "'");
+			return { rows: [...(tables[tableName] ?? [])] as O[] };
+		}
+		throw new Error(`Unexpected SQL in D1-restricted dialect: ${statement}`);
+	};
+
+	const connection: DatabaseConnection = {
+		executeQuery,
+		async *streamQuery() {
+			throw new Error("Streaming query is not supported.");
+		},
+	};
+	const driver: Driver = {
+		async init() {},
+		async acquireConnection() {
+			return connection;
+		},
+		async beginTransaction() {},
+		async commitTransaction() {},
+		async rollbackTransaction() {},
+		async releaseConnection() {},
+		async destroy() {},
+	};
+
+	return {
+		createAdapter: () => new SqliteAdapter(),
+		createDriver: () => driver,
+		createIntrospector: (db) => new SqliteIntrospector(db),
+		createQueryCompiler: () => new SqliteQueryCompiler(),
+	};
+}
+
+describe("SQLite schema validation", () => {
+	it("reports missing tables on ordinary SQLite", async ({
+		onTestFinished,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		const db = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+		onTestFinished(() => db.destroy());
+
+		await expect(
+			findSchemaProblems(db, "sqlite", sqliteUserSchema),
+		).resolves.toEqual([{ kind: "missing-table", table: "user" }]);
+	});
+
+	it("reports missing columns and unexpected required columns on ordinary SQLite", async ({
+		onTestFinished,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		sqlite
+			.prepare("CREATE TABLE user (id TEXT PRIMARY KEY, extra TEXT NOT NULL)")
+			.run();
+		const db = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+		onTestFinished(() => db.destroy());
+
+		await expect(
+			findSchemaProblems(db, "sqlite", sqliteUserSchema),
+		).resolves.toEqual([
+			{ kind: "missing-column", table: "user", column: "email" },
+			{
+				kind: "unexpected-required-column",
+				table: "user",
+				column: "extra",
+			},
+		]);
+	});
+
+	it("accepts a matching ordinary SQLite schema", async ({
+		onTestFinished,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		sqlite
+			.prepare("CREATE TABLE user (id TEXT PRIMARY KEY, email TEXT NOT NULL)")
+			.run();
+		const db = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+		onTestFinished(() => db.destroy());
+
+		await expect(
+			findSchemaProblems(db, "sqlite", sqliteUserSchema),
+		).resolves.toEqual([]);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11346
+ */
+describe("D1-denied SQLite schema validation", () => {
+	it("validates through statement-form PRAGMA when catalog reads are denied", async () => {
+		const db = new Kysely({
+			dialect: d1RestrictedSqliteDialect({
+				user: [
+					sqliteColumn("id", { pk: 1, cid: 0 }),
+					sqliteColumn("email", { cid: 1 }),
+				],
+			}),
+		});
+
+		await expect(
+			findSchemaProblems(db, "sqlite", sqliteUserSchema),
+		).resolves.toEqual([]);
+	});
+
+	it("still reports SchemaMismatchError findings when PRAGMA introspection succeeds", async () => {
+		const db = new Kysely({
+			dialect: d1RestrictedSqliteDialect({
+				user: [
+					sqliteColumn("id", { pk: 1, cid: 0 }),
+					sqliteColumn("extra", { cid: 1 }),
+				],
+				"user's backup": [
+					sqliteColumn("id", { pk: 1, cid: 0 }),
+					sqliteColumn("token", { cid: 1 }),
+				],
+			}),
+		});
+
+		await expect(
+			findSchemaProblems(db, "sqlite", {
+				...sqliteUserSchema,
+				"user's backup": { fields: { token: { type: "string" } } },
+			}),
+		).resolves.toEqual([
+			{ kind: "missing-column", table: "user", column: "email" },
+			{
+				kind: "unexpected-required-column",
+				table: "user",
+				column: "extra",
+			},
+		]);
+	});
+
+	it("soft-skips schema validation when PRAGMA introspection is also denied", async () => {
+		const db = new Kysely({
+			dialect: d1RestrictedSqliteDialect({}, { denyPragma: true }),
+		});
+
+		await expect(
+			findSchemaProblems(db, "sqlite", sqliteUserSchema),
 		).resolves.toEqual([]);
 	});
 });

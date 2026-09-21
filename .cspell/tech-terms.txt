@@ -84,3 +84,5 @@ styl
 vbscript
 unvalidated
 describedby
+SQLITE_AUTH
+

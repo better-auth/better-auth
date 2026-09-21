@@ -4,6 +4,7 @@ import type {
 	SchemaFinding,
 } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
+import { logger } from "@better-auth/core/env";
 import type { Kysely, TableMetadata } from "kysely";
 import {
 	ColumnNode,
@@ -12,6 +13,10 @@ import {
 	sql,
 	TableNode,
 } from "kysely";
+import {
+	DEFAULT_MIGRATION_LOCK_TABLE,
+	DEFAULT_MIGRATION_TABLE,
+} from "./kysely-migration-tables";
 import type { KyselyDatabaseType } from "./types";
 
 type AnyTables = Record<string, Record<string, unknown>>;
@@ -128,11 +133,141 @@ async function schemaSearchPath(
 	return undefined;
 }
 
+function quoteSqliteStringLiteral(value: string) {
+	return `'${value.replaceAll("'", "''")}'`;
+}
+
+function isSqliteAuthDenied(error: unknown): boolean {
+	const seen = new Set<unknown>();
+	let current: unknown = error;
+	while (current !== undefined && current !== null && !seen.has(current)) {
+		seen.add(current);
+		if (typeof current === "string") {
+			return current.includes("SQLITE_AUTH");
+		}
+		if (typeof current !== "object") {
+			return false;
+		}
+		if (
+			"code" in current &&
+			(current.code === "SQLITE_AUTH" || current.code === 23)
+		) {
+			return true;
+		}
+		if (
+			"message" in current &&
+			typeof current.message === "string" &&
+			current.message.includes("SQLITE_AUTH")
+		) {
+			return true;
+		}
+		current = "cause" in current ? current.cause : undefined;
+	}
+	return false;
+}
+
+interface SqliteTableListRow {
+	schema?: string | null | undefined;
+	name: string;
+	type: string;
+}
+
+interface SqliteTableInfoRow {
+	name: string;
+	type: string;
+	notnull: number | boolean;
+	dflt_value: unknown;
+	pk: number;
+}
+
+/**
+ * D1-safe SQLite introspection. Statement-form PRAGMA is permitted where
+ * `sqlite_master` and table-valued `pragma_table_info(...)` are not.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11346
+ * @see https://github.com/better-auth/better-auth/issues/10976
+ */
+async function introspectSqliteTables(
+	db: Kysely<unknown>,
+): Promise<IntrospectedTable[]> {
+	const listed = await sql<SqliteTableListRow>`PRAGMA table_list`.execute(db);
+	const tables = listed.rows.filter((row) => {
+		const type = row.type.toLowerCase();
+		if (type !== "table" && type !== "view") return false;
+		if (row.name.startsWith("sqlite_") || row.name.startsWith("_cf_")) {
+			return false;
+		}
+		if (
+			row.name === DEFAULT_MIGRATION_TABLE ||
+			row.name === DEFAULT_MIGRATION_LOCK_TABLE
+		) {
+			return false;
+		}
+		return (row.schema ?? "main") === "main";
+	});
+
+	const introspected: IntrospectedTable[] = [];
+	for (const table of tables) {
+		const info = await sql<SqliteTableInfoRow>`PRAGMA table_info(${sql.raw(
+			quoteSqliteStringLiteral(table.name),
+		)})`.execute(db);
+		const columns = info.rows;
+		const pkCols = columns.filter((column) => Number(column.pk) > 0);
+		const singlePk = pkCols.length === 1 ? pkCols[0] : undefined;
+		const autoIncrementCol =
+			singlePk && singlePk.type.toLowerCase() === "integer"
+				? singlePk.name
+				: undefined;
+		introspected.push({
+			name: table.name,
+			columns: columns.map((column) => ({
+				name: column.name,
+				nullable: !column.notnull,
+				hasDefault:
+					column.dflt_value != null || column.name === autoIncrementCol,
+			})),
+		});
+	}
+	return introspected;
+}
+
+async function introspectTables(
+	connection: Kysely<unknown>,
+	dbType: KyselyDatabaseType | undefined,
+): Promise<IntrospectedTable[] | "skipped"> {
+	try {
+		return toIntrospectedTables(await connection.introspection.getTables());
+	} catch (error) {
+		if (
+			!isSqliteAuthDenied(error) ||
+			(dbType !== undefined && dbType !== "sqlite")
+		) {
+			throw error;
+		}
+		try {
+			return await introspectSqliteTables(connection);
+		} catch (pragmaError) {
+			if (!isSqliteAuthDenied(pragmaError)) {
+				throw pragmaError;
+			}
+			logger.warn(
+				"[Kysely Adapter] Skipping schema validation because the database denied catalog introspection (SQLITE_AUTH). Cloudflare D1 blocks sqlite_master and table-valued PRAGMA functions.",
+			);
+			return "skipped";
+		}
+	}
+}
+
 /**
  * Compares the live database with the tables this configuration writes. Both
  * sides are read in the identifiers the connection sends: a plugin that
  * renames identifiers or qualifies them with a schema is applied to the
  * expected side, and introspection reports what the database stores.
+ *
+ * On SQLite, Cloudflare D1 denies Kysely's `sqlite_master` / table-valued
+ * PRAGMA catalog reads. When that happens, metadata is read with
+ * statement-form `PRAGMA table_list` / `PRAGMA table_info(...)`. If those are
+ * denied too, validation is skipped rather than failing every request.
  */
 export async function findSchemaProblems(
 	db: Kysely<unknown>,
@@ -142,9 +277,8 @@ export async function findSchemaProblems(
 	const physical = toPhysicalSchema(db, expected);
 	return db.connection().execute(async (connection) => {
 		const searchPath = await schemaSearchPath(connection, dbType);
-		const tables = toIntrospectedTables(
-			await connection.introspection.getTables(),
-		);
+		const tables = await introspectTables(connection, dbType);
+		if (tables === "skipped") return [];
 		for (const [name, table] of Object.entries(physical)) {
 			if (table.schema !== undefined || !searchPath) continue;
 			table.schema =
