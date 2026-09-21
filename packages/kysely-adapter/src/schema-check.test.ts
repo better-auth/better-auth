@@ -426,4 +426,21 @@ describe("D1-denied SQLite schema validation", () => {
 			findSchemaProblems(db, "sqlite", sqliteUserSchema),
 		).resolves.toEqual([]);
 	});
+
+	it("honors PRAGMA defaults when CamelCasePlugin would rename dflt_value", async () => {
+		const db = new Kysely({
+			dialect: d1RestrictedSqliteDialect({
+				user: [
+					sqliteColumn("id", { pk: 1, cid: 0 }),
+					sqliteColumn("email", { cid: 1 }),
+					sqliteColumn("extra", { cid: 2, dflt_value: "'pending'" }),
+				],
+			}),
+			plugins: [new CamelCasePlugin()],
+		});
+
+		await expect(
+			findSchemaProblems(db, "sqlite", sqliteUserSchema),
+		).resolves.toEqual([]);
+	});
 });

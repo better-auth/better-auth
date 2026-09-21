@@ -182,7 +182,9 @@ interface SqliteTableInfoRow {
 
 /**
  * D1-safe SQLite introspection. Statement-form PRAGMA is permitted where
- * `sqlite_master` and table-valued `pragma_table_info(...)` are not.
+ * `sqlite_master` and table-valued `pragma_table_info(...)` are not. Run
+ * without plugins so result keys stay snake_case (`dflt_value`), matching
+ * Kysely's own introspector.
  *
  * @see https://github.com/better-auth/better-auth/issues/11346
  * @see https://github.com/better-auth/better-auth/issues/10976
@@ -190,7 +192,8 @@ interface SqliteTableInfoRow {
 async function introspectSqliteTables(
 	db: Kysely<unknown>,
 ): Promise<IntrospectedTable[]> {
-	const listed = await sql<SqliteTableListRow>`PRAGMA table_list`.execute(db);
+	const raw = db.withoutPlugins();
+	const listed = await sql<SqliteTableListRow>`PRAGMA table_list`.execute(raw);
 	const tables = listed.rows.filter((row) => {
 		const type = row.type.toLowerCase();
 		if (type !== "table" && type !== "view") return false;
@@ -210,7 +213,7 @@ async function introspectSqliteTables(
 	for (const table of tables) {
 		const info = await sql<SqliteTableInfoRow>`PRAGMA table_info(${sql.raw(
 			quoteSqliteStringLiteral(table.name),
-		)})`.execute(db);
+		)})`.execute(raw);
 		const columns = info.rows;
 		const pkCols = columns.filter((column) => Number(column.pk) > 0);
 		const singlePk = pkCols.length === 1 ? pkCols[0] : undefined;
