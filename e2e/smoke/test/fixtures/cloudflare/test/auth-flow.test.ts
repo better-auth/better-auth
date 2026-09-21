@@ -34,6 +34,29 @@ afterAll(async () => {
 });
 
 describe("email and password authentication", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11346
+	 */
+	it("authenticates when D1 schema introspection is restricted", async () => {
+		const response = await server.fetch(
+			"http://localhost:8787/_test/restricted-d1-auth/sign-up/email",
+			{
+				method: "POST",
+				body: JSON.stringify({
+					email: `${crypto.randomUUID()}@test.com`,
+					name: crypto.randomUUID().replaceAll("-", "").slice(6),
+					password: crypto.randomUUID(),
+				}),
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:4000",
+				},
+			},
+		);
+
+		expect(response.status).toBe(200);
+	});
+
 	it("creates a user with email and password", async () => {
 		const email = `${crypto.randomUUID()}@test.com`;
 		const name = crypto.randomUUID().replaceAll("-", "").slice(6);

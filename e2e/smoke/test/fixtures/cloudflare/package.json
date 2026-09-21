@@ -5,7 +5,9 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
-    "hono": "^4.13.7"
+    "hono": "^4.13.7",
+    "kysely": "catalog:",
+    "kysely-d1": "^0.4.0"
   },
   "devDependencies": {
     "vitest": "catalog:vitest",
