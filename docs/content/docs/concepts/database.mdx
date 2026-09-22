@@ -741,10 +741,28 @@ Run `npx auth@latest generate` after enabling this option. Existing
 installations must backfill the scope field before making it non-null and
 replacing the global email unique constraint.
 
-Jobs, scripts, and other work outside an HTTP request must call
-`runWithEndpointContext` with a request (or headers) that `resolve` can
-read. There is no unscoped adapter escape hatch: operations without a
-resolved scope fail closed.
+Jobs, scripts, and other work outside an HTTP request must wrap the
+operation in `runWithEndpointContext` with the auth context plus a request
+or headers that `resolve` can read. There is no unscoped adapter escape
+hatch: operations without a resolved scope fail closed.
+
+```ts title="job.ts"
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { auth } from "./auth";
+
+export async function findTenantUser(tenantId: string, email: string) {
+  const context = await auth.$context;
+  return runWithEndpointContext(
+    {
+      context,
+      request: new Request("http://localhost/internal", {
+        headers: { "x-tenant-id": tenantId },
+      }),
+    },
+    () => context.internalAdapter.findUserByEmail(email),
+  );
+}
+```
 
 <Callout type="warn">
   Tenant-scoped identity currently requires database-backed sessions and
