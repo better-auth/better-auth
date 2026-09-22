@@ -741,6 +741,11 @@ Run `npx auth@latest generate` after enabling this option. Existing
 installations must backfill the scope field before making it non-null and
 replacing the global email unique constraint.
 
+Jobs, scripts, and other work outside an HTTP request must call
+`runWithEndpointContext` with a request (or headers) that `resolve` can
+read. There is no unscoped adapter escape hatch: operations without a
+resolved scope fail closed.
+
 <Callout type="warn">
   Tenant-scoped identity currently requires database-backed sessions and
   verification. It cannot be combined with `secondaryStorage` or
