@@ -187,6 +187,28 @@ describe("getAuthTables", () => {
 		);
 	});
 
+	it("rejects identity scope fields that collide with built-in columns", () => {
+		expect(() =>
+			getAuthTables({
+				user: {
+					additionalFields: {
+						email: {
+							type: "string",
+							required: true,
+							input: false,
+						},
+					},
+					identityScope: {
+						field: "email",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "email" cannot replace a built-in auth field.',
+		);
+	});
+
 	it("should use correct field name for refreshTokenExpiresAt", () => {
 		const tables = getAuthTables({
 			account: {

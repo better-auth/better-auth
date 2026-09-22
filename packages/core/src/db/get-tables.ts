@@ -362,6 +362,37 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 
 	const identityScope = options.user?.identityScope;
 	if (identityScope) {
+		const reservedIdentityScopeFields = new Set([
+			"id",
+			"name",
+			"email",
+			"emailVerified",
+			"image",
+			"createdAt",
+			"updatedAt",
+			"expiresAt",
+			"token",
+			"ipAddress",
+			"userAgent",
+			"userId",
+			"issuer",
+			"accountId",
+			"providerId",
+			"accessToken",
+			"refreshToken",
+			"idToken",
+			"accessTokenExpiresAt",
+			"refreshTokenExpiresAt",
+			"scope",
+			"password",
+			"identifier",
+			"value",
+		]);
+		if (reservedIdentityScopeFields.has(identityScope.field)) {
+			throw new BetterAuthError(
+				`Identity scope field "${identityScope.field}" cannot replace a built-in auth field.`,
+			);
+		}
 		const scopeField = options.user?.additionalFields?.[identityScope.field];
 		if (!scopeField) {
 			throw new BetterAuthError(
