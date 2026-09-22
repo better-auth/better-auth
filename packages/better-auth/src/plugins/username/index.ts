@@ -521,6 +521,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 								user.email,
 								undefined,
 								ctx.context.options.emailVerification?.expiresIn,
+								{ claimId: account.id },
 							);
 							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 								ctx.body.callbackURL || "/",
