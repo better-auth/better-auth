@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import type { BetterAuthClientOptions, ClientStore } from "@better-auth/core";
-import type { User } from "@better-auth/core/db";
+import type { Session, User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetch } from "@better-fetch/fetch";
 import electron from "electron";
@@ -342,9 +342,14 @@ function setupBridges(
 		if (state.isPending === true) return;
 
 		let user = state.data?.user ?? null;
-		if (user !== null && typeof opts.sanitizeUser === "function") {
+		const session = state.data?.session ?? null;
+		if (
+			user !== null &&
+			session !== null &&
+			typeof opts.sanitizeUser === "function"
+		) {
 			try {
-				user = await opts.sanitizeUser(user);
+				user = await opts.sanitizeUser(user, session);
 			} catch (error) {
 				console.error("Error while sanitizing user", error);
 				user = null;
@@ -358,20 +363,25 @@ function setupBridges(
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
-		const result = await ctx.$fetch<{ user: User & Record<string, any> }>(
-			"/get-session",
-			{
-				method: "GET",
-				headers: {
-					cookie: ctx.getCookie(),
-					"content-type": "application/json",
-				},
+		const result = await ctx.$fetch<{
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
+		}>("/get-session", {
+			method: "GET",
+			headers: {
+				cookie: ctx.getCookie(),
+				"content-type": "application/json",
 			},
-		);
+		});
 		let user = result.data?.user ?? null;
-		if (user !== null && typeof opts.sanitizeUser === "function") {
+		const session = result.data?.session ?? null;
+		if (
+			user !== null &&
+			session !== null &&
+			typeof opts.sanitizeUser === "function"
+		) {
 			try {
-				user = await opts.sanitizeUser(user);
+				user = await opts.sanitizeUser(user, session);
 			} catch (error) {
 				console.error("Error while sanitizing user", error);
 				user = null;

@@ -1,5 +1,5 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
-import type { User } from "@better-auth/core/db";
+import type { Session, User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
@@ -127,6 +127,7 @@ export async function authenticate({
 	return await $fetch<{
 		token: string;
 		user: User & Record<string, any>;
+		session: Session & Record<string, any>;
 	}>("/electron/token", {
 		...fetchOptions,
 		method: "POST",
@@ -138,9 +139,15 @@ export async function authenticate({
 		},
 		onSuccess: async (ctx) => {
 			let user: (User & Record<string, any>) | null = ctx.data?.user ?? null;
-			if (user !== null && typeof options.sanitizeUser === "function") {
+			let session: (Session & Record<string, any>) | null =
+				ctx.data?.session ?? null;
+			if (
+				user !== null &&
+				session !== null &&
+				typeof options.sanitizeUser === "function"
+			) {
 				try {
-					user = await options.sanitizeUser(user);
+					user = await options.sanitizeUser(user, session);
 				} catch (error) {
 					console.error("Error while sanitizing user", error);
 					user = null;
