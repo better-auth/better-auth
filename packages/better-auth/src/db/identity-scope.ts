@@ -9,43 +9,60 @@ import { BetterAuthError } from "@better-auth/core/error";
 
 const coreScopedModels = ["user", "account", "session", "verification"];
 
-type ResolvedIdentityScope = {
+export type ResolvedIdentityScope = {
 	field: string;
 	value: string;
 };
+
+export async function resolveIdentityScope(
+	options: BetterAuthOptions,
+	source?: {
+		headers?: Headers | null;
+		request?: Request | null;
+	},
+): Promise<ResolvedIdentityScope | null> {
+	const identityScope = options.user?.identityScope;
+	if (!identityScope) return null;
+
+	const value = await identityScope.resolve({
+		headers: source?.headers ?? undefined,
+		request: source?.request ?? undefined,
+	});
+	if (typeof value !== "string" || value.length === 0) {
+		throw new BetterAuthError(
+			"Unable to resolve the identity scope for this operation.",
+		);
+	}
+
+	return {
+		field: identityScope.field,
+		value,
+	};
+}
 
 function createIdentityScopeResolver(options: BetterAuthOptions) {
 	const identityScope = options.user?.identityScope;
 	if (!identityScope) return async () => null;
 	const requestValues = new WeakMap<object, Promise<ResolvedIdentityScope>>();
 
-	const resolve = async (
-		endpointContext: Awaited<ReturnType<typeof getCurrentAuthContext>> | null,
-	) => {
-		const value = await identityScope.resolve({
-			headers: endpointContext?.headers,
-			request: endpointContext?.request,
-		});
-		if (typeof value !== "string" || value.length === 0) {
-			throw new BetterAuthError(
-				"Unable to resolve the identity scope for this operation.",
-			);
-		}
-
-		return {
-			field: identityScope.field,
-			value,
-		};
-	};
-
 	return async () => {
 		const endpointContext = await getCurrentAuthContext().catch(() => null);
-		if (!endpointContext) return resolve(null);
+		if (!endpointContext) return resolveIdentityScope(options);
 
 		const existing = requestValues.get(endpointContext);
 		if (existing) return existing;
 
-		const value = resolve(endpointContext);
+		const value = resolveIdentityScope(options, {
+			headers: endpointContext.headers,
+			request: endpointContext.request,
+		}).then((scope) => {
+			if (!scope) {
+				throw new BetterAuthError(
+					"Unable to resolve the identity scope for this operation.",
+				);
+			}
+			return scope;
+		});
 		requestValues.set(endpointContext, value);
 		return value;
 	};

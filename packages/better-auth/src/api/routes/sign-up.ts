@@ -8,6 +8,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
+import { resolveIdentityScope } from "../../db/identity-scope";
 import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
@@ -251,7 +252,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				// for gate rejections under the same mode so that an existing email
 				// and a policy-rejected one are indistinguishable from a fresh
 				// sign-up, closing an account-enumeration channel.
-				const buildGenericDuplicateResponse = () => {
+				const buildGenericDuplicateResponse = async () => {
 					const now = new Date();
 					const generatedId =
 						ctx.context.generateId({ model: "user" }) || generateId();
@@ -263,6 +264,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						createdAt: now,
 						updatedAt: now,
 					};
+					const resolvedScope = await resolveIdentityScope(
+						ctx.context.options,
+						{
+							headers: ctx.headers,
+							request: ctx.request,
+						},
+					);
+					const trustedScopeFields = resolvedScope
+						? { [resolvedScope.field]: resolvedScope.value }
+						: {};
 
 					const customSyntheticUser =
 						ctx.context.options.emailAndPassword?.customSyntheticUser;
@@ -284,14 +295,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							additionalFields,
 							id: generatedId,
 						});
-						syntheticUser = buildSyntheticUserOutput(
-							ctx.context.options,
-							customResult,
-						);
+						syntheticUser = buildSyntheticUserOutput(ctx.context.options, {
+							...customResult,
+							...trustedScopeFields,
+						});
 					} else {
 						syntheticUser = buildSyntheticUserOutput(ctx.context.options, {
 							...coreFields,
 							...additionalUserFields,
+							...trustedScopeFields,
 							id: generatedId,
 						});
 					}
@@ -325,7 +337,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 								),
 							);
 						}
-						return buildGenericDuplicateResponse();
+						return await buildGenericDuplicateResponse();
 					}
 					throw APIError.from(
 						"UNPROCESSABLE_ENTITY",
@@ -365,7 +377,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						// same opaque success as an existing email to prevent account
 						// enumeration.
 						if (e.statusCode === 403 && shouldReturnGenericDuplicateResponse) {
-							return buildGenericDuplicateResponse();
+							return await buildGenericDuplicateResponse();
 						}
 						throw e;
 					}

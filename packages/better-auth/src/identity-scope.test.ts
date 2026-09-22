@@ -370,4 +370,42 @@ describe("tenant-scoped identity", async () => {
 			),
 		).rejects.toThrow("across identity scopes");
 	});
+
+	it("includes identity scope on synthetic existing-email signups", async () => {
+		const { auth } = await getTestInstance(
+			{
+				...tenantOptions(),
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					autoSignIn: false,
+				},
+				emailVerification: {
+					sendVerificationEmail: async () => {},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const first = await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "enum@example.com",
+				name: "First",
+				password: passwordA,
+			},
+		});
+		const duplicate = await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "enum@example.com",
+				name: "Second",
+				password: passwordB,
+			},
+		});
+
+		expect(first.user).toMatchObject({ tenantId: "tenant-a" });
+		expect(duplicate.user).toMatchObject({ tenantId: "tenant-a" });
+		expect("tenantId" in duplicate.user).toBe("tenantId" in first.user);
+	});
 });
