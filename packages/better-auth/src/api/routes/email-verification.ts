@@ -7,6 +7,7 @@ import { JWTExpired } from "jose/errors";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
+import { resolveIdentityScope } from "../../db/identity-scope";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
 import { safeCloneRequest } from "../../utils/request";
@@ -42,7 +43,7 @@ export async function createEmailVerificationToken(
 }
 
 /**
- * Creates an email-verification token bound to the user's configured identity
+ * Creates an email-verification token bound to the request's resolved identity
  * scope.
  *
  * @internal
@@ -53,19 +54,10 @@ export async function createEmailVerificationTokenForUser(
 	updateTo?: string | undefined,
 	extraPayload?: Record<string, unknown>,
 ) {
-	const identityScopeField = ctx.context.options.user?.identityScope?.field;
-	const identityScope = identityScopeField
-		? (user as User & Record<string, unknown>)[identityScopeField]
-		: undefined;
-	if (
-		identityScopeField &&
-		(typeof identityScope !== "string" || identityScope.length === 0)
-	) {
-		throw APIError.from("INTERNAL_SERVER_ERROR", {
-			code: "MISSING_IDENTITY_SCOPE",
-			message: "The user is missing its identity scope.",
-		});
-	}
+	const identityScope = await resolveIdentityScope(ctx.context.options, {
+		headers: ctx.headers,
+		request: ctx.request,
+	});
 
 	return createEmailVerificationToken(
 		ctx.context.secret,
@@ -74,7 +66,7 @@ export async function createEmailVerificationTokenForUser(
 		ctx.context.options.emailVerification?.expiresIn,
 		{
 			...extraPayload,
-			...(identityScopeField ? { identityScope } : {}),
+			...(identityScope ? { identityScope: identityScope.value } : {}),
 		},
 	);
 }

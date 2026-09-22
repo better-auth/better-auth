@@ -408,4 +408,63 @@ describe("tenant-scoped identity", async () => {
 		expect(duplicate.user).toMatchObject({ tenantId: "tenant-a" });
 		expect("tenantId" in duplicate.user).toBe("tenantId" in first.user);
 	});
+
+	it("binds email verification tokens when the user scope field is hidden", async () => {
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					changeEmail: { enabled: true },
+					additionalFields: {
+						tenantId: {
+							type: "string" as const,
+							required: true as const,
+							input: false as const,
+							returned: false as const,
+						},
+					},
+					identityScope: {
+						field: "tenantId",
+						resolve: ({
+							headers,
+							request,
+						}: {
+							headers?: Headers;
+							request?: Request;
+						}) => (request?.headers ?? headers)?.get("x-tenant-id") ?? null,
+					},
+				},
+				plugins: [bearer()],
+				emailAndPassword: { enabled: true },
+				emailVerification: {
+					sendVerificationEmail: async () => {},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "hidden-scope@example.com",
+				name: "Hidden",
+				password: passwordA,
+			},
+		});
+		const signIn = await auth.api.signInEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "hidden-scope@example.com",
+				password: passwordA,
+			},
+		});
+
+		const changed = await auth.api.changeEmail({
+			headers: tenantHeaders("tenant-a", signIn.token!),
+			body: {
+				newEmail: "hidden-scope-new@example.com",
+				callbackURL: "http://localhost/callback",
+			},
+		});
+		expect(changed).toEqual({ status: true });
+	});
 });
