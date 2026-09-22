@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
-import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { describe, expect, it } from "vitest";
 import { bearer } from "./plugins/bearer";
@@ -270,7 +269,7 @@ describe("tenant-scoped identity", async () => {
 
 		const googleAccount = {
 			accountId: "google-subject",
-			issuer: createOAuthAccountIssuer("google"),
+			issuer: "https://accounts.google.com",
 			providerId: "google",
 		};
 
@@ -290,7 +289,7 @@ describe("tenant-scoped identity", async () => {
 			withTenant("tenant-b", () =>
 				context.internalAdapter.createAccount({
 					accountId: "cross-tenant-subject",
-					issuer: createOAuthAccountIssuer("google"),
+					issuer: "https://accounts.google.com",
 					providerId: "google",
 					userId: userA.user.id,
 				}),
