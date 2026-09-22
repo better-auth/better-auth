@@ -68,7 +68,7 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 	sanitizeUser?:
 		| ((
 				user: User & Record<string, any>,
-				session: Session & Record<string, any>,
+				session: (Session & Record<string, any>) | null,
 		  ) => Awaitable<User & Record<string, any>>)
 		| undefined;
 	/**

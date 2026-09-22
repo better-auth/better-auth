@@ -58,7 +58,7 @@ export const electronToken = (_opts: ElectronOptions) =>
 												$ref: "#/components/schemas/Session",
 											},
 										},
-										required: ["token", "user"],
+										required: ["token", "user", "session"],
 									},
 								},
 							},

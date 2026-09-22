@@ -141,11 +141,7 @@ export async function authenticate({
 			let user: (User & Record<string, any>) | null = ctx.data?.user ?? null;
 			let session: (Session & Record<string, any>) | null =
 				ctx.data?.session ?? null;
-			if (
-				user !== null &&
-				session !== null &&
-				typeof options.sanitizeUser === "function"
-			) {
+			if (user !== null && typeof options.sanitizeUser === "function") {
 				try {
 					user = await options.sanitizeUser(user, session);
 				} catch (error) {

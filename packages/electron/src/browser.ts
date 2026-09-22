@@ -343,11 +343,7 @@ function setupBridges(
 
 		let user = state.data?.user ?? null;
 		const session = state.data?.session ?? null;
-		if (
-			user !== null &&
-			session !== null &&
-			typeof opts.sanitizeUser === "function"
-		) {
+		if (user !== null && typeof opts.sanitizeUser === "function") {
 			try {
 				user = await opts.sanitizeUser(user, session);
 			} catch (error) {
@@ -375,11 +371,7 @@ function setupBridges(
 		});
 		let user = result.data?.user ?? null;
 		const session = result.data?.session ?? null;
-		if (
-			user !== null &&
-			session !== null &&
-			typeof opts.sanitizeUser === "function"
-		) {
+		if (user !== null && typeof opts.sanitizeUser === "function") {
 			try {
 				user = await opts.sanitizeUser(user, session);
 			} catch (error) {
