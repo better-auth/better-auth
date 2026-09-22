@@ -468,6 +468,78 @@ describe("tenant-scoped identity", async () => {
 		expect(changed).toEqual({ status: true });
 	});
 
+	it("reuses one identity-scope resolution across rebuilt adapters", async () => {
+		let resolveCount = 0;
+		let capturedAdapter: DBAdapter | null = null;
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						tenantId: {
+							type: "string" as const,
+							required: true as const,
+							input: false as const,
+						},
+					},
+					identityScope: {
+						field: "tenantId",
+						resolve: ({
+							headers,
+							request,
+						}: {
+							headers?: Headers;
+							request?: Request;
+						}) => {
+							resolveCount += 1;
+							return (request?.headers ?? headers)?.get("x-tenant-id") ?? null;
+						},
+					},
+				},
+				plugins: [
+					{
+						id: "capture-adapter",
+						init(ctx) {
+							capturedAdapter = ctx.adapter;
+							return {};
+						},
+					},
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const user = await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "shared-cache@example.com",
+				name: "A",
+				password: passwordA,
+			},
+		});
+		resolveCount = 0;
+
+		await runWithEndpointContext(
+			{
+				context,
+				request: new Request("http://localhost/api/auth/test", {
+					headers: tenantHeaders("tenant-a"),
+				}),
+			} as unknown as GenericEndpointContext,
+			async () => {
+				await capturedAdapter!.findOne({
+					model: "user",
+					where: [{ field: "id", value: user.user.id }],
+				});
+				await context.adapter.findOne({
+					model: "user",
+					where: [{ field: "id", value: user.user.id }],
+				});
+			},
+		);
+
+		expect(resolveCount).toBe(1);
+	});
+
 	it("keeps adapters captured during plugin init identity-scoped", async () => {
 		let capturedAdapter: DBAdapter | null = null;
 		const { auth } = await getTestInstance(

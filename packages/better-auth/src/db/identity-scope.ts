@@ -9,6 +9,10 @@ import { BetterAuthError } from "@better-auth/core/error";
 
 const coreScopedModels = ["user", "account", "session", "verification"];
 const identityScopedBaseAdapters = new WeakMap<object, DBAdapter>();
+const identityScopeByEndpointContext = new WeakMap<
+	object,
+	Promise<ResolvedIdentityScope>
+>();
 
 export type ResolvedIdentityScope = {
 	field: string;
@@ -44,13 +48,12 @@ export async function resolveIdentityScope(
 function createIdentityScopeResolver(options: BetterAuthOptions) {
 	const identityScope = options.user?.identityScope;
 	if (!identityScope) return async () => null;
-	const requestValues = new WeakMap<object, Promise<ResolvedIdentityScope>>();
 
 	return async () => {
 		const endpointContext = await getCurrentAuthContext().catch(() => null);
 		if (!endpointContext) return resolveIdentityScope(options);
 
-		const existing = requestValues.get(endpointContext);
+		const existing = identityScopeByEndpointContext.get(endpointContext);
 		if (existing) return existing;
 
 		const value = resolveIdentityScope(options, {
@@ -64,7 +67,7 @@ function createIdentityScopeResolver(options: BetterAuthOptions) {
 			}
 			return scope;
 		});
-		requestValues.set(endpointContext, value);
+		identityScopeByEndpointContext.set(endpointContext, value);
 		return value;
 	};
 }
