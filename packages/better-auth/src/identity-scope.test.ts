@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { createOAuthAccountIssuer } from "@better-auth/core/db";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { describe, expect, it } from "vitest";
 import { bearer } from "./plugins/bearer";
 import { emailOTP } from "./plugins/email-otp";
@@ -466,5 +467,57 @@ describe("tenant-scoped identity", async () => {
 			},
 		});
 		expect(changed).toEqual({ status: true });
+	});
+
+	it("keeps adapters captured during plugin init identity-scoped", async () => {
+		let capturedAdapter: DBAdapter | null = null;
+		const { auth } = await getTestInstance(
+			{
+				...tenantOptions(),
+				plugins: [
+					bearer(),
+					{
+						id: "capture-adapter",
+						init(ctx) {
+							capturedAdapter = ctx.adapter;
+							return {};
+						},
+					},
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const userA = await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "capture-a@example.com",
+				name: "A",
+				password: passwordA,
+			},
+		});
+
+		await expect(
+			runWithEndpointContext(
+				{
+					context,
+					request: new Request("http://localhost/api/auth/test", {
+						headers: tenantHeaders("tenant-b"),
+					}),
+				} as unknown as GenericEndpointContext,
+				() =>
+					capturedAdapter!.create({
+						model: "account",
+						data: {
+							accountId: "plugin-captured-bypass",
+							issuer: "https://accounts.google.com",
+							providerId: "google",
+							userId: userA.user.id,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+					}),
+			),
+		).rejects.toThrow("across identity scopes");
 	});
 });

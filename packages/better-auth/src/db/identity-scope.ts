@@ -8,6 +8,7 @@ import type {
 import { BetterAuthError } from "@better-auth/core/error";
 
 const coreScopedModels = ["user", "account", "session", "verification"];
+const identityScopedBaseAdapters = new WeakMap<object, DBAdapter>();
 
 export type ResolvedIdentityScope = {
 	field: string;
@@ -199,8 +200,9 @@ export function createIdentityScopedAdapter(
 	adapter: DBAdapter,
 	options: BetterAuthOptions,
 ): DBAdapter {
+	const base = identityScopedBaseAdapters.get(adapter) ?? adapter;
 	const identityScope = options.user?.identityScope;
-	if (!identityScope) return adapter;
+	if (!identityScope) return base;
 
 	if (options.secondaryStorage) {
 		throw new BetterAuthError(
@@ -219,15 +221,15 @@ export function createIdentityScopedAdapter(
 	]);
 	const resolveIdentityScope = createIdentityScopeResolver(options);
 	const scoped = createScopedTransactionAdapter(
-		adapter,
+		base,
 		scopedModels,
 		resolveIdentityScope,
 	);
 
-	return {
+	const wrapped: DBAdapter = {
 		...scoped,
 		transaction: (callback) =>
-			adapter.transaction((transaction) =>
+			base.transaction((transaction) =>
 				callback(
 					createScopedTransactionAdapter(
 						transaction,
@@ -237,4 +239,6 @@ export function createIdentityScopedAdapter(
 				),
 			),
 	};
+	identityScopedBaseAdapters.set(wrapped, base);
+	return wrapped;
 }
