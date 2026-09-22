@@ -1,6 +1,9 @@
 import type { Store, StoreValue } from "nanostores";
 import { atom } from "nanostores";
 
+// Auth queries preserve their creation-time state as a stable hydration
+// snapshot. The brand lets framework adapters identify them without changing
+// SSR behavior for ordinary or computed plugin stores.
 const kAuthQuery = Symbol.for("better-auth:auth-query");
 
 type AuthQueryStore<SomeStore extends Store> = SomeStore & {
