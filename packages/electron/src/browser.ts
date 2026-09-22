@@ -31,8 +31,33 @@ export function withGetWindowFallback(
 	);
 }
 
+/**
+ * Resolves the WebContents to send IPC auth events to.
+ * Prefers `getTarget` when set; otherwise falls back to `getWindow` (unchanged).
+ */
+export function resolveWebContents(
+	cfg: Pick<SetupMainConfig, "getWindow" | "getTarget"> = {},
+): Electron.WebContents | null {
+	const target = cfg.getTarget?.();
+	if (target) return target.webContents;
+	return withGetWindowFallback(cfg.getWindow)()?.webContents ?? null;
+}
+
 export type SetupMainConfig = {
+	/**
+	 * Returns the BrowserWindow used for second-instance focus/restore and as
+	 * the fallback IPC target when `getTarget` is not set.
+	 */
 	getWindow?: () => electron.BrowserWindow | null | undefined;
+	/**
+	 * Preferred IPC target (`BrowserWindow` or `WebContentsView`).
+	 * When set, auth events are sent here instead of `getWindow().webContents`.
+	 */
+	getTarget?: () =>
+		| electron.BrowserWindow
+		| electron.WebContentsView
+		| null
+		| undefined;
 	csp?: boolean | undefined;
 	bridges?: boolean | undefined;
 	scheme?: boolean | undefined;
@@ -52,12 +77,18 @@ export function setupMain(
 	}
 
 	const getWindow = withGetWindowFallback(cfg?.getWindow);
+	const getTarget = cfg?.getTarget;
 
 	if (!cfg || cfg.csp === true) {
 		setupCSP(clientOptions, opts);
 	}
 	if (!cfg || cfg.scheme === true) {
-		registerProtocolScheme($fetch, opts, getWindow, clientOptions);
+		registerProtocolScheme(
+			$fetch,
+			opts,
+			{ getWindow, getTarget },
+			clientOptions,
+		);
 	}
 	if (!cfg || cfg.bridges === true) {
 		setupBridges(
@@ -66,6 +97,7 @@ export function setupMain(
 				$store,
 				getCookie,
 				getWindow,
+				getTarget,
 			},
 			opts,
 			clientOptions,
@@ -91,12 +123,14 @@ export async function handleDeepLink({
 	options,
 	url,
 	getWindow,
+	getTarget,
 	clientOptions,
 }: {
 	$fetch: BetterFetch;
 	options: ElectronClientOptions;
 	url: string;
 	getWindow?: SetupMainConfig["getWindow"] | undefined;
+	getTarget?: SetupMainConfig["getTarget"] | undefined;
 	clientOptions?: BetterAuthClientOptions | undefined;
 }) {
 	if (!isProcessType("browser")) {
@@ -141,7 +175,11 @@ export async function handleDeepLink({
 			throw: true,
 		},
 		token,
-		getWindow: withGetWindowFallback(getWindow),
+		getWebContents: () =>
+			resolveWebContents({
+				getWindow: withGetWindowFallback(getWindow),
+				getTarget,
+			}),
 		options,
 	});
 }
@@ -149,9 +187,13 @@ export async function handleDeepLink({
 function registerProtocolScheme(
 	$fetch: BetterFetch,
 	options: ElectronClientOptions,
-	getWindow: () => electron.BrowserWindow | null | undefined,
+	cfg: {
+		getWindow: () => electron.BrowserWindow | null | undefined;
+		getTarget?: SetupMainConfig["getTarget"] | undefined;
+	},
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
+	const { getWindow, getTarget } = cfg;
 	const { scheme, privileges = {} } =
 		typeof options.protocol === "string"
 			? {
@@ -219,6 +261,7 @@ function registerProtocolScheme(
 					options,
 					url,
 					getWindow,
+					getTarget,
 					clientOptions,
 				});
 			}
@@ -231,6 +274,7 @@ function registerProtocolScheme(
 					options,
 					url,
 					getWindow,
+					getTarget,
 					clientOptions,
 				});
 			}
@@ -246,6 +290,7 @@ function registerProtocolScheme(
 					options,
 					url: process.argv[1],
 					getWindow,
+					getTarget,
 					clientOptions,
 				});
 			}
@@ -332,11 +377,17 @@ function setupBridges(
 		$store: ClientStore | null;
 		getCookie: () => string;
 		getWindow: () => electron.BrowserWindow | null | undefined;
+		getTarget?: SetupMainConfig["getTarget"] | undefined;
 	},
 	opts: ElectronClientOptions,
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
 	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
+	const getAuthWebContents = () =>
+		resolveWebContents({
+			getWindow: ctx.getWindow,
+			getTarget: ctx.getTarget,
+		});
 
 	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
@@ -354,7 +405,9 @@ function setupBridges(
 			user = normalizeUserOutput(user, opts);
 		}
 
-		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
+		(
+			ctx.getTarget?.()?.webContents ?? webContents.getFocusedWebContents()
+		)?.send(`${prefix}user-updated`, user);
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
@@ -393,7 +446,7 @@ function setupBridges(
 		async (_evt, data: { token: string }) => {
 			await authenticate({
 				$fetch: ctx.$fetch,
-				getWindow: ctx.getWindow,
+				getWebContents: getAuthWebContents,
 				options: opts,
 				token: data.token,
 			});
