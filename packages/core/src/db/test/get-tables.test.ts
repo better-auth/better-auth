@@ -248,6 +248,27 @@ describe("getAuthTables", () => {
 		).toThrow(
 			'Identity scope field "email" cannot replace a built-in auth field.',
 		);
+
+		expect(() =>
+			getAuthTables({
+				user: {
+					additionalFields: {
+						tenantId: {
+							type: "string",
+							required: true,
+							input: false,
+							fieldName: "userId",
+						},
+					},
+					identityScope: {
+						field: "tenantId",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "tenantId" cannot replace a built-in auth field.',
+		);
 	});
 
 	it("should use correct field name for refreshTokenExpiresAt", () => {
