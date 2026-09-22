@@ -98,17 +98,25 @@ function createScopedTransactionAdapter(
 
 		const userId = data.userId;
 		if (model !== "user" && userId != null) {
-			if (
-				!isSupportedUserId(userId) ||
-				!(await adapter.findOne({
-					model: "user",
-					where: [
-						{ field: "id", value: userId },
-						{ field: scope.field, value: scope.value },
-					],
-					select: ["id"],
-				}))
-			) {
+			if (!isSupportedUserId(userId)) {
+				throw new BetterAuthError(
+					`Cannot create or move "${model}" data across identity scopes.`,
+				);
+			}
+			const owner = await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: userId }],
+				select: ["id", scope.field],
+			});
+			const ownerScope = owner
+				? (owner as Record<string, unknown>)[scope.field]
+				: undefined;
+			if (typeof ownerScope !== "string" || ownerScope.length === 0) {
+				throw new BetterAuthError(
+					`Cannot create or move "${model}" data for a user that has not been backfilled with identity scope "${scope.field}".`,
+				);
+			}
+			if (ownerScope !== scope.value) {
 				throw new BetterAuthError(
 					`Cannot create or move "${model}" data across identity scopes.`,
 				);

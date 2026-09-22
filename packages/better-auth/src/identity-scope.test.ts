@@ -371,6 +371,45 @@ describe("tenant-scoped identity", async () => {
 		).rejects.toThrow("across identity scopes");
 	});
 
+	it("explains when a related user is missing its identity scope", async () => {
+		const { auth, db } = await getTestInstance(tenantOptions(), {
+			disableTestUser: true,
+		});
+		const context = await auth.$context;
+		const user = await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "unbackfilled@example.com",
+				name: "Jane",
+				password: passwordA,
+			},
+		});
+
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: user.user.id }],
+			update: { tenantId: "" },
+		});
+
+		await expect(
+			runWithEndpointContext(
+				{
+					context,
+					request: new Request("http://localhost/api/auth/test", {
+						headers: tenantHeaders("tenant-a"),
+					}),
+				} as unknown as GenericEndpointContext,
+				() =>
+					context.internalAdapter.createAccount({
+						accountId: "unbackfilled-account",
+						issuer: "https://accounts.google.com",
+						providerId: "google",
+						userId: user.user.id,
+					}),
+			),
+		).rejects.toThrow("has not been backfilled");
+	});
+
 	it("includes identity scope on synthetic existing-email signups", async () => {
 		const { auth } = await getTestInstance(
 			{
