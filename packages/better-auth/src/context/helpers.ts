@@ -11,6 +11,7 @@ import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
 import { createCookieGetter, getCookies } from "../cookies";
 import { createInternalAdapter } from "../db";
+import { createIdentityScopedAdapter } from "../db/identity-scope";
 import { isPromise } from "../utils/is-promise";
 import {
 	getBaseURL,
@@ -88,6 +89,7 @@ export async function runPluginInit(context: AuthContext) {
 		dbHooks.push({ source: "user", hooks: options.databaseHooks });
 	}
 
+	context.adapter = createIdentityScopedAdapter(context.adapter, options);
 	context.internalAdapter = createInternalAdapter(context.adapter, {
 		options,
 		logger: context.logger,

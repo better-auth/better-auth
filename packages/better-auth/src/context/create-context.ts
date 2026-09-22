@@ -20,7 +20,6 @@ import { checkEndpointConflicts } from "../api";
 import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
-import { createIdentityScopedAdapter } from "../db/identity-scope";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
@@ -279,8 +278,6 @@ Most of the features of Better Auth will not work correctly.`,
 
 	const trustedOrigins = await getTrustedOrigins(options);
 	const trustedProviders = await getTrustedProviders(options);
-	const runtimeAdapter = createIdentityScopedAdapter(adapter, options);
-
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		baseURL: baseURL || "",
@@ -379,8 +376,8 @@ Most of the features of Better Auth will not work correctly.`,
 			this.newSession = session;
 		},
 		newSession: null,
-		adapter: runtimeAdapter,
-		internalAdapter: createInternalAdapter(runtimeAdapter, {
+		adapter,
+		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			logger,
 			hooks: options.databaseHooks
