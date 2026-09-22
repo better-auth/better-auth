@@ -841,8 +841,20 @@ admin({
 
 The message to show when a banned user tries to sign in. Defaults to "You have been banned from this application. Please contact support if you believe this is an error."
 
+You can also pass a synchronous or asynchronous function that receives the banned user and returns the message.
+
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: "Custom banned user message",
+});
+```
+
+```ts title="auth.ts"
+admin({
+  bannedUserMessage: (user) => {
+    return user.banReason
+      ? `You have been banned. Reason: ${user.banReason}`
+      : "You have been banned.";
+  },
 });
 ```
