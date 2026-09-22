@@ -15,7 +15,10 @@ import {
 	PostgresQueryCompiler,
 } from "kysely";
 import { describe, expect, it, vi } from "vitest";
-import { createD1IndexIntrospector } from "./d1-sqlite-dialect";
+import {
+	createD1IndexIntrospector,
+	D1SqliteDialect,
+} from "./d1-sqlite-dialect";
 import { createKyselyAdapter } from "./dialect";
 
 class StubDriver implements Driver {
@@ -174,6 +177,53 @@ describe("D1 index introspection", () => {
 				valid: true,
 			},
 		]);
+	});
+});
+
+/** @see https://developers.cloudflare.com/d1/worker-api/d1-database/#batch */
+describe("D1 table introspection", () => {
+	it("batches column metadata for all tables", async ({ onTestFinished }) => {
+		const all = vi.fn(async () => ({
+			results: ["user", "session"].map((name) => ({
+				name,
+				sql: `CREATE TABLE "${name}" ("id" text PRIMARY KEY)`,
+				type: "table",
+			})),
+			meta: { changes: 0, last_row_id: 0 },
+		}));
+		const prepare = vi.fn((query: string) => ({
+			bind: () => ({ query, all }),
+		}));
+		const batch = vi.fn(async (statements: { query: string }[]) =>
+			statements.map(() => ({
+				results: [
+					{
+						cid: 0,
+						name: "id",
+						type: "text",
+						notnull: 0,
+						dflt_value: null,
+						pk: 1,
+					},
+				],
+			})),
+		);
+		const database = {
+			batch,
+			exec: vi.fn(),
+			prepare,
+		} as unknown as D1Database;
+		const db = new Kysely<unknown>({
+			dialect: new D1SqliteDialect({ database }),
+		});
+		onTestFinished(() => db.destroy());
+
+		const tables = await db.introspection.getTables();
+
+		expect(tables.map((table) => table.name)).toEqual(["user", "session"]);
+		expect(all).toHaveBeenCalledTimes(1);
+		expect(batch).toHaveBeenCalledTimes(1);
+		expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
 	});
 });
 
