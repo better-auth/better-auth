@@ -20,6 +20,7 @@ import {
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecodeJWT, symmetricEncodeJWT } from "../../crypto";
+import { decryptOAuthToken } from "../../oauth2/utils";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
@@ -803,6 +804,66 @@ describe("account", async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(3);
 		});
+	});
+
+	it("should encrypt the id token", async () => {
+		const idToken =
+			"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJlbmMtc3ViamVjdCJ9.signature";
+		const {
+			auth: isolatedAuth,
+			client: isolatedClient,
+			signInWithTestUser: signInOnIsolatedInstance,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async () => true,
+				},
+			},
+			account: {
+				accountLinking: { allowDifferentEmails: true },
+				encryptOAuthTokens: true,
+			},
+		});
+		const isolatedContext = await isolatedAuth.$context;
+		const googleProvider = isolatedContext.socialProviders.find(
+			(provider) => provider.id === "google",
+		);
+		assert(googleProvider, "google provider should be configured");
+		const linkedUser = {
+			id: "enc-subject",
+			name: "enc",
+			email: "enc-subject@example.com",
+			sub: "enc-subject",
+			emailVerified: true,
+		};
+		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+			user: linkedUser,
+			data: linkedUser,
+		});
+
+		const { headers } = await signInOnIsolatedInstance();
+		const linked = await isolatedClient.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				idToken: { token: idToken },
+			},
+			{ headers },
+		);
+		expect(linked.error).toBeNull();
+
+		const account = await isolatedContext.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "accountId", value: "enc-subject" }],
+		});
+		assert(account, "linked account should exist");
+		expect(account.idToken).toBeTruthy();
+		expect(account.idToken).not.toBe(idToken);
+		expect(await decryptOAuthToken(account.idToken!, isolatedContext)).toBe(
+			idToken,
+		);
 	});
 
 	it("returns 401 over HTTP when a linked provider resolves an invalid account subject", async () => {

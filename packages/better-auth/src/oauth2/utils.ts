@@ -4,7 +4,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
 /**
  * Check if a string looks like encrypted data
  */
-function isLikelyEncrypted(token: string): boolean {
+export function isLikelyEncrypted(token: string): boolean {
 	if (token.startsWith("$ba$")) return true;
 	return token.length % 2 === 0 && /^[0-9a-f]+$/i.test(token);
 }
@@ -34,6 +34,23 @@ export function setTokenUtil(
 		});
 	}
 	return token;
+}
+
+/**
+ * Encrypt a token that is already stored in the account table.
+ *
+ * Only a value that does not look like ciphertext is encrypted, so a row
+ * written before `encryptOAuthTokens` was turned on is upgraded in place.
+ * A value that does look like ciphertext is returned untouched: decrypting it
+ * here to check would throw under a rotated secret, and re-encrypting the
+ * result would replace the stored token for good.
+ */
+export async function encryptStoredOAuthToken(
+	token: string | null | undefined,
+	ctx: AuthContext,
+) {
+	if (!token || isLikelyEncrypted(token)) return token;
+	return setTokenUtil(token, ctx);
 }
 
 export function getOAuthCallbackPath(provider: {
