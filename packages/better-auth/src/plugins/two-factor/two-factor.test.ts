@@ -2733,6 +2733,27 @@ describe("two-factor password length", async () => {
 	});
 	const { headers } = await signInWithTestUser();
 
+	it("enable should ignore an overlong optional password for a passwordless user", async () => {
+		const { auth: passwordlessAuth } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+			},
+			{ disableTestUser: true },
+		);
+		const signInRes = await passwordlessAuth.api.signInAnonymous({
+			asResponse: true,
+		});
+
+		const res = await passwordlessAuth.api.enableTwoFactor({
+			body: { password: "x".repeat(129) },
+			headers: convertSetCookieToCookie(signInRes.headers),
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+	});
+
 	it("enable should reject a password longer than maxPasswordLength before hashing", async () => {
 		hash.mockClear();
 		verify.mockClear();
