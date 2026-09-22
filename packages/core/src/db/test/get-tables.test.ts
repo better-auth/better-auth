@@ -83,6 +83,35 @@ describe("getAuthTables", () => {
 		}
 	});
 
+	it("does not duplicate indexes copied from the identity scope field", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+						index: true,
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					resolve: () => "tenant-a",
+				},
+			},
+		});
+
+		for (const model of ["user", "account", "session", "verification"]) {
+			expect(tables[model]?.fields.tenantId?.index).toBe(false);
+		}
+		expect(tables.session?.indexes).toContainEqual({
+			fields: ["tenantId"],
+		});
+		expect(tables.verification?.indexes).toContainEqual({
+			fields: ["tenantId"],
+		});
+	});
+
 	it("adds identity scope to explicitly configured plugin models", () => {
 		const tables = getAuthTables({
 			user: {

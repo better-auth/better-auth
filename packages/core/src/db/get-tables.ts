@@ -396,6 +396,7 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 
 			table.fields[identityScope.field] = {
 				...scopeField,
+				index: false,
 				input: false,
 				required: true,
 				unique: false,
