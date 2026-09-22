@@ -11,11 +11,6 @@ export function assertPasswordNotTooShort(
 	}
 }
 
-/**
- * Every endpoint that hands a password to `password.hash` / `password.verify`
- * calls this first, before any account lookup, so an over-long input is
- * rejected at the same cost whether or not the account exists.
- */
 export function assertPasswordNotTooLong(
 	ctx: GenericEndpointContext,
 	password: string,
@@ -77,11 +72,6 @@ export async function shouldRequirePassword(
 	userId: string,
 	allowPasswordless?: boolean,
 ): Promise<boolean> {
-	const password = ctx.body.password;
-	if (typeof password === "string") {
-		assertPasswordNotTooLong(ctx, password);
-	}
-
 	if (!allowPasswordless) {
 		return true;
 	}

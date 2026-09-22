@@ -2733,43 +2733,6 @@ describe("two-factor password length", async () => {
 	});
 	const { headers } = await signInWithTestUser();
 
-	it("rejects an optional overlong password before a passwordless credential lookup", async () => {
-		const { auth: passwordlessAuth } = await getTestInstance(
-			{
-				secret: DEFAULT_SECRET,
-				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
-			},
-			{ disableTestUser: true },
-		);
-		const signInResponse = await passwordlessAuth.api.signInAnonymous({
-			asResponse: true,
-		});
-		const passwordlessHeaders = convertSetCookieToCookie(
-			signInResponse.headers,
-		);
-		const context = await passwordlessAuth.$context;
-		const findCredentialAccount = vi.spyOn(
-			context.internalAdapter,
-			"findCredentialAccount",
-		);
-
-		try {
-			const response = await passwordlessAuth.api.enableTwoFactor({
-				body: { password: "x".repeat(129) },
-				headers: passwordlessHeaders,
-				asResponse: true,
-			});
-
-			expect(response.status).toBe(400);
-			await expect(response.json()).resolves.toMatchObject({
-				code: "PASSWORD_TOO_LONG",
-			});
-			expect(findCredentialAccount).not.toHaveBeenCalled();
-		} finally {
-			findCredentialAccount.mockRestore();
-		}
-	});
-
 	it("enable should reject a password longer than maxPasswordLength before hashing", async () => {
 		hash.mockClear();
 		verify.mockClear();
