@@ -1757,6 +1757,9 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../kysely-adapter
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../oauth-provider
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
