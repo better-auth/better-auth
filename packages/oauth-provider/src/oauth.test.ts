@@ -112,6 +112,24 @@ describe("oauth - init", () => {
 		).resolves.not.toThrowError();
 	});
 
+	it("should warn when jtiCacheStorage is set to secondary-storage without secondaryStorage", async () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		await getTestInstance({
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					jtiCacheStorage: "secondary-storage",
+				}),
+			],
+		});
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("jtiCacheStorage is set to 'secondary-storage' but no secondaryStorage is configured"),
+		);
+		warnSpy.mockRestore();
+	});
+
 	it("should fail with secondaryStorage when session config is omitted", async () => {
 		await expect(
 			getTestInstance({

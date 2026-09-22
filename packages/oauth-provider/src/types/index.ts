@@ -498,6 +498,11 @@ export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
 	/**
+	 * Storage strategy for JTI replay protection cache.
+	 * @default "memory"
+	 */
+	jtiCacheStorage?: "memory" | "secondary-storage" | undefined;
+	/**
 	 * Custom schema definitions
 	 */
 	schema?: InferOptionSchema<typeof schema>;

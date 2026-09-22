@@ -519,6 +519,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
+			if (opts.jtiCacheStorage === "secondary-storage" && !ctx.options.secondaryStorage) {
+				logger.warn(
+					"jtiCacheStorage is set to 'secondary-storage' but no secondaryStorage is configured. JTI replay protection has fallen back to per-process memory and will not prevent replays across instances.",
+				);
+			}
+
 			// Seed `oauthResource` rows from plugin config. Idempotent and
 			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
 			// is empty. Tolerates
