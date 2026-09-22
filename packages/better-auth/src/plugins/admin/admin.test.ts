@@ -81,7 +81,10 @@ describe("Admin plugin", async () => {
 			trustedOrigins: ["https://frontend.example.com"],
 			plugins: [
 				admin({
-					bannedUserMessage: "Custom banned user message",
+					bannedUserMessage: async (user) =>
+						user.banReason
+							? `Banned: ${user.banReason}`
+							: "Custom banned user message",
 				}),
 			],
 			databaseHooks: {
@@ -660,16 +663,16 @@ describe("Admin plugin", async () => {
 		expect(`${url.origin}${url.pathname}`).toBe(errorCallbackURL);
 		expect(url.searchParams.get("error")).toBe("BANNED_USER");
 		expect(url.searchParams.get("error_description")).toBe(
-			"Custom banned user message",
+			"Banned: Test reason",
 		);
 	});
 
-	it("should change banned user message", async () => {
+	it("should resolve async banned user message", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
 			password: "test",
 		});
-		expect(res.error?.message).toBe("Custom banned user message");
+		expect(res.error?.message).toBe("Banned: Test reason");
 	});
 
 	it("should allow banned user to sign in if ban expired", async () => {
