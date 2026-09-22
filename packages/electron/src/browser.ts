@@ -76,13 +76,20 @@ export function setupMain(
 		);
 	}
 
+	const config = {
+		bridges: true,
+		csp: true,
+		scheme: true,
+		...(cfg ?? {}),
+	} satisfies SetupMainConfig;
+
 	const getWindow = withGetWindowFallback(cfg?.getWindow);
 	const getTarget = cfg?.getTarget;
 
-	if (!cfg || cfg.csp === true) {
+	if (config.csp === true) {
 		setupCSP(clientOptions, opts);
 	}
-	if (!cfg || cfg.scheme === true) {
+	if (config.scheme === true) {
 		registerProtocolScheme(
 			$fetch,
 			opts,
@@ -90,7 +97,7 @@ export function setupMain(
 			clientOptions,
 		);
 	}
-	if (!cfg || cfg.bridges === true) {
+	if (config.bridges === true) {
 		setupBridges(
 			{
 				$fetch,
