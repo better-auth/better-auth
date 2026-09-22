@@ -864,12 +864,6 @@ importers:
       hono:
         specifier: ^4.13.7
         version: 4.13.7
-      kysely:
-        specifier: 0.28.17
-        version: 0.28.17
-      kysely-d1:
-        specifier: ^0.4.0
-        version: 0.4.0(kysely@0.28.17)
     devDependencies:
       vitest:
         specifier: catalog:vitest
@@ -11266,11 +11260,6 @@ packages:
 
   knitwork@1.3.0:
     resolution: {integrity: sha512-4LqMNoONzR43B1W0ek0fhXMsDNW/zxa1NdFAVMY+k28pgZLovR4G3PB5MrpTxCy1QaZCqNoiaKPr5w5qZHfSNw==}
-
-  kysely-d1@0.4.0:
-    resolution: {integrity: sha512-wUcVvQNtm30OTfuo7Ad5vYJ1qHqPXOCZc+zWchVKNyuvqY3u8OuGw4gmUx1Ypdx2wRVFLHVQC9I7v0pTmF7Nkw==}
-    peerDependencies:
-      kysely: 0.28.17
 
   kysely-postgres-js@3.0.0:
     resolution: {integrity: sha512-o2t/xNSYJQDW6rVGGFPXKmZ0BEz2dGn66c2B+cO/k9ZNcU2qPWPycQPQ+B+P2MBXbKYq0xV9BZmFIvkUrmFWAQ==}
@@ -27589,10 +27578,6 @@ snapshots:
       zod: 4.5.4
 
   knitwork@1.3.0: {}
-
-  kysely-d1@0.4.0(kysely@0.28.17):
-    dependencies:
-      kysely: 0.28.17
 
   kysely-postgres-js@3.0.0(kysely@0.28.17)(postgres@3.4.8):
     dependencies:

@@ -11,14 +11,11 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { getMigrations } from "better-auth/db/migration";
 import { Hono } from "hono";
-import { auth, restrictedD1Auth } from "./auth";
+import { auth } from "./auth";
 
 const app = new Hono();
 
 app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
-app.all("/_test/restricted-d1-auth/*", (c) =>
-	restrictedD1Auth.handler(c.req.raw),
-);
 
 app.get("/_test/session", async (c) => {
 	const session = await auth.api.getSession({
