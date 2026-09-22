@@ -2707,6 +2707,70 @@ describe("token routes cookie cache revocation", async () => {
 	});
 });
 
+describe("custom OAuth token encryption", async () => {
+	it("should store and read tokens through the custom encrypt and decrypt functions", async () => {
+		const encrypt = vi.fn(async (token: string) => `custom:${btoa(token)}`);
+		const decrypt = vi.fn(async (token: string) =>
+			atob(token.slice("custom:".length)),
+		);
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				encryptOAuthTokens: { encrypt, decrypt },
+			},
+		});
+		const ctx = await auth.$context;
+
+		const headers = new Headers();
+		email = "custom-encryption@test.com";
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const account = await ctx.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "providerId", value: "google" }],
+		});
+		expect(account?.accessToken).toBe(`custom:${btoa("test")}`);
+		expect(account?.refreshToken).toBe(`custom:${btoa("test")}`);
+
+		assert(account, "google account should be stored");
+		const accessTokenRes = await client.getAccessToken(
+			{ accountId: account.id },
+			{ headers },
+		);
+		expect(accessTokenRes.error).toBeNull();
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+		expect(decrypt).toHaveBeenCalledWith(`custom:${btoa("test")}`);
+	});
+});
+
 describe("account resolution in stateless mode", async () => {
 	const IDP = "https://idp.stateless.test";
 	const STATELESS_SECRET = "stateless-test-secret-stateless-test-secret";
