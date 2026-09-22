@@ -18,7 +18,11 @@ export {
 	type OnlineManager,
 } from "./online-manager";
 export * from "./parser";
-export * from "./query";
+export {
+	type AuthQueryAtom,
+	type AuthQueryState,
+	useAuthQuery,
+} from "./query";
 export * from "./session-refresh";
 export * from "./types";
 export * from "./vanilla";
