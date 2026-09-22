@@ -152,17 +152,15 @@ describe("getAuthTables", () => {
 		});
 	});
 
-	it("requires a server-owned string identity scope field", () => {
+	it.each([
+		{ type: "number" as const, required: true, input: false },
+		{ type: "string" as const, required: false, input: false },
+		{ type: "string" as const, required: true, input: true },
+	])("rejects invalid identity scope field configuration: $type/$required/$input", (scopeField) => {
 		expect(() =>
 			getAuthTables({
 				user: {
-					additionalFields: {
-						tenantId: {
-							type: "number",
-							required: true,
-							input: false,
-						},
-					},
+					additionalFields: { tenantId: scopeField },
 					identityScope: {
 						field: "tenantId",
 						resolve: () => "tenant-a",
@@ -171,6 +169,21 @@ describe("getAuthTables", () => {
 			}),
 		).toThrow(
 			'Identity scope field "tenantId" must use type: "string", required: true, and input: false.',
+		);
+	});
+
+	it("requires the identity scope field to be declared", () => {
+		expect(() =>
+			getAuthTables({
+				user: {
+					identityScope: {
+						field: "tenantId",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "tenantId" must be declared in user.additionalFields.',
 		);
 	});
 
