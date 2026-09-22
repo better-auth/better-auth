@@ -42,6 +42,235 @@ describe("getAuthTables", () => {
 		);
 	});
 
+	it("uses composite email uniqueness for tenant-scoped identity", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+						fieldName: "tenant_id",
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					resolve: ({ request }) => request?.headers.get("x-tenant-id") ?? null,
+				},
+			},
+		});
+
+		expect(tables.user?.fields.email?.unique).toBe(false);
+		expect(tables.user?.indexes).toContainEqual({
+			fields: ["tenantId", "email"],
+			unique: true,
+		});
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["tenantId", "issuer", "accountId"],
+			unique: true,
+		});
+		expect(tables.account?.indexes).not.toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+
+		for (const model of ["user", "account", "session", "verification"]) {
+			expect(tables[model]?.fields.tenantId).toMatchObject({
+				fieldName: "tenant_id",
+				required: true,
+				input: false,
+			});
+		}
+	});
+
+	it("does not duplicate indexes copied from the identity scope field", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+						index: true,
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					resolve: () => "tenant-a",
+				},
+			},
+		});
+
+		for (const model of ["user", "account", "session", "verification"]) {
+			expect(tables[model]?.fields.tenantId?.index).toBe(false);
+		}
+		expect(tables.session?.indexes).toContainEqual({
+			fields: ["tenantId"],
+		});
+		expect(tables.verification?.indexes).toContainEqual({
+			fields: ["tenantId"],
+		});
+	});
+
+	it("keeps non-unique issuer and accountId lookup indexes", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					resolve: () => "tenant-a",
+				},
+			},
+			plugins: [
+				{
+					id: "account-lookup",
+					schema: {
+						account: {
+							fields: {},
+							indexes: [{ fields: ["issuer", "accountId"] }],
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["issuer", "accountId"],
+		});
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["tenantId", "issuer", "accountId"],
+			unique: true,
+		});
+		expect(tables.account?.indexes).not.toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+	});
+
+	it("adds identity scope to explicitly configured plugin models", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					models: ["passkey"],
+					resolve: ({ request }) => request?.headers.get("x-tenant-id") ?? null,
+				},
+			},
+			plugins: [
+				{
+					id: "passkey",
+					schema: {
+						passkey: {
+							fields: {
+								credentialId: { type: "string", required: true },
+								userId: { type: "string", required: true },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.passkey?.fields.tenantId).toMatchObject({
+			required: true,
+			input: false,
+		});
+		expect(tables.passkey?.indexes).toContainEqual({
+			fields: ["tenantId"],
+		});
+	});
+
+	it.each([
+		{ type: "number" as const, required: true, input: false },
+		{ type: "string" as const, required: false, input: false },
+		{ type: "string" as const, required: true, input: true },
+	])("rejects invalid identity scope field configuration: $type/$required/$input", (scopeField) => {
+		expect(() =>
+			getAuthTables({
+				user: {
+					additionalFields: { tenantId: scopeField },
+					identityScope: {
+						field: "tenantId",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "tenantId" must use type: "string", required: true, and input: false.',
+		);
+	});
+
+	it("requires the identity scope field to be declared", () => {
+		expect(() =>
+			getAuthTables({
+				user: {
+					identityScope: {
+						field: "tenantId",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "tenantId" must be declared in user.additionalFields.',
+		);
+	});
+
+	it("rejects identity scope fields that collide with built-in columns", () => {
+		expect(() =>
+			getAuthTables({
+				user: {
+					additionalFields: {
+						email: {
+							type: "string",
+							required: true,
+							input: false,
+						},
+					},
+					identityScope: {
+						field: "email",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "email" cannot replace a built-in auth field.',
+		);
+
+		expect(() =>
+			getAuthTables({
+				user: {
+					additionalFields: {
+						tenantId: {
+							type: "string",
+							required: true,
+							input: false,
+							fieldName: "userId",
+						},
+					},
+					identityScope: {
+						field: "tenantId",
+						resolve: () => "tenant-a",
+					},
+				},
+			}),
+		).toThrow(
+			'Identity scope field "tenantId" cannot replace a built-in auth field.',
+		);
+	});
+
 	it("should use correct field name for refreshTokenExpiresAt", () => {
 		const tables = getAuthTables({
 			account: {

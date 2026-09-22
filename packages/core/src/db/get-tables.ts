@@ -1,3 +1,4 @@
+import { BetterAuthError } from "../error";
 import type { BetterAuthOptions } from "../types";
 import { resolveDatabaseSchemaIndexes } from "./database-index";
 import type {
@@ -194,7 +195,7 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 		},
 	} satisfies BetterAuthDBSchema;
 
-	const authTables = {
+	const authTables: BetterAuthDBSchema = {
 		user: {
 			modelName: options.user?.modelName || "user",
 			indexes: user?.indexes,
@@ -358,6 +359,126 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;
+
+	const identityScope = options.user?.identityScope;
+	if (identityScope) {
+		const reservedIdentityScopeFields = new Set([
+			"id",
+			"name",
+			"email",
+			"emailVerified",
+			"image",
+			"createdAt",
+			"updatedAt",
+			"expiresAt",
+			"token",
+			"ipAddress",
+			"userAgent",
+			"userId",
+			"issuer",
+			"accountId",
+			"providerId",
+			"accessToken",
+			"refreshToken",
+			"idToken",
+			"accessTokenExpiresAt",
+			"refreshTokenExpiresAt",
+			"scope",
+			"password",
+			"identifier",
+			"value",
+		]);
+		const scopeField = options.user?.additionalFields?.[identityScope.field];
+		if (!scopeField) {
+			throw new BetterAuthError(
+				`Identity scope field "${identityScope.field}" must be declared in user.additionalFields.`,
+			);
+		}
+		if (
+			scopeField.type !== "string" ||
+			scopeField.required !== true ||
+			scopeField.input !== false
+		) {
+			throw new BetterAuthError(
+				`Identity scope field "${identityScope.field}" must use type: "string", required: true, and input: false.`,
+			);
+		}
+		const physicalName = scopeField.fieldName ?? identityScope.field;
+		if (
+			reservedIdentityScopeFields.has(identityScope.field) ||
+			reservedIdentityScopeFields.has(physicalName)
+		) {
+			throw new BetterAuthError(
+				`Identity scope field "${identityScope.field}" cannot replace a built-in auth field.`,
+			);
+		}
+
+		const scopedModels = new Set([
+			"user",
+			"account",
+			"session",
+			"verification",
+			...(identityScope.models ?? []),
+		]);
+
+		for (const model of scopedModels) {
+			const table = authTables[model];
+			if (!table) {
+				throw new BetterAuthError(
+					`Identity scope model "${model}" is not registered in the database schema.`,
+				);
+			}
+
+			for (const [key, field] of Object.entries(table.fields)) {
+				if (model === "user" && key === identityScope.field) continue;
+				const existingPhysical = field.fieldName ?? key;
+				if (key === identityScope.field || existingPhysical === physicalName) {
+					throw new BetterAuthError(
+						`Identity scope field "${identityScope.field}" cannot replace an existing "${model}" column.`,
+					);
+				}
+			}
+
+			table.fields[identityScope.field] = {
+				...scopeField,
+				index: false,
+				input: false,
+				required: true,
+				unique: false,
+			};
+
+			if (model === "user") {
+				const email = table.fields.email;
+				if (email) email.unique = false;
+				table.indexes = mergeTableIndexes(table.indexes, [
+					{
+						fields: [identityScope.field, "email"],
+						unique: true,
+					},
+				]);
+			} else if (model === "account") {
+				table.indexes = mergeTableIndexes(
+					(table.indexes ?? []).filter(
+						(index) =>
+							!(
+								index.fields.join(",") === "issuer,accountId" &&
+								index.unique === true
+							),
+					),
+					[
+						{
+							fields: [identityScope.field, "issuer", "accountId"],
+							unique: true,
+						},
+					],
+				);
+			} else {
+				table.indexes = mergeTableIndexes(table.indexes, [
+					{ fields: [identityScope.field] },
+				]);
+			}
+		}
+	}
 
 	return authTables;
 };

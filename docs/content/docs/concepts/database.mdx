@@ -698,6 +698,80 @@ For `user.additionalFields`, `input` and `returned` are independent:
 
 If you're using a social or OAuth provider, `mapProfileToUser` can populate additional fields from the provider profile when those fields allow input. The mapper runs on your server, but Better Auth still treats its return value as provider input. Fields marked `input: false` stay server-owned, provider values for those fields are ignored, and configured `defaultValue` values still apply when OAuth creates a user. See [server-owned fields and authorization claims](/docs/concepts/oauth#server-owned-fields-and-authorization-claims) for secure handling patterns.
 
+### Tenant-scoped identity
+
+By default, Better Auth treats email and provider accounts as globally unique
+identities. If your application requires the same email address to represent
+independent users in different tenants, configure `user.identityScope`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  user: {
+    additionalFields: {
+      tenantId: {
+        type: "string",
+        required: true,
+        input: false,
+        fieldName: "tenant_id",
+      },
+    },
+    identityScope: {
+      field: "tenantId",
+      resolve: ({ headers, request }) =>
+        (request?.headers ?? headers)?.get("x-tenant-id"),
+      // Include plugin credential models that are looked up without a user ID.
+      models: ["passkey", "twoFactor"],
+    },
+  },
+});
+```
+
+The scope field must be a required, server-owned string user additional field
+(`type: "string"`, `required: true`, `input: false`). Better Auth resolves it
+for every database operation, injects it into scoped records, and adds it to
+reads, updates, and deletes. User email uniqueness becomes composite over the
+scope field and email. Account uniqueness becomes composite over the scope
+field, issuer, and account id. Session and verification records are scoped
+automatically, and email-verification tokens are bound to the issuing scope.
+Use `models` for plugin tables that also contain tenant-bound credentials.
+
+Run `npx auth@latest generate` after enabling this option. Existing
+installations must backfill the scope field before making it non-null and
+replacing the global email unique constraint.
+
+Jobs, scripts, and other work outside an HTTP request must wrap the
+operation in `runWithEndpointContext` with the auth context plus a request
+or headers that `resolve` can read. There is no unscoped adapter escape
+hatch: operations without a resolved scope fail closed. This example uses
+internal APIs (`runWithEndpointContext`, `auth.$context`, and
+`internalAdapter`) that may change in future releases.
+
+```ts title="job.ts"
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { auth } from "./auth";
+
+export async function findTenantUser(tenantId: string, email: string) {
+  const context = await auth.$context;
+  return runWithEndpointContext(
+    {
+      context,
+      request: new Request("http://localhost/internal", {
+        headers: { "x-tenant-id": tenantId },
+      }),
+    },
+    () => context.internalAdapter.findUserByEmail(email),
+  );
+}
+```
+
+<Callout type="warn">
+  Tenant-scoped identity currently requires database-backed sessions and
+  verification. It cannot be combined with `secondaryStorage` or
+  `session.cookieCache`.
+</Callout>
+
 **Example: Mapping Profile to User For `firstName` and `lastName`**
 
 ```ts title="auth.ts"
