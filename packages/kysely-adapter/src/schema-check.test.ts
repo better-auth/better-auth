@@ -140,6 +140,11 @@ it("validates SQLite without dialect introspection", async ({
 			widget: { fields: { name: { type: "string" } } },
 		}),
 	).resolves.toEqual([]);
+	await expect(
+		findSchemaProblems(db, "sqlite", {
+			missingWidget: { fields: { name: { type: "string" } } },
+		}),
+	).resolves.toEqual([{ kind: "missing-table", table: "missingWidget" }]);
 });
 
 /**
