@@ -445,7 +445,11 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 			} else if (model === "account") {
 				table.indexes = mergeTableIndexes(
 					(table.indexes ?? []).filter(
-						(index) => index.fields.join(",") !== "issuer,accountId",
+						(index) =>
+							!(
+								index.fields.join(",") === "issuer,accountId" &&
+								index.unique === true
+							),
 					),
 					[
 						{

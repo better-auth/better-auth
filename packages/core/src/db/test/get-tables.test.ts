@@ -112,6 +112,47 @@ describe("getAuthTables", () => {
 		});
 	});
 
+	it("keeps non-unique issuer and accountId lookup indexes", () => {
+		const tables = getAuthTables({
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+						input: false,
+					},
+				},
+				identityScope: {
+					field: "tenantId",
+					resolve: () => "tenant-a",
+				},
+			},
+			plugins: [
+				{
+					id: "account-lookup",
+					schema: {
+						account: {
+							fields: {},
+							indexes: [{ fields: ["issuer", "accountId"] }],
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["issuer", "accountId"],
+		});
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["tenantId", "issuer", "accountId"],
+			unique: true,
+		});
+		expect(tables.account?.indexes).not.toContainEqual({
+			fields: ["issuer", "accountId"],
+			unique: true,
+		});
+	});
+
 	it("adds identity scope to explicitly configured plugin models", () => {
 		const tables = getAuthTables({
 			user: {
