@@ -103,7 +103,7 @@ declare module "@better-auth/core" {
 This only affects TypeScript. Users must still add the plugin to their `plugins` array at runtime.
 
 <Callout type="info">
-  Skip this for local plugins that aren't accessed through `getPlugin()`. Published packages should declare `@better-auth/core` as a peer dependency with the same supported version range as `better-auth`.
+  If you publish the plugin as a separate package, declare `@better-auth/core` as a peer dependency with the same supported version range as `better-auth`.
 </Callout>
 
 ### Endpoints
