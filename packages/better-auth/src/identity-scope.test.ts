@@ -2,7 +2,6 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { describe, expect, it } from "vitest";
-import { bearer } from "./plugins/bearer";
 import { emailOTP } from "./plugins/email-otp";
 import { getTestInstance } from "./test-utils/test-instance";
 
@@ -38,7 +37,6 @@ function tenantOptions() {
 				}) => (request?.headers ?? headers)?.get("x-tenant-id") ?? null,
 			},
 		},
-		plugins: [bearer()],
 	};
 }
 
@@ -107,7 +105,6 @@ describe("tenant-scoped identity", async () => {
 			{
 				...tenantOptions(),
 				plugins: [
-					bearer(),
 					emailOTP({
 						disableSignUp: true,
 						generateOTP: () => "123456",
@@ -472,7 +469,6 @@ describe("tenant-scoped identity", async () => {
 						}) => (request?.headers ?? headers)?.get("x-tenant-id") ?? null,
 					},
 				},
-				plugins: [bearer()],
 				emailAndPassword: { enabled: true },
 				emailVerification: {
 					sendVerificationEmail: async () => {},
@@ -585,7 +581,6 @@ describe("tenant-scoped identity", async () => {
 			{
 				...tenantOptions(),
 				plugins: [
-					bearer(),
 					{
 						id: "capture-adapter",
 						init(ctx) {
