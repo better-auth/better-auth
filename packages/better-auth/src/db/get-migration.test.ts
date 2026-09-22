@@ -177,7 +177,7 @@ describe("get-migration: compound indexes on SQLite", () => {
 			'create unique index "user_email_uidx" on "user" ("email")',
 		);
 		expect(sql).toContain(
-			'create unique index "account_tenant_id_providerId_accountId_uidx" on "account" ("tenant_id", "providerId", "accountId")',
+			'create unique index "account_tenant_id_issuer_accountId_uidx" on "account" ("tenant_id", "issuer", "accountId")',
 		);
 	});
 

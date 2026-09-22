@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import { describe, expect, it } from "vitest";
 import { bearer } from "./plugins/bearer";
 import { emailOTP } from "./plugins/email-otp";
@@ -46,7 +47,7 @@ describe("tenant-scoped identity", async () => {
 		const { auth, db } = await getTestInstance(tenantOptions(), {
 			disableTestUser: true,
 		});
-		expect((await auth.$context).checkSchema).toBeDefined();
+		expect((await auth.$context).adapter).toBeDefined();
 
 		const userA = await auth.api.signUpEmail({
 			headers: tenantHeaders("tenant-a"),
@@ -266,17 +267,21 @@ describe("tenant-scoped identity", async () => {
 				callback,
 			);
 
+		const googleAccount = {
+			accountId: "google-subject",
+			issuer: createOAuthAccountIssuer("google"),
+			providerId: "google",
+		};
+
 		await withTenant("tenant-a", () =>
 			context.internalAdapter.createAccount({
-				accountId: "google-subject",
-				providerId: "google",
+				...googleAccount,
 				userId: userA.user.id,
 			}),
 		);
 		await withTenant("tenant-b", () =>
 			context.internalAdapter.createAccount({
-				accountId: "google-subject",
-				providerId: "google",
+				...googleAccount,
 				userId: userB.user.id,
 			}),
 		);
@@ -284,6 +289,7 @@ describe("tenant-scoped identity", async () => {
 			withTenant("tenant-b", () =>
 				context.internalAdapter.createAccount({
 					accountId: "cross-tenant-subject",
+					issuer: createOAuthAccountIssuer("google"),
 					providerId: "google",
 					userId: userA.user.id,
 				}),
@@ -292,14 +298,14 @@ describe("tenant-scoped identity", async () => {
 
 		const foundA = await withTenant("tenant-a", () =>
 			context.internalAdapter.findAccountOwnerByKey({
-				accountId: "google-subject",
-				providerId: "google",
+				accountId: googleAccount.accountId,
+				issuer: googleAccount.issuer,
 			}),
 		);
 		const foundB = await withTenant("tenant-b", () =>
 			context.internalAdapter.findAccountOwnerByKey({
-				accountId: "google-subject",
-				providerId: "google",
+				accountId: googleAccount.accountId,
+				issuer: googleAccount.issuer,
 			}),
 		);
 

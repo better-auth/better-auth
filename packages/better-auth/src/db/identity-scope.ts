@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import type {
 	DBAdapter,
 	DBTransactionAdapter,
@@ -20,7 +20,7 @@ function createIdentityScopeResolver(options: BetterAuthOptions) {
 	const requestValues = new WeakMap<object, Promise<ResolvedIdentityScope>>();
 
 	const resolve = async (
-		endpointContext: ReturnType<typeof tryGetCurrentAuthEndpointContext>,
+		endpointContext: Awaited<ReturnType<typeof getCurrentAuthContext>> | null,
 	) => {
 		const value = await identityScope.resolve({
 			headers: endpointContext?.headers,
@@ -38,9 +38,9 @@ function createIdentityScopeResolver(options: BetterAuthOptions) {
 		};
 	};
 
-	return () => {
-		const endpointContext = tryGetCurrentAuthEndpointContext();
-		if (!endpointContext) return resolve(undefined);
+	return async () => {
+		const endpointContext = await getCurrentAuthContext().catch(() => null);
+		if (!endpointContext) return resolve(null);
 
 		const existing = requestValues.get(endpointContext);
 		if (existing) return existing;
