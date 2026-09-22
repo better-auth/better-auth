@@ -17,11 +17,14 @@ const idp = new OAuth2Server();
 describe("SSO sign-in during an oauth-provider authorization", async () => {
 	const baseURL = "http://localhost:3000";
 	const redirectURI = "http://localhost:5000/callback";
+	await idp.issuer.keys.generate("RS256");
+	await idp.start(undefined, "127.0.0.1");
+	const issuer = idp.issuer.url!;
 	const { auth, client, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance(
 			{
 				baseURL,
-				trustedOrigins: ["http://localhost:8096"],
+				trustedOrigins: [issuer],
 				plugins: [
 					jwt(),
 					oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
@@ -48,9 +51,6 @@ describe("SSO sign-in during an oauth-provider authorization", async () => {
 	});
 
 	beforeAll(async () => {
-		await idp.issuer.keys.generate("RS256");
-		await idp.start(8096, "localhost");
-		const issuer = idp.issuer.url!;
 		const { headers } = await signInWithTestUser();
 		await auth.api.registerSSOProvider({
 			body: {
