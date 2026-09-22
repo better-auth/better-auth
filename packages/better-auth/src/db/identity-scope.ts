@@ -58,6 +58,13 @@ function scopeWhere(where: Where[] | undefined, field: string, value: string) {
 	];
 }
 
+function isSupportedUserId(userId: unknown): userId is string | number {
+	return (
+		(typeof userId === "string" && userId.length > 0) ||
+		(typeof userId === "number" && Number.isFinite(userId))
+	);
+}
+
 function createScopedTransactionAdapter(
 	adapter: DBTransactionAdapter,
 	scopedModels: ReadonlySet<string>,
@@ -69,21 +76,22 @@ function createScopedTransactionAdapter(
 		if (!scope) return data;
 
 		const userId = data.userId;
-		if (
-			model !== "user" &&
-			typeof userId === "string" &&
-			!(await adapter.findOne({
-				model: "user",
-				where: [
-					{ field: "id", value: userId },
-					{ field: scope.field, value: scope.value },
-				],
-				select: ["id"],
-			}))
-		) {
-			throw new BetterAuthError(
-				`Cannot create or move "${model}" data across identity scopes.`,
-			);
+		if (model !== "user" && userId != null) {
+			if (
+				!isSupportedUserId(userId) ||
+				!(await adapter.findOne({
+					model: "user",
+					where: [
+						{ field: "id", value: userId },
+						{ field: scope.field, value: scope.value },
+					],
+					select: ["id"],
+				}))
+			) {
+				throw new BetterAuthError(
+					`Cannot create or move "${model}" data across identity scopes.`,
+				);
+			}
 		}
 
 		return {

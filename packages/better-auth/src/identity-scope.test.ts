@@ -330,4 +330,44 @@ describe("tenant-scoped identity", async () => {
 			}),
 		).rejects.toThrow("identity scope");
 	});
+
+	it("rejects numeric userId that belongs to another tenant", async () => {
+		const { auth } = await getTestInstance(
+			{
+				...tenantOptions(),
+				advanced: { database: { generateId: "serial" as const } },
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const userA = await auth.api.signUpEmail({
+			headers: tenantHeaders("tenant-a"),
+			body: {
+				email: "serial-a@example.com",
+				name: "Jane A",
+				password: passwordA,
+			},
+		});
+
+		expect(typeof userA.user.id).toBe("string");
+		expect(Number(userA.user.id)).not.toBeNaN();
+
+		await expect(
+			runWithEndpointContext(
+				{
+					context,
+					request: new Request("http://localhost/api/auth/test", {
+						headers: tenantHeaders("tenant-b"),
+					}),
+				} as unknown as GenericEndpointContext,
+				() =>
+					context.internalAdapter.createAccount({
+						accountId: "cross-serial-num",
+						issuer: "https://accounts.google.com",
+						providerId: "google",
+						userId: Number(userA.user.id) as unknown as string,
+					}),
+			),
+		).rejects.toThrow("across identity scopes");
+	});
 });
