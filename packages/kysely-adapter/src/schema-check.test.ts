@@ -127,10 +127,11 @@ it("validates SQLite without dialect introspection", async ({
 	const rejectIntrospection = async (): Promise<never> => {
 		throw new Error("D1_ERROR: not authorized: SQLITE_AUTH");
 	};
+	const getTables = vi.fn(rejectIntrospection);
 	vi.spyOn(sqliteDialect, "createIntrospector").mockReturnValue({
 		getMetadata: rejectIntrospection,
 		getSchemas: async () => [],
-		getTables: rejectIntrospection,
+		getTables,
 	});
 	const db = new Kysely<unknown>({ dialect: sqliteDialect });
 	onTestFinished(() => db.destroy());
@@ -145,6 +146,7 @@ it("validates SQLite without dialect introspection", async ({
 			missingWidget: { fields: { name: { type: "string" } } },
 		}),
 	).resolves.toEqual([{ kind: "missing-table", table: "missingWidget" }]);
+	expect(getTables).toHaveBeenCalledTimes(2);
 });
 
 /**
