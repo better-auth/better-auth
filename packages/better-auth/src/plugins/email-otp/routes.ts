@@ -971,7 +971,9 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				ctx.body.otp,
 			);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
+				includeAccounts: true,
+			});
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
