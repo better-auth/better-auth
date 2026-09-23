@@ -1290,6 +1290,152 @@ describe("signUpOnVerification with additionalFields", async () => {
 	});
 });
 
+describe("custom generateOTP", async () => {
+	const fixedPhoneNumber = "+15550000000";
+	const fixedCode = "123456";
+	let otp = "";
+	let resetOtp = "";
+	const generateOTP = vi.fn(
+		({ phoneNumber }: { phoneNumber: string; type: string }) =>
+			phoneNumber === fixedPhoneNumber ? fixedCode : undefined,
+	);
+
+	const { client, db } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP({ code }) {
+						resetOtp = code;
+					},
+					generateOTP,
+					otpLength: 8,
+					allowedAttempts: 3,
+					requireVerification: true,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	afterEach(() => {
+		generateOTP.mockClear();
+	});
+
+	it("should use the custom code on send-otp and verify with it", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: fixedPhoneNumber });
+		expect(otp).toBe(fixedCode);
+		expect(generateOTP).toHaveBeenCalledWith(
+			{ phoneNumber: fixedPhoneNumber, type: "phone-number-verification" },
+			expect.objectContaining({ body: { phoneNumber: fixedPhoneNumber } }),
+		);
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: fixedPhoneNumber,
+			code: fixedCode,
+		});
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+	});
+
+	it("should keep the custom code single-use", async () => {
+		const res = await client.phoneNumber.verify({
+			phoneNumber: fixedPhoneNumber,
+			code: fixedCode,
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should fall back to a random code of otpLength when returning undefined", async () => {
+		const otherPhoneNumber = "+15550000001";
+		await client.phoneNumber.sendOtp({ phoneNumber: otherPhoneNumber });
+		expect(generateOTP).toHaveBeenCalledTimes(1);
+		expect(otp).toMatch(/^\d{8}$/);
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: otherPhoneNumber,
+			code: otp,
+		});
+		expect(res.error).toBe(null);
+	});
+
+	it("should keep counting attempts and enforce allowedAttempts", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: fixedPhoneNumber });
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber: fixedPhoneNumber,
+				code: "000000",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: fixedPhoneNumber,
+			code: fixedCode,
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
+	});
+
+	it("should pass the forget-password type on password reset", async () => {
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: fixedPhoneNumber,
+		});
+		expect(generateOTP).toHaveBeenCalledWith(
+			{ phoneNumber: fixedPhoneNumber, type: "forget-password" },
+			expect.anything(),
+		);
+		expect(resetOtp).toBe(fixedCode);
+
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: fixedPhoneNumber,
+			otp: fixedCode,
+			newPassword: "new-password",
+		});
+		expect(res.error).toBe(null);
+	});
+
+	it("should pass the phone-number-verification type when sign-in requires verification", async () => {
+		const unverifiedPhoneNumber = "+15550000002";
+		await client.signUp.email({
+			email: "generate-otp@test.com",
+			password: "password123",
+			name: "test",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "generate-otp@test.com" }],
+			update: { phoneNumber: unverifiedPhoneNumber },
+		});
+
+		const res = await client.signIn.phoneNumber({
+			phoneNumber: unverifiedPhoneNumber,
+			password: "password123",
+		});
+		expect(res.error?.code).toBe("PHONE_NUMBER_NOT_VERIFIED");
+		expect(generateOTP).toHaveBeenCalledWith(
+			{
+				phoneNumber: unverifiedPhoneNumber,
+				type: "phone-number-verification",
+			},
+			expect.anything(),
+		);
+	});
+});
+
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
 

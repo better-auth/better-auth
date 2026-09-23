@@ -339,6 +339,37 @@ A function that sends the OTP code to the user's phone number for password reset
 
 A custom function to validate the phone number. It takes the phone number as an argument and returns a boolean indicating whether the phone number is valid.
 
+### `generateOTP`
+
+A custom function to generate the OTP code. It receives an object with the `phoneNumber` and the `type` of code being sent (`"phone-number-verification"` or `"forget-password"`) and a request object, and returns the code to send. Return `undefined` to fall back to the default generator (a random code of `otpLength` digits).
+
+Only the generated code changes: the code is stored, expires, counts attempts and is consumed exactly like a generated one. This is useful to give a fixed code to test accounts that cannot receive SMS, such as an app store reviewer account.
+
+```ts
+import { betterAuth } from "better-auth";
+import { phoneNumber } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            sendOTP: ({ phoneNumber, code }, ctx) => {
+                // Implement sending OTP code via SMS
+            },
+            generateOTP: ({ phoneNumber, type }, ctx) => { // [!code highlight]
+                if (phoneNumber === process.env.REVIEWER_PHONE_NUMBER) { // [!code highlight]
+                    return process.env.REVIEWER_OTP; // [!code highlight]
+                } // [!code highlight]
+                // Return undefined to use the default generator // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
+```
+
+<Callout type="warn">
+  A fixed code is only as secret as the value you configure. Keep it out of source control and restrict it to dedicated test accounts.
+</Callout>
+
 ### `verifyOTP`
 
 A custom function to verify the OTP code. When provided, this function will be used instead of the default internal verification logic. This is useful when you want to integrate with external SMS providers that handle OTP verification (e.g., Twilio Verify, AWS SNS). The function takes an object with `phoneNumber` and `code` properties and a request object, and returns a boolean or a promise that resolves to a boolean indicating whether the OTP is valid.

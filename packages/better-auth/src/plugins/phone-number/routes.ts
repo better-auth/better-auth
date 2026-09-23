@@ -119,7 +119,11 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			if (opts.requireVerification) {
 				if (!user.phoneNumberVerified) {
-					const otp = generateOTP(opts.otpLength);
+					const otp = generateOTP(
+						opts,
+						{ phoneNumber, type: "phone-number-verification" },
+						ctx,
+					);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
 						identifier: phoneNumber,
@@ -278,7 +282,14 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				}
 			}
 
-			const code = generateOTP(opts.otpLength);
+			const code = generateOTP(
+				opts,
+				{
+					phoneNumber: ctx.body.phoneNumber,
+					type: "phone-number-verification",
+				},
+				ctx,
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: ctx.body.phoneNumber,
@@ -712,7 +723,11 @@ export const requestPasswordResetPhoneNumber = (
 					},
 				],
 			});
-			const code = generateOTP(opts.otpLength);
+			const code = generateOTP(
+				opts,
+				{ phoneNumber: ctx.body.phoneNumber, type: "forget-password" },
+				ctx,
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
@@ -921,6 +936,12 @@ function parseVerificationAttempts(value: string | undefined) {
 	return Number.isSafeInteger(attempts) && attempts > 0 ? attempts : 0;
 }
 
-function generateOTP(size: number) {
-	return generateRandomString(size, "0-9");
+function generateOTP(
+	opts: RequiredPhoneNumberOptions,
+	data: Parameters<NonNullable<PhoneNumberOptions["generateOTP"]>>[0],
+	ctx: GenericEndpointContext,
+) {
+	return (
+		opts.generateOTP?.(data, ctx) || generateRandomString(opts.otpLength, "0-9")
+	);
 }
