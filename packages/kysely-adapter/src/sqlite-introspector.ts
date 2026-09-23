@@ -85,7 +85,7 @@ async function readTableMetadata(
 	return toSqliteTableMetadata(
 		{ name },
 		columns,
-		sqliteAutoIncrementColumn(undefined, columns),
+		sqliteIntegerPrimaryKeyColumn(columns),
 	);
 }
 
