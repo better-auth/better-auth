@@ -136,6 +136,22 @@ describe("sqlite introspector", () => {
 		}
 	});
 
+	it("detects AUTOINCREMENT after whitespace in a column declaration", async () => {
+		const sqlite = new DatabaseSync(":memory:");
+		sqlite.exec(
+			"CREATE TABLE entries (\n  id INTEGER PRIMARY KEY AUTOINCREMENT\n)",
+		);
+		const db = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+
+		const tables = await db.introspection.getTables();
+		await db.destroy();
+
+		const entries = tables.find((table) => table.name === "entries");
+		expect(entries?.columns[0]?.isAutoIncrementing).toBe(true);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10366
 	 */
