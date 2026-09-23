@@ -139,27 +139,7 @@ describe("oauth-proxy", async () => {
 			},
 		};
 
-		async function prepareAccountLinkingCallback() {
-			let tokenRedirectURI: string | null = null;
-			server.use(
-				http.post(
-					"https://oauth2.googleapis.com/token",
-					async ({ request }) => {
-						const body = await request.formData();
-						const redirectURI = body.get("redirect_uri");
-						tokenRedirectURI =
-							typeof redirectURI === "string" ? redirectURI : null;
-						return HttpResponse.json({
-							access_token: "test",
-							refresh_token: "test",
-							id_token: testIdToken,
-							expires_in: 3600,
-							refresh_token_expires_in: 86400,
-							scope: "openid profile",
-						});
-					},
-				),
-			);
+		async function createAccountLinkingFlow() {
 			const preview = await getTestInstance({
 				baseURL: "http://preview.example.com",
 				secret: "preview-main-secret",
@@ -185,56 +165,78 @@ describe("oauth-proxy", async () => {
 			);
 			const { user, headers } = await preview.signInWithTestUser();
 
-			const link = await preview.client.linkSocial(
-				{
-					provider: "google",
-					callbackURL: "/settings",
-				},
-				{ headers },
-			);
-			const authorizationURL = link.data?.url;
-			if (!authorizationURL) throw new Error("Authorization URL is missing");
-			const authorization = new URL(authorizationURL);
-			const authorizationRedirectURI =
-				authorization.searchParams.get("redirect_uri");
-			const state = authorization.searchParams.get("state");
-			if (!state) throw new Error("OAuth state is missing");
-
-			let proxyCallbackURL: string | null = null;
-			await production.client.$fetch(
-				`/callback/google?code=test&state=${encodeURIComponent(state)}`,
-				{
-					onError(context) {
-						proxyCallbackURL = context.response.headers.get("location");
+			async function completeLink(accessToken: string, scope: string) {
+				let tokenRedirectURI: string | null = null;
+				server.use(
+					http.post(
+						"https://oauth2.googleapis.com/token",
+						async ({ request }) => {
+							const body = await request.formData();
+							const redirectURI = body.get("redirect_uri");
+							tokenRedirectURI =
+								typeof redirectURI === "string" ? redirectURI : null;
+							return HttpResponse.json({
+								access_token: accessToken,
+								refresh_token: "test",
+								id_token: testIdToken,
+								expires_in: 3600,
+								refresh_token_expires_in: 86400,
+								scope,
+							});
+						},
+					),
+				);
+				const link = await preview.client.linkSocial(
+					{
+						provider: "google",
+						callbackURL: "/settings",
 					},
-				},
-			);
-			if (!proxyCallbackURL) throw new Error("Proxy callback URL is missing");
+					{ headers },
+				);
+				const authorizationURL = link.data?.url;
+				if (!authorizationURL) throw new Error("Authorization URL is missing");
+				const authorization = new URL(authorizationURL);
+				const authorizationRedirectURI =
+					authorization.searchParams.get("redirect_uri");
+				const state = authorization.searchParams.get("state");
+				if (!state) throw new Error("OAuth state is missing");
 
-			const proxyCallback = new URL(proxyCallbackURL);
-			const callbackPath = `${proxyCallback.pathname.replace(
-				"/api/auth",
-				"",
-			)}${proxyCallback.search}`;
-			return {
-				authorizationRedirectURI,
-				callbackPath,
-				headers,
-				preview,
-				tokenRedirectURI,
-				user,
-			};
+				let proxyCallbackURL: string | null = null;
+				await production.client.$fetch(
+					`/callback/google?code=test&state=${encodeURIComponent(state)}`,
+					{
+						onError(context) {
+							proxyCallbackURL = context.response.headers.get("location");
+						},
+					},
+				);
+				if (!proxyCallbackURL) throw new Error("Proxy callback URL is missing");
+
+				const proxyCallback = new URL(proxyCallbackURL);
+				const callbackPath = `${proxyCallback.pathname.replace(
+					"/api/auth",
+					"",
+				)}${proxyCallback.search}`;
+				let finalRedirect: string | null = null;
+				await preview.client.$fetch(callbackPath, {
+					headers,
+					onError(context) {
+						finalRedirect = context.response.headers.get("location");
+					},
+				});
+
+				return {
+					authorizationRedirectURI,
+					finalRedirect,
+					tokenRedirectURI,
+				};
+			}
+
+			return { completeLink, preview, user };
 		}
 
-		it("links the provider account to the initiating user", async () => {
-			const {
-				authorizationRedirectURI,
-				callbackPath,
-				headers,
-				preview,
-				tokenRedirectURI,
-				user,
-			} = await prepareAccountLinkingCallback();
+		it("creates and updates the provider account for the initiating user", async () => {
+			const { completeLink, preview, user } = await createAccountLinkingFlow();
 			const previewContext = await preview.auth.$context;
 			const sessionsBefore = await previewContext.adapter.findMany<{
 				id: string;
@@ -242,18 +244,32 @@ describe("oauth-proxy", async () => {
 				model: "session",
 				where: [{ field: "userId", value: user.id }],
 			});
-			let finalRedirect: string | null = null;
-			await preview.client.$fetch(callbackPath, {
-				headers,
-				onError(context) {
-					finalRedirect = context.response.headers.get("location");
-				},
-			});
-
-			const accounts = await previewContext.internalAdapter.findAccounts(
-				user.id,
+			const firstLink = await completeLink(
+				"initial-access-token",
+				"openid profile",
 			);
-			const googleAccount = accounts.find(
+
+			const accountsAfterFirstLink =
+				await previewContext.internalAdapter.findAccounts(user.id);
+			const firstGoogleAccount = accountsAfterFirstLink.find(
+				(account) => account.providerId === "google",
+			);
+			expect(firstLink.authorizationRedirectURI).toBe(
+				"http://localhost:3000/api/auth/callback/google",
+			);
+			expect(firstLink.tokenRedirectURI).toBe(
+				firstLink.authorizationRedirectURI,
+			);
+			expect(firstLink.finalRedirect).toBe("/settings");
+			expect(firstGoogleAccount?.scope).toBe("openid,profile");
+
+			const secondLink = await completeLink(
+				"updated-access-token",
+				"https://www.googleapis.com/auth/drive.readonly",
+			);
+			const accountsAfterSecondLink =
+				await previewContext.internalAdapter.findAccounts(user.id);
+			const googleAccounts = accountsAfterSecondLink.filter(
 				(account) => account.providerId === "google",
 			);
 			const sessionsAfter = await previewContext.adapter.findMany<{
@@ -262,12 +278,15 @@ describe("oauth-proxy", async () => {
 				model: "session",
 				where: [{ field: "userId", value: user.id }],
 			});
-			expect(authorizationRedirectURI).toBe(
-				"http://localhost:3000/api/auth/callback/google",
-			);
-			expect(tokenRedirectURI).toBe(authorizationRedirectURI);
-			expect(finalRedirect).toBe("/settings");
-			expect(googleAccount?.scope).toBe("openid,profile");
+
+			expect(secondLink.finalRedirect).toBe("/settings");
+			expect(googleAccounts).toHaveLength(1);
+			expect(googleAccounts[0]?.accessToken).toBe("updated-access-token");
+			expect(googleAccounts[0]?.scope?.split(",").sort()).toEqual([
+				"https://www.googleapis.com/auth/drive.readonly",
+				"openid",
+				"profile",
+			]);
 			expect(sessionsAfter.map((session) => session.id)).toEqual(
 				sessionsBefore.map((session) => session.id),
 			);
