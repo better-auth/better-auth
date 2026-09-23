@@ -139,10 +139,58 @@ describe("sqlite introspector", () => {
 	/**
 	 * @see https://www.sqlite.org/autoinc.html
 	 */
-	it("does not treat a similarly named column as AUTOINCREMENT", async () => {
+	it.each([
+		{
+			label: "a later column name",
+			ddl: "CREATE TABLE entries (id TEXT PRIMARY KEY, autoIncrementFlag TEXT NOT NULL)",
+			columnName: "autoIncrementFlag",
+		},
+		{
+			label: "a leading column name",
+			ddl: "CREATE TABLE entries (autoIncrementFlag TEXT NOT NULL, id TEXT PRIMARY KEY)",
+			columnName: "autoIncrementFlag",
+		},
+		{
+			label: "a quoted identifier",
+			ddl: 'CREATE TABLE entries ("AUTOINCREMENT" TEXT NOT NULL, id TEXT PRIMARY KEY)',
+			columnName: "AUTOINCREMENT",
+		},
+		{
+			label: "a quoted table name",
+			ddl: 'CREATE TABLE "AUTOINCREMENT" (id INTEGER PRIMARY KEY, value TEXT) WITHOUT ROWID',
+			columnName: "id",
+			tableName: "AUTOINCREMENT",
+		},
+	])("does not treat $label as AUTOINCREMENT", async ({
+		ddl,
+		columnName,
+		tableName,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		sqlite.exec(ddl);
+		const db = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+
+		const tables = await db.introspection.getTables();
+		await db.destroy();
+
+		const entries = tables.find(
+			(table) => table.name === (tableName ?? "entries"),
+		);
+		const column = entries?.columns.find(
+			(column) => column.name === columnName,
+		);
+		expect(column?.isAutoIncrementing).toBe(false);
+	});
+
+	/**
+	 * @see https://www.sqlite.org/autoinc.html
+	 */
+	it("detects AUTOINCREMENT on a bracket-quoted primary key", async () => {
 		const sqlite = new DatabaseSync(":memory:");
 		sqlite.exec(
-			"CREATE TABLE entries (id TEXT PRIMARY KEY, autoIncrementFlag TEXT NOT NULL)",
+			"CREATE TABLE entries ([seq] INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE)",
 		);
 		const db = new Kysely({
 			dialect: new NodeSqliteDialect({ database: sqlite }),
@@ -152,10 +200,8 @@ describe("sqlite introspector", () => {
 		await db.destroy();
 
 		const entries = tables.find((table) => table.name === "entries");
-		const column = entries?.columns.find(
-			(column) => column.name === "autoIncrementFlag",
-		);
-		expect(column?.isAutoIncrementing).toBe(false);
+		const seq = entries?.columns.find((column) => column.name === "seq");
+		expect(seq?.isAutoIncrementing).toBe(true);
 	});
 
 	/**

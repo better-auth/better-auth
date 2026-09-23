@@ -39,23 +39,17 @@ interface SqliteSystemDatabase {
 /** @see https://www.sqlite.org/autoinc.html */
 function declaredAutoIncrementColumn(
 	createSql: string | null | undefined,
-): string | undefined {
-	// PRAGMA table_info does not report the AUTOINCREMENT keyword.
-	return createSql
-		?.split(/[(),]/)
-		.find((part) => part.toLowerCase().includes("autoincrement"))
-		?.split(/\s+/)[0]
-		?.replace(/["`]/g, "");
-}
-
-export function sqliteAutoIncrementColumn(
-	createSql: string | null | undefined,
 	columns: readonly PragmaTableInfo[],
 ): string | undefined {
-	const declared = declaredAutoIncrementColumn(createSql);
-	if (declared) return declared;
+	// PRAGMA table_info does not report the AUTOINCREMENT keyword.
+	return /\sAUTOINCREMENT\b/i.test(createSql ?? "")
+		? sqliteIntegerPrimaryKeyColumn(columns)
+		: undefined;
+}
 
-	// INTEGER PRIMARY KEY aliases rowid even without AUTOINCREMENT.
+export function sqliteIntegerPrimaryKeyColumn(
+	columns: readonly PragmaTableInfo[],
+): string | undefined {
 	const primaryKeys = columns.filter((column) => column.pk > 0);
 	const primaryKey = primaryKeys.length === 1 ? primaryKeys[0] : undefined;
 	return primaryKey?.type.toLowerCase() === "integer"
@@ -122,7 +116,7 @@ export function createSqliteIntrospector(
 				return toSqliteTableMetadata(
 					{ name, sql: createTable?.sql },
 					columns,
-					declaredAutoIncrementColumn(createTable?.sql),
+					declaredAutoIncrementColumn(createTable?.sql, columns),
 				);
 			}),
 		);

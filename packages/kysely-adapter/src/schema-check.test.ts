@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import type { ExpectedSchema } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
 import type { KyselyPlugin } from "kysely";
@@ -14,6 +15,7 @@ import {
 } from "kysely";
 import { Pool } from "pg";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { NodeSqliteDialect } from "./node-sqlite-dialect";
 import {
 	findSchemaProblems,
 	getPostgresSchema,
@@ -109,6 +111,26 @@ describe("toPhysicalSchema", () => {
 			),
 		).toHaveProperty("TWO_FACTOR.fields.USER_ID");
 	});
+});
+
+/**
+ * @see https://www.sqlite.org/autoinc.html
+ */
+it("accepts a database-generated SQLite column outside the auth model", async ({
+	onTestFinished,
+}) => {
+	const sqlite = new DatabaseSync(":memory:");
+	sqlite.exec(
+		"CREATE TABLE entries (\n  seq INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, id TEXT NOT NULL UNIQUE)",
+	);
+	const db = new Kysely<unknown>({
+		dialect: new NodeSqliteDialect({ database: sqlite }),
+	});
+	onTestFinished(() => db.destroy());
+
+	await expect(
+		findSchemaProblems(db, "sqlite", { entries: { fields: {} } }),
+	).resolves.toEqual([]);
 });
 
 /**

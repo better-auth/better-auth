@@ -21,7 +21,7 @@ import {
 } from "./kysely-migration-tables";
 import type { PragmaTableInfo } from "./sqlite-introspector";
 import {
-	sqliteAutoIncrementColumn,
+	sqliteIntegerPrimaryKeyColumn,
 	toSqliteTableMetadata,
 } from "./sqlite-introspector";
 import type { DatabaseIndexIntrospector } from "./types";
@@ -231,7 +231,7 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 			return toSqliteTableMetadata(
 				table,
 				columns,
-				sqliteAutoIncrementColumn(table.sql, columns),
+				sqliteIntegerPrimaryKeyColumn(columns),
 			);
 		});
 	}
