@@ -356,7 +356,11 @@ export const auth = betterAuth({
                 // Implement sending OTP code via SMS
             },
             generateOTP: ({ phoneNumber, type }, ctx) => { // [!code highlight]
-                if (phoneNumber === process.env.REVIEWER_PHONE_NUMBER) { // [!code highlight]
+                // Only use the fixed code to sign in, not to reset the password // [!code highlight]
+                if ( // [!code highlight]
+                    phoneNumber === process.env.REVIEWER_PHONE_NUMBER && // [!code highlight]
+                    type === "phone-number-verification" // [!code highlight]
+                ) { // [!code highlight]
                     return process.env.REVIEWER_OTP; // [!code highlight]
                 } // [!code highlight]
                 // Return undefined to use the default generator // [!code highlight]
@@ -367,7 +371,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-  A fixed code is only as secret as the value you configure. Keep it out of source control and restrict it to dedicated test accounts.
+  A fixed code is only as secret as the value you configure. Keep it out of source control, restrict it to dedicated test accounts, and check `type` so it cannot be used to reset their password.
 </Callout>
 
 ### `verifyOTP`
