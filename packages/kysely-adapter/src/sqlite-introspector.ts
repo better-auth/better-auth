@@ -36,15 +36,14 @@ interface SqliteSystemDatabase {
 	};
 }
 
-/** @see https://www.sqlite.org/autoinc.html */
 function declaredAutoIncrementColumn(
 	createSql: string | null | undefined,
-	columns: readonly PragmaTableInfo[],
 ): string | undefined {
-	// PRAGMA table_info does not report the AUTOINCREMENT keyword.
-	return /\sAUTOINCREMENT\b/i.test(createSql ?? "")
-		? sqliteIntegerPrimaryKeyColumn(columns)
-		: undefined;
+	return createSql
+		?.split(/[(),]/)
+		.find((part) => part.toLowerCase().includes("autoincrement"))
+		?.split(/\s+/)[0]
+		?.replace(/["`]/g, "");
 }
 
 export function sqliteIntegerPrimaryKeyColumn(
@@ -116,7 +115,7 @@ export function createSqliteIntrospector(
 				return toSqliteTableMetadata(
 					{ name, sql: createTable?.sql },
 					columns,
-					declaredAutoIncrementColumn(createTable?.sql, columns),
+					declaredAutoIncrementColumn(createTable?.sql),
 				);
 			}),
 		);

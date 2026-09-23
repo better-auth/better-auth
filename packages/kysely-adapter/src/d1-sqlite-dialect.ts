@@ -228,10 +228,16 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 
 		return tables.map((table, index) => {
 			const columns = batchResults[index]?.results ?? [];
+			const declared = table.sql
+				?.split(/[(),]/)
+				.find((part) => part.toLowerCase().includes("autoincrement"))
+				?.split(/\s+/)
+				.filter(Boolean)[0]
+				?.replace(/["`]/g, "");
 			return toSqliteTableMetadata(
 				table,
 				columns,
-				sqliteIntegerPrimaryKeyColumn(columns),
+				declared || sqliteIntegerPrimaryKeyColumn(columns),
 			);
 		});
 	}
