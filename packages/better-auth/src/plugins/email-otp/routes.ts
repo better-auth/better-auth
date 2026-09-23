@@ -954,19 +954,29 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 
-			// Use atomic verification to prevent race conditions
-			await atomicVerifyOTP(
+			// Hash (and plugin checks like haveIBeenPwned) before consuming the
+			// OTP so a rejected password does not burn the reset code. Keep the
+			// user lookup after OTP proof so invalid OTPs cannot enumerate
+			// registered emails.
+			const identifier = toOTPIdentifier("forget-password", email);
+			const consumedByPreflight = await preflightOTP(
 				ctx,
 				opts,
-				toOTPIdentifier("forget-password", email),
+				identifier,
 				ctx.body.otp,
 			);
+			const passwordHash = await ctx.context.password.hash(ctx.body.password);
+
+			// The preflight rejects invalid codes before expensive password hashing.
+			// This atomic consume remains the final single-winner race gate.
+			if (!consumedByPreflight) {
+				await atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp);
+			}
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
-			const passwordHash = await ctx.context.password.hash(ctx.body.password);
 			const account = await ctx.context.internalAdapter.findCredentialAccount(
 				user.user.id,
 			);
@@ -1299,6 +1309,32 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
  * enforced before verification, and a record whose attempts are exhausted is
  * left consumed (no recreate), locking the identifier out.
  */
+async function preflightOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	identifier: string,
+	providedOTP: string,
+): Promise<boolean> {
+	const existing =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!existing || existing.expiresAt < new Date()) {
+		await atomicVerifyOTP(ctx, opts, identifier, providedOTP);
+		return true;
+	}
+
+	const [otpValue, attempts] = splitAtLastColon(existing.value);
+	if (parseInt(attempts || "0") >= (opts.allowedAttempts || 3)) {
+		await atomicVerifyOTP(ctx, opts, identifier, providedOTP);
+		return true;
+	}
+	if (!(await verifyStoredOTP(ctx, opts, otpValue, providedOTP))) {
+		// Keep the established attempt counter and errors for incorrect codes.
+		await atomicVerifyOTP(ctx, opts, identifier, providedOTP);
+		return true;
+	}
+	return false;
+}
+
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,

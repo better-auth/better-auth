@@ -290,6 +290,70 @@ describe("email-otp", async () => {
 		);
 	});
 
+	it("rejects an incorrect reset OTP before hashing the proposed password", async () => {
+		const authContext = await auth.$context;
+		const hash = vi.spyOn(authContext.password, "hash");
+		try {
+			await client.emailOtp.requestPasswordReset({ email: testUser.email });
+			const result = await client.emailOtp.resetPassword({
+				email: testUser.email,
+				otp: "incorrect-code",
+				password: "unused-password",
+			});
+			expect(result.error?.code).toBe("INVALID_OTP");
+			expect(hash).not.toHaveBeenCalled();
+		} finally {
+			hash.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10717#issuecomment-5221376984
+	 */
+	it("updates the existing credential account when resetting a password with an email OTP", async () => {
+		let resetOtp = "";
+		const { client, testUser, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							resetOtp = otp;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const { internalAdapter } = await auth.$context;
+		const before = await internalAdapter.findUserByEmail(testUser.email, {
+			includeAccounts: true,
+		});
+		expect(before?.accounts).toHaveLength(1);
+		await client.emailOtp.requestPasswordReset({ email: testUser.email });
+		const reset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: resetOtp,
+			password: "updated-password",
+		});
+		expect(reset.error).toBeNull();
+		expect(reset.data?.success).toBe(true);
+		const after = await internalAdapter.findUserByEmail(testUser.email, {
+			includeAccounts: true,
+		});
+		expect(after?.accounts).toHaveLength(1);
+		expect(after?.accounts[0]?.id).toBe(before?.accounts[0]?.id);
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: "updated-password",
+		});
+		expect(signIn.data?.user.id).toBe(before?.user.id);
+		const oldPassword = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(oldPassword.error?.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+	});
+
 	it("should reset password using new emailOtp.requestPasswordReset endpoint", async () => {
 		await client.emailOtp.requestPasswordReset({
 			email: testUser.email,
