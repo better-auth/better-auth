@@ -19,6 +19,11 @@ import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 } from "./kysely-migration-tables";
+import type { PragmaTableInfo } from "./sqlite-introspector";
+import {
+	sqliteIntegerPrimaryKeyColumn,
+	toSqliteTableMetadata,
+} from "./sqlite-introspector";
 import type { DatabaseIndexIntrospector } from "./types";
 
 interface D1IndexListRow {
@@ -219,47 +224,21 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 		const statements = tables.map((table) =>
 			this.#d1.prepare("SELECT * FROM pragma_table_info(?)").bind(table.name),
 		);
-		const batchResults = await this.#d1.batch(statements);
+		const batchResults = await this.#d1.batch<PragmaTableInfo>(statements);
 
 		return tables.map((table, index) => {
-			const columnInfo = (batchResults[index]?.results ?? []) as Array<{
-				cid: number;
-				name: string;
-				type: string;
-				notnull: number;
-				dflt_value: string | null;
-				pk: number;
-			}>;
-
-			// Find the column that has `autoincrement` from CREATE SQL
-			let autoIncrementCol = table.sql
+			const columns = batchResults[index]?.results ?? [];
+			const declared = table.sql
 				?.split(/[(),]/)
-				?.find((it) => it.toLowerCase().includes("autoincrement"))
+				.find((part) => part.toLowerCase().includes("autoincrement"))
 				?.split(/\s+/)
-				?.filter(Boolean)?.[0]
+				.filter(Boolean)[0]
 				?.replace(/["`]/g, "");
-
-			// In SQLite, `INTEGER PRIMARY KEY` is always an alias for rowid
-			// and auto-increments even without the explicit AUTOINCREMENT keyword.
-			if (!autoIncrementCol) {
-				const pkCols = columnInfo.filter((r) => r.pk > 0);
-				const singlePk = pkCols.length === 1 ? pkCols[0] : undefined;
-				if (singlePk && singlePk.type.toLowerCase() === "integer") {
-					autoIncrementCol = singlePk.name;
-				}
-			}
-
-			return {
-				name: table.name,
-				isView: table.type === "view",
-				columns: columnInfo.map((col) => ({
-					name: col.name,
-					dataType: col.type,
-					isNullable: !col.notnull,
-					isAutoIncrementing: col.name === autoIncrementCol,
-					hasDefaultValue: col.dflt_value != null,
-				})),
-			};
+			return toSqliteTableMetadata(
+				table,
+				columns,
+				declared || sqliteIntegerPrimaryKeyColumn(columns),
+			);
 		});
 	}
 
