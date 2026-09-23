@@ -203,10 +203,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						);
 						// Canceled subscriptions remain in the organization's history.
 						// Select a current subscription before checking its seat plan.
-						const [dbSub] = await ctx.adapter.findMany<Subscription>({
+						const dbSub = await ctx.adapter.findOne<Subscription>({
 							model: "subscription",
-							limit: 1,
-							sortBy: { field: "periodStart", direction: "desc" },
 							where: [
 								{
 									field: "referenceId",
