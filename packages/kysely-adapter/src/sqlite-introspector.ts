@@ -74,6 +74,37 @@ export function toSqliteTableMetadata(
 	};
 }
 
+async function readTableMetadata(
+	db: Kysely<unknown>,
+	name: string,
+): Promise<TableMetadata | undefined> {
+	const { rows: columns } = await sql<PragmaTableInfo>`
+		PRAGMA table_info(${sql.id(name)})
+	`.execute(db.withoutPlugins());
+	if (columns.length === 0) return;
+	return toSqliteTableMetadata(
+		{ name },
+		columns,
+		sqliteIntegerPrimaryKeyColumn(columns),
+	);
+}
+
+export async function introspectSqliteTables(
+	db: Kysely<unknown>,
+	tableNames: readonly string[],
+): Promise<readonly TableMetadata[]> {
+	if (tableNames.length === 0) return [];
+	try {
+		return await db.introspection.getTables();
+	} catch {
+		// D1 may reject catalog-wide introspection, so inspect only expected tables.
+		const tables = await Promise.all(
+			tableNames.map((name) => readTableMetadata(db, name)),
+		);
+		return tables.filter((table) => table !== undefined);
+	}
+}
+
 export function createSqliteIntrospector(
 	db: Kysely<unknown>,
 ): DatabaseIntrospector {

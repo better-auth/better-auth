@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import type { ExpectedSchema } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
 import type { KyselyPlugin } from "kysely";
@@ -13,7 +14,8 @@ import {
 	sql,
 } from "kysely";
 import { Pool } from "pg";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { NodeSqliteDialect } from "./node-sqlite-dialect";
 import {
 	findSchemaProblems,
 	getPostgresSchema,
@@ -109,6 +111,42 @@ describe("toPhysicalSchema", () => {
 			),
 		).toHaveProperty("TWO_FACTOR.fields.USER_ID");
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11346
+ */
+it("validates SQLite without dialect introspection", async ({
+	onTestFinished,
+}) => {
+	const sqlite = new DatabaseSync(":memory:");
+	sqlite.exec(
+		"CREATE TABLE widget (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL)",
+	);
+	const sqliteDialect = new NodeSqliteDialect({ database: sqlite });
+	const rejectIntrospection = async (): Promise<never> => {
+		throw new Error("D1_ERROR: not authorized: SQLITE_AUTH");
+	};
+	const getTables = vi.fn(rejectIntrospection);
+	vi.spyOn(sqliteDialect, "createIntrospector").mockReturnValue({
+		getMetadata: rejectIntrospection,
+		getSchemas: async () => [],
+		getTables,
+	});
+	const db = new Kysely<unknown>({ dialect: sqliteDialect });
+	onTestFinished(() => db.destroy());
+
+	await expect(
+		findSchemaProblems(db, "sqlite", {
+			widget: { fields: { name: { type: "string" } } },
+		}),
+	).resolves.toEqual([]);
+	await expect(
+		findSchemaProblems(db, "sqlite", {
+			missingWidget: { fields: { name: { type: "string" } } },
+		}),
+	).resolves.toEqual([{ kind: "missing-table", table: "missingWidget" }]);
+	expect(getTables).toHaveBeenCalledTimes(2);
 });
 
 /**
