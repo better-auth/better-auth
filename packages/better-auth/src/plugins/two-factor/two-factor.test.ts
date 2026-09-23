@@ -2713,3 +2713,84 @@ describe("backup codes storage configurations", () => {
 		});
 	}
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("two-factor password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [twoFactor()],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("enable should ignore an overlong optional password for a passwordless user", async () => {
+		const { auth: passwordlessAuth } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+			},
+			{ disableTestUser: true },
+		);
+		const signInRes = await passwordlessAuth.api.signInAnonymous({
+			asResponse: true,
+		});
+
+		const res = await passwordlessAuth.api.enableTwoFactor({
+			body: { password: "x".repeat(129) },
+			headers: convertSetCookieToCookie(signInRes.headers),
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+	});
+
+	it("enable should reject a password longer than maxPasswordLength before hashing", async () => {
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.enableTwoFactor({
+				body: { password: "x".repeat(129) },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+
+	it("get-totp-uri should reject a password longer than maxPasswordLength before hashing", async () => {
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+		});
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.getTOTPURI({
+				body: { password: "x".repeat(129) },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+});
