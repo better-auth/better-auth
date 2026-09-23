@@ -432,6 +432,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
 					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+					{ cause: error },
 				);
 			}
 		},
