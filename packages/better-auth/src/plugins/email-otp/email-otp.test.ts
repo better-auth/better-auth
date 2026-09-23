@@ -291,6 +291,23 @@ describe("email-otp", async () => {
 		);
 	});
 
+	it("rejects an incorrect reset OTP before hashing the proposed password", async () => {
+		const authContext = await auth.$context;
+		const hash = vi.spyOn(authContext.password, "hash");
+		try {
+			await client.emailOtp.requestPasswordReset({ email: testUser.email });
+			const result = await client.emailOtp.resetPassword({
+				email: testUser.email,
+				otp: "incorrect-code",
+				password: "unused-password",
+			});
+			expect(result.error?.code).toBe("INVALID_OTP");
+			expect(hash).not.toHaveBeenCalled();
+		} finally {
+			hash.mockRestore();
+		}
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10717#issuecomment-5221376984
 	 */

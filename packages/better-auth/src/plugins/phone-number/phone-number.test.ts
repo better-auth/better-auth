@@ -761,7 +761,46 @@ describe("reset password flow attempts", async () => {
 		},
 	);
 
+	const authContext = await auth.$context;
 	const testPhoneNumber = "+251911121314";
+
+	it("rejects an incorrect reset OTP before hashing the proposed password", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: testPhoneNumber });
+		await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: otp,
+		});
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const hash = vi.spyOn(authContext.password, "hash");
+		try {
+			const result = await client.phoneNumber.resetPassword({
+				phoneNumber: testPhoneNumber,
+				otp: "incorrect-code",
+				newPassword: "unused-password",
+			});
+			expect(result.error?.message).toBe("Invalid OTP");
+			expect(hash).not.toHaveBeenCalled();
+		} finally {
+			hash.mockRestore();
+		}
+	});
+
+	it("returns the same invalid OTP error for an unknown phone number", async () => {
+		const unknownPhoneNumber = "+251900009999";
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: unknownPhoneNumber,
+		});
+		const result = await client.phoneNumber.resetPassword({
+			phoneNumber: unknownPhoneNumber,
+			otp: "incorrect-code",
+			newPassword: "unused-password",
+		});
+		expect(result.error?.status).toBe(400);
+		expect(result.error?.message).toBe("Invalid OTP");
+	});
 
 	it("should block reset password after exceeding allowed attempts", async () => {
 		//register phone number
@@ -792,8 +831,9 @@ describe("reset password flow attempts", async () => {
 			otp: otp,
 			newPassword: "password",
 		});
-		expect(res.error?.status).toBe(403);
-		expect(res.error?.message).toBe("Too many attempts");
+		// Keep attempt exhaustion indistinguishable from an unknown reset code.
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("Invalid OTP");
 	});
 
 	it("should successfully reset password with correct code", async () => {

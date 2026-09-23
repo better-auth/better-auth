@@ -14,19 +14,30 @@ import { haveIBeenPwned } from "./index";
  * breached. The plugin sends only the first five hash characters; the response
  * must carry the remaining suffix for the comparison to match.
  */
-async function mockBreached(password: string) {
+async function mockPasswordRange(password: string, compromised: boolean) {
 	const sha1Hash = (
 		await createHash("SHA-1", "hex").digest(password)
 	).toUpperCase();
 	const suffix = sha1Hash.substring(5);
+	const responseSuffix = compromised
+		? suffix
+		: `${suffix[0] === "0" ? "1" : "0"}${suffix.slice(1)}`;
 	const realFetch = globalThis.fetch;
 	vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
 		const url = input instanceof Request ? input.url : input.toString();
 		if (url.startsWith("https://api.pwnedpasswords.com/range/")) {
-			return new Response(`${suffix}:42\n`, { status: 200 });
+			return new Response(`${responseSuffix}:42\n`, { status: 200 });
 		}
 		return realFetch(input, init);
 	});
+}
+
+async function mockBreached(password: string) {
+	return mockPasswordRange(password, true);
+}
+
+async function mockNotBreached(password: string) {
+	return mockPasswordRange(password, false);
 }
 
 describe("have-i-been-pwned", async () => {
@@ -243,6 +254,7 @@ describe("have-i-been-pwned", async () => {
 			expect(first.error?.code).toBe("PASSWORD_COMPROMISED");
 
 			vi.restoreAllMocks();
+			await mockNotBreached(safePassword);
 			const second = await client.emailOtp.resetPassword({
 				email,
 				otp: reusedOtp,
@@ -318,6 +330,7 @@ describe("have-i-been-pwned", async () => {
 			expect(first.error?.code).toBe("PASSWORD_COMPROMISED");
 
 			vi.restoreAllMocks();
+			await mockNotBreached(safePassword);
 			const second = await client.phoneNumber.resetPassword({
 				phoneNumber: phone,
 				otp: reusedOtp,

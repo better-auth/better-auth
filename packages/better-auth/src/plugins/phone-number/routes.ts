@@ -798,14 +798,25 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (ctx.body.newPassword.length > maxLength) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
-			// Hash (and plugin checks like haveIBeenPwned) before consuming the
-			// OTP so a rejected password does not burn the reset code. Keep the
-			// user lookup after OTP proof so invalid OTPs cannot enumerate
-			// registered phone numbers.
+			// Reject invalid codes before expensive password hashing. The atomic
+			// consume remains the final gate after validation.
+			const consumedByPreflight = await preflightPasswordResetOTP(
+				ctx,
+				opts,
+				phoneResetIdentifier,
+				ctx.body.otp,
+			);
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			await verifyPhoneNumberOTP(ctx, opts, phoneResetIdentifier, ctx.body.otp);
+			if (!consumedByPreflight) {
+				await verifyPasswordResetOTP(
+					ctx,
+					opts,
+					phoneResetIdentifier,
+					ctx.body.otp,
+				);
+			}
 			const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 				model: "user",
 				where: [
@@ -866,6 +877,72 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
  * expiry and an incremented attempt counter. Once the budget is exhausted the
  * row is not recreated.
  */
+async function preflightPasswordResetOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredPhoneNumberOptions,
+	identifier: string,
+	providedCode: string,
+): Promise<boolean> {
+	try {
+		return await preflightPhoneNumberOTP(ctx, opts, identifier, providedCode);
+	} catch (error) {
+		throw normalizePasswordResetOTPError(error);
+	}
+}
+
+async function verifyPasswordResetOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredPhoneNumberOptions,
+	identifier: string,
+	providedCode: string,
+): Promise<void> {
+	try {
+		await verifyPhoneNumberOTP(ctx, opts, identifier, providedCode);
+	} catch (error) {
+		throw normalizePasswordResetOTPError(error);
+	}
+}
+
+function normalizePasswordResetOTPError(error: unknown): unknown {
+	const invalidCodes = [
+		PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND.code,
+		PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED.code,
+		PHONE_NUMBER_ERROR_CODES.INVALID_OTP.code,
+		PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS.code,
+	];
+	const errorCode = error instanceof APIError ? error.body?.code : undefined;
+	if (errorCode && invalidCodes.some((code) => code === errorCode)) {
+		return APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+	}
+	return error;
+}
+
+async function preflightPhoneNumberOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredPhoneNumberOptions,
+	identifier: string,
+	providedCode: string,
+): Promise<boolean> {
+	const existing =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!existing || existing.expiresAt < new Date()) {
+		await verifyPhoneNumberOTP(ctx, opts, identifier, providedCode);
+		return true;
+	}
+
+	const [otpValue, rawAttempts] = existing.value.split(":");
+	if (parseVerificationAttempts(rawAttempts) >= (opts.allowedAttempts ?? 3)) {
+		await verifyPhoneNumberOTP(ctx, opts, identifier, providedCode);
+		return true;
+	}
+	if (otpValue !== providedCode) {
+		// Preserve the established attempt counter and error behavior.
+		await verifyPhoneNumberOTP(ctx, opts, identifier, providedCode);
+		return true;
+	}
+	return false;
+}
+
 async function verifyPhoneNumberOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredPhoneNumberOptions,

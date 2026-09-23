@@ -151,9 +151,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
 
 			const shouldSendOTP = ctx.body.type === "sign-in" && !opts.disableSignUp;
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user && !shouldSendOTP) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					identifier,
@@ -961,24 +959,27 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			// OTP so a rejected password does not burn the reset code. Keep the
 			// user lookup after OTP proof so invalid OTPs cannot enumerate
 			// registered emails.
-			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-
-			// Use atomic verification to prevent race conditions
-			await atomicVerifyOTP(
+			const identifier = toOTPIdentifier("forget-password", email);
+			const consumedByPreflight = await preflightOTP(
 				ctx,
 				opts,
-				toOTPIdentifier("forget-password", email),
+				identifier,
 				ctx.body.otp,
 			);
+			const passwordHash = await ctx.context.password.hash(ctx.body.password);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
+			// The preflight rejects invalid codes before expensive password hashing.
+			// This atomic consume remains the final single-winner race gate.
+			if (!consumedByPreflight) {
+				await atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp);
+			}
+
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
-			const account = user.accounts?.find(
-				(account) => account.providerId === "credential",
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
+				user.user.id,
 			);
 			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
@@ -1310,6 +1311,32 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
  * enforced before verification, and a record whose attempts are exhausted is
  * left consumed (no recreate), locking the identifier out.
  */
+async function preflightOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	identifier: string,
+	providedOTP: string,
+): Promise<boolean> {
+	const existing =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!existing || existing.expiresAt < new Date()) {
+		await atomicVerifyOTP(ctx, opts, identifier, providedOTP);
+		return true;
+	}
+
+	const [otpValue, attempts] = splitAtLastColon(existing.value);
+	if (parseInt(attempts || "0") >= (opts.allowedAttempts || 3)) {
+		await atomicVerifyOTP(ctx, opts, identifier, providedOTP);
+		return true;
+	}
+	if (!(await verifyStoredOTP(ctx, opts, otpValue, providedOTP))) {
+		// Keep the established attempt counter and errors for incorrect codes.
+		await atomicVerifyOTP(ctx, opts, identifier, providedOTP);
+		return true;
+	}
+	return false;
+}
+
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,
