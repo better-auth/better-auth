@@ -136,10 +136,13 @@ describe("sqlite introspector", () => {
 		}
 	});
 
-	it("detects AUTOINCREMENT after whitespace in a column declaration", async () => {
+	/**
+	 * @see https://www.sqlite.org/autoinc.html
+	 */
+	it("does not treat a similarly named column as AUTOINCREMENT", async () => {
 		const sqlite = new DatabaseSync(":memory:");
 		sqlite.exec(
-			"CREATE TABLE entries (\n  id INTEGER PRIMARY KEY AUTOINCREMENT\n)",
+			"CREATE TABLE entries (id TEXT PRIMARY KEY, autoIncrementFlag TEXT NOT NULL)",
 		);
 		const db = new Kysely({
 			dialect: new NodeSqliteDialect({ database: sqlite }),
@@ -149,7 +152,10 @@ describe("sqlite introspector", () => {
 		await db.destroy();
 
 		const entries = tables.find((table) => table.name === "entries");
-		expect(entries?.columns[0]?.isAutoIncrementing).toBe(true);
+		const column = entries?.columns.find(
+			(column) => column.name === "autoIncrementFlag",
+		);
+		expect(column?.isAutoIncrementing).toBe(false);
 	});
 
 	/**

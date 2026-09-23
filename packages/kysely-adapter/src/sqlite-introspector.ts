@@ -44,8 +44,7 @@ function declaredAutoIncrementColumn(
 	return createSql
 		?.split(/[(),]/)
 		.find((part) => part.toLowerCase().includes("autoincrement"))
-		?.trimStart()
-		.split(/\s+/)[0]
+		?.split(/\s+/)[0]
 		?.replace(/["`]/g, "");
 }
 
