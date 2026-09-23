@@ -396,7 +396,10 @@ export const genericOAuth = <const ID extends string>(
 					async validateAuthorizationCode(data) {
 						if (c.getToken) {
 							return applyDefaultAccessTokenExpiry(
-								await c.getToken(data),
+								await c.getToken({
+									...data,
+									tokenUrl,
+								}),
 								c.accessTokenExpiresIn,
 							);
 						}
