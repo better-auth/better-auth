@@ -125,7 +125,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						ctx,
 					);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: otp,
+						value: `${otp}:0`,
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -895,7 +895,7 @@ async function verifyPhoneNumberOTP(
 
 	const allowedAttempts = opts?.allowedAttempts ?? 3;
 	const peekedAttempts = parseVerificationAttempts(
-		existing.value.split(":")[1],
+		splitAtLastColon(existing.value)[1],
 	);
 	if (peekedAttempts >= allowedAttempts) {
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
@@ -913,7 +913,7 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 
-	const [otpValue, rawAttempts] = consumed.value.split(":");
+	const [otpValue, rawAttempts] = splitAtLastColon(consumed.value);
 	const attempts = parseVerificationAttempts(rawAttempts);
 	if (attempts >= allowedAttempts) {
 		throw APIError.from(
@@ -929,6 +929,18 @@ async function verifyPhoneNumberOTP(
 		});
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
+}
+
+/**
+ * Splits a stored `<code>:<attempts>` value at the last colon,
+ * so custom codes may contain colons.
+ */
+function splitAtLastColon(input: string): [string, string] {
+	const idx = input.lastIndexOf(":");
+	if (idx === -1) {
+		return [input, ""];
+	}
+	return [input.slice(0, idx), input.slice(idx + 1)];
 }
 
 function parseVerificationAttempts(value: string | undefined) {

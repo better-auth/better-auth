@@ -1293,11 +1293,16 @@ describe("signUpOnVerification with additionalFields", async () => {
 describe("custom generateOTP", async () => {
 	const fixedPhoneNumber = "+15550000000";
 	const fixedCode = "123456";
+	const colonPhoneNumber = "+15550000003";
+	const colonCode = "qa:12:34";
 	let otp = "";
 	let resetOtp = "";
 	const generateOTP = vi.fn(
-		({ phoneNumber }: { phoneNumber: string; type: string }) =>
-			phoneNumber === fixedPhoneNumber ? fixedCode : undefined,
+		({ phoneNumber }: { phoneNumber: string; type: string }) => {
+			if (phoneNumber === fixedPhoneNumber) return fixedCode;
+			if (phoneNumber === colonPhoneNumber) return colonCode;
+			return undefined;
+		},
 	);
 
 	const { client, db } = await getTestInstance(
@@ -1390,7 +1395,31 @@ describe("custom generateOTP", async () => {
 		expect(res.error?.message).toBe("Too many attempts");
 	});
 
+	it("should verify a custom code containing colons", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: colonPhoneNumber });
+		expect(otp).toBe(colonCode);
+
+		const wrong = await client.phoneNumber.verify({
+			phoneNumber: colonPhoneNumber,
+			code: "qa",
+		});
+		expect(wrong.error?.status).toBe(400);
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: colonPhoneNumber,
+			code: colonCode,
+		});
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+	});
+
 	it("should pass the forget-password type on password reset", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: fixedPhoneNumber });
+		await client.phoneNumber.verify({
+			phoneNumber: fixedPhoneNumber,
+			code: fixedCode,
+		});
+
 		await client.phoneNumber.requestPasswordReset({
 			phoneNumber: fixedPhoneNumber,
 		});
