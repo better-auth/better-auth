@@ -2,4 +2,4 @@
 "auth": patch
 ---
 
-Add read-only `check` and `check schema` commands for validating supported adapter schemas in CI.
+Add read-only `check` and `check schema` commands to validate the configured adapter schema on demand.

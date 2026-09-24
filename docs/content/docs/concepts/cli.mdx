@@ -73,7 +73,7 @@ npx auth@latest migrate
 
 ## Check
 
-The `check` command runs all available checks. Currently, it checks whether your configured schema can hold what Better Auth writes. It does not create files or apply migrations. Run it as a separate CI or pre-deployment step to catch missed schema changes:
+The `check` command runs all available checks. Run it whenever you want to verify your Better Auth setup, manually or in automation:
 
 ```bash title="Terminal"
 npx auth@latest check --config ./src/auth.ts
@@ -81,7 +81,7 @@ npx auth@latest check --config ./src/auth.ts
 
 ### Schema
 
-To run the schema check specifically, use `check schema`:
+The `check schema` command verifies that your configured schema can hold what Better Auth writes. It does not create schema files or apply migrations.
 
 ```bash title="Terminal"
 npx auth@latest check schema --config ./src/auth.ts
