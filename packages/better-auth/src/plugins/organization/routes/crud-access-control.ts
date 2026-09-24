@@ -58,12 +58,16 @@ const getAdditionalFields = <
 	};
 };
 
+const roleNameSchema = z.string().refine((val) => !val.includes(","), {
+	message: "Role name cannot contain commas",
+});
+
 const baseCreateOrgRoleSchema = z.object({
 	organizationId: z.string().optional().meta({
 		description:
 			"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
 	}),
-	role: z.string().meta({
+	role: roleNameSchema.meta({
 		description: "The name of the role to create",
 	}),
 	permission: z.record(z.string(), z.array(z.string())).meta({
@@ -133,6 +137,12 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			roleName = normalizeRoleName(roleName);
+			if (roleName.includes(",")) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME,
+				);
+			}
 
 			await checkIfRoleNameIsTakenByPreDefinedRole({
 				role: roleName,
@@ -857,7 +867,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 							.meta({
 								description: "The permission to update the role with",
 							}),
-						roleName: z.string().optional().meta({
+						roleName: roleNameSchema.optional().meta({
 							description: "The name of the role to update",
 						}),
 						...additionalFieldsSchema.shape,
@@ -1047,6 +1057,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				let newRoleName = ctx.body.data.roleName;
 
 				newRoleName = normalizeRoleName(newRoleName);
+				if (newRoleName.includes(",")) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME,
+					);
+				}
 
 				await checkIfRoleNameIsTakenByPreDefinedRole({
 					role: newRoleName,
