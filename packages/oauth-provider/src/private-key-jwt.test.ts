@@ -609,10 +609,53 @@ describe("private_key_jwt authentication", async () => {
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
-				redirect: "error",
+				redirect: "manual",
 			}),
 		);
 		expect(discoveryMetadataFetch).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11328
+	 */
+	it("should reject jwks_uri fetch when the endpoint redirects in manual mode", async () => {
+		const redirectingClient = (await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks_uri: "https://trusted.example.com/.well-known/redirect-jwks.json",
+			},
+		}))!;
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				new Response(null, {
+					status: 302,
+					headers: { location: "https://trusted.example.com/other-jwks.json" },
+				}),
+			),
+		);
+
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(redirectingClient.client_id, codeVerifier);
+		const assertion = await signAssertion({
+			clientId: redirectingClient.client_id,
+			kid: "trusted-jwks-key",
+		});
+
+		const tokens = await exchangeCodeForTokens({
+			clientId: redirectingClient.client_id,
+			code,
+			codeVerifier,
+			assertion,
+		});
+
+		expect(tokens.error?.status).toBe(400);
+		expect((tokens.error as any)?.error).toBe("invalid_client");
 	});
 
 	it("should reject assertion signed with wrong key", async () => {

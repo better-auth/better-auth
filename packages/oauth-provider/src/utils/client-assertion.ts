@@ -1,6 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import {
+	assertResponseNotRedirect,
 	CLIENT_ASSERTION_TYPE,
+	noFollowRedirect,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
@@ -188,8 +190,9 @@ async function fetchJwksFromUri(
 		const response = await fetchClientMetadataResource(jwksUri, {
 			signal: controller.signal,
 			headers: { accept: "application/json" },
-			redirect: "error",
+			...noFollowRedirect,
 		});
+		assertResponseNotRedirect(jwksUri, response);
 		if (response.redirected) {
 			throw new Error("JWKS fetch redirected");
 		}

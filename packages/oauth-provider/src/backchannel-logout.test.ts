@@ -654,6 +654,32 @@ describe("oauth back-channel logout", async () => {
 		expect(rp.received).toHaveLength(1);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11328
+	 */
+	it("uses manual redirect mode and refuses RP redirects during back-channel logout", async () => {
+		const capturedInits: RequestInit[] = [];
+		const currentFetch = globalThis.fetch;
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+			if (init) capturedInits.push(init);
+			return currentFetch(input, init);
+		});
+
+		await rp.close();
+		rp = await startMockRp({ status: 302 });
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: `${rp.publicUrl}/logout/backchannel`,
+		});
+		await issueTokens({ client: oauthClient });
+
+		const result = await client.signOut({ fetchOptions: { headers } });
+		expect(result.error).toBeNull();
+		await waitForDispatches();
+
+		expect(rp.received).toHaveLength(1);
+		expect(capturedInits.some((init) => init.redirect === "manual")).toBe(true);
+	});
+
 	it("isolates a malformed pairwise client from revocation and healthy RP delivery", async () => {
 		const healthyClient = await registerClient();
 		const malformedClient = await registerClient({ subject_type: "pairwise" });
