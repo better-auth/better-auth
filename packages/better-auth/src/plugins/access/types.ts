@@ -59,4 +59,5 @@ export type Role<
 		connector?: ("OR" | "AND") | undefined,
 	) => AuthorizeResponse;
 	statements: TRoleStatements;
+	scope?: "organization" | "team" | "both";
 };
