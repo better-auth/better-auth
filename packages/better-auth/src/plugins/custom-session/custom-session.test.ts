@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -63,6 +63,28 @@ describe("Custom Session Plugin Tests", async () => {
 		const s = await client.getSession({ fetchOptions: { headers } });
 		expect(s.data?.newData).toEqual({ message: "Hello, World!" });
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10566
+	 */
+	it("propagates session lookup failures instead of treating them as signed-out sessions", async () => {
+		const { auth: authWithoutCache, signInWithTestUser: signIn } =
+			await getTestInstance({
+				plugins: [customSession(async (session) => session)],
+			});
+		const { headers } = await signIn();
+		const context = await authWithoutCache.$context;
+		const lookup = vi
+			.spyOn(context.internalAdapter, "findSession")
+			.mockRejectedValue(new Error("database unavailable"));
+		try {
+			await expect(
+				authWithoutCache.api.getSession({ headers }),
+			).rejects.toMatchObject({ status: "INTERNAL_SERVER_ERROR" });
+		} finally {
+			lookup.mockRestore();
+		}
 	});
 
 	it("should return set cookie headers as separate entries", async () => {
