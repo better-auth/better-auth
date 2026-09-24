@@ -15,6 +15,7 @@ export {
 	createSchemaCheck,
 	invalidateSchemaChecks,
 	registerSchemaCheck,
+	runtimeSchemaCheckFor,
 	type SchemaCheck,
 	schemaCheckFor,
 } from "./schema-check";
