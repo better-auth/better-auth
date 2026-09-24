@@ -1,13 +1,14 @@
 import type { SQLInputValue } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 import { Kysely } from "kysely";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BunSqliteDialect } from "./bun-sqlite-dialect";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 } from "./kysely-migration-tables";
 import { NodeSqliteDialect } from "./node-sqlite-dialect";
+import { introspectSqliteTables } from "./sqlite-introspector";
 
 function createSchema(db: DatabaseSync) {
 	for (const sql of [
@@ -170,5 +171,149 @@ describe("sqlite introspector", () => {
 		expect(DEFAULT_MIGRATION_LOCK_TABLE).toBe(
 			KYSELY_DEFAULT_MIGRATION_LOCK_TABLE,
 		);
+	});
+});
+
+/**
+ * @see https://www.sqlite.org/autoinc.html
+ * @see https://www.sqlite.org/lang_createtable.html#rowids_and_the_integer_primary_key
+ */
+describe("SQLite generated primary keys", () => {
+	it.for([
+		{
+			name: "an explicit AUTOINCREMENT declaration after whitespace",
+			definition: `CREATE TABLE entries (
+				seq INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+				id TEXT NOT NULL UNIQUE
+			)`,
+			generated: "seq",
+		},
+		{
+			name: "an AUTOINCREMENT declaration separated by a comment",
+			definition:
+				"CREATE TABLE entries (seq INTEGER PRIMARY KEY/**/AUTOINCREMENT, id TEXT)",
+			generated: "seq",
+		},
+		{
+			name: "an INTEGER PRIMARY KEY without AUTOINCREMENT",
+			definition: "CREATE TABLE entries (seq INTEGER PRIMARY KEY, id TEXT)",
+			generated: "seq",
+		},
+		{
+			name: "a quoted primary key identifier",
+			definition:
+				'CREATE TABLE entries ("sequence number" INTEGER PRIMARY KEY, id TEXT)',
+			generated: "sequence number",
+		},
+		{
+			name: "AUTOINCREMENT inside a default string",
+			definition:
+				"CREATE TABLE entries (ref INTEGER PRIMARY KEY,note TEXT DEFAULT 'use AUTOINCREMENT')",
+			generated: "ref",
+		},
+		{
+			name: "AUTOINCREMENT inside a default string on a WITHOUT ROWID table",
+			definition:
+				"CREATE TABLE entries (ref INTEGER PRIMARY KEY, note TEXT DEFAULT 'use AUTOINCREMENT') WITHOUT ROWID",
+			generated: undefined,
+		},
+		{
+			name: "an INTEGER PRIMARY KEY DESC column",
+			definition:
+				"CREATE TABLE entries (seq INTEGER PRIMARY KEY DESC, id TEXT)",
+			generated: undefined,
+		},
+		{
+			name: "a table-level PRIMARY KEY with DESC ordering",
+			definition:
+				"CREATE TABLE entries (seq INTEGER, id TEXT, PRIMARY KEY (seq DESC))",
+			generated: "seq",
+		},
+		{
+			name: "an INTEGER PRIMARY KEY on a WITHOUT ROWID table",
+			definition:
+				"CREATE TABLE entries (seq INTEGER PRIMARY KEY, id TEXT) WITHOUT ROWID",
+			generated: undefined,
+		},
+		{
+			name: "an INT PRIMARY KEY column",
+			definition: "CREATE TABLE entries (seq INT PRIMARY KEY, id TEXT)",
+			generated: undefined,
+		},
+	])("recognizes $name", async ({ definition, generated }, {
+		onTestFinished,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		sqlite.exec(definition);
+		const db = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+		onTestFinished(() => db.destroy());
+
+		const tables = await db.introspection.getTables();
+		const entries = tables.find((table) => table.name === "entries");
+		expect(
+			entries?.columns
+				.filter((column) => column.isAutoIncrementing)
+				.map((column) => column.name),
+		).toEqual(generated ? [generated] : []);
+	});
+
+	it("BunSqliteDialect recognizes an INTEGER PRIMARY KEY", async ({
+		onTestFinished,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		sqlite.exec("CREATE TABLE entries (id INTEGER PRIMARY KEY, name TEXT)");
+		const db = new Kysely({
+			dialect: new BunSqliteDialect({ database: asBunLikeDatabase(sqlite) }),
+		});
+		onTestFinished(() => db.destroy());
+
+		const tables = await db.introspection.getTables();
+		const id = tables.find((table) => table.name === "entries")?.columns[0];
+		expect(id?.isAutoIncrementing).toBe(true);
+	});
+
+	/** @see https://github.com/better-auth/better-auth/issues/10551 */
+	it("uses statement-form PRAGMA when dialect introspection is unavailable", async ({
+		onTestFinished,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		const generatedName = 'generated"name';
+		sqlite.exec('CREATE TABLE "generated""name" (id INTEGER PRIMARY KEY)');
+		sqlite.exec("CREATE TABLE descending (id INTEGER PRIMARY KEY DESC)");
+		const prepare = sqlite.prepare.bind(sqlite);
+		vi.spyOn(sqlite, "prepare").mockImplementation((query) => {
+			if (
+				query.trimStart().toLowerCase().startsWith("select") &&
+				query.includes("pragma_index_list")
+			) {
+				throw new Error("D1_ERROR: not authorized: SQLITE_AUTH");
+			}
+			return prepare(query);
+		});
+		const dialect = new NodeSqliteDialect({ database: sqlite });
+		vi.spyOn(dialect, "createIntrospector").mockReturnValue({
+			getMetadata: async () => {
+				throw new Error("introspection unavailable");
+			},
+			getSchemas: async () => [],
+			getTables: async () => {
+				throw new Error("introspection unavailable");
+			},
+		});
+		const db = new Kysely({ dialect });
+		onTestFinished(() => db.destroy());
+
+		const tables = await introspectSqliteTables(db, [
+			generatedName,
+			"descending",
+		]);
+		expect(
+			tables.map((table) => [table.name, table.columns[0]?.isAutoIncrementing]),
+		).toEqual([
+			[generatedName, true],
+			["descending", false],
+		]);
 	});
 });

@@ -22,28 +22,23 @@ export interface PragmaTableInfo {
 	type: string;
 }
 
+export interface PragmaIndexListRow {
+	name: string;
+	origin: "c" | "u" | "pk";
+	partial: number;
+	unique: number;
+}
+
 interface SqliteTable {
 	name: string;
-	sql?: string | null | undefined;
 	type?: string | undefined;
 }
 
 interface SqliteSystemDatabase {
 	sqlite_schema: {
 		name: string;
-		sql: string | null;
 		type: "index" | "table" | "trigger" | "view";
 	};
-}
-
-function declaredAutoIncrementColumn(
-	createSql: string | null | undefined,
-): string | undefined {
-	return createSql
-		?.split(/[(),]/)
-		.find((part) => part.toLowerCase().includes("autoincrement"))
-		?.split(/\s+/)[0]
-		?.replace(/["`]/g, "");
 }
 
 export function sqliteIntegerPrimaryKeyColumn(
@@ -54,6 +49,19 @@ export function sqliteIntegerPrimaryKeyColumn(
 	return primaryKey?.type.toLowerCase() === "integer"
 		? primaryKey.name
 		: undefined;
+}
+
+async function sqliteGeneratedPrimaryKeyColumn(
+	db: Kysely<unknown>,
+	name: string,
+	columns: readonly PragmaTableInfo[],
+): Promise<string | undefined> {
+	const column = sqliteIntegerPrimaryKeyColumn(columns);
+	if (!column) return;
+	const { rows } = await sql<PragmaIndexListRow>`
+		PRAGMA index_list(${sql.id(name)})
+	`.execute(db.withoutPlugins());
+	return rows.some((index) => index.origin === "pk") ? undefined : column;
 }
 
 export function toSqliteTableMetadata(
@@ -82,11 +90,12 @@ async function readTableMetadata(
 		PRAGMA table_info(${sql.id(name)})
 	`.execute(db.withoutPlugins());
 	if (columns.length === 0) return;
-	return toSqliteTableMetadata(
-		{ name },
+	const generatedColumn = await sqliteGeneratedPrimaryKeyColumn(
+		db,
+		name,
 		columns,
-		sqliteIntegerPrimaryKeyColumn(columns),
 	);
+	return toSqliteTableMetadata({ name }, columns, generatedColumn);
 }
 
 export async function introspectSqliteTables(
@@ -132,22 +141,18 @@ export function createSqliteIntrospector(
 		const tables = await query.execute();
 		return Promise.all(
 			tables.map(async ({ name }) => {
-				const createTable = await systemDb
-					.selectFrom("sqlite_schema")
-					.where("name", "=", name)
-					.select("sql")
-					.executeTakeFirst();
 				const columns = await db
 					.selectFrom(
 						sql<PragmaTableInfo>`pragma_table_info(${name})`.as("table_info"),
 					)
 					.select(["cid", "name", "type", "notnull", "dflt_value", "pk"])
 					.execute();
-				return toSqliteTableMetadata(
-					{ name, sql: createTable?.sql },
+				const generatedColumn = await sqliteGeneratedPrimaryKeyColumn(
+					db,
+					name,
 					columns,
-					declaredAutoIncrementColumn(createTable?.sql),
 				);
+				return toSqliteTableMetadata({ name }, columns, generatedColumn);
 			}),
 		);
 	}
