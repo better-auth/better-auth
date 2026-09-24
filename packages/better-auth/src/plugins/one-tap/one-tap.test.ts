@@ -81,6 +81,30 @@ describe("one-tap last login method", () => {
 			expect.stringContaining("better-auth.last_used_login_method=google"),
 		);
 	});
+
+	it("persists Google as the last login method after a one-tap callback", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				oneTap({ clientId: "test-google-client" }),
+				lastLoginMethod({ storeInDatabase: true }),
+			],
+		});
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/one-tap/callback", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ idToken: "stub-id-token" }),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const context = await auth.$context;
+		const user = await context.adapter.findOne<{ lastLoginMethod: string }>({
+			model: "user",
+			where: [{ field: "email", value: defaultVerifiedPayload.email }],
+		});
+		expect(user?.lastLoginMethod).toBe("google");
+	});
 });
 
 describe("one-tap implicit linking gate", async () => {
