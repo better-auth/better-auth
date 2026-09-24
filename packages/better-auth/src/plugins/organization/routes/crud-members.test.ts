@@ -422,6 +422,11 @@ describe("updateMemberRole", async () => {
 			},
 		);
 		expect(updatedMember.data?.role).toBe("admin");
+		expect(updatedMember.data?.user).toMatchObject({
+			id: newUser.user.id,
+			email: newUser.user.email,
+			name: newUser.user.name,
+		});
 	});
 
 	it("should not update the member role if the member updating is not a member	", async () => {

@@ -5,6 +5,7 @@ import {
 } from "@better-auth/core/context";
 import type {
 	DBTransactionAdapter,
+	Where,
 	WhereOperator,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -21,6 +22,7 @@ import type {
 	InferOrganization,
 	InferTeam,
 	InvitationInput,
+	InvitationStatus,
 	Member,
 	MemberInput,
 	OrganizationInput,
@@ -1254,9 +1256,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return invitation.filter(
-				(invite) => new Date(invite.expiresAt) > new Date(),
-			);
+			// Include expired rows while their lifecycle status is still pending.
+			// Creation must claim or renew those rows before inserting a replacement;
+			// otherwise databases that enforce one pending invitation per org/email
+			// reject the replacement even though the old invitation is no longer usable.
+			return invitation;
 		},
 		findPendingInvitations: async (data: { organizationId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -1290,28 +1294,43 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return invitations;
 		},
-		updateInvitation: async (data: {
-			invitationId: string;
-			status: "pending" | "accepted" | "canceled" | "rejected";
-			/**
-			 * Only transition when the invitation is currently in this status. The
-			 * guarded update is atomic, so a concurrent caller racing the same
-			 * transition gets `null` instead of both proceeding.
-			 */
-			fromStatus?: "pending" | "accepted" | "canceled" | "rejected";
-		}) => {
+		updateInvitation: async (
+			data: {
+				invitationId: string;
+				/**
+				 * Only transition when the invitation is currently in this status. The
+				 * guarded update is atomic, so a concurrent caller racing the same
+				 * transition gets `null` instead of both proceeding.
+				 */
+				fromStatus?: InvitationStatus | undefined;
+				/**
+				 * Compare-and-swap guard for invitation refreshes. Expiration changes act
+				 * as the invitation lifecycle version, so resend cannot race a terminal
+				 * transition or another resend based on an older snapshot.
+				 */
+				fromExpiresAt?: Date | undefined;
+			} & (
+				| { status: InvitationStatus; expiresAt?: Date | undefined }
+				| { status?: undefined; expiresAt: Date }
+			),
+		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const where = [{ field: "id", value: data.invitationId }];
+			const where: Where[] = [{ field: "id", value: data.invitationId }];
 			if (data.fromStatus) {
 				where.push({ field: "status", value: data.fromStatus });
 			}
+			if (data.fromExpiresAt) {
+				where.push({ field: "expiresAt", value: data.fromExpiresAt });
+			}
+			const set = {
+				...(data.status ? { status: data.status } : {}),
+				...(data.expiresAt ? { expiresAt: data.expiresAt } : {}),
+			};
 			const invitation = await adapter.incrementOne<InferInvitation<O, false>>({
 				model: "invitation",
 				where,
 				increment: {},
-				set: {
-					status: data.status,
-				},
+				set,
 			});
 			return invitation;
 		},
