@@ -823,3 +823,188 @@ describe("oneTapClient types", () => {
 		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });
+
+describe("one-tap active mode", async () => {
+	const initialize = vi.fn();
+	const renderButton = vi.fn();
+
+	const stubBrowser = ({ gsi = true }: { gsi?: boolean } = {}) => {
+		vi.stubGlobal("window", {
+			document: {},
+			...(gsi
+				? {
+						googleScriptInitialized: true,
+						google: { accounts: { id: { initialize, renderButton } } },
+					}
+				: {}),
+		});
+	};
+
+	afterEach(() => {
+		initialize.mockReset();
+		renderButton.mockReset();
+		vi.unstubAllGlobals();
+	});
+
+	const getClient = async (mode?: "passive" | "active") =>
+		(
+			await getTestInstance(
+				{
+					socialProviders: {
+						google: { clientId: "test-client", clientSecret: "test-secret" },
+					},
+					plugins: [oneTap()],
+				},
+				{
+					clientOptions: {
+						plugins: [oneTapClient({ clientId: "test-client", mode })],
+					},
+				},
+			)
+		).client;
+
+	it("enables the FedCM button flow in active mode", async () => {
+		const client = await getClient();
+		stubBrowser();
+
+		await client.oneTap({
+			mode: "active",
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.objectContaining({
+				client_id: "test-client",
+				use_fedcm_for_button: true,
+				button_auto_select: false,
+			}),
+		);
+		expect(renderButton).toHaveBeenCalled();
+	});
+
+	it("enables the FedCM button flow when active mode is set on the plugin", async () => {
+		const client = await getClient("active");
+		stubBrowser();
+
+		await client.oneTap({
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.objectContaining({ use_fedcm_for_button: true }),
+		);
+	});
+
+	it("carries autoSelect over to the FedCM button flow", async () => {
+		const client = await getClient();
+		stubBrowser();
+
+		await client.oneTap({
+			mode: "active",
+			autoSelect: true,
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.objectContaining({ button_auto_select: true }),
+		);
+	});
+
+	it("skips the FedCM button flow when FedCM is opted out", async () => {
+		const client = (
+			await getTestInstance(
+				{
+					socialProviders: {
+						google: { clientId: "test-client", clientSecret: "test-secret" },
+					},
+					plugins: [oneTap()],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							oneTapClient({
+								clientId: "test-client",
+								mode: "active",
+								promptOptions: { fedCM: false },
+							}),
+						],
+					},
+				},
+			)
+		).client;
+		stubBrowser();
+
+		await client.oneTap({
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.not.objectContaining({ use_fedcm_for_button: true }),
+		);
+	});
+
+	it("leaves the button flow untouched in passive mode", async () => {
+		const client = await getClient();
+		stubBrowser();
+
+		await client.oneTap({
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.not.objectContaining({ use_fedcm_for_button: true }),
+		);
+	});
+
+	it("verifies the id token the FedCM button returns", async () => {
+		const client = await getClient();
+		stubBrowser();
+
+		await client.oneTap({
+			mode: "active",
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		const config = initialize.mock.calls[0]![0] as {
+			callback: (response: { credential: string }) => Promise<void>;
+		};
+		await config.callback({ credential: "stub-id-token" });
+
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Object),
+			expect.objectContaining({ audience: "test-client" }),
+		);
+	});
+
+	it("falls back to the passive prompt when active mode is used without a button", async () => {
+		const client = await getClient();
+		stubBrowser({ gsi: false });
+		vi.stubGlobal("document", {
+			createElement: () => ({}),
+			head: {
+				appendChild: (script: { onerror: () => void }) => script.onerror(),
+			},
+		});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await expect(
+			client.oneTap({ mode: "active", fetchOptions: {} }),
+		).rejects.toThrow("Failed to load Google Identity Services script");
+
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("needs the `button` option"),
+		);
+		expect(initialize).not.toHaveBeenCalled();
+
+		warn.mockRestore();
+		error.mockRestore();
+	});
+});

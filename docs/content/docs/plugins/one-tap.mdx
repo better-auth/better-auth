@@ -72,6 +72,29 @@ import { authClient } from "@/lib/auth-client";
 await authClient.oneTap(); // [!code highlight]
 ```
 
+#### Active Mode
+
+By default the prompt is passive: the browser decides when to show it and renders it in a corner of the page. Active mode is Google's [FedCM button flow](https://developers.google.com/identity/gsi/web/guides/fedcm-migration) — clicking the rendered Sign in with Google button opens the browser's centered account chooser instead of a popup window:
+
+```html
+<div id="google-signin"></div>
+```
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+await authClient.oneTap({
+  mode: "active", // [!code highlight]
+  button: { container: "#google-signin" },
+});
+```
+
+Active mode only applies together with the `button` option, because the chooser is opened by the button Google renders. Calling `oneTap({ mode: "active" })` without a container logs a warning and shows the passive prompt. Setting `promptOptions: { fedCM: false }` opts out of FedCM everywhere, so the button keeps the popup flow even in active mode.
+
+`autoSelect` carries over to the button flow: a returning user with an active Google session is signed in straight away, skipping the account chooser.
+
+The flow needs Chrome 125+ on desktop or Chrome 128+ on Android. Elsewhere the button keeps the existing non-FedCM popup flow, so there is nothing to feature-detect.
+
 #### Button Mode
 
 To render a "Sign In with Google" button instead of showing the automatic prompt, use the `button` option:
@@ -181,11 +204,12 @@ await authClient.oneTap({
 * `cancelOnTapOutside`: Cancel the One Tap popup when the user taps outside it. Note that this option may not have an effect when FedCM is active, as the browser manages the dismiss behavior. Default is true.
 * `uxMode`: The mode to use for the Google One Tap flow. Can be "popup" or "redirect". Default is "popup".
 * `context`: The context in which the One Tap API should be used. Can be "signin", "signup", or "use". Default is "signin".
+* `mode`: The UI mode for the flow. `"passive"` shows the One Tap prompt in a corner of the page, `"active"` opts the rendered button into the FedCM button flow so it opens the browser's centered account chooser. Only applies with the `button` option. Can be set per call on the `oneTap` action. Default is "passive".
 * `additionalOptions`: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt).
 * `promptOptions`: Configuration for the prompt behavior and exponential backoff:
   * `baseDelay`: Base delay in milliseconds for retries. Default is 1000.
   * `maxAttempts`: Maximum number of prompt attempts before invoking the `onPromptNotification` callback. Default is 5.
-  * `fedCM`: When enabled, calls [`navigator.credentials.preventSilentAccess()`](https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/preventSilentAccess) on sign-out to clear the browser's FedCM credential state. FedCM itself is managed by the Google Identity Services library and cannot be disabled. Default is true.
+  * `fedCM`: When enabled, calls [`navigator.credentials.preventSilentAccess()`](https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/preventSilentAccess) on sign-out to clear the browser's FedCM credential state, and lets `mode: "active"` opt the rendered button into the FedCM button flow. Setting it to false keeps that button on the popup flow. FedCM for the One Tap prompt itself is managed by the Google Identity Services library and cannot be disabled. Default is true.
 
 ### Button Mode Options
 

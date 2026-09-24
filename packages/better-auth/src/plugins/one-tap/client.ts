@@ -118,6 +118,21 @@ export interface GoogleOneTapOptions {
 	 */
 	context?: ("signin" | "signup" | "use") | undefined;
 	/**
+	 * The UI mode to use for the Google One Tap flow.
+	 *
+	 * passive: shows the One Tap prompt, rendered by the browser in a corner of
+	 * the page. It can be shown without a user gesture.
+	 *
+	 * active: turns the rendered Sign in with Google button into the FedCM
+	 * button flow, so clicking it opens the browser's centered account chooser.
+	 * It only applies together with the `button` option, and is skipped when
+	 * `promptOptions.fedCM` is false.
+	 *
+	 * @see {@link https://developers.google.com/identity/gsi/web/guides/fedcm-migration}
+	 * @default "passive"
+	 */
+	mode?: ("passive" | "active") | undefined;
+	/**
 	 * Additional configuration options to pass to the Google One Tap API.
 	 */
 	additionalOptions?: Record<string, any> | undefined;
@@ -280,8 +295,17 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 						const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
 						const contextValue = context ?? options.context ?? "signin";
+						const modeValue = opts?.mode ?? options.mode ?? "passive";
 
 						const useFedCM = options.promptOptions?.fedCM !== false;
+						const activeModeOptions =
+							modeValue === "active" && useFedCM
+								? {
+										use_fedcm_for_button: true,
+										button_auto_select:
+											autoSelect ?? options.autoSelect ?? false,
+									}
+								: {};
 						window.google?.accounts.id.initialize({
 							client_id: options.clientId,
 							callback: async (response: { credential: string }) => {
@@ -298,6 +322,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							nonce: opts?.nonce,
 							itp_support: true,
 							use_fedcm_for_prompt: useFedCM,
+							...activeModeOptions,
 							...options.additionalOptions,
 						});
 
@@ -335,6 +360,14 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 					const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
 					const contextValue = context ?? options.context ?? "signin";
+					const modeValue = opts?.mode ?? options.mode ?? "passive";
+
+					if (modeValue === "active") {
+						console.warn(
+							"Google One Tap: active mode is the FedCM button flow, so it needs the `button` option. Falling back to the passive prompt.",
+						);
+					}
+
 					isRequestInProgress = true;
 
 					try {
