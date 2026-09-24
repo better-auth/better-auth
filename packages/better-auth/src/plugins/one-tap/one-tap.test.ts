@@ -913,6 +913,40 @@ describe("one-tap active mode", async () => {
 		);
 	});
 
+	it("skips the FedCM button flow when FedCM is opted out", async () => {
+		const client = (
+			await getTestInstance(
+				{
+					socialProviders: {
+						google: { clientId: "test-client", clientSecret: "test-secret" },
+					},
+					plugins: [oneTap()],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							oneTapClient({
+								clientId: "test-client",
+								mode: "active",
+								promptOptions: { fedCM: false },
+							}),
+						],
+					},
+				},
+			)
+		).client;
+		stubBrowser();
+
+		await client.oneTap({
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.not.objectContaining({ use_fedcm_for_button: true }),
+		);
+	});
+
 	it("leaves the button flow untouched in passive mode", async () => {
 		const client = await getClient();
 		stubBrowser();

@@ -76,6 +76,10 @@ await authClient.oneTap(); // [!code highlight]
 
 By default the prompt is passive: the browser decides when to show it and renders it in a corner of the page. Active mode is Google's [FedCM button flow](https://developers.google.com/identity/gsi/web/guides/fedcm-migration) — clicking the rendered Sign in with Google button opens the browser's centered account chooser instead of a popup window:
 
+```html
+<div id="google-signin"></div>
+```
+
 ```ts
 import { authClient } from "@/lib/auth-client";
 
@@ -85,7 +89,7 @@ await authClient.oneTap({
 });
 ```
 
-Active mode only applies together with the `button` option, because the chooser is opened by the button Google renders. Calling `oneTap({ mode: "active" })` without a container logs a warning and shows the passive prompt.
+Active mode only applies together with the `button` option, because the chooser is opened by the button Google renders. Calling `oneTap({ mode: "active" })` without a container logs a warning and shows the passive prompt. Setting `promptOptions: { fedCM: false }` opts out of FedCM everywhere, so the button keeps the popup flow even in active mode.
 
 `autoSelect` carries over to the button flow: a returning user with an active Google session is signed in straight away, skipping the account chooser.
 

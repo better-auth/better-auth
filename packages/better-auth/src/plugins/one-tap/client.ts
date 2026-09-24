@@ -125,7 +125,8 @@ export interface GoogleOneTapOptions {
 	 *
 	 * active: turns the rendered Sign in with Google button into the FedCM
 	 * button flow, so clicking it opens the browser's centered account chooser.
-	 * It only applies together with the `button` option.
+	 * It only applies together with the `button` option, and is skipped when
+	 * `promptOptions.fedCM` is false.
 	 *
 	 * @see {@link https://developers.google.com/identity/gsi/web/guides/fedcm-migration}
 	 * @default "passive"
@@ -298,7 +299,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 						const useFedCM = options.promptOptions?.fedCM !== false;
 						const activeModeOptions =
-							modeValue === "active"
+							modeValue === "active" && useFedCM
 								? {
 										use_fedcm_for_button: true,
 										button_auto_select:
