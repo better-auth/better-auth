@@ -37,26 +37,23 @@ async function readRootPackageJson(): Promise<PackageJson | undefined> {
 }
 
 async function getPackageVersion(pkg: string): Promise<string | undefined> {
-	if (packageJSONCache) {
-		return (packageJSONCache.dependencies?.[pkg] ||
-			packageJSONCache.devDependencies?.[pkg] ||
-			packageJSONCache.peerDependencies?.[pkg]) as string | undefined;
-	}
-
 	try {
 		const cwd = process.cwd();
 		if (!cwd) throw new Error("no-cwd");
-		// A joined node_modules path makes file tracers ship every package.json.
-		const pkgJsonPath = createRequire(path.join(cwd, "package.json")).resolve(
-			`${pkg}/package.json`,
-		);
-		const raw = await fsPromises.readFile(pkgJsonPath, "utf-8");
-		const json = JSON.parse(raw);
-		const resolved =
-			(json.version as string) ||
-			(await getVersionFromLocalPackageJson(pkg)) ||
-			undefined;
-		return resolved;
+		// Search the node_modules directories Node would search. A literal
+		// node_modules path makes file tracers ship every package.json.
+		const dirs =
+			createRequire(path.join(cwd, "package.json")).resolve.paths(pkg) ?? [];
+		for (const dir of dirs) {
+			try {
+				const raw = await fsPromises.readFile(
+					path.join(dir, pkg, "package.json"),
+					"utf-8",
+				);
+				const version = JSON.parse(raw).version;
+				if (version) return version as string;
+			} catch {}
+		}
 	} catch {}
 
 	return getVersionFromLocalPackageJson(pkg);
