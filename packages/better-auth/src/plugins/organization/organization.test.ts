@@ -2793,7 +2793,7 @@ describe("Additional Fields", async () => {
 			{
 				id: string;
 				organizationId: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -2855,7 +2855,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			userId: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			createdAt: Date;
 			teamId?: string | undefined;
 			user: {
@@ -3089,7 +3089,7 @@ describe("Additional Fields", async () => {
 		type ExpectedMembers = {
 			id: string;
 			organizationId: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			createdAt: Date;
 			userId: string;
 			teamId?: string | undefined;
@@ -3107,7 +3107,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			email: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			status: InvitationStatus;
 			inviterId: string;
 			expiresAt: Date;
@@ -3209,7 +3209,7 @@ describe("Additional Fields", async () => {
 			members: ({
 				id: string;
 				organizationId: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -3278,7 +3278,7 @@ describe("Additional Fields", async () => {
 			member: {
 				id: string;
 				organizationId: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -3306,7 +3306,7 @@ describe("Additional Fields", async () => {
 		id: string;
 		organizationId: string;
 		email: string;
-		role: "member" | "admin" | "owner";
+		role: "member" | "admin" | "owner" | (string & {});
 		status: InvitationStatus;
 		inviterId: string;
 		expiresAt: Date;
@@ -3399,7 +3399,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			email: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			status: InvitationStatus;
 			inviterId: string;
 			createdAt: Date;
@@ -3433,7 +3433,7 @@ describe("Additional Fields", async () => {
 				id: string;
 				organizationId: string;
 				email: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				status: InvitationStatus;
 				inviterId: string;
 				createdAt: Date;
@@ -3479,7 +3479,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			email: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			status: InvitationStatus;
 			createdAt: Date;
 			expiresAt: Date;
