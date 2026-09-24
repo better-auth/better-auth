@@ -4184,3 +4184,83 @@ describe("delete cascade rollback", async () => {
 		expect(teamMemberCount).toBe(1);
 	});
 });
+
+describe("acceptInvitation", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11275
+	 */
+	it("refreshes cached session cookie with activeOrganizationId upon accepting invitation", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [organization()],
+				session: {
+					cookieCache: {
+						enabled: true,
+					},
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+
+		const userAHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "User A",
+				email: "user-a@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess: cookieSetter(userAHeaders),
+			},
+		);
+
+		const ownerHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "Owner",
+				email: "owner@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		);
+
+		const org = await client.organization.create({
+			name: "Test Org",
+			slug: "test-org",
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: "user-a@example.com",
+			role: "member",
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		await client.organization.acceptInvitation({
+			invitationId: invite.data!.id,
+			fetchOptions: {
+				headers: userAHeaders,
+				onSuccess: cookieSetter(userAHeaders),
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: userAHeaders,
+			},
+		});
+
+		expect(session.data?.session?.activeOrganizationId).toBe(org.data?.id);
+	});
+});
