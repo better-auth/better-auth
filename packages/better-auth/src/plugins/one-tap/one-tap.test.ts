@@ -4,6 +4,7 @@ import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { lastLoginMethod } from "../last-login-method";
 import { oneTapClient } from "./client";
 import { oneTap } from "./index";
 
@@ -57,6 +58,29 @@ vi.mock("jose", async (importOriginal) => {
 
 afterEach(() => {
 	vi.mocked(jwtVerify).mockClear();
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10995
+ */
+describe("one-tap last login method", () => {
+	it("records Google as the last login method after a one-tap callback", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [oneTap({ clientId: "test-google-client" }), lastLoginMethod()],
+		});
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/one-tap/callback", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ idToken: "stub-id-token" }),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.getSetCookie()).toContainEqual(
+			expect.stringContaining("better-auth.last_used_login_method=google"),
+		);
+	});
 });
 
 describe("one-tap implicit linking gate", async () => {
