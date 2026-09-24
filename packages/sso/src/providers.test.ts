@@ -2086,6 +2086,45 @@ kBGIJYs=
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11372
+		 */
+		it("replaces a SAML mapping when updating only extra fields", async () => {
+			const { auth, data, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "mapped-saml-provider", undefined, {
+				samlConfig: {
+					entryPoint: "https://idp.example.com/sso",
+					cert: TEST_CERT,
+					idpMetadata: { entityID: "https://idp.example.com" },
+					mapping: { email: "mail", name: "display_name" },
+				},
+			});
+			const savedMapping = () =>
+				safeJsonParse<SAMLConfig>(data.ssoProvider[0]?.samlConfig ?? "")
+					?.mapping;
+			expect(savedMapping()).toEqual({ email: "mail", name: "display_name" });
+
+			await auth.api.updateSSOProvider({
+				body: {
+					providerId: "mapped-saml-provider",
+					samlConfig: {
+						mapping: { extraFields: { department: "department" } },
+					},
+				},
+				headers,
+			});
+
+			expect(savedMapping()).toEqual({
+				extraFields: { department: "department" },
+			});
+		});
+
 		it.each(
 			INVALID_CUSTOM_SP_METADATA,
 		)("rejects custom SP metadata with $name before updating the provider", async ({
