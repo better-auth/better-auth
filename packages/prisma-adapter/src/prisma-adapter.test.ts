@@ -32,6 +32,36 @@ describe("prisma-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("keeps field mapping tied to the schema model", async () => {
+		const findFirst = vi.fn(async () => ({
+			id: "user-id",
+			email: "ada@example.com",
+		}));
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				account: { findFirst },
+			} as never,
+			{ provider: "sqlite" },
+		)({
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+		});
+
+		await adapter.findOne({
+			model: "user",
+			where: [{ field: "email", value: "ada@example.com" }],
+			select: ["email"],
+		});
+
+		expect(findFirst).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { email: { equals: "ada@example.com" } },
+				select: { email: true },
+			}),
+		);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8365
 	 */
