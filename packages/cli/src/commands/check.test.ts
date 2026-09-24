@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/db/internal";
 import { test as baseTest, describe, expect, vi } from "vitest";
 import { getAuth } from "../utils/get-config";
-import { checkSchema } from "./check-schema";
+import { check } from "./check";
 
 vi.mock("../utils/get-config", () => ({ getAuth: vi.fn() }));
 
@@ -21,10 +21,10 @@ const test = baseTest.extend("runCheck", ({}, { onCleanup }) => {
 		process.exitCode = undefined;
 		vi.mocked(getAuth).mockReset();
 	});
-	return async (cwd = process.cwd()) => {
-		await expect(
-			checkSchema.parseAsync(["--cwd", cwd], { from: "user" }),
-		).rejects.toThrow("command exited");
+	return async (...args: string[]) => {
+		await expect(check.parseAsync(args, { from: "user" })).rejects.toThrow(
+			"command exited",
+		);
 		return exit.mock.calls[0]?.[0];
 	};
 });
@@ -39,12 +39,12 @@ function useAdapter(adapter: object) {
 	});
 }
 
-describe("check-schema", () => {
+describe("check", () => {
 	test("rejects a cwd that does not exist", async ({ expect, runCheck }) => {
 		const cwd = fileURLToPath(new URL("missing-directory", import.meta.url));
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const exitCode = await runCheck(cwd);
+		const exitCode = await runCheck("--cwd", cwd);
 
 		expect(getAuth).not.toHaveBeenCalled();
 		expect(error).toHaveBeenCalledWith(
@@ -60,7 +60,7 @@ describe("check-schema", () => {
 		const cwd = fileURLToPath(import.meta.url);
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const exitCode = await runCheck(cwd);
+		const exitCode = await runCheck("--cwd", cwd);
 
 		expect(getAuth).not.toHaveBeenCalled();
 		expect(error).toHaveBeenCalledWith(`The path "${cwd}" is not a directory.`);
@@ -83,6 +83,22 @@ describe("check-schema", () => {
 		expect(log).toHaveBeenCalledWith(
 			"Schema check passed against the live database.",
 		);
+		expect(exitCode).toBe(0);
+	});
+
+	test("checks the schema through the schema subcommand", async ({
+		expect,
+		runCheck,
+	}) => {
+		const adapter = { id: "kysely" };
+		const find = vi.fn(async () => []);
+		registerSchemaCheck(adapter, createSchemaCheck(find, "database"));
+		useAdapter(adapter);
+		vi.spyOn(console, "log").mockImplementation(() => {});
+
+		const exitCode = await runCheck("schema");
+
+		expect(find).toHaveBeenCalledOnce();
 		expect(exitCode).toBe(0);
 	});
 

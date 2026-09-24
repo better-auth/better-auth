@@ -93,10 +93,13 @@ async function checkSchemaAction(input: unknown): Promise<void> {
 	}
 }
 
-export const checkSchema = new Command("check-schema")
-	.description(
-		"Check that the configured schema can hold what Better Auth writes",
-	)
+async function runSchemaCheck(options: unknown): Promise<void> {
+	await checkSchemaAction(options);
+	process.exit(typeof process.exitCode === "number" ? process.exitCode : 0);
+}
+
+export const check = new Command("check")
+	.description("Run all available Better Auth checks")
 	.option(
 		"-c, --cwd <cwd>",
 		"the working directory. defaults to the current directory.",
@@ -106,7 +109,12 @@ export const checkSchema = new Command("check-schema")
 		"--config <config>",
 		"the path to the Better Auth configuration file.",
 	)
-	.action(async (options) => {
-		await checkSchemaAction(options);
-		process.exit(typeof process.exitCode === "number" ? process.exitCode : 0);
-	});
+	.action(runSchemaCheck);
+
+check
+	.command("schema")
+	.description(
+		"Check that the configured schema can hold what Better Auth writes",
+	)
+	.configureHelp({ showGlobalOptions: true })
+	.action((_options, command) => runSchemaCheck(command.optsWithGlobals()));

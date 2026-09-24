@@ -22,7 +22,7 @@ beforeAll(() => {
 	}
 });
 
-describe("check-schema", () => {
+describe("check", () => {
 	it("exposes an explicit check from the loaded auth config", async () => {
 		const auth = await getAuth({
 			cwd: path.dirname(configPath),
@@ -41,12 +41,17 @@ describe("check-schema", () => {
 		});
 	});
 
-	it("exits with status 1 when the configured schema does not match", async () => {
+	it.for([
+		{ command: "check", args: ["check"] },
+		{ command: "check schema", args: ["check", "schema"] },
+	])("$command exits with status 1 when the schema does not match", async ({
+		args,
+	}) => {
 		const result = execute(
 			process.execPath,
 			[
 				cliPath,
-				"check-schema",
+				...args,
 				"--cwd",
 				path.dirname(configPath),
 				"--config",

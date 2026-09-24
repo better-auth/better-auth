@@ -2,4 +2,4 @@
 "auth": patch
 ---
 
-Add a read-only `check-schema` command for explicitly validating supported adapter schemas in build pipelines.
+Add read-only `check` and `check schema` commands for validating supported adapter schemas in CI.
