@@ -282,16 +282,7 @@ describe("SQLite generated primary keys", () => {
 		const generatedName = 'generated"name';
 		sqlite.exec('CREATE TABLE "generated""name" (id INTEGER PRIMARY KEY)');
 		sqlite.exec("CREATE TABLE descending (id INTEGER PRIMARY KEY DESC)");
-		const prepare = sqlite.prepare.bind(sqlite);
-		vi.spyOn(sqlite, "prepare").mockImplementation((query) => {
-			if (
-				query.trimStart().toLowerCase().startsWith("select") &&
-				query.includes("pragma_index_list")
-			) {
-				throw new Error("D1_ERROR: not authorized: SQLITE_AUTH");
-			}
-			return prepare(query);
-		});
+		const prepare = vi.spyOn(sqlite, "prepare");
 		const dialect = new NodeSqliteDialect({ database: sqlite });
 		vi.spyOn(dialect, "createIntrospector").mockReturnValue({
 			getMetadata: async () => {
@@ -315,5 +306,15 @@ describe("SQLite generated primary keys", () => {
 			[generatedName, true],
 			["descending", false],
 		]);
+		const indexQueries = prepare.mock.calls
+			.map(([query]) => query.trim())
+			.filter((query) => query.includes("index_list"));
+		expect(indexQueries).toHaveLength(2);
+		expect(indexQueries).toEqual(
+			expect.arrayContaining([
+				'PRAGMA index_list("generated""name")',
+				'PRAGMA index_list("descending")',
+			]),
+		);
 	});
 });
