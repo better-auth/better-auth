@@ -12,6 +12,7 @@ import {
 	sql,
 	TableNode,
 } from "kysely";
+import { introspectSqliteTables } from "./sqlite-introspector";
 import type { KyselyDatabaseType } from "./types";
 
 type AnyTables = Record<string, Record<string, unknown>>;
@@ -140,6 +141,14 @@ export async function findSchemaProblems(
 	expected: ExpectedSchema,
 ): Promise<SchemaFinding[]> {
 	const physical = toPhysicalSchema(db, expected);
+	if (dbType === "sqlite") {
+		const tableNames = Object.entries(physical).flatMap(([name, table]) =>
+			table.disableMigrations ? [] : [name],
+		);
+		const tables = await introspectSqliteTables(db, tableNames);
+		return diffSchema(physical, toIntrospectedTables(tables));
+	}
+
 	return db.connection().execute(async (connection) => {
 		const searchPath = await schemaSearchPath(connection, dbType);
 		const tables = toIntrospectedTables(

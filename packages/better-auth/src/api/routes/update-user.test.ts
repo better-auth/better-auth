@@ -1158,3 +1158,68 @@ describe("setPassword", async () => {
 		).resolves.toBe(true);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("password length on verify-only fields", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth, signInWithTestUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		user: {
+			deleteUser: {
+				enabled: true,
+			},
+		},
+	});
+
+	it("change-password should reject a currentPassword longer than maxPasswordLength before hashing", async () => {
+		const { headers } = await signInWithTestUser();
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.changePassword({
+				body: {
+					newPassword: "newPassword123",
+					currentPassword: "x".repeat(129),
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+
+	it("delete-user should reject a password longer than maxPasswordLength before hashing", async () => {
+		const { headers } = await signInWithTestUser();
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.deleteUser({
+				body: {
+					password: "x".repeat(129),
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+});
