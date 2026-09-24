@@ -2,4 +2,4 @@
 "auth": patch
 ---
 
-Add a read-only `check-schema` command that fails builds when Better Auth cannot write to the configured schema.
+Add a read-only `check-schema` command for explicitly validating supported adapter schemas in build pipelines.
