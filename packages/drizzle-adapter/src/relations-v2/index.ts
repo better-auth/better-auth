@@ -1193,26 +1193,24 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
-		if (checksSchema(options)) {
-			registerSchemaCheck(
-				instance,
-				createSchemaCheck(async () => {
-					const relations: Record<string, { table: unknown }> =
-						db._?.relations ?? {};
-					const schema = {
-						...db._?.fullSchema,
-						...Object.fromEntries(
-							Object.entries(relations).map(([name, relation]) => [
-								name,
-								relation.table,
-							]),
-						),
-						...config.schema,
-					};
-					return findDrizzleSchemaProblems(schema, options, config.usePlural);
-				}, "drizzle"),
-			);
-		}
+		const schemaCheck = createSchemaCheck(() => {
+			const relations: Record<string, { table: unknown }> =
+				db._?.relations ?? {};
+			const schema = {
+				...db._?.fullSchema,
+				...Object.fromEntries(
+					Object.entries(relations).map(([name, relation]) => [
+						name,
+						relation.table,
+					]),
+				),
+				...config.schema,
+			};
+			return findDrizzleSchemaProblems(schema, options, config.usePlural);
+		}, "drizzle");
+		registerSchemaCheck(instance, schemaCheck, {
+			runtimeEnabled: checksSchema(options),
+		});
 		return instance;
 	};
 };

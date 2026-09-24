@@ -1061,21 +1061,19 @@ export const kyselyAdapter = (
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
-		if (checksSchema(options)) {
-			registerSchemaCheck(
-				instance,
-				createSchemaCheck(
-					() =>
-						findSchemaProblems(
-							db,
-							config?.type,
-							getExpectedSchema(options, { usePlural: config?.usePlural }),
-						),
-					"database",
-					options.database,
+		const schemaCheck = createSchemaCheck(
+			() =>
+				findSchemaProblems(
+					db,
+					config?.type,
+					getExpectedSchema(options, { usePlural: config?.usePlural }),
 				),
-			);
-		}
+			"database",
+			options.database,
+		);
+		registerSchemaCheck(instance, schemaCheck, {
+			runtimeEnabled: checksSchema(options),
+		});
 		return instance;
 	};
 };

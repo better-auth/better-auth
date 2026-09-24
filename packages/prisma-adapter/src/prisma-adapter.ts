@@ -853,15 +853,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const dataModel = readPrismaDataModel(prisma);
-		if (dataModel && checksSchema(options)) {
-			registerSchemaCheck(
-				instance,
-				createSchemaCheck(
-					async () =>
-						findPrismaSchemaProblems(dataModel, options, config.usePlural),
-					"prisma",
-				),
+		if (dataModel) {
+			const schemaCheck = createSchemaCheck(
+				() => findPrismaSchemaProblems(dataModel, options, config.usePlural),
+				"prisma",
 			);
+			registerSchemaCheck(instance, schemaCheck, {
+				runtimeEnabled: checksSchema(options),
+			});
 		}
 		return instance;
 	};
