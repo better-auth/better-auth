@@ -12,7 +12,7 @@ For an introduction to Prisma ORM, see
 <Callout type="info">
   This guide uses Prisma 7 and PostgreSQL. If you use Prisma 6 or earlier, a
   driver adapter is optional and your existing Prisma Client setup can remain
-  unchanged.
+  unchanged. Prisma 8 (Prisma Next) is not supported yet.
 </Callout>
 
 ## Installation
@@ -58,15 +58,21 @@ The examples below use the following project structure:
 
 ### Configure Prisma
 
-If you are starting a new Prisma project, initialize it with PostgreSQL and an
-explicit Prisma Client output path:
+If you are starting a new Prisma project, install the Prisma 7 CLI:
+
+```package-install title="Install Prisma CLI"
+-D prisma@7
+```
+
+Then initialize it with PostgreSQL and an explicit Prisma Client output path:
 
 ```package-install title="Initialize Prisma"
 npx prisma init --datasource-provider postgresql --output ../src/generated/prisma
 ```
 
-This creates `prisma/schema.prisma`, `prisma.config.ts`, and `.env`. Set
-`DATABASE_URL` in `.env` to your PostgreSQL connection string.
+This creates `prisma/schema.prisma`, `prisma.config.ts` (`prisma7.config.ts`
+on Prisma 7.10 and later), and `.env`. Set `DATABASE_URL` in `.env` to your
+PostgreSQL connection string.
 
 If Prisma is already configured in your project, keep your existing datasource
 and output path and skip this initialization command.
