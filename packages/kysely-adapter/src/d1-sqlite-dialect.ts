@@ -19,18 +19,15 @@ import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 } from "./kysely-migration-tables";
-import type { PragmaTableInfo } from "./sqlite-introspector";
+import type {
+	PragmaIndexListRow,
+	PragmaTableInfo,
+} from "./sqlite-introspector";
 import {
 	sqliteIntegerPrimaryKeyColumn,
 	toSqliteTableMetadata,
 } from "./sqlite-introspector";
 import type { DatabaseIndexIntrospector } from "./types";
-
-interface D1IndexListRow {
-	name: string;
-	partial: number;
-	unique: number;
-}
 
 interface D1IndexInfoRow {
 	name: string | null;
@@ -46,7 +43,7 @@ export function createD1IndexIntrospector(
 ): DatabaseIndexIntrospector {
 	return async (tableNames) => {
 		if (tableNames.length === 0) return [];
-		const indexLists = await database.batch<D1IndexListRow>(
+		const indexLists = await database.batch<PragmaIndexListRow>(
 			tableNames.map((tableName) =>
 				database.prepare(
 					`PRAGMA index_list(${quoteSqliteStringLiteral(tableName)})`,
@@ -204,8 +201,8 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 			.where("name", "not like", "sqlite_%")
 			// @ts-expect-error - D1 internal tables
 			.where("name", "not like", "_cf_%")
-			.select(["name", "type", "sql"])
-			.$castTo<{ name: string; type: string; sql: string | null }>();
+			.select(["name", "type"])
+			.$castTo<{ name: string; type: string }>();
 
 		if (!options.withInternalKyselyTables) {
 			query = query
@@ -225,20 +222,33 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 			this.#d1.prepare("SELECT * FROM pragma_table_info(?)").bind(table.name),
 		);
 		const batchResults = await this.#d1.batch<PragmaTableInfo>(statements);
+		const rowidCandidates = tables.flatMap((table, index) => {
+			const column = sqliteIntegerPrimaryKeyColumn(
+				batchResults[index]?.results ?? [],
+			);
+			return column ? [{ index, tableName: table.name, column }] : [];
+		});
+		const indexResults = rowidCandidates.length
+			? await this.#d1.batch<PragmaIndexListRow>(
+					rowidCandidates.map(({ tableName }) =>
+						this.#d1.prepare(
+							`PRAGMA index_list(${quoteSqliteStringLiteral(tableName)})`,
+						),
+					),
+				)
+			: [];
+		const generatedColumns = new Map(
+			rowidCandidates
+				.filter(
+					(_, index) =>
+						!indexResults[index]?.results?.some((row) => row.origin === "pk"),
+				)
+				.map(({ index, column }) => [index, column]),
+		);
 
 		return tables.map((table, index) => {
 			const columns = batchResults[index]?.results ?? [];
-			const declared = table.sql
-				?.split(/[(),]/)
-				.find((part) => part.toLowerCase().includes("autoincrement"))
-				?.split(/\s+/)
-				.filter(Boolean)[0]
-				?.replace(/["`]/g, "");
-			return toSqliteTableMetadata(
-				table,
-				columns,
-				declared || sqliteIntegerPrimaryKeyColumn(columns),
-			);
+			return toSqliteTableMetadata(table, columns, generatedColumns.get(index));
 		});
 	}
 

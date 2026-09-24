@@ -150,6 +150,43 @@ it("validates SQLite without dialect introspection", async ({
 });
 
 /**
+ * @see https://www.sqlite.org/lang_createtable.html#rowids_and_the_integer_primary_key
+ */
+it("distinguishes generated and required SQLite primary keys", async ({
+	onTestFinished,
+}) => {
+	const sqlite = new DatabaseSync(":memory:");
+	sqlite.exec(
+		"CREATE TABLE generated (seq INTEGER PRIMARY KEY NOT NULL, id TEXT NOT NULL UNIQUE)",
+	);
+	sqlite.exec(
+		"CREATE TABLE descending (seq INTEGER PRIMARY KEY DESC NOT NULL, id TEXT NOT NULL UNIQUE)",
+	);
+	sqlite.exec(
+		"CREATE TABLE without_rowid (seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE) WITHOUT ROWID",
+	);
+	const db = new Kysely<unknown>({
+		dialect: new NodeSqliteDialect({ database: sqlite }),
+	});
+	onTestFinished(() => db.destroy());
+
+	const findings = await findSchemaProblems(db, "sqlite", {
+		generated: { fields: {} },
+		descending: { fields: {} },
+		without_rowid: { fields: {} },
+	});
+
+	expect(findings).toEqual([
+		{ kind: "unexpected-required-column", table: "descending", column: "seq" },
+		{
+			kind: "unexpected-required-column",
+			table: "without_rowid",
+			column: "seq",
+		},
+	]);
+});
+
+/**
  * @see https://www.postgresql.org/docs/current/ddl-schemas.html#DDL-SCHEMAS-PATH
  */
 describe("PostgreSQL schema validation", () => {

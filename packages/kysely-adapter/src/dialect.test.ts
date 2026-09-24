@@ -231,6 +231,74 @@ describe("D1 table introspection", () => {
 			"session",
 		]);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10551
+	 * @see https://www.sqlite.org/pragma.html#pragma_index_list
+	 */
+	it("checks primary-key indexes only for INTEGER PRIMARY KEY candidates", async ({
+		onTestFinished,
+	}) => {
+		const all = vi.fn(async () => ({
+			results: ["plain's", "descending", "text"].map((name) => ({
+				name,
+				type: "table",
+			})),
+			meta: { changes: 0, last_row_id: 0 },
+		}));
+		const prepare = vi.fn((query: string) => ({
+			query,
+			bind: (tableName?: string) => ({ query, tableName, all }),
+		}));
+		const batch = vi
+			.fn()
+			.mockResolvedValueOnce(
+				["plain's", "descending", "text"].map((name) => ({
+					results: [
+						{
+							cid: 0,
+							name: "id",
+							type: name === "text" ? "TEXT" : "INTEGER",
+							notnull: 0,
+							dflt_value: null,
+							pk: 1,
+						},
+					],
+				})),
+			)
+			.mockResolvedValueOnce([
+				{ results: [] },
+				{ results: [{ origin: "pk" }] },
+			]);
+		const database = {
+			batch,
+			exec: vi.fn(),
+			prepare,
+		} as unknown as D1Database;
+		const db = new Kysely<unknown>({
+			dialect: new D1SqliteDialect({ database }),
+		});
+		onTestFinished(() => db.destroy());
+
+		const tables = await db.introspection.getTables();
+
+		expect(
+			tables.map((table) => [table.name, table.columns[0]?.isAutoIncrementing]),
+		).toEqual([
+			["plain's", true],
+			["descending", false],
+			["text", false],
+		]);
+		expect(batch).toHaveBeenCalledTimes(2);
+		expect(
+			batch.mock.calls[1]?.[0].map(
+				(statement: { query: string }) => statement.query,
+			),
+		).toEqual([
+			"PRAGMA index_list('plain''s')",
+			"PRAGMA index_list('descending')",
+		]);
+	});
 });
 
 describe("createKyselyAdapter schema namespace", () => {
