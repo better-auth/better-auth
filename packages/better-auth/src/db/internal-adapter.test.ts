@@ -5,6 +5,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
@@ -17,6 +18,7 @@ import type {
 	User,
 } from "../types";
 import { getMigrations } from "./get-migration";
+import { getWithHooks } from "./with-hooks";
 
 function createStringSecondaryStorage(
 	store: Map<string, string>,
@@ -2473,6 +2475,145 @@ describe("internal adapter test", async () => {
  * @see https://github.com/better-auth/better-auth/issues/11330
  */
 describe("concurrent delete hooks", () => {
+	it("does not consume a row when a required delete.before snapshot is missing", async () => {
+		const before = vi.fn();
+		const after = vi.fn();
+		const consumeOne = vi.fn().mockResolvedValue({ id: "new-row" });
+		const adapter = {
+			findMany: vi.fn().mockResolvedValue([]),
+			consumeOne,
+		} as unknown as DBAdapter<BetterAuthOptions>;
+		const { deleteWithHooks } = getWithHooks(adapter, {
+			options: {},
+			hooks: [
+				{
+					source: "test",
+					hooks: { session: { delete: { before, after } } },
+				},
+			],
+		});
+
+		const result = await deleteWithHooks(
+			[{ field: "id", value: "new-row" }],
+			"session",
+			undefined,
+			true,
+		);
+
+		expect(result).toBeNull();
+		expect(before).not.toHaveBeenCalled();
+		expect(consumeOne).not.toHaveBeenCalled();
+		expect(after).not.toHaveBeenCalled();
+	});
+
+	it("does not consume a row when the required delete.before read fails", async () => {
+		const consumeOne = vi.fn().mockResolvedValue({ id: "new-row" });
+		const adapter = {
+			findMany: vi.fn().mockRejectedValue(new Error("read failed")),
+			consumeOne,
+		} as unknown as DBAdapter<BetterAuthOptions>;
+		const { deleteWithHooks } = getWithHooks(adapter, {
+			options: {},
+			hooks: [
+				{
+					source: "test",
+					hooks: { session: { delete: { before: vi.fn() } } },
+				},
+			],
+		});
+
+		await expect(
+			deleteWithHooks(
+				[{ field: "id", value: "new-row" }],
+				"session",
+				undefined,
+				true,
+			),
+		).rejects.toThrow("read failed");
+		expect(consumeOne).not.toHaveBeenCalled();
+	});
+
+	it("runs user delete.after only for the caller that removes the row", async () => {
+		let arrived = 0;
+		let releaseBoth = () => {};
+		const bothRead = new Promise<void>((resolve) => {
+			releaseBoth = resolve;
+		});
+		const after = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				user: {
+					delete: {
+						before: async () => {
+							arrived++;
+							if (arrived === 2) releaseBoth();
+							await bothRead;
+						},
+						after,
+					},
+				},
+			},
+		});
+		const context = await auth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		expect(user).not.toBeNull();
+
+		await Promise.all([
+			context.internalAdapter.deleteUser(user!.user.id),
+			context.internalAdapter.deleteUser(user!.user.id),
+		]);
+
+		expect(arrived).toBe(2);
+		expect(after).toHaveBeenCalledTimes(1);
+		expect(after).toHaveBeenCalledWith(
+			expect.objectContaining({ id: user!.user.id }),
+			undefined,
+		);
+	});
+
+	it("runs account delete.after only for the caller that removes the row", async () => {
+		let arrived = 0;
+		let releaseBoth = () => {};
+		const bothRead = new Promise<void>((resolve) => {
+			releaseBoth = resolve;
+		});
+		const after = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				account: {
+					delete: {
+						before: async () => {
+							arrived++;
+							if (arrived === 2) releaseBoth();
+							await bothRead;
+						},
+						after,
+					},
+				},
+			},
+		});
+		const context = await auth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		expect(user).not.toBeNull();
+		const account = await context.internalAdapter.createAccount({
+			userId: user!.user.id,
+			providerId: "test-provider",
+			accountId: "concurrent-delete-account",
+		});
+
+		await Promise.all([
+			context.internalAdapter.deleteAccount(account.id),
+			context.internalAdapter.deleteAccount(account.id),
+		]);
+
+		expect(arrived).toBe(2);
+		expect(after).toHaveBeenCalledTimes(1);
+		expect(after).toHaveBeenCalledWith(
+			expect.objectContaining({ id: account.id }),
+			undefined,
+		);
+	});
+
 	it("runs session delete.after only for the caller that removes the row", async () => {
 		let arrived = 0;
 		let releaseBoth = () => {};
