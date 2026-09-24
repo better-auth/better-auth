@@ -12,7 +12,7 @@ import { getTestInstance } from "better-auth/test";
 import type { APIError } from "better-call";
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
@@ -44,6 +44,7 @@ describe("oauth userinfo", async () => {
 	});
 
 	const { headers, user } = await signInWithTestUser();
+	const authContext = await auth.$context;
 	const client = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
@@ -733,5 +734,79 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data?.name).toBeUndefined();
 		expect(userinfo.data?.given_name).toBeUndefined();
 		expect(userinfo.data?.family_name).toBeUndefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11193
+	 */
+	it.each([
+		{
+			caseName: "null",
+			name: null,
+			expectedName: undefined,
+			expectedGiven: undefined,
+			expectedFamily: undefined,
+		},
+		{
+			caseName: "undefined",
+			name: undefined,
+			expectedName: undefined,
+			expectedGiven: undefined,
+			expectedFamily: undefined,
+		},
+		{
+			caseName: "single-word",
+			name: "Single",
+			expectedName: "Single",
+			expectedGiven: undefined,
+			expectedFamily: undefined,
+		},
+		{
+			caseName: "multi-word",
+			name: "First Last",
+			expectedName: "First Last",
+			expectedGiven: "First",
+			expectedFamily: "Last",
+		},
+	])("resolves profile name claims when user.name is $caseName", async ({
+		name,
+		expectedName,
+		expectedGiven,
+		expectedFamily,
+	}) => {
+		const tokens = await getTokens({
+			scopes: ["openid", "profile"],
+		});
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const findUserSpy = vi
+			.spyOn(authContext.internalAdapter, "findUserById")
+			.mockResolvedValue({
+				...user,
+				name: name as unknown as string,
+			});
+
+		try {
+			const userinfo = await client.$fetch<Record<string, string>>(
+				"/oauth2/userinfo",
+				{
+					headers: {
+						authorization: tokens.data?.access_token ?? "",
+					},
+				},
+			);
+			expect(userinfo.error).toBeNull();
+			expect(userinfo.data).toMatchObject({
+				sub: user.id,
+				...(expectedName ? { name: expectedName } : {}),
+				...(expectedGiven ? { given_name: expectedGiven } : {}),
+				...(expectedFamily ? { family_name: expectedFamily } : {}),
+			});
+			expect(userinfo.data?.name).toBe(expectedName);
+			expect(userinfo.data?.given_name).toBe(expectedGiven);
+			expect(userinfo.data?.family_name).toBe(expectedFamily);
+		} finally {
+			findUserSpy.mockRestore();
+		}
 	});
 });
