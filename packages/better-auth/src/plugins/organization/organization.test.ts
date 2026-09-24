@@ -7,7 +7,7 @@ import type {
 	PreinitializedWritableAtom,
 } from "../../client";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
+import { getCookieCache, parseSetCookieHeader } from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
@@ -4247,20 +4247,46 @@ describe("acceptInvitation", async () => {
 			},
 		});
 
+		// Capture the Set-Cookie headers emitted by acceptInvitation so we can
+		// verify that the session_data cache cookie itself was refreshed (not
+		// just the database row). Without the fix, session_data is never written
+		// here and getCookieCache returns null even though getSession() would
+		// still succeed via DB fallback.
+		let acceptResponseCookieHeader: string | null = null;
 		await client.organization.acceptInvitation({
 			invitationId: invite.data!.id,
 			fetchOptions: {
 				headers: userAHeaders,
-				onSuccess: cookieSetter(userAHeaders),
+				onSuccess(ctx) {
+					acceptResponseCookieHeader = ctx.response.headers.get("set-cookie");
+					cookieSetter(userAHeaders)(ctx);
+				},
 			},
 		});
 
-		const session = await client.getSession({
-			fetchOptions: {
-				headers: userAHeaders,
-			},
-		});
+		// Parse the session_data value out of the acceptInvitation response and
+		// decode it directly — this proves the cookie cache was refreshed by
+		// the endpoint, independently of any DB fallback in getSession().
+		const responseCookies = parseSetCookieHeader(
+			acceptResponseCookieHeader || "",
+		);
+		const sessionDataValue = responseCookies.get(
+			"better-auth.session_data",
+		)?.value;
+		expect(
+			sessionDataValue,
+			"acceptInvitation must set a fresh session_data cache cookie",
+		).toBeTruthy();
 
-		expect(session.data?.session?.activeOrganizationId).toBe(org.data?.id);
+		const cookieCacheHeaders = new Headers({
+			cookie: `better-auth.session_data=${sessionDataValue}`,
+		});
+		const cache = await getCookieCache(cookieCacheHeaders, {
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+		});
+		expect(
+			cache?.session?.activeOrganizationId,
+			"session_data cache cookie must contain the updated activeOrganizationId",
+		).toBe(org.data?.id);
 	});
 });
