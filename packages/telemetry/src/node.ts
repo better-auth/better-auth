@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
@@ -45,7 +46,10 @@ async function getPackageVersion(pkg: string): Promise<string | undefined> {
 	try {
 		const cwd = process.cwd();
 		if (!cwd) throw new Error("no-cwd");
-		const pkgJsonPath = path.join(cwd, "node_modules", pkg, "package.json");
+		// A joined node_modules path makes file tracers ship every package.json.
+		const pkgJsonPath = createRequire(path.join(cwd, "package.json")).resolve(
+			`${pkg}/package.json`,
+		);
 		const raw = await fsPromises.readFile(pkgJsonPath, "utf-8");
 		const json = JSON.parse(raw);
 		const resolved =
