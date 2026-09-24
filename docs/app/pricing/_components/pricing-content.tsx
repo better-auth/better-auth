@@ -60,7 +60,7 @@ const tiers: readonly Tier[] = [
 			"Unlimited seats",
 			["20,000 audit logs / month", "then $0.0001 per event"],
 			["10,000 security detections / month", "then $0.001 per event"],
-			"Self-service SSO",
+			["Self-service SSO", "1 connection, then $50/month per connection"],
 			["Directory Sync", "1 connection, then $50/month per connection"],
 			["Transactional email & SMS", "$0.001 per email, $0.09 per SMS"],
 			"Email templates & abuse protection",
@@ -152,7 +152,11 @@ const compareSections: readonly CompareSection[] = [
 			},
 			{
 				label: "Self-service SSO",
-				values: [false, "Included", "Custom"],
+				values: [
+					false,
+					["1 connection", "then $50/month per connection"],
+					"Custom",
+				],
 			},
 			{
 				label: "Directory Sync",
