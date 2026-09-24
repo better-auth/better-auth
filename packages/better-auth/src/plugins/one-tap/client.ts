@@ -123,11 +123,11 @@ export interface GoogleOneTapOptions {
 	 * passive: shows the One Tap prompt, rendered by the browser in a corner of
 	 * the page. It can be shown without a user gesture.
 	 *
-	 * active: shows the browser's centered account chooser, so it can be wired
-	 * to your own sign-in button. It requires FedCM support and a user gesture,
-	 * and falls back to the passive prompt when FedCM is unavailable.
+	 * active: turns the rendered Sign in with Google button into the FedCM
+	 * button flow, so clicking it opens the browser's centered account chooser.
+	 * It only applies together with the `button` option.
 	 *
-	 * @see {@link https://developers.google.com/privacy-sandbox/cookies/fedcm}
+	 * @see {@link https://developers.google.com/identity/gsi/web/guides/fedcm-migration}
 	 * @default "passive"
 	 */
 	mode?: ("passive" | "active") | undefined;
@@ -171,10 +171,6 @@ export interface GoogleOneTapActionOptions
 	/**
 	 * Optional callback that receives the prompt notification if (or when) the prompt is dismissed or skipped.
 	 * This lets you render an alternative UI (e.g. a Google Sign-In button) to restart the process.
-	 *
-	 * In `active` mode it receives the `DOMException` the browser rejected the
-	 * account chooser with, e.g. `NotAllowedError` when the user closes it, or
-	 * no argument when the browser resolves the chooser without a credential.
 	 */
 	onPromptNotification?: ((notification?: any | undefined) => void) | undefined;
 	nonce?: string | undefined;
@@ -199,72 +195,8 @@ export interface GoogleOneTapActionOptions
 
 let isRequestInProgress = false;
 
-const GOOGLE_FEDCM_CONFIG_URL = "https://accounts.google.com/gsi/fedcm.json";
-const GOOGLE_FEDCM_FIELDS = ["name", "email", "picture"];
-const GOOGLE_FEDCM_SCOPE = "email profile openid";
-const GOOGLE_FEDCM_MISSING_NONCE = "not_provided";
-
-interface FedCMCredential extends Credential {
-	token?: string;
-}
-
 function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
-}
-
-function extractIdToken(token: string | undefined): string | undefined {
-	if (!token) {
-		return undefined;
-	}
-	try {
-		const parsed = JSON.parse(token) as { id_token?: unknown };
-		if (typeof parsed?.id_token === "string") {
-			return parsed.id_token;
-		}
-	} catch {
-		return token;
-	}
-	return token;
-}
-
-async function requestActiveModeIdToken({
-	clientId,
-	context,
-	nonce,
-	autoSelect,
-}: {
-	clientId: string;
-	context: "signin" | "signup" | "use";
-	nonce: string | undefined;
-	autoSelect: boolean | undefined;
-}): Promise<string | undefined> {
-	const request = {
-		mediation: autoSelect ? "optional" : "required",
-		identity: {
-			context,
-			mode: "active",
-			providers: [
-				{
-					configURL: GOOGLE_FEDCM_CONFIG_URL,
-					clientId,
-					nonce,
-					fields: GOOGLE_FEDCM_FIELDS,
-					params: {
-						response_type: "id_token",
-						scope: GOOGLE_FEDCM_SCOPE,
-						nonce: nonce ?? GOOGLE_FEDCM_MISSING_NONCE,
-						ss_domain: window.location.origin,
-					},
-				},
-			],
-		},
-	} as unknown as CredentialRequestOptions;
-
-	const credential = (await navigator.credentials.get(
-		request,
-	)) as FedCMCredential | null;
-
-	return extractIdToken(credential?.token);
 }
 
 /**
@@ -362,8 +294,17 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 						const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
 						const contextValue = context ?? options.context ?? "signin";
+						const modeValue = opts?.mode ?? options.mode ?? "passive";
 
 						const useFedCM = options.promptOptions?.fedCM !== false;
+						const activeModeOptions =
+							modeValue === "active"
+								? {
+										use_fedcm_for_button: true,
+										button_auto_select:
+											autoSelect ?? options.autoSelect ?? false,
+									}
+								: {};
 						window.google?.accounts.id.initialize({
 							client_id: options.clientId,
 							callback: async (response: { credential: string }) => {
@@ -380,6 +321,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							nonce: opts?.nonce,
 							itp_support: true,
 							use_fedcm_for_prompt: useFedCM,
+							...activeModeOptions,
 							...options.additionalOptions,
 						});
 
@@ -420,35 +362,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					const modeValue = opts?.mode ?? options.mode ?? "passive";
 
 					if (modeValue === "active") {
-						if (!isFedCMSupported()) {
-							console.warn(
-								"Google One Tap: active mode needs FedCM support, falling back to the passive prompt.",
-							);
-						} else {
-							isRequestInProgress = true;
-							try {
-								let idToken: string | undefined;
-								try {
-									idToken = await requestActiveModeIdToken({
-										clientId: options.clientId,
-										context: contextValue,
-										nonce: opts?.nonce,
-										autoSelect: autoSelect ?? options.autoSelect,
-									});
-								} catch (error) {
-									opts?.onPromptNotification?.(error);
-									return;
-								}
-								if (idToken) {
-									await callback(idToken);
-								} else {
-									opts?.onPromptNotification?.();
-								}
-							} finally {
-								isRequestInProgress = false;
-							}
-							return;
-						}
+						console.warn(
+							"Google One Tap: active mode is the FedCM button flow, so it needs the `button` option. Falling back to the passive prompt.",
+						);
 					}
 
 					isRequestInProgress = true;

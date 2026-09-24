@@ -825,19 +825,24 @@ describe("oneTapClient types", () => {
 });
 
 describe("one-tap active mode", async () => {
-	const credentialsGet = vi.fn();
+	const initialize = vi.fn();
+	const renderButton = vi.fn();
 
-	const stubBrowser = ({ fedCM = true }: { fedCM?: boolean } = {}) => {
+	const stubBrowser = ({ gsi = true }: { gsi?: boolean } = {}) => {
 		vi.stubGlobal("window", {
 			document: {},
-			location: { origin: "http://localhost:3000" },
-			...(fedCM ? { IdentityCredential: class {} } : {}),
+			...(gsi
+				? {
+						googleScriptInitialized: true,
+						google: { accounts: { id: { initialize, renderButton } } },
+					}
+				: {}),
 		});
-		vi.stubGlobal("navigator", { credentials: { get: credentialsGet } });
 	};
 
 	afterEach(() => {
-		credentialsGet.mockReset();
+		initialize.mockReset();
+		renderButton.mockReset();
 		vi.unstubAllGlobals();
 	});
 
@@ -858,67 +863,85 @@ describe("one-tap active mode", async () => {
 			)
 		).client;
 
-	it("requests the account chooser in active mode and sends the id token", async () => {
+	it("enables the FedCM button flow in active mode", async () => {
 		const client = await getClient();
 		stubBrowser();
-		credentialsGet.mockResolvedValue({ token: "stub-id-token" });
 
-		await client.oneTap({ mode: "active", fetchOptions: {} });
-
-		expect(credentialsGet).toHaveBeenCalledWith(
-			expect.objectContaining({
-				mediation: "required",
-				identity: expect.objectContaining({
-					mode: "active",
-					context: "signin",
-					providers: [
-						expect.objectContaining({
-							configURL: "https://accounts.google.com/gsi/fedcm.json",
-							clientId: "test-client",
-							params: expect.objectContaining({
-								response_type: "id_token",
-								scope: "email profile openid",
-							}),
-						}),
-					],
-				}),
-			}),
-		);
-		expect(jwtVerify).toHaveBeenCalledWith(
-			"stub-id-token",
-			expect.any(Object),
-			expect.objectContaining({ audience: "test-client" }),
-		);
-	});
-
-	it("unwraps the id token when the credential carries a JSON payload", async () => {
-		const client = await getClient();
-		stubBrowser();
-		credentialsGet.mockResolvedValue({
-			token: JSON.stringify({ id_token: "stub-id-token" }),
+		await client.oneTap({
+			mode: "active",
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
 		});
 
-		await client.oneTap({ mode: "active", fetchOptions: {} });
-
-		expect(jwtVerify).toHaveBeenCalledWith(
-			"stub-id-token",
-			expect.any(Object),
-			expect.objectContaining({ audience: "test-client" }),
-		);
-	});
-
-	it("uses the account chooser when active mode is set on the plugin", async () => {
-		const client = await getClient("active");
-		stubBrowser();
-		credentialsGet.mockResolvedValue({ token: "stub-id-token" });
-
-		await client.oneTap({ fetchOptions: {} });
-
-		expect(credentialsGet).toHaveBeenCalledWith(
+		expect(initialize).toHaveBeenCalledWith(
 			expect.objectContaining({
-				identity: expect.objectContaining({ mode: "active" }),
+				client_id: "test-client",
+				use_fedcm_for_button: true,
+				button_auto_select: false,
 			}),
 		);
+		expect(renderButton).toHaveBeenCalled();
+	});
+
+	it("enables the FedCM button flow when active mode is set on the plugin", async () => {
+		const client = await getClient("active");
+		stubBrowser();
+
+		await client.oneTap({
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.objectContaining({ use_fedcm_for_button: true }),
+		);
+	});
+
+	it("carries autoSelect over to the FedCM button flow", async () => {
+		const client = await getClient();
+		stubBrowser();
+
+		await client.oneTap({
+			mode: "active",
+			autoSelect: true,
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.objectContaining({ button_auto_select: true }),
+		);
+	});
+
+	it("leaves the button flow untouched in passive mode", async () => {
+		const client = await getClient();
+		stubBrowser();
+
+		await client.oneTap({
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.not.objectContaining({ use_fedcm_for_button: true }),
+		);
+	});
+
+	it("verifies the id token the FedCM button returns", async () => {
+		const client = await getClient();
+		stubBrowser();
+
+		await client.oneTap({
+			mode: "active",
+			button: { container: {} as HTMLElement },
+			fetchOptions: {},
+		});
+
+		const config = initialize.mock.calls[0]![0] as {
+			callback: (response: { credential: string }) => Promise<void>;
+		};
+		await config.callback({ credential: "stub-id-token" });
+
 		expect(jwtVerify).toHaveBeenCalledWith(
 			"stub-id-token",
 			expect.any(Object),
@@ -926,9 +949,9 @@ describe("one-tap active mode", async () => {
 		);
 	});
 
-	it("falls back to the passive prompt when FedCM is unavailable", async () => {
+	it("falls back to the passive prompt when active mode is used without a button", async () => {
 		const client = await getClient();
-		stubBrowser({ fedCM: false });
+		stubBrowser({ gsi: false });
 		vi.stubGlobal("document", {
 			createElement: () => ({}),
 			head: {
@@ -943,61 +966,11 @@ describe("one-tap active mode", async () => {
 		).rejects.toThrow("Failed to load Google Identity Services script");
 
 		expect(warn).toHaveBeenCalledWith(
-			expect.stringContaining("active mode needs FedCM support"),
+			expect.stringContaining("needs the `button` option"),
 		);
-		expect(credentialsGet).not.toHaveBeenCalled();
+		expect(initialize).not.toHaveBeenCalled();
 
 		warn.mockRestore();
 		error.mockRestore();
-	});
-
-	it("does not report a failed callback as a dismissed chooser", async () => {
-		const client = await getClient();
-		stubBrowser();
-		credentialsGet.mockResolvedValue({ token: "stub-id-token" });
-		vi.mocked(jwtVerify).mockRejectedValueOnce(new Error("bad signature"));
-		const onPromptNotification = vi.fn();
-
-		await client.oneTap({
-			mode: "active",
-			onPromptNotification,
-			fetchOptions: {},
-		});
-
-		expect(jwtVerify).toHaveBeenCalled();
-		expect(onPromptNotification).not.toHaveBeenCalled();
-	});
-
-	it("reports a chooser that resolves without a credential", async () => {
-		const client = await getClient();
-		stubBrowser();
-		credentialsGet.mockResolvedValue(null);
-		const onPromptNotification = vi.fn();
-
-		await client.oneTap({
-			mode: "active",
-			onPromptNotification,
-			fetchOptions: {},
-		});
-
-		expect(onPromptNotification).toHaveBeenCalled();
-		expect(jwtVerify).not.toHaveBeenCalled();
-	});
-
-	it("reports a dismissed chooser through onPromptNotification", async () => {
-		const client = await getClient();
-		stubBrowser();
-		const dismissed = new Error("NotAllowedError");
-		credentialsGet.mockRejectedValue(dismissed);
-		const onPromptNotification = vi.fn();
-
-		await client.oneTap({
-			mode: "active",
-			onPromptNotification,
-			fetchOptions: {},
-		});
-
-		expect(onPromptNotification).toHaveBeenCalledWith(dismissed);
-		expect(jwtVerify).not.toHaveBeenCalled();
 	});
 });
