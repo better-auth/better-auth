@@ -13,6 +13,9 @@ const execute = promisify(execFile);
 const configPath = fileURLToPath(
 	new URL("./fixtures/check-schema-auth.ts", import.meta.url),
 );
+const runtimeConfigPath = fileURLToPath(
+	new URL("./fixtures/check-schema-runtime-auth.ts", import.meta.url),
+);
 
 beforeAll(() => {
 	if (!fs.existsSync(cliPath)) {
@@ -70,5 +73,39 @@ describe("check", () => {
 			code: 1,
 			stderr: expect.stringContaining("Database schema mismatch"),
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11382
+	 */
+	it("prints a schema mismatch once when runtime validation is enabled", async () => {
+		const result = await new Promise<{ error: Error | null; stderr: string }>(
+			(resolve) => {
+				execFile(
+					process.execPath,
+					[
+						cliPath,
+						"check",
+						"schema",
+						"--cwd",
+						path.dirname(runtimeConfigPath),
+						"--config",
+						runtimeConfigPath,
+					],
+					{
+						cwd: path.dirname(runtimeConfigPath),
+						timeout: 30_000,
+						env: {
+							...process.env,
+							BETTER_AUTH_TELEMETRY_DISABLED: "true",
+						},
+					},
+					(error, _stdout, stderr) => resolve({ error, stderr }),
+				);
+			},
+		);
+
+		expect(result.error).toMatchObject({ code: 1 });
+		expect(result.stderr.match(/Database schema mismatch/g)).toHaveLength(1);
 	});
 });
