@@ -349,6 +349,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			function getJoinRelationKey(
 				baseModel: string,
 				joinModel: string,
+				baseModelKey: string,
+				joinModelKey: string,
 				relationKeys: ReadonlySet<string> | undefined,
 				isUnique: boolean,
 			) {
@@ -356,6 +358,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return getOneToOneRelationKey({
 						baseModel,
 						joinModel,
+						baseModelKey,
+						joinModelKey,
 						relationKeys,
 						schema: baSchema,
 						getDefaultModelName,
@@ -367,6 +371,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			}
 			const withReturning = async (
 				model: string,
+				modelKey: string,
 				builder: any,
 				data: Record<string, any>,
 				where?: Where[] | undefined,
@@ -398,7 +403,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return w;
 					});
 
-					const clause = convertWhereClause(updatedWhere, model);
+					const clause = convertWhereClause(updatedWhere, model, modelKey);
 					const res = await db
 						.select()
 						.from(schemaModel)
@@ -445,11 +450,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					// 4. Unique column lookup via Better Auth schema
-					const modelSchema = baSchema[getDefaultModelName(model)]?.fields;
+					const modelSchema = baSchema[modelKey]?.fields;
 					if (modelSchema) {
 						for (const [fieldKey, fieldAttr] of Object.entries(modelSchema)) {
 							if (!fieldAttr.unique) continue;
-							const dbFieldName = getFieldName({ model, field: fieldKey });
+							const dbFieldName = getFieldName({
+								model: modelKey,
+								field: fieldKey,
+							});
 							const val = data[dbFieldName];
 							if (val === undefined || val === null) continue;
 							if (!schemaModel[dbFieldName]) continue;
@@ -497,9 +505,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					? fetchInserted(db)
 					: db.transaction(fetchInserted);
 			};
-			function resolveColumn(model: string, w: Where) {
+			function resolveColumn(model: string, modelKey: string, w: Where) {
 				const schemaModel = getSchema(model);
-				const field = getFieldName({ model, field: w.field });
+				const field = getFieldName({ model: modelKey, field: w.field });
 				if (!schemaModel[field]) {
 					throw new BetterAuthError(
 						`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
@@ -508,14 +516,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return { column: schemaModel[field], field };
 			}
 
-			function convertWhereClause(where: Where[], model: string) {
+			function convertWhereClause(
+				where: Where[],
+				model: string,
+				modelKey: string,
+			) {
 				if (!where) return [];
 				if (where.length === 1) {
 					const w = where[0];
 					if (!w) {
 						return [];
 					}
-					const { column } = resolveColumn(model, w);
+					const { column } = resolveColumn(model, modelKey, w);
 					return [applyWhereOperator(column, w, w.field, config.provider)];
 				}
 				const andGroup = where.filter(
@@ -525,13 +537,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				const andClause = and(
 					...andGroup.map((w) => {
-						const { column } = resolveColumn(model, w);
+						const { column } = resolveColumn(model, modelKey, w);
 						return applyWhereOperator(column, w, w.field, config.provider);
 					}),
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
-						const { column } = resolveColumn(model, w);
+						const { column } = resolveColumn(model, modelKey, w);
 						return applyWhereOperator(column, w, w.field, config.provider);
 					}),
 				);
@@ -542,7 +554,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return combined ? [combined] : [];
 			}
 
-			function convertNewWhereClause(where: Where[], model: string) {
+			function convertNewWhereClause(
+				where: Where[],
+				model: string,
+				modelKey: string,
+			) {
 				const schemaModel = getSchema(model);
 				if (!where || where.length === 0) {
 					return {};
@@ -558,7 +574,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				});
 
 				const convertWhereToColumn = (w: Where) => {
-					const field = getFieldName({ model, field: w.field });
+					const field = getFieldName({ model: modelKey, field: w.field });
 					if (!schemaModel[field]) {
 						throw new BetterAuthError(
 							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
@@ -703,16 +719,21 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			}
 
 			return {
-				async create({ model, data: values }) {
-					const schemaModel = getSchema(model);
-					checkMissingFields(schemaModel, model, values);
-					const builder = db.insert(schemaModel).values(values);
-					const returned = await withReturning(model, builder, values);
+				async create({ model, modelKey = model, data: values }) {
+					const table = getSchema(model);
+					checkMissingFields(table, modelKey, values);
+					const builder = db.insert(table).values(values);
+					const returned = await withReturning(
+						model,
+						modelKey,
+						builder,
+						values,
+					);
 					return returned;
 				},
-				async findOne({ model, where, select, join }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
+				async findOne({ model, modelKey = model, where, select, join }) {
+					const table = getSchema(model);
+					const clause = convertWhereClause(where, model, modelKey);
 
 					if (join) {
 						const queryModel = getQueryModel(model);
@@ -739,6 +760,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								const relationKey = getJoinRelationKey(
 									model,
 									joinModel,
+									modelKey,
+									joinAttr.modelKey ?? joinModel,
 									relationKeys,
 									isUnique,
 								);
@@ -750,14 +773,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									});
 								}
 							}
-							const clause = convertNewWhereClause(where, model);
+							const clause = convertNewWhereClause(where, model, modelKey);
 							const query = db.query[queryModel].findFirst({
 								where: clause,
 								columns:
 									select?.length && select.length > 0
 										? select.reduce(
 												(acc, field) => {
-													acc[getFieldName({ model, field })] = true;
+													acc[getFieldName({ model: modelKey, field })] = true;
 													return acc;
 												},
 												{} as Record<string, boolean>,
@@ -781,15 +804,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.select(
 							select?.length && select.length > 0
 								? select.reduce((acc, field) => {
-										const fieldName = getFieldName({ model, field });
+										const fieldName = getFieldName({
+											model: modelKey,
+											field,
+										});
 										return {
 											...acc,
-											[fieldName]: schemaModel[fieldName],
+											[fieldName]: table[fieldName],
 										};
 									}, {})
 								: undefined,
 						)
-						.from(schemaModel)
+						.from(table)
 						.where(...clause);
 
 					const res = await query;
@@ -797,9 +823,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, select, offset, join }) {
-					const schemaModel = getSchema(model);
-					const clause = where ? convertWhereClause(where, model) : [];
+				async findMany({
+					model,
+					modelKey = model,
+					where,
+					sortBy,
+					limit,
+					select,
+					offset,
+					join,
+				}) {
+					const table = getSchema(model);
+					const clause = where
+						? convertWhereClause(where, model, modelKey)
+						: [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
 					if (join) {
@@ -827,6 +864,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								const relationKey = getJoinRelationKey(
 									model,
 									joinModel,
+									modelKey,
+									joinAttr.modelKey ?? joinModel,
 									relationKeys,
 									isUnique,
 								);
@@ -841,20 +880,25 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							let orderBy: Record<string, "asc" | "desc"> | undefined =
 								undefined;
 							if (sortBy?.field) {
-								const fieldName = getFieldName({ model, field: sortBy.field });
+								const fieldName = getFieldName({
+									model: modelKey,
+									field: sortBy.field,
+								});
 								orderBy = {
 									[fieldName]: sortBy.direction === "desc" ? "desc" : "asc",
 								};
 							}
 
 							const query = db.query[queryModel].findMany({
-								where: where ? convertNewWhereClause(where, model) : undefined,
+								where: where
+									? convertNewWhereClause(where, model, modelKey)
+									: undefined,
 								with: includes,
 								columns:
 									select?.length && select.length > 0
 										? select.reduce(
 												(acc, field) => {
-													acc[getFieldName({ model, field })] = true;
+													acc[getFieldName({ model: modelKey, field })] = true;
 													return acc;
 												},
 												{} as Record<string, boolean>,
@@ -881,15 +925,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.select(
 							select?.length && select.length > 0
 								? select.reduce((acc, field) => {
-										const fieldName = getFieldName({ model, field });
+										const fieldName = getFieldName({
+											model: modelKey,
+											field,
+										});
 										return {
 											...acc,
-											[fieldName]: schemaModel[fieldName],
+											[fieldName]: table[fieldName],
 										};
 									}, {})
 								: undefined,
 						)
-						.from(schemaModel);
+						.from(table);
 
 					const effectiveLimit = limit;
 					const effectiveOffset = offset;
@@ -905,7 +952,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (sortBy?.field) {
 						builder = builder.orderBy(
 							sortFn(
-								schemaModel[getFieldName({ model, field: sortBy?.field })],
+								table[getFieldName({ model: modelKey, field: sortBy?.field })],
 							),
 						);
 					}
@@ -913,58 +960,66 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const res = await builder.where(...clause);
 					return res;
 				},
-				async count({ model, where }) {
-					const schemaModel = getSchema(model);
-					const clause = where ? convertWhereClause(where, model) : [];
+				async count({ model, modelKey = model, where }) {
+					const table = getSchema(model);
+					const clause = where
+						? convertWhereClause(where, model, modelKey)
+						: [];
 					const res = await db
 						.select({ count: count() })
-						.from(schemaModel)
+						.from(table)
 						.where(...clause);
 					return res[0].count;
 				},
-				async update({ model, where, update: values }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
+				async update({ model, modelKey = model, where, update: values }) {
+					const table = getSchema(model);
+					const clause = convertWhereClause(where, model, modelKey);
 					const builder = db
-						.update(schemaModel)
+						.update(table)
 						.set(values)
 						.where(...clause);
-					return await withReturning(model, builder, values as any, where);
+					return await withReturning(
+						model,
+						modelKey,
+						builder,
+						values as any,
+						where,
+					);
 				},
-				async updateMany({ model, where, update: values }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
+				async updateMany({ model, modelKey = model, where, update: values }) {
+					const table = getSchema(model);
+					const clause = convertWhereClause(where, model, modelKey);
 					const builder = db
-						.update(schemaModel)
+						.update(table)
 						.set(values)
 						.where(...clause);
 					const res = await builder;
 					return getAffectedRowCount(res, "updateMany", { model, where });
 				},
-				async delete({ model, where }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
+				async delete({ model, modelKey = model, where }) {
+					const table = getSchema(model);
+					const clause = convertWhereClause(where, model, modelKey);
+					const builder = db.delete(table).where(...clause);
 					return await builder;
 				},
-				async deleteMany({ model, where }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const builder = db.delete(schemaModel).where(...clause);
+				async deleteMany({ model, modelKey = model, where }) {
+					const table = getSchema(model);
+					const clause = convertWhereClause(where, model, modelKey);
+					const builder = db.delete(table).where(...clause);
 					const res = await builder;
 					return getAffectedRowCount(res, "deleteMany", { model, where });
 				},
-				async consumeOne({ model, where }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const idField = getFieldName({ model, field: "id" });
-					const idColumn = schemaModel[idField];
+				async consumeOne({ model, modelKey = model, where }) {
+					const table = getSchema(model);
+					const clause = convertWhereClause(where, model, modelKey);
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const idColumn = table[idField];
 
 					if (config.provider === "mysql") {
 						const claimFromTransaction = async (tx: DB) => {
 							const rows = await tx
 								.select()
-								.from(schemaModel)
+								.from(table)
 								.where(...clause)
 								.for("update")
 								.limit(1);
@@ -975,7 +1030,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								return null;
 							}
 							const delRes = await tx
-								.delete(schemaModel)
+								.delete(table)
 								.where(eq(idColumn, targetId))
 								.execute();
 							// This branch only runs for mysql, but route through the shared
@@ -996,25 +1051,25 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 					const targetIds = db
 						.select({ id: idColumn })
-						.from(schemaModel)
+						.from(table)
 						.where(...clause)
 						.limit(1);
 					const deleted = await db
-						.delete(schemaModel)
+						.delete(table)
 						.where(inArray(idColumn, targetIds))
 						.returning();
 					return (deleted[0] as any) ?? null;
 				},
-				async incrementOne({ model, where, increment, set }) {
-					const schemaModel = getSchema(model);
-					const clause = convertWhereClause(where, model);
-					const idField = getFieldName({ model, field: "id" });
-					const idColumn = schemaModel[idField];
+				async incrementOne({ model, modelKey = model, where, increment, set }) {
+					const table = getSchema(model);
+					const clause = convertWhereClause(where, model, modelKey);
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const idColumn = table[idField];
 
 					const assignments: Record<string, unknown> = {};
 					for (const [field, delta] of Object.entries(increment)) {
-						const columnName = getFieldName({ model, field });
-						const column = schemaModel[columnName];
+						const columnName = getFieldName({ model: modelKey, field });
+						const column = table[columnName];
 						if (!column) {
 							throw new BetterAuthError(
 								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
@@ -1024,8 +1079,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 					if (set) {
 						for (const [field, value] of Object.entries(set)) {
-							const columnName = getFieldName({ model, field });
-							if (!schemaModel[columnName]) {
+							const columnName = getFieldName({ model: modelKey, field });
+							if (!table[columnName]) {
 								throw new BetterAuthError(
 									`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 								);
@@ -1038,7 +1093,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						const mutateInTransaction = async (tx: DB) => {
 							const rows = await tx
 								.select()
-								.from(schemaModel)
+								.from(table)
 								.where(...clause)
 								.for("update")
 								.limit(1);
@@ -1049,13 +1104,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								return null;
 							}
 							await tx
-								.update(schemaModel)
+								.update(table)
 								.set(assignments)
 								.where(eq(idColumn, targetId))
 								.execute();
 							const updated = await tx
 								.select()
-								.from(schemaModel)
+								.from(table)
 								.where(eq(idColumn, targetId))
 								.limit(1)
 								.execute();
@@ -1071,11 +1126,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 					const targetIds = db
 						.select({ id: idColumn })
-						.from(schemaModel)
+						.from(table)
 						.where(...clause)
 						.limit(1);
 					const updated = await db
-						.update(schemaModel)
+						.update(table)
 						.set(assignments)
 						.where(inArray(idColumn, targetIds))
 						.returning();
