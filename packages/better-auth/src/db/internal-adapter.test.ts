@@ -2468,3 +2468,48 @@ describe("internal adapter test", async () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11330
+ */
+describe("concurrent delete hooks", () => {
+	it("runs session delete.after only for the caller that removes the row", async () => {
+		let arrived = 0;
+		let releaseBoth = () => {};
+		const bothRead = new Promise<void>((resolve) => {
+			releaseBoth = resolve;
+		});
+		const after = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: { enabled: true },
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => {
+							arrived++;
+							if (arrived === 2) releaseBoth();
+							await bothRead;
+						},
+						after,
+					},
+				},
+			},
+		});
+		const context = await auth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		expect(user).not.toBeNull();
+		const session = await context.internalAdapter.createSession(user!.user.id);
+
+		await Promise.all([
+			context.internalAdapter.deleteSession(session.token),
+			context.internalAdapter.deleteSession(session.token),
+		]);
+
+		expect(arrived).toBe(2);
+		expect(after).toHaveBeenCalledTimes(1);
+		expect(after).toHaveBeenCalledWith(
+			expect.objectContaining({ token: session.token }),
+			undefined,
+		);
+	});
+});

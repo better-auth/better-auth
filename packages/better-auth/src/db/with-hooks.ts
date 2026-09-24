@@ -260,7 +260,14 @@ export function getWithHooks(
 					executeMainFn?: boolean;
 			  }
 			| undefined,
+		atomicSingleRow = false,
 	) {
+		if (atomicSingleRow && !customDeleteFn) {
+			return consumeOneWithHooks<T>(model, where, async () =>
+				(await getCurrentAdapter(adapter)).consumeOne<T>({ model, where }),
+			);
+		}
+
 		const context = tryGetCurrentAuthEndpointContext();
 		let entityToDelete: T | null = null;
 
