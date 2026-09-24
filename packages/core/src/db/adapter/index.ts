@@ -359,6 +359,10 @@ export type JoinOption = {
 export type JoinConfig = {
 	[model: string]: {
 		/**
+		 * The canonical Better Auth model key.
+		 */
+		modelKey?: string | undefined;
+		/**
 		 * The joining column names.
 		 */
 		on: {
@@ -526,33 +530,44 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 
 export type CleanedWhere = Required<Where>;
 
+export type ModelTarget = {
+	/**
+	 * The physical model or table name used by the database adapter.
+	 */
+	model: string;
+	/**
+	 * The canonical Better Auth model key.
+	 */
+	modelKey?: string | undefined;
+};
+
 export interface CustomAdapter {
 	create: <T extends Record<string, any>>({
 		data,
 		model,
 		select,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		data: T;
 		select?: string[] | undefined;
 	}) => Promise<T>;
-	update: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-		update: T;
-	}) => Promise<T | null>;
-	updateMany: (data: {
-		model: string;
-		where: CleanedWhere[];
-		update: Record<string, any>;
-	}) => Promise<number>;
+	update: <T>(
+		data: ModelTarget & {
+			where: CleanedWhere[];
+			update: T;
+		},
+	) => Promise<T | null>;
+	updateMany: (
+		data: ModelTarget & {
+			where: CleanedWhere[];
+			update: Record<string, any>;
+		},
+	) => Promise<number>;
 	findOne: <T>({
 		model,
 		where,
 		select,
 		join,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where: CleanedWhere[];
 		select?: string[] | undefined;
 		join?: JoinConfig | undefined;
@@ -565,8 +580,7 @@ export interface CustomAdapter {
 		sortBy,
 		offset,
 		join,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
 		limit: number;
 		select?: string[] | undefined;
@@ -577,15 +591,13 @@ export interface CustomAdapter {
 	delete: ({
 		model,
 		where,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where: CleanedWhere[];
 	}) => Promise<void>;
 	deleteMany: ({
 		model,
 		where,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where: CleanedWhere[];
 	}) => Promise<number>;
 	/**
@@ -596,10 +608,11 @@ export interface CustomAdapter {
 	 * strongest race-safety guarantee. Implementations must delete at most
 	 * one matching row.
 	 */
-	consumeOne?: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-	}) => Promise<T | null>;
+	consumeOne?: <T>(
+		data: ModelTarget & {
+			where: CleanedWhere[];
+		},
+	) => Promise<T | null>;
 	/**
 	 * Optional native atomic guarded counter mutation.
 	 *
@@ -612,17 +625,17 @@ export interface CustomAdapter {
 	 * RETURNING *`) gives one round trip and the strongest race-safety
 	 * guarantee.
 	 */
-	incrementOne?: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-		increment: Record<string, number>;
-		set?: Record<string, unknown> | undefined;
-	}) => Promise<T | null>;
+	incrementOne?: <T>(
+		data: ModelTarget & {
+			where: CleanedWhere[];
+			increment: Record<string, number>;
+			set?: Record<string, unknown> | undefined;
+		},
+	) => Promise<T | null>;
 	count: ({
 		model,
 		where,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
 	}) => Promise<number>;
 	createSchema?:

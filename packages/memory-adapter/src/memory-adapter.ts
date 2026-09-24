@@ -172,20 +172,18 @@ export const memoryAdapter = (
 					return result;
 				},
 			},
-			adapter: ({
-				getFieldName,
-				getDefaultFieldName,
-				options,
-				getModelName,
-			}) => {
+			adapter: ({ getFieldName, getDefaultFieldName, options }) => {
 				const applySortToRecords = (
 					records: any[],
 					sortBy: { field: string; direction: "asc" | "desc" } | undefined,
-					model: string,
+					modelKey: string,
 				) => {
 					if (!sortBy) return records;
 					return records.sort((a: any, b: any) => {
-						const field = getFieldName({ model, field: sortBy.field });
+						const field = getFieldName({
+							model: modelKey,
+							field: sortBy.field,
+						});
 						const aValue = a[field];
 						const bValue = b[field];
 
@@ -230,6 +228,7 @@ export const memoryAdapter = (
 				function convertWhereClause(
 					where: CleanedWhere[],
 					model: string,
+					modelKey: string,
 					join?: JoinConfig,
 					select?: string[],
 				): any[] {
@@ -337,7 +336,12 @@ export const memoryAdapter = (
 							records = records.map((record: any) =>
 								Object.fromEntries(
 									Object.entries(record).filter(([key]) =>
-										select.includes(getDefaultFieldName({ model, field: key })),
+										select.includes(
+											getDefaultFieldName({
+												model: modelKey,
+												field: key,
+											}),
+										),
 									),
 								),
 							);
@@ -360,7 +364,7 @@ export const memoryAdapter = (
 
 							// Initialize joined data structures based on isUnique
 							for (const [joinModel, joinAttr] of Object.entries(join)) {
-								const joinModelName = getModelName(joinModel);
+								const joinModelName = joinModel;
 								if (joinAttr.relation === "one-to-one") {
 									nested[joinModelName] = null;
 								} else {
@@ -376,7 +380,7 @@ export const memoryAdapter = (
 
 						// Add joined data
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
-							const joinModelName = getModelName(joinModel);
+							const joinModelName = joinModel;
 							const joinTable = activeDb[joinModelName];
 							if (!joinTable) {
 								logger.error(
@@ -420,7 +424,7 @@ export const memoryAdapter = (
 							options.advanced?.database?.generateId === "serial";
 						if (useNumberId) {
 							// @ts-expect-error
-							data.id = activeDb[getModelName(model)]!.length + 1;
+							data.id = activeDb[model]!.length + 1;
 						}
 						if (!activeDb[model]) {
 							activeDb[model] = [];
@@ -428,8 +432,14 @@ export const memoryAdapter = (
 						activeDb[model]!.push(data);
 						return data;
 					},
-					findOne: async ({ model, where, select, join }) => {
-						const res = convertWhereClause(where, model, join, select);
+					findOne: async ({ model, modelKey = model, where, select, join }) => {
+						const res = convertWhereClause(
+							where,
+							model,
+							modelKey,
+							join,
+							select,
+						);
 						if (join) {
 							// When join is present, res is an array of nested objects
 							const resArray = res as any[];
@@ -446,6 +456,7 @@ export const memoryAdapter = (
 					},
 					findMany: async ({
 						model,
+						modelKey = model,
 						where,
 						sortBy,
 						limit,
@@ -453,7 +464,13 @@ export const memoryAdapter = (
 						offset,
 						join,
 					}) => {
-						const res = convertWhereClause(where || [], model, join, select);
+						const res = convertWhereClause(
+							where || [],
+							model,
+							modelKey,
+							join,
+							select,
+						);
 
 						if (join) {
 							// When join is present, res is an array of nested objects
@@ -463,7 +480,7 @@ export const memoryAdapter = (
 							}
 
 							// Apply sorting to nested objects
-							applySortToRecords(resArray, sortBy, model);
+							applySortToRecords(resArray, sortBy, modelKey);
 
 							// Apply offset and limit
 							let paginatedRecords = resArray;
@@ -479,7 +496,7 @@ export const memoryAdapter = (
 
 						// Without join - original logic
 						const resArray = res as any[];
-						let table = applySortToRecords(resArray, sortBy, model);
+						let table = applySortToRecords(resArray, sortBy, modelKey);
 						if (offset !== undefined) {
 							table = table!.slice(offset);
 						}
@@ -488,27 +505,31 @@ export const memoryAdapter = (
 						}
 						return table || [];
 					},
-					count: async ({ model, where }) => {
+					count: async ({ model, modelKey = model, where }) => {
 						if (where) {
-							const filteredRecords = convertWhereClause(where, model);
+							const filteredRecords = convertWhereClause(
+								where,
+								model,
+								modelKey,
+							);
 							return filteredRecords.length;
 						}
 						return activeDb[model]!.length;
 					},
-					update: async ({ model, where, update }) => {
+					update: async ({ model, modelKey = model, where, update }) => {
 						// A singular mutation with an empty predicate is a no-op. Match-all
 						// is reserved for updateMany/deleteMany; a singular update must
 						// never mutate every row.
 						if (where.length === 0) {
 							return null;
 						}
-						const res = convertWhereClause(where, model);
+						const res = convertWhereClause(where, model, modelKey);
 						res.forEach((record) => {
 							Object.assign(record, update);
 						});
 						return res[0] || null;
 					},
-					delete: async ({ model, where }) => {
+					delete: async ({ model, modelKey = model, where }) => {
 						// A singular mutation with an empty predicate is a no-op. Match-all
 						// is reserved for updateMany/deleteMany; a singular delete must
 						// never remove every row.
@@ -516,12 +537,12 @@ export const memoryAdapter = (
 							return;
 						}
 						const table = activeDb[model]!;
-						const res = convertWhereClause(where, model);
+						const res = convertWhereClause(where, model, modelKey);
 						activeDb[model] = table.filter((record) => !res.includes(record));
 					},
-					deleteMany: async ({ model, where }) => {
+					deleteMany: async ({ model, modelKey = model, where }) => {
 						const table = activeDb[model]!;
-						const res = convertWhereClause(where, model);
+						const res = convertWhereClause(where, model, modelKey);
 						let count = 0;
 						activeDb[model] = table.filter((record) => {
 							if (res.includes(record)) {
@@ -532,16 +553,22 @@ export const memoryAdapter = (
 						});
 						return count;
 					},
-					consumeOne: async ({ model, where }) => {
+					consumeOne: async ({ model, modelKey = model, where }) => {
 						const table = activeDb[model]!;
-						const matches = convertWhereClause(where, model);
+						const matches = convertWhereClause(where, model, modelKey);
 						const target = matches[0];
 						if (!target) return null;
 						activeDb[model] = table.filter((record) => record !== target);
 						return target as any;
 					},
-					incrementOne: async ({ model, where, increment, set }) => {
-						const target = convertWhereClause(where, model)[0];
+					incrementOne: async ({
+						model,
+						modelKey = model,
+						where,
+						increment,
+						set,
+					}) => {
+						const target = convertWhereClause(where, model, modelKey)[0];
 						if (!target) return null;
 						for (const [field, delta] of Object.entries(increment)) {
 							const current =
@@ -553,8 +580,8 @@ export const memoryAdapter = (
 						}
 						return target as any;
 					},
-					updateMany: async ({ model, where, update }) => {
-						const res = convertWhereClause(where, model);
+					updateMany: async ({ model, modelKey = model, where, update }) => {
+						const res = convertWhereClause(where, model, modelKey);
 						res.forEach((record) => {
 							Object.assign(record, update);
 						});

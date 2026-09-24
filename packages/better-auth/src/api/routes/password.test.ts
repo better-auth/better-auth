@@ -563,3 +563,41 @@ describe("verify password", async () => {
 		}
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("verify password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth, signInWithTestUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		const { headers } = await signInWithTestUser();
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.verifyPassword({
+				body: {
+					password: "x".repeat(129),
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+});
