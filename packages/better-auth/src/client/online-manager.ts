@@ -34,15 +34,17 @@ class WindowOnlineManager implements OnlineManager {
 			return () => {};
 		}
 
+		const win = window;
+
 		const onOnline = () => this.setOnline(true);
 		const onOffline = () => this.setOnline(false);
 
-		window.addEventListener("online", onOnline, false);
-		window.addEventListener("offline", onOffline, false);
+		win.addEventListener("online", onOnline, false);
+		win.addEventListener("offline", onOffline, false);
 
 		return () => {
-			window.removeEventListener("online", onOnline, false);
-			window.removeEventListener("offline", onOffline, false);
+			win.removeEventListener("online", onOnline, false);
+			win.removeEventListener("offline", onOffline, false);
 		};
 	}
 }

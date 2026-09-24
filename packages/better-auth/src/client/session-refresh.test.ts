@@ -348,4 +348,48 @@ describe("session-refresh", () => {
 
 		secondManager.cleanup();
 	});
+
+	it("should remove the setup-time DOM listeners when the globals are removed", () => {
+		const sessionSignal = atom(false);
+		const mockFetchSession = vi.fn(async () => {});
+		const documentRef = document;
+		const windowRef = window;
+		const documentRemove = vi.spyOn(documentRef, "removeEventListener");
+		const windowRemove = vi.spyOn(windowRef, "removeEventListener");
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		manager.init();
+
+		// Test environments such as happy-dom remove the DOM globals before the
+		// delayed nanostores cleanup runs.
+		vi.stubGlobal("window", undefined);
+		vi.stubGlobal("document", undefined);
+		try {
+			expect(() => manager.cleanup()).not.toThrow();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		// Cleanup must unregister from the objects setup() used, not from the removed
+		// globals, otherwise the listeners stay attached and later events can throw.
+		expect(documentRemove).toHaveBeenCalledWith(
+			"visibilitychange",
+			expect.any(Function),
+			false,
+		);
+		expect(windowRemove).toHaveBeenCalledWith(
+			"online",
+			expect.any(Function),
+			false,
+		);
+		expect(windowRemove).toHaveBeenCalledWith(
+			"offline",
+			expect.any(Function),
+			false,
+		);
+	});
 });

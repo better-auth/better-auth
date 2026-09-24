@@ -50,6 +50,8 @@ class WindowBroadcastChannel implements BroadcastChannel {
 			return () => {};
 		}
 
+		const win = window;
+
 		const handler = (event: StorageEvent) => {
 			if (event.key !== this.name) return;
 			const message: BroadcastMessage = JSON.parse(event.newValue ?? "{}");
@@ -58,10 +60,10 @@ class WindowBroadcastChannel implements BroadcastChannel {
 			this.listeners.forEach((listener) => listener(message));
 		};
 
-		window.addEventListener("storage", handler);
+		win.addEventListener("storage", handler);
 
 		return () => {
-			window.removeEventListener("storage", handler);
+			win.removeEventListener("storage", handler);
 		};
 	}
 }
