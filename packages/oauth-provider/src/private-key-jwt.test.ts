@@ -656,6 +656,13 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(tokens.error?.status).toBe(400);
 		expect((tokens.error as any)?.error).toBe("invalid_client");
+		expect(globalThis.fetch).toHaveBeenCalledWith(
+			"https://trusted.example.com/.well-known/redirect-jwks.json",
+			expect.objectContaining({
+				headers: { accept: "application/json" },
+				redirect: "manual",
+			}),
+		);
 	});
 
 	it("should reject assertion signed with wrong key", async () => {
