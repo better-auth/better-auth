@@ -18,7 +18,10 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import { lockSSOProviderForAccountLink } from "./routes/providers";
-import { getRegisterSSOProviderBodySchema } from "./routes/schemas";
+import {
+	getRegisterSSOProviderBodySchema,
+	getUpdateSSOProviderBodySchema,
+} from "./routes/schemas";
 import type { SAMLConfig, SSOOptions } from "./types";
 import { safeJsonParse } from "./utils";
 
@@ -285,6 +288,45 @@ describe("SAML redirect URL schema", () => {
 				},
 			}).success,
 		).toBe(expected);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11372
+ */
+describe("partial SSO profile mappings", () => {
+	const mapping = { extraFields: { department: "department" } };
+
+	it.each([
+		[
+			"OIDC",
+			{ oidcConfig: { clientId: "test", mapping } },
+			{ oidcConfig: { mapping } },
+		],
+		[
+			"SAML",
+			{
+				samlConfig: {
+					entryPoint: "https://idp.example.com/sso",
+					idpMetadata: { entityID: "https://idp.example.com" },
+					mapping,
+				},
+			},
+			{ samlConfig: { mapping } },
+		],
+	])("accepts %s mappings with only extra fields", (_, config, updateConfig) => {
+		const registration = getRegisterSSOProviderBodySchema().safeParse({
+			providerId: "school-idp",
+			issuer: "https://idp.example.com",
+			domain: "idp.example.com",
+			...config,
+		});
+		const update = getUpdateSSOProviderBodySchema().safeParse({
+			providerId: "school-idp",
+			...updateConfig,
+		});
+
+		expect([registration.success, update.success]).toEqual([true, true]);
 	});
 });
 
