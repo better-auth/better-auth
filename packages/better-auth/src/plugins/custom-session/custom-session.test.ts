@@ -87,6 +87,33 @@ describe("Custom Session Plugin Tests", async () => {
 		}
 	});
 
+	it("returns an HTTP error to the client when the session lookup fails", async () => {
+		const {
+			auth: authWithoutCache,
+			signInWithTestUser: signIn,
+			customFetchImpl: fetchWithoutCache,
+		} = await getTestInstance({
+			plugins: [customSession(async (session) => session)],
+		});
+		const { headers } = await signIn();
+		const httpClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [customSessionClient<typeof authWithoutCache>()],
+			fetchOptions: { customFetchImpl: fetchWithoutCache },
+		});
+		const context = await authWithoutCache.$context;
+		const lookup = vi
+			.spyOn(context.internalAdapter, "findSession")
+			.mockRejectedValue(new Error("database unavailable"));
+		try {
+			const result = await httpClient.getSession({ fetchOptions: { headers } });
+			expect(result.data).toBeNull();
+			expect(result.error?.status).toBe(500);
+		} finally {
+			lookup.mockRestore();
+		}
+	});
+
 	it("should return set cookie headers as separate entries", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.getSession({
