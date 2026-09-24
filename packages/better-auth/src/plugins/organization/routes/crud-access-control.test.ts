@@ -1078,7 +1078,10 @@ describe("dynamic access control", async () => {
 				},
 				headers,
 			}),
-		).rejects.toThrow();
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "INVALID_ROLE_NAME" },
+		});
 
 		const clientRes = await authClient.organization.createRole(
 			{
@@ -1095,6 +1098,7 @@ describe("dynamic access control", async () => {
 			},
 		);
 		expect(clientRes.error?.status).toBe(400);
+		expect(clientRes.error?.code).toBe("INVALID_ROLE_NAME");
 	});
 
 	/**
@@ -1125,7 +1129,10 @@ describe("dynamic access control", async () => {
 				},
 				headers,
 			}),
-		).rejects.toThrow();
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "INVALID_ROLE_NAME" },
+		});
 
 		const updateClientRes = await authClient.organization.updateRole(
 			{
@@ -1137,5 +1144,19 @@ describe("dynamic access control", async () => {
 			{ headers },
 		);
 		expect(updateClientRes.error?.status).toBe(400);
+		expect(updateClientRes.error?.code).toBe("INVALID_ROLE_NAME");
+
+		const validUpdate = await authClient.organization.updateRole(
+			{
+				roleName: testRole.data.roleData.role,
+				data: {
+					roleName: "owner-temp",
+				},
+			},
+			{ headers },
+		);
+		expect(validUpdate.error).toBeNull();
+		expect(validUpdate.data?.success).toBe(true);
+		expect(validUpdate.data?.roleData.role).toBe("owner-temp");
 	});
 });

@@ -58,16 +58,12 @@ const getAdditionalFields = <
 	};
 };
 
-const roleNameSchema = z.string().refine((val) => !val.includes(","), {
-	message: "Role name cannot contain commas",
-});
-
 const baseCreateOrgRoleSchema = z.object({
 	organizationId: z.string().optional().meta({
 		description:
 			"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
 	}),
-	role: roleNameSchema.meta({
+	role: z.string().meta({
 		description: "The name of the role to create",
 	}),
 	permission: z.record(z.string(), z.array(z.string())).meta({
@@ -867,7 +863,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 							.meta({
 								description: "The permission to update the role with",
 							}),
-						roleName: roleNameSchema.optional().meta({
+						roleName: z.string().optional().meta({
 							description: "The name of the role to update",
 						}),
 						...additionalFieldsSchema.shape,
