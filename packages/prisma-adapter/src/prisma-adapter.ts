@@ -55,7 +55,7 @@ export interface PrismaConfig {
 interface PrismaClient {}
 
 // Prisma raises `P2025` for every "record not found" surface area we care
-// about (`update`, `delete`, and `incrementOne`) with the actual cause
+// about (`update` and `delete`) with the actual cause
 // distinguishable via `meta.cause` (e.g. "Record to update not found." vs
 // "Record to delete does not exist."). Match on the code alone: any other
 // failure (constraint, connection, permission) must propagate so the caller
@@ -756,44 +756,50 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						data[field] = { increment: delta };
 					}
 
-					const hasIdField = where?.some((w) => w.field === "id");
-					if (hasIdField) {
-						const whereClause = convertWhereClause({
+					const idCondition = where?.find(
+						(w) =>
+							w.field === "id" &&
+							(!w.operator || w.operator === "eq") &&
+							w.value !== undefined,
+					);
+
+					const mutateInTransaction = async (tx: PrismaClient) => {
+						const client = (tx as any)[model];
+						const idField = getFieldName({ model: modelKey, field: "id" });
+
+						if (idCondition) {
+							const whereClause = convertWhereClause({
+								model: modelKey,
+								where,
+								action: "updateMany",
+							});
+							const result = await client.updateMany({
+								where: whereClause,
+								data,
+							});
+							if (!result?.count) {
+								return null;
+							}
+							const row = await client.findFirst({
+								where: { [idField]: idCondition.value },
+							});
+							return (row as any) ?? null;
+						}
+
+						const findWhere = convertWhereClause({
 							model: modelKey,
 							where,
-							action: "updateMany",
+							action: "findOne",
 						});
-						const result = await db[model]!.updateMany({
-							where: whereClause,
-							data,
-						});
-						if (!result?.count) {
-							return null;
-						}
-						const idField = getFieldName({ model: modelKey, field: "id" });
-						const idValue = where.find((w) => w.field === "id")?.value;
-						const row = await db[model]!.findFirst({
-							where: { [idField]: idValue },
-						});
-						return (row as any) ?? null;
-					}
-
-					const findWhere = convertWhereClause({
-						model: modelKey,
-						where,
-						action: "findOne",
-					});
-					const mutateInTransaction = async (tx: PrismaClient) => {
-						const target = await (tx as any)[model].findFirst({
+						const target = await client.findFirst({
 							where: findWhere,
 						});
 						if (!target) return null;
-						const idField = getFieldName({ model: modelKey, field: "id" });
 						const targetId = (target as any)[idField] ?? (target as any).id;
 						const whereClause = convertWhereClause({
 							model: modelKey,
 							where: [
-								...where,
+								...(where ?? []),
 								{
 									field: "id",
 									value: targetId,
@@ -804,14 +810,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							],
 							action: "updateMany",
 						});
-						const result = await (tx as any)[model].updateMany({
+						const result = await client.updateMany({
 							where: whereClause,
 							data,
 						});
 						if (!result?.count) {
 							return null;
 						}
-						const row = await (tx as any)[model].findFirst({
+						const row = await client.findFirst({
 							where: { [idField]: targetId },
 						});
 						return (row as any) ?? null;
