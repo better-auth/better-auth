@@ -13,6 +13,7 @@ import {
 	parseUserOutput,
 	revokeUnprovenAccountAccess,
 } from "../../db";
+import { emailSchema } from "../../utils/email";
 import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
@@ -97,7 +98,7 @@ export interface MagicLinkOptions {
 }
 
 const signInMagicLinkBodySchema = z.object({
-	email: z.email().meta({
+	email: emailSchema.meta({
 		description: "Email address to send the magic link",
 	}),
 	name: z
@@ -236,7 +237,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email, metadata } = ctx.body;
+					const { metadata } = ctx.body;
+					const email = ctx.body.email.toLowerCase();
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)

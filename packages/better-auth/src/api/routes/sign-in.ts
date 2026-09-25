@@ -23,6 +23,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
+import { isValidEmail } from "../../utils/email";
 import { assertPasswordNotTooLong } from "../../utils/password";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -520,8 +521,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				});
 			}
 			const { email, password } = ctx.body;
-			const isValidEmail = z.email().safeParse(email);
-			if (!isValidEmail.success) {
+			if (!(await isValidEmail(email, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 			assertPasswordNotTooLong(ctx, password);

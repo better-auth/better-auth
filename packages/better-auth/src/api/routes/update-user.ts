@@ -6,6 +6,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
+import { emailSchema } from "../../utils/email";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -656,7 +657,7 @@ export const changeEmail = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			newEmail: z.email().meta({
+			newEmail: emailSchema.meta({
 				description:
 					"The new email address to set must be a valid email address",
 			}),
