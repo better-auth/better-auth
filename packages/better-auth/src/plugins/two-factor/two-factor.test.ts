@@ -1910,6 +1910,63 @@ describe("TOTP secret storage", async () => {
 	});
 
 	/**
+	 * `allowPasswordless` makes the password optional in the body schema, so a
+	 * missing password reaches the handler; a credential account still requires
+	 * one there.
+	 */
+	describe("password check before decrypt", async () => {
+		const custom = aesGcm("totp-secret-encryption-key");
+		const decrypt = vi.fn(custom.decrypt);
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					allowPasswordless: true,
+					totpOptions: { storeSecret: { encrypt: custom.encrypt, decrypt } },
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "totp" },
+			headers,
+		});
+
+		it("should not decrypt the secret when the password is missing", async () => {
+			decrypt.mockClear();
+			await expect(
+				auth.api.getTOTPURI({ body: {}, headers }),
+			).rejects.toMatchObject({
+				body: { code: BASE_ERROR_CODES.INVALID_PASSWORD.code },
+			});
+			expect(decrypt).not.toHaveBeenCalled();
+		});
+
+		it("should not decrypt the secret when the password is wrong", async () => {
+			decrypt.mockClear();
+			await expect(
+				auth.api.getTOTPURI({
+					body: { password: "not-the-real-password" },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: { code: BASE_ERROR_CODES.INVALID_PASSWORD.code },
+			});
+			expect(decrypt).not.toHaveBeenCalled();
+		});
+
+		it("should decrypt the secret once the password is verified", async () => {
+			decrypt.mockClear();
+			const { totpURI } = await auth.api.getTOTPURI({
+				body: { password: testUser.password },
+				headers,
+			});
+			expect(totpURI).toBeDefined();
+			expect(decrypt).toHaveBeenCalledOnce();
+		});
+	});
+
+	/**
 	 * Guards the migration recipe documented in
 	 * docs/content/docs/plugins/2fa.mdx: a secret written before `storeSecret`
 	 * was adopted must still be readable through the fallback, using the same

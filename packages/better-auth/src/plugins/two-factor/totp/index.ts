@@ -333,7 +333,6 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				);
 			}
-			const secret = await decodeTOTPSecret(ctx, twoFactor.secret, options);
 			const requirePassword = await shouldRequirePassword(
 				ctx,
 				user.id,
@@ -345,6 +344,9 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				}
 				await ctx.context.password.checkPassword(user.id, ctx);
 			}
+			// Decrypt only after the password check, so a rejected request never
+			// reaches a custom `storeSecret` cipher, which may be a KMS/HSM call.
+			const secret = await decodeTOTPSecret(ctx, twoFactor.secret, options);
 			const totpURI = createOTP(secret, {
 				digits: opts.digits,
 				period: opts.period,
