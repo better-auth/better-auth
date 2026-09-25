@@ -43,10 +43,18 @@ export interface PrismaConfig {
 	usePlural?: boolean | undefined;
 
 	/**
-	 * Whether to execute multiple operations in a transaction.
+	 * Whether to enable the adapter's multi-operation transaction API (`adapter.transaction`).
 	 *
-	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
+	 * When `false` or unset (the default), multi-operation transactions are disabled and
+	 * operations execute sequentially. Set to `true` to enable transactional batches.
+	 * For MongoDB, transactions also require a replica set.
+	 *
+	 * Note: `incrementOne` runs inside an atomic transaction by default on providers
+	 * that support them (PostgreSQL, MySQL, SQLite, CockroachDB, SQL Server) unless
+	 * explicitly set to `false`, and on MongoDB only when `transaction: true` is set.
+	 * `consumeOne` uses the client's `$transaction` whenever the connected client
+	 * supports it, independent of this flag.
+	 *
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
@@ -55,7 +63,7 @@ export interface PrismaConfig {
 interface PrismaClient {}
 
 // Prisma raises `P2025` for every "record not found" surface area we care
-// about (`update`, `delete`, and `incrementOne`) with the actual cause
+// about (`update` and `delete`) with the actual cause
 // distinguishable via `meta.cause` (e.g. "Record to update not found." vs
 // "Record to delete does not exist."). Match on the code alone: any other
 // failure (constraint, connection, permission) must propagate so the caller
@@ -744,75 +752,101 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// the read of the current value and the write of `value + delta`
 					// happen in a single statement. The contract mutates at most one
 					// row, so we resolve a single target id and key the write on it the
-					// same way `consumeOne` does, never `updateMany`.
+					// same way `consumeOne` does.
+					//
+					// To avoid P2025 errors in Prisma's client logger when optimistic
+					// concurrency guards (e.g. rate limit window resets, remaining quota)
+					// fail, we use non-throwing `updateMany`. When 0 rows match,
+					// `updateMany` quietly returns `{ count: 0 }` without logging P2025
+					// false alarms to stderr.
 					const data: Record<string, unknown> = { ...(set ?? {}) };
 					for (const [field, delta] of Object.entries(increment)) {
 						data[field] = { increment: delta };
 					}
 
-					// `prisma.model.update` requires a WhereUniqueInput and returns the
-					// mutated row. When the caller keys on the primary key we update in a
-					// single round trip; otherwise we resolve the target id inside a
-					// transaction and update by id. Either way the original guard stays in
-					// the where, so a racer that invalidated it (e.g. remaining dropped to
-					// 0) yields P2025 and we report no mutation.
-					const hasIdField = where?.some((w) => w.field === "id");
-					if (hasIdField) {
-						const whereClause = convertWhereClause({
-							model: modelKey,
-							where,
-							action: "update",
-						});
-						try {
-							const row = await db[model]!.update({
+					const isInsensitiveId = (w?: Where) =>
+						w?.field === "id" &&
+						w.mode === "insensitive" &&
+						(config.provider === "postgresql" || config.provider === "mongodb");
+
+					const idCondition = where?.find(
+						(w) =>
+							w.field === "id" &&
+							(!w.operator || w.operator === "eq") &&
+							w.value !== undefined &&
+							!isInsensitiveId(w),
+					);
+
+					const mutateInTransaction = async (tx: PrismaClient) => {
+						const client = (tx as any)[model];
+						const idField = getFieldName({ model: modelKey, field: "id" });
+
+						if (idCondition) {
+							const whereClause = convertWhereClause({
+								model: modelKey,
+								where,
+								action: "updateMany",
+							});
+							const result = await client.updateMany({
 								where: whereClause,
 								data,
 							});
+							if (!result?.count) {
+								return null;
+							}
+							const row = await client.findFirst({
+								where: { [idField]: idCondition.value },
+							});
 							return (row as any) ?? null;
-						} catch (e: any) {
-							if (isPrismaNotFoundError(e)) return null;
-							throw e;
 						}
-					}
 
-					const findWhere = convertWhereClause({
-						model: modelKey,
-						where,
-						action: "findOne",
-					});
-					const mutateInTransaction = async (tx: PrismaClient) => {
-						const target = await (tx as any)[model].findFirst({
+						const findWhere = convertWhereClause({
+							model: modelKey,
+							where,
+							action: "findOne",
+						});
+						const target = await client.findFirst({
 							where: findWhere,
 						});
 						if (!target) return null;
-						try {
-							const row = await (tx as any)[model].update({
-								where: convertWhereClause({
-									model: modelKey,
-									where: [
-										...where,
-										{
-											field: "id",
-											value: (target as any).id,
-											operator: "eq",
-											connector: "AND",
-											mode: "sensitive",
-										},
-									],
-									action: "update",
-								}),
-								data,
-							});
-							return (row as any) ?? null;
-						} catch (e: any) {
-							if (isPrismaNotFoundError(e)) return null;
-							throw e;
+						const targetId = (target as any)[idField] ?? (target as any).id;
+						const whereClause = convertWhereClause({
+							model: modelKey,
+							where: [
+								...(where ?? []),
+								{
+									field: "id",
+									value: targetId,
+									operator: "eq",
+									connector: "AND",
+									mode: "sensitive",
+								},
+							],
+							action: "updateMany",
+						});
+						const result = await client.updateMany({
+							where: whereClause,
+							data,
+						});
+						if (!result?.count) {
+							return null;
 						}
+						const row = await client.findFirst({
+							where: { [idField]: targetId },
+						});
+						return (row as any) ?? null;
 					};
 
-					return inTransaction || typeof db.$transaction !== "function"
-						? mutateInTransaction(db)
-						: db.$transaction(mutateInTransaction);
+					const supportsTransaction =
+						!inTransaction &&
+						typeof db.$transaction === "function" &&
+						(config.provider === "mongodb"
+							? config.transaction === true
+							: config.transaction !== false);
+
+					return supportsTransaction
+						? db.$transaction(mutateInTransaction)
+						: mutateInTransaction(db);
 				},
 				options: config,
 			};
