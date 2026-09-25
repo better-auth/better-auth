@@ -744,35 +744,38 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// the read of the current value and the write of `value + delta`
 					// happen in a single statement. The contract mutates at most one
 					// row, so we resolve a single target id and key the write on it the
-					// same way `consumeOne` does, never `updateMany`.
+					// same way `consumeOne` does.
+					//
+					// To avoid P2025 errors in Prisma's client logger when optimistic
+					// concurrency guards (e.g. rate limit window resets, remaining quota)
+					// fail, we use non-throwing `updateMany`. When 0 rows match,
+					// `updateMany` quietly returns `{ count: 0 }` without logging P2025
+					// false alarms to stderr.
 					const data: Record<string, unknown> = { ...(set ?? {}) };
 					for (const [field, delta] of Object.entries(increment)) {
 						data[field] = { increment: delta };
 					}
 
-					// `prisma.model.update` requires a WhereUniqueInput and returns the
-					// mutated row. When the caller keys on the primary key we update in a
-					// single round trip; otherwise we resolve the target id inside a
-					// transaction and update by id. Either way the original guard stays in
-					// the where, so a racer that invalidated it (e.g. remaining dropped to
-					// 0) yields P2025 and we report no mutation.
 					const hasIdField = where?.some((w) => w.field === "id");
 					if (hasIdField) {
 						const whereClause = convertWhereClause({
 							model: modelKey,
 							where,
-							action: "update",
+							action: "updateMany",
 						});
-						try {
-							const row = await db[model]!.update({
-								where: whereClause,
-								data,
-							});
-							return (row as any) ?? null;
-						} catch (e: any) {
-							if (isPrismaNotFoundError(e)) return null;
-							throw e;
+						const result = await db[model]!.updateMany({
+							where: whereClause,
+							data,
+						});
+						if (!result?.count) {
+							return null;
 						}
+						const idField = getFieldName({ model: modelKey, field: "id" });
+						const idValue = where.find((w) => w.field === "id")?.value;
+						const row = await db[model]!.findFirst({
+							where: { [idField]: idValue },
+						});
+						return (row as any) ?? null;
 					}
 
 					const findWhere = convertWhereClause({
@@ -785,29 +788,33 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: findWhere,
 						});
 						if (!target) return null;
-						try {
-							const row = await (tx as any)[model].update({
-								where: convertWhereClause({
-									model: modelKey,
-									where: [
-										...where,
-										{
-											field: "id",
-											value: (target as any).id,
-											operator: "eq",
-											connector: "AND",
-											mode: "sensitive",
-										},
-									],
-									action: "update",
-								}),
-								data,
-							});
-							return (row as any) ?? null;
-						} catch (e: any) {
-							if (isPrismaNotFoundError(e)) return null;
-							throw e;
+						const idField = getFieldName({ model: modelKey, field: "id" });
+						const targetId = (target as any)[idField] ?? (target as any).id;
+						const whereClause = convertWhereClause({
+							model: modelKey,
+							where: [
+								...where,
+								{
+									field: "id",
+									value: targetId,
+									operator: "eq",
+									connector: "AND",
+									mode: "sensitive",
+								},
+							],
+							action: "updateMany",
+						});
+						const result = await (tx as any)[model].updateMany({
+							where: whereClause,
+							data,
+						});
+						if (!result?.count) {
+							return null;
 						}
+						const row = await (tx as any)[model].findFirst({
+							where: { [idField]: targetId },
+						});
+						return (row as any) ?? null;
 					};
 
 					return inTransaction || typeof db.$transaction !== "function"
