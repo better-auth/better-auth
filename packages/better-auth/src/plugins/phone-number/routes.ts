@@ -2,7 +2,8 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx } from "../../api";
+import { isSessionOutsideStore } from "../../api/state/session-source";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
@@ -538,7 +539,16 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			await verifyAndConsumePhoneNumberOTP(ctx, opts, ctx.body);
 
 			if (ctx.body.updatePhoneNumber) {
-				const session = await getSessionFromCtx(ctx);
+				// Replacing the number changes a sign-in method, so a session revoked
+				// in the store must not pass on its cookie cache alone. A session
+				// built from an API key has no store row; the key is verified on
+				// every request instead.
+				const requestSession = ctx.context.session;
+				const session =
+					requestSession &&
+					(await isSessionOutsideStore(requestSession.session.token))
+						? requestSession
+						: await getAuthoritativeSessionFromCtx(ctx);
 				if (!session) {
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}

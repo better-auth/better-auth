@@ -24,6 +24,7 @@ const stateDataSchema = z.looseObject({
 		.object({
 			email: z.string(),
 			userId: z.coerce.string(),
+			encryptedSessionToken: z.string().optional(),
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),

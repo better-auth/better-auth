@@ -17,6 +17,8 @@ import {
 	getAccountCookie,
 	setAccountCookie,
 } from "../../cookies/session-store";
+import { symmetricEncrypt } from "../../crypto";
+import { derivePurposeKey } from "../../crypto/purpose";
 import { parseAccountOutput } from "../../db/schema";
 import { resolveOAuthAccountKeyForAPI } from "../../oauth2/account-key";
 import { missingEmailLogMessage } from "../../oauth2/errors";
@@ -31,6 +33,7 @@ import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	isStateful,
+	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
 
@@ -212,7 +215,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			 */
 			additionalData: z.record(z.string(), z.any()).optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
@@ -425,6 +428,13 @@ export const linkSocialAccount = createAuthEndpoint(
 			link: {
 				userId: session.user.id,
 				email: session.user.email,
+				encryptedSessionToken: await symmetricEncrypt({
+					key: derivePurposeKey(
+						c.context.secretConfig,
+						"oauth-link-session-token",
+					),
+					data: session.session.token,
+				}),
 			},
 			additionalData: c.body.additionalData,
 			idTokenNonce,

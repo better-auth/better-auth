@@ -10,7 +10,12 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
+import {
+	getAuthoritativeSessionFromCtx,
+	sensitiveSessionMiddleware,
+	sessionMiddleware,
+} from "../../api";
+import { isSessionOutsideStore } from "../../api/state/session-source";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -256,7 +261,20 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
+					// Enabling replaces the session, so a cached cookie must not outlive a
+					// revocation. Sessions built outside the store have no row to re-read.
+					const session = (await isSessionOutsideStore(
+						ctx.context.session.session.token,
+					))
+						? ctx.context.session
+						: await getAuthoritativeSessionFromCtx(ctx);
+					if (!session) {
+						throw APIError.from("UNAUTHORIZED", {
+							message: "Unauthorized",
+							code: "UNAUTHORIZED",
+						});
+					}
+					const user = session.user as UserWithTwoFactor;
 					const { password, issuer, method } = ctx.body;
 					const requirePassword = await shouldRequirePassword(
 						ctx,

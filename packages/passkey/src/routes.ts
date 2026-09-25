@@ -6,6 +6,7 @@ import {
 } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import type {
 	AuthenticationExtensionsClientInputs,
 	AuthenticationResponseJSON,
@@ -19,8 +20,11 @@ import {
 } from "@simplewebauthn/server";
 import {
 	freshSessionMiddleware,
+	getAuthoritativeSessionFromCtx,
 	getSessionFromCtx,
+	isStateful,
 	requireResourceOwnership,
+	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -46,7 +50,43 @@ type PasskeyCeremony = "registration" | "authentication";
  */
 type StoredChallengeValue = WebAuthnChallengeValue & {
 	type?: PasskeyCeremony;
+	registrationSource?:
+		| { type: "session"; tokenHash: string }
+		| { type: "resolver" };
 };
+
+/**
+ * Challenge rows are readable by hooks and exports, so they hold a digest of
+ * the session token rather than the token itself.
+ */
+const hashSessionToken = (token: string) =>
+	createHash("SHA-256", "base64urlnopad").digest(token);
+
+async function registrationSourceMatches(
+	source: StoredChallengeValue["registrationSource"],
+	sessionToken: string | undefined,
+) {
+	if (source?.type === "resolver") return true;
+	if (source?.type !== "session" || !sessionToken) return false;
+	return source.tokenHash === (await hashSessionToken(sessionToken));
+}
+
+/**
+ * How a registration that does not require a session started: from a
+ * session, bound by its digest, or through `resolveUser`. Nothing is recorded
+ * when a session is required or sessions are not stored.
+ */
+async function registrationSourceFor(
+	recordSource: boolean,
+	sessionToken: string | undefined,
+): Promise<StoredChallengeValue["registrationSource"]> {
+	if (!recordSource) return undefined;
+	if (!sessionToken) return { type: "resolver" };
+	return {
+		type: "session",
+		tokenHash: await hashSessionToken(sessionToken),
+	};
+}
 
 type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 
@@ -85,7 +125,7 @@ const resolveRegistrationUser = async (
 		};
 	}
 
-	const session = await getSessionFromCtx(ctx);
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (session?.user?.id) {
 		const sessionName = session.user.email || session.user.id;
 		return {
@@ -169,7 +209,9 @@ export const generatePasskeyRegistrationOptions = (
 		"/passkey/generate-register-options",
 		{
 			method: "GET",
-			use: requireSession ? [freshSessionMiddleware] : [],
+			use: requireSession
+				? [sensitiveSessionMiddleware, freshSessionMiddleware]
+				: [],
 			query: generatePasskeyQuerySchema,
 			metadata: {
 				openapi: {
@@ -281,6 +323,7 @@ export const generatePasskeyRegistrationOptions = (
 		},
 		async (ctx) => {
 			const user = await resolveRegistrationUser(opts, ctx);
+			const sessionToken = ctx.context.session?.session?.token;
 			const userPasskeys = await ctx.context.adapter.findMany<Passkey>({
 				model: "passkey",
 				where: [
@@ -344,6 +387,10 @@ export const generatePasskeyRegistrationOptions = (
 				identifier: verificationToken,
 				value: JSON.stringify({
 					type: "registration",
+					registrationSource: await registrationSourceFor(
+						!requireSession && isStateful(ctx),
+						sessionToken,
+					),
 					expectedChallenge: options.challenge,
 					userData: {
 						id: user.id,
@@ -568,7 +615,9 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 		{
 			method: "POST",
 			body: verifyPasskeyRegistrationBodySchema,
-			use: requireSession ? [freshSessionMiddleware] : [],
+			use: requireSession
+				? [sensitiveSessionMiddleware, freshSessionMiddleware]
+				: [],
 			metadata: {
 				openapi: {
 					operationId: "passkeyVerifyRegistration",
@@ -624,6 +673,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 			const {
 				type: ceremony,
+				registrationSource,
 				expectedChallenge,
 				userData,
 				context,
@@ -637,7 +687,20 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 
 			const session = requireSession
 				? ctx.context.session
-				: await getSessionFromCtx(ctx);
+				: await getAuthoritativeSessionFromCtx(ctx);
+			if (
+				!requireSession &&
+				isStateful(ctx) &&
+				!(await registrationSourceMatches(
+					registrationSource,
+					session?.session.token,
+				))
+			) {
+				throw APIError.from(
+					"UNAUTHORIZED",
+					PASSKEY_ERROR_CODES.SESSION_REQUIRED,
+				);
+			}
 			if (session?.user?.id && userData.id !== session.user.id) {
 				throw APIError.from(
 					"UNAUTHORIZED",
