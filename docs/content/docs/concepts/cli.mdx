@@ -1,10 +1,10 @@
 ---
 icon: conceptsCLI
 title: CLI
-description: Learn about the Better Auth CLI commands for generating and migrating database schemas, creating initial admins, initializing projects, generating secret keys, and gathering diagnostic info.
+description: Learn about the Better Auth CLI commands for generating, migrating, and checking database schemas, creating initial admins, initializing projects, generating secret keys, and gathering diagnostic info.
 ---
 
-Better Auth comes with a built-in CLI to help you manage the database schemas, create initial admin users, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
+Better Auth comes with a built-in CLI to help you manage and check database schemas, create initial admin users, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
 
 ## Generate
 
@@ -70,6 +70,31 @@ npx auth@latest migrate
 
   Set `database.schemaName` to select the schema explicitly. Otherwise, the migrate command uses the connection's `search_path`. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
 </Callout>
+
+## Check
+
+The `check` command runs all available checks. Run it whenever you want to verify your Better Auth setup, manually or in automation:
+
+```bash title="Terminal"
+npx auth@latest check --config ./src/auth.ts
+```
+
+### Schema
+
+The `check schema` command verifies that your configured schema can hold what Better Auth writes. It does not create schema files or apply migrations.
+
+```bash title="Terminal"
+npx auth@latest check schema --config ./src/auth.ts
+```
+
+The schema check reads the live database for Kysely, the configured schema object for Drizzle, and the generated client model for Prisma. Drizzle and Prisma checks do not confirm that migrations have been applied to the database. If validation is unavailable for your adapter, the command fails instead of silently skipping it. It also runs when runtime validation is disabled with `advanced.database.validateSchema: false`.
+
+### Options
+
+Both `check` and `check schema` accept:
+
+* `-c, --cwd` - The working directory. Defaults to the current directory.
+* `--config` - The path to your Better Auth config file. By default, the CLI searches the usual config locations.
 
 ## Create Admin
 

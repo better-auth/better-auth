@@ -124,7 +124,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					for (const [joinModel, joinAttr] of Object.entries(join)) {
-						const key = getJoinKeyName(model, getModelName(joinModel), schema);
+						const key = getJoinKeyName(
+							model,
+							joinAttr.modelKey ?? joinModel,
+							schema,
+						);
 						if (joinAttr.relation === "one-to-one") {
 							result[key] = true;
 						} else {
@@ -407,7 +411,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			};
 
 			return {
-				async create({ model, data: values, select }) {
+				async create({ model, modelKey = model, data: values, select }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -415,14 +419,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 					const result = await db[model]!.create({
 						data: values,
-						select: convertSelect(select, model),
+						select: convertSelect(select, modelKey),
 					});
 					return result;
 				},
-				async findOne({ model, where, select, join }) {
+				async findOne({ model, modelKey = model, where, select, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "findOne",
 					});
@@ -434,12 +438,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// transform join keys to use Prisma expected field names
 					const map = new Map<string, string>();
-					for (const joinModel of Object.keys(join ?? {})) {
-						const key = getJoinKeyName(model, joinModel, schema);
-						map.set(key, getModelName(joinModel));
+					for (const [joinModel, joinAttr] of Object.entries(join ?? {})) {
+						const key = getJoinKeyName(
+							modelKey,
+							joinAttr.modelKey ?? joinModel,
+							schema,
+						);
+						map.set(key, joinModel);
 					}
 
-					const selects = convertSelect(select, model, join);
+					const selects = convertSelect(select, modelKey, join);
 
 					const result = await db[model]!.findFirst({
 						where: whereClause,
@@ -458,10 +466,19 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 					return result;
 				},
-				async findMany({ model, where, limit, select, offset, sortBy, join }) {
+				async findMany({
+					model,
+					modelKey = model,
+					where,
+					limit,
+					select,
+					offset,
+					sortBy,
+					join,
+				}) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "findMany",
 					});
@@ -473,13 +490,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// transform join keys to use Prisma expected field names
 					const map = new Map<string, string>();
 					if (join) {
-						for (const [joinModel, _value] of Object.entries(join)) {
-							const key = getJoinKeyName(model, joinModel, schema);
-							map.set(key, getModelName(joinModel));
+						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							const key = getJoinKeyName(
+								modelKey,
+								joinAttr.modelKey ?? joinModel,
+								schema,
+							);
+							map.set(key, joinModel);
 						}
 					}
 
-					const selects = convertSelect(select, model, join);
+					const selects = convertSelect(select, modelKey, join);
 
 					const result = await db[model]!.findMany({
 						where: whereClause,
@@ -488,7 +509,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						...(sortBy?.field
 							? {
 									orderBy: {
-										[getFieldName({ model, field: sortBy.field })]:
+										[getFieldName({ model: modelKey, field: sortBy.field })]:
 											sortBy.direction === "desc" ? "desc" : "asc",
 									},
 								}
@@ -511,9 +532,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					return result;
 				},
-				async count({ model, where }) {
+				async count({ model, modelKey = model, where }) {
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "count",
 					});
@@ -526,19 +547,19 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where: whereClause,
 					});
 				},
-				async update({ model, where, update }) {
+				async update({ model, modelKey = model, where, update }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
 					const hasRootUniqueCondition = hasRootUniqueWhereCondition(
-						model,
+						modelKey,
 						where,
 					);
 					if (!hasRootUniqueCondition) {
 						const whereClause = convertWhereClause({
-							model,
+							model: modelKey,
 							where,
 							action: "updateMany",
 						});
@@ -555,7 +576,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						});
 					}
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "update",
 					});
@@ -580,14 +601,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						throw e;
 					}
 				},
-				async updateMany({ model, where, update }) {
+				async updateMany({ model, modelKey = model, where, update }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "updateMany",
 					});
@@ -597,7 +618,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 					return result ? (result.count as number) : 0;
 				},
-				async delete({ model, where }) {
+				async delete({ model, modelKey = model, where }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -608,7 +629,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					const hasIdField = where?.some((w) => w.field === "id");
 					if (!hasIdField) {
 						const whereClause = convertWhereClause({
-							model,
+							model: modelKey,
 							where,
 							action: "deleteMany",
 						});
@@ -618,7 +639,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return;
 					}
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "delete",
 					});
@@ -633,9 +654,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						throw e;
 					}
 				},
-				async deleteMany({ model, where }) {
+				async deleteMany({ model, modelKey = model, where }) {
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "deleteMany",
 					});
@@ -644,7 +665,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 					return result ? (result.count as number) : 0;
 				},
-				async consumeOne({ model, where }) {
+				async consumeOne({ model, modelKey = model, where }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -662,7 +683,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					const hasIdField = where?.some((w) => w.field === "id");
 					if (hasIdField) {
 						const whereClause = convertWhereClause({
-							model,
+							model: modelKey,
 							where,
 							action: "delete",
 						});
@@ -676,7 +697,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					const findWhere = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "findOne",
 					});
@@ -688,7 +709,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						try {
 							const result = await (tx as any)[model].deleteMany({
 								where: convertWhereClause({
-									model,
+									model: modelKey,
 									where: [
 										...(where ?? []),
 										{
@@ -712,7 +733,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						? claimFromTransaction(db)
 						: db.$transaction(claimFromTransaction);
 				},
-				async incrementOne({ model, where, increment, set }) {
+				async incrementOne({ model, modelKey = model, where, increment, set }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -738,7 +759,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					const hasIdField = where?.some((w) => w.field === "id");
 					if (hasIdField) {
 						const whereClause = convertWhereClause({
-							model,
+							model: modelKey,
 							where,
 							action: "update",
 						});
@@ -755,7 +776,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					const findWhere = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "findOne",
 					});
@@ -767,7 +788,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						try {
 							const row = await (tx as any)[model].update({
 								where: convertWhereClause({
-									model,
+									model: modelKey,
 									where: [
 										...where,
 										{
@@ -832,15 +853,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const dataModel = readPrismaDataModel(prisma);
-		if (dataModel && checksSchema(options)) {
-			registerSchemaCheck(
-				instance,
-				createSchemaCheck(
-					async () =>
-						findPrismaSchemaProblems(dataModel, options, config.usePlural),
-					"prisma",
-				),
+		if (dataModel) {
+			const schemaCheck = createSchemaCheck(
+				() => findPrismaSchemaProblems(dataModel, options, config.usePlural),
+				"prisma",
 			);
+			registerSchemaCheck(instance, schemaCheck, {
+				runtimeEnabled: checksSchema(options),
+			});
 		}
 		return instance;
 	};

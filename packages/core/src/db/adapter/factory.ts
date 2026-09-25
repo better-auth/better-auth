@@ -306,19 +306,20 @@ export const createAdapterFactory =
 
 		const transformOutput = async (
 			data: Record<string, any> | null,
-			unsafe_model: string,
+			inputModel: string,
 			select: string[] = [],
 			join: JoinConfig | undefined,
 		) => {
 			const transformSingleOutput = async (
 				data: Record<string, any> | null,
-				unsafe_model: string,
+				inputModel: string,
 				select: string[] = [],
 			) => {
 				if (!data) return null;
+				const modelKey = getDefaultModelName(inputModel);
 				const newMappedKeys = config.mapKeysTransformOutput ?? {};
 				const transformedData: Record<string, any> = {};
-				const tableSchema = schema[getDefaultModelName(unsafe_model)]!.fields;
+				const tableSchema = schema[modelKey]!.fields;
 				const idKey = Object.entries(newMappedKeys).find(
 					([_, v]) => v === "id",
 				)?.[0];
@@ -384,7 +385,7 @@ export const createAdapterFactory =
 								field: newFieldName,
 								fieldAttributes: field,
 								select,
-								model: getModelName(unsafe_model),
+								model: getModelName(modelKey),
 								schema,
 								options,
 							});
@@ -397,23 +398,23 @@ export const createAdapterFactory =
 			};
 
 			if (!join || Object.keys(join).length === 0) {
-				return await transformSingleOutput(data, unsafe_model, select);
+				return await transformSingleOutput(data, inputModel, select);
 			}
 
-			unsafe_model = getDefaultModelName(unsafe_model);
+			const modelKey = getDefaultModelName(inputModel);
 			// for now we just transform the base model
 			// later we append the joined models to this object.
 			const transformedData: Record<string, any> = await transformSingleOutput(
 				data,
-				unsafe_model,
+				modelKey,
 				select,
 			);
 
 			// Get all the models that are required to be joined.
 			const requiredModels = Object.entries(join).map(
 				([model, joinConfig]) => ({
-					modelName: getModelName(model),
-					defaultModelName: getDefaultModelName(model),
+					modelName: model,
+					defaultModelName: joinConfig.modelKey ?? getDefaultModelName(model),
 					joinConfig,
 				}),
 			);
@@ -435,7 +436,7 @@ export const createAdapterFactory =
 						}
 					}
 					return await handleFallbackJoin({
-						baseModel: unsafe_model,
+						baseModel: modelKey,
 						baseData: transformedData,
 						joinModel: modelName,
 						specificJoinConfig: joinConfig,
@@ -460,7 +461,7 @@ export const createAdapterFactory =
 					for (const item of joinedData) {
 						const transformedItem = await transformSingleOutput(
 							item,
-							modelName,
+							defaultModelName,
 							[],
 						);
 						transformed.push(transformedItem);
@@ -468,7 +469,7 @@ export const createAdapterFactory =
 				} else {
 					const transformedItem = await transformSingleOutput(
 						joinedData,
-						modelName,
+						defaultModelName,
 						[],
 					);
 					transformed.push(transformedItem);
@@ -732,6 +733,7 @@ export const createAdapterFactory =
 				}
 
 				transformedJoin[getModelName(model)] = {
+					modelKey: model,
 					on: {
 						from,
 						to,
@@ -758,7 +760,8 @@ export const createAdapterFactory =
 			specificJoinConfig: JoinConfig[number];
 		}) => {
 			if (!baseData) return baseData;
-			const modelName = getModelName(joinModel);
+			const modelKey = joinConfig.modelKey ?? getDefaultModelName(joinModel);
+			const modelName = getModelName(modelKey);
 			const field = joinConfig.on.to;
 			const value =
 				baseData[
@@ -773,7 +776,7 @@ export const createAdapterFactory =
 			}
 			let result: Record<string, any> | Record<string, any>[] | null;
 			const where = transformWhereClause({
-				model: modelName,
+				model: modelKey,
 				where: [
 					{
 						field,
@@ -795,6 +798,7 @@ export const createAdapterFactory =
 						() =>
 							adapterInstance.findOne<Record<string, any>>({
 								model: modelName,
+								modelKey,
 								where: where,
 							}),
 					);
@@ -812,6 +816,7 @@ export const createAdapterFactory =
 						() =>
 							adapterInstance.findMany<Record<string, any>>({
 								model: modelName,
+								modelKey,
 								where: where,
 								limit,
 							}),
@@ -869,7 +874,7 @@ export const createAdapterFactory =
 			},
 			create: async <T extends Record<string, any>, R = T>({
 				data: unsafeData,
-				model: unsafeModel,
+				model: inputModel,
 				select,
 				forceAllowId = false,
 			}: {
@@ -880,8 +885,8 @@ export const createAdapterFactory =
 			}): Promise<R> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
-				unsafeModel = getDefaultModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				if (
 					"id" in unsafeData &&
 					typeof unsafeData.id !== "undefined" &&
@@ -915,7 +920,7 @@ export const createAdapterFactory =
 				if (!config.disableTransformInput) {
 					data = (await transformInput(
 						unsafeData,
-						unsafeModel,
+						modelKey,
 						"create",
 						forceAllowId,
 					)) as T;
@@ -932,7 +937,12 @@ export const createAdapterFactory =
 						[ATTR_DB_OPERATION_NAME]: "create",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.create<T>({ data, model }),
+					() =>
+						adapterInstance.create<T>({
+							data,
+							model,
+							modelKey,
+						}),
 				);
 				debugLog(
 					{ method: "create" },
@@ -944,7 +954,7 @@ export const createAdapterFactory =
 				if (!config.disableTransformOutput) {
 					transformed = await transformOutput(
 						res as any,
-						unsafeModel,
+						modelKey,
 						select,
 						undefined,
 					);
@@ -958,7 +968,7 @@ export const createAdapterFactory =
 				return transformed;
 			},
 			update: async <T>({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 				update: unsafeData,
 			}: {
@@ -968,10 +978,10 @@ export const createAdapterFactory =
 			}): Promise<T | null> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				unsafeModel = getDefaultModelName(unsafeModel);
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "update",
 				});
@@ -988,7 +998,7 @@ export const createAdapterFactory =
 				);
 				let data = unsafeData as T;
 				if (!config.disableTransformInput) {
-					data = (await transformInput(unsafeData, unsafeModel, "update")) as T;
+					data = (await transformInput(unsafeData, modelKey, "update")) as T;
 				}
 				debugLog(
 					{ method: "update" },
@@ -1005,6 +1015,7 @@ export const createAdapterFactory =
 					() =>
 						adapterInstance.update<T>({
 							model,
+							modelKey,
 							where,
 							update: data,
 						}),
@@ -1019,7 +1030,7 @@ export const createAdapterFactory =
 				if (!config.disableTransformOutput) {
 					transformed = await transformOutput(
 						res as any,
-						unsafeModel,
+						modelKey,
 						undefined,
 						undefined,
 					);
@@ -1033,7 +1044,7 @@ export const createAdapterFactory =
 				return transformed;
 			},
 			updateMany: async ({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 				update: unsafeData,
 			}: {
@@ -1043,13 +1054,13 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "updateMany",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -1058,7 +1069,7 @@ export const createAdapterFactory =
 				);
 				let data = unsafeData;
 				if (!config.disableTransformInput) {
-					data = await transformInput(unsafeData, unsafeModel, "update");
+					data = await transformInput(unsafeData, modelKey, "update");
 				}
 				debugLog(
 					{ method: "updateMany" },
@@ -1076,6 +1087,7 @@ export const createAdapterFactory =
 					() =>
 						adapterInstance.updateMany({
 							model,
+							modelKey,
 							where,
 							update: data,
 						}),
@@ -1103,7 +1115,7 @@ export const createAdapterFactory =
 				return updatedCount;
 			},
 			findOne: async <T extends Record<string, any>>({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 				select,
 				join: unsafeJoin,
@@ -1115,17 +1127,17 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "findOne",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
+					const result = transformJoinClause(modelKey, unsafeJoin, select);
 					if (result) {
 						join = result.join;
 						select = result.select;
@@ -1158,6 +1170,7 @@ export const createAdapterFactory =
 					() =>
 						adapterInstance.findOne<T>({
 							model,
+							modelKey,
 							where,
 							select,
 							join: passJoinToAdapter ? join : undefined,
@@ -1173,7 +1186,7 @@ export const createAdapterFactory =
 				// Handle fallback join if adapter doesn't support joins
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(res, unsafeModel, select, join);
+					transformed = await transformOutput(res, modelKey, select, join);
 				}
 				debugLog(
 					{ method: "findOne" },
@@ -1184,7 +1197,7 @@ export const createAdapterFactory =
 				return transformed;
 			},
 			findMany: async <T extends Record<string, any>>({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 				limit: unsafeLimit,
 				select,
@@ -1206,17 +1219,17 @@ export const createAdapterFactory =
 					unsafeLimit ??
 					options.advanced?.database?.defaultFindManyLimit ??
 					100;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "findMany",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
+					const result = transformJoinClause(modelKey, unsafeJoin, select);
 					if (result) {
 						join = result.join;
 						select = result.select;
@@ -1248,6 +1261,7 @@ export const createAdapterFactory =
 					() =>
 						adapterInstance.findMany<T>({
 							model,
+							modelKey,
 							where,
 							limit: limit,
 							select,
@@ -1267,7 +1281,7 @@ export const createAdapterFactory =
 				if (!config.disableTransformOutput) {
 					transformed = await Promise.all(
 						res.map(async (r: Record<string, any>) => {
-							return await transformOutput(r, unsafeModel, undefined, join);
+							return await transformOutput(r, modelKey, undefined, join);
 						}),
 					);
 				}
@@ -1281,7 +1295,7 @@ export const createAdapterFactory =
 				return transformed;
 			},
 			delete: async ({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 			}: {
 				model: string;
@@ -1289,13 +1303,13 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "delete",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1308,7 +1322,12 @@ export const createAdapterFactory =
 						[ATTR_DB_OPERATION_NAME]: "delete",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.delete({ model, where }),
+					() =>
+						adapterInstance.delete({
+							model,
+							modelKey,
+							where,
+						}),
 				);
 				debugLog(
 					{ method: "delete" },
@@ -1318,7 +1337,7 @@ export const createAdapterFactory =
 				);
 			},
 			deleteMany: async ({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 			}: {
 				model: string;
@@ -1326,13 +1345,13 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "deleteMany",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1345,7 +1364,12 @@ export const createAdapterFactory =
 						[ATTR_DB_OPERATION_NAME]: "deleteMany",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.deleteMany({ model, where }),
+					() =>
+						adapterInstance.deleteMany({
+							model,
+							modelKey,
+							where,
+						}),
 				);
 				debugLog(
 					{ method: "deleteMany" },
@@ -1356,7 +1380,7 @@ export const createAdapterFactory =
 				return res;
 			},
 			consumeOne: async <T>({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 			}: {
 				model: string;
@@ -1364,13 +1388,13 @@ export const createAdapterFactory =
 			}): Promise<T | null> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "consumeOne",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "consumeOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -1386,10 +1410,14 @@ export const createAdapterFactory =
 					},
 					() =>
 						adapterInstance.consumeOne
-							? adapterInstance.consumeOne<T>({ model, where })
+							? adapterInstance.consumeOne<T>({
+									model,
+									modelKey,
+									where,
+								})
 							: atomicFallbacks.consumeOne({
 									model,
-									logicalModel: unsafeModel,
+									modelKey,
 									where,
 								}),
 				);
@@ -1404,7 +1432,7 @@ export const createAdapterFactory =
 				if (!config.disableTransformOutput && res) {
 					transformed = await transformOutput(
 						res as Record<string, any>,
-						unsafeModel,
+						modelKey,
 						undefined,
 						undefined,
 					);
@@ -1418,7 +1446,7 @@ export const createAdapterFactory =
 				return transformed as T | null;
 			},
 			incrementOne: async <T>({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 				increment: unsafeIncrement,
 				set: unsafeSet,
@@ -1440,13 +1468,13 @@ export const createAdapterFactory =
 				}
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "incrementOne",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "incrementOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -1458,12 +1486,12 @@ export const createAdapterFactory =
 				const increment: Record<string, number> = {};
 				for (const [field, delta] of Object.entries(unsafeIncrement)) {
 					increment[
-						mappedKeys[field] || getFieldName({ model: unsafeModel, field })
+						mappedKeys[field] || getFieldName({ model: modelKey, field })
 					] = delta;
 				}
 				let set: Record<string, unknown> | undefined;
 				if (unsafeSet && !config.disableTransformInput) {
-					set = await transformInput(unsafeSet, unsafeModel, "update");
+					set = await transformInput(unsafeSet, modelKey, "update");
 				} else {
 					set = unsafeSet;
 				}
@@ -1485,13 +1513,14 @@ export const createAdapterFactory =
 						adapterInstance.incrementOne
 							? adapterInstance.incrementOne<T>({
 									model,
+									modelKey,
 									where,
 									increment,
 									set,
 								})
 							: atomicFallbacks.incrementOne({
 									model,
-									logicalModel: unsafeModel,
+									modelKey,
 									where,
 									increment,
 									set,
@@ -1508,7 +1537,7 @@ export const createAdapterFactory =
 				if (!config.disableTransformOutput && res) {
 					transformed = await transformOutput(
 						res as Record<string, any>,
-						unsafeModel,
+						modelKey,
 						undefined,
 						undefined,
 					);
@@ -1522,7 +1551,7 @@ export const createAdapterFactory =
 				return transformed as T | null;
 			},
 			count: async ({
-				model: unsafeModel,
+				model: inputModel,
 				where: unsafeWhere,
 			}: {
 				model: string;
@@ -1530,13 +1559,13 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
 				const where = transformWhereClause({
-					model: unsafeModel,
+					model: modelKey,
 					where: unsafeWhere,
 					action: "count",
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1552,7 +1581,12 @@ export const createAdapterFactory =
 						[ATTR_DB_OPERATION_NAME]: "count",
 						[ATTR_DB_COLLECTION_NAME]: model,
 					},
-					() => adapterInstance.count({ model, where }),
+					() =>
+						adapterInstance.count({
+							model,
+							modelKey,
+							where,
+						}),
 				);
 				debugLog(
 					{ method: "count" },
