@@ -1,10 +1,13 @@
-import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type {
+	OAuthProvider,
+	ProviderOptions,
+	TokenEndpointAuth,
+} from "../oauth2";
 import {
 	createAuthorizationURL,
-	getOAuth2Tokens,
 	refreshAccessToken,
+	validateAuthorizationCode,
 } from "../oauth2";
 import { createPlaceholderEmail } from "../utils/email";
 
@@ -23,6 +26,15 @@ export interface RedditOptions extends ProviderOptions<RedditProfile> {
 }
 
 export const reddit = (options: RedditOptions) => {
+	const tokenEndpoint = "https://www.reddit.com/api/v1/access_token";
+	const tokenRequestOptions = {
+		clientId: options.clientId,
+		clientSecret: options.clientSecret,
+	};
+	const tokenEndpointAuth = {
+		method: "client_secret_basic",
+	} satisfies TokenEndpointAuth;
+
 	return {
 		id: "reddit",
 		name: "Reddit",
@@ -43,34 +55,17 @@ export const reddit = (options: RedditOptions) => {
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
-			const body = new URLSearchParams({
-				grant_type: "authorization_code",
+			return validateAuthorizationCode({
 				code,
-				redirect_uri: options.redirectURI || redirectURI,
-			});
-			const headers = {
-				"content-type": "application/x-www-form-urlencoded",
-				accept: "text/plain",
-				"user-agent": "better-auth",
-				Authorization: `Basic ${base64.encode(
-					`${options.clientId}:${options.clientSecret}`,
-				)}`,
-			};
-
-			const { data, error } = await betterFetch<object>(
-				"https://www.reddit.com/api/v1/access_token",
-				{
-					method: "POST",
-					headers,
-					body: body.toString(),
+				redirectURI: options.redirectURI || redirectURI,
+				options: tokenRequestOptions,
+				tokenEndpoint,
+				tokenEndpointAuth,
+				headers: {
+					accept: "text/plain",
+					"user-agent": "better-auth",
 				},
-			);
-
-			if (error) {
-				throw error;
-			}
-
-			return getOAuth2Tokens(data);
+			});
 		},
 
 		refreshAccessToken: options.refreshAccessToken
@@ -78,13 +73,9 @@ export const reddit = (options: RedditOptions) => {
 			: async (refreshToken) => {
 					return refreshAccessToken({
 						refreshToken,
-						options: {
-							clientId: options.clientId,
-							clientKey: options.clientKey,
-							clientSecret: options.clientSecret,
-						},
-						authentication: "basic",
-						tokenEndpoint: "https://www.reddit.com/api/v1/access_token",
+						options: tokenRequestOptions,
+						tokenEndpoint,
+						tokenEndpointAuth,
 					});
 				},
 		async getUserInfo(token) {

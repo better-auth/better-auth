@@ -129,6 +129,46 @@ When making changes to public APIs, please update the relevant documentation.
 Before opening an issue, search existing issues to avoid duplicates.
 We provide templates to help you get started.
 
+### Issue Triage
+
+These labels communicate current maintainer intent and the next step to
+contributors. Straightforward issues may be resolved directly without entering
+this flow.
+
+An issue is untriaged until it has a `needs:*` or `target:*` label. Once
+triaged, it has exactly one label from either group:
+
+| Label | Meaning |
+| --- | --- |
+| `needs: info` | More information is required from the reporter. |
+| `needs: repro` | A minimal reproduction is required. |
+| `needs: discussion` | Further discussion is required to align on scope or direction. |
+| `target: patch` | Accepted and can ship in a patch release. |
+| `target: minor` | Accepted and requires a minor release. |
+| `target: major` | Accepted and requires a major release. |
+
+```text
+Untriaged
+    │
+    ▼
+Triaged
+    ├─ needs: info / repro / discussion
+    └─ target: patch / minor / major
+    │
+    ▼
+Completed
+```
+
+On a triaged issue, the absence of a `needs:*` label means maintainers are not
+currently requesting additional information, a reproduction, or further
+discussion. Labels may be added, changed, or removed as the issue evolves.
+
+A `target:*` label identifies the smallest release category that can contain the
+change. It does not indicate priority or commit the issue to the next matching
+release after the label is applied or work begins. The change may ship in any
+later matching release. A milestone identifies the version currently planned;
+an assignee or linked pull request indicates active work.
+
 ### Bug Reports
 
 Use the [bug report template](https://github.com/better-auth/better-auth/issues/new?template=bug_report.yml).
@@ -179,7 +219,12 @@ See [SECURITY.md](/SECURITY.md) for details.
 ## Pull Request Guidelines
 
 > [!NOTE]
-> For new features, please open an issue first to discuss before moving forward. We do not review large feature PRs opened without going through an issue first.
+> Discuss new features and other large changes in an issue before implementation.
+> Pull requests that introduce features before this discussion, or whose scope is
+> too broad for effective review, may be closed without detailed review.
+> In turn, the Better Auth team aims to participate in these community discussions
+> promptly and provide clear direction, so contributors can avoid investing in
+> work that may not align with the project.
 
 ### Code Formatting and Linting
 
@@ -270,4 +315,7 @@ We welcome AI-assisted contributions, whether code or issue reports, as long
 as they solve a real problem. Code must follow our coding standards and
 include appropriate tests and documentation. You should also review and
 understand what you're submitting well enough to discuss it. PRs and issues
-that do not meet these guidelines will be closed.
+that do not meet these guidelines will be closed. AI can reduce implementation
+effort, but it does not reduce the cost of review, long-term maintenance,
+compatibility, or support. We prioritize changes that align with the project's
+direction over the volume of code submitted.

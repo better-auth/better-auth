@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	additionalAuthorizationParamsSchema,
@@ -25,6 +24,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
 import { isValidEmail } from "../../utils/email";
+import { assertPasswordNotTooLong } from "../../utils/password";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -324,7 +324,6 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					provider,
 					oauthTokens,
 					userInfo.data,
-					c.context.options.account?.identityStrategy,
 				);
 				const providerProfile = toOAuthProfileRecord(userInfo.data);
 				const data = await handleOAuthUserInfo(c, {
@@ -337,7 +336,6 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						emailVerified: userInfo.user.emailVerified || false,
 					},
 					account: {
-						providerId: provider.id,
 						...accountKey,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
@@ -526,15 +524,14 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			if (!(await isValidEmail(email, ctx.context.options))) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
+			assertPasswordNotTooLong(ctx, password);
 			const userRecord = await ctx.context.internalAdapter.findUserByEmail(
 				email.toLowerCase(),
 				{ includeAccounts: true },
 			);
-			const credentialIssuer = createLocalAccountIssuer("credential");
 			const credentialAccount = userRecord?.accounts.find(
 				(account) =>
 					account.providerId === "credential" &&
-					account.issuer === credentialIssuer &&
 					account.accountId === userRecord.user.id,
 			);
 

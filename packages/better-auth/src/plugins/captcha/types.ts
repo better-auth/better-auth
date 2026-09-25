@@ -52,8 +52,55 @@ export interface CaptchaFoxOptions extends BaseCaptchaOptions {
 	siteKey?: string | undefined;
 }
 
+/**
+ * BotID verdict fields available to custom request validation.
+ *
+ * @see https://vercel.com/docs/botid/verified-bots
+ */
+export type BotIdVerification = {
+	isBot: boolean;
+	isVerifiedBot?: boolean | undefined;
+	verifiedBotName?: string | undefined;
+	verifiedBotCategory?: string | undefined;
+};
+
+export type ValidateRequestContext = {
+	request: Request;
+	verification: BotIdVerification;
+};
+
+/**
+ * Protect auth requests with Vercel BotID. The browser must also protect the
+ * same request paths and methods with BotID's client SDK.
+ *
+ * @see https://vercel.com/docs/botid/get-started
+ */
+export interface VercelBotIdOptions {
+	provider: typeof Providers.VERCEL_BOTID;
+	/**
+	 * Auth paths to verify, without the Better Auth base path.
+	 *
+	 * @default ["/sign-up/email", "/sign-in/email", "/request-password-reset"]
+	 */
+	endpoints?: string[] | undefined;
+	/**
+	 * Vercel's server-side check for the current request. Pass `checkBotId` from
+	 * `botid/server`, or wrap it to supply SDK options.
+	 */
+	checkBotId: () => Promise<BotIdVerification>;
+
+	/**
+	 * Override the default `isBot === false` decision. Return `true` to allow
+	 * the request, including a verified bot you trust.
+	 *
+	 * @see https://vercel.com/docs/botid/verified-bots
+	 */
+	validateRequest?: (ctx: ValidateRequestContext) => boolean | Promise<boolean>;
+}
+
 export type CaptchaOptions =
 	| GoogleRecaptchaOptions
 	| CloudflareTurnstileOptions
 	| HCaptchaOptions
-	| CaptchaFoxOptions;
+	| CaptchaFoxOptions
+	| VercelBotIdOptions;

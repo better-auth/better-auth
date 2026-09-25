@@ -391,7 +391,6 @@ describe("magic link", async () => {
 		await internalAdapter.createAccount({
 			userId,
 			providerId: "google",
-			issuer: "local:google",
 			accountId: "attacker-google",
 		});
 

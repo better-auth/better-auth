@@ -34,18 +34,22 @@ export function buildRelationKeysByModel(
 export function getOneToOneRelationKey({
 	baseModel,
 	joinModel,
+	baseModelKey,
+	joinModelKey,
 	relationKeys,
 	schema,
 	getDefaultModelName,
 }: {
 	baseModel: string;
 	joinModel: string;
+	baseModelKey?: string | undefined;
+	joinModelKey?: string | undefined;
 	relationKeys: ReadonlySet<string> | undefined;
 	schema: BetterAuthDBSchema;
 	getDefaultModelName: (model: string) => string;
 }) {
-	const defaultBaseModelName = getDefaultModelName(baseModel);
-	const defaultJoinModelName = getDefaultModelName(joinModel);
+	const defaultBaseModelName = baseModelKey ?? getDefaultModelName(baseModel);
+	const defaultJoinModelName = joinModelKey ?? getDefaultModelName(joinModel);
 	const joinModelFields = schema[defaultJoinModelName]?.fields ?? {};
 	// Keep this direction check aligned with transformJoinClause and the
 	// forward/reverse naming in both Drizzle schema generators.

@@ -1,7 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { betterAuth } from "../auth/full";
 import { getAdapter } from "../db/adapter-kysely";
 import { jwt } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
@@ -10,9 +9,6 @@ import { createAuthContext } from "./create-context";
 import { getAwaitableValue } from "./helpers";
 
 describe("base context creation", () => {
-	const omittedIdentityStrategyWarning =
-		'account.identityStrategy is omitted; Better Auth v1.7 compatibility mode is using issuer identity. Add account: { identityStrategy: "issuer" } to make this behavior explicit. For a new database, use account: { identityStrategy: "provider-id" } instead. Run auth migrate plan before changing populated account data.';
-
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
 		const opts: BetterAuthOptions = {
 			baseURL: "http://localhost:3000",
@@ -34,53 +30,6 @@ describe("base context creation", () => {
 		expect(res.options.baseURL).toBe("http://localhost:5147");
 		expect(res.baseURL).toBe("http://localhost:5147/api/auth");
 		vi.unstubAllEnvs();
-	});
-
-	it("warns once when account.identityStrategy is omitted", async () => {
-		const log = vi.fn();
-		const baseOptions = {
-			baseURL: "http://localhost:3000",
-			logger: { level: "warn", log },
-		} satisfies BetterAuthOptions;
-		const adapter = await getAdapter(baseOptions);
-		const findOne = vi.spyOn(adapter, "findOne");
-		const findMany = vi.spyOn(adapter, "findMany");
-		const auth = betterAuth({
-			...baseOptions,
-			database: () => adapter,
-		});
-
-		expect(log).toHaveBeenCalledTimes(1);
-		await auth.$context;
-		await auth.$context;
-
-		expect(log).toHaveBeenCalledTimes(1);
-		expect(log).toHaveBeenCalledWith("warn", omittedIdentityStrategyWarning);
-		expect(findOne).not.toHaveBeenCalled();
-		expect(findMany).not.toHaveBeenCalled();
-	});
-
-	it.each([
-		"issuer",
-		"provider-id",
-	] as const)("does not warn when account.identityStrategy is explicitly %s", async (identityStrategy) => {
-		const log = vi.fn();
-		const options = {
-			baseURL: "http://localhost:3000",
-			logger: { level: "warn", log },
-			account: { identityStrategy },
-		} satisfies BetterAuthOptions;
-		const adapter = await getAdapter(options);
-		const auth = betterAuth({
-			...options,
-			database: () => adapter,
-		});
-		await auth.$context;
-
-		expect(log).not.toHaveBeenCalledWith(
-			"warn",
-			omittedIdentityStrategyWarning,
-		);
 	});
 
 	it("should respect base path", async () => {

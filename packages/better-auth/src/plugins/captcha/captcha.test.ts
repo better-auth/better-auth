@@ -1,4 +1,5 @@
 import * as betterFetchModule from "@better-fetch/fetch";
+import { checkBotId as vercelCheckBotId } from "botid/server";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
@@ -224,24 +225,82 @@ describe("captcha", async () => {
 			expect(res.error?.status).toBe(500);
 		});
 
-		it("Should return 403 in case of a validation failure", async () => {
-			mockBetterFetch.mockResolvedValue({
-				data: {
-					success: false,
-					"error-codes": ["invalid-input-response"],
-				},
-			});
-			const res = await client.signIn.email({
-				email: "test@test.com",
-				password: "test123456",
-				fetchOptions: {
-					headers: {
-						"x-captcha-response": "captcha-token",
+		/**
+		 * @see https://developers.cloudflare.com/turnstile/get-started/server-side-validation/#best-practices
+		 */
+		describe("Siteverify failures", () => {
+			it("returns a generic 403", async () => {
+				mockBetterFetch.mockResolvedValue({
+					data: {
+						success: false,
+						"error-codes": ["invalid-input-response"],
 					},
-				},
+				});
+				const res = await client.signIn.email({
+					email: "test@test.com",
+					password: "test123456",
+					fetchOptions: {
+						headers: {
+							"x-captcha-response": "captcha-token",
+						},
+					},
+				});
+
+				expect(res.error?.status).toBe(403);
+				expect(res.error?.code).toBe("VERIFICATION_FAILED");
+				expect(res.error?.message).toBe("Captcha verification failed");
 			});
 
-			expect(res.error?.status).toBe(403);
+			it("logs diagnostics without sensitive response fields", async () => {
+				const log = vi.fn();
+				const { client } = await getTestInstance({
+					logger: { log },
+					plugins: [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: "xx-secret-key",
+						}),
+					],
+				});
+				mockBetterFetch.mockResolvedValue({
+					data: {
+						success: false,
+						"error-codes": ["invalid-input-response"],
+						hostname: "example.com",
+						action: "login",
+						cdata: "private-custom-data",
+						metadata: {
+							ephemeral_id: "private-device-id",
+						},
+					},
+				});
+
+				await client.signIn.email({
+					email: "test@test.com",
+					password: "test123456",
+					fetchOptions: {
+						headers: {
+							"x-captcha-response": "captcha-token",
+						},
+					},
+				});
+
+				expect(log).toHaveBeenCalledWith(
+					"warn",
+					"Cloudflare Turnstile verification failed",
+					expect.objectContaining({
+						provider: "cloudflare-turnstile",
+						reason: "siteverify_rejected",
+						errorCodes: ["invalid-input-response"],
+						hostname: "example.com",
+						action: "login",
+					}),
+				);
+
+				const loggedDetails = log.mock.calls[0]?.[2];
+				expect(loggedDetails).not.toHaveProperty("cdata");
+				expect(loggedDetails).not.toHaveProperty("metadata");
+			});
 		});
 	});
 
@@ -808,9 +867,203 @@ describe("captcha", async () => {
 		});
 	});
 
+	describe("vercel-botid", () => {
+		it.each([
+			"/sign-up/email",
+			"/sign-in/email",
+			"/request-password-reset",
+		])("rejects bots on %s without a captcha token or secret key", async (path) => {
+			const checkBotId = vi.fn(async () => ({ isBot: true }));
+			const { auth } = await getTestInstance({
+				plugins: [captcha({ provider: "vercel-botid", checkBotId })],
+			});
+			const res = await auth.handler(
+				new Request(`http://localhost:3000/api/auth${path}`, {
+					method: "POST",
+				}),
+			);
+
+			expect(res.status).toBe(403);
+			expect(await res.json()).toMatchObject({
+				code: "VERIFICATION_FAILED",
+			});
+			expect(checkBotId).toHaveBeenCalledOnce();
+		});
+
+		/**
+		 * @see https://vercel.com/docs/botid/local-development-behavior
+		 */
+		it("rejects the SDK's development BAD-BOT verdict", async () => {
+			const checkBotId = () =>
+				vercelCheckBotId({ developmentOptions: { bypass: "BAD-BOT" } });
+			const { auth } = await getTestInstance({
+				plugins: [captcha({ provider: "vercel-botid", checkBotId })],
+			});
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email", {
+					method: "POST",
+				}),
+			);
+
+			expect(res.status).toBe(403);
+			expect(await res.json()).toMatchObject({
+				code: "VERIFICATION_FAILED",
+			});
+		});
+
+		/**
+		 * @see https://vercel.com/docs/botid/local-development-behavior
+		 */
+		it("allows the SDK's development HUMAN verdict without a captcha token", async () => {
+			const checkBotId = vi.fn(() =>
+				vercelCheckBotId({ developmentOptions: { bypass: "HUMAN" } }),
+			);
+			const { client, testUser } = await getTestInstance({
+				plugins: [captcha({ provider: "vercel-botid", checkBotId })],
+			});
+			const res = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+
+			expect(res.error).toBeNull();
+			expect(res.data?.user).toBeDefined();
+			expect(checkBotId).toHaveBeenCalledOnce();
+		});
+
+		it("allows a verified bot when custom validation opts in", async () => {
+			const checkBotId = vi.fn(async () => ({
+				isBot: true,
+				isVerifiedBot: true,
+				verifiedBotName: "trusted-agent",
+			}));
+			const { client, testUser } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "vercel-botid",
+						checkBotId,
+						validateRequest: ({ verification }) =>
+							verification.isVerifiedBot === true &&
+							verification.verifiedBotName === "trusted-agent",
+					}),
+				],
+			});
+			const res = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+
+			expect(res.error).toBeNull();
+			expect(res.data?.user).toBeDefined();
+		});
+
+		it("rejects a human when custom validation rejects the request", async () => {
+			const checkBotId = vi.fn(async () => ({ isBot: false }));
+			const { client } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "vercel-botid",
+						checkBotId,
+						validateRequest: () => false,
+					}),
+				],
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(res.error?.status).toBe(403);
+		});
+
+		it("returns a generic 500 when the check fails", async () => {
+			const checkBotId = vi.fn(async () => {
+				throw new Error("private BotID failure");
+			});
+			const { client } = await getTestInstance({
+				plugins: [captcha({ provider: "vercel-botid", checkBotId })],
+			});
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(res.error?.status).toBe(500);
+			expect(res.error?.code).toBe("UNKNOWN_ERROR");
+			expect(res.error?.message).toBe("Something went wrong");
+		});
+
+		it("does not check routes outside the protected endpoints", async () => {
+			const checkBotId = vi.fn(async () => ({ isBot: true }));
+			const { auth } = await getTestInstance({
+				plugins: [captcha({ provider: "vercel-botid", checkBotId })],
+			});
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/ok"),
+			);
+
+			expect(res.status).toBe(200);
+			expect(checkBotId).not.toHaveBeenCalled();
+		});
+
+		it("fails closed when the check never resolves", async () => {
+			vi.useFakeTimers();
+			try {
+				const checkBotId = () => new Promise<{ isBot: boolean }>(() => {});
+				const { vercelBotId } = await import("./verify-handlers/vercel-botid");
+				const resultPromise = vercelBotId({
+					request: new Request("http://localhost/sign-in/email"),
+					checkBotId,
+				});
+				const settled = vi.fn();
+				void resultPromise.then(settled, settled);
+				const assertion = expect(resultPromise).rejects.toThrow(
+					"CAPTCHA service unavailable",
+				);
+
+				await vi.advanceTimersByTimeAsync(CAPTCHA_VERIFY_TIMEOUT_MS - 1);
+				expect(settled).not.toHaveBeenCalled();
+				await vi.advanceTimersByTimeAsync(1);
+
+				await assertion;
+				expect(settled).toHaveBeenCalledOnce();
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("fails closed when custom validation never resolves", async () => {
+			vi.useFakeTimers();
+			try {
+				const { vercelBotId } = await import("./verify-handlers/vercel-botid");
+				const resultPromise = vercelBotId({
+					request: new Request("http://localhost/sign-in/email"),
+					checkBotId: async () => ({ isBot: false }),
+					validateRequest: () => new Promise<boolean>(() => {}),
+				});
+				const settled = vi.fn();
+				void resultPromise.then(settled, settled);
+				const assertion = expect(resultPromise).rejects.toThrow(
+					"CAPTCHA service unavailable",
+				);
+
+				await vi.advanceTimersByTimeAsync(CAPTCHA_VERIFY_TIMEOUT_MS - 1);
+				expect(settled).not.toHaveBeenCalled();
+				await vi.advanceTimersByTimeAsync(1);
+
+				await assertion;
+				expect(settled).toHaveBeenCalledOnce();
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
 	describe("action and hostname binding", async () => {
 		it("rejects a Turnstile token whose action does not match expectedAction", async () => {
+			const log = vi.fn();
 			const { client } = await getTestInstance({
+				logger: { log },
 				plugins: [
 					captcha({
 						provider: "cloudflare-turnstile",
@@ -828,10 +1081,22 @@ describe("captcha", async () => {
 				fetchOptions: { headers: { "x-captcha-response": "token" } },
 			});
 			expect(res.error?.status).toBe(403);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				"Cloudflare Turnstile verification failed",
+				expect.objectContaining({
+					provider: "cloudflare-turnstile",
+					reason: "action_mismatch",
+					expectedAction: "login",
+					actualAction: "signup",
+				}),
+			);
 		});
 
 		it("rejects a Turnstile token from a hostname outside allowedHostnames", async () => {
+			const log = vi.fn();
 			const { client } = await getTestInstance({
+				logger: { log },
 				plugins: [
 					captcha({
 						provider: "cloudflare-turnstile",
@@ -849,6 +1114,16 @@ describe("captcha", async () => {
 				fetchOptions: { headers: { "x-captcha-response": "token" } },
 			});
 			expect(res.error?.status).toBe(403);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				"Cloudflare Turnstile verification failed",
+				expect.objectContaining({
+					provider: "cloudflare-turnstile",
+					reason: "hostname_mismatch",
+					allowedHostnames: ["myapp.com"],
+					actualHostname: "untrusted.example",
+				}),
+			);
 		});
 
 		it("rejects a reCAPTCHA v3 token whose action does not match expectedAction", async () => {

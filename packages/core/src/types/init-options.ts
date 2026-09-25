@@ -1,6 +1,5 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -28,10 +27,12 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
+import type { D1Database } from "./database";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
+
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
@@ -471,6 +472,17 @@ export type BetterAuthAdvancedOptions = {
 				 * @default false
 				 */
 				joins?: boolean;
+				/**
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database; Drizzle and Prisma inspect
+				 * local schema metadata without opening a connection.
+				 * Set `false` to disable runtime schema validation.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
@@ -639,6 +651,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 				| {
 						/**
@@ -669,6 +691,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 		  )
 		| undefined;
@@ -1169,21 +1201,6 @@ export type BetterAuthOptions = {
 		| undefined;
 	account?:
 		| (BetterAuthDBOptions<"account", keyof BaseAccount> & {
-				/**
-				 * Determines which namespace Better Auth pairs with a provider's
-				 * account ID when recognizing an external account.
-				 *
-				 * `"issuer"` uses the authority verified by the provider, or the
-				 * provider's synthetic issuer when it has no issuer of its own.
-				 * `"provider-id"` stores a deterministic provider namespace in the same
-				 * required issuer field, preserving logical v1.6 `(providerId, accountId)`
-				 * recognition. The guided 1.6 migration requires an explicit strategy for
-				 * populated accounts.
-				 *
-				 * @default "issuer" when omitted in v1.7 compatibility mode.
-				 * Generated configurations explicitly use "provider-id".
-				 */
-				identityStrategy?: "issuer" | "provider-id";
 				/**
 				 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 				 * will be updated on sign in with the latest data from the provider.
@@ -1810,6 +1827,26 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debug?: boolean;
+		  }
+		| undefined;
+	/**
+	 * Experimental features.
+	 */
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
 		  }
 		| undefined;
 };

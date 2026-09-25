@@ -1,12 +1,15 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { getDate } from "../../utils/date";
 import { emailSchema } from "../../utils/email";
-import { validatePassword } from "../../utils/password";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+	validatePassword,
+} from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { sensitiveSessionMiddleware } from "./session";
 
@@ -281,14 +284,8 @@ export const resetPassword = createAuthEndpoint(
 
 		const { newPassword } = ctx.body;
 
-		const minLength = ctx.context.password?.config.minPasswordLength;
-		const maxLength = ctx.context.password?.config.maxPasswordLength;
-		if (newPassword.length < minLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
-		if (newPassword.length > maxLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
+		assertPasswordNotTooShort(ctx, newPassword);
+		assertPasswordNotTooLong(ctx, newPassword);
 
 		const id = `reset-password:${token}`;
 
@@ -312,7 +309,6 @@ export const resetPassword = createAuthEndpoint(
 			await ctx.context.internalAdapter.createAccount({
 				userId,
 				providerId: "credential",
-				issuer: createLocalAccountIssuer("credential"),
 				accountId: user.id,
 				password: hashedPassword,
 			});

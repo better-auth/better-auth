@@ -3,7 +3,6 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -17,6 +16,10 @@ import {
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { isValidEmail } from "../../utils/email";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
@@ -427,6 +430,10 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
+			if (ctx.body.password) {
+				assertPasswordNotTooLong(ctx, ctx.body.password);
+			}
+
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {
@@ -461,7 +468,6 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				);
 				await ctx.context.internalAdapter.linkAccount({
 					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
 					accountId: user.id,
 					password: hashedPassword,
 					userId: user.id,
@@ -1715,16 +1721,8 @@ export const setUserPassword = (opts: AdminOptions) =>
 			}
 
 			const { newPassword, userId } = ctx.body;
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (newPassword.length < minPasswordLength) {
-				ctx.context.logger.warn("Password is too short");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (newPassword.length > maxPasswordLength) {
-				ctx.context.logger.warn("Password is too long");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooShort(ctx, newPassword);
+			assertPasswordNotTooLong(ctx, newPassword);
 			const user = await ctx.context.internalAdapter.findUserById(userId);
 			if (!user) {
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
@@ -1741,7 +1739,6 @@ export const setUserPassword = (opts: AdminOptions) =>
 				await ctx.context.internalAdapter.createAccount({
 					userId,
 					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
 					accountId: user.id,
 					password: hashedPassword,
 				});
