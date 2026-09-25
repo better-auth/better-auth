@@ -516,6 +516,43 @@ describe("oauth logout", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11262
+	 */
+	it("includes the target origin in confirmation CSP form-action when post_logout_redirect_uri is registered", async () => {
+		const redirectClient = await createLogoutRedirectClient();
+		const confirmation = await requestEndSession({
+			query: {
+				client_id: redirectClient.client_id,
+				post_logout_redirect_uri: logoutRedirectUri,
+				state: "confirmed-state",
+			},
+			accept: "text/html",
+		});
+		expect(confirmation.response.status).toBe(200);
+		expect(confirmation.response.headers.get("content-security-policy")).toBe(
+			`default-src 'none'; form-action 'self' ${new URL(logoutRedirectUri).origin}; base-uri 'none'; frame-ancestors 'none'`,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11262
+	 */
+	it("falls back to form-action 'self' in confirmation CSP when post_logout_redirect_uri is unregistered", async () => {
+		const redirectClient = await createLogoutRedirectClient();
+		const confirmation = await requestEndSession({
+			query: {
+				client_id: redirectClient.client_id,
+				post_logout_redirect_uri: "https://evil.example/logout",
+			},
+			accept: "text/html",
+		});
+		expect(confirmation.response.status).toBe(200);
+		expect(confirmation.response.headers.get("content-security-policy")).toBe(
+			"default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+		);
+	});
+
+	/**
 	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html#Redirection
 	 */
 	it("revalidates a no-hint redirect before completing confirmation", async () => {
