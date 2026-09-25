@@ -3,7 +3,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { isLoopbackIP } from "@better-auth/core/utils/host";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
@@ -167,6 +167,7 @@ async function resolveClientRegistrationResources(
 function validateClientRedirectUri(
 	redirectUri: string,
 	applicationType: "web" | "native",
+	allowInsecureRedirectUri?: (url: URL) => boolean,
 ) {
 	let url: URL;
 	try {
@@ -199,7 +200,15 @@ function validateClientRedirectUri(
 		rawHttpHostname === "127.0.0.1" ||
 		rawHttpHostname === "[::1]";
 
+	const insecureHttpAllowed =
+		isHttp &&
+		!isLoopbackHost(url.hostname) &&
+		allowInsecureRedirectUri?.(url) === true;
+
 	if (applicationType === "web") {
+		if (insecureHttpAllowed) {
+			return;
+		}
 		if (!isHttps || isRedirectLoopback) {
 			invalidRedirectUri(
 				`web clients require https redirect URIs on non-loopback hosts: ${redirectUri}`,
@@ -217,7 +226,7 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isAllowedNativeHttpLoopback) {
+		if (!isAllowedNativeHttpLoopback && !insecureHttpAllowed) {
 			invalidRedirectUri(
 				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
 			);
@@ -404,6 +413,7 @@ export async function checkOAuthClient(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
 				(isClientMetadataDocument ? "native" : "web"),
+			opts.allowInsecureRedirectUri,
 		);
 	}
 

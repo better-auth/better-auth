@@ -48,7 +48,7 @@ import type {
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
-import { verificationValueSchema } from "./types/zod";
+import { createVerificationValueSchema } from "./types/zod";
 import { pickClaims } from "./userinfo";
 import {
 	clientAllowsGrant,
@@ -1396,7 +1396,7 @@ async function checkVerificationValue(
 			error: "invalid_grant",
 		});
 	}
-	const parsed = verificationValueSchema.safeParse(rawValue);
+	const parsed = createVerificationValueSchema().safeParse(rawValue);
 	if (!parsed.success) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "malformed verification value",

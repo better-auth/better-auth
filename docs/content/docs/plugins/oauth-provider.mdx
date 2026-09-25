@@ -1402,6 +1402,26 @@ oauthProvider({
 })
 ```
 
+### Insecure HTTP redirect URIs
+
+Redirect URIs default to HTTPS. HTTP is allowed only for loopback hosts (`localhost`, `127.0.0.0/8`, `[::1]`). Self-hosted deployments on a LAN, VPN, or private DNS name can opt in per origin with `allowInsecureRedirectUri`. The callback receives an already-parsed `URL` and is authoritative for any non-loopback HTTP URL, including hosts that classify as public such as `myapp.homelab.lan`.
+
+The same callback applies to authorize, token, logout (`post_logout_redirect_uri`), and dynamic client registration. When the policy rejects a URI on authorize, the authorization server returns `invalid_request` itself instead of redirecting the error to the rejected URI.
+
+```ts title="auth.ts"
+oauthProvider({
+  loginPage: "/sign-in",
+  consentPage: "/consent",
+  allowInsecureRedirectUri: (url) => {
+    const frontend = process.env.FRONTEND_URL;
+    if (!frontend) return false;
+    return url.origin === new URL(frontend).origin;
+  },
+})
+```
+
+Leave the option unset to keep HTTPS-only as the default.
+
 ### PKCE Configuration
 
 PKCE (Proof Key for Code Exchange) is a security mechanism that prevents authorization code interception attacks. This plugin follows the OAuth 2.1 specification, which requires PKCE by default for all authorization code flows.

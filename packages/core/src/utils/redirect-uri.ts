@@ -23,38 +23,36 @@ export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
 }
 
 /**
- * Zod schema for OAuth redirect URIs and other developer-supplied URLs that the
- * server stores and later hands back to a browser.
- *
- * - Rejects dangerous schemes (`javascript:`, `data:`, `vbscript:`).
- * - Rejects URIs with a fragment component (`#...`) per RFC 6749 §3.1.2.
- * - Requires HTTPS, except for loopback hosts (`127.0.0.0/8`, `[::1]`,
- *   `*.localhost` per RFC 6761), where HTTP is allowed for local development.
- * - Allows custom schemes for mobile apps (e.g. `myapp://callback`).
- *
- * This is the single source of truth for redirect-URI validation across the
- * OAuth provider plugins. Consume it from `@better-auth/core/utils/redirect-uri`
- * rather than re-implementing the scheme policy per plugin.
+ * Operator opt-in for non-loopback `http:` redirect URIs. The callback receives
+ * an already-parsed `URL` and is authoritative for any non-loopback HTTP URL,
+ * including hosts `classifyHost` would call public (for example
+ * `http://myapp.homelab.lan`). Returning `true` allows that origin; any other
+ * result keeps the HTTPS-only default.
  */
-export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
-	let u: URL;
+export type AllowInsecureRedirectUri = (url: URL) => boolean;
+
+function refineStructuralUrl(
+	val: string,
+	ctx: z.RefinementCtx,
+): URL | undefined {
+	let parsedUrl: URL;
 	try {
-		u = new URL(val);
+		parsedUrl = new URL(val);
 	} catch {
 		ctx.addIssue({
 			code: "custom",
 			message: "URL must be parseable",
 			fatal: true,
 		});
-		return z.NEVER;
+		return undefined;
 	}
 
-	if (DANGEROUS_URL_SCHEMES.includes(u.protocol)) {
+	if (DANGEROUS_URL_SCHEMES.includes(parsedUrl.protocol)) {
 		ctx.addIssue({
 			code: "custom",
 			message: "URL cannot use javascript:, data:, or vbscript: scheme",
 		});
-		return;
+		return undefined;
 	}
 
 	if (val.includes("#")) {
@@ -64,11 +62,59 @@ export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
 		});
 	}
 
-	if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
-		ctx.addIssue({
-			code: "custom",
-			message:
-				"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
-		});
-	}
-});
+	return parsedUrl;
+}
+
+/**
+ * Structural URL checks shared by authorize-time and stored-code schemas:
+ * parseable URI, no fragment, no `javascript:`/`data:`/`vbscript:`. Does not
+ * enforce HTTPS. Use this when the value was already checked against the live
+ * redirect-URI policy (for example an authorization-code verification blob).
+ */
+export function createStructuralUrlSchema() {
+	return z.url().superRefine((val, ctx) => {
+		refineStructuralUrl(val, ctx);
+	});
+}
+
+export const StructuralUrlSchema = createStructuralUrlSchema();
+
+/**
+ * Zod schema for OAuth redirect URIs and other developer-supplied URLs that the
+ * server stores and later hands back to a browser.
+ *
+ * - Rejects dangerous schemes (`javascript:`, `data:`, `vbscript:`).
+ * - Rejects URIs with a fragment component (`#...`) per RFC 6749 §3.1.2.
+ * - Requires HTTPS, except for loopback hosts (`127.0.0.0/8`, `[::1]`,
+ *   `*.localhost` per RFC 6761), where HTTP is allowed for local development.
+ * - Allows custom schemes for mobile apps (e.g. `myapp://callback`).
+ * - Optionally allows non-loopback HTTP when `allowInsecureRedirectUri`
+ *   returns true for the parsed URL.
+ *
+ * This is the single source of truth for redirect-URI validation across the
+ * OAuth provider plugins. Consume it from `@better-auth/core/utils/redirect-uri`
+ * rather than re-implementing the scheme policy per plugin.
+ */
+export function createSafeUrlSchema(
+	allowInsecureRedirectUri?: AllowInsecureRedirectUri,
+) {
+	return z.url().superRefine((val, ctx) => {
+		const parsedUrl = refineStructuralUrl(val, ctx);
+		if (!parsedUrl) {
+			return;
+		}
+
+		if (parsedUrl.protocol === "http:" && !isLoopbackHost(parsedUrl.host)) {
+			if (allowInsecureRedirectUri?.(parsedUrl) === true) {
+				return;
+			}
+			ctx.addIssue({
+				code: "custom",
+				message:
+					"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
+			});
+		}
+	});
+}
+
+export const SafeUrlSchema = createSafeUrlSchema();

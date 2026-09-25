@@ -50,9 +50,9 @@ import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
-	clientRegistrationRequestSchema,
+	createClientRegistrationRequestSchema,
+	createSafeUrlSchema,
 	ResourceUriSchema,
-	SafeUrlSchema,
 } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
@@ -79,13 +79,6 @@ export const DEFAULT_OAUTH_SCOPES = [
 	"email",
 	"offline_access",
 ] as const;
-
-const rpInitiatedLogoutRequestSchema = z.object({
-	id_token_hint: z.string().optional(),
-	client_id: z.string().optional(),
-	post_logout_redirect_uri: SafeUrlSchema.optional(),
-	state: z.string().optional(),
-});
 
 type RPInitiatedLogoutFields = {
 	id_token_hint?: string;
@@ -231,6 +224,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 	validateOAuthProviderExtensions(opts.extensions);
+
+	const safeUrlSchema = createSafeUrlSchema(opts.allowInsecureRedirectUri);
+	const clientRegistrationSchema = createClientRegistrationRequestSchema(
+		opts.allowInsecureRedirectUri,
+	);
+	const rpInitiatedLogoutRequestSchema = z.object({
+		id_token_hint: z.string().optional(),
+		client_id: z.string().optional(),
+		post_logout_redirect_uri: safeUrlSchema.optional(),
+		state: z.string().optional(),
+	});
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
@@ -893,7 +897,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							client_assertion_type: z.string().optional(),
 							code: z.string().optional(),
 							code_verifier: z.string().optional(),
-							redirect_uri: SafeUrlSchema.optional(),
+							redirect_uri: safeUrlSchema.optional(),
 							refresh_token: z.string().optional(),
 							resource: z
 								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
@@ -1505,7 +1509,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: clientRegistrationRequestSchema,
+					body: clientRegistrationSchema,
 					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",
