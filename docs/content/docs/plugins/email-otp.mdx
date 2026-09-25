@@ -168,6 +168,8 @@ To verify the user's email address with OTP, use the `sendVerificationOtp()` met
   ```
 </APIMethod>
 
+If the address is already verified, a request over HTTP succeeds without sending a code unless it comes from the signed-in user who owns that address. Server-side calls made with neither a request nor headers are not subject to this check.
+
 Once the user provides the OTP, use the `verifyEmail()` method to complete email verification.
 
 <APIMethod path="/email-otp/verify-email" method="POST">
@@ -323,7 +325,7 @@ export const auth = betterAuth({
 })
 ```
 
-Before requesting the email change, use the `sendVerificationOtp()` method with type `email-verification` to send an OTP to the user's email address.
+Before requesting the email change, use the `sendVerificationOtp()` method with type `email-verification` to send an OTP to the user's current email address. The user must be signed in for this request if their current address is already verified.
 
 <APIMethod path="/email-otp/send-verification-otp" method="POST">
   ```ts
