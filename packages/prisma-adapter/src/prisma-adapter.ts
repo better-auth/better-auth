@@ -43,16 +43,18 @@ export interface PrismaConfig {
 	usePlural?: boolean | undefined;
 
 	/**
-	 * Whether to execute multiple operations in a transaction.
+	 * Whether to enable the adapter's multi-operation transaction API (`adapter.transaction`).
 	 *
-	 * - For MongoDB: transactions require a replica set and default to `false`
-	 *   (operations execute sequentially). Set to `true` if your MongoDB
-	 *   deployment supports replica-set transactions.
-	 * - For other providers (PostgreSQL, MySQL, SQLite, CockroachDB, SQL Server):
-	 *   transactions are supported and enabled by default. Set to `false` to force
-	 *   sequential execution if transactions are disabled or unavailable.
+	 * When `false` or unset (the default), multi-operation transactions are disabled and
+	 * operations execute sequentially. Set to `true` to enable transactional batches.
+	 * For MongoDB, transactions also require a replica set.
 	 *
-	 * @default false for MongoDB, true for other providers
+	 * Note: Internal compound operations (`incrementOne`, `consumeOne`) run inside an
+	 * atomic transaction by default on providers that support them (PostgreSQL, MySQL,
+	 * SQLite, CockroachDB, SQL Server) to guard concurrency, unless explicitly set to `false`.
+	 * On MongoDB, internal operations run sequentially unless `transaction: true` is configured.
+	 *
+	 * @default false
 	 */
 	transaction?: boolean | undefined;
 }
