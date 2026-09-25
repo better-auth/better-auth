@@ -219,11 +219,22 @@ export const genericOAuth = <const ID extends string>(
 				let discoveryResolved = !c.discoveryUrl;
 				let discoveryInflight: Promise<boolean> | null = null;
 
+				// Explicit configuration, captured before discovery mutates
+				// anything. Each attempt starts from these values, so a retry
+				// never mixes endpoints from two different discovery documents.
+				const explicitAuthorizationUrl = authorizationUrl;
+				const explicitTokenUrl = tokenUrl;
+				const explicitUserInfoUrl = userInfoUrl;
+				const explicitEndSessionEndpoint = endSessionEndpoint;
+
 				/**
-				 * Fetch the discovery document and apply it on top of any
-				 * explicitly configured endpoints, then report whether the provider
-				 * is usable. Safe to retry: already-resolved values are kept, so a
-				 * later success only fills in what is still missing.
+				 * Fetch the discovery document and apply it on top of the explicit
+				 * configuration, then report whether the provider is usable.
+				 * Values are committed only when the attempt leaves the provider
+				 * usable, so a failed attempt never half-applies a document. When
+				 * the fetch fails but explicit endpoints are configured, the
+				 * provider stays usable on those endpoints, as it did before
+				 * lazy discovery existed.
 				 */
 				const resolveDiscovery = async (): Promise<boolean> => {
 					if (!c.discoveryUrl) {
@@ -238,42 +249,56 @@ export const genericOAuth = <const ID extends string>(
 						);
 						return null;
 					});
-					if (!discovered) {
-						discoveryFailure = "the discovery document could not be fetched";
-						return false;
-					}
-					authorizationUrl ??= discovered.authorization_endpoint;
-					tokenUrl ??= discovered.token_endpoint;
-					userInfoUrl ??= discovered.userinfo_endpoint;
-					endSessionEndpoint ??= discovered.end_session_endpoint;
-					issuer = discovered.issuer;
-					const signingAlgs = discovered.id_token_signing_alg_values_supported;
-					isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
-					if (discovered.jwks_uri && discovered.issuer) {
-						let jwksUrl: URL;
-						try {
-							jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
-						} catch {
-							discoveryFailure = `invalid jwks_uri "${discovered.jwks_uri}" in discovery document`;
-							return false;
+					let nextAuthorizationUrl = explicitAuthorizationUrl;
+					let nextTokenUrl = explicitTokenUrl;
+					let nextUserInfoUrl = explicitUserInfoUrl;
+					let nextEndSessionEndpoint = explicitEndSessionEndpoint;
+					let nextIssuer: string | undefined;
+					let nextIsOidc = false;
+					let nextIdTokenConfig: OAuthIdTokenConfig | undefined;
+					if (discovered) {
+						nextAuthorizationUrl ??= discovered.authorization_endpoint;
+						nextTokenUrl ??= discovered.token_endpoint;
+						nextUserInfoUrl ??= discovered.userinfo_endpoint;
+						nextEndSessionEndpoint ??= discovered.end_session_endpoint;
+						nextIssuer = discovered.issuer;
+						const signingAlgs =
+							discovered.id_token_signing_alg_values_supported;
+						nextIsOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
+						if (discovered.jwks_uri && discovered.issuer) {
+							let jwksUrl: URL;
+							try {
+								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
+							} catch {
+								discoveryFailure = `invalid jwks_uri "${discovered.jwks_uri}" in discovery document`;
+								return false;
+							}
+							nextIdTokenConfig = {
+								jwks: createRemoteJWKSet(jwksUrl),
+								issuer: discovered.issuer,
+								audience: c.clientId,
+								algorithms: nextIsOidc ? signingAlgs : undefined,
+							};
 						}
-						idTokenConfig = {
-							jwks: createRemoteJWKSet(jwksUrl),
-							issuer: discovered.issuer,
-							audience: c.clientId,
-							algorithms: isOidc ? signingAlgs : undefined,
-						};
 					}
-					if (!authorizationUrl || (!tokenUrl && !c.getToken)) {
-						discoveryFailure =
-							"discovery left no usable authorization endpoint or token exchange";
+					if (!nextAuthorizationUrl || (!nextTokenUrl && !c.getToken)) {
+						discoveryFailure = discovered
+							? "discovery left no usable authorization endpoint or token exchange"
+							: "the discovery document could not be fetched";
 						return false;
 					}
-					if (c.requireIdTokenVerification && !idTokenConfig) {
+					if (c.requireIdTokenVerification && !nextIdTokenConfig) {
 						discoveryFailure =
 							"requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri";
 						return false;
 					}
+					authorizationUrl = nextAuthorizationUrl;
+					tokenUrl = nextTokenUrl;
+					userInfoUrl = nextUserInfoUrl;
+					endSessionEndpoint = nextEndSessionEndpoint;
+					issuer = nextIssuer;
+					isOidc = nextIsOidc;
+					idTokenConfig = nextIdTokenConfig;
 					discoveryFailure = null;
 					return true;
 				};
@@ -308,6 +333,9 @@ export const genericOAuth = <const ID extends string>(
 								// these were captured by value at construction time.
 								provider.issuer = issuer;
 								provider.idToken = idTokenConfig;
+								// Only relaxes nonce binding (when the provider turns out
+								// not to be OIDC); it never turns on late, because core
+								// already minted the nonce before this retry ran.
 								provider.requiresIdTokenNonce =
 									idTokenConfig !== undefined &&
 									c.disableIdTokenNonceBinding !== true;
@@ -371,9 +399,15 @@ export const genericOAuth = <const ID extends string>(
 							: (genericProfile.id ?? "");
 					},
 					idToken: idTokenConfig,
+					// Mint the nonce whenever a pending discovery could still turn
+					// nonce binding on: core mints the nonce before calling
+					// createAuthorizationURL, so binding must already be on here.
+					// Once discovery resolves, binding only ever relaxes (see
+					// ensureDiscovery), so a state minted with a nonce never fails
+					// its callback for wanting one.
 					requiresIdTokenNonce:
-						idTokenConfig !== undefined &&
-						c.disableIdTokenNonceBinding !== true,
+						c.disableIdTokenNonceBinding !== true &&
+						(idTokenConfig !== undefined || !discoveryResolved),
 					allowIdpInitiated: c.allowIdpInitiated,
 					async createEndSessionURL(data: {
 						idToken?: string | null | undefined;

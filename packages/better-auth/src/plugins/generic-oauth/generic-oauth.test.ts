@@ -5,7 +5,7 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateKeyPair, SignJWT } from "jose";
-import { HttpResponse, http } from "msw";
+import { HttpResponse, http, passthrough } from "msw";
 import { setupServer } from "msw/node";
 import type {
 	MutableResponse,
@@ -5529,6 +5529,117 @@ describe("oauth2", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 		});
 		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
+	});
+
+	/**
+	 * Explicit endpoints keep the provider usable when discovery is
+	 * unreachable, as it behaved before lazy discovery retries.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("keeps explicit endpoints usable when discovery is unreachable", async () => {
+		const discoveryUrl =
+			"https://down-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () => new HttpResponse(null, { status: 503 })),
+		);
+		const { customFetchImpl: explicitFetch } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "explicit-fallback",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: explicitFetch },
+		});
+		const res = await client.signIn.social({
+			provider: "explicit-fallback",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+	});
+
+	/**
+	 * Core mints the id_token nonce before calling createAuthorizationURL, so
+	 * nonce binding must already be on while discovery is pending. Otherwise
+	 * the first sign-in that heals a failed startup discovery would mint no
+	 * nonce and its callback would fail the binding check.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("mints a nonce when startup discovery failed and the retry succeeds at sign-in", async () => {
+		let idpDown = true;
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () => {
+				if (idpDown) {
+					return new HttpResponse(null, { status: 503 });
+				}
+				return passthrough();
+			}),
+		);
+		const { auth: recoveryAuth, customFetchImpl: recoveryFetch } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "recovering-nonce",
+								discoveryUrl,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+		expect(
+			(await recoveryAuth.$context).socialProviders.map((p) => p.id),
+		).toContain("recovering-nonce");
+		await expect(
+			recoveryAuth.api.signInSocial({
+				body: { provider: "recovering-nonce", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "recovering-nonce" is temporarily unavailable');
+
+		// The IdP recovers; the next sign-in triggers the retry.
+		idpDown = false;
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: recoveryFetch },
+		});
+		const headers = new Headers();
+		const res = await client.signIn.social({
+			provider: "recovering-nonce",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		expect(new URL(res.data?.url || "").searchParams.get("nonce")).toBeTruthy();
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			recoveryFetch,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+		const session = await client.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("oauth2@test.com");
 	});
 });
 
