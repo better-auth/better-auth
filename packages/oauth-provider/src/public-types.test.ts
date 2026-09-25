@@ -17,6 +17,14 @@ type ClientPrivilegeAction = Parameters<
 >[0]["action"];
 
 describe("public oauth-provider types", () => {
+	it("exports the signed-query verifier with a server-side secret", () => {
+		expectTypeOf<
+			typeof import("@better-auth/oauth-provider").verifyOAuthQueryParams
+		>().toEqualTypeOf<
+			(oauth_query: string, secret: string) => Promise<boolean>
+		>();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9378
 	 */
