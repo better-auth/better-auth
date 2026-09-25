@@ -509,6 +509,18 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				 */
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
+			if (user.user.emailVerified) {
+				/**
+				 * Nothing left to verify, so mirror core `/verify-email`: no update, no
+				 * hooks and no session. Otherwise a leftover code would sign the account
+				 * in without a password, even where `/sign-in/email-otp` is disabled.
+				 */
+				return ctx.json({
+					status: true,
+					token: null,
+					user: parseUserOutput(ctx.context.options, user.user),
+				});
+			}
 			if (ctx.context.options.emailVerification?.beforeEmailVerification) {
 				await ctx.context.options.emailVerification.beforeEmailVerification(
 					user.user,
