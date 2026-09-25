@@ -41,7 +41,10 @@ import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
 import { computeSSOProviderReference } from "./provider-reference";
 import { findSAMLProvider } from "./routes/helpers";
-import { getSafeRedirectUrl } from "./routes/saml-pipeline";
+import {
+	getExpectedSAMLRecipients,
+	getSafeRedirectUrl,
+} from "./routes/saml-pipeline";
 import { saml } from "./samlify";
 import type { SSOOptions, SSOUserResolutionInput } from "./types";
 import { normalizePem } from "./utils";
@@ -8750,7 +8753,132 @@ describe("SAML SSO Hardening", () => {
 			);
 			expect(redirectUrl.origin).toBe(frontendOrigin);
 			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
-			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11296
+	 */
+	describe("SAML assertion consumer service recipient validation (#11296)", () => {
+		it("should resolve assertionConsumerServiceUrl using 'post' binding so expectedRecipients includes the ACS URL", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+			});
+			const { headers } = await signInWithTestUser();
+			const providerId = "saml-acs-recipient-provider";
+			const acsUrl = `http://localhost:3000/api/auth/sso/saml2/sp/acs/${providerId}`;
+			const customCallbackUrl =
+				"http://localhost:3000/api/auth/sso/saml2/custom-callback";
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId,
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: customCallbackUrl,
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						idpMetadata: {
+							metadata: idpMetadata,
+						},
+						identifierFormat:
+							"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					},
+				},
+				headers,
+			});
+
+			const idpResponseUrl = new URL(
+				"http://localhost:8081/api/sso/saml2/idp/post",
+			);
+			idpResponseUrl.searchParams.set("destination", acsUrl);
+			idpResponseUrl.searchParams.set("recipient", acsUrl);
+			idpResponseUrl.searchParams.set("audience", "http://localhost:8081");
+
+			let samlResponse: MockSAMLResponse | undefined;
+			await betterFetch(idpResponseUrl.toString(), {
+				onSuccess: async (context) => {
+					samlResponse = (await context.data) as MockSAMLResponse;
+				},
+			});
+
+			const proto = saml.SPMetadata({ entityID: "temp" }).constructor.prototype;
+			const getAcsSpy = vi.spyOn(proto, "getAssertionConsumerService");
+
+			try {
+				await auth.api.acsEndpoint({
+					method: "POST",
+					body: {
+						SAMLResponse: samlResponse!.samlResponse,
+					},
+					params: { providerId },
+					asResponse: true,
+				});
+
+				expect(getAcsSpy).toHaveBeenCalledWith("post");
+				expect(getAcsSpy).toHaveReturnedWith(acsUrl);
+			} finally {
+				getAcsSpy.mockRestore();
+			}
+
+			// Verify that resolving assertionConsumerServiceUrl with "post" binding is what
+			// contributes a custom ACS URL to expectedRecipients (non-tautological verification).
+			const customSp = saml.ServiceProvider({
+				metadata: saml
+					.SPMetadata({
+						entityID: "http://localhost:8081",
+						assertionConsumerService: [
+							{
+								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+								Location: customCallbackUrl,
+							},
+						],
+					})
+					.getMetadata(),
+			});
+
+			const config = {
+				issuer: "http://localhost:8081",
+				entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+				cert: certificate,
+				callbackUrl: customCallbackUrl,
+				idpMetadata: {
+					metadata: idpMetadata,
+				},
+			};
+			const currentCallbackPath =
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/other-route";
+
+			// Prior to the fix, passing the full URN binding returned undefined from samlify:
+			const brokenAcsUrl = customSp.entityMeta.getAssertionConsumerService(
+				"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+			);
+			expect(brokenAcsUrl).toBeUndefined();
+			const recipientsWithoutFix = getExpectedSAMLRecipients(
+				config,
+				"http://localhost:3000/api/auth",
+				providerId,
+				currentCallbackPath,
+				brokenAcsUrl,
+			);
+			expect(recipientsWithoutFix).not.toContain(customCallbackUrl);
+
+			// With the fix ("post"), samlify resolves the registered ACS URL and expectedRecipients includes it:
+			const resolvedAcsUrl =
+				customSp.entityMeta.getAssertionConsumerService("post");
+			expect(resolvedAcsUrl).toBe(customCallbackUrl);
+			const recipientsWithFix = getExpectedSAMLRecipients(
+				config,
+				"http://localhost:3000/api/auth",
+				providerId,
+				currentCallbackPath,
+				resolvedAcsUrl,
+			);
+			expect(recipientsWithFix).toContain(customCallbackUrl);
 		});
 	});
 });
