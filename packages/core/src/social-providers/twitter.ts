@@ -5,6 +5,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 export interface TwitterProfile {
 	data: {
@@ -187,9 +188,14 @@ export const twitter = (options: TwitterOption) => {
 			return {
 				user: {
 					name: profile.data.name,
-					email: profile.data.email || profile.data.username || null,
+					email:
+						profile.data.email ||
+						createPlaceholderEmail({
+							identifier: profile.data.id,
+							namespace: "twitter",
+						}),
 					image: profile.data.profile_image_url,
-					emailVerified: emailVerified,
+					emailVerified,
 					...userMap,
 				},
 				data: profile,

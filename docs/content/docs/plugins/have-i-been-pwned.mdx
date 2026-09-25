@@ -1,4 +1,5 @@
 ---
+icon: pluginsHaveIBeenPwned
 title: Have I Been Pwned
 description: A plugin to check if a password has been compromised
 ---
@@ -30,6 +31,21 @@ When a user attempts to create an account or update their password with a compro
   "message": "The password you entered has been compromised. Please choose a different password."
 }
 ```
+
+### Custom password flows
+
+Use `isPasswordCompromised` to check passwords in server-side flows that do not use Better Auth endpoints.
+
+```ts
+import { isPasswordCompromised } from "better-auth/plugins/haveibeenpwned"
+
+const compromised = await isPasswordCompromised(password)
+if (compromised) {
+    throw new Error("Please choose a password that has not been compromised")
+}
+```
+
+The function only sends the first five characters of the password's SHA-1 hash to Have I Been Pwned. It throws an `APIError` if the service cannot complete the check.
 
 ## Options
 

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
 	Awaitable,
 	BetterAuthClientOptions,
@@ -30,6 +30,23 @@ afterAll(async () => {
 		cleanupSet.delete(cleanup);
 	}
 });
+
+const TEST_PASSWORD_HASH_PREFIX = "$test$sha256$";
+
+/**
+ * Intentionally fast for tests
+ */
+function createTestPasswordHash(password: string) {
+	return `${TEST_PASSWORD_HASH_PREFIX}${createHash("sha256")
+		.update(password.normalize("NFKC"))
+		.digest("hex")}`;
+}
+
+const testPassword = {
+	hash: async (password: string) => createTestPasswordHash(password),
+	verify: async ({ hash, password }: { hash: string; password: string }) =>
+		hash === createTestPasswordHash(password),
+};
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -156,12 +173,27 @@ export async function getTestInstance<
 		},
 	} satisfies BetterAuthOptions;
 
-	const auth = betterAuth({
+	const authOptions = {
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
+		emailAndPassword: {
+			...opts.emailAndPassword,
+			...options?.emailAndPassword,
+			password: options?.emailAndPassword?.password ?? testPassword,
+		},
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as unknown as O);
+	} as unknown as O;
+
+	if (testWith !== "mongodb") {
+		const { runMigrations } = await getMigrations({
+			...authOptions,
+			database: opts.database,
+		});
+		await runMigrations();
+	}
+
+	const auth = betterAuth(authOptions);
 
 	const testUser = {
 		email: "test@test.com",
@@ -194,14 +226,6 @@ export async function getTestInstance<
 			body: testUser,
 			headers,
 		});
-	}
-
-	if (testWith !== "mongodb") {
-		const { runMigrations } = await getMigrations({
-			...auth.options,
-			database: opts.database,
-		});
-		await runMigrations();
 	}
 
 	await createTestUser();

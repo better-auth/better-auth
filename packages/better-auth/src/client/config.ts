@@ -191,6 +191,7 @@ export const getClientConfig = (
 		pluginPathMethods,
 		atomListeners,
 		hydrateSession,
+		$sessionSignal,
 		$fetch,
 		$store,
 	};

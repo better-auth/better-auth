@@ -504,7 +504,6 @@ describe("phone auth flow", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 		const emailSignIn = await client.signIn.email({
@@ -846,7 +845,6 @@ describe("reset password flow attempts", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 	});
@@ -1502,5 +1500,51 @@ describe("phone-number validateUserInfo provisioning gate", async () => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("phone_blocked");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("phone-number sign-in password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [phoneNumber()],
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "long-password@test.com",
+				password: "password",
+				name: "Long Password",
+				phoneNumber: "+251911121314",
+			},
+		});
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.signInPhoneNumber({
+				body: {
+					phoneNumber: "+251911121314",
+					password: "x".repeat(129),
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
 	});
 });

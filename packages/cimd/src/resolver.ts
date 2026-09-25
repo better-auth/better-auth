@@ -342,6 +342,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				candidateClientId,
 				candidateLastFetchStartAtMs,
 			] of lastFetchStartAtMsByClientId) {
+				if (inFlightResolutionByClientId.has(candidateClientId)) {
+					continue;
+				}
 				if (
 					fetchPolicy.minimumFetchIntervalMs > 0 &&
 					nowMs - candidateLastFetchStartAtMs <
@@ -541,11 +544,18 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			} else {
 				metadataCache.delete(clientId);
 			}
+			// Successful fetches are governed by HTTP freshness and origin/global
+			// budgets. Keep the per-client interval only as failed-fetch backoff.
+			lastFetchStartAtMsByClientId.delete(clientId);
 			return storedClient;
 		})();
 		inFlightResolutionByClientId.set(clientId, resolution);
 		try {
 			return await resolution;
+		} catch (error) {
+			lastFetchStartAtMsByClientId.delete(clientId);
+			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			throw error;
 		} finally {
 			if (inFlightResolutionByClientId.get(clientId) === resolution) {
 				inFlightResolutionByClientId.delete(clientId);

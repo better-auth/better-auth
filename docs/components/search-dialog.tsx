@@ -17,11 +17,12 @@ import {
 	useSearch,
 } from "fumadocs-ui/components/dialog/search";
 import { ArrowRight, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { Client } from "typesense";
 import { useTypesenseSearch } from "typesense-fumadocs-adapter/client";
 import { usePages } from "@/app/docs/provider";
+import { getVersionFromPathname } from "@/lib/docs-versions";
 
 const typesenseClient = (() => {
 	const url = process.env.NEXT_PUBLIC_TYPESENSE_SERVER_URL;
@@ -57,14 +58,12 @@ const typesenseClient = (() => {
 })();
 
 export default function CustomSearchDialog(props: SharedProps) {
+	const pathname = usePathname() || "/docs";
+	const version = getVersionFromPathname(pathname);
 	const { search, setSearch, query } = useTypesenseSearch({
 		typesenseCollectionName: "better-auth-docs",
 		client: typesenseClient!,
-		/**
-		 * Non-legacy mode leaves raw <mark> tags in content at the moment,
-		 * which renders as plain text in fumadocs-ui
-		 */
-		legacy: true,
+		tag: version.id,
 	});
 	const pages = usePages();
 	const router = useRouter();

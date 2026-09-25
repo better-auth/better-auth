@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
@@ -15,6 +14,10 @@ import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
@@ -946,14 +949,8 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (ctx.body.password.length < minPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.password.length > maxPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooShort(ctx, ctx.body.password);
+			assertPasswordNotTooLong(ctx, ctx.body.password);
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(
@@ -975,7 +972,6 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.user.id,
 					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
 					accountId: user.user.id,
 					password: passwordHash,
 				});

@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -11,6 +10,10 @@ import { parseUserInput } from "../../db";
 import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -217,23 +220,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 				}
 
-				const minPasswordLength = ctx.context.password.config.minPasswordLength;
-				if (password.length < minPasswordLength) {
-					ctx.context.logger.warn("Password is too short");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-					);
-				}
-
-				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-				if (password.length > maxPasswordLength) {
-					ctx.context.logger.warn("Password is too long");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-					);
-				}
+				assertPasswordNotTooShort(ctx, password);
+				assertPasswordNotTooLong(ctx, password);
 				const shouldReturnGenericDuplicateResponse =
 					ctx.context.options.emailAndPassword.requireEmailVerification ||
 					ctx.context.options.emailAndPassword.autoSignIn === false;
@@ -387,7 +375,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				await ctx.context.internalAdapter.linkAccount({
 					userId: createdUser.id,
 					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
 					accountId: createdUser.id,
 					password: hash,
 				});

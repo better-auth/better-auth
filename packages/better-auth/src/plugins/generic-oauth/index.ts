@@ -222,11 +222,6 @@ export const genericOAuth = <const ID extends string>(
 						return null;
 					});
 					if (discovered) {
-						if (!discovered.issuer && !c.accountIssuer) {
-							throw new Error(
-								`Provider "${c.providerId}": discovery did not return an issuer. Configure accountIssuer explicitly to establish a stable account namespace.`,
-							);
-						}
 						authorizationUrl ??= discovered.authorization_endpoint;
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
@@ -240,9 +235,10 @@ export const genericOAuth = <const ID extends string>(
 							try {
 								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
 							} catch {
-								throw new Error(
-									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document.`,
+								ctx.logger.error(
+									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document. Provider skipped.`,
 								);
+								continue;
 							}
 							idTokenConfig = {
 								jwks: createRemoteJWKSet(jwksUrl),
@@ -251,17 +247,21 @@ export const genericOAuth = <const ID extends string>(
 								algorithms: isOidc ? signingAlgs : undefined,
 							};
 						}
-					} else if (!c.accountIssuer) {
-						throw new Error(
-							`Provider "${c.providerId}": discovery returned no valid data. Provider initialization stopped to keep its account issuer stable.`,
-						);
-					} else if (!authorizationUrl || !tokenUrl) {
+					}
+					if (!authorizationUrl || (!tokenUrl && !c.getToken)) {
 						ctx.logger.error(
-							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
+							`Provider "${c.providerId}": discovery left no usable authorization endpoint or token exchange. Provider skipped.`,
 						);
+						continue;
 					}
 				}
 				if (c.requireIdTokenVerification && !idTokenConfig) {
+					if (c.discoveryUrl) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri. Provider skipped.`,
+						);
+						continue;
+					}
 					throw new Error(
 						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
 					);
@@ -297,7 +297,6 @@ export const genericOAuth = <const ID extends string>(
 				}
 
 				const accountSubject = c.accountSubject;
-				const accountIssuer = c.accountIssuer;
 				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
@@ -313,14 +312,6 @@ export const genericOAuth = <const ID extends string>(
 							? (genericProfile.sub ?? "")
 							: (genericProfile.id ?? "");
 					},
-					accountIssuer:
-						typeof accountIssuer === "function"
-							? ({ tokens, profile }) =>
-									accountIssuer({
-										tokens,
-										profile: profile as GenericOAuthUserInfo,
-									})
-							: (accountIssuer ?? issuer),
 					idToken: idTokenConfig,
 					requiresIdTokenNonce:
 						idTokenConfig !== undefined &&
