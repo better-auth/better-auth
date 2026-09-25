@@ -433,13 +433,15 @@ export const linkSocialAccount = createAuthEndpoint(
 			link: {
 				userId: session.user.id,
 				email: session.user.email,
-				encryptedSessionToken: await symmetricEncrypt({
-					key: derivePurposeKey(
-						c.context.secretConfig,
-						"oauth-link-session-token",
-					),
-					data: session.session.token,
-				}),
+				encryptedSessionToken: isStateful(c)
+					? await symmetricEncrypt({
+							key: derivePurposeKey(
+								c.context.secretConfig,
+								"oauth-link-session-token",
+							),
+							data: session.session.token,
+						})
+					: undefined,
 			},
 			additionalData: c.body.additionalData,
 			idTokenNonce,

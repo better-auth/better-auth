@@ -4,6 +4,7 @@ import { runWithTransaction } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api/routes";
+import { sensitiveSessionMiddleware } from "../../../api/routes/session";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
@@ -143,7 +144,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 		{
 			method: "POST",
 			requireHeaders: true,
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware, sensitiveSessionMiddleware, orgSessionMiddleware],
 			body: z.object({
 				...baseInvitationSchema.shape,
 				...additionalFieldsSchema.shape,

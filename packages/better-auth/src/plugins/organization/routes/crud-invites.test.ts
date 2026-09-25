@@ -7,6 +7,38 @@ import { organizationClient } from "../client";
 import { organization } from "../organization";
 import type { OrganizationOptions } from "../types";
 
+describe("organization invitation session authority", () => {
+	it("rejects a revoked cached inviter before creating an invitation", async () => {
+		const { auth, client, signInWithTestUser, cookieSetter } =
+			await getTestInstance(
+				{
+					session: { cookieCache: { enabled: true, maxAge: 60 } },
+					plugins: [organization()],
+				},
+				{ clientOptions: { plugins: [organizationClient()] } },
+			);
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Acme",
+			slug: "acme-revoked-inviter",
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: "invitee@example.com",
+			role: "member",
+			fetchOptions: { headers },
+		});
+		expect(invite.error?.status).toBe(401);
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3
  */

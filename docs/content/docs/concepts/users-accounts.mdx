@@ -527,7 +527,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  When sessions are stored server-side, the session must still be active when linking starts and when the provider redirects back.
+  With a server-side session store, the session that started linking must still be active when the provider redirects back.
 
   You can also request specific scopes when linking a social account, which can be different from the scopes used during the initial authentication:
 

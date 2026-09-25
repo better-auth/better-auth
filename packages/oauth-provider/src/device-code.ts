@@ -1,6 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
+import { getAuthoritativeSessionFromCtx } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
 	DeviceAuthorizationPluginOptions,
@@ -260,6 +261,16 @@ function deviceApprovalRequest(
 				// RFC 8628 section 5.4: the user who approves must see consent.
 				requireConsent: true,
 				approve: async (approval) => {
+					// Approval hands the device a token, so a session revoked in the
+					// store must not approve on its cookie cache alone.
+					const session = await getAuthoritativeSessionFromCtx(ctx);
+					if (session?.session.id !== approval.sessionId) {
+						tokenError(
+							"UNAUTHORIZED",
+							"access_denied",
+							"The session that approved this device is no longer active",
+						);
+					}
 					await decideDeviceCode(ctx, {
 						deviceCode,
 						userId: approval.userId,

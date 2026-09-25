@@ -27,6 +27,7 @@ import {
 } from "../../crypto";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import type { StateData } from "../../state";
+import { getAuthStateVerificationIdentifier } from "../../state";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -144,7 +145,7 @@ describe("account", async () => {
 		);
 		const state = new URL(link.data!.url!).searchParams.get("state")!;
 		const storedState = await ctx.internalAdapter.findVerificationValue(
-			`auth-state:${state}`,
+			getAuthStateVerificationIdentifier(state),
 		);
 		expect(storedState?.value).not.toContain(current.data!.session.token);
 		const stateData = JSON.parse(storedState!.value) as StateData;
@@ -167,7 +168,7 @@ describe("account", async () => {
 		expect(after).toHaveLength(before.length);
 	});
 
-	it("links a provider when the state carries no initiating session token", async () => {
+	it("refuses a link whose state carries no initiating session token", async () => {
 		const { headers } = await signInWithTestUser();
 		const current = await client.getSession({ fetchOptions: { headers } });
 		const userId = current.data!.user.id;
@@ -189,31 +190,30 @@ describe("account", async () => {
 			},
 		);
 		const state = new URL(link.data!.url!).searchParams.get("state")!;
-		const storedState = await ctx.internalAdapter.findVerificationValue(
-			`auth-state:${state}`,
-		);
+		const identifier = getAuthStateVerificationIdentifier(state);
+		const storedState =
+			await ctx.internalAdapter.findVerificationValue(identifier);
 		const stateData = JSON.parse(storedState!.value) as StateData;
 		assert(stateData.link);
-		// A redirect started before the token was recorded.
-		const { encryptedSessionToken: _, ...legacyLink } = stateData.link;
-		await ctx.internalAdapter.updateVerificationByIdentifier(
-			`auth-state:${state}`,
-			{
-				value: JSON.stringify({
-					...stateData,
-					link: legacyLink,
-				}),
-			},
-		);
-		email = "no-session-token@example.com";
+		const { encryptedSessionToken: _, ...tokenlessLink } = stateData.link;
+		await ctx.internalAdapter.updateVerificationByIdentifier(identifier, {
+			value: JSON.stringify({
+				...stateData,
+				link: tokenlessLink,
+			}),
+		});
+		email = "tokenless-link@example.com";
 
 		await client.$fetch("/callback/google", {
 			method: "GET",
-			query: { state, code: "test" },
+			query: {
+				state,
+				code: "test",
+			},
 			headers: { cookie: stateCookie },
 		});
 		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after).toHaveLength(before.length + 1);
+		expect(after).toHaveLength(before.length);
 	});
 
 	it("rejects social-link initiation from a revoked cached session", async () => {
@@ -252,7 +252,7 @@ describe("account", async () => {
 		expect(result.error?.status).toBe(401);
 	});
 
-	async function linkWithIdToken(revokeSource: boolean) {
+	async function linkWithIdToken({ revoke }: { revoke: boolean }) {
 		const {
 			auth: directAuth,
 			client: directClient,
@@ -282,9 +282,12 @@ describe("account", async () => {
 		});
 		const { headers } = await signIn();
 		const current = await directClient.getSession({
-			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
 		});
-		if (revokeSource) {
+		if (revoke) {
 			await directCtx.internalAdapter.deleteSession(
 				current.data!.session.token,
 			);
@@ -303,16 +306,14 @@ describe("account", async () => {
 		return { result, accounts };
 	}
 
-	it("links an ID token with a live session", async () => {
-		const { result, accounts } = await linkWithIdToken(false);
-
+	it("links with an ID token from a live session", async () => {
+		const { result, accounts } = await linkWithIdToken({ revoke: false });
 		expect(result.error).toBeNull();
 		expect(accounts).toHaveLength(2);
 	});
 
-	it("refuses to link an ID token from a revoked cached session", async () => {
-		const { result, accounts } = await linkWithIdToken(true);
-
+	it("refuses ID-token linking from a revoked cached session", async () => {
+		const { result, accounts } = await linkWithIdToken({ revoke: true });
 		expect(result.error?.status).toBe(401);
 		expect(accounts).toHaveLength(1);
 	});
@@ -362,10 +363,11 @@ describe("account", async () => {
 		);
 		const state = new URL(link.data!.url!).searchParams.get("state")!;
 		const storedState = await rotatedCtx.internalAdapter.findVerificationValue(
-			`auth-state:${state}`,
+			getAuthStateVerificationIdentifier(state),
 		);
 		const stateData = JSON.parse(storedState!.value) as StateData;
 		expect(stateData.link?.encryptedSessionToken).toMatch(/^\$ba\$1\$/);
+
 		if (typeof rotatedCtx.secretConfig === "string") {
 			throw new Error("Expected a versioned secret configuration");
 		}
@@ -2939,7 +2941,10 @@ describe("token routes cookie cache revocation", async () => {
 
 		const headers = new Headers();
 		await client.signIn.email(
-			{ email: testUser.email, password: testUser.password },
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
 			{ onSuccess: cookieSetter(headers) },
 		);
 		const initial = await client.getSession({

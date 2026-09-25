@@ -68,14 +68,14 @@ function linkOAuthAccountFailure(
 
 /**
  * Whether the session that started a link is still live when the provider
- * returns. Links whose state carries no session token (started before the
- * token was recorded, or built by a direct caller) are not checked.
+ * returns. Links whose state carries no session token are refused.
  */
 async function isLinkSessionLive(
 	c: GenericEndpointContext,
 	link: LinkOAuthAccountOptions["link"],
 ) {
-	if (!link.encryptedSessionToken || !isStateful(c)) return true;
+	if (!isStateful(c)) return true;
+	if (!link.encryptedSessionToken) return false;
 	const sessionToken = await symmetricDecrypt({
 		key: derivePurposeKey(c.context.secretConfig, "oauth-link-session-token"),
 		data: link.encryptedSessionToken,

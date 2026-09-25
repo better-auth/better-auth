@@ -14,6 +14,33 @@ import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
 describe("two-factor enrollment session authority", () => {
+	it("rejects enrollment from a revoked cached session", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [twoFactor({ otpOptions: { sendOTP: async () => {} } })],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		const result = await client.$fetch("/two-factor/enable", {
+			method: "POST",
+			body: { method: "otp", password: testUser.password },
+			headers,
+		});
+		expect(result.error?.status).toBe(401);
+	});
+
 	it("does not complete TOTP enrollment after the source session is revoked", async () => {
 		const { auth, client, testUser, cookieSetter } = await getTestInstance({
 			secret: DEFAULT_SECRET,
@@ -62,6 +89,118 @@ describe("two-factor enrollment session authority", () => {
 			where: [{ field: "userId", value: current.data!.user.id }],
 		});
 		expect(stored?.verified).toBe(false);
+	});
+
+	it("rejects immediate passwordless TOTP enrollment from a revoked cached session", async () => {
+		const { auth } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [
+				anonymous(),
+				twoFactor({
+					allowPasswordless: true,
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+		const signIn = await auth.api.signInAnonymous({ asResponse: true });
+		const headers = convertSetCookieToCookie(signIn.headers);
+		const current = await auth.api.getSession({ headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current!.session.token);
+		expect((await auth.api.getSession({ headers }))?.user.id).toBe(
+			current!.user.id,
+		);
+
+		await expect(
+			auth.api.enableTwoFactor({ body: {}, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: current!.user.id }],
+		});
+		expect(stored).toBeNull();
+	});
+
+	it("allows immediate passwordless TOTP enrollment with a live session", async () => {
+		const { auth } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [
+				anonymous(),
+				twoFactor({
+					allowPasswordless: true,
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+		const signIn = await auth.api.signInAnonymous({ asResponse: true });
+		const headers = convertSetCookieToCookie(signIn.headers);
+		const current = await auth.api.getSession({ headers });
+		const enabled = await auth.api.enableTwoFactor({ body: {}, headers });
+		expect(enabled.method).toBe("totp");
+		const ctx = await auth.$context;
+		const stored = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: current!.user.id }],
+		});
+		expect(stored?.verified).toBe(true);
+	});
+
+	async function signInPasswordless() {
+		const { auth } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [
+				anonymous(),
+				twoFactor({
+					allowPasswordless: true,
+					otpOptions: { sendOTP: async () => {} },
+				}),
+			],
+		});
+		const signIn = await auth.api.signInAnonymous({ asResponse: true });
+		const headers = convertSetCookieToCookie(signIn.headers);
+		const current = await auth.api.getSession({ headers });
+		const ctx = await auth.$context;
+		const twoFactorEnabled = async () =>
+			(
+				(await ctx.internalAdapter.findUserById(
+					current!.user.id,
+				)) as UserWithTwoFactor | null
+			)?.twoFactorEnabled;
+		return { auth, ctx, headers, current: current!, twoFactorEnabled };
+	}
+
+	it("enables passwordless OTP from a live session", async () => {
+		const { auth, ctx, headers, current, twoFactorEnabled } =
+			await signInPasswordless();
+
+		const enabled = await auth.api.enableTwoFactor({
+			body: { method: "otp" },
+			headers,
+		});
+
+		expect(enabled.method).toBe("otp");
+		expect(await twoFactorEnabled()).toBe(true);
+		expect(
+			await ctx.internalAdapter.listSessions(current.user.id),
+		).toHaveLength(1);
+	});
+
+	it("refuses passwordless OTP from a revoked cached session", async () => {
+		const { auth, ctx, headers, current, twoFactorEnabled } =
+			await signInPasswordless();
+		await ctx.internalAdapter.deleteSession(current.session.token);
+
+		await expect(
+			auth.api.enableTwoFactor({
+				body: { method: "otp" },
+				headers,
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+
+		expect(await twoFactorEnabled()).toBe(false);
+		expect(
+			await ctx.internalAdapter.listSessions(current.user.id),
+		).toHaveLength(0);
 	});
 });
 

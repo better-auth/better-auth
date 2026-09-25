@@ -1133,16 +1133,18 @@ describe("oauth-provider device-code grant", async () => {
 		const { device_code, user_code } = await guardedAuth.api.deviceCode({
 			body: { client_id: registered!.client_id },
 		});
-		await guardedAuth.api.deviceVerify({ query: { user_code }, headers });
+		const consent = await openDeviceConsent(guardedClient, user_code, headers);
 		const ctx = await guardedAuth.$context;
 		await ctx.internalAdapter.deleteSession(current.data!.session.token);
 
-		await expect(
-			guardedAuth.api.deviceApprove({
-				body: { userCode: user_code },
-				headers,
-			}),
-		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const answered = await fetchRedirect(guardedClient, "/oauth2/consent", {
+			method: "POST",
+			headers,
+			body: { accept: true, oauth_query: consent.toString() },
+		});
+		expect(new URL(answered, baseURL).searchParams.get("status")).not.toBe(
+			"approved",
+		);
 		const polled = await guardedClient.$fetch<Record<string, unknown>>(
 			"/oauth2/token",
 			{

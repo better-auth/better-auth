@@ -127,7 +127,7 @@ await authClient.passkey.addPasskey({
 
 When `createSession` is `true`, successful verification sets the session cookie and returns the `session` and `user` with the registered passkey. If you want to avoid creating a user before the WebAuthn ceremony succeeds, create or load the user in `registration.afterVerification` and return its `userId`.
 
-With `registration.requireSession: false`, a registration started with a session must be verified with that same active session. A registration started without a session uses `resolveUser`.
+With `registration.requireSession: false`, a registration started with a session must be verified with that same live session. One started without a session uses `resolveUser`.
 
 ## Usage
 

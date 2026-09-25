@@ -158,7 +158,7 @@ describe("passkey registration session authority", () => {
 			onResponse: cookieSetter(headers),
 		});
 		const ctx = await auth.$context;
-		const rows = await ctx.adapter.findMany<Verification>({
+		const rows = await ctx.adapter.findMany<{ value: string }>({
 			model: "verification",
 		});
 		const challenge = rows.find((row) =>
@@ -166,6 +166,7 @@ describe("passkey registration session authority", () => {
 		);
 		expect(challenge).toBeDefined();
 		expect(challenge!.value).not.toContain(current.data!.session.token);
+		expect(challenge!.value).toContain('"tokenHash"');
 
 		serverMocks.verifyRegistrationResponse.mockResolvedValue(
 			mockRegistrationVerification,

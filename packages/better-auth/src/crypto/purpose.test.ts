@@ -9,6 +9,7 @@ const purposes: EncryptionPurpose[] = [
 	"oauth-proxy-state",
 	"oauth-proxy-package",
 	"oauth-proxy-profile",
+	"oauth-link-session-token",
 ];
 
 /**
