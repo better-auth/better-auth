@@ -125,9 +125,13 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			if (opts.requireVerification) {
 				if (!user.phoneNumberVerified) {
-					const otp = generateOTP(opts.otpLength);
+					const otp = generateOTP(
+						opts,
+						{ phoneNumber, type: "phone-number-verification" },
+						ctx,
+					);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: otp,
+						value: `${otp}:0`,
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -284,7 +288,14 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				}
 			}
 
-			const code = generateOTP(opts.otpLength);
+			const code = generateOTP(
+				opts,
+				{
+					phoneNumber: ctx.body.phoneNumber,
+					type: "phone-number-verification",
+				},
+				ctx,
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: ctx.body.phoneNumber,
@@ -718,7 +729,11 @@ export const requestPasswordResetPhoneNumber = (
 					},
 				],
 			});
-			const code = generateOTP(opts.otpLength);
+			const code = generateOTP(
+				opts,
+				{ phoneNumber: ctx.body.phoneNumber, type: "forget-password" },
+				ctx,
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
@@ -880,7 +895,7 @@ async function verifyPhoneNumberOTP(
 
 	const allowedAttempts = opts?.allowedAttempts ?? 3;
 	const peekedAttempts = parseVerificationAttempts(
-		existing.value.split(":")[1],
+		splitAtLastColon(existing.value)[1],
 	);
 	if (peekedAttempts >= allowedAttempts) {
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
@@ -898,7 +913,7 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 
-	const [otpValue, rawAttempts] = consumed.value.split(":");
+	const [otpValue, rawAttempts] = splitAtLastColon(consumed.value);
 	const attempts = parseVerificationAttempts(rawAttempts);
 	if (attempts >= allowedAttempts) {
 		throw APIError.from(
@@ -916,11 +931,29 @@ async function verifyPhoneNumberOTP(
 	}
 }
 
+/**
+ * Splits a stored `<code>:<attempts>` value at the last colon,
+ * so custom codes may contain colons.
+ */
+function splitAtLastColon(input: string): [string, string] {
+	const idx = input.lastIndexOf(":");
+	if (idx === -1) {
+		return [input, ""];
+	}
+	return [input.slice(0, idx), input.slice(idx + 1)];
+}
+
 function parseVerificationAttempts(value: string | undefined) {
 	const attempts = Number(value ?? 0);
 	return Number.isSafeInteger(attempts) && attempts > 0 ? attempts : 0;
 }
 
-function generateOTP(size: number) {
-	return generateRandomString(size, "0-9");
+function generateOTP(
+	opts: RequiredPhoneNumberOptions,
+	data: Parameters<NonNullable<PhoneNumberOptions["generateOTP"]>>[0],
+	ctx: GenericEndpointContext,
+) {
+	return (
+		opts.generateOTP?.(data, ctx) || generateRandomString(opts.otpLength, "0-9")
+	);
 }
