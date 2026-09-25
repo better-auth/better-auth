@@ -49,10 +49,11 @@ export interface PrismaConfig {
 	 * operations execute sequentially. Set to `true` to enable transactional batches.
 	 * For MongoDB, transactions also require a replica set.
 	 *
-	 * Note: Internal compound operations (`incrementOne`, `consumeOne`) run inside an
-	 * atomic transaction by default on providers that support them (PostgreSQL, MySQL,
-	 * SQLite, CockroachDB, SQL Server) to guard concurrency, unless explicitly set to `false`.
-	 * On MongoDB, internal operations run sequentially unless `transaction: true` is configured.
+	 * Note: `incrementOne` runs inside an atomic transaction by default on providers
+	 * that support them (PostgreSQL, MySQL, SQLite, CockroachDB, SQL Server) unless
+	 * explicitly set to `false`, and on MongoDB only when `transaction: true` is set.
+	 * `consumeOne` uses the client's `$transaction` whenever the connected client
+	 * supports it, independent of this flag.
 	 *
 	 * @default false
 	 */
