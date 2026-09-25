@@ -7,6 +7,8 @@ import type { SCIMUser } from "./persistence";
 
 const BASE_URL = "http://localhost:3000";
 const SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
+const SCIM_ENTERPRISE_USER_SCHEMA =
+	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const SCIM_MEDIA_TYPE = "application/scim+json";
 const SCIM_TOKEN = "entra-token";
@@ -37,12 +39,27 @@ interface SCIMUserResponse {
 		formatted: string;
 		givenName?: string;
 		familyName?: string;
+		middleName?: string;
+		honorificPrefix?: string;
+		honorificSuffix?: string;
 	};
 	emails?: SCIMMultiValue[];
 	phoneNumbers?: SCIMMultiValue[];
 	addresses?: SCIMAddress[];
 	roles?: SCIMMultiValue[];
 	entitlements?: SCIMMultiValue[];
+	[SCIM_ENTERPRISE_USER_SCHEMA]?: {
+		employeeNumber?: string;
+		costCenter?: string;
+		organization?: string;
+		division?: string;
+		department?: string;
+		manager?: {
+			value?: string;
+			$ref?: string;
+			displayName?: string;
+		};
+	};
 }
 
 function createEntraFixture() {
@@ -294,6 +311,7 @@ describe("Microsoft Entra ID SCIM User creation conformance", () => {
 	it("provisions a user when optional complex subattributes are null", async () => {
 		const { auth } = createEntraFixture();
 		const user = await createUser(auth, {
+			schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
 			userName: "entra-null-subattributes@example.com",
 			name: {
 				formatted: null,
@@ -303,6 +321,20 @@ describe("Microsoft Entra ID SCIM User creation conformance", () => {
 				honorificPrefix: null,
 				honorificSuffix: null,
 			},
+			emails: [
+				{
+					value: "entra-null-subattributes@example.com",
+					type: null,
+					primary: null,
+				},
+			],
+			phoneNumbers: [
+				{
+					value: "+1-555-0100",
+					type: null,
+					primary: null,
+				},
+			],
 			addresses: [
 				{
 					type: "work",
@@ -319,16 +351,42 @@ describe("Microsoft Entra ID SCIM User creation conformance", () => {
 				{
 					value: "engineer",
 					display: null,
-					type: "work",
-					primary: false,
+					type: null,
+					primary: null,
 				},
 			],
+			entitlements: [
+				{
+					value: "vpn",
+					display: null,
+					type: null,
+					primary: null,
+				},
+			],
+			[SCIM_ENTERPRISE_USER_SCHEMA]: {
+				manager: {
+					value: "manager-456",
+					$ref: null,
+					displayName: null,
+				},
+			},
 		});
 
 		expect(user.userName).toBe("entra-null-subattributes@example.com");
 		expect(user.name.formatted).toBe("Ada Lovelace");
 		expect(user.name.givenName).toBe("Ada");
 		expect(user.name.familyName).toBe("Lovelace");
+		expect(user.emails).toEqual([
+			{
+				value: "entra-null-subattributes@example.com",
+				primary: true,
+			},
+		]);
+		expect(user.phoneNumbers).toEqual([
+			{
+				value: "+1-555-0100",
+			},
+		]);
 		expect(user.addresses).toEqual([
 			{
 				type: "work",
@@ -342,9 +400,61 @@ describe("Microsoft Entra ID SCIM User creation conformance", () => {
 		expect(user.roles).toEqual([
 			{
 				value: "engineer",
-				type: "work",
-				primary: false,
 			},
 		]);
+		expect(user.entitlements).toEqual([
+			{
+				value: "vpn",
+			},
+		]);
+		expect(user[SCIM_ENTERPRISE_USER_SCHEMA]?.manager).toEqual({
+			value: "manager-456",
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11015
+	 */
+	it("updates a user name when PATCH contains null name subattributes", async () => {
+		const { auth } = createEntraFixture();
+		const user = await createUser(auth, {
+			userName: "patch-null-name@example.com",
+			name: {
+				formatted: "Ada Lovelace",
+				givenName: "Ada",
+				familyName: "Lovelace",
+				middleName: "Countess",
+			},
+		});
+
+		expect(user.name.middleName).toBe("Countess");
+
+		const response = await patchUser(auth, user.id, [
+			{
+				op: "Replace",
+				path: "name",
+				value: {
+					formatted: "Ada King",
+					familyName: "King",
+					middleName: null,
+				},
+			},
+		]);
+		const patched = await readJSON<SCIMUserResponse>(response);
+		expect(response.status, JSON.stringify(patched)).toBe(200);
+		expect(patched.name.formatted).toBe("Ada King");
+		expect(patched.name.familyName).toBe("King");
+		expect(patched.name.middleName).toBeUndefined();
+
+		const singlePathResponse = await patchUser(auth, user.id, [
+			{
+				op: "Replace",
+				path: "name.givenName",
+				value: null,
+			},
+		]);
+		const singlePatched = await readJSON<SCIMUserResponse>(singlePathResponse);
+		expect(singlePathResponse.status, JSON.stringify(singlePatched)).toBe(200);
+		expect(singlePatched.name.givenName).toBeUndefined();
 	});
 });
