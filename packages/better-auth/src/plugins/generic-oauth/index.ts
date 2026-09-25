@@ -211,7 +211,24 @@ export const genericOAuth = <const ID extends string>(
 				let isOidc = false;
 				let idTokenConfig: OAuthIdTokenConfig | undefined;
 
-				if (c.discoveryUrl) {
+				/**
+				 * Reason the latest discovery attempt left the provider unusable.
+				 * Surfaced when a request arrives while discovery is still pending.
+				 */
+				let discoveryFailure: string | null = null;
+				let discoveryResolved = !c.discoveryUrl;
+				let discoveryInflight: Promise<boolean> | null = null;
+
+				/**
+				 * Fetch the discovery document and apply it on top of any
+				 * explicitly configured endpoints, then report whether the provider
+				 * is usable. Safe to retry: already-resolved values are kept, so a
+				 * later success only fills in what is still missing.
+				 */
+				const resolveDiscovery = async (): Promise<boolean> => {
+					if (!c.discoveryUrl) {
+						return true;
+					}
 					const discovered = await fetchDiscovery(
 						c.discoveryUrl,
 						c.discoveryHeaders,
@@ -221,51 +238,92 @@ export const genericOAuth = <const ID extends string>(
 						);
 						return null;
 					});
-					if (discovered) {
-						authorizationUrl ??= discovered.authorization_endpoint;
-						tokenUrl ??= discovered.token_endpoint;
-						userInfoUrl ??= discovered.userinfo_endpoint;
-						endSessionEndpoint ??= discovered.end_session_endpoint;
-						issuer = discovered.issuer;
-						const signingAlgs =
-							discovered.id_token_signing_alg_values_supported;
-						isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
-						if (discovered.jwks_uri && discovered.issuer) {
-							let jwksUrl: URL;
-							try {
-								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
-							} catch {
-								ctx.logger.error(
-									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document. Provider skipped.`,
-								);
-								continue;
-							}
-							idTokenConfig = {
-								jwks: createRemoteJWKSet(jwksUrl),
-								issuer: discovered.issuer,
-								audience: c.clientId,
-								algorithms: isOidc ? signingAlgs : undefined,
-							};
+					if (!discovered) {
+						discoveryFailure = "the discovery document could not be fetched";
+						return false;
+					}
+					authorizationUrl ??= discovered.authorization_endpoint;
+					tokenUrl ??= discovered.token_endpoint;
+					userInfoUrl ??= discovered.userinfo_endpoint;
+					endSessionEndpoint ??= discovered.end_session_endpoint;
+					issuer = discovered.issuer;
+					const signingAlgs = discovered.id_token_signing_alg_values_supported;
+					isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
+					if (discovered.jwks_uri && discovered.issuer) {
+						let jwksUrl: URL;
+						try {
+							jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
+						} catch {
+							discoveryFailure = `invalid jwks_uri "${discovered.jwks_uri}" in discovery document`;
+							return false;
 						}
+						idTokenConfig = {
+							jwks: createRemoteJWKSet(jwksUrl),
+							issuer: discovered.issuer,
+							audience: c.clientId,
+							algorithms: isOidc ? signingAlgs : undefined,
+						};
 					}
 					if (!authorizationUrl || (!tokenUrl && !c.getToken)) {
-						ctx.logger.error(
-							`Provider "${c.providerId}": discovery left no usable authorization endpoint or token exchange. Provider skipped.`,
+						discoveryFailure =
+							"discovery left no usable authorization endpoint or token exchange";
+						return false;
+					}
+					if (c.requireIdTokenVerification && !idTokenConfig) {
+						discoveryFailure =
+							"requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri";
+						return false;
+					}
+					discoveryFailure = null;
+					return true;
+				};
+
+				if (c.discoveryUrl) {
+					discoveryResolved = await resolveDiscovery();
+					if (!discoveryResolved) {
+						ctx.logger.warn(
+							`Provider "${c.providerId}": ${discoveryFailure}. Provider registered and discovery will be retried on first use.`,
 						);
-						continue;
 					}
 				}
-				if (c.requireIdTokenVerification && !idTokenConfig) {
-					if (c.discoveryUrl) {
-						ctx.logger.error(
-							`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri. Provider skipped.`,
-						);
-						continue;
-					}
+				if (c.requireIdTokenVerification && !idTokenConfig && !c.discoveryUrl) {
 					throw new Error(
 						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
 					);
 				}
+
+				/**
+				 * Retry discovery for a provider whose startup discovery failed.
+				 * Concurrent callers share a single in-flight attempt.
+				 */
+				const ensureDiscovery = async (): Promise<void> => {
+					if (discoveryResolved) {
+						return;
+					}
+					discoveryInflight ??= resolveDiscovery()
+						.then((ok) => {
+							if (ok) {
+								discoveryResolved = true;
+								// Publish the late-resolved OIDC metadata on the provider;
+								// these were captured by value at construction time.
+								provider.issuer = issuer;
+								provider.idToken = idTokenConfig;
+								provider.requiresIdTokenNonce =
+									idTokenConfig !== undefined &&
+									c.disableIdTokenNonceBinding !== true;
+							}
+							return ok;
+						})
+						.finally(() => {
+							discoveryInflight = null;
+						});
+					if (!(await discoveryInflight)) {
+						throw APIError.from("SERVICE_UNAVAILABLE", {
+							code: GENERIC_OAUTH_ERROR_CODES.OAUTH_PROVIDER_UNAVAILABLE.code,
+							message: `Provider "${c.providerId}" is temporarily unavailable: ${discoveryFailure ?? "discovery has not succeeded yet"}.`,
+						});
+					}
+				};
 
 				const tokenEndpointAuth = c.tokenEndpointAuth;
 				if (
@@ -325,6 +383,11 @@ export const genericOAuth = <const ID extends string>(
 						if (c.disableProviderLogout) {
 							return null;
 						}
+						try {
+							await ensureDiscovery();
+						} catch {
+							return null;
+						}
 						if (!endSessionEndpoint) {
 							return null;
 						}
@@ -356,7 +419,8 @@ export const genericOAuth = <const ID extends string>(
 						}
 						return url;
 					},
-					createAuthorizationURL(data) {
+					async createAuthorizationURL(data) {
+						await ensureDiscovery();
 						if (!authorizationUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
@@ -394,6 +458,7 @@ export const genericOAuth = <const ID extends string>(
 						});
 					},
 					async validateAuthorizationCode(data) {
+						await ensureDiscovery();
 						if (c.getToken) {
 							return applyDefaultAccessTokenExpiry(
 								await c.getToken(data),
@@ -427,6 +492,7 @@ export const genericOAuth = <const ID extends string>(
 						);
 					},
 					async getUserInfo(tokens) {
+						await ensureDiscovery();
 						const { expectedIdTokenNonce, ...oauthTokens } = tokens;
 						// Fail closed: when discovery published a JWKS, an id_token
 						// that cannot be verified must not become an identity source.
@@ -471,6 +537,7 @@ export const genericOAuth = <const ID extends string>(
 						refreshToken: string,
 						refreshCtx?: OAuthRefreshContext,
 					): Promise<OAuth2Tokens> {
+						await ensureDiscovery();
 						if (!tokenUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",

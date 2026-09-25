@@ -3092,7 +3092,7 @@ describe("oauth2", async () => {
 			expect(msConfig.disableImplicitSignUp).toBe(true);
 		});
 
-		it("skips the Microsoft provider when discovery is unavailable", async () => {
+		it("keeps the Microsoft provider registered when discovery is unavailable and retries on use", async () => {
 			mswServer.use(
 				http.get(
 					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
@@ -3117,8 +3117,15 @@ describe("oauth2", async () => {
 			);
 
 			const ctx = await auth.$context;
-			expect(ctx.socialProviders.map((provider) => provider.id)).not.toContain(
+			expect(ctx.socialProviders.map((provider) => provider.id)).toContain(
 				"microsoft-entra-id",
+			);
+			await expect(
+				auth.api.signInSocial({
+					body: { provider: "microsoft-entra-id", callbackURL: "/" },
+				}),
+			).rejects.toThrow(
+				'Provider "microsoft-entra-id" is temporarily unavailable',
 			);
 		});
 
@@ -5186,7 +5193,7 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("skips a provider when required ID token verification metadata is unavailable", async () => {
+		it("keeps a provider registered when required ID token verification metadata is unavailable and retries on use", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5224,7 +5231,17 @@ describe("oauth2", async () => {
 				const context = await auth.$context;
 				expect(
 					context.socialProviders.map((provider) => provider.id),
-				).not.toContain("verified-id-token-required");
+				).toContain("verified-id-token-required");
+				await expect(
+					auth.api.signInSocial({
+						body: {
+							provider: "verified-id-token-required",
+							callbackURL: "/",
+						},
+					}),
+				).rejects.toThrow(
+					'Provider "verified-id-token-required" is temporarily unavailable',
+				);
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((error) => (error ? reject(error) : resolve())),
@@ -5232,7 +5249,7 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("skips a provider when discovery returns a malformed jwks_uri", async () => {
+		it("keeps a provider registered when discovery returns a malformed jwks_uri and retries on use", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5270,7 +5287,14 @@ describe("oauth2", async () => {
 				const context = await auth.$context;
 				expect(
 					context.socialProviders.map((provider) => provider.id),
-				).not.toContain("malformed-jwks");
+				).toContain("malformed-jwks");
+				await expect(
+					auth.api.signInSocial({
+						body: { provider: "malformed-jwks", callbackURL: "/" },
+					}),
+				).rejects.toThrow(
+					'Provider "malformed-jwks" is temporarily unavailable',
+				);
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
@@ -5280,31 +5304,31 @@ describe("oauth2", async () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 * @see https://github.com/better-auth/better-auth/issues/11404
 	 */
 	it.each([
 		"authorization",
 		"token",
 		"both",
-	])("skips discovery missing %s endpoints", async (missing) => {
+	])("keeps a provider whose discovery misses %s endpoints registered and retries discovery on use", async (missing) => {
 		const discoveryUrl =
 			"https://incomplete-idp.test/.well-known/openid-configuration";
 		mswServer.use(
 			http.get(discoveryUrl, () =>
 				HttpResponse.json({
-					issuer: "https://incomplete-idp.test",
+					issuer: `http://localhost:${port}`,
 					...(missing === "token"
 						? {
-								authorization_endpoint: "https://incomplete-idp.test/authorize",
+								authorization_endpoint: `http://localhost:${port}/authorize`,
 							}
 						: {}),
 					...(missing === "authorization"
-						? { token_endpoint: "https://incomplete-idp.test/token" }
+						? { token_endpoint: `http://localhost:${port}/token` }
 						: {}),
 				}),
 			),
 		);
-		const { auth } = await getTestInstance(
+		const { auth, customFetchImpl } = await getTestInstance(
 			{
 				plugins: [
 					genericOAuth({
@@ -5323,7 +5347,34 @@ describe("oauth2", async () => {
 		);
 		expect(
 			(await auth.$context).socialProviders.map((provider) => provider.id),
-		).not.toContain("incomplete");
+		).toContain("incomplete");
+		await expect(
+			auth.api.signInSocial({
+				body: { provider: "incomplete", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "incomplete" is temporarily unavailable');
+
+		// Once the IdP publishes a complete document, the next sign-in succeeds.
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: `http://localhost:${port}`,
+					authorization_endpoint: `http://localhost:${port}/authorize`,
+					token_endpoint: `http://localhost:${port}/token`,
+					userinfo_endpoint: `http://localhost:${port}/userinfo`,
+					jwks_uri: `http://localhost:${port}/jwks`,
+				}),
+			),
+		);
+		const localClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const signInRes = await localClient.signIn.social({
+			provider: "incomplete",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
 	});
 
 	it.each([
@@ -5401,7 +5452,16 @@ describe("oauth2", async () => {
 		const ctx = await auth.$context;
 		const providerIds = ctx.socialProviders.map((provider) => provider.id);
 		expect(providerIds).toContain("healthy-idp");
-		expect(providerIds).not.toContain("broken-idp");
+		expect(providerIds).toContain("broken-idp");
+
+		// The unreachable provider stays registered and reports itself as
+		// unavailable instead of disappearing; discovery is retried on the
+		// next sign-in attempt.
+		await expect(
+			auth.api.signInSocial({
+				body: { provider: "broken-idp", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "broken-idp" is temporarily unavailable');
 
 		const signUp = await auth.api.signUpEmail({
 			body: {
@@ -5411,6 +5471,64 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(signUp.token).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11404
+	 */
+	it("recovers a provider whose startup discovery was unreachable once the IdP is reachable", async () => {
+		const discoveryUrl =
+			"https://flaky-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () => new HttpResponse(null, { status: 503 })),
+		);
+		const { auth, customFetchImpl } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "flaky-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).toContain("flaky-idp");
+		await expect(
+			auth.api.signInSocial({
+				body: { provider: "flaky-idp", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "flaky-idp" is temporarily unavailable');
+
+		// The IdP comes back; the next sign-in rediscovers it and works.
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: `http://localhost:${port}`,
+					authorization_endpoint: `http://localhost:${port}/authorize`,
+					token_endpoint: `http://localhost:${port}/token`,
+					userinfo_endpoint: `http://localhost:${port}/userinfo`,
+					jwks_uri: `http://localhost:${port}/jwks`,
+				}),
+			),
+		);
+		const localClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const signInRes = await localClient.signIn.social({
+			provider: "flaky-idp",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
 	});
 });
 
