@@ -173,7 +173,7 @@ function readOptionalNamePart(
 ): string | null {
 	const scalar = unwrapSinglePatchValue(value);
 	if (scalar === null) return null;
-	return readNonEmptyString(scalar, attribute);
+	return readNonEmptyString(value, attribute);
 }
 
 function readName(

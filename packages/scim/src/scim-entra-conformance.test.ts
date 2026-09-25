@@ -457,4 +457,58 @@ describe("Microsoft Entra ID SCIM User creation conformance", () => {
 		expect(singlePathResponse.status, JSON.stringify(singlePatched)).toBe(200);
 		expect(singlePatched.name.givenName).toBeUndefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11015
+	 */
+	it("rejects nested array values in name subattributes during PATCH", async () => {
+		const { auth } = createEntraFixture();
+		const user = await createUser(auth, {
+			userName: "patch-nested-name@example.com",
+			name: {
+				formatted: "Ada Lovelace",
+				givenName: "Ada",
+				familyName: "Lovelace",
+			},
+		});
+
+		const response = await patchUser(auth, user.id, [
+			{
+				op: "Replace",
+				path: "name",
+				value: {
+					givenName: [["Ada"]],
+				},
+			},
+		]);
+		const error = await readJSON<{ scimType?: string }>(response);
+		expect(response.status, JSON.stringify(error)).toBe(400);
+		expect(error.scimType).toBe("invalidValue");
+
+		const directPathResponse = await patchUser(auth, user.id, [
+			{
+				op: "Replace",
+				path: "name.familyName",
+				value: [["Lovelace"]],
+			},
+		]);
+		const directError = await readJSON<{ scimType?: string }>(
+			directPathResponse,
+		);
+		expect(directPathResponse.status, JSON.stringify(directError)).toBe(400);
+		expect(directError.scimType).toBe("invalidValue");
+
+		const validSingletonResponse = await patchUser(auth, user.id, [
+			{
+				op: "Replace",
+				path: "name",
+				value: {
+					givenName: ["Augusta"],
+				},
+			},
+		]);
+		const patched = await readJSON<SCIMUserResponse>(validSingletonResponse);
+		expect(validSingletonResponse.status, JSON.stringify(patched)).toBe(200);
+		expect(patched.name.givenName).toBe("Augusta");
+	});
 });
