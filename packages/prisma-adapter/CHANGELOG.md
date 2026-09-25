@@ -1,5 +1,7 @@
 # @better-auth/prisma-adapter
 
+## 1.7.7
+
 ## 1.7.6
 
 ### Patch Changes

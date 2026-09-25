@@ -1,5 +1,11 @@
 # @better-auth/oauth-provider
 
+## 1.7.7
+
+### Patch Changes
+
+- [#11402](https://github.com/better-auth/better-auth/pull/11402) [`b26057e`](https://github.com/better-auth/better-auth/commit/b26057e23a3c4fc8c97c346857751564d57324c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Export `verifyOAuthQueryParams` from the package root, so an application that renders its own consent page can verify the `sig`/`exp` this plugin's `signParams` puts on the authorization query before it renders anything.
+
 ## 1.7.6
 
 ## 1.7.5
