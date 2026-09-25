@@ -10,7 +10,7 @@ export type NamedImportGroup = {
 	 */
 	imports: Import;
 	/**
-	 * Wether the import is importing from a `default export` or a `named export`
+	 * Whether the import is importing from a `default export` or a `named export`
 	 */
 	isNamedImport: true;
 };
@@ -25,7 +25,7 @@ export type NormalImportGroup = {
 	 */
 	imports: Import[];
 	/**
-	 * Wether the import is a default import
+	 * Whether the import is a default import
 	 */
 	isNamedImport: false;
 };
