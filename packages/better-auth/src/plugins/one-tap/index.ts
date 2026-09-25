@@ -9,6 +9,7 @@ import {
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
 import { parseUserOutput } from "../../db/schema";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -39,11 +40,28 @@ export interface OneTapOptions {
 	clientId?: string | undefined;
 }
 
+const ONE_TAP_NONCE_IDENTIFIER_PREFIX = "one-tap-nonce:";
+const ONE_TAP_NONCE_EXPIRES_IN_MS = 5 * 60 * 1000;
+
+const oneTapNonceBodySchema = z.object({}).strict().optional();
+
 const oneTapCallbackBodySchema = z.object({
 	idToken: z.string().meta({
 		description:
 			"Google ID token, which the client obtains from the One Tap API",
 	}),
+	/**
+	 * Nonce previously issued by `/one-tap/nonce`. It is consumed on use and
+	 * must equal the ID token's `nonce` claim, which binds the token to this
+	 * sign-in attempt and prevents a captured token from being replayed.
+	 */
+	nonce: z
+		.string()
+		.meta({
+			description:
+				"Nonce issued by /one-tap/nonce and passed to Google when the ID token was requested",
+		})
+		.optional(),
 	/**
 	 * Sent so the global origin-check middleware validates the post-login
 	 * redirect target against `trustedOrigins`. Without it the client performs
@@ -62,6 +80,45 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 		id: "one-tap",
 		version: PACKAGE_VERSION,
 		endpoints: {
+			oneTapNonce: createAuthEndpoint(
+				"/one-tap/nonce",
+				{
+					method: "POST",
+					body: oneTapNonceBodySchema,
+					metadata: {
+						openapi: {
+							summary: "Issue a One Tap nonce",
+							description:
+								"Issues a single-use nonce to pass to Google when requesting the One Tap ID token. The callback consumes it and requires the token's nonce claim to match.",
+							responses: {
+								200: {
+									description: "Successful response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													nonce: { type: "string" },
+												},
+												required: ["nonce"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const nonce = generateRandomString(32, "a-z", "A-Z", "0-9");
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: `${ONE_TAP_NONCE_IDENTIFIER_PREFIX}${nonce}`,
+						value: nonce,
+						expiresAt: new Date(Date.now() + ONE_TAP_NONCE_EXPIRES_IN_MS),
+					});
+					return ctx.json({ nonce });
+				},
+			),
 			oneTapCallback: createAuthEndpoint(
 				"/one-tap/callback",
 				{
@@ -99,7 +156,20 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					},
 				},
 				async (ctx) => {
-					const { idToken } = ctx.body;
+					const { idToken, nonce } = ctx.body;
+					// Consume the nonce before any verification work so a failed
+					// attempt burns it too and concurrent racers cannot share it.
+					if (nonce !== undefined) {
+						const issued =
+							await ctx.context.internalAdapter.consumeVerificationValue(
+								`${ONE_TAP_NONCE_IDENTIFIER_PREFIX}${nonce}`,
+							);
+						if (!issued) {
+							throw new APIError("BAD_REQUEST", {
+								message: "invalid or expired nonce",
+							});
+						}
+					}
 					const googleProvider =
 						typeof ctx.context.options.socialProviders?.google === "function"
 							? await ctx.context.options.socialProviders?.google()
@@ -119,8 +189,17 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					const payload = (await verifyGoogleIdToken({
 						token: idToken,
 						audience,
-					})) as Partial<GoogleProfile> | null;
+						nonce,
+					})) as (Partial<GoogleProfile> & { nonce?: unknown }) | null;
 					if (!payload) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
+					// A token minted with a nonce must be presented with that nonce.
+					// Accepting it without one would let a captured token bypass the
+					// single-use binding above.
+					if (payload.nonce !== undefined && nonce === undefined) {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
