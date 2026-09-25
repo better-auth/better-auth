@@ -259,6 +259,16 @@ export interface InternalAdapter<
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
 	/**
+	 * Delete one verification row by `id`, leaving any other row stored under
+	 * the same `identifier` in the meantime untouched. Use it instead of
+	 * `deleteVerificationByIdentifier` when replacing a row that a concurrent
+	 * request may have replaced already. In secondary storage the cached row is
+	 * addressed when its `id` equals this one; a row cached without an id is
+	 * addressed by none.
+	 */
+	deleteVerificationById(identifier: string, id: string): Promise<void>;
+
+	/**
 	 * Atomically consume a single-use verification row by `identifier` and
 	 * return it. Only the first concurrent caller receives the latest row;
 	 * subsequent callers receive `null`. Consuming one row invalidates the
@@ -295,6 +305,20 @@ export interface InternalAdapter<
 		identifier: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
+
+	/**
+	 * Update one verification row by `id`, leaving any other row stored under
+	 * the same `identifier` in the meantime untouched. Returns `null` when that
+	 * row no longer exists, so a caller that read the row before can tell that
+	 * a concurrent request has replaced it. In secondary storage the cached row
+	 * is addressed when its `id` equals this one; a row cached without an id is
+	 * addressed by none.
+	 */
+	updateVerificationById(
+		identifier: string,
+		id: string,
+		data: Partial<Verification>,
+	): Promise<Verification | null>;
 
 	refreshUserSessions(user: User): Promise<void>;
 }
