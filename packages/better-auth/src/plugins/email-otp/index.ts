@@ -101,27 +101,37 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							user: { email: string };
 						}>(ctx);
 						const email = response?.user.email;
-						if (email) {
-							const otp =
-								opts.generateOTP({ email, type: "email-verification" }, ctx) ||
-								defaultOTPGenerator(opts);
-							const storedOTP = await storeOTP(ctx, opts, otp);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: `${storedOTP}:0`,
-								identifier: toOTPIdentifier("email-verification", email),
-								expiresAt: getDate(opts.expiresIn, "sec"),
-							});
-							await ctx.context.runInBackgroundOrAwait(
-								options.sendVerificationOTP(
-									{
-										email,
-										otp,
-										type: "email-verification",
-									},
-									ctx,
-								),
-							);
+						if (!email) {
+							return;
 						}
+						/**
+						 * Sign-up answers an existing email with a synthetic user, so the
+						 * stored account decides whether a code goes out.
+						 */
+						const user =
+							await ctx.context.internalAdapter.findUserByEmail(email);
+						if (!user || user.user.emailVerified) {
+							return;
+						}
+						const otp =
+							opts.generateOTP({ email, type: "email-verification" }, ctx) ||
+							defaultOTPGenerator(opts);
+						const storedOTP = await storeOTP(ctx, opts, otp);
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: `${storedOTP}:0`,
+							identifier: toOTPIdentifier("email-verification", email),
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						});
+						await ctx.context.runInBackgroundOrAwait(
+							options.sendVerificationOTP(
+								{
+									email,
+									otp,
+									type: "email-verification",
+								},
+								ctx,
+							),
+						);
 					}),
 				},
 			],
