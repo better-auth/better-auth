@@ -1060,4 +1060,103 @@ describe("dynamic access control", async () => {
 			},
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11303
+	 */
+	it("createOrgRole with role: 'owner,temp' -> expect 400 Bad Request", async () => {
+		await expect(
+			auth.api.createOrgRole({
+				body: {
+					role: "owner,temp",
+					permission: {
+						project: ["read"],
+					},
+					additionalFields: {
+						color: "#000000",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "INVALID_ROLE_NAME" },
+		});
+
+		const clientRes = await authClient.organization.createRole(
+			{
+				role: "owner,temp",
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(clientRes.error?.status).toBe(400);
+		expect(clientRes.error?.code).toBe("INVALID_ROLE_NAME");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11303
+	 */
+	it("updateOrgRole with data: { roleName: 'owner,temp' } -> expect 400 Bad Request", async () => {
+		const testRole = await authClient.organization.createRole(
+			{
+				role: `valid-role-${crypto.randomUUID()}`,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+
+		await expect(
+			auth.api.updateOrgRole({
+				body: {
+					roleName: testRole.data.roleData.role,
+					data: {
+						roleName: "owner,temp",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "INVALID_ROLE_NAME" },
+		});
+
+		const updateClientRes = await authClient.organization.updateRole(
+			{
+				roleName: testRole.data.roleData.role,
+				data: {
+					roleName: "owner,temp",
+				},
+			},
+			{ headers },
+		);
+		expect(updateClientRes.error?.status).toBe(400);
+		expect(updateClientRes.error?.code).toBe("INVALID_ROLE_NAME");
+
+		const validUpdate = await authClient.organization.updateRole(
+			{
+				roleName: testRole.data.roleData.role,
+				data: {
+					roleName: "owner-temp",
+				},
+			},
+			{ headers },
+		);
+		expect(validUpdate.error).toBeNull();
+		expect(validUpdate.data?.success).toBe(true);
+		expect(validUpdate.data?.roleData.role).toBe("owner-temp");
+	});
 });
