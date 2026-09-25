@@ -45,6 +45,7 @@ import {
 	getExpectedSAMLRecipients,
 	getSafeRedirectUrl,
 } from "./routes/saml-pipeline";
+import { validateSAMLResponseBinding } from "./saml";
 import { saml } from "./samlify";
 import type { SSOOptions, SSOUserResolutionInput } from "./types";
 import { normalizePem } from "./utils";
@@ -8753,6 +8754,7 @@ describe("SAML SSO Hardening", () => {
 			);
 			expect(redirectUrl.origin).toBe(frontendOrigin);
 			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
+			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
 		});
 	});
 
@@ -8766,9 +8768,17 @@ describe("SAML SSO Hardening", () => {
 			});
 			const { headers } = await signInWithTestUser();
 			const providerId = "saml-acs-recipient-provider";
-			const acsUrl = `http://localhost:3000/api/auth/sso/saml2/sp/acs/${providerId}`;
 			const customCallbackUrl =
 				"http://localhost:3000/api/auth/sso/saml2/custom-callback";
+
+			const customSpMetadata = `
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081">
+<md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="${customCallbackUrl}" index="1"/>
+</md:SPSSODescriptor>
+</md:EntityDescriptor>
+`.trim();
 
 			await auth.api.registerSSOProvider({
 				body: {
@@ -8778,12 +8788,15 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: customCallbackUrl,
+						callbackUrl: "http://localhost:3000/dashboard?source=saml",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
 						idpMetadata: {
 							metadata: idpMetadata,
+						},
+						spMetadata: {
+							metadata: customSpMetadata,
 						},
 						identifierFormat:
 							"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
@@ -8795,8 +8808,8 @@ describe("SAML SSO Hardening", () => {
 			const idpResponseUrl = new URL(
 				"http://localhost:8081/api/sso/saml2/idp/post",
 			);
-			idpResponseUrl.searchParams.set("destination", acsUrl);
-			idpResponseUrl.searchParams.set("recipient", acsUrl);
+			idpResponseUrl.searchParams.set("destination", customCallbackUrl);
+			idpResponseUrl.searchParams.set("recipient", customCallbackUrl);
 			idpResponseUrl.searchParams.set("audience", "http://localhost:8081");
 
 			let samlResponse: MockSAMLResponse | undefined;
@@ -8810,7 +8823,7 @@ describe("SAML SSO Hardening", () => {
 			const getAcsSpy = vi.spyOn(proto, "getAssertionConsumerService");
 
 			try {
-				await auth.api.acsEndpoint({
+				const response = await auth.api.acsEndpoint({
 					method: "POST",
 					body: {
 						SAMLResponse: samlResponse!.samlResponse,
@@ -8820,28 +8833,26 @@ describe("SAML SSO Hardening", () => {
 				});
 
 				expect(getAcsSpy).toHaveBeenCalledWith("post");
-				expect(getAcsSpy).toHaveReturnedWith(acsUrl);
+				expect(getAcsSpy).toHaveReturnedWith(customCallbackUrl);
+				expect(response.status).toBe(302);
+				const location = response.headers.get("location") || "";
+				expect(location).not.toContain("error=invalid_saml_response");
+				expect(location).toContain("/dashboard?source=saml");
 			} finally {
 				getAcsSpy.mockRestore();
 			}
 
-			// Verify that resolving assertionConsumerServiceUrl with "post" binding is what
-			// contributes a custom ACS URL to expectedRecipients (non-tautological verification).
+			// Verify that without "post" (i.e. passing the full URN binding as before the fix),
+			// samlify returns undefined, leaving customCallbackUrl out of expectedRecipients and causing SAML_RECIPIENT_MISMATCH:
 			const customSp = saml.ServiceProvider({
-				metadata: saml
-					.SPMetadata({
-						entityID: "http://localhost:8081",
-						assertionConsumerService: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location: customCallbackUrl,
-							},
-						],
-					})
-					.getMetadata(),
+				metadata: customSpMetadata,
 			});
+			const brokenAcsUrl = customSp.entityMeta.getAssertionConsumerService(
+				"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+			);
+			expect(brokenAcsUrl).toBeUndefined();
 
-			const config = {
+			const configWithoutMetadataXml = {
 				issuer: "http://localhost:8081",
 				entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 				cert: certificate,
@@ -8853,13 +8864,8 @@ describe("SAML SSO Hardening", () => {
 			const currentCallbackPath =
 				"http://localhost:3000/api/auth/sso/saml2/sp/acs/other-route";
 
-			// Prior to the fix, passing the full URN binding returned undefined from samlify:
-			const brokenAcsUrl = customSp.entityMeta.getAssertionConsumerService(
-				"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-			);
-			expect(brokenAcsUrl).toBeUndefined();
 			const recipientsWithoutFix = getExpectedSAMLRecipients(
-				config,
+				configWithoutMetadataXml,
 				"http://localhost:3000/api/auth",
 				providerId,
 				currentCallbackPath,
@@ -8867,18 +8873,43 @@ describe("SAML SSO Hardening", () => {
 			);
 			expect(recipientsWithoutFix).not.toContain(customCallbackUrl);
 
-			// With the fix ("post"), samlify resolves the registered ACS URL and expectedRecipients includes it:
+			const samlXml = Buffer.from(
+				samlResponse!.samlResponse,
+				"base64",
+			).toString("utf-8");
+
+			expect(() =>
+				validateSAMLResponseBinding(samlXml, {
+					expectedAudiences: ["http://localhost:8081"],
+					expectedRecipients: recipientsWithoutFix,
+				}),
+			).toThrowError(
+				expect.objectContaining({
+					body: expect.objectContaining({
+						code: "SAML_RECIPIENT_MISMATCH",
+					}),
+				}),
+			);
+
+			// With the fix ("post"), samlify resolves the registered ACS URL and validation succeeds:
 			const resolvedAcsUrl =
 				customSp.entityMeta.getAssertionConsumerService("post");
 			expect(resolvedAcsUrl).toBe(customCallbackUrl);
 			const recipientsWithFix = getExpectedSAMLRecipients(
-				config,
+				configWithoutMetadataXml,
 				"http://localhost:3000/api/auth",
 				providerId,
 				currentCallbackPath,
 				resolvedAcsUrl,
 			);
 			expect(recipientsWithFix).toContain(customCallbackUrl);
+
+			expect(() =>
+				validateSAMLResponseBinding(samlXml, {
+					expectedAudiences: ["http://localhost:8081"],
+					expectedRecipients: recipientsWithFix,
+				}),
+			).not.toThrow();
 		});
 	});
 });
