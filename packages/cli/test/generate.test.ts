@@ -668,6 +668,40 @@ model Directory_user {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11052
+	 */
+	it("should generate prisma schema for cockroachdb with uuid ids", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "cockroachdb",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "cockroachdb",
+					},
+				),
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			},
+		});
+
+		expect(schema.code).toContain('provider = "cockroachdb"');
+		expect(schema.code).toMatch(
+			/id\s+String\s+@id\s+@default\(dbgenerated\("pg_catalog\.gen_random_uuid\(\)"\)\)\s+@db\.Uuid/,
+		);
+		expect(schema.code).toMatch(/userId\s+String\s+@db\.Uuid/);
+	});
+
 	it("should generate prisma schema for mongodb", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
