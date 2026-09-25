@@ -104,8 +104,6 @@ export const customSession = <
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
-					}).catch((e) => {
-						return null;
 					});
 					if (!session?.response) {
 						return ctx.json(null);
