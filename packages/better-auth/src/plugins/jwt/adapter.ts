@@ -106,9 +106,9 @@ export const getJwksAdapter = (
 			const configAlg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 			const now = new Date();
 			return candidates
-				.filter((k) => (parsePublicJwk(k).alg ?? configAlg) === alg)
 				.filter((k) => !k.expiresAt || k.expiresAt > now)
-				.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+				.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+				.find((k) => (parsePublicJwk(k).alg ?? configAlg) === alg);
 		},
 		createJwk: async (ctx: GenericEndpointContext, webKey: Omit<Jwk, "id">) => {
 			if (options?.adapter?.createJwk) {
