@@ -286,3 +286,65 @@ describe("SCIM User PATCH against Microsoft Entra ID attribute mappings", () => 
 		expect(error.scimType).toBe("noTarget");
 	});
 });
+
+describe("Microsoft Entra ID SCIM User creation conformance", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11015
+	 */
+	it("provisions a user when optional complex subattributes are null", async () => {
+		const { auth } = createEntraFixture();
+		const user = await createUser(auth, {
+			userName: "entra-null-subattributes@example.com",
+			name: {
+				formatted: null,
+				givenName: "Ada",
+				familyName: "Lovelace",
+				middleName: null,
+				honorificPrefix: null,
+				honorificSuffix: null,
+			},
+			addresses: [
+				{
+					type: "work",
+					streetAddress: "123 Main St",
+					locality: "Redmond",
+					region: "WA",
+					postalCode: "98052",
+					country: null,
+					formatted: null,
+					primary: true,
+				},
+			],
+			roles: [
+				{
+					value: "engineer",
+					display: null,
+					type: "work",
+					primary: false,
+				},
+			],
+		});
+
+		expect(user.userName).toBe("entra-null-subattributes@example.com");
+		expect(user.name.formatted).toBe("Ada Lovelace");
+		expect(user.name.givenName).toBe("Ada");
+		expect(user.name.familyName).toBe("Lovelace");
+		expect(user.addresses).toEqual([
+			{
+				type: "work",
+				streetAddress: "123 Main St",
+				locality: "Redmond",
+				region: "WA",
+				postalCode: "98052",
+				primary: true,
+			},
+		]);
+		expect(user.roles).toEqual([
+			{
+				value: "engineer",
+				type: "work",
+				primary: false,
+			},
+		]);
+	});
+});

@@ -33,6 +33,17 @@ function scimSingleValueScalar<Schema extends z.ZodType>(schema: Schema) {
 	);
 }
 
+/**
+ * Normalize an optional subattribute that Microsoft Entra serializes as
+ * JSON `null` when unpopulated instead of omitting.
+ */
+function scimOptionalSubAttribute<Schema extends z.ZodType>(schema: Schema) {
+	return z.preprocess(
+		(value) => (value === null ? undefined : value),
+		schema.optional(),
+	);
+}
+
 function atMostOnePrimary<T extends { primary?: boolean }>(
 	values: readonly T[],
 ): boolean {
@@ -63,12 +74,12 @@ export interface SCIMDiscoveryAttribute {
 }
 
 const scimNameSchema = z.object({
-	formatted: scimLongStringSchema.optional(),
-	givenName: scimStringSchema.optional(),
-	familyName: scimStringSchema.optional(),
-	middleName: scimStringSchema.optional(),
-	honorificPrefix: scimStringSchema.optional(),
-	honorificSuffix: scimStringSchema.optional(),
+	formatted: scimOptionalSubAttribute(scimLongStringSchema),
+	givenName: scimOptionalSubAttribute(scimStringSchema),
+	familyName: scimOptionalSubAttribute(scimStringSchema),
+	middleName: scimOptionalSubAttribute(scimStringSchema),
+	honorificPrefix: scimOptionalSubAttribute(scimStringSchema),
+	honorificSuffix: scimOptionalSubAttribute(scimStringSchema),
 });
 
 const scimCanonicalNameSchema = scimNameSchema.extend({
@@ -77,8 +88,10 @@ const scimCanonicalNameSchema = scimNameSchema.extend({
 
 const scimEmailSchema = z.object({
 	value: scimEmailValueSchema,
-	primary: z.boolean().optional(),
-	type: scimStringSchema.transform((type) => type.toLowerCase()).optional(),
+	primary: scimOptionalSubAttribute(z.boolean()),
+	type: scimOptionalSubAttribute(
+		scimStringSchema.transform((type) => type.toLowerCase()),
+	),
 });
 
 const scimCanonicalEmailSchema = scimEmailSchema.extend({
@@ -87,20 +100,24 @@ const scimCanonicalEmailSchema = scimEmailSchema.extend({
 
 const scimPhoneNumberSchema = z.object({
 	value: scimLongStringSchema,
-	type: scimStringSchema.transform((type) => type.toLowerCase()).optional(),
-	primary: z.boolean().optional(),
+	type: scimOptionalSubAttribute(
+		scimStringSchema.transform((type) => type.toLowerCase()),
+	),
+	primary: scimOptionalSubAttribute(z.boolean()),
 });
 
 const scimAddressSchema = z
 	.object({
-		formatted: scimLongStringSchema.optional(),
-		streetAddress: scimLongStringSchema.optional(),
-		locality: scimStringSchema.optional(),
-		region: scimStringSchema.optional(),
-		postalCode: scimStringSchema.optional(),
-		country: scimStringSchema.optional(),
-		type: scimStringSchema.transform((type) => type.toLowerCase()).optional(),
-		primary: z.boolean().optional(),
+		formatted: scimOptionalSubAttribute(scimLongStringSchema),
+		streetAddress: scimOptionalSubAttribute(scimLongStringSchema),
+		locality: scimOptionalSubAttribute(scimStringSchema),
+		region: scimOptionalSubAttribute(scimStringSchema),
+		postalCode: scimOptionalSubAttribute(scimStringSchema),
+		country: scimOptionalSubAttribute(scimStringSchema),
+		type: scimOptionalSubAttribute(
+			scimStringSchema.transform((type) => type.toLowerCase()),
+		),
+		primary: scimOptionalSubAttribute(z.boolean()),
 	})
 	.refine(
 		(address) =>
@@ -115,17 +132,19 @@ const scimAddressSchema = z
 
 const scimRoleSchema = z.object({
 	value: scimLongStringSchema,
-	display: scimLongStringSchema.optional(),
-	type: scimStringSchema.transform((type) => type.toLowerCase()).optional(),
-	primary: z.boolean().optional(),
+	display: scimOptionalSubAttribute(scimLongStringSchema),
+	type: scimOptionalSubAttribute(
+		scimStringSchema.transform((type) => type.toLowerCase()),
+	),
+	primary: scimOptionalSubAttribute(z.boolean()),
 });
 
 const scimEntitlementSchema = scimRoleSchema;
 
 const scimCanonicalManagerSchema = z
 	.object({
-		value: scimStringSchema.optional(),
-		$ref: scimReferenceSchema.optional(),
+		value: scimOptionalSubAttribute(scimStringSchema),
+		$ref: scimOptionalSubAttribute(scimReferenceSchema),
 	})
 	.refine(
 		(manager) => manager.value !== undefined || manager.$ref !== undefined,
@@ -145,9 +164,9 @@ const scimCanonicalManagerSchema = z
 	});
 
 const scimManagerInputObjectSchema = z.object({
-	value: scimStringSchema.optional(),
-	$ref: scimReferenceSchema.optional(),
-	displayName: scimLongStringSchema.optional(),
+	value: scimOptionalSubAttribute(scimStringSchema),
+	$ref: scimOptionalSubAttribute(scimReferenceSchema),
+	displayName: scimOptionalSubAttribute(scimLongStringSchema),
 });
 
 const scimManagerInputSchema = z
