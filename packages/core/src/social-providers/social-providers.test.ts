@@ -13,6 +13,8 @@ import type {
 import { CLIENT_ASSERTION_TYPE } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
+import type { GithubProfile } from "./github";
+import { github } from "./github";
 import { socialProviders } from "./index";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
@@ -453,5 +455,111 @@ describe("cognito provider", () => {
 		const provider = cognito(cognitoConfig);
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
+	});
+});
+
+describe("github provider", () => {
+	/**
+	 * Matches the documented GET /users/{username} response: ids and counters
+	 * are numbers, and unset profile fields are null rather than empty strings.
+	 * Fields GitHub only returns on the authenticated GET /user response
+	 * (private_* counters, plan) are absent.
+	 */
+	const octocatProfile = {
+		login: "octocat",
+		id: 583231,
+		node_id: "MDQ6VXNlcjU4MzIzMQ==",
+		avatar_url: "https://avatars.githubusercontent.com/u/583231?v=4",
+		gravatar_id: "",
+		url: "https://api.github.com/users/octocat",
+		html_url: "https://github.com/octocat",
+		followers_url: "https://api.github.com/users/octocat/followers",
+		following_url:
+			"https://api.github.com/users/octocat/following{/other_user}",
+		gists_url: "https://api.github.com/users/octocat/gists{/gist_id}",
+		starred_url: "https://api.github.com/users/octocat/starred{/owner}{/repo}",
+		subscriptions_url: "https://api.github.com/users/octocat/subscriptions",
+		organizations_url: "https://api.github.com/users/octocat/orgs",
+		repos_url: "https://api.github.com/users/octocat/repos",
+		events_url: "https://api.github.com/users/octocat/events{/privacy}",
+		received_events_url: "https://api.github.com/users/octocat/received_events",
+		type: "User",
+		site_admin: false,
+		name: "The Octocat",
+		company: "@github",
+		blog: "https://github.blog",
+		location: "San Francisco",
+		email: null,
+		hireable: null,
+		bio: null,
+		twitter_username: null,
+		public_repos: 8,
+		public_gists: 8,
+		followers: 23815,
+		following: 9,
+		created_at: "2011-01-25T18:44:36Z",
+		updated_at: "2026-01-01T00:00:00Z",
+	};
+
+	/**
+	 * Matches the authenticated `GET /user` response. These fields are omitted
+	 * when GitHub returns the public profile shape instead.
+	 */
+	const authenticatedOctocatProfile = {
+		...octocatProfile,
+		gravatar_id: null,
+		name: null,
+		company: null,
+		blog: null,
+		location: null,
+		email: "octocat@github.com",
+		private_gists: 81,
+		total_private_repos: 100,
+		owned_private_repos: 100,
+		disk_usage: 10_000,
+		collaborators: 8,
+		two_factor_authentication: true,
+		plan: {
+			name: "Medium",
+			space: 400,
+			private_repos: 20,
+			collaborators: 0,
+		},
+	};
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11040
+	 */
+	it("accepts a real GitHub API user response as GithubProfile", () => {
+		const profile = octocatProfile satisfies GithubProfile;
+		expect(profile.id).toBe(583231);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11040
+	 */
+	it("accepts an authenticated GitHub API user response as GithubProfile", () => {
+		const profile = authenticatedOctocatProfile satisfies GithubProfile;
+		expect(profile.plan?.private_repos).toBe(20);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11040
+	 */
+	it("accepts a custom getUserInfo that returns the raw API response", () => {
+		const provider = github({
+			...credentials,
+			getUserInfo: async () => ({
+				user: {
+					name:
+						authenticatedOctocatProfile.name ??
+						authenticatedOctocatProfile.login,
+					email: authenticatedOctocatProfile.email,
+					emailVerified: false,
+				},
+				data: authenticatedOctocatProfile,
+			}),
+		});
+		expect(provider.id).toBe("github");
 	});
 });
