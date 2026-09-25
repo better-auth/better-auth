@@ -62,7 +62,7 @@ export const auth = betterAuth({
 ```
 
 * `allowedHosts`: List of accepted host patterns. Supports exact matches (`myapp.com`), wildcards (`*.vercel.app`, `preview-*.myapp.com`), and port wildcards (`localhost:*`). Automatically added to [`trustedOrigins`](#trustedorigins) (localhost entries get both `http` and `https`)
-* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` uses `x-forwarded-proto` only when `advanced.trustedProxyHeaders` is `true`, then the request URL, then HTTP for local loopback hosts, and otherwise HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
+* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` uses `x-forwarded-proto` only when `advanced.trustedProxyHeaders` is `true`, then the request URL, then HTTP for local loopback hosts, and otherwise HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.cookieSecurity`
 * `fallback`: URL to use when no request host is available or the incoming host does not match. Without it, unresolved or unknown hosts throw. Its origin is also added to `trustedOrigins`
 
 <Callout type="warn">
@@ -612,7 +612,7 @@ export const auth = betterAuth({
 			ipAddressHeaders: ["x-client-ip", "x-real-ip"],
 			disableIpTracking: false
 		},
-		useSecureCookies: true,
+		cookieSecurity: "secure",
 		disableCSRFCheck: false,
 		disableOriginCheck: false,
 		crossSubDomainCookies: {
@@ -635,7 +635,7 @@ export const auth = betterAuth({
 		},
 		// OAuth state configuration has been moved to account option
 		// Use account.storeStateStrategy and account.skipStateCookieCheck instead
-		cookiePrefix: "myapp",
+		cookieNamespace: "myapp",
 		database: {
 			// Use your own custom ID generator,
 			// disable generating IDS so your database will generate them,
@@ -662,13 +662,15 @@ export const auth = betterAuth({
   * `disableIpTracking`: Disable IP address tracking.
   * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
   * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
-* `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
+* `cookieSecurity`: Omit for the URL/environment-based default. `"none"` omits the name prefix and defaults Secure to false; `"secure"` uses `__Secure-` and Secure; `"host"` uses `__Host-`, Secure, `Path=/`, and no Domain. Host mode cannot be combined with `crossSubDomainCookies`. Changing modes renames cookies and ends existing sessions.
+* `useSecureCookies`: Deprecated alias for `cookieSecurity`; it will be removed in a future minor release.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
 * `crossSubDomainCookies`: Configure cookies to be shared across subdomains
 * `cookies`: Customize cookie names and attributes
 * `defaultCookieAttributes`: Default attributes for all cookies
-* `cookiePrefix`: Prefix for cookies
+* `cookieNamespace`: Application namespace in default cookie names. Custom cookie names override it.
+* `cookiePrefix`: Deprecated alias for `cookieNamespace`; it will be removed in a future minor release.
 * `database`: Database configuration options
 * `backgroundTasks`: Configure background task handling for deferred operations
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)

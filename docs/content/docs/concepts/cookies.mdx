@@ -1,7 +1,7 @@
 ---
 icon: conceptsCookies
 title: Cookies
-description: Learn how Better Auth uses cookies, including cookie prefixes, custom cookie attributes, cross-subdomain sharing, secure cookies, and handling Safari ITP with proxies.
+description: Learn how Better Auth uses cookie namespaces, security prefixes, custom attributes, cross-subdomain sharing, and Safari ITP proxies.
 ---
 
 Cookies are used to store data such as session tokens, session data, OAuth state, and more.
@@ -14,23 +14,25 @@ Cookies are used to store data such as session tokens, session data, OAuth state
 
 If you use [versioned secrets](/docs/reference/options#secrets) for rotation, secret-backed cookie data (including signed cookies and encrypted JWE session caches) will automatically use the current key and remain compatible with previous keys where supported.
 
-### Cookie Prefix
+### Cookie Namespace
 
-By default, Better Auth cookies follow the format `${prefix}.${cookie_name}`. The default prefix is "better-auth". You can change the prefix by setting `cookiePrefix` in the `advanced` object of the auth options.
+By default, Better Auth cookies follow the format `${namespace}.${cookie_name}`. The default namespace is "better-auth". Set `cookieNamespace` to change it; this is separate from the security prefix on the final cookie name.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
     advanced: {
-        cookiePrefix: "my-app"
+        cookieNamespace: "my-app"
     }
 })
 ```
 
+`cookiePrefix` is a deprecated alias for `cookieNamespace` and will be removed in a future minor release. Do not set both.
+
 ### Custom Cookies
 
-All cookies are `httpOnly` and `secure` when the server is running in production mode.
+Core auth cookies default to `HttpOnly`. Better Auth derives `Secure` from the URL, protocol, or environment. Explicit `"secure"` and `"host"` policies override conflicting custom attributes.
 
 If you want to set custom cookie names and attributes, you can do so by setting `cookies` in the `advanced` object of the auth options.
 
@@ -91,19 +93,31 @@ export const auth = betterAuth({
 })
 ```
 
-### Secure Cookies
+### Cookie Security
 
-By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
+By default, Better Auth chooses the cookie name prefix and Secure attribute from the configured URL, protocol, or environment. Use `cookieSecurity` to select the policy explicitly:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
     advanced: {
-        useSecureCookies: true
+        cookieSecurity: "host"
     }
 })
 ```
+
+The available policies are:
+
+* `"none"`: Uses no security prefix and defaults Secure to `false`
+* `"secure"`: Uses `__Secure-` and requires Secure
+* `"host"`: Uses `__Host-` and requires Secure, `Path=/`, and no Domain
+
+The `"host"` policy follows [RFC 6265bis](https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis-22#section-4.1.3.2) and prevents sibling subdomains from overwriting the cookie. It cannot be combined with `crossSubDomainCookies`.
+
+<Callout type="warn">
+  `useSecureCookies` is deprecated and will be removed in a future minor release. Use `cookieSecurity` alone. Changing the mode renames cookies and signs users out; pass the same explicit mode to cookie helpers.
+</Callout>
 
 ## Safari, ITP, and Cross-Domain Setups
 

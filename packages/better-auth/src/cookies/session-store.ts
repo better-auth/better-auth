@@ -30,8 +30,7 @@ const MAX_COOKIE_CHUNKS = 100;
  * wire. Non-positive when the name and attributes alone overflow.
  */
 function getMaxCookieValueSize(name: string, options: CookieOptions): number {
-	// serializeCookie mutates options (e.g. forces `secure`), so copy them.
-	const overhead = serializeCookie(name, "", { ...options }).length;
+	const overhead = serializeCookie(name, "", options).length;
 	return MAX_COOKIE_SIZE - overhead;
 }
 
