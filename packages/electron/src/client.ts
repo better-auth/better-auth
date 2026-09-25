@@ -9,7 +9,12 @@ import type {
 	ElectronRequestAuthOptions,
 } from "./authenticate";
 import { authenticate, requestAuth } from "./authenticate";
-import { setupMain, withGetWindowFallback } from "./browser";
+import type { SetupMainConfig } from "./browser";
+import {
+	resolveWebContents,
+	setupMain,
+	withGetWindowFallback,
+} from "./browser";
 import {
 	getCookie,
 	getSetCookie,
@@ -183,8 +188,8 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 		],
 		getActions: ($fetch: BetterFetch, $store, clientOptions) => {
 			store = $store;
-			let getWindow: () => electron.BrowserWindow | null | undefined = () =>
-				null;
+			let getWindow: SetupMainConfig["getWindow"] = () => null;
+			let getTarget: SetupMainConfig["getTarget"] = () => null;
 
 			const getCookieFn = () => {
 				const cookie = getDecrypted(cookieName);
@@ -224,7 +229,11 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 						...data,
 						$fetch,
 						options,
-						getWindow: withGetWindowFallback(getWindow),
+						getWebContents: () =>
+							resolveWebContents({
+								getWindow: withGetWindowFallback(getWindow),
+								getTarget,
+							}),
 					});
 				},
 				/**
@@ -240,14 +249,12 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 				 * - Registers IPC bridge handlers.
 				 * - Handles content security policy if needed.
 				 */
-				setupMain: (cfg?: {
-					csp?: boolean | undefined;
-					bridges?: boolean | undefined;
-					scheme?: boolean | undefined;
-					getWindow?: () => electron.BrowserWindow | null | undefined;
-				}) => {
+				setupMain: (cfg?: SetupMainConfig) => {
 					if (cfg?.getWindow) {
 						getWindow = cfg.getWindow;
+					}
+					if (cfg?.getTarget) {
+						getTarget = cfg.getTarget;
 					}
 					return setupMain(
 						$fetch,
