@@ -119,6 +119,8 @@ The `@creem_io/better-auth` plugin connects Creem to your Better Auth users. It 
       </Tab>
     </Tabs>
 
+    `migrate` applies the schema with Better Auth's built-in Kysely adapter. If Prisma, Drizzle, or another ORM manages your schema, `generate` writes the schema instead, and you apply it with your ORM's migration tooling.
+
     See the [Schema](#schema) section for the tables and fields the plugin adds. Skip this step if you set `persistSubscriptions: false`.
   </Step>
 
@@ -200,7 +202,7 @@ A subscription grants access while its status is `active`, `trialing`, or `paid`
 
 The request fails with status `401` when no user is signed in, and `400` when persistence is disabled. Deny access whenever `error` is set.
 
-On the server, call the same endpoint with the request headers:
+On the server, call the same endpoint with the request headers. `auth.api.hasAccessGranted` throws an `APIError` when the user is signed out, so check the session first:
 
 ```tsx title="app/dashboard/page.tsx"
 import { auth } from "@/lib/auth";
@@ -208,8 +210,15 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
+    const requestHeaders = await headers();
+    const session = await auth.api.getSession({ headers: requestHeaders });
+
+    if (!session) {
+        redirect("/sign-in");
+    }
+
     const access = await auth.api.hasAccessGranted({
-        headers: await headers(),
+        headers: requestHeaders,
     });
 
     if (!access.hasAccessGranted) {
@@ -219,8 +228,6 @@ export default async function DashboardPage() {
     return <h1>Dashboard</h1>;
 }
 ```
-
-`auth.api.hasAccessGranted` throws an `APIError` when the user is signed out, so redirect signed-out users before this call.
 
 ### Cancel a subscription
 
