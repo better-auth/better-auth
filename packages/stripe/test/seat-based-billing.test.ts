@@ -1270,6 +1270,126 @@ describe("seat-based billing", () => {
 			);
 		});
 
+		test("should sync seat quantity when a member leaves", async ({
+			stripeMock,
+		}) => {
+			const seatOptions = buildSeatPlanOptions(stripeMock);
+			stripeMock.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_seat_leave",
+				status: "active",
+				items: {
+					data: [
+						{
+							id: "si_base",
+							price: { id: "price_team_base" },
+							quantity: 1,
+						},
+						{
+							id: "si_seat",
+							price: { id: "price_team_seat" },
+							quantity: 2,
+						},
+					],
+				},
+			});
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(seatOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "leave-owner@test.com",
+					password: "password",
+					name: "Leave Owner",
+				},
+				{ throw: true },
+			);
+			const ownerHeaders = new Headers();
+			await client.signIn.email(
+				{ email: "leave-owner@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(ownerHeaders) },
+			);
+
+			const org = await client.organization.create({
+				name: "Leave Seat Org",
+				slug: "leave-seat-org",
+				fetchOptions: { headers: ownerHeaders },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_leave_seat" },
+				where: [{ field: "id", value: orgId }],
+			});
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_leave_seat",
+					stripeSubscriptionId: "sub_seat_leave",
+					status: "active",
+					plan: "team",
+					seats: 2,
+				},
+			});
+
+			const leaver = await client.signUp.email(
+				{
+					email: "leaver@test.com",
+					password: "password",
+					name: "Leaver",
+				},
+				{ throw: true },
+			);
+			await ctx.adapter.create({
+				model: "member",
+				data: {
+					userId: leaver.user.id,
+					organizationId: orgId,
+					role: "member",
+					createdAt: new Date(),
+				},
+			});
+			const leaverHeaders = new Headers();
+			await client.signIn.email(
+				{ email: "leaver@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(leaverHeaders) },
+			);
+
+			await client.organization.leave({
+				organizationId: orgId,
+				fetchOptions: { headers: leaverHeaders },
+			});
+
+			expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+				"sub_seat_leave",
+				expect.objectContaining({
+					proration_behavior: "create_prorations",
+				}),
+			);
+
+			const updateCall = stripeMock.subscriptions.update.mock.calls[0];
+			const seatItems = updateCall?.[1]?.items;
+			// Owner only remains → quantity = 1
+			expect(seatItems).toContainEqual(
+				expect.objectContaining({ id: "si_seat", quantity: 1 }),
+			);
+		});
+
 		test("should use custom prorationBehavior on member removal", async ({
 			stripeMock,
 		}) => {
