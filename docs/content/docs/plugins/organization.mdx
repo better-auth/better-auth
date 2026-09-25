@@ -1528,6 +1528,12 @@ Only users with roles which contain the `ac` resource with the `create` permissi
 By default, only the `admin` and `owner` roles have this permission. You also cannot add permissions that your
 current role in that organization can't already access.
 
+<Callout type="warn">
+  Role names cannot contain a comma. Members store their roles comma-joined, so a name like `owner,admin`
+  would create a role that could never be assigned. Requests with such names are rejected with the
+  `INVALID_ROLE_NAME` error code. The same rule applies when renaming a role.
+</Callout>
+
 <APIMethod path="/organization/create-role" method="POST" requireSession noResult>
   ```ts
   // To use custom resources or permissions,
@@ -1622,6 +1628,7 @@ This requires the `ac` resource with the `read` permission for the member to be 
 ### Updating a role
 
 To update a role, you can use the `updateOrgRole` function and pass either a `roleName` or `roleId` parameter.
+The new name cannot contain a comma; such requests are rejected with the `INVALID_ROLE_NAME` error code.
 
 <APIMethod path="/organization/update-role" method="POST" requireSession resultVariable="updatedRole">
   ```ts
