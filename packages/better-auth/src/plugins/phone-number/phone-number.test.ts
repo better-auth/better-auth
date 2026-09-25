@@ -859,6 +859,91 @@ describe("reset password flow attempts", async () => {
 	});
 });
 
+describe("reset password guess accounting", async () => {
+	let otp = "";
+	let resetOtp = "";
+	const { auth, client } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP({ code }) {
+						resetOtp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("does not check guesses while another request holds the code", async () => {
+		const phoneNumber = "+251911121320";
+		const identifier = `${phoneNumber}-request-password-reset`;
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const wrong = resetOtp === "000000" ? "111111" : "000000";
+		const guesses = [wrong, wrong, wrong, wrong, resetOtp];
+
+		// Another request holds the code, as a consume in flight on another server
+		// would, until every wrong guess is answered. A guess that reaches the
+		// password hash was checked without the code, so it waits for that.
+		const context = await auth.$context;
+		const { internalAdapter } = context;
+		const consumeVerificationValue = internalAdapter.consumeVerificationValue;
+		let held = true;
+		let answered = 0;
+		let releaseWrongGuesses: () => void = () => {};
+		const wrongGuessesAnswered = new Promise<void>((resolve) => {
+			releaseWrongGuesses = resolve;
+		});
+		const passwordHash = context.password.hash;
+		const hash = vi
+			.spyOn(context.password, "hash")
+			.mockImplementation(async (password) => {
+				await wrongGuessesAnswered;
+				held = false;
+				return passwordHash(password);
+			});
+		const consume = vi
+			.spyOn(internalAdapter, "consumeVerificationValue")
+			.mockImplementation(async (value) =>
+				value === identifier && held ? null : consumeVerificationValue(value),
+			);
+		const burst = await Promise.all(
+			guesses.map(async (otp) => {
+				const res = await client.phoneNumber.resetPassword({
+					phoneNumber,
+					otp,
+					newPassword: "new-password",
+				});
+				if (++answered === guesses.length - 1) releaseWrongGuesses();
+				return res;
+			}),
+		);
+		consume.mockRestore();
+		hash.mockRestore();
+
+		expect(burst.map((res) => res.error?.message)).toEqual(
+			guesses.map(() => "Invalid OTP"),
+		);
+		const stored = await internalAdapter.findVerificationValue(identifier);
+		expect(stored?.value).toBe(`${resetOtp}:0`);
+	});
+});
+
 describe("reset password session revocation", async () => {
 	let otp = "";
 	let resetOtp = "";
