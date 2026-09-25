@@ -514,83 +514,55 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
-	 * Custom redirect URI validation function for composable validation logic.
+	 * Validates an OAuth authorization request's redirect URI. Without this
+	 * option, the URI must match one registered for the client, except that
+	 * a registered native HTTP loopback URI may use a different port.
 	 *
-	 * By default, the OAuth provider validates redirect URIs with:
-	 * 1. Exact string matching against registered redirect URIs
-	 * 2. Native loopback port variance for localhost, 127.0.0.0/8, and [::1]
+	 * The callback runs for every client and also controls whether early
+	 * authorization errors may be sent to the requested URI. Returning `true`
+	 * accepts the URI even when `defaultResult` is `false`; returning `false`
+	 * or throwing rejects it. Client registration is unchanged.
 	 *
-	 * The `defaultResult` parameter provides the result of the default validation,
-	 * enabling flexible composition patterns:
+	 * The preview example assumes only trusted clients can register its
+	 * production callback URI.
 	 *
 	 * @example
 	 * ```ts
-	 * // Extend: add preview deployment support while preserving defaults
-	 * validateRedirectUri: (uri, _registered, defaultResult) => {
-	 *   if (defaultResult) return true;
-	 *   // Registration rejects fragments; keep custom validation just as strict.
-	 *   if (uri.includes("#")) return false;
-	 *   try {
-	 *     const url = new URL(uri);
-	 *     return (
-	 *       url.protocol === "https:" &&
-	 *       url.username === "" &&
-	 *       url.password === "" &&
-	 *       // Suffix match only — never `includes()`, or `evil.com/?x=.preview.example.com` slips through.
-	 *       url.hostname.endsWith(".preview.example.com") &&
-	 *       url.port === "" &&
-	 *       // Pin the callback path so the host alone is not enough.
-	 *       url.pathname === "/api/auth/callback" &&
-	 *       url.search === ""
-	 *     );
-	 *   } catch {
-	 *     return false;
-	 *   }
-	 * }
-	 *
-	 * // Replace: full custom control (use with caution)
-	 * validateRedirectUri: (uri, registered, _defaultResult) => {
-	 *   return myCustomValidation(uri, registered);
-	 * }
-	 *
-	 * // Restrict: add extra constraints on top of defaults
-	 * validateRedirectUri: (uri, registered, defaultResult) => {
-	 *   return defaultResult && !isBlocklisted(uri);
-	 * }
+	 * oauthProvider({
+	 *   validateRedirectUri: (uri, registeredUris, defaultResult) => {
+	 *     if (defaultResult) return true;
+	 *     if (!registeredUris.includes("https://app.example.com/api/auth/callback")) {
+	 *       return false;
+	 *     }
+	 *     if (uri.includes("#")) return false;
+	 *     try {
+	 *       const url = new URL(uri);
+	 *       return (
+	 *         url.protocol === "https:" &&
+	 *         url.username === "" &&
+	 *         url.password === "" &&
+	 *         url.hostname.endsWith(".preview.example.com") &&
+	 *         url.port === "" &&
+	 *         url.pathname === "/api/auth/callback" &&
+	 *         url.search === ""
+	 *       );
+	 *     } catch {
+	 *       return false;
+	 *     }
+	 *   },
+	 * })
 	 * ```
 	 *
-	 * **Use Cases:**
-	 * - **Preview deployments**: Match `*.preview.example.com` for platforms
-	 *   like Vercel, Netlify, or Cloudflare Pages.
-	 * - **Multi-tenant applications**: Dynamic tenant subdomains.
+	 * Custom acceptance relaxes the exact matching required by RFC 9700 §2.1.
+	 * Accept only callback hosts you control. For pairwise subject identifiers,
+	 * custom-validated URIs use the sector of the client's first registered URI.
 	 *
-	 * **Security Considerations:**
-	 * - Never allow overly broad patterns like `*` or `*.com`
-	 * - Validate the full URI (protocol, host, path) - not just the hostname
-	 * - Consider using a library like `tldts` to prevent matches on
-	 *   public suffixes (e.g., `*.co.uk`, `*.github.io`)
-	 * - Always require HTTPS (except for localhost)
-	 * - If the validator throws, the request is rejected (fail-closed)
-	 * - Accept only callback hosts controlled by the provider operator; custom
-	 *   acceptance relaxes the exact URI matching required by RFC 9700 §2.1
-	 * - Invalid URI syntax, fragments, credentials, and unsafe schemes are
-	 *   rejected before the validator can accept them
-	 *
-	 * The validator is also consulted when deciding whether authorization
-	 * errors may be redirected to the requested redirect_uri
-	 * (RFC 6749 §4.1.2.1); on rejection or exception, errors fall back to
-	 * the server error page.
-	 *
-	 * **Pairwise Subject Note:** For clients using pairwise subject identifiers,
-	 * the sector identifier is derived from the client's first registered
-	 * redirect URI. Custom-validated URIs that are not that registered URI
-	 * will still share the same sector derived from the first registered
-	 * redirect URI.
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider#custom-redirect-uri-validation
 	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
-	 * @param registeredUris - Array of registered redirect URIs for the client
-	 * @param defaultResult - Result of exact matching and native loopback port variance
-	 * @returns `true` if the redirect URI is valid, `false` otherwise.
+	 * @param registeredUris - Registered redirect URIs for the client
+	 * @param defaultResult - Result of built-in redirect URI matching
+	 * @returns `true` to accept the URI, or `false` to reject it
 	 */
 	validateRedirectUri?: (
 		redirectUri: string,
