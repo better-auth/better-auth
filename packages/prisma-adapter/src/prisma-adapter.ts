@@ -780,8 +780,13 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							if (!result?.count) {
 								return null;
 							}
+							const readWhere = convertWhereClause({
+								model: modelKey,
+								where: [idCondition],
+								action: "findOne",
+							});
 							const row = await client.findFirst({
-								where: { [idField]: idCondition.value },
+								where: readWhere,
 							});
 							return (row as any) ?? null;
 						}
@@ -823,9 +828,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return (row as any) ?? null;
 					};
 
-					return inTransaction || typeof db.$transaction !== "function"
-						? mutateInTransaction(db)
-						: db.$transaction(mutateInTransaction);
+					const supportsTransaction =
+						!inTransaction &&
+						typeof db.$transaction === "function" &&
+						(config.provider === "mongodb"
+							? config.transaction === true
+							: config.transaction !== false);
+
+					return supportsTransaction
+						? db.$transaction(mutateInTransaction)
+						: mutateInTransaction(db);
 				},
 				options: config,
 			};

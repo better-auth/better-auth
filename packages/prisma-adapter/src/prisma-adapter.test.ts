@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
+import type { PrismaConfig } from "./prisma-adapter";
 import { prismaAdapter } from "./prisma-adapter";
 
 describe("prisma-adapter", () => {
@@ -10,9 +11,13 @@ describe("prisma-adapter", () => {
 
 	// incrementOne mutates numeric counters; declare the fields it touches on an
 	// existing model so the factory's where/input transforms recognize them.
-	const createCounterAdapter = (prisma: Record<string, unknown>) =>
+	const createCounterAdapter = (
+		prisma: Record<string, unknown>,
+		config?: Partial<PrismaConfig>,
+	) =>
 		prismaAdapter(prisma as never, {
 			provider: "sqlite",
+			...config,
 		})({
 			verification: {
 				additionalFields: {
@@ -424,7 +429,7 @@ describe("prisma-adapter", () => {
 			data: { remaining: { increment: 1 } },
 		});
 		expect(findFirst).toHaveBeenCalledWith({
-			where: { id: "counter-id" },
+			where: { id: { equals: "counter-id" } },
 		});
 	});
 
@@ -676,6 +681,165 @@ describe("prisma-adapter", () => {
 				lastRefill: expect.any(Number),
 			}),
 		});
+	});
+
+	it("incrementOne on standalone mongodb executes sequentially without calling db.$transaction", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const transaction = vi.fn();
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: { findFirst, updateMany },
+			},
+			{ provider: "mongodb" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id" } },
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id" } },
+		});
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+	});
+
+	it("incrementOne on mongodb with replica set (transaction: true) uses db.$transaction", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: {},
+			},
+			{ provider: "mongodb", transaction: true },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+	});
+
+	it("incrementOne with transaction: false executes sequentially without calling db.$transaction", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const transaction = vi.fn();
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: { findFirst, updateMany },
+			},
+			{ provider: "sqlite", transaction: false },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id" } },
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id" } },
+		});
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+	});
+
+	it("incrementOne preserves mode: 'insensitive' on findFirst read-back for postgresql and mongodb", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "COUNTER-ID", remaining: 5 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: {},
+			},
+			{ provider: "postgresql" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id", mode: "insensitive" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(updateMany).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id", mode: "insensitive" } },
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id", mode: "insensitive" } },
+		});
+		expect(result).toEqual({ id: "COUNTER-ID", remaining: 5 });
+	});
+
+	it("incrementOne does not open a nested transaction from a transaction adapter", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = prismaAdapter(
+			{
+				$transaction: transaction,
+			} as never,
+			{
+				provider: "sqlite",
+				transaction: true,
+			},
+		)({
+			verification: {
+				additionalFields: {
+					remaining: { type: "number" },
+				},
+			},
+		} as BetterAuthOptions);
+
+		await adapter.transaction(async (trx) => {
+			await trx.incrementOne({
+				model: "verification",
+				where: [{ field: "id", value: "counter-id" }],
+				increment: { remaining: 1 },
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
 	});
 
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {
