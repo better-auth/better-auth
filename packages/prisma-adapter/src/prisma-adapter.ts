@@ -45,9 +45,14 @@ export interface PrismaConfig {
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
-	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
-	 * @default false
+	 * - For MongoDB: transactions require a replica set and default to `false`
+	 *   (operations execute sequentially). Set to `true` if your MongoDB
+	 *   deployment supports replica-set transactions.
+	 * - For other providers (PostgreSQL, MySQL, SQLite, CockroachDB, SQL Server):
+	 *   transactions are supported and enabled by default. Set to `false` to force
+	 *   sequential execution if transactions are disabled or unavailable.
+	 *
+	 * @default false for MongoDB, true for other providers
 	 */
 	transaction?: boolean | undefined;
 }
@@ -756,11 +761,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						data[field] = { increment: delta };
 					}
 
+					const isInsensitiveId = (w?: Where) =>
+						w?.field === "id" &&
+						w.mode === "insensitive" &&
+						(config.provider === "postgresql" || config.provider === "mongodb");
+
 					const idCondition = where?.find(
 						(w) =>
 							w.field === "id" &&
 							(!w.operator || w.operator === "eq") &&
-							w.value !== undefined,
+							w.value !== undefined &&
+							!isInsensitiveId(w),
 					);
 
 					const mutateInTransaction = async (tx: PrismaClient) => {
@@ -780,13 +791,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							if (!result?.count) {
 								return null;
 							}
-							const readWhere = convertWhereClause({
-								model: modelKey,
-								where: [idCondition],
-								action: "findOne",
-							});
 							const row = await client.findFirst({
-								where: readWhere,
+								where: { [idField]: idCondition.value },
 							});
 							return (row as any) ?? null;
 						}

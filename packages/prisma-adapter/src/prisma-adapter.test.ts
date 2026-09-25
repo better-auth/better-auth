@@ -429,7 +429,7 @@ describe("prisma-adapter", () => {
 			data: { remaining: { increment: 1 } },
 		});
 		expect(findFirst).toHaveBeenCalledWith({
-			where: { id: { equals: "counter-id" } },
+			where: { id: "counter-id" },
 		});
 	});
 
@@ -709,7 +709,7 @@ describe("prisma-adapter", () => {
 			data: { remaining: { increment: 1 } },
 		});
 		expect(findFirst).toHaveBeenCalledWith({
-			where: { id: { equals: "counter-id" } },
+			where: { id: "counter-id" },
 		});
 		expect(result).toEqual({ id: "counter-id", remaining: 4 });
 	});
@@ -767,16 +767,18 @@ describe("prisma-adapter", () => {
 			data: { remaining: { increment: 1 } },
 		});
 		expect(findFirst).toHaveBeenCalledWith({
-			where: { id: { equals: "counter-id" } },
+			where: { id: "counter-id" },
 		});
 		expect(result).toEqual({ id: "counter-id", remaining: 4 });
 	});
 
-	it("incrementOne preserves mode: 'insensitive' on findFirst read-back for postgresql and mongodb", async () => {
+	it("incrementOne with mode: 'insensitive' on postgresql routes through target resolution and returns the updated row", async () => {
+		const target = { id: "COUNTER-ID", remaining: 5 };
 		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
 		const findFirst = vi
 			.fn()
-			.mockResolvedValue({ id: "COUNTER-ID", remaining: 5 });
+			.mockResolvedValueOnce(target)
+			.mockResolvedValueOnce({ id: "COUNTER-ID", remaining: 6 });
 		const txClient = {
 			verification: { findFirst, updateMany },
 		};
@@ -796,14 +798,114 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(transaction).toHaveBeenCalledTimes(1);
-		expect(updateMany).toHaveBeenCalledWith({
+		expect(findFirst).toHaveBeenNthCalledWith(1, {
 			where: { id: { equals: "counter-id", mode: "insensitive" } },
+		});
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ id: { equals: "COUNTER-ID" } },
+				],
+			},
 			data: { remaining: { increment: 1 } },
 		});
-		expect(findFirst).toHaveBeenCalledWith({
+		expect(findFirst).toHaveBeenNthCalledWith(2, {
+			where: { id: "COUNTER-ID" },
+		});
+		expect(result).toEqual({ id: "COUNTER-ID", remaining: 6 });
+	});
+
+	it("incrementOne with mode: 'insensitive' on mongodb routes through target resolution and returns the updated row", async () => {
+		const target = { id: "COUNTER-ID", remaining: 5 };
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValueOnce(target)
+			.mockResolvedValueOnce({ id: "COUNTER-ID", remaining: 6 });
+		const adapter = createCounterAdapter(
+			{
+				$transaction: vi.fn(),
+				verification: { findFirst, updateMany },
+			},
+			{ provider: "mongodb" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id", mode: "insensitive" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(findFirst).toHaveBeenNthCalledWith(1, {
 			where: { id: { equals: "counter-id", mode: "insensitive" } },
 		});
-		expect(result).toEqual({ id: "COUNTER-ID", remaining: 5 });
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ id: { equals: "COUNTER-ID" } },
+				],
+			},
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenNthCalledWith(2, {
+			where: { id: "COUNTER-ID" },
+		});
+		expect(result).toEqual({ id: "COUNTER-ID", remaining: 6 });
+	});
+
+	it("incrementOne with insensitive id filter and guard selects and updates the matching case-variant row rather than another row with different casing", async () => {
+		const matchingTarget = { id: "COUNTER-ID", remaining: 5 };
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValueOnce(matchingTarget)
+			.mockResolvedValueOnce({ id: "COUNTER-ID", remaining: 4 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: {},
+			},
+			{ provider: "postgresql" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [
+				{ field: "id", value: "counter-id", mode: "insensitive" },
+				{ field: "remaining", value: 0, operator: "gt" },
+			],
+			increment: { remaining: -1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(findFirst).toHaveBeenNthCalledWith(1, {
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ remaining: { gt: 0 } },
+				],
+			},
+		});
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ remaining: { gt: 0 } },
+					{ id: { equals: "COUNTER-ID" } },
+				],
+			},
+			data: { remaining: { increment: -1 } },
+		});
+		expect(findFirst).toHaveBeenNthCalledWith(2, {
+			where: { id: "COUNTER-ID" },
+		});
+		expect(result).toEqual({ id: "COUNTER-ID", remaining: 4 });
 	});
 
 	it("incrementOne does not open a nested transaction from a transaction adapter", async () => {
