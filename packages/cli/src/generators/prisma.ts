@@ -597,17 +597,43 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					) {
 						continue;
 					}
+					const referencedCustomModelName =
+						tables[referencedOriginalModelName]?.modelName ||
+						referencedOriginalModelName;
+					const referencedModelName = capitalizeFirstLetter(
+						getModelName(referencedCustomModelName),
+					);
+
+					const referencedModel =
+						builder.findByType("model", { name: referencedModelName }) ||
+						builder.findByType("model", { name: referencedCustomModelName }) ||
+						builder.findByType("model", { name: referencedOriginalModelName });
+
+					let shouldAddUuid = useUUIDs;
+					if (referencedModel) {
+						const referencedField = builder.findByType("field", {
+							name: attr.references.field,
+							within: referencedModel.properties,
+						});
+						if (referencedField) {
+							const hasUuid = Boolean(
+								referencedField.attributes?.some(
+									(a) =>
+										(a.name === "Uuid" && a.group === "db") ||
+										a.name === "db.Uuid",
+								),
+							);
+							shouldAddUuid = hasUuid;
+						}
+					}
+
 					if (
-						useUUIDs &&
+						shouldAddUuid &&
 						(provider === "postgresql" || provider === "cockroachdb") &&
 						attr.references?.field === "id"
 					) {
 						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
-
-					const referencedCustomModelName =
-						tables[referencedOriginalModelName]?.modelName ||
-						referencedOriginalModelName;
 					let action = "Cascade";
 					if (attr.references.onDelete === "no action") action = "NoAction";
 					else if (attr.references.onDelete === "set null") action = "SetNull";

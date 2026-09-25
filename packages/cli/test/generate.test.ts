@@ -702,6 +702,74 @@ model Directory_user {
 		expect(schema.code).toMatch(/userId\s+String\s+@db\.Uuid/);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11052
+	 */
+	it("should not add @db.Uuid to cockroachdb relation fields when referenced model has plain string id", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-cockroach-relation-"),
+		);
+		const schemaPath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), schemaPath);
+		try {
+			const existingSchema = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("user")
+}
+`;
+			fs.writeFileSync(schemaPath, existingSchema);
+
+			const schema = await generatePrismaSchema({
+				file: relativePath,
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "cockroachdb",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "cockroachdb",
+						},
+					),
+					advanced: {
+						database: {
+							generateId: "uuid",
+						},
+					},
+				},
+			});
+
+			expect(schema.code).toBeDefined();
+			// User id should remain plain String without @db.Uuid
+			expect(schema.code).toMatch(
+				/model User {[\s\S]*?id\s+String\s+@id(?!\s+@db\.Uuid)/,
+			);
+			// Session userId referencing User.id should NOT have @db.Uuid because User.id does not have @db.Uuid
+			expect(schema.code).toMatch(/userId\s+String(?!\s+@db\.Uuid)/);
+			expect(schema.code).not.toMatch(/userId\s+String\s+@db\.Uuid/);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
 	it("should generate prisma schema for mongodb", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
