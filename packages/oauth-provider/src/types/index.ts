@@ -1189,7 +1189,7 @@ export interface OAuthOptions<
 	}) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Overwrite specific /.well-known/openid-configuration
-	 * values so they are not available publically.
+	 * values so they are not available publicly.
 	 * This may be important if not all clients need specific scopes.
 	 */
 	advertisedMetadata?: {
