@@ -1,5 +1,5 @@
 import type { Awaitable } from "@better-auth/core";
-import type { User } from "@better-auth/core/db";
+import type { Session, User } from "@better-auth/core/db";
 import type { ElectronSharedOptions } from "./options";
 
 export interface Storage {
@@ -68,6 +68,7 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 	sanitizeUser?:
 		| ((
 				user: User & Record<string, any>,
+				session: (Session & Record<string, any>) | null,
 		  ) => Awaitable<User & Record<string, any>>)
 		| undefined;
 	/**

@@ -2191,6 +2191,66 @@ describe("Electron", () => {
 				expect.objectContaining({ id: user.id, name: "Sanitized" }),
 			);
 		});
+
+		it("should allow interpolating data from session", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email: "sanitize-session@test.com",
+					password: "password",
+					name: "Sanitize Session",
+				},
+			});
+
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", codeVerifier],
+			]);
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge,
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+
+			await authenticate({
+				$fetch: client.$fetch,
+				options: {
+					...options,
+					sanitizeUser: async (u, session) => ({
+						...u,
+						sessionId: session.id,
+					}),
+				},
+				token: encodeRedirectToken(identifier, "abc"),
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({
+					id: user.id,
+					sessionId: expect.any(String),
+				}),
+			);
+		});
 	});
 
 	describe("user normalization", () => {
