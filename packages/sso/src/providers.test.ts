@@ -18,7 +18,10 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import { lockSSOProviderForAccountLink } from "./routes/providers";
-import { getRegisterSSOProviderBodySchema } from "./routes/schemas";
+import {
+	getRegisterSSOProviderBodySchema,
+	getUpdateSSOProviderBodySchema,
+} from "./routes/schemas";
 import type { SAMLConfig, SSOOptions } from "./types";
 import { safeJsonParse } from "./utils";
 
@@ -285,6 +288,45 @@ describe("SAML redirect URL schema", () => {
 				},
 			}).success,
 		).toBe(expected);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11372
+ */
+describe("partial SSO profile mappings", () => {
+	const mapping = { extraFields: { department: "department" } };
+
+	it.each([
+		[
+			"OIDC",
+			{ oidcConfig: { clientId: "test", mapping } },
+			{ oidcConfig: { mapping } },
+		],
+		[
+			"SAML",
+			{
+				samlConfig: {
+					entryPoint: "https://idp.example.com/sso",
+					idpMetadata: { entityID: "https://idp.example.com" },
+					mapping,
+				},
+			},
+			{ samlConfig: { mapping } },
+		],
+	])("accepts %s mappings with only extra fields", (_, config, updateConfig) => {
+		const registration = getRegisterSSOProviderBodySchema().safeParse({
+			providerId: "school-idp",
+			issuer: "https://idp.example.com",
+			domain: "idp.example.com",
+			...config,
+		});
+		const update = getUpdateSSOProviderBodySchema().safeParse({
+			providerId: "school-idp",
+			...updateConfig,
+		});
+
+		expect([registration.success, update.success]).toEqual([true, true]);
 	});
 });
 
@@ -2042,6 +2084,45 @@ kBGIJYs=
 			expect(updated.samlConfig?.entryPoint).toBe(
 				"https://idp.example.com/sso",
 			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11372
+		 */
+		it("replaces a SAML mapping when updating only extra fields", async () => {
+			const { auth, data, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "mapped-saml-provider", undefined, {
+				samlConfig: {
+					entryPoint: "https://idp.example.com/sso",
+					cert: TEST_CERT,
+					idpMetadata: { entityID: "https://idp.example.com" },
+					mapping: { email: "mail", name: "display_name" },
+				},
+			});
+			const savedMapping = () =>
+				safeJsonParse<SAMLConfig>(data.ssoProvider[0]?.samlConfig ?? "")
+					?.mapping;
+			expect(savedMapping()).toEqual({ email: "mail", name: "display_name" });
+
+			await auth.api.updateSSOProvider({
+				body: {
+					providerId: "mapped-saml-provider",
+					samlConfig: {
+						mapping: { extraFields: { department: "department" } },
+					},
+				},
+				headers,
+			});
+
+			expect(savedMapping()).toEqual({
+				extraFields: { department: "department" },
+			});
 		});
 
 		it.each(

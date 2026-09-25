@@ -820,7 +820,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					operationId: "updateSSOProvider",
 					summary: "Update SSO provider",
 					description:
-						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
+						"Partially update an SSO provider. A supplied OIDC or SAML mapping replaces the entire previous mapping. If the domain changes, domainVerified is reset to false.",
 					responses: {
 						"200": {
 							description:
