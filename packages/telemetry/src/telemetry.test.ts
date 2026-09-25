@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 import { createTelemetry } from "./index";
 import type { TelemetryEvent } from "./types";
 
@@ -246,6 +247,34 @@ describe("telemetry", () => {
 			},
 			anonymousId: "anon-123",
 		});
+	});
+
+	it("reports custom OAuth token encryption functions as enabled", async () => {
+		const config = await getTelemetryAuthConfig({
+			account: {
+				encryptOAuthTokens: {
+					encrypt: (token) => token,
+					decrypt: (token) => token,
+				},
+			},
+		});
+		expect(config.account.encryptOAuthTokens).toBe(true);
+	});
+
+	it("reports encryptOAuthTokens: false as disabled", async () => {
+		const config = await getTelemetryAuthConfig({
+			account: {
+				encryptOAuthTokens: false,
+			},
+		});
+
+		expect(config.account.encryptOAuthTokens).toBe(false);
+	});
+
+	it("reports unset encryptOAuthTokens as undefined", async () => {
+		const config = await getTelemetryAuthConfig({});
+
+		expect(config.account.encryptOAuthTokens).toBeUndefined();
 	});
 
 	it("does not publish when disabled via env", async () => {

@@ -98,7 +98,11 @@ export async function getTelemetryAuthConfig(
 		account: {
 			modelName: options.account?.modelName,
 			fields: options.account?.fields,
-			encryptOAuthTokens: options.account?.encryptOAuthTokens,
+			encryptOAuthTokens:
+				options.account?.encryptOAuthTokens &&
+				typeof options.account.encryptOAuthTokens === "object"
+					? true
+					: options.account?.encryptOAuthTokens,
 			updateAccountOnSignIn: options.account?.updateAccountOnSignIn,
 			accountLinking: {
 				enabled: options.account?.accountLinking?.enabled,
