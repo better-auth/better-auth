@@ -564,7 +564,7 @@ describe("email-otp", async () => {
 describe("change email", async () => {
 	const otpFn = vi.fn();
 	let otp = "";
-	const { client, testUser, runWithUser } = await getTestInstance(
+	const { client, auth, testUser, runWithUser } = await getTestInstance(
 		{
 			plugins: [
 				bearer(),
@@ -1150,6 +1150,75 @@ describe("change email", async () => {
 				}),
 				expect.any(Object),
 			);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10612
+	 */
+	describe("generic otp endpoints", () => {
+		it("should reject change-email type when checking an otp", async () => {
+			const res = await client.emailOtp.checkVerificationOtp({
+				email: testUser.email,
+				type: "change-email",
+				otp: "123456",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP type");
+		});
+
+		it("should reject change-email type when creating an otp", async () => {
+			await expect(
+				auth.api.createVerificationOTP({
+					body: {
+						email: testUser.email,
+						type: "change-email",
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { message: "Invalid OTP type" },
+			});
+		});
+
+		it("should reject change-email type when getting an otp", async () => {
+			await expect(
+				auth.api.getVerificationOTP({
+					query: {
+						email: testUser.email,
+						type: "change-email",
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { message: "Invalid OTP type" },
+			});
+		});
+
+		it("should leave a pending change-email otp usable", async () => {
+			const user = {
+				email: "generic-check@test.com",
+				password: "password123",
+				name: "Generic Check",
+			};
+			await client.signUp.email(user);
+			const newEmail = "generic-check-new@test.com";
+			await runWithUser(user.email, user.password, async () => {
+				const res = await client.emailOtp.requestEmailChange({ newEmail });
+				expect(res.data?.success).toBe(true);
+			});
+
+			const check = await client.emailOtp.checkVerificationOtp({
+				email: user.email,
+				type: "change-email",
+				otp,
+			});
+			expect(check.error?.message).toBe("Invalid OTP type");
+
+			await runWithUser(user.email, user.password, async () => {
+				const res = await client.emailOtp.changeEmail({ newEmail, otp });
+				expect(res.data?.success).toBe(true);
+			});
 		});
 	});
 });
