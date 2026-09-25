@@ -128,23 +128,26 @@ export function computeDiscoveryUrl(issuer: string): string {
 /**
  * Validate a discovery URL before fetching.
  *
+ * Applies the same policy as every other user-supplied OIDC endpoint (see
+ * {@link validateOIDCEndpointUrl}): publicly routable hosts are allowed, and
+ * non-public hosts require the operator to allowlist the origin through
+ * `trustedOrigins`.
+ *
+ * Public hosts are deliberately *not* required to be trusted origins. A trusted
+ * origin skips {@link assertEndpointResolvesPublic}, so demanding trust for
+ * every public issuer would push multi-tenant deployments to allowlist the very
+ * URLs their tenants control, which disables the DNS SSRF guard for them.
+ *
  * @param url - The discovery URL to validate
- * @param isTrustedOrigin - Origin verification tester function
- * @throws DiscoveryError if URL is invalid
+ * @param isTrustedOrigin - Predicate matching the configured `trustedOrigins`
+ * @throws DiscoveryError(discovery_invalid_url)  — malformed URL or non-http(s) scheme
+ * @throws DiscoveryError(discovery_private_host) — host is not publicly routable and not allowlisted
  */
 export function validateDiscoveryUrl(
 	url: string,
 	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
 ): void {
-	const discoveryEndpoint = parseURL("discoveryEndpoint", url).toString();
-
-	if (!isTrustedOrigin(discoveryEndpoint)) {
-		throw new DiscoveryError(
-			"discovery_untrusted_origin",
-			`The main discovery endpoint "${discoveryEndpoint}" is not trusted by your trusted origins configuration.`,
-			{ url: discoveryEndpoint },
-		);
-	}
+	validateOIDCEndpointUrl("discoveryEndpoint", url, isTrustedOrigin);
 }
 
 /**
@@ -172,7 +175,7 @@ export function validateDiscoveryUrl(
  * @throws DiscoveryError(discovery_private_host) — host is not publicly routable and not allowlisted
  */
 function validateOIDCEndpointUrl(
-	name: OIDCConfigEndpointName,
+	name: string,
 	endpoint: string,
 	isTrustedOrigin: (url: string) => boolean,
 ): void {
@@ -674,12 +677,17 @@ export function normalizeDiscoveryUrls(
 }
 
 /**
- * Normalizes and validates a single URL endpoint
+ * Normalizes and validates a single URL endpoint.
+ *
+ * Applies the same public-or-allowlisted host policy as
+ * {@link validateOIDCEndpointUrl}, so that discovered endpoints on public hosts
+ * still reach {@link assertEndpointResolvesPublic} at fetch time.
+ *
  * @param name The url name
  * @param endpoint The url to validate
  * @param issuer The issuer base url
- * @param isTrustedOrigin - Origin verification tester function
- * @returns
+ * @param isTrustedOrigin - Predicate matching the configured `trustedOrigins`
+ * @throws DiscoveryError(discovery_invalid_url | discovery_private_host)
  */
 function normalizeAndValidateUrl(
 	name: string,
@@ -688,15 +696,7 @@ function normalizeAndValidateUrl(
 	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
 ): string {
 	const url = normalizeUrl(name, endpoint, issuer);
-
-	if (!isTrustedOrigin(url)) {
-		throw new DiscoveryError(
-			"discovery_untrusted_origin",
-			`The ${name} "${url}" is not trusted by your trusted origins configuration.`,
-			{ endpoint: name, url },
-		);
-	}
-
+	validateOIDCEndpointUrl(name, url, isTrustedOrigin);
 	return url;
 }
 
