@@ -611,10 +611,19 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 					let shouldAddUuid = useUUIDs;
 					if (referencedModel) {
-						const referencedField = builder.findByType("field", {
-							name: attr.references.field,
-							within: referencedModel.properties,
+						const targetFieldName = getFieldName({
+							model: attr.references.model,
+							field: attr.references.field,
 						});
+						const referencedField =
+							builder.findByType("field", {
+								name: targetFieldName,
+								within: referencedModel.properties,
+							}) ||
+							builder.findByType("field", {
+								name: attr.references.field,
+								within: referencedModel.properties,
+							});
 						if (referencedField) {
 							const hasUuid = Boolean(
 								referencedField.attributes?.some(

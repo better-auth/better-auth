@@ -770,6 +770,142 @@ model User {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11052
+	 */
+	it("should correctly resolve cockroachdb uuid type attribute when referenced model uses a custom fieldName for id", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-cockroach-custom-id-"),
+		);
+		const schemaPath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), schemaPath);
+		const customIdPlugin: BetterAuthPlugin = {
+			id: "custom-id-plugin",
+			schema: {
+				user: {
+					fields: {
+						id: {
+							type: "string",
+							fieldName: "userId",
+						},
+					},
+				},
+			},
+		};
+		try {
+			const existingSchemaWithoutUuid = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  userId        String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("user")
+}
+`;
+			fs.writeFileSync(schemaPath, existingSchemaWithoutUuid);
+
+			const schemaWithoutUuid = await generatePrismaSchema({
+				file: relativePath,
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "cockroachdb",
+					},
+				)({ plugins: [customIdPlugin] } as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "cockroachdb",
+						},
+					),
+					plugins: [customIdPlugin],
+					advanced: {
+						database: {
+							generateId: "uuid",
+						},
+					},
+				},
+			});
+
+			expect(schemaWithoutUuid.code).toBeDefined();
+			expect(schemaWithoutUuid.code).toMatch(
+				/model User {[\s\S]*?userId\s+String\s+@id(?!\s+@db\.Uuid)/,
+			);
+			expect(schemaWithoutUuid.code).toMatch(
+				/model Session {[\s\S]*?userId\s+String(?!\s+@db\.Uuid)/,
+			);
+			expect(schemaWithoutUuid.code).not.toMatch(
+				/model Session {[\s\S]*?userId\s+String\s+@db\.Uuid/,
+			);
+			expect(schemaWithoutUuid.code).toContain(
+				"user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade)",
+			);
+
+			const existingSchemaWithUuid = `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  userId        String    @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("user")
+}
+`;
+			fs.writeFileSync(schemaPath, existingSchemaWithUuid);
+
+			const schemaWithUuid = await generatePrismaSchema({
+				file: relativePath,
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "cockroachdb",
+					},
+				)({ plugins: [customIdPlugin] } as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "cockroachdb",
+						},
+					),
+					plugins: [customIdPlugin],
+				},
+			});
+
+			expect(schemaWithUuid.code).toBeDefined();
+			expect(schemaWithUuid.code).toMatch(
+				/model Session {[\s\S]*?userId\s+String\s+@db\.Uuid/,
+			);
+			expect(schemaWithUuid.code).toContain(
+				"user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade)",
+			);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
 	it("should generate prisma schema for mongodb", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
