@@ -3,7 +3,7 @@ import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import type { JWTPayload } from "jose";
 import { importJWK, jwtVerify } from "jose";
-import { getJwksAdapter } from "./adapter";
+import { getJwksAdapter, parsePublicJwk } from "./adapter";
 import type { JwtOptions } from "./types";
 
 /**
@@ -45,8 +45,8 @@ export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 			return null;
 		}
 
-		const publicKey = JSON.parse(key.publicKey);
-		const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+		const publicKey = parsePublicJwk(key);
+		const alg = publicKey.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 		const cryptoKey = await importJWK(publicKey, alg);
 
 		const baseURLOrigin =

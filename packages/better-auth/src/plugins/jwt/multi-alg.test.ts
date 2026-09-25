@@ -1,9 +1,11 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import type { JWTPayload } from "jose";
-import { describe, expect, it, vi } from "vitest";
+import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
+import { assert, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
 import { getJwksAdapter } from "./adapter";
+import { createCookieCacheSigner } from "./cookie-cache";
 import { signJWT } from "./sign";
 import type { JWSAlgorithms, Jwk } from "./types";
 import { generateExportedKeyPair } from "./utils";
@@ -487,6 +489,160 @@ describe("jwks.alg / jwks.crv persistence after createJwk", () => {
 		expect(row.alg).toBe("ES256");
 		// EC keys derive the curve at generation time — P-256 for ES256.
 		expect(row.crv).toBe("P-256");
+	});
+});
+
+const rs256Options = {
+	jwks: {
+		disablePrivateKeyEncryption: true,
+		keyPairConfig: { alg: "RS256" as const },
+	},
+} as const;
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc7517#section-4.4
+ */
+describe("alg on the stored public JWK", () => {
+	/**
+	 * RS256 and PS256 share RSA key material, so the key alone cannot tell
+	 * them apart. A row whose JWK declares PS256 while `keyPairConfig.alg` is
+	 * RS256 shows which source wins.
+	 */
+	async function provisionPs256JwkRow(ctx: AuthContextShim) {
+		const { publicWebKey, privateWebKey } = await generateExportedKeyPair({
+			jwks: { keyPairConfig: { alg: "PS256" } },
+		});
+		return ctx.adapter.create<Omit<Jwk, "id">, Jwk>({
+			model: "jwks",
+			data: {
+				publicKey: JSON.stringify({ ...publicWebKey, alg: "PS256" }),
+				privateKey: JSON.stringify(privateWebKey),
+				createdAt: new Date(),
+			},
+		});
+	}
+
+	it("stores alg on the public JWK of a freshly-minted key", async () => {
+		const opts = {
+			jwks: {
+				disablePrivateKeyEncryption: true,
+				keyPairConfig: { alg: "PS256" as const },
+			},
+		} as const;
+		const { auth } = await getTestInstance({
+			plugins: [jwt(opts)],
+			logger: { level: "error" },
+		});
+		const ctx = asShim(await auth.$context);
+		await signJWT(makeSignCtx(ctx), {
+			options: opts,
+			payload: { sub: "u1", iat: Math.floor(Date.now() / 1000) },
+		});
+
+		const [row] = await ctx.adapter.findMany<Jwk>({ model: "jwks" });
+		assert(row);
+		expect(JSON.parse(row.publicKey).alg).toBe("PS256");
+	});
+
+	it("signs with the JWK alg and publishes it in the JWKS", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt(rs256Options)],
+			logger: { level: "error" },
+		});
+		const ctx = asShim(await auth.$context);
+		const key = await provisionPs256JwkRow(ctx);
+
+		const token = await signJWT(makeSignCtx(ctx), {
+			options: rs256Options,
+			payload: { sub: "u1", iat: Math.floor(Date.now() / 1000) },
+			signingKeyId: key.id,
+		});
+		expect(decodeProtectedHeader(token).alg).toBe("PS256");
+
+		const jwks = await auth.api.getJwks();
+		const { payload } = await jwtVerify(token, createLocalJWKSet(jwks), {
+			algorithms: ["PS256"],
+		});
+		expect(payload.sub).toBe("u1");
+	});
+
+	it("matches the JWK alg in getLatestKeyByAlg", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt(rs256Options)],
+			logger: { level: "error" },
+		});
+		const ctx = asShim(await auth.$context);
+		const key = await provisionPs256JwkRow(ctx);
+
+		const adapter = getJwksAdapter(ctx.adapter, rs256Options);
+		await expect(
+			adapter.getLatestKeyByAlg(makeSignCtx(ctx), "PS256"),
+		).resolves.toMatchObject({ id: key.id });
+		await expect(
+			adapter.getLatestKeyByAlg(makeSignCtx(ctx), "RS256"),
+		).resolves.toBeUndefined();
+	});
+});
+
+/**
+ * Keys minted before the public JWK carried `alg`. With `keyPairConfig.alg`
+ * set to RS256, the PS256 case only verifies if the `alg` column is read.
+ */
+describe("verifying tokens signed with keys minted before JWK alg", () => {
+	const preexistingKeys = [
+		{ label: "no stored alg", alg: "RS256", persistAlg: false },
+		{ label: "alg in the column only", alg: "PS256", persistAlg: true },
+	] as const;
+
+	it.for(
+		preexistingKeys,
+	)("verifyJWT accepts a token signed by a key with $label", async ({
+		alg,
+		persistAlg,
+	}, { expect }) => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt(rs256Options)],
+			logger: { level: "error" },
+		});
+		await provisionKey(asShim(await auth.$context), { alg, persistAlg });
+
+		const { token } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" } },
+		});
+		expect(decodeProtectedHeader(token).alg).toBe(alg);
+
+		await expect(
+			auth.api.verifyJWT({ body: { token } }),
+		).resolves.toMatchObject({ payload: { sub: "u1" } });
+	});
+
+	it.for(
+		preexistingKeys,
+	)("cookie cache verifies a session signed by a key with $label", async ({
+		alg,
+		persistAlg,
+	}, { expect }) => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [jwt(rs256Options)],
+			logger: { level: "error" },
+		});
+		const ctx = asShim(await auth.$context);
+		await provisionKey(ctx, { alg, persistAlg });
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers });
+		assert(session);
+
+		const signer = createCookieCacheSigner(rs256Options);
+		const token = await signer.sign(
+			makeSignCtx(ctx),
+			{ ...session, updatedAt: Date.now() },
+			60,
+		);
+		expect(decodeProtectedHeader(token).alg).toBe(alg);
+
+		await expect(signer.verify(makeSignCtx(ctx), token)).resolves.toMatchObject(
+			{ payload: { user: { id: session.user.id } } },
+		);
 	});
 });
 
