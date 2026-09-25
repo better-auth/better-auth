@@ -7,7 +7,7 @@ import type {
 	PreinitializedWritableAtom,
 } from "../../client";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
+import { getCookieCache, parseSetCookieHeader } from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
@@ -4182,5 +4182,111 @@ describe("delete cascade rollback", async () => {
 			],
 		});
 		expect(teamMemberCount).toBe(1);
+	});
+});
+
+describe("acceptInvitation", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11275
+	 */
+	it("refreshes cached session cookie with activeOrganizationId upon accepting invitation", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [organization()],
+				session: {
+					cookieCache: {
+						enabled: true,
+					},
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+
+		const userAHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "User A",
+				email: "user-a@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess: cookieSetter(userAHeaders),
+			},
+		);
+
+		const ownerHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "Owner",
+				email: "owner@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		);
+
+		const org = await client.organization.create({
+			name: "Test Org",
+			slug: "test-org",
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: "user-a@example.com",
+			role: "member",
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		// Capture the Set-Cookie headers emitted by acceptInvitation so we can
+		// verify that the session_data cache cookie itself was refreshed (not
+		// just the database row). Without the fix, session_data is never written
+		// here and getCookieCache returns null even though getSession() would
+		// still succeed via DB fallback.
+		let acceptResponseCookieHeader: string | null = null;
+		await client.organization.acceptInvitation({
+			invitationId: invite.data!.id,
+			fetchOptions: {
+				headers: userAHeaders,
+				onSuccess(ctx) {
+					acceptResponseCookieHeader = ctx.response.headers.get("set-cookie");
+					cookieSetter(userAHeaders)(ctx);
+				},
+			},
+		});
+
+		// Parse the session_data value out of the acceptInvitation response and
+		// decode it directly — this proves the cookie cache was refreshed by
+		// the endpoint, independently of any DB fallback in getSession().
+		const responseCookies = parseSetCookieHeader(
+			acceptResponseCookieHeader || "",
+		);
+		const sessionDataValue = responseCookies.get(
+			"better-auth.session_data",
+		)?.value;
+		expect(
+			sessionDataValue,
+			"acceptInvitation must set a fresh session_data cache cookie",
+		).toBeTruthy();
+
+		const cookieCacheHeaders = new Headers({
+			cookie: `better-auth.session_data=${sessionDataValue}`,
+		});
+		const cache = await getCookieCache(cookieCacheHeaders, {
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+		});
+		expect(
+			cache?.session?.activeOrganizationId,
+			"session_data cache cookie must contain the updated activeOrganizationId",
+		).toBe(org.data?.id);
 	});
 });

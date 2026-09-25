@@ -834,11 +834,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					createdAt: new Date(),
 				});
 
-				await adapter.setActiveOrganization(
+				const updatedSession = await adapter.setActiveOrganization(
 					session.session.token,
 					acceptedI.organizationId,
 					ctx,
 				);
+
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 
 				return createdMember;
 			}).catch(async (error) => {
