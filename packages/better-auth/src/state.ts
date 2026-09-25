@@ -86,6 +86,10 @@ export async function generateGenericState(
 ) {
 	const state = generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
+	// The payload `expiresAt` is what `parseGenericState` enforces, so the cookie
+	// and the verification row are derived from it and cannot outlive or, worse,
+	// expire before it.
+	const maxAge = Math.ceil((stateData.expiresAt - Date.now()) / 1000);
 
 	// Cookie strategy:
 	//
@@ -100,9 +104,7 @@ export async function generateGenericState(
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "oauth_state",
-			{
-				maxAge: 10 * 60, // 10 minutes
-			},
+			{ maxAge },
 		);
 
 		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
@@ -119,9 +121,7 @@ export async function generateGenericState(
 	// the adapter hashes it at rest when storeIdentifier is set
 	const stateCookie = c.context.createAuthCookie(
 		settings?.cookieName ?? "state",
-		{
-			maxAge: 5 * 60, // 5 minutes
-		},
+		{ maxAge },
 	);
 
 	await c.setSignedCookie(
@@ -131,16 +131,13 @@ export async function generateGenericState(
 		stateCookie.attributes,
 	);
 
-	const expiresAt = new Date();
-	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-
 	const verification = await c.context.internalAdapter.createVerificationValue({
 		value: JSON.stringify({
 			...stateData,
 			oauthState: state,
 		} satisfies StateData),
 		identifier: state,
-		expiresAt,
+		expiresAt: new Date(stateData.expiresAt),
 	});
 
 	if (!verification) {
