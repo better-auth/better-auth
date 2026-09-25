@@ -1,6 +1,8 @@
+import { DatabaseSync } from "node:sqlite";
 import { Kysely, SqliteDialect } from "kysely";
 import { describe, expect, it, vi } from "vitest";
 import { kyselyAdapter } from "./kysely-adapter";
+import { NodeSqliteDialect } from "./node-sqlite-dialect";
 
 describe("kysely-adapter", () => {
 	it("should create kysely adapter", () => {
@@ -20,6 +22,75 @@ describe("kysely-adapter", () => {
 		});
 		const adapter = kyselyAdapter(db);
 		expect(adapter).toBeDefined();
+	});
+
+	it("keeps model identity when a custom name matches another schema key", async ({
+		onTestFinished,
+	}) => {
+		const sqlite = new DatabaseSync(":memory:");
+		sqlite.exec(`
+			CREATE TABLE account (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				email TEXT NOT NULL,
+				emailVerified INTEGER NOT NULL,
+				image TEXT,
+				createdAt TEXT NOT NULL,
+				updatedAt TEXT NOT NULL
+			);
+			CREATE TABLE session (
+				id TEXT PRIMARY KEY,
+				token TEXT NOT NULL,
+				userId TEXT NOT NULL,
+				expiresAt TEXT NOT NULL,
+				ipAddress TEXT,
+				userAgent TEXT,
+				createdAt TEXT NOT NULL,
+				updatedAt TEXT NOT NULL
+			);
+		`);
+		const db = new Kysely<unknown>({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+		onTestFinished(() => db.destroy());
+		const adapter = kyselyAdapter(db, { type: "sqlite" })({
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+			advanced: { database: { joins: true } },
+		});
+		const now = new Date();
+
+		await adapter.create({
+			model: "user",
+			data: {
+				id: "user-id",
+				name: "Ada",
+				email: "ada@example.com",
+				emailVerified: false,
+				createdAt: now,
+				updatedAt: now,
+			},
+			forceAllowId: true,
+		});
+		await adapter.create({
+			model: "session",
+			data: {
+				id: "session-id",
+				token: "session-token",
+				userId: "user-id",
+				expiresAt: new Date(now.getTime() + 60_000),
+				createdAt: now,
+				updatedAt: now,
+			},
+			forceAllowId: true,
+		});
+
+		const session = await adapter.findOne<{ user: { email: string } }>({
+			model: "session",
+			where: [{ field: "id", value: "session-id" }],
+			join: { user: true },
+		});
+		expect(session?.user.email).toBe("ada@example.com");
 	});
 
 	it("consumeOne deletes only the selected row for non-unique predicates", async () => {

@@ -1,5 +1,15 @@
 # @better-auth/kysely-adapter
 
+## 1.7.6
+
+### Patch Changes
+
+- [#11366](https://github.com/better-auth/better-auth/pull/11366) [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5) Thanks [@bytaesu](https://github.com/bytaesu)! - Use targeted PRAGMA queries when a Kysely dialect cannot introspect Cloudflare D1.
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+- [#11374](https://github.com/better-auth/better-auth/pull/11374) [`2b13e01`](https://github.com/better-auth/better-auth/commit/2b13e011b4a4f8be4e4c39573b9e962cbabb2094) Thanks [@bytaesu](https://github.com/bytaesu)! - Correctly detect database-generated SQLite primary keys during schema validation, including `INTEGER PRIMARY KEY` columns without `AUTOINCREMENT`.
+
 ## 1.7.5
 
 ### Patch Changes
