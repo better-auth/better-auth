@@ -81,4 +81,4 @@ jobs:
           gh pr edit "$PR_NUMBER" --base next --repo "$GITHUB_REPOSITORY"
           gh pr edit "$PR_NUMBER" --add-label "retargeted-to-next" --repo "$GITHUB_REPOSITORY" || true
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body \
-            "This PR was automatically retargeted from \`main\` to \`next\` because it contains a **${MAX_BUMP}** changeset. The \`main\` branch only accepts \`patch\` (bug fix) changes. Features and breaking changes go through \`next\` for beta testing before promotion to stable."
+            "This PR's base branch was automatically changed from \`main\` to \`next\` because its changeset requests a **${MAX_BUMP}** bump. \`main\` accepts patch changes. Minor and major changes are tested on \`next\` before promotion to stable."
