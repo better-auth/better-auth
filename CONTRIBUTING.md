@@ -129,46 +129,6 @@ When making changes to public APIs, please update the relevant documentation.
 Before opening an issue, search existing issues to avoid duplicates.
 We provide templates to help you get started.
 
-### Issue Triage
-
-These labels communicate current maintainer intent and the next step to
-contributors. Straightforward issues may be resolved directly without entering
-this flow.
-
-An issue is untriaged until it has a `needs:*` or `target:*` label. Once
-triaged, it has exactly one label from either group:
-
-| Label | Meaning |
-| --- | --- |
-| `needs: info` | More information is required from the reporter. |
-| `needs: repro` | A minimal reproduction is required. |
-| `needs: discussion` | Further discussion is required to align on scope or direction. |
-| `target: patch` | Accepted and can ship in a patch release. |
-| `target: minor` | Accepted and requires a minor release. |
-| `target: major` | Accepted and requires a major release. |
-
-```text
-Untriaged
-    │
-    ▼
-Triaged
-    ├─ needs: info / repro / discussion
-    └─ target: patch / minor / major
-    │
-    ▼
-Completed
-```
-
-On a triaged issue, the absence of a `needs:*` label means maintainers are not
-currently requesting additional information, a reproduction, or further
-discussion. Labels may be added, changed, or removed as the issue evolves.
-
-A `target:*` label identifies the smallest release category that can contain the
-change. It does not indicate priority or commit the issue to the next matching
-release after the label is applied or work begins. The change may ship in any
-later matching release. A milestone identifies the version currently planned;
-an assignee or linked pull request indicates active work.
-
 ### Bug Reports
 
 Use the [bug report template](https://github.com/better-auth/better-auth/issues/new?template=bug_report.yml).
@@ -299,6 +259,53 @@ it before merge.
    - Reference related issues (e.g. "Closes #1234")
    - List any potential breaking changes
    - Add screenshots for UI changes
+
+## Maintenance Guidelines
+
+The following rules apply to issues and PRs:
+
+- **Core schema:** We do not currently accept core schema changes due to their
+  broad impact on existing systems.
+
+### Issue Triage
+
+These labels communicate current maintainer intent and the next step to
+contributors. Straightforward issues may be resolved directly without entering
+this flow.
+
+An issue is untriaged until it has a `needs:*` or `target:*` label. Once
+triaged, it has exactly one label from either group:
+
+| Label | Meaning |
+| --- | --- |
+| `needs: info` | More information is required from the reporter. |
+| `needs: repro` | A minimal reproduction is required. |
+| `needs: discussion` | Further discussion is required to align on scope or direction. |
+| `target: patch` | Accepted and can ship in a patch release. |
+| `target: minor` | Accepted and requires a minor release. |
+| `target: major` | Accepted and requires a major release. |
+
+```text
+Untriaged
+    │
+    ▼
+Triaged
+    ├─ needs: info / repro / discussion
+    └─ target: patch / minor / major
+    │
+    ▼
+Completed
+```
+
+On a triaged issue, the absence of a `needs:*` label means maintainers are not
+currently requesting additional information, a reproduction, or further
+discussion. Labels may be added, changed, or removed as the issue evolves.
+
+A `target:*` label identifies the smallest release category that can contain the
+change. It does not indicate priority or commit the issue to the next matching
+release after the label is applied or work begins. The change may ship in any
+later matching release. A milestone identifies the version currently planned;
+an assignee or linked pull request indicates active work.
 
 ## Following Up on Closed Issues and PRs
 
