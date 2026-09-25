@@ -1192,6 +1192,8 @@ oauthProvider({
 })
 ```
 
+`allowedScopes` narrows a token to the scopes it shares with that list, and rejects a request sharing none with `invalid_scope`. Omit it to accept any requested scope; use `disabled` to stop issuing for the resource entirely.
+
 Use the admin resource endpoints when resource policy needs to change at runtime.
 
 Dynamic registration can attach protected resources to the new client in the same transaction as the client row. `clientRegistrationDefaultResources` adds server-owned defaults to every registration. `clientRegistrationAllowedResources` lists additional resources a client may request; the effective allowlist is the union of the default and allowed lists. Defaults appear first, duplicates are removed, and every configured value must also be present in `resources`.
