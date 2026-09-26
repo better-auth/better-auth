@@ -37,6 +37,15 @@ export type PasskeyExtensionsResolver =
 			ctx: GenericEndpointContext;
 	  }) => Awaitable<AuthenticationExtensionsClientInputs | undefined>);
 
+export type PasskeyRPIDResolver =
+	| string
+	| ((args: { ctx: GenericEndpointContext }) => Awaitable<string>);
+
+export type PasskeyExpectedRPIDResolver =
+	| string
+	| string[]
+	| ((args: { ctx: GenericEndpointContext }) => Awaitable<string | string[]>);
+
 export interface PasskeyRegistrationOptions {
 	/**
 	 * Require an authenticated session for passkey registration.
@@ -101,9 +110,23 @@ export interface PasskeyOptions {
 	 * A unique identifier for your website. 'localhost' is okay for
 	 * local dev
 	 *
-	 * @default "localhost"
+	 * Pass a function to resolve it per request, e.g. when one server
+	 * serves several relying parties. It runs on both the options and the
+	 * verify endpoints.
+	 *
+	 * @default the hostname of `baseURL`, or "localhost"
 	 */
-	rpID?: string | undefined;
+	rpID?: PasskeyRPIDResolver | undefined;
+	/**
+	 * The RP ID(s) a registration or authentication response may be bound
+	 * to. Use this when the RP ID hash the authenticator signs differs from
+	 * the `rpID` sent in the options (Chrome extension pages send the bare
+	 * extension ID but sign `chrome-extension://<id>`), or to accept several
+	 * RP IDs.
+	 *
+	 * @default the resolved `rpID`
+	 */
+	expectedRPID?: PasskeyExpectedRPIDResolver | undefined;
 	/**
 	 * Human-readable title for your website
 	 *
