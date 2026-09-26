@@ -5573,6 +5573,79 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * An explicit-endpoint provider whose discovery fetch fails stays usable
+	 * but keeps retrying, so the OIDC metadata self-heals once the IdP is
+	 * reachable again.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("recovers discovery metadata for an explicit-endpoint provider once the IdP is reachable", async () => {
+		let idpDown = true;
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () => {
+				if (idpDown) {
+					return new HttpResponse(null, { status: 503 });
+				}
+				return passthrough();
+			}),
+		);
+		const { customFetchImpl: healFetch } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "explicit-heals",
+							clientId,
+							clientSecret,
+							discoveryUrl,
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+						},
+					],
+				}),
+			],
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: healFetch },
+		});
+		const first = await client.signIn.social({
+			provider: "explicit-heals",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		// Degraded: usable on the explicit endpoints, without OIDC metadata.
+		expect(first.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(
+			new URL(first.data?.url || "").searchParams.get("scope") ?? "",
+		).not.toContain("openid");
+
+		// The IdP recovers; the next sign-in completes discovery and the full
+		// flow verifies the id_token against the discovered JWKS.
+		idpDown = false;
+		const headers = new Headers();
+		const res = await client.signIn.social({
+			provider: "explicit-heals",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const healedUrl = new URL(res.data?.url || "");
+		expect(healedUrl.searchParams.get("scope") ?? "").toContain("openid");
+		expect(healedUrl.searchParams.get("nonce")).toBeTruthy();
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			healFetch,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+		const session = await client.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("oauth2@test.com");
+	});
+
+	/**
 	 * Core mints the id_token nonce before calling createAuthorizationURL, so
 	 * nonce binding must already be on while discovery is pending. Otherwise
 	 * the first sign-in that heals a failed startup discovery would mint no

@@ -216,8 +216,18 @@ export const genericOAuth = <const ID extends string>(
 				 * Surfaced when a request arrives while discovery is still pending.
 				 */
 				let discoveryFailure: string | null = null;
-				let discoveryResolved = !c.discoveryUrl;
-				let discoveryInflight: Promise<boolean> | null = null;
+
+				/**
+				 * complete: a fetched discovery document was applied and the
+				 * provider carries its full OIDC metadata. degraded: the fetch
+				 * failed but explicit endpoints keep the provider usable; the
+				 * metadata (issuer, JWKS, OIDC scope) is still missing, so
+				 * discovery keeps retrying on use. failed: the provider is
+				 * unusable; calls fail with 503 and discovery keeps retrying.
+				 */
+				type DiscoveryOutcome = "complete" | "degraded" | "failed";
+				let discoveryComplete = !c.discoveryUrl;
+				let discoveryInflight: Promise<DiscoveryOutcome> | null = null;
 
 				// Explicit configuration, captured before discovery mutates
 				// anything. Each attempt starts from these values, so a retry
@@ -229,16 +239,17 @@ export const genericOAuth = <const ID extends string>(
 
 				/**
 				 * Fetch the discovery document and apply it on top of the explicit
-				 * configuration, then report whether the provider is usable.
-				 * Values are committed only when the attempt leaves the provider
-				 * usable, so a failed attempt never half-applies a document. When
-				 * the fetch fails but explicit endpoints are configured, the
-				 * provider stays usable on those endpoints, as it did before
-				 * lazy discovery existed.
+				 * configuration. Values are committed only when a fetched
+				 * document leaves the provider usable, so a failed attempt never
+				 * half-applies a document. When the fetch fails but explicit
+				 * endpoints are configured, the provider stays usable on those
+				 * endpoints (as it did before lazy discovery existed) but
+				 * reports "degraded", so discovery keeps retrying until the
+				 * metadata self-heals.
 				 */
-				const resolveDiscovery = async (): Promise<boolean> => {
+				const resolveDiscovery = async (): Promise<DiscoveryOutcome> => {
 					if (!c.discoveryUrl) {
-						return true;
+						return "complete";
 					}
 					const discovered = await fetchDiscovery(
 						c.discoveryUrl,
@@ -271,7 +282,7 @@ export const genericOAuth = <const ID extends string>(
 								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
 							} catch {
 								discoveryFailure = `invalid jwks_uri "${discovered.jwks_uri}" in discovery document`;
-								return false;
+								return "failed";
 							}
 							nextIdTokenConfig = {
 								jwks: createRemoteJWKSet(jwksUrl),
@@ -285,12 +296,20 @@ export const genericOAuth = <const ID extends string>(
 						discoveryFailure = discovered
 							? "discovery left no usable authorization endpoint or token exchange"
 							: "the discovery document could not be fetched";
-						return false;
+						return "failed";
 					}
 					if (c.requireIdTokenVerification && !nextIdTokenConfig) {
 						discoveryFailure =
 							"requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri";
-						return false;
+						return "failed";
+					}
+					if (!discovered) {
+						// Explicit endpoints keep the provider usable, but the
+						// discovery metadata is still missing. Report "degraded"
+						// instead of resolving: a later call retries and self-heals
+						// the metadata once the IdP is reachable again.
+						discoveryFailure = "the discovery document could not be fetched";
+						return "degraded";
 					}
 					authorizationUrl = nextAuthorizationUrl;
 					tokenUrl = nextTokenUrl;
@@ -300,14 +319,19 @@ export const genericOAuth = <const ID extends string>(
 					isOidc = nextIsOidc;
 					idTokenConfig = nextIdTokenConfig;
 					discoveryFailure = null;
-					return true;
+					return "complete";
 				};
 
 				if (c.discoveryUrl) {
-					discoveryResolved = await resolveDiscovery();
-					if (!discoveryResolved) {
+					const outcome = await resolveDiscovery();
+					discoveryComplete = outcome === "complete";
+					if (outcome === "failed") {
 						ctx.logger.warn(
 							`Provider "${c.providerId}": ${discoveryFailure}. Provider registered and discovery will be retried on first use.`,
+						);
+					} else if (outcome === "degraded") {
+						ctx.logger.warn(
+							`Provider "${c.providerId}": ${discoveryFailure}. Provider registered with its explicit endpoints; discovery metadata will be retried on use.`,
 						);
 					}
 				}
@@ -318,17 +342,20 @@ export const genericOAuth = <const ID extends string>(
 				}
 
 				/**
-				 * Retry discovery for a provider whose startup discovery failed.
-				 * Concurrent callers share a single in-flight attempt.
+				 * Retry discovery for a provider whose startup discovery did not
+				 * complete. Concurrent callers share a single in-flight attempt.
+				 * A degraded provider (explicit endpoints, metadata missing)
+				 * stays usable while the retry repeats; a failed provider
+				 * throws 503.
 				 */
 				const ensureDiscovery = async (): Promise<void> => {
-					if (discoveryResolved) {
+					if (discoveryComplete) {
 						return;
 					}
 					discoveryInflight ??= resolveDiscovery()
-						.then((ok) => {
-							if (ok) {
-								discoveryResolved = true;
+						.then((outcome) => {
+							if (outcome === "complete") {
+								discoveryComplete = true;
 								// Publish the late-resolved OIDC metadata on the provider;
 								// these were captured by value at construction time.
 								provider.issuer = issuer;
@@ -340,12 +367,12 @@ export const genericOAuth = <const ID extends string>(
 									idTokenConfig !== undefined &&
 									c.disableIdTokenNonceBinding !== true;
 							}
-							return ok;
+							return outcome;
 						})
 						.finally(() => {
 							discoveryInflight = null;
 						});
-					if (!(await discoveryInflight)) {
+					if ((await discoveryInflight) === "failed") {
 						throw APIError.from("SERVICE_UNAVAILABLE", {
 							code: GENERIC_OAUTH_ERROR_CODES.OAUTH_PROVIDER_UNAVAILABLE.code,
 							message: `Provider "${c.providerId}" is temporarily unavailable: ${discoveryFailure ?? "discovery has not succeeded yet"}.`,
@@ -407,7 +434,7 @@ export const genericOAuth = <const ID extends string>(
 					// its callback for wanting one.
 					requiresIdTokenNonce:
 						c.disableIdTokenNonceBinding !== true &&
-						(idTokenConfig !== undefined || !discoveryResolved),
+						(idTokenConfig !== undefined || !discoveryComplete),
 					allowIdpInitiated: c.allowIdpInitiated,
 					async createEndSessionURL(data: {
 						idToken?: string | null | undefined;
