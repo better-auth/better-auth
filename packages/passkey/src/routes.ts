@@ -35,7 +35,7 @@ import type {
 	PasskeyRegistrationUser,
 	WebAuthnChallengeValue,
 } from "./types";
-import { getRpID } from "./utils";
+import { resolveExpectedRPID, resolveRpID } from "./utils";
 
 type PasskeyCeremony = "registration" | "authentication";
 
@@ -297,13 +297,9 @@ export const generatePasskeyRegistrationOptions = (
 			const userID = new TextEncoder().encode(
 				generateRandomString(32, "a-z", "0-9"),
 			);
-			const baseURLString =
-				typeof ctx.context.options.baseURL === "string"
-					? ctx.context.options.baseURL
-					: undefined;
 			const options = await generateRegistrationOptions({
 				rpName: opts.rpName || ctx.context.appName,
-				rpID: getRpID(opts, baseURLString),
+				rpID: await resolveRpID(opts, ctx),
 				userID,
 				userName: ctx.query?.name || user.name || user.id,
 				userDisplayName: user.displayName || user.name || user.id,
@@ -475,16 +471,12 @@ export const generatePasskeyAuthenticationOptions = (
 					],
 				});
 			}
-			const baseURLString =
-				typeof ctx.context.options.baseURL === "string"
-					? ctx.context.options.baseURL
-					: undefined;
 			const authenticationExtensions = await resolveExtensions(
 				opts.authentication?.extensions,
 				ctx,
 			);
 			const options = await generateAuthenticationOptions({
-				rpID: getRpID(opts, baseURLString),
+				rpID: await resolveRpID(opts, ctx),
 				userVerification: "preferred",
 				extensions: authenticationExtensions,
 				...(userPasskeys.length
@@ -646,15 +638,11 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 
 			try {
-				const verifyBaseURL =
-					typeof ctx.context.options.baseURL === "string"
-						? ctx.context.options.baseURL
-						: undefined;
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, verifyBaseURL),
+					expectedRPID: await resolveExpectedRPID(options, ctx),
 					requireUserVerification: false,
 				});
 				const { verified, registrationInfo } = verification;
@@ -889,15 +877,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 			try {
-				const authBaseURL =
-					typeof ctx.context.options.baseURL === "string"
-						? ctx.context.options.baseURL
-						: undefined;
 				const verification = await verifyAuthenticationResponse({
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, authBaseURL),
+					expectedRPID: await resolveExpectedRPID(options, ctx),
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),
