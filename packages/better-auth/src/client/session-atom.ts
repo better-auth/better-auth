@@ -54,6 +54,7 @@ type SessionFlight = {
 	cancel: () => void;
 	promise: Promise<SessionFetchOutcome>;
 	revision: number;
+	queryParams?: { query?: SessionQueryParams } | undefined;
 };
 
 /**
@@ -103,6 +104,14 @@ export function getSessionAtom(
 	const $signal = atom<boolean>(false);
 
 	let flight: SessionFlight | undefined;
+	let nextFlight:
+		| {
+				promise: Promise<void>;
+				resolve: () => void;
+				reject: (err: unknown) => void;
+				queryParams?: { query?: SessionQueryParams } | undefined;
+		  }
+		| undefined;
 	let freshUntil = 0;
 	let sessionRevision = 0;
 	$signal.listen(() => {
@@ -112,7 +121,7 @@ export function getSessionAtom(
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
-	): Promise<void> => fetchSession(queryParams);
+	): Promise<void> => fetchSession(queryParams, { cancelInFlight: true });
 
 	const session: SessionAtom = createAuthQueryAtom<AuthQueryState<SessionData>>(
 		{
@@ -177,7 +186,7 @@ export function getSessionAtom(
 					data: isUnauthorized ? null : latest.data,
 					error: error as BetterFetchError,
 					isPending: false,
-					isRefetching: false,
+					isRefetching: Boolean(nextFlight),
 					refetch,
 				});
 				return "failed";
@@ -195,7 +204,7 @@ export function getSessionAtom(
 				data: stableData as SessionData | null,
 				error: null,
 				isPending: false,
-				isRefetching: false,
+				isRefetching: Boolean(nextFlight),
 				refetch,
 			});
 			return outcome;
@@ -208,7 +217,7 @@ export function getSessionAtom(
 				data: latest.data,
 				error: fetchError as BetterFetchError,
 				isPending: false,
-				isRefetching: false,
+				isRefetching: Boolean(nextFlight),
 				refetch,
 			});
 			return "failed";
@@ -230,8 +239,37 @@ export function getSessionAtom(
 
 	const fetchSession = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
+		fetchOpts?: { cancelInFlight?: boolean } | undefined,
 	): Promise<void> => {
 		freshUntil = 0;
+
+		if (flight && !fetchOpts?.cancelInFlight) {
+			if (
+				flight.revision === sessionRevision &&
+				isJsonEqual(flight.queryParams, queryParams) &&
+				!nextFlight
+			) {
+				return flight.promise.then(() => undefined);
+			}
+			if (!nextFlight) {
+				let resolve!: () => void;
+				let reject!: (err: unknown) => void;
+				const promise = new Promise<void>((res, rej) => {
+					resolve = res;
+					reject = rej;
+				});
+				nextFlight = {
+					promise,
+					resolve,
+					reject,
+					queryParams,
+				};
+			} else if (queryParams) {
+				nextFlight.queryParams = queryParams;
+			}
+			return nextFlight.promise;
+		}
+
 		flight?.cancel();
 		const controller = new AbortController();
 		const promise = Promise.resolve().then(() => {
@@ -242,13 +280,23 @@ export function getSessionAtom(
 			cancel: () => controller.abort(),
 			promise,
 			revision: sessionRevision,
+			queryParams,
 		};
 		flight = request;
 		const settleFlight = (outcome: SessionFetchOutcome) => {
 			if (flight !== request) return;
 			flight = undefined;
-			if (outcome === "fresh" && request.revision === sessionRevision) {
+			if (
+				outcome === "fresh" &&
+				request.revision === sessionRevision &&
+				!nextFlight
+			) {
 				freshUntil = getFreshUntil();
+			}
+			if (nextFlight) {
+				const queued = nextFlight;
+				nextFlight = undefined;
+				fetchSession(queued.queryParams).then(queued.resolve, queued.reject);
 			}
 		};
 		void request.promise.then(settleFlight, () => settleFlight("failed"));
@@ -277,7 +325,7 @@ export function getSessionAtom(
 		}
 
 		const refreshManager = createSessionRefreshManager({
-			fetchSession,
+			fetchSession: () => fetchSession(),
 			shouldPollSession: () => session.value.data != null,
 			sessionSignal: $signal,
 			options,

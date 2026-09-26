@@ -893,4 +893,81 @@ describe("useAuthQuery - error handling", () => {
 		expect(fetchCallCount).toBe(2);
 		expect(session().data).toBe(initialData);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should not abort in-flight session request or discard its response on session signal refetch", async () => {
+		let fetchCount = 0;
+		let resolveFirstRequest: ((response: Response) => void) | undefined;
+		let resolveSecondRequest: ((response: Response) => void) | undefined;
+		const observedAborts: boolean[] = [];
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				fetchCount++;
+				const signal = init?.signal as AbortSignal | undefined;
+				if (fetchCount === 1) {
+					return new Promise<Response>((resolve) => {
+						signal?.addEventListener("abort", () => {
+							observedAborts.push(true);
+						});
+						resolveFirstRequest = resolve;
+					});
+				}
+				return new Promise<Response>((resolve) => {
+					resolveSecondRequest = resolve;
+				});
+			},
+		});
+
+		const { $sessionSignal, session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(fetchCount).toBe(1);
+
+		$sessionSignal.set(!$sessionSignal.get());
+		await vi.advanceTimersByTimeAsync(10);
+
+		expect(observedAborts).toEqual([]);
+
+		const settleFirst = resolveFirstRequest;
+		if (!settleFirst) throw new Error("First session request did not start");
+		settleFirst(
+			new Response(
+				JSON.stringify({
+					session: {
+						id: "session-1",
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+					user: { id: "user-1", email: "test@example.com" },
+				}),
+			),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(session.value.data?.session.id).toBe("session-1");
+
+		const settleSecond = resolveSecondRequest;
+		if (!settleSecond) throw new Error("Second session request did not start");
+		settleSecond(
+			new Response(
+				JSON.stringify({
+					session: {
+						id: "session-2",
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+					user: { id: "user-1", email: "test@example.com" },
+				}),
+			),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(fetchCount).toBe(2);
+		expect(session.value.data?.session.id).toBe("session-2");
+
+		unsubscribe();
+	});
 });

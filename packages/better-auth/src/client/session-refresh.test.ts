@@ -348,4 +348,30 @@ describe("session-refresh", () => {
 
 		secondManager.cleanup();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should damp rapid $sessionSignal notifications into a single refetch", async () => {
+		const sessionSignal = atom(false);
+		const mockFetchSession = vi.fn(async () => {});
+
+		const manager = createSessionRefreshManager({
+			fetchSession: mockFetchSession,
+			sessionSignal,
+		});
+
+		manager.init();
+
+		sessionSignal.set(!sessionSignal.get());
+		sessionSignal.set(!sessionSignal.get());
+		sessionSignal.set(!sessionSignal.get());
+		sessionSignal.set(!sessionSignal.get());
+
+		await vi.runAllTimersAsync();
+
+		expect(mockFetchSession).toHaveBeenCalledTimes(1);
+
+		manager.cleanup();
+	});
 });

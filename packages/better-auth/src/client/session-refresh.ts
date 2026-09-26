@@ -11,6 +11,11 @@ const now = () => Math.floor(Date.now() / 1000);
  */
 const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
+/**
+ * Damping delay to coalesce rapid $sessionSignal bursts into a single refetch.
+ */
+const SIGNAL_REFETCH_DAMP_MS = 10;
+
 export interface SessionRefreshOptions {
 	fetchSession: () => Promise<void>;
 	shouldPollSession?: () => boolean;
@@ -22,6 +27,7 @@ interface SessionRefreshState {
 	isInitialized: boolean;
 	lastSessionRequest: number;
 	pollInterval?: ReturnType<typeof setInterval> | undefined;
+	signalTimeout?: ReturnType<typeof setTimeout> | undefined;
 	unsubscribeBroadcast?: (() => void) | undefined;
 	unsubscribeFocus?: (() => void) | undefined;
 	unsubscribeOnline?: (() => void) | undefined;
@@ -131,7 +137,13 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 	const setupSignalSubscription = () => {
 		state.unsubscribeSignal = sessionSignal.listen(() => {
-			void fetchSession();
+			if (state.signalTimeout) {
+				clearTimeout(state.signalTimeout);
+			}
+			state.signalTimeout = setTimeout(() => {
+				state.signalTimeout = undefined;
+				void fetchSession();
+			}, SIGNAL_REFETCH_DAMP_MS);
 		});
 	};
 
@@ -153,6 +165,10 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const cleanup = () => {
 		if (!state.isInitialized) return;
 
+		if (state.signalTimeout) {
+			clearTimeout(state.signalTimeout);
+			state.signalTimeout = undefined;
+		}
 		if (state.pollInterval) {
 			clearInterval(state.pollInterval);
 			state.pollInterval = undefined;
