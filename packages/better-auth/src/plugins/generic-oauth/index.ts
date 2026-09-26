@@ -437,6 +437,14 @@ export const genericOAuth = <const ID extends string>(
 						// completed, the rule is exactly what it was before lazy
 						// discovery existed, so existing account keys never move.
 						if (c.discoveryUrl && !discoveryComplete) {
+							// While discovery is incomplete the eventual identity
+							// rule is unknowable: a provider that heals as OIDC
+							// keys `sub`, one that recovers as non-OIDC keys `id`.
+							// No static choice satisfies both for a profile that
+							// carries distinct `id` and `sub` values; preferring
+							// `sub` matches the OIDC intent of a discovery-serving
+							// provider and can only drift when discovery later
+							// completes as non-OIDC with a dual-field profile.
 							return genericProfile.sub ?? genericProfile.id ?? "";
 						}
 						return genericProfile.id ?? "";
