@@ -6,6 +6,7 @@ import type {
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
 	OAuthOptions,
+	OAuthProviderOptions,
 	SchemaClient,
 	Scope,
 	TokenEndpointAuthMethod,
@@ -67,5 +68,15 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<SchemaClient>().not.toHaveProperty("type");
 		expectTypeOf<"configure-client-credentials-scopes">().toMatchTypeOf<ClientPrivilegeAction>();
 		expectTypeOf<"configure-client-credentials">().not.toMatchTypeOf<ClientPrivilegeAction>();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11204
+	 */
+	it("exports signedQueryExpiresIn and OAuthProviderOptions", () => {
+		expectTypeOf<OAuthOptions["signedQueryExpiresIn"]>().toEqualTypeOf<
+			number | undefined
+		>();
+		expectTypeOf<OAuthProviderOptions>().toEqualTypeOf<OAuthOptions>();
 	});
 });

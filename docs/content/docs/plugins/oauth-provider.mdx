@@ -1299,6 +1299,7 @@ Each token type and grant type can independently can set a default expiration.
 * `refreshTokenExpiresIn` defaults 30 days
 * `refreshTokenReuseInterval` defaults 0 seconds
 * `codeExpiresIn` defaults 10 minutes
+* `signedQueryExpiresIn` defaults to `codeExpiresIn` (10 minutes) — maximum allowed lifetime for signed authorize query redirects
 * `assertionMaxLifetime` defaults 5 minutes — maximum allowed lifetime for `private_key_jwt` client assertions
 
 Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privilege scopes that require shorter expiration times. The earliest expiration will take precedence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.

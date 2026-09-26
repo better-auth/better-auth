@@ -672,6 +672,15 @@ export interface OAuthOptions<
 	 */
 	codeExpiresIn?: number;
 	/**
+	 * The amount of time in seconds that the signed authorize query hop is valid for.
+	 *
+	 * When the user is redirected to the login, consent, or select-account page,
+	 * the authorization request parameters are signed and include an expiration timestamp.
+	 *
+	 * @default codeExpiresIn (which defaults to 600 seconds / 10 minutes)
+	 */
+	signedQueryExpiresIn?: number;
+	/**
 	 * Create access token expirations based on scope.
 	 *
 	 * This is useful for higher-privilege scopes that
@@ -1382,6 +1391,13 @@ export interface OAuthOptions<
 		signingAlgorithms?: JWSAlgorithms[];
 	};
 }
+
+/**
+ * Alias for {@link OAuthOptions}.
+ */
+export type OAuthProviderOptions<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> = OAuthOptions<Scopes>;
 
 export interface OAuthAuthorizationQuery {
 	/**
