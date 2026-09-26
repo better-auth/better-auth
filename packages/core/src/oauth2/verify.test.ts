@@ -881,4 +881,152 @@ describe("verifyBearerToken", () => {
 			).rejects.toThrow();
 		});
 	});
+
+	/**
+	 * The resource-server entry points only accepted a `string` `jwksUrl`, so a
+	 * resource server co-located with the authorization server had to reach its
+	 * own `{baseURL}{basePath}/jwks` over HTTP for a key set it already held in
+	 * process. The introspection and revocation paths could always pass an
+	 * in-process resolver plus a `jwksCacheKey`; the resource-server path could
+	 * not, and it also dropped the cache key on the way to `verifyJwsAccessToken`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10856
+	 */
+	describe("in-process jwks sources on the resource-server entry points", () => {
+		/**
+		 * Loads a fresh copy of the module so the module-level
+		 * `functionJwksCache`/`jwksCache` maps are isolated to this test.
+		 */
+		async function isolatedVerify() {
+			vi.resetModules();
+			return await import("./verify");
+		}
+
+		it("should read an in-process jwks source once across verifications sharing a jwksCacheKey", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			const jwksCacheKey = {};
+			let readCount = 0;
+
+			// A fresh closure per call, like a per-request caller writes.
+			for (let i = 0; i < 3; i++) {
+				await expect(
+					verify(token, {
+						jwksUrl: async () => {
+							readCount++;
+							return { keys: [publicJWK] };
+						},
+						jwksCacheKey,
+						verifyOptions: { issuer, audience },
+					}),
+				).resolves.toMatchObject({ sub: "user-123" });
+			}
+
+			// `readCount` is 1 only if `jwksCacheKey` survived the hop through
+			// `verifyAccessTokenPayload`, and no fetch means the url-keyed cache
+			// was never consulted either.
+			expect(readCount).toBe(1);
+			expect(mockedFetch).not.toHaveBeenCalled();
+		});
+
+		it("should read an in-process jwks source on every verification when no jwksCacheKey is given", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			const read = vi.fn(async () => ({ keys: [publicJWK] }));
+
+			// Without a stable cache key the function source is uncached, so
+			// each verification pays the cost. This is the documented penalty
+			// that `jwksCacheKey` exists to remove.
+			for (let i = 0; i < 3; i++) {
+				await expect(
+					verify(token, {
+						jwksUrl: read,
+						verifyOptions: { issuer, audience },
+					}),
+				).resolves.toMatchObject({ sub: "user-123" });
+			}
+
+			expect(read).toHaveBeenCalledTimes(3);
+		});
+
+		it("should not read the in-process jwks source when remote verification is forced", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			const read = vi.fn(async () => ({ keys: [publicJWK] }));
+			mockJSONResponse({
+				active: true,
+				iss: issuer,
+				aud: audience,
+				sub: "user-123",
+			});
+
+			await expect(
+				verify(token, {
+					jwksUrl: read,
+					verifyOptions: { issuer, audience },
+					remoteVerify: {
+						introspectUrl: `${issuer}/oauth2/introspect`,
+						clientId: "rs-client",
+						clientSecret: "rs-secret",
+						force: true,
+					},
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			expect(read).not.toHaveBeenCalled();
+		});
+
+		it("should reject a token whose kid is absent from the in-process jwks source", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const tokenKey = await createTestJWKS();
+			const unrelatedKey = await createTestJWKS();
+			const token = await createSignedToken(tokenKey.privateKey, tokenKey.kid);
+
+			// An in-process source is not a verification bypass: a key set that
+			// cannot verify the signature still fails closed.
+			await expectUnauthorized(
+				verify(token, {
+					jwksUrl: async () => ({ keys: [unrelatedKey.publicJWK] }),
+					jwksCacheKey: {},
+					verifyOptions: { issuer, audience },
+				}),
+			);
+			expect(mockedFetch).not.toHaveBeenCalled();
+		});
+
+		it("should verify a protected-resource request from an in-process jwks source", async () => {
+			const { verifyAccessTokenRequest: verifyRequest } =
+				await isolatedVerify();
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			const jwksCacheKey = {};
+			let readCount = 0;
+
+			for (let i = 0; i < 3; i++) {
+				await expect(
+					verifyRequest(
+						{
+							authorizationHeader: `Bearer ${token}`,
+							method: "GET",
+							url: `${audience}/posts`,
+						},
+						{
+							jwksUrl: async () => {
+								readCount++;
+								return { keys: [publicJWK] };
+							},
+							jwksCacheKey,
+							verifyOptions: { issuer, audience },
+						},
+					),
+				).resolves.toMatchObject({ sub: "user-123" });
+			}
+
+			expect(readCount).toBe(1);
+			expect(mockedFetch).not.toHaveBeenCalled();
+		});
+	});
 });

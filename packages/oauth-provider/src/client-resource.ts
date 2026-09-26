@@ -98,6 +98,11 @@ export const oauthProviderResourceClient = <
 			(authServerBaseUrl
 				? `${authServerBaseUrl}${authServerBasePath ?? ""}/oauth2/introspect`
 				: undefined);
+		// A function `jwksUrl`, and the `jwksCacheKey` forwarded by `...opts`,
+		// reach `verifyAccessTokenPayload` untouched. A resource server
+		// co-located with the authorization server therefore never has to HTTP
+		// self-fetch `{baseURL}{basePath}/jwks` for a key set it already holds in
+		// process.
 		return {
 			...opts,
 			jwksUrl,
@@ -145,7 +150,19 @@ export const oauthProviderResourceClient = <
 							Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 						requiredScopes?: readonly string[];
 						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
-						jwksUrl?: string;
+						/**
+						 * JWKS url, or an in-process resolver for the issuer's key set
+						 * when this resource server is co-located with the authorization
+						 * server. Prefer the function form to skip the self-fetch.
+						 */
+						jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
+						/**
+						 * Stable object to cache a function `jwksUrl` under. Without it,
+						 * a function source is read on every verification. The cache is
+						 * keyed by this object alone, so it must be stable per issuer (and
+						 * audience) rather than shared across issuers.
+						 */
+						jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 						remoteVerify?: VerifyAccessTokenRemote;
 						/** Maps non-url (ie urn, client) resources to resource_metadata */
 						resourceMetadataMappings?: Record<string, string>;
@@ -185,7 +202,19 @@ export const oauthProviderResourceClient = <
 							Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 						requiredScopes?: readonly string[];
 						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
-						jwksUrl?: string;
+						/**
+						 * JWKS url, or an in-process resolver for the issuer's key set
+						 * when this resource server is co-located with the authorization
+						 * server. Prefer the function form to skip the self-fetch.
+						 */
+						jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
+						/**
+						 * Stable object to cache a function `jwksUrl` under. Without it,
+						 * a function source is read on every verification. The cache is
+						 * keyed by this object alone, so it must be stable per issuer (and
+						 * audience) rather than shared across issuers.
+						 */
+						jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 						remoteVerify?: VerifyAccessTokenRemote;
 						dpop?: VerifyAccessTokenRequestOptions["dpop"];
 						/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -336,7 +365,19 @@ type VerifyAccessTokenAuthOpts = {
 		Required<Pick<JWTVerifyOptions, "audience">>;
 	requiredScopes?: readonly string[];
 	isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
-	jwksUrl?: string;
+	/**
+	 * JWKS url, or an in-process resolver for the issuer's key set when this
+	 * resource server is co-located with the authorization server. Prefer the
+	 * function form to skip the self-fetch.
+	 */
+	jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
+	/**
+	 * Stable object to cache a function `jwksUrl` under. Without it, a function
+	 * source is read on every verification. The cache is keyed by this object
+	 * alone, so it must be stable per issuer (and audience) rather than shared
+	 * across issuers.
+	 */
+	jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 	remoteVerify?: VerifyAccessTokenRemote;
 	/** Maps non-url (ie urn, client) resources to resource_metadata */
 	resourceMetadataMappings?: Record<string, string>;
@@ -350,7 +391,19 @@ type VerifyAccessTokenNoAuthOpts =
 				Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 			requiredScopes?: readonly string[];
 			isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
-			jwksUrl: string;
+			/**
+			 * JWKS url, or an in-process resolver for the issuer's key set when
+			 * this resource server is co-located with the authorization server.
+			 * Prefer the function form to skip the self-fetch.
+			 */
+			jwksUrl: NonNullable<VerifyAccessTokenRequestOptions["jwksUrl"]>;
+			/**
+			 * Stable object to cache a function `jwksUrl` under. Without it, a
+			 * function source is read on every verification. The cache is keyed by
+			 * this object alone, so it must be stable per issuer (and audience)
+			 * rather than shared across issuers.
+			 */
+			jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 			remoteVerify?: VerifyAccessTokenRemote;
 			/** Maps non-url (ie urn, client) resources to resource_metadata */
 			resourceMetadataMappings?: Record<string, string>;
@@ -360,7 +413,19 @@ type VerifyAccessTokenNoAuthOpts =
 				Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 			requiredScopes?: readonly string[];
 			isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
-			jwksUrl?: string;
+			/**
+			 * JWKS url, or an in-process resolver for the issuer's key set when
+			 * this resource server is co-located with the authorization server.
+			 * Prefer the function form to skip the self-fetch.
+			 */
+			jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
+			/**
+			 * Stable object to cache a function `jwksUrl` under. Without it, a
+			 * function source is read on every verification. The cache is keyed by
+			 * this object alone, so it must be stable per issuer (and audience)
+			 * rather than shared across issuers.
+			 */
+			jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 			remoteVerify: VerifyAccessTokenRemote;
 			/** Maps non-url (ie urn, client) resources to resource_metadata */
 			resourceMetadataMappings?: Record<string, string>;

@@ -174,8 +174,39 @@ export interface VerifyAccessTokenOptions {
 		requiredScope: string,
 		grantedScopes: ReadonlySet<string>,
 	) => boolean;
-	/** Required to verify access token locally */
-	jwksUrl?: string;
+	/**
+	 * Required to verify access token locally. Either a JWKS url, or an
+	 * in-process resolver for the issuer's key set. Prefer the function form
+	 * when the resource server already holds the key set in process, so
+	 * verification does not need a network round trip back to the issuer.
+	 *
+	 * A function source runs inside the caller's process, so its failures are
+	 * the resolver's own. Two consequences: a falsy return reaches the caller
+	 * as `Error: No jwks found` and a throw propagates the resolver's own
+	 * error; a `TypeError` thrown anywhere in the resolver is read as "likely
+	 * an opaque token" and swallowed, so verification falls through to
+	 * `remoteVerify` when one is configured instead of surfacing. Return the
+	 * key set or throw, and do not let a resolver throw `TypeError` for an
+	 * expected condition. With no `remoteVerify` configured there is no
+	 * fallthrough, so a `TypeError` still fails closed.
+	 */
+	jwksUrl?: JwksFetchOptions["jwksFetch"];
+	/**
+	 * Stable object to cache the result of a function `jwksUrl` under, with the
+	 * same TTL and kid-miss refetch rules as string sources. Without it, a
+	 * function source is read on every verification. Ignored for string
+	 * sources, which are cached by url.
+	 *
+	 * The cache holds no issuer or audience of its own and is keyed by this
+	 * object alone, so the key must be stable per issuer (and audience), not
+	 * merely stable across requests. Sharing one key across issuers is not safe:
+	 * a cached set is reused whenever it contains the token's `kid`, so a `kid`
+	 * that both issuers publish verifies against the wrong key and is rejected
+	 * for the rest of the TTL. The `kid`-miss refetch cannot rescue that case,
+	 * because the `kid` was found. `iss` and `aud` are still enforced, so this
+	 * is a caching artifact rather than an authentication bypass.
+	 */
+	jwksCacheKey?: JwksFetchOptions["jwksCacheKey"];
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
 }
@@ -364,6 +395,7 @@ async function verifyAccessTokenPayload(
 		try {
 			payload = await verifyJwsAccessToken(token, {
 				jwksFetch: opts.jwksUrl,
+				jwksCacheKey: opts.jwksCacheKey,
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {
