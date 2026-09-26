@@ -36,6 +36,7 @@ import {
 	clientAllowsGrant,
 	getClient,
 	getJwtPlugin,
+	isHashedSecretWithoutJwt,
 	isPKCERequired,
 	parsePrompt,
 	storeToken,
@@ -576,18 +577,10 @@ export async function authorizeEndpoint(
 	}
 	// Check for invalid scopes if requested from query
 	let requestedScopes = query.scope?.split(" ").filter((s) => s);
-	const providerScopes = new Set(opts.scopes ?? []);
-	const isHashedWithoutJwt =
-		Boolean(opts.disableJwtPlugin) &&
-		(opts.storeClientSecret === "hashed" ||
-			(typeof opts.storeClientSecret === "object" &&
-				opts.storeClientSecret !== null &&
-				"hash" in opts.storeClientSecret));
-	const allowedScopes = (
-		client.scopes
-			? client.scopes.filter((scope) => providerScopes.has(scope))
-			: (opts.scopes ?? [])
-	).filter((scope) => !isHashedWithoutJwt || scope !== "openid");
+	const baseScopes = client.scopes ?? opts.scopes ?? [];
+	const allowedScopes = isHashedSecretWithoutJwt(opts)
+		? baseScopes.filter((scope) => scope !== "openid")
+		: baseScopes;
 	const validScopes = new Set(allowedScopes);
 	if (requestedScopes) {
 		const invalidScopes = requestedScopes.filter((scope) => {

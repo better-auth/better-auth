@@ -458,6 +458,23 @@ export async function storeClientSecret(
 }
 
 /**
+ * Whether the provider is configured with client secret hashing while the JWT
+ * plugin is disabled (meaning raw client secrets cannot be recovered to sign ID tokens).
+ */
+export function isHashedSecretWithoutJwt(opts: {
+	disableJwtPlugin?: boolean;
+	storeClientSecret?: unknown;
+}): boolean {
+	return Boolean(
+		opts.disableJwtPlugin &&
+			(opts.storeClientSecret === "hashed" ||
+				(typeof opts.storeClientSecret === "object" &&
+					opts.storeClientSecret !== null &&
+					"hash" in opts.storeClientSecret)),
+	);
+}
+
+/**
  * Stores a token value (ie opaque tokens, refresh tokens, transaction tokens, verification codes)
  * on the database in a secure hashed format.
  *

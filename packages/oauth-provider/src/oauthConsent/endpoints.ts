@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import type { OAuthConsent, OAuthOptions, Scope } from "../types";
-import { getClient } from "../utils";
+import { getClient, isHashedSecretWithoutJwt } from "../utils";
 
 async function getConsent(
 	ctx: GenericEndpointContext & { query: { id: string } },
@@ -133,18 +133,10 @@ export async function updateConsentEndpoint(
 		});
 	}
 
-	const providerScopes = new Set(opts.scopes ?? []);
-	const isHashedWithoutJwt =
-		Boolean(opts.disableJwtPlugin) &&
-		(opts.storeClientSecret === "hashed" ||
-			(typeof opts.storeClientSecret === "object" &&
-				opts.storeClientSecret !== null &&
-				"hash" in opts.storeClientSecret));
-	const allowedScopes = (
-		client?.scopes
-			? client.scopes.filter((scope) => providerScopes.has(scope))
-			: (opts.scopes ?? [])
-	).filter((scope) => !isHashedWithoutJwt || scope !== "openid");
+	const baseScopes = client?.scopes ?? opts.scopes ?? [];
+	const allowedScopes = isHashedSecretWithoutJwt(opts)
+		? baseScopes.filter((scope) => scope !== "openid")
+		: baseScopes;
 
 	// Check if scopes are granted to that client
 	const updates = ctx.body.update as Partial<OAuthConsent>;

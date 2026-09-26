@@ -58,6 +58,7 @@ import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
 	getSignedQueryIssuedAt,
+	isHashedSecretWithoutJwt,
 	isSessionFreshForSignedQuery,
 	postLoginClearedParam,
 	removeMaxAgeFromQuery,
@@ -250,13 +251,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
-	if (
-		opts.disableJwtPlugin &&
-		scopes.has("openid") &&
-		(opts.storeClientSecret === "hashed" ||
-			(typeof opts.storeClientSecret === "object" &&
-				"hash" in opts.storeClientSecret))
-	) {
+	if (isHashedSecretWithoutJwt(opts) && scopes.has("openid")) {
 		throw new BetterAuthError(
 			"unable to store hashed secrets because id tokens will be signed with secret",
 		);

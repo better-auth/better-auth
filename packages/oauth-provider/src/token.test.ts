@@ -5294,4 +5294,124 @@ describe("disableJwtPlugin + storeClientSecret hashed grant flow", async () => {
 		expect(response.error?.status).toBe(400);
 		expect((response.error as { error?: string })?.error).toBe("invalid_scope");
 	});
+
+	it("11416: preserves client custom scopes not present in provider opts.scopes", async ({
+		expect,
+	}) => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		expect(oauthClient?.client_id).toBeDefined();
+
+		// Seed client with a custom scope not present in opts.scopes (["profile", "email"])
+		// along with openid and profile.
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+			update: { scopes: ["custom_scope", "openid", "profile"] },
+		});
+
+		// 1. Authorize explicitly requesting the custom scope (without openid)
+		const codeVerifier = generateRandomString(32);
+		const digest = await crypto.subtle.digest(
+			"SHA-256",
+			new TextEncoder().encode(codeVerifier),
+		);
+		const codeChallenge = Buffer.from(digest).toString("base64url");
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient!.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("state", "test-custom-scope");
+		authUrl.searchParams.set("code_challenge", codeChallenge);
+		authUrl.searchParams.set("code_challenge_method", "S256");
+		authUrl.searchParams.set("scope", "custom_scope profile");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).not.toContain("error=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient!.client_id,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.scope).toBe("custom_scope profile");
+
+		// 2. Authorize omitting scope — defaults should include custom_scope and profile, omitting openid
+		const codeVerifier2 = generateRandomString(32);
+		const digest2 = await crypto.subtle.digest(
+			"SHA-256",
+			new TextEncoder().encode(codeVerifier2),
+		);
+		const codeChallenge2 = Buffer.from(digest2).toString("base64url");
+		const authUrl2 = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl2.searchParams.set("client_id", oauthClient!.client_id);
+		authUrl2.searchParams.set("redirect_uri", redirectUri);
+		authUrl2.searchParams.set("response_type", "code");
+		authUrl2.searchParams.set("state", "test-default-custom-scope");
+		authUrl2.searchParams.set("code_challenge", codeChallenge2);
+		authUrl2.searchParams.set("code_challenge_method", "S256");
+
+		let callbackRedirectUrl2 = "";
+		await client.$fetch(authUrl2.toString(), {
+			onError(context) {
+				callbackRedirectUrl2 = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl2).toContain(redirectUri);
+		expect(callbackRedirectUrl2).toContain("code=");
+		expect(callbackRedirectUrl2).not.toContain("error=");
+
+		const code2 = new URL(callbackRedirectUrl2).searchParams.get("code")!;
+		const { body: body2, headers: reqHeaders2 } =
+			await authorizationCodeRequest({
+				code: code2,
+				codeVerifier: codeVerifier2,
+				redirectURI: redirectUri,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+
+		const tokens2 = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body: body2,
+			headers: reqHeaders2,
+		});
+
+		expect(tokens2.data?.access_token).toBeDefined();
+		expect(tokens2.data?.id_token).toBeUndefined();
+		expect(tokens2.data?.scope).toBe("custom_scope profile");
+	});
 });

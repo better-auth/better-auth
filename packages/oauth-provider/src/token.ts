@@ -58,6 +58,7 @@ import {
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	isHashedSecretWithoutJwt,
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -397,13 +398,7 @@ async function createIdToken(
 		return undefined;
 	}
 
-	if (
-		opts.disableJwtPlugin &&
-		(opts.storeClientSecret === "hashed" ||
-			(typeof opts.storeClientSecret === "object" &&
-				opts.storeClientSecret !== null &&
-				"hash" in opts.storeClientSecret))
-	) {
+	if (isHashedSecretWithoutJwt(opts)) {
 		return undefined;
 	}
 
@@ -1160,18 +1155,14 @@ async function createUserTokens(
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	const isIdToken = user && effectiveScopes.includes("openid");
 
-	const isHashedWithoutJwt =
-		Boolean(opts.disableJwtPlugin) &&
-		(opts.storeClientSecret === "hashed" ||
-			(typeof opts.storeClientSecret === "object" &&
-				opts.storeClientSecret !== null &&
-				"hash" in opts.storeClientSecret));
-
 	// Runtime guard: when JWT plugin is disabled, the ID token is signed with
 	// the raw client secret (HS256). A hashed secret cannot be recovered, so
 	// issuing an ID token is impossible — return a clear OAuth error rather
 	// than letting decryptStoredClientSecret throw an opaque internal error.
-	if (isHashedWithoutJwt && (isIdToken || effectiveScopes.includes("openid"))) {
+	if (
+		isHashedSecretWithoutJwt(opts) &&
+		(isIdToken || effectiveScopes.includes("openid"))
+	) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_scope",
 			error_description:
