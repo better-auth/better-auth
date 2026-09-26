@@ -1029,4 +1029,258 @@ describe("verifyBearerToken", () => {
 			expect(mockedFetch).not.toHaveBeenCalled();
 		});
 	});
+
+	/**
+	 * A cached function key set was identified only by the caller's
+	 * `jwksCacheKey` object, so two issuers sharing one key object shared one
+	 * entry. A cached set is reused whenever it contains the token's `kid`, and
+	 * `iss`/`aud` constrain only the token's own claims, which whoever holds a
+	 * signing key also writes. A `kid` published by issuer A was therefore
+	 * verified against A's key material on issuer B's verification path, so
+	 * holding A's signing key was enough to mint a token issuer B accepted.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10856
+	 */
+	describe("function jwks cache scoped to the verified issuer", () => {
+		const issuerA = "https://trust-a.example.com";
+		const issuerB = "https://trust-b.example.com";
+		const audienceA = `${issuerA}/api`;
+		const audienceB = `${issuerB}/api`;
+
+		/**
+		 * Loads a fresh copy of the module so the module-level
+		 * `functionJwksCache`/`jwksCache` maps are isolated to this test.
+		 */
+		async function isolatedVerify() {
+			vi.resetModules();
+			return await import("./verify");
+		}
+
+		it("should reject a token signed with another issuer's key when the jwksCacheKey is shared", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const keyA = await createTestJWKS("trust-a-key");
+			const keyB = await createTestJWKS("trust-b-key");
+			const jwksCacheKey = {};
+
+			// Warm the shared cache key with issuer A's set.
+			const tokenA = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: issuerA,
+				aud: audienceA,
+			});
+			await expect(
+				verify(tokenA, {
+					jwksUrl: async () => ({ keys: [keyA.publicJWK] }),
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerA, audience: audienceA },
+				}),
+			).resolves.toMatchObject({ iss: issuerA });
+
+			// Whoever holds issuer A's signing key mints a token that claims
+			// issuer B. Only the verifying key binds a token to an issuer.
+			const forgedForB = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: issuerB,
+				aud: audienceB,
+			});
+			const readB = vi.fn(async () => ({ keys: [keyB.publicJWK] }));
+
+			await expect(
+				verify(forgedForB, {
+					jwksUrl: readB,
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerB, audience: audienceB },
+				}),
+			).rejects.toMatchObject({
+				status: "UNAUTHORIZED",
+				body: { message: "invalid access token" },
+			});
+			// Issuer B's own set has to be read, since A's must not stand in.
+			expect(readB).toHaveBeenCalledTimes(1);
+		});
+
+		it("should still verify each issuer's own tokens when they share a jwksCacheKey", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const keyA = await createTestJWKS("trust-a-key");
+			const keyB = await createTestJWKS("trust-b-key");
+			const jwksCacheKey = {};
+			const readA = vi.fn(async () => ({ keys: [keyA.publicJWK] }));
+			const readB = vi.fn(async () => ({ keys: [keyB.publicJWK] }));
+			const tokenA = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: issuerA,
+				aud: audienceA,
+			});
+			const tokenB = await createSignedToken(keyB.privateKey, keyB.kid, {
+				iss: issuerB,
+				aud: audienceB,
+			});
+			const verifyA = () =>
+				verify(tokenA, {
+					jwksUrl: readA,
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerA, audience: audienceA },
+				});
+			const verifyB = () =>
+				verify(tokenB, {
+					jwksUrl: readB,
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerB, audience: audienceB },
+				});
+
+			await expect(verifyA()).resolves.toMatchObject({ iss: issuerA });
+			await expect(verifyB()).resolves.toMatchObject({ iss: issuerB });
+			// Verifying B's token must not have evicted A's entry, and each
+			// issuer's set is read once.
+			await expect(verifyA()).resolves.toMatchObject({ iss: issuerA });
+			await expect(verifyB()).resolves.toMatchObject({ iss: issuerB });
+
+			expect(readA).toHaveBeenCalledTimes(1);
+			expect(readB).toHaveBeenCalledTimes(1);
+		});
+
+		it("should scope a function jwks cache entry to the issuer set, order-independently", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const keyA = await createTestJWKS("trust-a-key");
+			const tokenA = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: issuerA,
+				aud: audienceA,
+			});
+			const verifyAs = (
+				jwksCacheKey: object,
+				read: () => Promise<{ keys: JWK[] }>,
+				issuer: string | string[],
+			) =>
+				verify(tokenA, {
+					jwksUrl: read,
+					jwksCacheKey,
+					verifyOptions: { issuer, audience: audienceA },
+				});
+
+			// jose reads a list as one trust set, so its order is not part of the
+			// cache key.
+			const listCacheKey = {};
+			const readList = vi.fn(async () => ({ keys: [keyA.publicJWK] }));
+			await expect(
+				verifyAs(listCacheKey, readList, [issuerA, issuerB]),
+			).resolves.toMatchObject({ iss: issuerA });
+			await expect(
+				verifyAs(listCacheKey, readList, [issuerB, issuerA]),
+			).resolves.toMatchObject({ iss: issuerA });
+			expect(readList).toHaveBeenCalledTimes(1);
+
+			// A repeated entry adds nothing, so it is the slot of the single
+			// issuer and not the slot of the two-issuer list.
+			const singleCacheKey = {};
+			const readSingle = vi.fn(async () => ({ keys: [keyA.publicJWK] }));
+			await expect(
+				verifyAs(singleCacheKey, readSingle, issuerA),
+			).resolves.toMatchObject({ iss: issuerA });
+			await expect(
+				verifyAs(singleCacheKey, readSingle, [issuerA, issuerA]),
+			).resolves.toMatchObject({ iss: issuerA });
+			expect(readSingle).toHaveBeenCalledTimes(1);
+			await expect(
+				verifyAs(singleCacheKey, readSingle, [issuerA, issuerB]),
+			).resolves.toMatchObject({ iss: issuerA });
+			expect(readSingle).toHaveBeenCalledTimes(2);
+		});
+
+		it("should keep two issuer sets apart that a joined encoding would collide", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const keyA = await createTestJWKS("trust-a-key");
+			const jwksCacheKey = {};
+			const read = vi.fn(async () => ({ keys: [keyA.publicJWK] }));
+			// jose reads `iss` as a StringOrURI, which only has to be a URI when
+			// it contains a colon, so an issuer with a NUL and no colon is a
+			// value jose accepts. `["A\u0000B"]` and `["A","B"]` are different
+			// trust sets that a NUL-joined inner key maps onto one slot, so the
+			// slot encoding has to keep them apart on its own.
+			const nulIssuer = "A\u0000B";
+			const verifyAs = (token: string, issuer: string[]) =>
+				verify(token, {
+					jwksUrl: read,
+					jwksCacheKey,
+					verifyOptions: { issuer, audience: audienceA },
+				});
+			const nulToken = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: nulIssuer,
+				aud: audienceA,
+			});
+			const pairToken = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: "A",
+				aud: audienceA,
+			});
+
+			await expect(verifyAs(nulToken, [nulIssuer])).resolves.toMatchObject({
+				iss: nulIssuer,
+			});
+			await expect(verifyAs(pairToken, ["A", "B"])).resolves.toMatchObject({
+				iss: "A",
+			});
+			// Neither set may reuse the other's entry, and each keeps its own.
+			expect(read).toHaveBeenCalledTimes(2);
+			await expect(verifyAs(pairToken, ["A", "B"])).resolves.toMatchObject({
+				iss: "A",
+			});
+			expect(read).toHaveBeenCalledTimes(2);
+		});
+
+		it("should cache a function jwks source for getJwks, which configures no issuer", async () => {
+			const { getJwks } = await isolatedVerify();
+			const key = await createTestJWKS();
+			const jwksCacheKey = {};
+			const read = vi.fn(async () => ({ keys: [key.publicJWK] }));
+			const token = await createSignedToken(key.privateKey, key.kid);
+
+			await getJwks(token, { jwksFetch: read, jwksCacheKey });
+			await getJwks(token, { jwksFetch: read, jwksCacheKey });
+
+			expect(read).toHaveBeenCalledTimes(1);
+		});
+
+		it("should keep caching a string jwks source by url regardless of jwksCacheKey", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const keyA = await createTestJWKS("trust-a-key");
+			const keyB = await createTestJWKS("trust-b-key");
+			// A string source keeps its own url-keyed cache, so `jwksCacheKey`
+			// has nothing to bind to the issuer.
+			const jwksCacheKey = {};
+			mockedFetch.mockImplementation((input: unknown) =>
+				Promise.resolve(
+					requestUrl(input).includes("trust-b")
+						? jwksResponse(keyB.publicJWK)
+						: jwksResponse(keyA.publicJWK),
+				),
+			);
+
+			const tokenA = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: issuerA,
+				aud: audienceA,
+			});
+			await expect(
+				verify(tokenA, {
+					jwksUrl: `${issuerA}/jwks`,
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerA, audience: audienceA },
+				}),
+			).resolves.toMatchObject({ iss: issuerA });
+
+			// Issuer B's url is a separate cache entry, so issuer B's own set is
+			// fetched and the token signed with issuer A's key is rejected.
+			const forgedForB = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: issuerB,
+				aud: audienceB,
+			});
+			await expect(
+				verify(forgedForB, {
+					jwksUrl: `${issuerB}/jwks`,
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerB, audience: audienceB },
+				}),
+			).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+
+			// One fetch per url: the shared `jwksCacheKey` neither added an entry
+			// nor substituted one.
+			expect(mockedFetch).toHaveBeenCalledTimes(2);
+			mockedFetch.mockReset();
+		});
+	});
 });

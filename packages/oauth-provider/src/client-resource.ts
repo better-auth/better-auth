@@ -157,10 +157,10 @@ export const oauthProviderResourceClient = <
 						 */
 						jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
 						/**
-						 * Stable object to cache a function `jwksUrl` under. Without it,
-						 * a function source is read on every verification. The cache is
-						 * keyed by this object alone, so it must be stable per issuer (and
-						 * audience) rather than shared across issuers.
+						 * Stable object to cache a function `jwksUrl` under. Without it, a
+						 * function source is read on every verification. Entries are
+						 * scoped to the verified issuer, so one object may serve several
+						 * issuers. Declare it at module scope, one per function source.
 						 */
 						jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 						remoteVerify?: VerifyAccessTokenRemote;
@@ -209,10 +209,10 @@ export const oauthProviderResourceClient = <
 						 */
 						jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
 						/**
-						 * Stable object to cache a function `jwksUrl` under. Without it,
-						 * a function source is read on every verification. The cache is
-						 * keyed by this object alone, so it must be stable per issuer (and
-						 * audience) rather than shared across issuers.
+						 * Stable object to cache a function `jwksUrl` under. Without it, a
+						 * function source is read on every verification. Entries are
+						 * scoped to the verified issuer, so one object may serve several
+						 * issuers. Declare it at module scope, one per function source.
 						 */
 						jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 						remoteVerify?: VerifyAccessTokenRemote;
@@ -373,9 +373,9 @@ type VerifyAccessTokenAuthOpts = {
 	jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
 	/**
 	 * Stable object to cache a function `jwksUrl` under. Without it, a function
-	 * source is read on every verification. The cache is keyed by this object
-	 * alone, so it must be stable per issuer (and audience) rather than shared
-	 * across issuers.
+	 * source is read on every verification. Entries are scoped to the verified
+	 * issuer, so one object may serve several issuers. Declare it at module
+	 * scope, one per function source.
 	 */
 	jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 	remoteVerify?: VerifyAccessTokenRemote;
@@ -399,9 +399,9 @@ type VerifyAccessTokenNoAuthOpts =
 			jwksUrl: NonNullable<VerifyAccessTokenRequestOptions["jwksUrl"]>;
 			/**
 			 * Stable object to cache a function `jwksUrl` under. Without it, a
-			 * function source is read on every verification. The cache is keyed by
-			 * this object alone, so it must be stable per issuer (and audience)
-			 * rather than shared across issuers.
+			 * function source is read on every verification. Entries are scoped to
+			 * the verified issuer, so one object may serve several issuers.
+			 * Declare it at module scope, one per function source.
 			 */
 			jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 			remoteVerify?: VerifyAccessTokenRemote;
@@ -421,9 +421,9 @@ type VerifyAccessTokenNoAuthOpts =
 			jwksUrl?: VerifyAccessTokenRequestOptions["jwksUrl"];
 			/**
 			 * Stable object to cache a function `jwksUrl` under. Without it, a
-			 * function source is read on every verification. The cache is keyed by
-			 * this object alone, so it must be stable per issuer (and audience)
-			 * rather than shared across issuers.
+			 * function source is read on every verification. Entries are scoped to
+			 * the verified issuer, so one object may serve several issuers.
+			 * Declare it at module scope, one per function source.
 			 */
 			jwksCacheKey?: VerifyAccessTokenRequestOptions["jwksCacheKey"];
 			remoteVerify: VerifyAccessTokenRemote;
