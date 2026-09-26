@@ -1,5 +1,6 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
-import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
+import type { BetterFetch } from "@better-fetch/fetch";
+import { BetterFetchError } from "@better-fetch/fetch";
 import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
@@ -160,11 +161,14 @@ export function getSessionAtom(
 		if (signal.aborted) return "aborted";
 
 		let timeoutId: ReturnType<typeof setTimeout> | undefined;
-		if (typeof setTimeout !== "undefined") {
-			timeoutId = setTimeout(() => {
-				controller.abort();
-			}, SESSION_FETCH_TIMEOUT_MS);
-		}
+		const armTimeout = () => {
+			if (timeoutId) clearTimeout(timeoutId);
+			if (typeof setTimeout !== "undefined") {
+				timeoutId = setTimeout(() => {
+					controller.abort();
+				}, SESSION_FETCH_TIMEOUT_MS);
+			}
+		};
 
 		const abortPromise = new Promise<never>((_, reject) => {
 			if (signal.aborted) {
@@ -179,6 +183,7 @@ export function getSessionAtom(
 		});
 
 		try {
+			armTimeout();
 			const res = await Promise.race([
 				$fetch<SessionResponse>("/get-session", {
 					method: "GET",
@@ -197,6 +202,7 @@ export function getSessionAtom(
 
 			if (data?.needsRefresh) {
 				try {
+					armTimeout();
 					const refreshRes = await Promise.race([
 						$fetch<SessionResponse>("/get-session", {
 							method: "POST",
@@ -346,12 +352,27 @@ export function getSessionAtom(
 		const settleFlight = (outcome: SessionFetchOutcome) => {
 			if (flight !== request) return;
 			flight = undefined;
-			if (
-				outcome === "fresh" &&
-				request.revision === sessionRevision &&
-				!nextFlight
-			) {
-				freshUntil = getFreshUntil();
+			if (!nextFlight) {
+				if (outcome === "fresh" && request.revision === sessionRevision) {
+					freshUntil = getFreshUntil();
+				}
+				const current = session.value;
+				if (current.isRefetching || current.isPending) {
+					session.set({
+						...current,
+						isRefetching: false,
+						isPending: false,
+						error:
+							outcome === "aborted" || outcome === "failed"
+								? (current.error ??
+									new BetterFetchError(
+										408,
+										"Request Timeout",
+										"The session request timed out or was aborted",
+									))
+								: current.error,
+					});
+				}
 			}
 			if (nextFlight) {
 				const queued = nextFlight;

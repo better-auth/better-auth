@@ -1294,4 +1294,174 @@ describe("useAuthQuery - error handling", () => {
 
 		unsubscribe();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should reset isRefetching and isPending to false when a lone flight times out or aborts without queued flight", async () => {
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				const signal = init?.signal as AbortSignal | undefined;
+				return new Promise<Response>((_resolve, reject) => {
+					signal?.addEventListener("abort", () => {
+						reject(
+							new DOMException("The operation was aborted.", "AbortError"),
+						);
+					});
+				});
+			},
+		});
+
+		const { session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+
+		// Mount fetch starts
+		await vi.advanceTimersByTimeAsync(0);
+		expect(session.value.isPending).toBe(true);
+		expect(session.value.isRefetching).toBe(true);
+
+		// Advance time by SESSION_FETCH_TIMEOUT_MS to trigger timeout abort
+		await vi.advanceTimersByTimeAsync(SESSION_FETCH_TIMEOUT_MS);
+		await vi.runAllTimersAsync();
+
+		// Session should NOT be stuck in loading/refetching
+		expect(session.value.isRefetching).toBe(false);
+		expect(session.value.isPending).toBe(false);
+		expect(session.value.error).not.toBeNull();
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should abort in-flight request when refetch is called with cancelInFlight: true in useAuthQuery", async () => {
+		let fetchCount = 0;
+		const abortedRequests: number[] = [];
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				fetchCount++;
+				const currentCount = fetchCount;
+				const signal = init?.signal as AbortSignal | undefined;
+				if (currentCount === 1) {
+					return new Promise<Response>((_resolve, reject) => {
+						signal?.addEventListener("abort", () => {
+							abortedRequests.push(currentCount);
+							reject(
+								new DOMException("The operation was aborted.", "AbortError"),
+							);
+						});
+					});
+				}
+				return new Response(JSON.stringify({ ok: true }));
+			},
+		});
+
+		const $signal = atom(false);
+		const query = useAuthQuery<{ ok: boolean }>($signal, "/test", $fetch, {
+			method: "GET",
+		});
+		const unsubscribe = query.listen(() => {});
+
+		// Mount fetch starts (fetch #1)
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+
+		// Trigger refetch with cancelInFlight: true
+		void query.value.refetch(undefined, { cancelInFlight: true });
+		await vi.advanceTimersByTimeAsync(0);
+
+		// Fetch #1 should have been aborted
+		expect(abortedRequests).toContain(1);
+		expect(fetchCount).toBe(2);
+
+		await vi.runAllTimersAsync();
+		expect(query.value.data).toEqual({ ok: true });
+		expect(query.value.isRefetching).toBe(false);
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should provide independent timeout deadline for session refresh POST request", async () => {
+		let getCount = 0;
+		let postCount = 0;
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				const method = (init?.method ?? "GET").toUpperCase();
+				const signal = init?.signal as AbortSignal | undefined;
+				if (method === "GET") {
+					getCount++;
+					// GET takes 8 seconds (less than 10s timeout)
+					return new Promise<Response>((resolve, reject) => {
+						const timer = setTimeout(() => {
+							resolve(
+								new Response(
+									JSON.stringify({
+										session: { id: "s1" },
+										user: { id: "u1" },
+										needsRefresh: true,
+									}),
+								),
+							);
+						}, 8000);
+						signal?.addEventListener("abort", () => {
+							clearTimeout(timer);
+							reject(
+								new DOMException("The operation was aborted.", "AbortError"),
+							);
+						});
+					});
+				}
+				postCount++;
+				// POST refresh takes 5 seconds (total elapsed = 13s > 10s single timer)
+				return new Promise<Response>((resolve, reject) => {
+					const timer = setTimeout(() => {
+						resolve(
+							new Response(
+								JSON.stringify({
+									session: { id: "s1-refreshed" },
+									user: { id: "u1" },
+								}),
+							),
+						);
+					}, 5000);
+					signal?.addEventListener("abort", () => {
+						clearTimeout(timer);
+						reject(
+							new DOMException("The operation was aborted.", "AbortError"),
+						);
+					});
+				});
+			},
+		});
+
+		const { session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+
+		// Mount fetch starts
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getCount).toBe(1);
+
+		// Advance 8s for GET to finish and trigger POST refresh
+		await vi.advanceTimersByTimeAsync(8000);
+		expect(postCount).toBe(1);
+
+		// Advance another 5s for POST refresh to complete (total 13s)
+		await vi.advanceTimersByTimeAsync(5000);
+		await vi.runAllTimersAsync();
+
+		expect(session.value.data?.session.id).toBe("s1-refreshed");
+		expect(session.value.isRefetching).toBe(false);
+		expect(session.value.error).toBeNull();
+
+		unsubscribe();
+	});
 });

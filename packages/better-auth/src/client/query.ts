@@ -52,19 +52,18 @@ export const useAuthQuery = <T>(
 		  )
 		| undefined,
 ) => {
-	const value: AuthQueryAtom<T> = createAuthQueryAtom<AuthQueryState<T>>({
-		data: null,
-		error: null,
-		isPending: true,
-		isRefetching: false,
-		refetch: (queryParams) => fn(queryParams),
-	});
-	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
+	let activeAbortController: AbortController | undefined;
 	let latestRequestId = 0;
 
 	const fn = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,
+		fetchOpts?: { cancelInFlight?: boolean } | undefined,
 	) => {
+		if (fetchOpts?.cancelInFlight === true) {
+			activeAbortController?.abort();
+		}
+		const controller = new AbortController();
+		activeAbortController = controller;
 		const requestId = ++latestRequestId;
 		return new Promise<void>((resolve) => {
 			const opts =
@@ -76,12 +75,25 @@ export const useAuthQuery = <T>(
 						})
 					: options;
 
+			if (opts?.signal) {
+				if (opts.signal.aborted) {
+					controller.abort(opts.signal.reason);
+				} else {
+					opts.signal.addEventListener(
+						"abort",
+						() => controller.abort(opts.signal?.reason),
+						{ once: true },
+					);
+				}
+			}
+
 			$fetch<T>(path, {
 				...opts,
 				query: {
 					...opts?.query,
 					...queryParams?.query,
 				},
+				signal: controller.signal,
 				async onSuccess(context) {
 					if (requestId === latestRequestId) {
 						const current = value.get();
@@ -148,10 +160,22 @@ export const useAuthQuery = <T>(
 					});
 				})
 				.finally(() => {
+					if (activeAbortController === controller) {
+						activeAbortController = undefined;
+					}
 					resolve(void 0);
 				});
 		});
 	};
+
+	const value: AuthQueryAtom<T> = createAuthQueryAtom<AuthQueryState<T>>({
+		data: null,
+		error: null,
+		isPending: true,
+		isRefetching: false,
+		refetch: (queryParams, fetchOpts) => fn(queryParams, fetchOpts),
+	});
+	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
