@@ -89,10 +89,12 @@ function isClientSecretTokenEndpointAuth(
 async function fetchDiscovery(
 	url: string,
 	headers?: Record<string, string>,
+	signal?: AbortSignal,
 ): Promise<DiscoveryDocument | null> {
 	const result = await betterFetch<DiscoveryDocument>(url, {
 		method: "GET",
 		headers,
+		signal,
 	});
 	if (result.error || !result.data) {
 		return null;
@@ -211,61 +213,177 @@ export const genericOAuth = <const ID extends string>(
 				let isOidc = false;
 				let idTokenConfig: OAuthIdTokenConfig | undefined;
 
-				if (c.discoveryUrl) {
+				/**
+				 * Reason the latest discovery attempt left the provider unusable.
+				 * Surfaced when a request arrives while discovery is still pending.
+				 */
+				let discoveryFailure: string | null = null;
+
+				/**
+				 * complete: a fetched discovery document was applied and the
+				 * provider carries its full OIDC metadata. degraded: the fetch
+				 * failed but explicit endpoints keep the provider usable; the
+				 * metadata (issuer, JWKS, OIDC scope) is still missing, so
+				 * discovery keeps retrying on use. failed: the provider is
+				 * unusable; calls fail with 503 and discovery keeps retrying.
+				 */
+				type DiscoveryOutcome = "complete" | "degraded" | "failed";
+				let discoveryComplete = !c.discoveryUrl;
+				let discoveryInflight: Promise<DiscoveryOutcome> | null = null;
+
+				// Explicit configuration, captured before discovery mutates
+				// anything. Each attempt starts from these values, so a retry
+				// never mixes endpoints from two different discovery documents.
+				const explicitAuthorizationUrl = authorizationUrl;
+				const explicitTokenUrl = tokenUrl;
+				const explicitUserInfoUrl = userInfoUrl;
+				const explicitEndSessionEndpoint = endSessionEndpoint;
+
+				/**
+				 * Fetch the discovery document and apply it on top of the explicit
+				 * configuration. Values are committed only when a fetched
+				 * document leaves the provider usable, so a failed attempt never
+				 * half-applies a document. When the fetch fails but explicit
+				 * endpoints are configured, the provider stays usable on those
+				 * endpoints (as it did before lazy discovery existed) but
+				 * reports "degraded", so discovery keeps retrying until the
+				 * metadata self-heals.
+				 */
+				const resolveDiscovery = async (): Promise<DiscoveryOutcome> => {
+					if (!c.discoveryUrl) {
+						return "complete";
+					}
 					const discovered = await fetchDiscovery(
 						c.discoveryUrl,
 						c.discoveryHeaders,
+						// A stalled IdP must not hang sign-in: discovery is retried
+						// on use, so every attempt runs under a timeout.
+						AbortSignal.timeout(c.discoveryTimeout ?? 5000),
 					).catch((err) => {
 						ctx.logger.error(
 							`Discovery fetch failed for "${c.providerId}": ${err}`,
 						);
 						return null;
 					});
+					let nextAuthorizationUrl = explicitAuthorizationUrl;
+					let nextTokenUrl = explicitTokenUrl;
+					let nextUserInfoUrl = explicitUserInfoUrl;
+					let nextEndSessionEndpoint = explicitEndSessionEndpoint;
+					let nextIssuer: string | undefined;
+					let nextIsOidc = false;
+					let nextIdTokenConfig: OAuthIdTokenConfig | undefined;
 					if (discovered) {
-						authorizationUrl ??= discovered.authorization_endpoint;
-						tokenUrl ??= discovered.token_endpoint;
-						userInfoUrl ??= discovered.userinfo_endpoint;
-						endSessionEndpoint ??= discovered.end_session_endpoint;
-						issuer = discovered.issuer;
+						nextAuthorizationUrl ??= discovered.authorization_endpoint;
+						nextTokenUrl ??= discovered.token_endpoint;
+						nextUserInfoUrl ??= discovered.userinfo_endpoint;
+						nextEndSessionEndpoint ??= discovered.end_session_endpoint;
+						nextIssuer = discovered.issuer;
 						const signingAlgs =
 							discovered.id_token_signing_alg_values_supported;
-						isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
+						nextIsOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
 						if (discovered.jwks_uri && discovered.issuer) {
 							let jwksUrl: URL;
 							try {
 								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
 							} catch {
-								ctx.logger.error(
-									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document. Provider skipped.`,
-								);
-								continue;
+								discoveryFailure = `invalid jwks_uri "${discovered.jwks_uri}" in discovery document`;
+								return "failed";
 							}
-							idTokenConfig = {
+							nextIdTokenConfig = {
 								jwks: createRemoteJWKSet(jwksUrl),
 								issuer: discovered.issuer,
 								audience: c.clientId,
-								algorithms: isOidc ? signingAlgs : undefined,
+								algorithms: nextIsOidc ? signingAlgs : undefined,
 							};
 						}
 					}
-					if (!authorizationUrl || (!tokenUrl && !c.getToken)) {
-						ctx.logger.error(
-							`Provider "${c.providerId}": discovery left no usable authorization endpoint or token exchange. Provider skipped.`,
+					if (!nextAuthorizationUrl || (!nextTokenUrl && !c.getToken)) {
+						discoveryFailure = discovered
+							? "discovery left no usable authorization endpoint or token exchange"
+							: "the discovery document could not be fetched";
+						return "failed";
+					}
+					if (c.requireIdTokenVerification && !nextIdTokenConfig) {
+						discoveryFailure =
+							"requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri";
+						return "failed";
+					}
+					if (!discovered) {
+						// Explicit endpoints keep the provider usable, but the
+						// discovery metadata is still missing. Report "degraded"
+						// instead of resolving: a later call retries and self-heals
+						// the metadata once the IdP is reachable again.
+						discoveryFailure = "the discovery document could not be fetched";
+						return "degraded";
+					}
+					authorizationUrl = nextAuthorizationUrl;
+					tokenUrl = nextTokenUrl;
+					userInfoUrl = nextUserInfoUrl;
+					endSessionEndpoint = nextEndSessionEndpoint;
+					issuer = nextIssuer;
+					isOidc = nextIsOidc;
+					idTokenConfig = nextIdTokenConfig;
+					discoveryFailure = null;
+					return "complete";
+				};
+
+				if (c.discoveryUrl) {
+					const outcome = await resolveDiscovery();
+					discoveryComplete = outcome === "complete";
+					if (outcome === "failed") {
+						ctx.logger.warn(
+							`Provider "${c.providerId}": ${discoveryFailure}. Provider registered and discovery will be retried on first use.`,
 						);
-						continue;
+					} else if (outcome === "degraded") {
+						ctx.logger.warn(
+							`Provider "${c.providerId}": ${discoveryFailure}. Provider registered with its explicit endpoints; discovery metadata will be retried on use.`,
+						);
 					}
 				}
-				if (c.requireIdTokenVerification && !idTokenConfig) {
-					if (c.discoveryUrl) {
-						ctx.logger.error(
-							`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri. Provider skipped.`,
-						);
-						continue;
-					}
+				if (c.requireIdTokenVerification && !idTokenConfig && !c.discoveryUrl) {
 					throw new Error(
 						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
 					);
 				}
+
+				/**
+				 * Retry discovery for a provider whose startup discovery did not
+				 * complete. Concurrent callers share a single in-flight attempt.
+				 * A degraded provider (explicit endpoints, metadata missing)
+				 * stays usable while the retry repeats; a failed provider
+				 * throws 503.
+				 */
+				const ensureDiscovery = async (): Promise<void> => {
+					if (discoveryComplete) {
+						return;
+					}
+					discoveryInflight ??= resolveDiscovery()
+						.then((outcome) => {
+							if (outcome === "complete") {
+								discoveryComplete = true;
+								// Publish the late-resolved OIDC metadata on the provider;
+								// these were captured by value at construction time.
+								provider.issuer = issuer;
+								provider.idToken = idTokenConfig;
+								// Only relaxes nonce binding (when the provider turns out
+								// not to be OIDC); it never turns on late, because core
+								// already minted the nonce before this retry ran.
+								provider.requiresIdTokenNonce =
+									idTokenConfig !== undefined &&
+									c.disableIdTokenNonceBinding !== true;
+							}
+							return outcome;
+						})
+						.finally(() => {
+							discoveryInflight = null;
+						});
+					if ((await discoveryInflight) === "failed") {
+						throw APIError.from("SERVICE_UNAVAILABLE", {
+							code: GENERIC_OAUTH_ERROR_CODES.OAUTH_PROVIDER_UNAVAILABLE.code,
+							message: `Provider "${c.providerId}" is temporarily unavailable: ${discoveryFailure ?? "discovery has not succeeded yet"}.`,
+						});
+					}
+				};
 
 				const tokenEndpointAuth = c.tokenEndpointAuth;
 				if (
@@ -308,14 +426,39 @@ export const genericOAuth = <const ID extends string>(
 						if (accountSubject) {
 							return accountSubject({ tokens, profile: genericProfile });
 						}
-						return isOidc
-							? (genericProfile.sub ?? "")
-							: (genericProfile.id ?? "");
+						if (isOidc) {
+							return genericProfile.sub ?? "";
+						}
+						// Only while discovery is still incomplete can a heal
+						// flip the provider to OIDC later. Pin identity to what
+						// the healed provider will use: `sub` whenever the
+						// profile carries it (a discovery-serving provider is
+						// OIDC-intended), `id` otherwise. Once discovery has
+						// completed, the rule is exactly what it was before lazy
+						// discovery existed, so existing account keys never move.
+						if (c.discoveryUrl && !discoveryComplete) {
+							// While discovery is incomplete the eventual identity
+							// rule is unknowable: a provider that heals as OIDC
+							// keys `sub`, one that recovers as non-OIDC keys `id`.
+							// No static choice satisfies both for a profile that
+							// carries distinct `id` and `sub` values; preferring
+							// `sub` matches the OIDC intent of a discovery-serving
+							// provider and can only drift when discovery later
+							// completes as non-OIDC with a dual-field profile.
+							return genericProfile.sub ?? genericProfile.id ?? "";
+						}
+						return genericProfile.id ?? "";
 					},
 					idToken: idTokenConfig,
+					// Mint the nonce whenever a pending discovery could still turn
+					// nonce binding on: core mints the nonce before calling
+					// createAuthorizationURL, so binding must already be on here.
+					// Once discovery resolves, binding only ever relaxes (see
+					// ensureDiscovery), so a state minted with a nonce never fails
+					// its callback for wanting one.
 					requiresIdTokenNonce:
-						idTokenConfig !== undefined &&
-						c.disableIdTokenNonceBinding !== true,
+						c.disableIdTokenNonceBinding !== true &&
+						(idTokenConfig !== undefined || !discoveryComplete),
 					allowIdpInitiated: c.allowIdpInitiated,
 					async createEndSessionURL(data: {
 						idToken?: string | null | undefined;
@@ -323,6 +466,11 @@ export const genericOAuth = <const ID extends string>(
 						state?: string | undefined;
 					}) {
 						if (c.disableProviderLogout) {
+							return null;
+						}
+						try {
+							await ensureDiscovery();
+						} catch {
 							return null;
 						}
 						if (!endSessionEndpoint) {
@@ -356,7 +504,8 @@ export const genericOAuth = <const ID extends string>(
 						}
 						return url;
 					},
-					createAuthorizationURL(data) {
+					async createAuthorizationURL(data) {
+						await ensureDiscovery();
 						if (!authorizationUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
@@ -394,6 +543,7 @@ export const genericOAuth = <const ID extends string>(
 						});
 					},
 					async validateAuthorizationCode(data) {
+						await ensureDiscovery();
 						if (c.getToken) {
 							return applyDefaultAccessTokenExpiry(
 								await c.getToken(data),
@@ -427,6 +577,7 @@ export const genericOAuth = <const ID extends string>(
 						);
 					},
 					async getUserInfo(tokens) {
+						await ensureDiscovery();
 						const { expectedIdTokenNonce, ...oauthTokens } = tokens;
 						// Fail closed: when discovery published a JWKS, an id_token
 						// that cannot be verified must not become an identity source.
@@ -471,6 +622,7 @@ export const genericOAuth = <const ID extends string>(
 						refreshToken: string,
 						refreshCtx?: OAuthRefreshContext,
 					): Promise<OAuth2Tokens> {
+						await ensureDiscovery();
 						if (!tokenUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",

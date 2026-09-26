@@ -5,7 +5,7 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateKeyPair, SignJWT } from "jose";
-import { HttpResponse, http } from "msw";
+import { HttpResponse, http, passthrough } from "msw";
 import { setupServer } from "msw/node";
 import type {
 	MutableResponse,
@@ -3092,7 +3092,7 @@ describe("oauth2", async () => {
 			expect(msConfig.disableImplicitSignUp).toBe(true);
 		});
 
-		it("skips the Microsoft provider when discovery is unavailable", async () => {
+		it("keeps the Microsoft provider registered when discovery is unavailable and retries on use", async () => {
 			mswServer.use(
 				http.get(
 					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
@@ -3117,8 +3117,15 @@ describe("oauth2", async () => {
 			);
 
 			const ctx = await auth.$context;
-			expect(ctx.socialProviders.map((provider) => provider.id)).not.toContain(
+			expect(ctx.socialProviders.map((provider) => provider.id)).toContain(
 				"microsoft-entra-id",
+			);
+			await expect(
+				auth.api.signInSocial({
+					body: { provider: "microsoft-entra-id", callbackURL: "/" },
+				}),
+			).rejects.toThrow(
+				'Provider "microsoft-entra-id" is temporarily unavailable',
 			);
 		});
 
@@ -5186,7 +5193,7 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("skips a provider when required ID token verification metadata is unavailable", async () => {
+		it("keeps a provider registered when required ID token verification metadata is unavailable and retries on use", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5224,7 +5231,17 @@ describe("oauth2", async () => {
 				const context = await auth.$context;
 				expect(
 					context.socialProviders.map((provider) => provider.id),
-				).not.toContain("verified-id-token-required");
+				).toContain("verified-id-token-required");
+				await expect(
+					auth.api.signInSocial({
+						body: {
+							provider: "verified-id-token-required",
+							callbackURL: "/",
+						},
+					}),
+				).rejects.toThrow(
+					'Provider "verified-id-token-required" is temporarily unavailable',
+				);
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((error) => (error ? reject(error) : resolve())),
@@ -5232,7 +5249,7 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("skips a provider when discovery returns a malformed jwks_uri", async () => {
+		it("keeps a provider registered when discovery returns a malformed jwks_uri and retries on use", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -5270,7 +5287,14 @@ describe("oauth2", async () => {
 				const context = await auth.$context;
 				expect(
 					context.socialProviders.map((provider) => provider.id),
-				).not.toContain("malformed-jwks");
+				).toContain("malformed-jwks");
+				await expect(
+					auth.api.signInSocial({
+						body: { provider: "malformed-jwks", callbackURL: "/" },
+					}),
+				).rejects.toThrow(
+					'Provider "malformed-jwks" is temporarily unavailable',
+				);
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
@@ -5280,31 +5304,31 @@ describe("oauth2", async () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 * @see https://github.com/better-auth/better-auth/issues/11404
 	 */
 	it.each([
 		"authorization",
 		"token",
 		"both",
-	])("skips discovery missing %s endpoints", async (missing) => {
+	])("keeps a provider whose discovery misses %s endpoints registered and retries discovery on use", async (missing) => {
 		const discoveryUrl =
 			"https://incomplete-idp.test/.well-known/openid-configuration";
 		mswServer.use(
 			http.get(discoveryUrl, () =>
 				HttpResponse.json({
-					issuer: "https://incomplete-idp.test",
+					issuer: `http://localhost:${port}`,
 					...(missing === "token"
 						? {
-								authorization_endpoint: "https://incomplete-idp.test/authorize",
+								authorization_endpoint: `http://localhost:${port}/authorize`,
 							}
 						: {}),
 					...(missing === "authorization"
-						? { token_endpoint: "https://incomplete-idp.test/token" }
+						? { token_endpoint: `http://localhost:${port}/token` }
 						: {}),
 				}),
 			),
 		);
-		const { auth } = await getTestInstance(
+		const { auth, customFetchImpl } = await getTestInstance(
 			{
 				plugins: [
 					genericOAuth({
@@ -5323,7 +5347,34 @@ describe("oauth2", async () => {
 		);
 		expect(
 			(await auth.$context).socialProviders.map((provider) => provider.id),
-		).not.toContain("incomplete");
+		).toContain("incomplete");
+		await expect(
+			auth.api.signInSocial({
+				body: { provider: "incomplete", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "incomplete" is temporarily unavailable');
+
+		// Once the IdP publishes a complete document, the next sign-in succeeds.
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: `http://localhost:${port}`,
+					authorization_endpoint: `http://localhost:${port}/authorize`,
+					token_endpoint: `http://localhost:${port}/token`,
+					userinfo_endpoint: `http://localhost:${port}/userinfo`,
+					jwks_uri: `http://localhost:${port}/jwks`,
+				}),
+			),
+		);
+		const localClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const signInRes = await localClient.signIn.social({
+			provider: "incomplete",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
 	});
 
 	it.each([
@@ -5401,7 +5452,16 @@ describe("oauth2", async () => {
 		const ctx = await auth.$context;
 		const providerIds = ctx.socialProviders.map((provider) => provider.id);
 		expect(providerIds).toContain("healthy-idp");
-		expect(providerIds).not.toContain("broken-idp");
+		expect(providerIds).toContain("broken-idp");
+
+		// The unreachable provider stays registered and reports itself as
+		// unavailable instead of disappearing; discovery is retried on the
+		// next sign-in attempt.
+		await expect(
+			auth.api.signInSocial({
+				body: { provider: "broken-idp", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "broken-idp" is temporarily unavailable');
 
 		const signUp = await auth.api.signUpEmail({
 			body: {
@@ -5411,6 +5471,448 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(signUp.token).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11404
+	 */
+	it("recovers a provider whose startup discovery was unreachable once the IdP is reachable", async () => {
+		const discoveryUrl =
+			"https://flaky-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () => new HttpResponse(null, { status: 503 })),
+		);
+		const { auth, customFetchImpl } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "flaky-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).toContain("flaky-idp");
+		await expect(
+			auth.api.signInSocial({
+				body: { provider: "flaky-idp", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "flaky-idp" is temporarily unavailable');
+
+		// The IdP comes back; the next sign-in rediscovers it and works.
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: `http://localhost:${port}`,
+					authorization_endpoint: `http://localhost:${port}/authorize`,
+					token_endpoint: `http://localhost:${port}/token`,
+					userinfo_endpoint: `http://localhost:${port}/userinfo`,
+					jwks_uri: `http://localhost:${port}/jwks`,
+				}),
+			),
+		);
+		const localClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const signInRes = await localClient.signIn.social({
+			provider: "flaky-idp",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(signInRes.data?.url).toContain(`http://localhost:${port}/authorize`);
+	});
+
+	/**
+	 * Explicit endpoints keep the provider usable when discovery is
+	 * unreachable, as it behaved before lazy discovery retries.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("keeps explicit endpoints usable when discovery is unreachable", async () => {
+		const discoveryUrl =
+			"https://down-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () => new HttpResponse(null, { status: 503 })),
+		);
+		const { customFetchImpl: explicitFetch } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "explicit-fallback",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: explicitFetch },
+		});
+		const res = await client.signIn.social({
+			provider: "explicit-fallback",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+	});
+
+	/**
+	 * An explicit-endpoint provider whose discovery fetch fails stays usable
+	 * but keeps retrying, so the OIDC metadata self-heals once the IdP is
+	 * reachable again.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("recovers discovery metadata for an explicit-endpoint provider once the IdP is reachable", async () => {
+		let idpDown = true;
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () => {
+				if (idpDown) {
+					return new HttpResponse(null, { status: 503 });
+				}
+				return passthrough();
+			}),
+		);
+		const { customFetchImpl: healFetch } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "explicit-heals",
+							clientId,
+							clientSecret,
+							discoveryUrl,
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+						},
+					],
+				}),
+			],
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: healFetch },
+		});
+		const first = await client.signIn.social({
+			provider: "explicit-heals",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		// Degraded: usable on the explicit endpoints, without OIDC metadata.
+		expect(first.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(
+			new URL(first.data?.url || "").searchParams.get("scope") ?? "",
+		).not.toContain("openid");
+
+		// The IdP recovers; the next sign-in completes discovery and the full
+		// flow verifies the id_token against the discovered JWKS.
+		idpDown = false;
+		const headers = new Headers();
+		const res = await client.signIn.social({
+			provider: "explicit-heals",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const healedUrl = new URL(res.data?.url || "");
+		expect(healedUrl.searchParams.get("scope") ?? "").toContain("openid");
+		expect(healedUrl.searchParams.get("nonce")).toBeTruthy();
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			healFetch,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+		const session = await client.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("oauth2@test.com");
+	});
+
+	/**
+	 * Account identity must not depend on whether discovery completed before
+	 * or after a sign-in: a healed provider resolves the same account.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("keeps account identity stable when discovery completes after accounts exist", async () => {
+		let idpDown = true;
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () => {
+				if (idpDown) {
+					return new HttpResponse(null, { status: 503 });
+				}
+				return passthrough();
+			}),
+		);
+		const { auth: stableAuth, customFetchImpl: stableFetch } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "identity-stability",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+								userInfoUrl: `http://localhost:${port}/userinfo`,
+							},
+						],
+					}),
+				],
+			});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: stableFetch },
+		});
+
+		// First sign-in while discovery is down (degraded explicit endpoints).
+		const firstHeaders = new Headers();
+		const first = await client.signIn.social({
+			provider: "identity-stability",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
+		});
+		const firstFlow = await simulateOAuthFlow(
+			first.data?.url || "",
+			firstHeaders,
+			stableFetch,
+		);
+		expect(firstFlow.callbackURL).toBe("http://localhost:3000/dashboard");
+		const firstSession = await client.getSession({
+			fetchOptions: { headers: firstFlow.headers },
+		});
+		const userId = firstSession.data?.user.id!;
+
+		// Discovery heals; the second sign-in must resolve the same account.
+		idpDown = false;
+		const secondHeaders = new Headers();
+		const second = await client.signIn.social({
+			provider: "identity-stability",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
+		});
+		const secondFlow = await simulateOAuthFlow(
+			second.data?.url || "",
+			secondHeaders,
+			stableFetch,
+		);
+		expect(secondFlow.callbackURL).toBe("http://localhost:3000/dashboard");
+		const secondSession = await client.getSession({
+			fetchOptions: { headers: secondFlow.headers },
+		});
+		expect(secondSession.data?.user.id).toBe(userId);
+
+		const stableCtx = await stableAuth.$context;
+		const accounts = (
+			await stableCtx.internalAdapter.findAccounts(userId)
+		).filter((account) => account.providerId === "identity-stability");
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "identity-stability",
+			accountId: "oauth2",
+		});
+	});
+
+	/**
+	 * Once discovery has completed, the identity rule is exactly what it was
+	 * before lazy discovery retries: a non-OIDC provider (no advertised
+	 * signing algorithms) stays keyed on the profile `id`, so existing
+	 * account keys never move even when the profile also carries a `sub`.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("keeps id-based identity for a provider whose discovery completes without OIDC signing algorithms", async () => {
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: `http://localhost:${port}`,
+					authorization_endpoint: `http://localhost:${port}/authorize`,
+					token_endpoint: `http://localhost:${port}/token`,
+					userinfo_endpoint: `http://localhost:${port}/userinfo`,
+				}),
+			),
+		);
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "legacy-id@test.com",
+				name: "Legacy Id User",
+				sub: "oidc-sub-1",
+				id: "legacy-id-1",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		const { auth: legacyAuth, customFetchImpl: legacyFetch } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "completed-non-oidc",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+							},
+						],
+					}),
+				],
+			});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: legacyFetch },
+		});
+		const headers = new Headers();
+		const res = await client.signIn.social({
+			provider: "completed-non-oidc",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			legacyFetch,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+		const session = await client.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		const legacyCtx = await legacyAuth.$context;
+		const accounts = (
+			await legacyCtx.internalAdapter.findAccounts(session.data?.user.id!)
+		).filter((account) => account.providerId === "completed-non-oidc");
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({ accountId: "legacy-id-1" });
+	});
+
+	/**
+	 * A stalled discovery fetch must not hang sign-in while the explicit
+	 * endpoint fallback is available.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("falls back to explicit endpoints when the discovery fetch stalls", async () => {
+		const discoveryUrl =
+			"https://stalled-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () => new Promise<Response>(() => {})),
+		);
+		const { customFetchImpl: stalledFetch } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "stalled-discovery",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								discoveryTimeout: 100,
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: stalledFetch },
+		});
+		const res = await client.signIn.social({
+			provider: "stalled-discovery",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+	});
+
+	/**
+	 * Core mints the id_token nonce before calling createAuthorizationURL, so
+	 * nonce binding must already be on while discovery is pending. Otherwise
+	 * the first sign-in that heals a failed startup discovery would mint no
+	 * nonce and its callback would fail the binding check.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("mints a nonce when startup discovery failed and the retry succeeds at sign-in", async () => {
+		let idpDown = true;
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () => {
+				if (idpDown) {
+					return new HttpResponse(null, { status: 503 });
+				}
+				return passthrough();
+			}),
+		);
+		const { auth: recoveryAuth, customFetchImpl: recoveryFetch } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "recovering-nonce",
+								discoveryUrl,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+		expect(
+			(await recoveryAuth.$context).socialProviders.map((p) => p.id),
+		).toContain("recovering-nonce");
+		await expect(
+			recoveryAuth.api.signInSocial({
+				body: { provider: "recovering-nonce", callbackURL: "/" },
+			}),
+		).rejects.toThrow('Provider "recovering-nonce" is temporarily unavailable');
+
+		// The IdP recovers; the next sign-in triggers the retry.
+		idpDown = false;
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: recoveryFetch },
+		});
+		const headers = new Headers();
+		const res = await client.signIn.social({
+			provider: "recovering-nonce",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		expect(new URL(res.data?.url || "").searchParams.get("nonce")).toBeTruthy();
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			recoveryFetch,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+		const session = await client.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("oauth2@test.com");
 	});
 });
 

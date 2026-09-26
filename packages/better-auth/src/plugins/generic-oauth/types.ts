@@ -54,6 +54,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	discoveryUrl?: string | undefined;
 	/**
+	 * Milliseconds before a discovery fetch is aborted. A stalled identity
+	 * provider must not hang sign-in while discovery is retried on use.
+	 *
+	 * @default 5000
+	 */
+	discoveryTimeout?: number | undefined;
+	/**
 	 * Require discovery to provide the issuer and JWKS metadata needed to verify
 	 * ID tokens before this provider is registered.
 	 *
