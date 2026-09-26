@@ -7,7 +7,7 @@ import { getJwks } from "better-auth/oauth2";
 import { resolveSigningKey, signJWT } from "better-auth/plugins";
 import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
-import type { JWTPayload } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
 import type { OAuthRedirectResult } from "./authorize";
 import { getIssuer, handleRedirect } from "./authorize";
@@ -696,11 +696,21 @@ async function verifyLogoutHint(
 				new TextDecoder().decode(verifiedPayload),
 			) as JWTPayload;
 		} else {
-			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-			const jwksUrl =
-				jwtPluginOptions?.jwks?.remoteUrl ??
-				`${ctx.context.baseURL}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`;
-			const jwks = await getJwks(hint, { jwksFetch: jwksUrl });
+			const jwtPlugin = getJwtPlugin(ctx.context);
+			const jwtPluginOptions = jwtPlugin?.options;
+			const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
+				? jwtPluginOptions.jwks.remoteUrl
+				: async (): Promise<JSONWebKeySet | undefined> => {
+						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+						// @ts-expect-error response is a JSONWebKeySet but within the response field
+						return jwksRes?.response as JSONWebKeySet | undefined;
+					};
+			const jwks = await getJwks(hint, {
+				jwksFetch,
+				// The plugin instance is stable across requests, so the key set
+				// fetched by the per-request closure above is cached under it.
+				jwksCacheKey: jwtPlugin,
+			});
 			const { payload: verifiedPayload } = await compactVerify(
 				hint,
 				createLocalJWKSet(jwks),
