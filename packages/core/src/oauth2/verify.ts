@@ -64,10 +64,40 @@ type ResolvedJwks = {
 export const jwksCache = new Map<string, JwksCacheEntry>();
 
 /**
- * Cache for function jwks sources, keyed by a caller-provided stable object.
- * Entries are released with their key, so per-request keys cannot accumulate.
+ * Cache for function jwks sources, keyed by a caller-provided stable object and
+ * then by the issuer the entry was fetched for. A `jwksCacheKey` identifies the
+ * source, not the issuer it was trusted for, so the issuer is part of the entry
+ * key: one key object shared by two issuers keeps one entry per issuer instead
+ * of one entry per key. Entries are released with their key object, so
+ * per-request keys cannot accumulate.
  */
-const functionJwksCache = new WeakMap<object, JwksCacheEntry>();
+const functionJwksCache = new WeakMap<object, Map<string, JwksCacheEntry>>();
+
+/** Reserved inner key for callers that configure no issuer, e.g. `getJwks`. */
+const JWKS_NO_ISSUER_SLOT = "0";
+/** Prefix for every issuer-derived inner key, so it cannot be that reserved key. */
+const JWKS_ISSUER_SLOT_PREFIX = "1";
+
+/**
+ * Resolves the inner cache key for a trusted issuer set.
+ *
+ * `JSON.stringify` is one-to-one over an array of strings, so two issuer sets
+ * share an inner key only when they are the same trust set, whatever
+ * characters an issuer contains, and the `JWKS_ISSUER_SLOT_PREFIX` prefix keeps
+ * every issuer slot distinct from the reserved `JWKS_NO_ISSUER_SLOT`.
+ * `getJwks` callers configure no issuer and get that reserved slot, so they
+ * keep one entry per `jwksCacheKey` exactly as before.
+ */
+function getJwksIssuerSlot(issuer: string | string[] | undefined) {
+	if (issuer === undefined) return JWKS_NO_ISSUER_SLOT;
+	// jose accepts a list, and its order is not part of the trust set, so
+	// `["a","b"]`, `["b","a"]` and `["a","a","b"]` are one slot. Sorting is
+	// therefore still required: `JSON.stringify` preserves array order, so
+	// without it two orderings of one trust set would take two entries. The
+	// copy keeps the caller's array order untouched.
+	const issuers = Array.isArray(issuer) ? [...new Set(issuer)] : [issuer];
+	return JWKS_ISSUER_SLOT_PREFIX + JSON.stringify(issuers.sort());
+}
 
 /**
  * How long a cached JWKS is trusted before it is refetched
@@ -174,8 +204,46 @@ export interface VerifyAccessTokenOptions {
 		requiredScope: string,
 		grantedScopes: ReadonlySet<string>,
 	) => boolean;
-	/** Required to verify access token locally */
-	jwksUrl?: string;
+	/**
+	 * Required to verify access token locally. Either a JWKS url, or an
+	 * in-process resolver for the issuer's key set. Prefer the function form
+	 * when the resource server already holds the key set in process, so
+	 * verification does not need a network round trip back to the issuer.
+	 *
+	 * A function source runs inside the caller's process, so its failures are
+	 * the resolver's own. A falsy return reaches the caller as `Error: No jwks
+	 * found`, and any other non-jose throw propagates the resolver's own error.
+	 * A jose error a resolver throws is the exception: it is reported as a token
+	 * failure instead, an invalid access token or a `token expired`, exactly as
+	 * if the token itself had failed, except the JWKS infrastructure errors,
+	 * which mean the key set could not be obtained and propagate. Two error
+	 * names are exempt from both: `TypeError` and `JWSInvalid` are read as
+	 * "likely an opaque token" and swallowed rather than surfaced, so
+	 * verification falls through to `remoteVerify` when one is configured.
+	 * Return the key set or throw, and do not let a resolver throw `TypeError`
+	 * or produce a `JWSInvalid` for an expected condition. With no
+	 * `remoteVerify` configured there is no fallthrough, so they still fail
+	 * closed, as a 401.
+	 */
+	jwksUrl?: JwksFetchOptions["jwksFetch"];
+	/**
+	 * Stable object to cache the result of a function `jwksUrl` under, with the
+	 * same TTL and kid-miss refetch rules as string sources. Without it, a
+	 * function source is read on every verification. Ignored for string
+	 * sources, which are cached by url.
+	 *
+	 * One key object may be shared by verifications for different issuers and
+	 * audiences: the cache keeps an entry per key object *and* per verified
+	 * issuer, so sharing a key costs one entry per issuer instead of letting
+	 * one issuer's key material stand in for another's. Keep the object
+	 * module-scoped so it survives between requests, and per source, so a
+	 * function source is not read on every verification. A verification that
+	 * trusts a *list* of issuers has one entry for that list, so a `kid`
+	 * published by two of the same list's issuers still matches whichever of
+	 * their sets is cached; configure one `issuer` per verification to keep them
+	 * apart.
+	 */
+	jwksCacheKey?: JwksFetchOptions["jwksCacheKey"];
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
 }
@@ -240,8 +308,12 @@ export async function verifyJwsAccessToken(
 			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 	},
 ) {
+	// A function source is cached under the caller's key object, so the issuer
+	// the key set is trusted for is threaded down to scope that entry: it is the
+	// verifying key, not the `iss`/`aud` claim, that binds a token to an issuer.
+	const jwksOpts = { ...opts, issuer: opts.verifyOptions.issuer };
 	try {
-		const resolved = await getJwksForVerification(token, opts);
+		const resolved = await getJwksForVerification(token, jwksOpts);
 		let jwt: JWTVerifyResult<JWTPayload>;
 		try {
 			jwt = await jwtVerify<JWTPayload>(
@@ -252,7 +324,7 @@ export async function verifyJwsAccessToken(
 		} catch (error) {
 			if (shouldRefetchCachedJwksWithoutKid(error, resolved)) {
 				const refreshed = await getJwksForVerification(token, {
-					...opts,
+					...jwksOpts,
 					forceRefresh: true,
 				});
 				jwt = await jwtVerify<JWTPayload>(
@@ -282,7 +354,16 @@ export async function getJwks(token: string, opts: JwksFetchOptions) {
 
 async function getJwksForVerification(
 	token: string,
-	opts: JwksFetchOptions & { forceRefresh?: boolean },
+	opts: JwksFetchOptions & {
+		forceRefresh?: boolean;
+		/**
+		 * Issuer set the key set is trusted for, used to scope the
+		 * function-source cache so a shared `jwksCacheKey` cannot hand one
+		 * issuer's key material to another. Absent for callers that verify no
+		 * issuer, which share one reserved cache slot.
+		 */
+		issuer?: string | string[] | undefined;
+	},
 ) {
 	// Attempt to decode the token and find a matching kid in jwks
 	let jwtHeaders: ProtectedHeaderParameters | undefined;
@@ -297,7 +378,8 @@ async function getJwksForVerification(
 
 	// Function sources have no usable identity of their own (callers pass
 	// fresh closures per request), so they are cached only under a stable
-	// caller-provided key object.
+	// caller-provided key object, scoped to the issuer the entry was fetched
+	// for.
 	if (typeof opts.jwksFetch !== "string") {
 		const cacheKey = opts.jwksCacheKey;
 		if (!cacheKey) {
@@ -305,7 +387,16 @@ async function getJwksForVerification(
 			if (!jwks) throw new Error("No jwks found");
 			return { jwks, fromCache: false, kid };
 		}
-		const cached = functionJwksCache.get(cacheKey);
+		const slot = getJwksIssuerSlot(opts.issuer);
+		const byIssuer = functionJwksCache.get(cacheKey);
+		// An entry stored for another issuer is a miss, not a rejection: the
+		// resolver is called and the verified issuer gets its own entry.
+		// Rejecting instead would turn a shared `jwksCacheKey` into a hard
+		// failure that reads as an outage, and would make a legitimately added
+		// issuer look like a key-rotation problem. The read is a local call in
+		// the co-located case a function source exists for, so a mismatched
+		// entry costs one read rather than opening a refetch path.
+		const cached = byIssuer?.get(slot);
 		const cachedJwks = opts.forceRefresh
 			? undefined
 			: getFreshJwksWithKid(cached, kid);
@@ -320,11 +411,28 @@ async function getJwksForVerification(
 		const jwks = await opts.jwksFetch();
 		if (!jwks) throw new Error("No jwks found");
 		const fetchedAt = Date.now();
-		functionJwksCache.set(cacheKey, {
+		const entry = {
 			jwks,
 			fetchedAt,
 			...(opts.forceRefresh && !kid ? { noKidRefetchedAt: fetchedAt } : {}),
-		});
+		};
+		// The map read above was captured before the resolver ran, so a
+		// verification for another issuer sharing this `cacheKey` may have
+		// installed one in the meantime; writing that stale reference would
+		// replace the whole map and drop the entry it holds. Re-read and mutate
+		// the map that is actually installed. The re-read and the write are
+		// synchronously adjacent, with no `await` between them, and JavaScript
+		// runs one continuation at a time, so no other verification can observe
+		// the cache in between: the map observed here is the map mutated here.
+		// Only the map's identity changes, never `slot`, so an entry still lands
+		// in the slot of the issuer set it was read for and stays unusable by
+		// another. Losing an entry remains a miss, never a wrong-key match.
+		const currentByIssuer = functionJwksCache.get(cacheKey);
+		if (currentByIssuer) {
+			currentByIssuer.set(slot, entry);
+		} else {
+			functionJwksCache.set(cacheKey, new Map([[slot, entry]]));
+		}
 		return { jwks, fromCache: false, kid };
 	}
 
@@ -364,6 +472,7 @@ async function verifyAccessTokenPayload(
 		try {
 			payload = await verifyJwsAccessToken(token, {
 				jwksFetch: opts.jwksUrl,
+				jwksCacheKey: opts.jwksCacheKey,
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {

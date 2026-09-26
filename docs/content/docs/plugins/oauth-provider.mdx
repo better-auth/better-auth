@@ -878,6 +878,7 @@ export const GET = async (req: Request) => {
       issuer: "https://auth.example.com",
       audience: "https://api.example.com",
     },
+    jwksUrl: "https://auth.example.com/api/auth/jwks",
     requiredScopes: ["read:post"], // optional
   });
   // ...continue
@@ -899,6 +900,7 @@ export const POST = async (req: Request) => {
         issuer: "https://auth.example.com",
         audience: "https://api.example.com",
       },
+      jwksUrl: "https://auth.example.com/api/auth/jwks",
       requiredScopes: ["write:post"], // optional
     }
   );
@@ -914,6 +916,90 @@ export const POST = async (req: Request) => {
   * **Behind a proxy:** the proof is checked against `request.url`, so a TLS-terminating or path-rewriting proxy must forward the externally visible scheme, host, and path, or legitimate proofs are rejected.
   * **Replay protection:** `verifyAccessTokenRequest` defaults to an in-memory `jti` store that is safe only for a single instance. For multi-instance or serverless resource servers, pass a shared `dpop.replayStore` such as `createDpopReplayStore(ctx.context.internalAdapter)`, which records proofs in the database-backed verification store (the provider's own endpoints and `requireMcpAuth` use it by default). It requires database-backed verification storage; a secondary-storage-only deployment rejects DPoP requests rather than skipping replay protection.
 </Callout>
+
+#### JWKS Sources
+
+`jwksUrl` accepts either a URL string or an in-process resolver:
+
+```ts
+import { auth } from "@/lib/auth";
+
+const opts = {
+  // A URL string. Fetched over HTTP, then cached by url for five minutes and
+  // refetched when a token's `kid` is missing from the cached set.
+  jwksUrl: "https://auth.example.com/api/auth/jwks",
+  // Or an in-process resolver, called with no arguments. It must resolve to
+  // the issuer's key set, or throw.
+  // jwksUrl: async () => await auth.api.getJwks(),
+};
+```
+
+<Callout type="warn">
+  A resolver must resolve to the issuer's key set or throw, and because it runs in your own process its failures are yours. Resolving to `undefined` surfaces as `Error: No jwks found`, and any other non-jose throw surfaces unchanged; neither is an authorization failure, so neither becomes a `401` on any entry point, and a route handler reports them as an unexpected error, typically an HTTP `500`. A jose error a resolver throws is the exception: it is reported as a token failure instead, exactly as if the token itself had failed, so verification throws an `APIError` with `status: "UNAUTHORIZED"`, a `401`, and the resolver's own error is not surfaced. Whether that `401` also carries an RFC 6750 challenge depends on the entry point. The `oauthProviderResourceClient` actions add the `WWW-Authenticate` header to the rejection, so the client learns the resource metadata url. `verifyAccessTokenRequest` and `verifyBearerToken` from `better-auth/oauth2` add no such header, so a direct call rejects with a bare `401` and your own error handling has to build the response, and the challenge with it, if you want one. The JWKS infrastructure errors `JWKSTimeout`, `JWKSInvalid`, and `JWKSMultipleMatchingKeys` are the other exception and surface unchanged, because they mean the key set could not be obtained rather than that the token is bad. The remaining exceptions are the only two error names verification reads as "probably an opaque token", `TypeError` and `JWSInvalid`: those are swallowed, so verification falls through to `remoteVerify` when one is configured, and otherwise rejects the token with a `401` instead of surfacing the resolver's error. Do not signal an expected condition by throwing a `TypeError` from a resolver, and make sure a resolver cannot throw one for a reason unrelated to token format. Treat a resolver as "the key set is available" or "something is broken", never as a "not ready yet" state for the caller to handle.
+</Callout>
+
+Note the url includes `basePath`, which defaults to `/api/auth`. A Better Auth server composes it as `{baseURL}{basePath}/jwks`, so the default is `https://auth.example.com/api/auth/jwks`, not `https://auth.example.com/jwks`.
+
+Prefer the function form when your resource server is co-located with the authorization server. It already holds the key set in process, so a string source still costs a network round trip back to *its own* `{baseURL}{basePath}/jwks` before anything can be verified. To be precise, a string source is not fetched per request: it is cached by url for five minutes, with a refetch on a `kid` miss and on a signature failure for a token that carries no `kid`, the latter at most once per 30 seconds per cache key so one bad no-`kid` token cannot drive a refetch storm. The function form's advantage is that it removes the network hop entirely and keeps no url-keyed cache entry.
+
+A function source is read on **every** verification unless you also pass `jwksCacheKey`. That field takes a stable object, and the resolved key set is cached under it with the same five-minute TTL and key-rotation rules as a string source:
+
+```ts title="api/[endpoint].ts"
+import {
+  requestToResourceInput,
+  verifyAccessTokenRequest,
+} from "better-auth/oauth2";
+import { auth } from "@/lib/auth";
+
+// Module scope, so every request reuses the same key object.
+const jwksCacheKey = {};
+
+export const GET = async (req: Request) => {
+  const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
+    verifyOptions: {
+      issuer: "https://auth.example.com",
+      audience: "https://api.example.com",
+    },
+    jwksUrl: async () => await auth.api.getJwks(),
+    jwksCacheKey,
+  });
+  // ...continue
+}
+```
+
+A cached set is scoped to the issuer it was read for, so one key object is safe to share across issuers and audiences: each issuer set is cached separately, so a set read while verifying one issuer is never handed to another. Configure one `issuer` per verification rather than a list, because a list is one trust set and therefore one entry, so a `kid` published by two issuers in the same list still matches whichever of their sets is cached. Declare the object at module scope, as above, or every request builds a fresh key and pays the read this option removes, and use one object per function source, so two sources serving the *same* issuer stay independent. `jwksCacheKey` is ignored for string `jwksUrl` values, which are already cached by url.
+
+The same options apply to the `oauthProviderResourceClient` plugin, where the resource client is passed to the client plugin instead of to the call. `oauthProviderResourceClient(auth)` fills `jwksUrl` from the co-located auth instance by default; pass an explicit `jwksUrl` to skip that self-fetch:
+
+```ts title="lib/server-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
+import { auth } from "@/lib/auth";
+
+export const serverClient = createAuthClient({
+  plugins: [oauthProviderResourceClient(auth)],
+});
+```
+
+```ts title="api/[endpoint].ts"
+import { auth } from "@/lib/auth";
+import { serverClient } from "@/lib/server-client";
+
+// Module scope, so every request reuses the same key object.
+const jwksCacheKey = {};
+
+export const GET = async (req: Request) => {
+  const payload = await serverClient.verifyAccessTokenRequest(req, {
+    verifyOptions: {
+      issuer: "https://auth.example.com",
+      audience: "https://api.example.com",
+    },
+    jwksUrl: async () => await auth.api.getJwks(),
+    jwksCacheKey,
+  });
+  // ...continue
+}
+```
 
 #### JWT Verification
 
