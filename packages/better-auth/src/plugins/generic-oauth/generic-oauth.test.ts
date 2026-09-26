@@ -5729,6 +5729,77 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * Once discovery has completed, the identity rule is exactly what it was
+	 * before lazy discovery retries: a non-OIDC provider (no advertised
+	 * signing algorithms) stays keyed on the profile `id`, so existing
+	 * account keys never move even when the profile also carries a `sub`.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("keeps id-based identity for a provider whose discovery completes without OIDC signing algorithms", async () => {
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: `http://localhost:${port}`,
+					authorization_endpoint: `http://localhost:${port}/authorize`,
+					token_endpoint: `http://localhost:${port}/token`,
+					userinfo_endpoint: `http://localhost:${port}/userinfo`,
+				}),
+			),
+		);
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "legacy-id@test.com",
+				name: "Legacy Id User",
+				sub: "oidc-sub-1",
+				id: "legacy-id-1",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		const { auth: legacyAuth, customFetchImpl: legacyFetch } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "completed-non-oidc",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+							},
+						],
+					}),
+				],
+			});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: legacyFetch },
+		});
+		const headers = new Headers();
+		const res = await client.signIn.social({
+			provider: "completed-non-oidc",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			legacyFetch,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+		const session = await client.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		const legacyCtx = await legacyAuth.$context;
+		const accounts = (
+			await legacyCtx.internalAdapter.findAccounts(session.data?.user.id!)
+		).filter((account) => account.providerId === "completed-non-oidc");
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({ accountId: "legacy-id-1" });
+	});
+
+	/**
 	 * A stalled discovery fetch must not hang sign-in while the explicit
 	 * endpoint fallback is available.
 	 * @see https://github.com/better-auth/better-auth/pull/11414

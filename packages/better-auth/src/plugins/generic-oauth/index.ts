@@ -429,13 +429,14 @@ export const genericOAuth = <const ID extends string>(
 						if (isOidc) {
 							return genericProfile.sub ?? "";
 						}
-						// A discovery-configured provider can complete discovery
-						// after accounts already exist (lazy retry). Keep the
-						// identity rule independent of when discovery succeeded:
-						// `sub` whenever the profile carries it, so a healed
-						// provider cannot drift account identity between the
-						// profile's `id` and `sub` fields.
-						if (c.discoveryUrl) {
+						// Only while discovery is still incomplete can a heal
+						// flip the provider to OIDC later. Pin identity to what
+						// the healed provider will use: `sub` whenever the
+						// profile carries it (a discovery-serving provider is
+						// OIDC-intended), `id` otherwise. Once discovery has
+						// completed, the rule is exactly what it was before lazy
+						// discovery existed, so existing account keys never move.
+						if (c.discoveryUrl && !discoveryComplete) {
 							return genericProfile.sub ?? genericProfile.id ?? "";
 						}
 						return genericProfile.id ?? "";
