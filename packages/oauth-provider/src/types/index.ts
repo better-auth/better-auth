@@ -514,6 +514,62 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
+	 * Validates an OAuth authorization request's redirect URI. Without this
+	 * option, the URI must match one registered for the client, except that
+	 * a registered native HTTP loopback URI may use a different port.
+	 *
+	 * The callback runs for every client and also controls whether early
+	 * authorization errors may be sent to the requested URI. Returning `true`
+	 * accepts the URI even when `defaultResult` is `false`; returning `false`
+	 * or throwing rejects it. Client registration is unchanged.
+	 *
+	 * The preview example assumes only trusted clients can register its
+	 * production callback URI.
+	 *
+	 * @example
+	 * ```ts
+	 * oauthProvider({
+	 *   validateRedirectUri: (uri, registeredUris, defaultResult) => {
+	 *     if (defaultResult) return true;
+	 *     if (!registeredUris.includes("https://app.example.com/api/auth/callback")) {
+	 *       return false;
+	 *     }
+	 *     if (uri.includes("#")) return false;
+	 *     try {
+	 *       const url = new URL(uri);
+	 *       return (
+	 *         url.protocol === "https:" &&
+	 *         url.username === "" &&
+	 *         url.password === "" &&
+	 *         url.hostname.endsWith(".preview.example.com") &&
+	 *         url.port === "" &&
+	 *         url.pathname === "/api/auth/callback" &&
+	 *         url.search === ""
+	 *       );
+	 *     } catch {
+	 *       return false;
+	 *     }
+	 *   },
+	 * })
+	 * ```
+	 *
+	 * Custom acceptance relaxes the exact matching required by RFC 9700 §2.1.
+	 * Accept only callback hosts you control. For pairwise subject identifiers,
+	 * custom-validated URIs use the sector of the client's first registered URI.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider#custom-redirect-uri-validation
+	 *
+	 * @param redirectUri - The redirect_uri from the authorization request
+	 * @param registeredUris - Registered redirect URIs for the client
+	 * @param defaultResult - Result of built-in redirect URI matching
+	 * @returns `true` to accept the URI, or `false` to reject it
+	 */
+	validateRedirectUri?: (
+		redirectUri: string,
+		registeredUris: readonly string[],
+		defaultResult: boolean,
+	) => Awaitable<boolean>;
+	/**
 	 * Protected resources the AS issues access tokens for. Promotes the
 	 * resource model into a first-class persisted entity with per-resource
 	 * token policy.
