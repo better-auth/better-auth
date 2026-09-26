@@ -1136,6 +1136,88 @@ describe("verifyBearerToken", () => {
 			expect(readB).toHaveBeenCalledTimes(1);
 		});
 
+		/**
+		 * A resolver that parks at a one-shot gate, so a test can hold a
+		 * verification inside the resolver instead of hoping two promises race.
+		 * `entered` resolves only once the resolver has actually been called, and
+		 * the resolver returns only after `open`, so the interleaving is forced
+		 * rather than waited for. No timer is involved.
+		 */
+		function gatedResolver(read: () => { keys: JWK[] }) {
+			let open: () => void = () => {};
+			const opened = new Promise<void>((resolve) => {
+				open = resolve;
+			});
+			let markEntered: () => void = () => {};
+			const entered = new Promise<void>((resolve) => {
+				markEntered = resolve;
+			});
+			const resolver = vi.fn(async () => {
+				markEntered();
+				await opened;
+				return read();
+			});
+			return {
+				resolver,
+				/** Resolves once a verification is parked inside the resolver. */
+				entered: () => entered,
+				open: () => open(),
+			};
+		}
+
+		it("should keep both issuers' entries when their cold fetches overlap", async () => {
+			const { verifyBearerToken: verify } = await isolatedVerify();
+			const keyA = await createTestJWKS("trust-a-key");
+			const keyB = await createTestJWKS("trust-b-key");
+			const jwksCacheKey = {};
+			const gatedA = gatedResolver(() => ({ keys: [keyA.publicJWK] }));
+			const gatedB = gatedResolver(() => ({ keys: [keyB.publicJWK] }));
+			const tokenA = await createSignedToken(keyA.privateKey, keyA.kid, {
+				iss: issuerA,
+				aud: audienceA,
+			});
+			const tokenB = await createSignedToken(keyB.privateKey, keyB.kid, {
+				iss: issuerB,
+				aud: audienceB,
+			});
+			const verifyA = () =>
+				verify(tokenA, {
+					jwksUrl: gatedA.resolver,
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerA, audience: audienceA },
+				});
+			const verifyB = () =>
+				verify(tokenB, {
+					jwksUrl: gatedB.resolver,
+					jwksCacheKey,
+					verifyOptions: { issuer: issuerB, audience: audienceB },
+				});
+
+			// Both verifications read the shared cache key before either has written
+			// to it, so both go on to their own resolver and park there.
+			const pendingA = expect(verifyA()).resolves.toMatchObject({
+				iss: issuerA,
+			});
+			const pendingB = expect(verifyB()).resolves.toMatchObject({
+				iss: issuerB,
+			});
+			await Promise.all([gatedA.entered(), gatedB.entered()]);
+			expect(gatedA.resolver).toHaveBeenCalledTimes(1);
+			expect(gatedB.resolver).toHaveBeenCalledTimes(1);
+			gatedA.open();
+			gatedB.open();
+			await pendingA;
+			await pendingB;
+
+			// Whichever issuer's entry is left must still be cached, so a dropped
+			// entry cannot make a valid token fail on a resolver that has since
+			// started failing.
+			await expect(verifyA()).resolves.toMatchObject({ iss: issuerA });
+			await expect(verifyB()).resolves.toMatchObject({ iss: issuerB });
+			expect(gatedA.resolver).toHaveBeenCalledTimes(1);
+			expect(gatedB.resolver).toHaveBeenCalledTimes(1);
+		});
+
 		it("should scope a function jwks cache entry to the issuer set, order-independently", async () => {
 			const { verifyBearerToken: verify } = await isolatedVerify();
 			const keyA = await createTestJWKS("trust-a-key");

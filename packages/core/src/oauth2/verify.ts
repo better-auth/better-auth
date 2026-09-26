@@ -416,8 +416,20 @@ async function getJwksForVerification(
 			fetchedAt,
 			...(opts.forceRefresh && !kid ? { noKidRefetchedAt: fetchedAt } : {}),
 		};
-		if (byIssuer) {
-			byIssuer.set(slot, entry);
+		// The map read above was captured before the resolver ran, so a
+		// verification for another issuer sharing this `cacheKey` may have
+		// installed one in the meantime; writing that stale reference would
+		// replace the whole map and drop the entry it holds. Re-read and mutate
+		// the map that is actually installed. The re-read and the write are
+		// synchronously adjacent, with no `await` between them, and JavaScript
+		// runs one continuation at a time, so no other verification can observe
+		// the cache in between: the map observed here is the map mutated here.
+		// Only the map's identity changes, never `slot`, so an entry still lands
+		// in the slot of the issuer set it was read for and stays unusable by
+		// another. Losing an entry remains a miss, never a wrong-key match.
+		const currentByIssuer = functionJwksCache.get(cacheKey);
+		if (currentByIssuer) {
+			currentByIssuer.set(slot, entry);
 		} else {
 			functionJwksCache.set(cacheKey, new Map([[slot, entry]]));
 		}
