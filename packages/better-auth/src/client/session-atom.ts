@@ -14,6 +14,11 @@ const isServer = () => typeof window === "undefined";
 // Align session request reuse with the nanostores's remount lifecycle.
 const SESSION_MOUNT_DEDUPE_INTERVAL = STORE_UNMOUNT_DELAY;
 
+/**
+ * Fallback timeout to abort stalled in-flight session requests and unblock queued refreshes.
+ */
+export const SESSION_FETCH_TIMEOUT_MS = 10000;
+
 export type SessionData = {
 	user: User;
 	session: Session;
@@ -121,7 +126,11 @@ export function getSessionAtom(
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
-	): Promise<void> => fetchSession(queryParams, { cancelInFlight: true });
+		fetchOpts?: { cancelInFlight?: boolean } | undefined,
+	): Promise<void> =>
+		fetchSession(queryParams, {
+			cancelInFlight: fetchOpts?.cancelInFlight ?? true,
+		});
 
 	const session: SessionAtom = createAuthQueryAtom<AuthQueryState<SessionData>>(
 		{
@@ -135,9 +144,11 @@ export function getSessionAtom(
 	withEquality(session, isSessionAtomEqual);
 
 	const executeSessionFetch = async (
-		signal: AbortSignal,
+		controller: AbortController,
+		revision: number,
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<SessionFetchOutcome> => {
+		const signal = controller.signal;
 		const current = session.value;
 		session.set({
 			...current,
@@ -148,12 +159,35 @@ export function getSessionAtom(
 		});
 		if (signal.aborted) return "aborted";
 
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		if (typeof setTimeout !== "undefined") {
+			timeoutId = setTimeout(() => {
+				controller.abort();
+			}, SESSION_FETCH_TIMEOUT_MS);
+		}
+
+		const abortPromise = new Promise<never>((_, reject) => {
+			if (signal.aborted) {
+				reject(signal.reason ?? new Error("The operation was aborted."));
+				return;
+			}
+			signal.addEventListener(
+				"abort",
+				() => reject(signal.reason ?? new Error("The operation was aborted.")),
+				{ once: true },
+			);
+		});
+
 		try {
-			const res = await $fetch<SessionResponse>("/get-session", {
-				method: "GET",
-				query: queryParams?.query,
-				signal,
-			});
+			const res = await Promise.race([
+				$fetch<SessionResponse>("/get-session", {
+					method: "GET",
+					query: queryParams?.query,
+					signal,
+					timeout: SESSION_FETCH_TIMEOUT_MS,
+				}),
+				abortPromise,
+			]);
 			if (signal.aborted) {
 				return "aborted";
 			}
@@ -163,10 +197,14 @@ export function getSessionAtom(
 
 			if (data?.needsRefresh) {
 				try {
-					const refreshRes = await $fetch<SessionResponse>("/get-session", {
-						method: "POST",
-						signal,
-					});
+					const refreshRes = await Promise.race([
+						$fetch<SessionResponse>("/get-session", {
+							method: "POST",
+							signal,
+							timeout: SESSION_FETCH_TIMEOUT_MS,
+						}),
+						abortPromise,
+					]);
 					if (signal.aborted) {
 						return "aborted";
 					}
@@ -177,6 +215,13 @@ export function getSessionAtom(
 					}
 					outcome = "stale";
 				}
+			}
+
+			// Guard: if auth changed while we were in-flight, skip write but let
+			// settleFlight drain nextFlight. Only skip the data write — not the
+			// return value, so the caller can still resolve queued nextFlight.
+			if (revision !== sessionRevision) {
+				return outcome === "fresh" ? "stale" : outcome;
 			}
 
 			if (error) {
@@ -212,6 +257,9 @@ export function getSessionAtom(
 			if (signal.aborted) {
 				return "aborted";
 			}
+			if (revision !== sessionRevision) {
+				return "failed";
+			}
 			const latest = session.value;
 			session.set({
 				data: latest.data,
@@ -221,6 +269,10 @@ export function getSessionAtom(
 				refetch,
 			});
 			return "failed";
+		} finally {
+			if (timeoutId) {
+				clearTimeout(timeoutId);
+			}
 		}
 	};
 
@@ -246,7 +298,7 @@ export function getSessionAtom(
 		if (flight && !fetchOpts?.cancelInFlight) {
 			if (
 				flight.revision === sessionRevision &&
-				isJsonEqual(flight.queryParams, queryParams) &&
+				isJsonEqual(flight.queryParams ?? null, queryParams ?? null) &&
 				!nextFlight
 			) {
 				return flight.promise.then(() => undefined);
@@ -270,16 +322,24 @@ export function getSessionAtom(
 			return nextFlight.promise;
 		}
 
-		flight?.cancel();
+		if (fetchOpts?.cancelInFlight) {
+			if (nextFlight) {
+				nextFlight.resolve();
+				nextFlight = undefined;
+			}
+			flight?.cancel();
+		}
+
 		const controller = new AbortController();
+		const capturedRevision = sessionRevision;
 		const promise = Promise.resolve().then(() => {
 			if (controller.signal.aborted) return "aborted" as const;
-			return executeSessionFetch(controller.signal, queryParams);
+			return executeSessionFetch(controller, capturedRevision, queryParams);
 		});
 		const request: SessionFlight = {
 			cancel: () => controller.abort(),
 			promise,
-			revision: sessionRevision,
+			revision: capturedRevision,
 			queryParams,
 		};
 		flight = request;
@@ -296,7 +356,23 @@ export function getSessionAtom(
 			if (nextFlight) {
 				const queued = nextFlight;
 				nextFlight = undefined;
-				fetchSession(queued.queryParams).then(queued.resolve, queued.reject);
+				if (
+					outcome === "fresh" &&
+					request.revision === sessionRevision &&
+					isJsonEqual(request.queryParams ?? null, queued.queryParams ?? null)
+				) {
+					freshUntil = getFreshUntil();
+					const latest = session.value;
+					if (latest.isRefetching) {
+						session.set({
+							...latest,
+							isRefetching: false,
+						});
+					}
+					queued.resolve();
+				} else {
+					fetchSession(queued.queryParams).then(queued.resolve, queued.reject);
+				}
 			}
 		};
 		void request.promise.then(settleFlight, () => settleFlight("failed"));

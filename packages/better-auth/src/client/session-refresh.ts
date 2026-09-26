@@ -14,7 +14,7 @@ const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 /**
  * Damping delay to coalesce rapid $sessionSignal bursts into a single refetch.
  */
-const SIGNAL_REFETCH_DAMP_MS = 10;
+export const SIGNAL_REFETCH_DAMP_MS = 10;
 
 export interface SessionRefreshOptions {
 	fetchSession: () => Promise<void>;

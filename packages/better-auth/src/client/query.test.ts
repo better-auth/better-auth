@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalFocusManager } from "./focus-manager";
 import { useAuthQuery } from "./query";
 import { createAuthClient as createReactAuthClient } from "./react";
-import { getSessionAtom } from "./session-atom";
+import { getSessionAtom, SESSION_FETCH_TIMEOUT_MS } from "./session-atom";
+import { SIGNAL_REFETCH_DAMP_MS } from "./session-refresh";
 import { createAuthClient } from "./solid";
 import { testClientPlugin } from "./test-plugin";
 
@@ -929,9 +930,10 @@ describe("useAuthQuery - error handling", () => {
 		expect(fetchCount).toBe(1);
 
 		$sessionSignal.set(!$sessionSignal.get());
-		await vi.advanceTimersByTimeAsync(10);
-
-		expect(observedAborts).toEqual([]);
+		// After damping delay fires, second fetch is queued behind in-flight — not
+		// launched concurrently.
+		await vi.advanceTimersByTimeAsync(SIGNAL_REFETCH_DAMP_MS);
+		expect(fetchCount).toBe(1);
 
 		const settleFirst = resolveFirstRequest;
 		if (!settleFirst) throw new Error("First session request did not start");
@@ -948,7 +950,14 @@ describe("useAuthQuery - error handling", () => {
 		);
 		await vi.advanceTimersByTimeAsync(0);
 
-		expect(session.value.data?.session.id).toBe("session-1");
+		// The first flight is NOT aborted (no abort observed), but its response
+		// is not written because the revision guard detects that sessionRevision
+		// advanced since this flight started (Fix 1). The second fetch should now
+		// be in-flight.
+		expect(observedAborts).toEqual([]);
+		expect(fetchCount).toBe(2);
+		// Data must still be null/pending — the stale first-flight response is discarded.
+		expect(session.value.data).toBeNull();
 
 		const settleSecond = resolveSecondRequest;
 		if (!settleSecond) throw new Error("Second session request did not start");
@@ -966,7 +975,322 @@ describe("useAuthQuery - error handling", () => {
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(fetchCount).toBe(2);
+		expect(observedAborts).toEqual([]);
 		expect(session.value.data?.session.id).toBe("session-2");
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should not write stale session data when flight finishes after sessionRevision incremented", async () => {
+		let resolveFirstRequest: ((response: Response) => void) | undefined;
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				const method = (init as RequestInit | undefined)?.method ?? "GET";
+				if (method === "GET" && !resolveFirstRequest) {
+					return new Promise<Response>((resolve) => {
+						resolveFirstRequest = resolve;
+					});
+				}
+				// Second fetch (post-signal) returns a new session
+				return new Response(
+					JSON.stringify({
+						session: { id: "session-new" },
+						user: { id: "user-1" },
+					}),
+				);
+			},
+		});
+
+		const { $sessionSignal, session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		// First fetch is in-flight. Signal increment (sign-out / user switch)
+		// bumps sessionRevision before the first flight resolves.
+		$sessionSignal.set(!$sessionSignal.get());
+		await vi.advanceTimersByTimeAsync(SIGNAL_REFETCH_DAMP_MS);
+
+		// Resolve the stale first request AFTER the revision has been bumped.
+		const settleStale = resolveFirstRequest;
+		if (!settleStale) throw new Error("First session request did not start");
+		settleStale(
+			new Response(
+				JSON.stringify({
+					session: { id: "session-stale" },
+					user: { id: "user-1" },
+				}),
+			),
+		);
+		// Let the second (post-signal) fetch also complete.
+		await vi.runAllTimersAsync();
+
+		// Stale response must NOT have been written; only the post-signal response
+		// should be visible.
+		expect(session.value.data?.session.id).not.toBe("session-stale");
+		expect(session.value.data?.session.id).toBe("session-new");
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should clear pending nextFlight when explicit refetch (cancelInFlight) is called", async () => {
+		let fetchCount = 0;
+		const requests: Array<(response: Response) => void> = [];
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Promise<Response>((resolve) => {
+					requests.push(resolve);
+				});
+			},
+		});
+
+		const { $sessionSignal, session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+
+		// Signal queues a nextFlight behind the in-flight request.
+		$sessionSignal.set(!$sessionSignal.get());
+		await vi.advanceTimersByTimeAsync(SIGNAL_REFETCH_DAMP_MS);
+		// At this point the nextFlight is queued but the first fetch still pending.
+
+		// Explicit refetch (cancelInFlight=true) should clear nextFlight and abort
+		// the current in-flight, then start a new fetch itself.
+		const refetchPromise = session.value.refetch();
+		await vi.advanceTimersByTimeAsync(0);
+
+		// Settle all outstanding fetches.
+		for (const resolve of requests) {
+			resolve(
+				new Response(
+					JSON.stringify({ session: { id: "session-x" }, user: { id: "u1" } }),
+				),
+			);
+		}
+		await refetchPromise;
+		await vi.runAllTimersAsync();
+
+		// After the explicit refetch completes, no redundant nextFlight-driven fetch
+		// should have fired. fetchCount should be exactly 2: initial + explicit
+		// refetch (not 3 with a redundant nextFlight fetch).
+		expect(fetchCount).toBe(2);
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should spawn a follow-up fetch for queued nextFlight when revision changed since the in-flight request", async () => {
+		let fetchCount = 0;
+		let resolveInFlight: ((response: Response) => void) | undefined;
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				fetchCount++;
+				const method = (init as RequestInit | undefined)?.method ?? "GET";
+				// Only the first signal-triggered fetch stalls; subsequent ones resolve
+				// immediately.
+				if (method === "GET" && fetchCount === 2) {
+					return new Promise<Response>((resolve) => {
+						resolveInFlight = resolve;
+					});
+				}
+				return new Response(
+					JSON.stringify({
+						session: { id: "session-fresh" },
+						user: { id: "u1" },
+					}),
+				);
+			},
+		});
+
+		const { $sessionSignal, session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+
+		// Let mount fetch (#1) complete immediately.
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(1);
+
+		// Signal #1 triggers flight #2 (which stalls) with revision=1.
+		$sessionSignal.set(!$sessionSignal.get());
+		await vi.advanceTimersByTimeAsync(SIGNAL_REFETCH_DAMP_MS);
+		expect(fetchCount).toBe(2);
+
+		// Signal #2 bumps revision to 2 and queues a nextFlight behind flight #2.
+		$sessionSignal.set(!$sessionSignal.get());
+		await vi.advanceTimersByTimeAsync(SIGNAL_REFETCH_DAMP_MS);
+		// Still only 2 fetches — nextFlight is queued, not yet started.
+		expect(fetchCount).toBe(2);
+
+		// Resolve stale flight #2 (revision=1, current=2) — data must not be
+		// written, and settleFlight must spawn fetch #3 to satisfy nextFlight.
+		const settle = resolveInFlight;
+		if (!settle) throw new Error("Stalled session fetch did not start");
+		settle(
+			new Response(
+				JSON.stringify({
+					session: { id: "session-stale" },
+					user: { id: "u1" },
+				}),
+			),
+		);
+		await vi.runAllTimersAsync();
+
+		// Fetch #3 is the nextFlight follow-up; it resolves with "session-fresh".
+		expect(fetchCount).toBe(3);
+		expect(session.value.data?.session.id).toBe("session-fresh");
+		// Stale data from flight #2 must never be visible.
+		expect(session.value.data?.session.id).not.toBe("session-stale");
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should abort stalled in-flight session request after timeout and unblock queued refresh", async () => {
+		let fetchCount = 0;
+		const observedAborts: boolean[] = [];
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				fetchCount++;
+				const signal = init?.signal as AbortSignal | undefined;
+				if (fetchCount === 1) {
+					// Flight 1 stalls indefinitely.
+					return new Promise<Response>((_resolve, reject) => {
+						signal?.addEventListener("abort", () => {
+							observedAborts.push(true);
+							reject(
+								new DOMException("The operation was aborted.", "AbortError"),
+							);
+						});
+					});
+				}
+				// Flight 2 (the queued refresh) succeeds immediately.
+				return new Response(
+					JSON.stringify({
+						session: { id: "session-unblocked" },
+						user: { id: "u1" },
+					}),
+				);
+			},
+		});
+
+		const { $sessionSignal, session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+
+		// Signal queues flight 2 behind the stalled flight 1.
+		$sessionSignal.set(!$sessionSignal.get());
+		await vi.advanceTimersByTimeAsync(SIGNAL_REFETCH_DAMP_MS);
+		expect(fetchCount).toBe(1);
+
+		// Advance time by the fallback timeout to trigger timeout abort.
+		await vi.advanceTimersByTimeAsync(SESSION_FETCH_TIMEOUT_MS);
+
+		// Stalled flight 1 was aborted by timeout.
+		expect(observedAborts).toEqual([true]);
+
+		// Queued refresh (flight 2) was unblocked and ran to completion.
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(2);
+		expect(session.value.data?.session.id).toBe("session-unblocked");
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should resolve redundant queued flight immediately if active flight completed fresh with matching revision and query params", async () => {
+		let fetchCount = 0;
+		const requests: Array<(response: Response) => void> = [];
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Promise<Response>((resolve) => {
+					requests.push(resolve);
+				});
+			},
+		});
+
+		const { session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+
+		// Mount fetch starts with queryParams: undefined
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+
+		// Settle mount fetch first so we start from an idle atom state
+		const settleMount = requests.shift();
+		if (!settleMount) throw new Error("Mount fetch did not start");
+		settleMount(
+			new Response(
+				JSON.stringify({
+					session: { id: "session-mount" },
+					user: { id: "u1" },
+				}),
+			),
+		);
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(1);
+
+		// Start in-flight request with custom queryParams
+		const queryA = { query: { disableCookieCache: false } };
+		const queryB = { query: { disableCookieCache: true } };
+
+		void session.value.refetch(queryA);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(2);
+
+		// Queue a flight with differing queryParams (creates nextFlight)
+		const queuedPromise1 = session.value.refetch(queryB, {
+			cancelInFlight: false,
+		});
+		// Update queued flight to match the active flight's queryParams
+		const queuedPromise2 = session.value.refetch(queryA, {
+			cancelInFlight: false,
+		});
+
+		// Neither queued request should have launched concurrently
+		expect(fetchCount).toBe(2);
+
+		// Resolve in-flight request fresh with matching revision and queryParams
+		const settleActive = requests.shift();
+		if (!settleActive) throw new Error("Active fetch did not start");
+		settleActive(
+			new Response(
+				JSON.stringify({
+					session: { id: "session-fresh" },
+					user: { id: "u1" },
+				}),
+			),
+		);
+
+		await Promise.all([queuedPromise1, queuedPromise2]);
+		await vi.runAllTimersAsync();
+
+		// Redundant nextFlight was resolved directly by settleFlight without a 3rd fetch
+		expect(fetchCount).toBe(2);
+		expect(session.value.data?.session.id).toBe("session-fresh");
+		expect(session.value.isRefetching).toBe(false);
 
 		unsubscribe();
 	});

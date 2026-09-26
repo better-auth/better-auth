@@ -16,6 +16,7 @@ export type AuthQueryState<T> = {
 	isRefetching: boolean;
 	refetch: (
 		queryParams?: { query?: SessionQueryParams } | undefined,
+		fetchOpts?: { cancelInFlight?: boolean } | undefined,
 	) => Promise<void>;
 };
 
