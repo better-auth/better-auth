@@ -5716,6 +5716,10 @@ describe("oauth2", async () => {
 			stableFetch,
 		);
 		expect(secondFlow.callbackURL).toBe("http://localhost:3000/dashboard");
+		const secondSession = await client.getSession({
+			fetchOptions: { headers: secondFlow.headers },
+		});
+		expect(secondSession.data?.user.id).toBe(userId);
 
 		const stableCtx = await stableAuth.$context;
 		const accounts = (
