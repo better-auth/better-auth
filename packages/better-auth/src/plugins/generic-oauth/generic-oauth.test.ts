@@ -5646,6 +5646,131 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * Account identity must not depend on whether discovery completed before
+	 * or after a sign-in: a healed provider resolves the same account.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("keeps account identity stable when discovery completes after accounts exist", async () => {
+		let idpDown = true;
+		const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+		mswServer.use(
+			http.get(discoveryUrl, () => {
+				if (idpDown) {
+					return new HttpResponse(null, { status: 503 });
+				}
+				return passthrough();
+			}),
+		);
+		const { auth: stableAuth, customFetchImpl: stableFetch } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "identity-stability",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+								userInfoUrl: `http://localhost:${port}/userinfo`,
+							},
+						],
+					}),
+				],
+			});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: stableFetch },
+		});
+
+		// First sign-in while discovery is down (degraded explicit endpoints).
+		const firstHeaders = new Headers();
+		const first = await client.signIn.social({
+			provider: "identity-stability",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
+		});
+		const firstFlow = await simulateOAuthFlow(
+			first.data?.url || "",
+			firstHeaders,
+			stableFetch,
+		);
+		expect(firstFlow.callbackURL).toBe("http://localhost:3000/dashboard");
+		const firstSession = await client.getSession({
+			fetchOptions: { headers: firstFlow.headers },
+		});
+		const userId = firstSession.data?.user.id!;
+
+		// Discovery heals; the second sign-in must resolve the same account.
+		idpDown = false;
+		const secondHeaders = new Headers();
+		const second = await client.signIn.social({
+			provider: "identity-stability",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
+		});
+		const secondFlow = await simulateOAuthFlow(
+			second.data?.url || "",
+			secondHeaders,
+			stableFetch,
+		);
+		expect(secondFlow.callbackURL).toBe("http://localhost:3000/dashboard");
+
+		const stableCtx = await stableAuth.$context;
+		const accounts = (
+			await stableCtx.internalAdapter.findAccounts(userId)
+		).filter((account) => account.providerId === "identity-stability");
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "identity-stability",
+			accountId: "oauth2",
+		});
+	});
+
+	/**
+	 * A stalled discovery fetch must not hang sign-in while the explicit
+	 * endpoint fallback is available.
+	 * @see https://github.com/better-auth/better-auth/pull/11414
+	 */
+	it("falls back to explicit endpoints when the discovery fetch stalls", async () => {
+		const discoveryUrl =
+			"https://stalled-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () => new Promise<Response>(() => {})),
+		);
+		const { customFetchImpl: stalledFetch } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "stalled-discovery",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								discoveryTimeout: 100,
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl: stalledFetch },
+		});
+		const res = await client.signIn.social({
+			provider: "stalled-discovery",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+	});
+
+	/**
 	 * Core mints the id_token nonce before calling createAuthorizationURL, so
 	 * nonce binding must already be on while discovery is pending. Otherwise
 	 * the first sign-in that heals a failed startup discovery would mint no

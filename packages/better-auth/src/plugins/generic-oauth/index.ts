@@ -89,10 +89,12 @@ function isClientSecretTokenEndpointAuth(
 async function fetchDiscovery(
 	url: string,
 	headers?: Record<string, string>,
+	signal?: AbortSignal,
 ): Promise<DiscoveryDocument | null> {
 	const result = await betterFetch<DiscoveryDocument>(url, {
 		method: "GET",
 		headers,
+		signal,
 	});
 	if (result.error || !result.data) {
 		return null;
@@ -254,6 +256,9 @@ export const genericOAuth = <const ID extends string>(
 					const discovered = await fetchDiscovery(
 						c.discoveryUrl,
 						c.discoveryHeaders,
+						// A stalled IdP must not hang sign-in: discovery is retried
+						// on use, so every attempt runs under a timeout.
+						AbortSignal.timeout(c.discoveryTimeout ?? 5000),
 					).catch((err) => {
 						ctx.logger.error(
 							`Discovery fetch failed for "${c.providerId}": ${err}`,
@@ -421,9 +426,19 @@ export const genericOAuth = <const ID extends string>(
 						if (accountSubject) {
 							return accountSubject({ tokens, profile: genericProfile });
 						}
-						return isOidc
-							? (genericProfile.sub ?? "")
-							: (genericProfile.id ?? "");
+						if (isOidc) {
+							return genericProfile.sub ?? "";
+						}
+						// A discovery-configured provider can complete discovery
+						// after accounts already exist (lazy retry). Keep the
+						// identity rule independent of when discovery succeeded:
+						// `sub` whenever the profile carries it, so a healed
+						// provider cannot drift account identity between the
+						// profile's `id` and `sub` fields.
+						if (c.discoveryUrl) {
+							return genericProfile.sub ?? genericProfile.id ?? "";
+						}
+						return genericProfile.id ?? "";
 					},
 					idToken: idTokenConfig,
 					// Mint the nonce whenever a pending discovery could still turn
