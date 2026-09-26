@@ -40,6 +40,7 @@ class WindowFocusManager implements FocusManager {
 		document.addEventListener("visibilitychange", visibilityHandler, false);
 
 		return () => {
+			if (typeof document === "undefined") return;
 			document.removeEventListener(
 				"visibilitychange",
 				visibilityHandler,
