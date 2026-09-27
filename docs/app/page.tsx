@@ -32,8 +32,8 @@ export default async function HomePage() {
 								<Image
 									src="/right-3d-logo.webp"
 									alt=""
-									width={518}
-									height={667}
+									width={495}
+									height={618}
 									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
 									sizes="160px"
 									draggable={false}
@@ -44,8 +44,8 @@ export default async function HomePage() {
 								<Image
 									src="/left-3d-logo-light.webp"
 									alt=""
-									width={518}
-									height={667}
+									width={375}
+									height={486}
 									className="h-auto max-h-[200px] z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
 									sizes="160px"
 									draggable={false}
@@ -53,8 +53,8 @@ export default async function HomePage() {
 								<Image
 									src="/right-3d-logo-light.webp"
 									alt=""
-									width={518}
-									height={667}
+									width={328}
+									height={435}
 									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
 									sizes="160px"
 									draggable={false}

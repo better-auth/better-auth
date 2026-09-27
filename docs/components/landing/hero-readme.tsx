@@ -707,9 +707,10 @@ function ContributorsSection({
 	const wallRef = useRef<HTMLDivElement>(null);
 	const [wallNearViewport, setWallNearViewport] = useState(false);
 
-	// Hundreds of avatars scroll through the wall; only fetch them once it's
-	// close to the viewport instead of relying on the browser's generous
-	// native lazy-loading distance.
+	// Hundreds of avatars scroll through the wall; the links always render,
+	// but the avatar images are only mounted once the wall is close to the
+	// viewport instead of relying on the browser's generous native
+	// lazy-loading distance.
 	useEffect(() => {
 		const wall = wallRef.current;
 		if (!wall) return;
@@ -784,24 +785,25 @@ function ContributorsSection({
 							transformOrigin: "center center",
 						}}
 					>
-						{wallNearViewport &&
-							columns.map((col, i) => (
-								<div key={i} className="relative overflow-hidden h-full">
-									<div
-										className="flex flex-col gap-1 items-center"
-										style={{
-											animation: `vertical-marquee ${speeds[i]}s linear infinite`,
-										}}
-									>
-										{[...col, ...col].map((c, j) => (
-											<a
-												key={`${c.login}-${j}`}
-												href={c.html_url}
-												target="_blank"
-												rel="noopener noreferrer"
-												title={c.login}
-												className="relative group shrink-0"
-											>
+						{columns.map((col, i) => (
+							<div key={i} className="relative overflow-hidden h-full">
+								<div
+									className="flex flex-col gap-1 items-center"
+									style={{
+										animation: `vertical-marquee ${speeds[i]}s linear infinite`,
+									}}
+								>
+									{[...col, ...col].map((c, j) => (
+										<a
+											key={`${c.login}-${j}`}
+											href={c.html_url}
+											target="_blank"
+											rel="noopener noreferrer"
+											title={c.login}
+											aria-label={c.login}
+											className="relative group shrink-0"
+										>
+											{wallNearViewport ? (
 												<img
 													src={`${c.avatar_url}&s=64`}
 													alt={c.login}
@@ -810,14 +812,17 @@ function ContributorsSection({
 													loading="lazy"
 													className="rounded-sm grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
 												/>
-												<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-foreground text-background text-[8px] font-mono rounded-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
-													{c.login}
-												</div>
-											</a>
-										))}
-									</div>
+											) : (
+												<span className="block size-8 rounded-sm bg-foreground/5" />
+											)}
+											<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-foreground text-background text-[8px] font-mono rounded-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
+												{c.login}
+											</div>
+										</a>
+									))}
 								</div>
-							))}
+							</div>
+						))}
 					</div>
 					<div className="absolute inset-y-0 left-0 w-8 bg-linear-to-r from-background to-transparent pointer-events-none z-10" />
 					<div className="absolute inset-y-0 right-0 w-8 bg-linear-to-l from-background to-transparent pointer-events-none z-10" />
@@ -1041,27 +1046,25 @@ function DemoVideo() {
 
 	return (
 		<div ref={containerRef}>
+			{/* The poster is a CSS background rather than the `poster` attribute:
+			    hidden <video>s still fetch their poster, but browsers skip
+			    backgrounds on display:none elements, so only the active theme's
+			    poster loads and it's there on first paint. */}
 			<video
 				src="/demo-dark.mp4"
-				// Hidden <video>s still fetch their poster, so only set the
-				// poster for the active theme (known after hydration).
-				poster={resolvedTheme === "dark" ? "/demo-dark-poster.webp" : undefined}
 				preload="none"
 				loop
 				muted
 				playsInline
-				className="w-full h-auto -mt-[2px] dark:block hidden"
+				className="w-full h-auto aspect-[2528/1440] -mt-[2px] bg-[url(/demo-dark-poster.webp)] bg-cover dark:block hidden"
 			/>
 			<video
 				src="/demo-light.mp4"
-				poster={
-					resolvedTheme === "light" ? "/demo-light-poster.webp" : undefined
-				}
 				preload="none"
 				loop
 				muted
 				playsInline
-				className="w-full h-auto -mt-[2px] dark:hidden"
+				className="w-full h-auto aspect-[2544/1440] -mt-[2px] bg-[url(/demo-light-poster.webp)] bg-cover dark:hidden"
 			/>
 		</div>
 	);
