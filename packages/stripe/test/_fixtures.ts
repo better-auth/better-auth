@@ -72,6 +72,8 @@ export function createStripeMock(
 					id: checkoutSessionId,
 				}),
 				retrieve: vi.fn(),
+				list: vi.fn().mockResolvedValue({ data: [] }),
+				expire: vi.fn().mockResolvedValue({}),
 			},
 		},
 		billingPortal: {
