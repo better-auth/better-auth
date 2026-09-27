@@ -16,26 +16,28 @@ export default async function HomePage() {
 					{/* Left side — Hero title */}
 					<div className="relative w-full lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] px-5 sm:px-6 lg:px-7 lg:sticky lg:top-0 z-10 bg-background lg:overflow-clip">
 						<LineFieldBackground />
-						{/* 3D Logo */}
+						{/* 3D Logo: WebPs are rendered from the original SVGs at 2x their
+						    display size with the grain baked in, so they're `unoptimized` to
+						    keep next/image from resampling the grain away. */}
 						<div className="hidden lg:flex justify-center h-full absolute items-center left-1/2 -translate-x-1/2 w-full pointer-events-auto select-none animate-logo-reveal z-[1]">
 							{/* Dark mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] hidden dark:flex justify-center opacity-100">
 								<Image
 									src="/left-3d-logo.webp"
 									alt=""
-									width={518}
-									height={667}
-									className="h-auto max-h-[200px] z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
-									sizes="160px"
+									width={311}
+									height={400}
+									className="h-auto max-h-[200px] object-contain z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
+									unoptimized
 									draggable={false}
 								/>
 								<Image
 									src="/right-3d-logo.webp"
 									alt=""
-									width={495}
-									height={618}
-									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
-									sizes="160px"
+									width={321}
+									height={400}
+									className="h-auto object-contain -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
+									unoptimized
 									draggable={false}
 								/>
 							</div>
@@ -44,19 +46,19 @@ export default async function HomePage() {
 								<Image
 									src="/left-3d-logo-light.webp"
 									alt=""
-									width={375}
-									height={486}
-									className="h-auto max-h-[200px] z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
-									sizes="160px"
+									width={309}
+									height={400}
+									className="h-auto max-h-[200px] object-contain z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
+									unoptimized
 									draggable={false}
 								/>
 								<Image
 									src="/right-3d-logo-light.webp"
 									alt=""
-									width={328}
-									height={435}
-									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
-									sizes="160px"
+									width={302}
+									height={400}
+									className="h-auto object-contain -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
+									unoptimized
 									draggable={false}
 								/>
 							</div>
