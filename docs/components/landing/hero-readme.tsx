@@ -698,31 +698,30 @@ type CommunityHeroStats = {
 };
 
 /**
- * Below-the-fold media (contributor avatars, the demo video) stays out of the
- * initial load. On a fast connection it's fetched as soon as the page has
- * finished loading, so it's ready before anyone scrolls to it; on slow or
- * data-saver connections it waits until it's about a screen away.
+ * Below-the-fold media (contributor avatars, the demo video) never competes
+ * with the initial load. Once the page has loaded, a fast connection fetches
+ * it right away so it's ready before anyone scrolls to it; slow or
+ * data-saver connections wait until it's close to the viewport.
  */
-function useIdlePrefetch() {
-	const [prefetch, setPrefetch] = useState(false);
+function useBelowFoldMedia() {
+	const [state, setState] = useState({ loaded: false, prefetch: false });
 
 	useEffect(() => {
 		let timer: ReturnType<typeof setTimeout> | undefined;
-		const start = () => {
-			if (isSlowConnection()) return;
-			// Give the browser a beat after `load` so this never competes with
-			// the page's own resources.
-			timer = setTimeout(() => setPrefetch(true), 300);
+		const onLoad = () => {
+			const prefetch = !isSlowConnection();
+			// Give the browser a beat after `load` before starting any fetches.
+			timer = setTimeout(() => setState({ loaded: true, prefetch }), 300);
 		};
-		if (document.readyState === "complete") start();
-		else window.addEventListener("load", start, { once: true });
+		if (document.readyState === "complete") onLoad();
+		else window.addEventListener("load", onLoad, { once: true });
 		return () => {
-			window.removeEventListener("load", start);
+			window.removeEventListener("load", onLoad);
 			clearTimeout(timer);
 		};
 	}, []);
 
-	return prefetch;
+	return state;
 }
 
 function isSlowConnection() {
@@ -741,9 +740,6 @@ function isSlowConnection() {
 	return (navigation?.loadEventStart || performance.now()) > 4000;
 }
 
-/** Starts loading ahead of time: roughly one screen before it's visible. */
-const NEAR_VIEWPORT_MARGIN = "100% 0px";
-
 function ContributorsSection({
 	contributors = EMPTY_CONTRIBUTORS,
 	contributorCount,
@@ -753,12 +749,13 @@ function ContributorsSection({
 }) {
 	const wallRef = useRef<HTMLDivElement>(null);
 	const [wallNearViewport, setWallNearViewport] = useState(false);
-	const prefetch = useIdlePrefetch();
-	const showAvatars = prefetch || wallNearViewport;
+	const { loaded, prefetch } = useBelowFoldMedia();
+	const showAvatars = prefetch || (loaded && wallNearViewport);
 
 	// Hundreds of avatars scroll through the wall; the links always render,
-	// but the avatar images are only mounted after the page has loaded (fast
-	// connections) or once the wall is about a screen away (slow ones).
+	// but the avatar images are only mounted after the page has loaded: right
+	// away on fast connections, or once the wall is about a screen away on
+	// slow ones.
 	useEffect(() => {
 		const wall = wallRef.current;
 		if (!wall) return;
@@ -769,7 +766,8 @@ function ContributorsSection({
 					observer.disconnect();
 				}
 			},
-			{ rootMargin: NEAR_VIEWPORT_MARGIN },
+			// About a screen ahead; the images themselves stay `loading="lazy"`.
+			{ rootMargin: "100% 0px" },
 		);
 		observer.observe(wall);
 		return () => observer.disconnect();
@@ -1071,13 +1069,13 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 /**
  * Both theme variants are rendered so CSS picks the right one without a
  * hydration flash, but neither autoplays or preloads up front. Only the
- * visible variant is fetched: right after load on fast connections, or once
- * it's about a screen away on slow ones.
+ * visible variant is fetched, after the page has loaded: right away on fast
+ * connections, or once it's about to scroll into view on slow ones.
  */
 function DemoVideo() {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const { resolvedTheme } = useTheme();
-	const prefetch = useIdlePrefetch();
+	const { loaded, prefetch } = useBelowFoldMedia();
 
 	// On fast connections, buffer the visible variant once the page has
 	// loaded so it's already playing by the time it scrolls into view.
@@ -1093,7 +1091,7 @@ function DemoVideo() {
 
 	useEffect(() => {
 		const container = containerRef.current;
-		if (!container) return;
+		if (!loaded || !container) return;
 		const videos = Array.from(container.querySelectorAll("video"));
 		const observer = new IntersectionObserver(
 			([entry]) => {
@@ -1106,11 +1104,13 @@ function DemoVideo() {
 					}
 				}
 			},
-			{ rootMargin: NEAR_VIEWPORT_MARGIN },
+			// Only start playing when it's close: on slow connections that's
+			// also when the (multi-MB) video starts downloading.
+			{ rootMargin: "200px" },
 		);
 		observer.observe(container);
 		return () => observer.disconnect();
-	}, [resolvedTheme]);
+	}, [loaded, resolvedTheme]);
 
 	return (
 		<div ref={containerRef}>
