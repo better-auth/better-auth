@@ -17,6 +17,7 @@ import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuth } from "../generic-oauth";
+import { twoFactor } from "../two-factor";
 import { anonymous } from ".";
 import { anonymousClient } from "./client";
 
@@ -612,7 +613,6 @@ describe("anonymous", async () => {
 					options: {},
 					secret: "secret",
 					setNewSession: vi.fn(),
-					getPlugin: () => null,
 				},
 				headers: new Headers(),
 				query: {},
@@ -784,4 +784,74 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
+});
+
+describe("anonymous linking with two-factor", () => {
+	// The two-factor challenge discards the provisional session, so linking
+	// must not run on it whichever plugin is registered first.
+	it.for(["anonymous-first", "two-factor-first"] as const)(
+		"does not link before the second factor is verified (%s)",
+		async (order) => {
+			const linkAccountFn = vi.fn();
+			const anonymousPlugin = anonymous({
+				async onLinkAccount(data) {
+					linkAccountFn(data);
+				},
+			});
+			const twoFactorPlugin = twoFactor({
+				skipVerificationOnEnable: true,
+			});
+			const { auth, client, sessionSetter, signInWithTestUser, testUser } =
+				await getTestInstance(
+					{
+						plugins:
+							order === "anonymous-first"
+								? [anonymousPlugin, twoFactorPlugin]
+								: [twoFactorPlugin, anonymousPlugin],
+					},
+					{
+						clientOptions: {
+							plugins: [anonymousClient()],
+						},
+					},
+				);
+			const { headers: userHeaders } = await signInWithTestUser();
+			await auth.api.enableTwoFactor({
+				body: {
+					password: testUser.password,
+				},
+				headers: userHeaders,
+			});
+
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			const anonymousSession = await client.getSession({
+				fetchOptions: {
+					headers,
+				},
+			});
+			const anonymousUserId = anonymousSession.data?.user.id;
+			expect(anonymousUserId).toBeDefined();
+
+			const result = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			expect(result.data).toMatchObject({ twoFactorRedirect: true });
+			expect(linkAccountFn).not.toHaveBeenCalled();
+			const context = await auth.$context;
+			const anonymousUser = await context.internalAdapter.findUserById(
+				anonymousUserId!,
+			);
+			expect(anonymousUser).not.toBeNull();
+		},
+	);
 });

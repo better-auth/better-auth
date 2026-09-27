@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,13 @@ export function TwoFactorTotpForm({
 }: TwoFactorTotpFormProps) {
 	const [loading, startTransition] = useTransition();
 	const [isVerified, setIsVerified] = useState(false);
+	const active = useRef(true);
+	useEffect(() => {
+		active.current = true;
+		return () => {
+			active.current = false;
+		};
+	}, []);
 
 	const form = useForm<TotpFormValues>({
 		resolver: zodResolver(totpSchema),
@@ -45,15 +52,27 @@ export function TwoFactorTotpForm({
 
 	const onSubmit = (data: TotpFormValues) => {
 		startTransition(async () => {
-			const res = await authClient.twoFactor.verifyTotp({
-				code: data.code,
-			});
-			if (res.data?.token) {
+			setIsVerified(false);
+			form.clearErrors("code");
+			try {
+				const { data: verified, error } = await authClient.twoFactor.verifyTotp(
+					{ code: data.code },
+				);
+				if (!active.current) return;
+				if (error || !verified?.token) {
+					const message =
+						error?.message ?? "Verification did not complete sign-in.";
+					onError?.(message);
+					form.setError("code", { message });
+					return;
+				}
 				setIsVerified(true);
 				onSuccess?.();
-			} else {
-				onError?.("Invalid TOTP code");
-				form.setError("code", { message: "Invalid TOTP code" });
+			} catch {
+				if (!active.current) return;
+				form.setError("code", {
+					message: "Could not verify the code. Try again.",
+				});
 			}
 		});
 	};
@@ -79,6 +98,7 @@ export function TwoFactorTotpForm({
 							<Input
 								{...field}
 								id="totp-code"
+								disabled={loading}
 								type="text"
 								inputMode="numeric"
 								maxLength={6}

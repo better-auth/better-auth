@@ -3,7 +3,10 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	createAuthEndpoint,
+	sensitiveSessionMiddleware,
+} from "better-auth/api";
 import {
 	parseSetCookieHeader,
 	setSessionCookie,
@@ -43,6 +46,7 @@ export const electronToken = (_opts: ElectronOptions) =>
 			method: "POST",
 			body: electronTokenBodySchema,
 			metadata: {
+				noStore: true,
 				scope: "http",
 				openapi: {
 					description: "Exchange the electron token for a session",
@@ -85,11 +89,8 @@ export const electronToken = (_opts: ElectronOptions) =>
 			}
 
 			const tokenRecord = safeJSONParse<ElectronVerificationValue>(token.value);
-			if (!tokenRecord) {
-				throw APIError.from(
-					"INTERNAL_SERVER_ERROR",
-					ELECTRON_ERROR_CODES.INVALID_TOKEN,
-				);
+			if (!tokenRecord?.sourceSessionTokenHash) {
+				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 
 			if (tokenRecord.state !== ctx.body.state) {
@@ -120,10 +121,7 @@ export const electronToken = (_opts: ElectronOptions) =>
 					.filter((session) => new Date(session.expiresAt).getTime() > now)
 					.map((session) => hashSessionToken(session.token)),
 			);
-			if (
-				!tokenRecord.sourceSessionTokenHash ||
-				!sourceSessionHashes.includes(tokenRecord.sourceSessionTokenHash)
-			) {
+			if (!sourceSessionHashes.includes(tokenRecord.sourceSessionTokenHash)) {
 				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 			const user = await ctx.context.internalAdapter.findUserById(
@@ -274,6 +272,7 @@ export const electronTransferUser = (
 				state: string;
 				code_challenge: string;
 			},
+			sourceSession: NonNullable<GenericEndpointContext["context"]["session"]>,
 		) => Promise<string | null>;
 	},
 ) =>
@@ -283,9 +282,10 @@ export const electronTransferUser = (
 			method: "POST",
 			query: electronTransferUserQuerySchema,
 			body: electronTransferUserBodySchema,
-			use: [sessionMiddleware],
+			use: [sensitiveSessionMiddleware],
 			requireHeaders: true,
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: "Transfer the user to the electron app",
 					operationId: "electronTransferUser",
@@ -323,7 +323,11 @@ export const electronTransferUser = (
 			},
 		},
 		async (ctx) => {
-			const identifier = await handleTransfer(ctx, ctx.query);
+			const identifier = await handleTransfer(
+				ctx,
+				ctx.query,
+				ctx.context.session,
+			);
 			if (identifier === null) {
 				throw APIError.from(
 					"BAD_REQUEST",
