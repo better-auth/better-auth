@@ -854,7 +854,8 @@ function ContributorsSection({
 											{showAvatars ? (
 												// Eager once prefetching: Safari's native lazy-loading
 												// only starts right at the viewport, so avatars would
-												// still pop in one by one as the marquee scrolls. The
+												// still pop in one by one as the marquee scrolls. Low
+												// priority keeps them behind the demo video, and the
 												// tile background covers any that land a beat late.
 												<img
 													src={`${c.avatar_url}&s=64`}
@@ -862,6 +863,7 @@ function ContributorsSection({
 													width={32}
 													height={32}
 													loading={prefetch ? "eager" : "lazy"}
+													fetchPriority="low"
 													className="rounded-sm bg-foreground/10 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
 												/>
 											) : (
