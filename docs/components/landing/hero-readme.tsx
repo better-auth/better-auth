@@ -704,6 +704,29 @@ function ContributorsSection({
 	contributors: ContributorInfo[];
 	contributorCount: number;
 }) {
+	const wallRef = useRef<HTMLDivElement>(null);
+	const [wallNearViewport, setWallNearViewport] = useState(false);
+
+	// Hundreds of avatars scroll through the wall; the links always render,
+	// but the avatar images are only mounted once the wall is close to the
+	// viewport instead of relying on the browser's generous native
+	// lazy-loading distance.
+	useEffect(() => {
+		const wall = wallRef.current;
+		if (!wall) return;
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) {
+					setWallNearViewport(true);
+					observer.disconnect();
+				}
+			},
+			{ rootMargin: "200px" },
+		);
+		observer.observe(wall);
+		return () => observer.disconnect();
+	}, []);
+
 	if (contributors.length === 0) return null;
 
 	const colCount = 18;
@@ -735,6 +758,7 @@ function ContributorsSection({
 
 			{contributors.length > 0 && (
 				<div
+					ref={wallRef}
 					className="relative overflow-hidden h-[220px] rounded-md"
 					style={{
 						perspective: "600px",
@@ -776,16 +800,21 @@ function ContributorsSection({
 											target="_blank"
 											rel="noopener noreferrer"
 											title={c.login}
+											aria-label={c.login}
 											className="relative group shrink-0"
 										>
-											<img
-												src={`${c.avatar_url}&s=64`}
-												alt={c.login}
-												width={32}
-												height={32}
-												loading="lazy"
-												className="rounded-sm grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
-											/>
+											{wallNearViewport ? (
+												<img
+													src={`${c.avatar_url}&s=64`}
+													alt={c.login}
+													width={32}
+													height={32}
+													loading="lazy"
+													className="rounded-sm grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
+												/>
+											) : (
+												<span className="block size-8 rounded-sm bg-foreground/5" />
+											)}
 											<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-foreground text-background text-[8px] font-mono rounded-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
 												{c.login}
 											</div>
@@ -1017,23 +1046,25 @@ function DemoVideo() {
 
 	return (
 		<div ref={containerRef}>
+			{/* The poster is a CSS background rather than the `poster` attribute:
+			    hidden <video>s still fetch their poster, but browsers skip
+			    backgrounds on display:none elements, so only the active theme's
+			    poster loads and it's there on first paint. */}
 			<video
 				src="/demo-dark.mp4"
-				poster="/demo-dark-poster.webp"
 				preload="none"
 				loop
 				muted
 				playsInline
-				className="w-full h-auto -mt-[2px] dark:block hidden"
+				className="w-full h-auto aspect-[2528/1440] -mt-[2px] bg-[url(/demo-dark-poster.webp)] bg-cover dark:block hidden"
 			/>
 			<video
 				src="/demo-light.mp4"
-				poster="/demo-light-poster.webp"
 				preload="none"
 				loop
 				muted
 				playsInline
-				className="w-full h-auto -mt-[2px] dark:hidden"
+				className="w-full h-auto aspect-[2544/1440] -mt-[2px] bg-[url(/demo-light-poster.webp)] bg-cover dark:hidden"
 			/>
 		</div>
 	);
