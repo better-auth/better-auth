@@ -21,42 +21,42 @@ export default async function HomePage() {
 							{/* Dark mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] hidden dark:flex justify-center opacity-100">
 								<Image
-									src="/left-3d-logo.svg"
+									src="/left-3d-logo.webp"
 									alt=""
 									width={518}
 									height={667}
 									className="h-auto max-h-[200px] z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
-									priority
+									sizes="160px"
 									draggable={false}
 								/>
 								<Image
-									src="/right-3d-logo.svg"
+									src="/right-3d-logo.webp"
 									alt=""
 									width={518}
 									height={667}
 									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
-									priority
+									sizes="160px"
 									draggable={false}
 								/>
 							</div>
 							{/* Light mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] flex dark:hidden justify-center opacity-100">
 								<Image
-									src="/left-3d-logo-light.svg"
+									src="/left-3d-logo-light.webp"
 									alt=""
 									width={518}
 									height={667}
 									className="h-auto max-h-[200px] z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
-									priority
+									sizes="160px"
 									draggable={false}
 								/>
 								<Image
-									src="/right-3d-logo-light.svg"
+									src="/right-3d-logo-light.webp"
 									alt=""
 									width={518}
 									height={667}
 									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
-									priority
+									sizes="160px"
 									draggable={false}
 								/>
 							</div>
