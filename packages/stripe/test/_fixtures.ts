@@ -72,7 +72,7 @@ export function createStripeMock(
 					id: checkoutSessionId,
 				}),
 				retrieve: vi.fn(),
-				list: vi.fn().mockResolvedValue({ data: [] }),
+				list: vi.fn().mockReturnValue(asyncList([])),
 				expire: vi.fn().mockResolvedValue({}),
 			},
 		},

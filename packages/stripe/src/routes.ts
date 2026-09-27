@@ -1007,6 +1007,52 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				});
 			}
 
+			// A reused pending subscription may still have checkout sessions from
+			// earlier attempts. Two paid sessions create two Stripe subscriptions
+			// for one record, so open ones are expired, and a completed one whose
+			// webhook has not arrived yet ends the request.
+			if (
+				incompleteSubscription &&
+				!activeOrTrialingSubscription &&
+				customerId
+			) {
+				let isCheckoutCompleted = false;
+				try {
+					for await (const previousSession of client.checkout.sessions.list({
+						customer: customerId,
+						limit: 100,
+					})) {
+						if (
+							previousSession.mode !== "subscription" ||
+							subscriptionMetadata.get(previousSession.metadata)
+								.subscriptionId !== incompleteSubscription.id
+						) {
+							continue;
+						}
+						if (previousSession.status === "complete") {
+							isCheckoutCompleted = true;
+						}
+						if (previousSession.status === "open") {
+							await client.checkout.sessions.expire(previousSession.id);
+						}
+					}
+				} catch (e) {
+					// A session that can no longer be expired may have just been paid,
+					// so a new one must not be created next to it.
+					const error = e as { message?: string; code?: string };
+					throw ctx.error("BAD_REQUEST", {
+						message: error.message,
+						code: error.code,
+					});
+				}
+				if (isCheckoutCompleted) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.CHECKOUT_ALREADY_COMPLETED,
+					);
+				}
+			}
+
 			let subscription: Subscription | undefined =
 				activeOrTrialingSubscription || incompleteSubscription;
 
@@ -1090,41 +1136,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				client_reference_id: _client_reference_id,
 				...additionalParams
 			} = params?.params ?? {};
-
-			// A reused pending subscription still has the checkout session of the
-			// previous attempt open. Expire it so only the new session can be paid:
-			// two paid sessions create two Stripe subscriptions for one record.
-			if (
-				incompleteSubscription &&
-				!activeOrTrialingSubscription &&
-				customerId
-			) {
-				const pendingSubscriptionId = incompleteSubscription.id;
-				try {
-					const { data: openSessions } = await client.checkout.sessions.list({
-						customer: customerId,
-						status: "open",
-						limit: 100,
-					});
-					for (const openSession of openSessions) {
-						if (
-							openSession.mode === "subscription" &&
-							subscriptionMetadata.get(openSession.metadata).subscriptionId ===
-								pendingSubscriptionId
-						) {
-							await client.checkout.sessions.expire(openSession.id);
-						}
-					}
-				} catch (e) {
-					// A session that can no longer be expired may have just been paid,
-					// so a new one must not be created next to it.
-					const error = e as { message?: string; code?: string };
-					throw ctx.error("BAD_REQUEST", {
-						message: error.message,
-						code: error.code,
-					});
-				}
-			}
 
 			const checkoutSession = await client.checkout.sessions
 				.create(

@@ -300,7 +300,7 @@ This will create a Checkout Session and redirect the user to the Stripe Checkout
 
   If the user already has an active subscription, you **must** provide the `subscriptionId` parameter when upgrading. Otherwise, a new subscription may be created alongside the existing one, resulting in duplicate billing.
 
-  If a checkout is started again before the previous one was paid, the previous Checkout Session is expired first, so only the latest one can be completed.
+  If a checkout is started again before the previous one was paid, the previous Checkout Session is expired first, so only the latest one can be completed. If the previous one was already paid or can no longer be expired, the request fails and no second Checkout Session is created.
 </Callout>
 
 > **Important:** The `successUrl` parameter will be internally modified to handle race conditions between checkout completion and webhook processing. The plugin creates an intermediate redirect that ensures subscription status is properly updated before redirecting to your success page.
