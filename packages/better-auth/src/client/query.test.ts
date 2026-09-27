@@ -1314,6 +1314,7 @@ describe("useAuthQuery - error handling", () => {
 		});
 
 		const { session } = getSessionAtom($fetch);
+		const query = session;
 		const unsubscribe = session.listen(() => {});
 
 		// Mount fetch starts
@@ -1328,59 +1329,9 @@ describe("useAuthQuery - error handling", () => {
 		// Session should NOT be stuck in loading/refetching
 		expect(session.value.isRefetching).toBe(false);
 		expect(session.value.isPending).toBe(false);
-		expect(session.value.error).not.toBeNull();
-
-		unsubscribe();
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11160
-	 */
-	it("should abort in-flight request when refetch is called with cancelInFlight: true in useAuthQuery", async () => {
-		let fetchCount = 0;
-		const abortedRequests: number[] = [];
-
-		const $fetch = createFetch({
-			baseURL: "http://localhost:3000",
-			customFetchImpl: async (_url, init) => {
-				fetchCount++;
-				const currentCount = fetchCount;
-				const signal = init?.signal as AbortSignal | undefined;
-				if (currentCount === 1) {
-					return new Promise<Response>((_resolve, reject) => {
-						signal?.addEventListener("abort", () => {
-							abortedRequests.push(currentCount);
-							reject(
-								new DOMException("The operation was aborted.", "AbortError"),
-							);
-						});
-					});
-				}
-				return new Response(JSON.stringify({ ok: true }));
-			},
-		});
-
-		const $signal = atom(false);
-		const query = useAuthQuery<{ ok: boolean }>($signal, "/test", $fetch, {
-			method: "GET",
-		});
-		const unsubscribe = query.listen(() => {});
-
-		// Mount fetch starts (fetch #1)
-		await vi.advanceTimersByTimeAsync(0);
-		expect(fetchCount).toBe(1);
-
-		// Trigger refetch with cancelInFlight: true
-		void query.value.refetch(undefined, { cancelInFlight: true });
-		await vi.advanceTimersByTimeAsync(0);
-
-		// Fetch #1 should have been aborted
-		expect(abortedRequests).toContain(1);
-		expect(fetchCount).toBe(2);
-
-		await vi.runAllTimersAsync();
-		expect(query.value.data).toEqual({ ok: true });
-		expect(query.value.isRefetching).toBe(false);
+		expect(query.value.error?.name).toBe("BetterFetchError");
+		expect(query.value.error?.status).toBe(408);
+		expect(query.value.error?.statusText).toBe("Request Timeout");
 
 		unsubscribe();
 	});
@@ -1510,50 +1461,6 @@ describe("useAuthQuery - error handling", () => {
 		expect(query.value.isPending).toBe(false);
 		expect(query.value.isRefetching).toBe(false);
 		expect(query.value.error).not.toBeNull();
-
-		unsubscribe();
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11160
-	 */
-	it("should clean up abort event listener from opts.signal on completion in useAuthQuery", async () => {
-		const $fetch = createFetch({
-			baseURL: "http://localhost:3000",
-			customFetchImpl: async () => {
-				return new Response(JSON.stringify({ ok: true }));
-			},
-		});
-
-		const callerController = new AbortController();
-		const addEventListenerSpy = vi.spyOn(
-			callerController.signal,
-			"addEventListener",
-		);
-		const removeEventListenerSpy = vi.spyOn(
-			callerController.signal,
-			"removeEventListener",
-		);
-
-		const $signal = atom(false);
-		const query = useAuthQuery<{ ok: boolean }>($signal, "/test", $fetch, {
-			signal: callerController.signal,
-		});
-		const unsubscribe = query.listen(() => {});
-
-		// Mount fetch completes
-		await vi.advanceTimersByTimeAsync(0);
-		await vi.runAllTimersAsync();
-
-		expect(addEventListenerSpy).toHaveBeenCalledWith(
-			"abort",
-			expect.any(Function),
-			{ once: true },
-		);
-		expect(removeEventListenerSpy).toHaveBeenCalledWith(
-			"abort",
-			expect.any(Function),
-		);
 
 		unsubscribe();
 	});

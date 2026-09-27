@@ -16,7 +16,6 @@ export type AuthQueryState<T> = {
 	isRefetching: boolean;
 	refetch: (
 		queryParams?: { query?: SessionQueryParams } | undefined,
-		fetchOpts?: { cancelInFlight?: boolean } | undefined,
 	) => Promise<void>;
 };
 
@@ -52,18 +51,19 @@ export const useAuthQuery = <T>(
 		  )
 		| undefined,
 ) => {
-	let activeAbortController: AbortController | undefined;
+	const value: AuthQueryAtom<T> = createAuthQueryAtom<AuthQueryState<T>>({
+		data: null,
+		error: null,
+		isPending: true,
+		isRefetching: false,
+		refetch: (queryParams) => fn(queryParams),
+	});
+	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
 	let latestRequestId = 0;
 
 	const fn = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,
-		fetchOpts?: { cancelInFlight?: boolean } | undefined,
 	) => {
-		if (fetchOpts?.cancelInFlight === true) {
-			activeAbortController?.abort();
-		}
-		const controller = new AbortController();
-		activeAbortController = controller;
 		const requestId = ++latestRequestId;
 		return new Promise<void>((resolve) => {
 			const opts =
@@ -75,32 +75,12 @@ export const useAuthQuery = <T>(
 						})
 					: options;
 
-			let timeoutId: ReturnType<typeof setTimeout> | undefined;
-			if (opts?.timeout && typeof setTimeout !== "undefined") {
-				timeoutId = setTimeout(() => {
-					controller.abort(
-						new DOMException("The operation timed out.", "TimeoutError"),
-					);
-				}, opts.timeout);
-			}
-
-			let onAbort: (() => void) | undefined;
-			if (opts?.signal) {
-				if (opts.signal.aborted) {
-					controller.abort(opts.signal.reason);
-				} else {
-					onAbort = () => controller.abort(opts.signal?.reason);
-					opts.signal.addEventListener("abort", onAbort, { once: true });
-				}
-			}
-
 			$fetch<T>(path, {
 				...opts,
 				query: {
 					...opts?.query,
 					...queryParams?.query,
 				},
-				signal: controller.signal,
 				async onSuccess(context) {
 					if (requestId === latestRequestId) {
 						const current = value.get();
@@ -167,28 +147,10 @@ export const useAuthQuery = <T>(
 					});
 				})
 				.finally(() => {
-					if (timeoutId) {
-						clearTimeout(timeoutId);
-					}
-					if (opts?.signal && onAbort) {
-						opts.signal.removeEventListener("abort", onAbort);
-					}
-					if (activeAbortController === controller) {
-						activeAbortController = undefined;
-					}
 					resolve(void 0);
 				});
 		});
 	};
-
-	const value: AuthQueryAtom<T> = createAuthQueryAtom<AuthQueryState<T>>({
-		data: null,
-		error: null,
-		isPending: true,
-		isRefetching: false,
-		refetch: (queryParams, fetchOpts) => fn(queryParams, fetchOpts),
-	});
-	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];

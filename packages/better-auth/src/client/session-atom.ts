@@ -1,16 +1,28 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import { BetterFetchError } from "@better-fetch/fetch";
+import type { PreinitializedWritableAtom } from "nanostores";
 import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
-import type { AuthQueryAtom, AuthQueryState } from "./query";
+import type { AuthQueryState } from "./query";
 import { createAuthQueryAtom } from "./query-atom";
 import { createSessionRefreshManager } from "./session-refresh";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection
 const isServer = () => typeof window === "undefined";
+
+const createTimeoutError = () => {
+	if (typeof DOMException !== "undefined") {
+		try {
+			return new DOMException("The operation timed out.", "TimeoutError");
+		} catch {}
+	}
+	const err = new Error("The operation timed out.");
+	err.name = "TimeoutError";
+	return err;
+};
 
 // Align session request reuse with the nanostores's remount lifecycle.
 const SESSION_MOUNT_DEDUPE_INTERVAL = STORE_UNMOUNT_DELAY;
@@ -25,7 +37,16 @@ export type SessionData = {
 	session: Session;
 } & Record<string, any>;
 
-export type SessionAtom = AuthQueryAtom<SessionData>;
+export type SessionAtomState<T = Session> = AuthQueryState<T> & {
+	refetch: (
+		queryParams?: { query?: SessionQueryParams } | undefined,
+		fetchOpts?: { cancelInFlight?: boolean } | undefined,
+	) => Promise<void>;
+};
+
+export type SessionAtom = PreinitializedWritableAtom<
+	SessionAtomState<SessionData>
+>;
 
 export function hydrateSessionAtom(
 	sessionAtom: SessionAtom,
@@ -96,8 +117,8 @@ function normalizeSessionData(
 }
 
 function isSessionAtomEqual(
-	a: AuthQueryState<SessionData>,
-	b: AuthQueryState<SessionData>,
+	a: SessionAtomState<SessionData>,
+	b: SessionAtomState<SessionData>,
 ): boolean {
 	return (
 		isJsonEqual(a.data, b.data) &&
@@ -138,15 +159,15 @@ export function getSessionAtom(
 			cancelInFlight: fetchOpts?.cancelInFlight ?? true,
 		});
 
-	const session: SessionAtom = createAuthQueryAtom<AuthQueryState<SessionData>>(
-		{
-			data: null,
-			error: null,
-			isPending: true,
-			isRefetching: false,
-			refetch,
-		},
-	);
+	const session: SessionAtom = createAuthQueryAtom<
+		SessionAtomState<SessionData>
+	>({
+		data: null,
+		error: null,
+		isPending: true,
+		isRefetching: false,
+		refetch,
+	});
 	withEquality(session, isSessionAtomEqual);
 
 	const executeSessionFetch = async (
@@ -170,7 +191,7 @@ export function getSessionAtom(
 			if (timeoutId) clearTimeout(timeoutId);
 			if (typeof setTimeout !== "undefined") {
 				timeoutId = setTimeout(() => {
-					controller.abort();
+					controller.abort(createTimeoutError());
 				}, SESSION_FETCH_TIMEOUT_MS);
 			}
 		};
@@ -366,14 +387,18 @@ export function getSessionAtom(
 				}
 				const current = session.value;
 				if (current.isRefetching || current.isPending) {
+					let timeoutError: BetterFetchError | undefined;
+					if (outcome === "aborted" && !current.error) {
+						timeoutError = new BetterFetchError(
+							408,
+							"Request Timeout",
+							"The session request timed out or was aborted",
+						);
+						timeoutError.name = "BetterFetchError";
+					}
 					const resolvedError =
 						outcome === "aborted"
-							? (current.error ??
-								new BetterFetchError(
-									408,
-									"Request Timeout",
-									"The session request timed out or was aborted",
-								))
+							? (current.error ?? timeoutError!)
 							: (error ?? current.error);
 					session.set({
 						...current,
