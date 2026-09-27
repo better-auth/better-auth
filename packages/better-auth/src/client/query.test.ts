@@ -1464,4 +1464,145 @@ describe("useAuthQuery - error handling", () => {
 
 		unsubscribe();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should abort and respect opts.timeout in useAuthQuery", async () => {
+		let fetchStarted = false;
+		let aborted = false;
+
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				fetchStarted = true;
+				const signal = init?.signal as AbortSignal | undefined;
+				return new Promise<Response>((resolve, reject) => {
+					const timer = setTimeout(() => {
+						resolve(new Response(JSON.stringify({ ok: true })));
+					}, 2000);
+					signal?.addEventListener("abort", () => {
+						clearTimeout(timer);
+						aborted = true;
+						reject(
+							signal.reason ??
+								new DOMException("The operation was aborted.", "AbortError"),
+						);
+					});
+				});
+			},
+		});
+
+		const $signal = atom(false);
+		const query = useAuthQuery<{ ok: boolean }>($signal, "/test", $fetch, {
+			timeout: 500,
+		});
+		const unsubscribe = query.listen(() => {});
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchStarted).toBe(true);
+
+		// Advance past timeout (500ms)
+		await vi.advanceTimersByTimeAsync(500);
+		await vi.runAllTimersAsync();
+
+		expect(aborted).toBe(true);
+		expect(query.value.isPending).toBe(false);
+		expect(query.value.isRefetching).toBe(false);
+		expect(query.value.error).not.toBeNull();
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should clean up abort event listener from opts.signal on completion in useAuthQuery", async () => {
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				return new Response(JSON.stringify({ ok: true }));
+			},
+		});
+
+		const callerController = new AbortController();
+		const addEventListenerSpy = vi.spyOn(
+			callerController.signal,
+			"addEventListener",
+		);
+		const removeEventListenerSpy = vi.spyOn(
+			callerController.signal,
+			"removeEventListener",
+		);
+
+		const $signal = atom(false);
+		const query = useAuthQuery<{ ok: boolean }>($signal, "/test", $fetch, {
+			signal: callerController.signal,
+		});
+		const unsubscribe = query.listen(() => {});
+
+		// Mount fetch completes
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.runAllTimersAsync();
+
+		expect(addEventListenerSpy).toHaveBeenCalledWith(
+			"abort",
+			expect.any(Function),
+			{ once: true },
+		);
+		expect(removeEventListenerSpy).toHaveBeenCalledWith(
+			"abort",
+			expect.any(Function),
+		);
+
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11160
+	 */
+	it("should not classify real failed requests as 408 Request Timeout", async () => {
+		let is500 = false;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				if (is500) {
+					return new Response(JSON.stringify({ message: "Server error" }), {
+						status: 500,
+						statusText: "Internal Server Error",
+					});
+				}
+				throw new TypeError("Failed to fetch");
+			},
+		});
+
+		const { session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+
+		// Mount fetch starts and fails with TypeError
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.runAllTimersAsync();
+
+		// Real network failure should report the actual error, never a fabricated 408 Request Timeout
+		expect(session.value.isRefetching).toBe(false);
+		expect(session.value.isPending).toBe(false);
+		expect(session.value.error).not.toBeNull();
+		expect(session.value.error?.status).not.toBe(408);
+		expect(session.value.error?.message).not.toContain("Request Timeout");
+
+		// Refetch fails with HTTP 500
+		is500 = true;
+		await session.value.refetch();
+		await vi.runAllTimersAsync();
+
+		// Real 500 failure should report 500, never a fabricated 408 Request Timeout
+		expect(session.value.isRefetching).toBe(false);
+		expect(session.value.isPending).toBe(false);
+		expect(session.value.error).not.toBeNull();
+		expect(session.value.error?.status).toBe(500);
+		expect(session.value.error?.status).not.toBe(408);
+		expect(session.value.error?.statusText).not.toBe("Request Timeout");
+
+		unsubscribe();
+	});
 });

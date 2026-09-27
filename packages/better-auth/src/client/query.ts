@@ -75,15 +75,22 @@ export const useAuthQuery = <T>(
 						})
 					: options;
 
+			let timeoutId: ReturnType<typeof setTimeout> | undefined;
+			if (opts?.timeout && typeof setTimeout !== "undefined") {
+				timeoutId = setTimeout(() => {
+					controller.abort(
+						new DOMException("The operation timed out.", "TimeoutError"),
+					);
+				}, opts.timeout);
+			}
+
+			let onAbort: (() => void) | undefined;
 			if (opts?.signal) {
 				if (opts.signal.aborted) {
 					controller.abort(opts.signal.reason);
 				} else {
-					opts.signal.addEventListener(
-						"abort",
-						() => controller.abort(opts.signal?.reason),
-						{ once: true },
-					);
+					onAbort = () => controller.abort(opts.signal?.reason);
+					opts.signal.addEventListener("abort", onAbort, { once: true });
 				}
 			}
 
@@ -160,6 +167,12 @@ export const useAuthQuery = <T>(
 					});
 				})
 				.finally(() => {
+					if (timeoutId) {
+						clearTimeout(timeoutId);
+					}
+					if (opts?.signal && onAbort) {
+						opts.signal.removeEventListener("abort", onAbort);
+					}
 					if (activeAbortController === controller) {
 						activeAbortController = undefined;
 					}

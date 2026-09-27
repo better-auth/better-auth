@@ -56,9 +56,14 @@ type SessionResponse = (
 
 type SessionFetchOutcome = "aborted" | "failed" | "stale" | "fresh";
 
+type SessionFetchResult = {
+	outcome: SessionFetchOutcome;
+	error?: BetterFetchError | null;
+};
+
 type SessionFlight = {
 	cancel: () => void;
-	promise: Promise<SessionFetchOutcome>;
+	promise: Promise<SessionFetchResult>;
 	revision: number;
 	queryParams?: { query?: SessionQueryParams } | undefined;
 };
@@ -148,7 +153,7 @@ export function getSessionAtom(
 		controller: AbortController,
 		revision: number,
 		queryParams?: { query?: SessionQueryParams } | undefined,
-	): Promise<SessionFetchOutcome> => {
+	): Promise<SessionFetchResult> => {
 		const signal = controller.signal;
 		const current = session.value;
 		session.set({
@@ -158,7 +163,7 @@ export function getSessionAtom(
 			error: null,
 			refetch,
 		});
-		if (signal.aborted) return "aborted";
+		if (signal.aborted) return { outcome: "aborted" };
 
 		let timeoutId: ReturnType<typeof setTimeout> | undefined;
 		const armTimeout = () => {
@@ -194,7 +199,7 @@ export function getSessionAtom(
 				abortPromise,
 			]);
 			if (signal.aborted) {
-				return "aborted";
+				return { outcome: "aborted" };
 			}
 
 			let { data, error } = normalizeSessionResponse(res);
@@ -212,12 +217,12 @@ export function getSessionAtom(
 						abortPromise,
 					]);
 					if (signal.aborted) {
-						return "aborted";
+						return { outcome: "aborted" };
 					}
 					({ data, error } = normalizeSessionResponse(refreshRes));
 				} catch {
 					if (signal.aborted) {
-						return "aborted";
+						return { outcome: "aborted" };
 					}
 					outcome = "stale";
 				}
@@ -227,7 +232,7 @@ export function getSessionAtom(
 			// settleFlight drain nextFlight. Only skip the data write — not the
 			// return value, so the caller can still resolve queued nextFlight.
 			if (revision !== sessionRevision) {
-				return outcome === "fresh" ? "stale" : outcome;
+				return { outcome: outcome === "fresh" ? "stale" : outcome };
 			}
 
 			if (error) {
@@ -240,7 +245,7 @@ export function getSessionAtom(
 					isRefetching: Boolean(nextFlight),
 					refetch,
 				});
-				return "failed";
+				return { outcome: "failed", error: error as BetterFetchError };
 			}
 
 			const sessionData = normalizeSessionData(data);
@@ -258,13 +263,13 @@ export function getSessionAtom(
 				isRefetching: Boolean(nextFlight),
 				refetch,
 			});
-			return outcome;
+			return { outcome };
 		} catch (fetchError) {
 			if (signal.aborted) {
-				return "aborted";
+				return { outcome: "aborted" };
 			}
 			if (revision !== sessionRevision) {
-				return "failed";
+				return { outcome: "failed", error: fetchError as BetterFetchError };
 			}
 			const latest = session.value;
 			session.set({
@@ -274,7 +279,7 @@ export function getSessionAtom(
 				isRefetching: Boolean(nextFlight),
 				refetch,
 			});
-			return "failed";
+			return { outcome: "failed", error: fetchError as BetterFetchError };
 		} finally {
 			if (timeoutId) {
 				clearTimeout(timeoutId);
@@ -339,7 +344,7 @@ export function getSessionAtom(
 		const controller = new AbortController();
 		const capturedRevision = sessionRevision;
 		const promise = Promise.resolve().then(() => {
-			if (controller.signal.aborted) return "aborted" as const;
+			if (controller.signal.aborted) return { outcome: "aborted" as const };
 			return executeSessionFetch(controller, capturedRevision, queryParams);
 		});
 		const request: SessionFlight = {
@@ -349,7 +354,10 @@ export function getSessionAtom(
 			queryParams,
 		};
 		flight = request;
-		const settleFlight = (outcome: SessionFetchOutcome) => {
+		const settleFlight = (
+			outcome: SessionFetchOutcome,
+			error?: BetterFetchError | null,
+		) => {
 			if (flight !== request) return;
 			flight = undefined;
 			if (!nextFlight) {
@@ -358,19 +366,20 @@ export function getSessionAtom(
 				}
 				const current = session.value;
 				if (current.isRefetching || current.isPending) {
+					const resolvedError =
+						outcome === "aborted"
+							? (current.error ??
+								new BetterFetchError(
+									408,
+									"Request Timeout",
+									"The session request timed out or was aborted",
+								))
+							: (error ?? current.error);
 					session.set({
 						...current,
 						isRefetching: false,
 						isPending: false,
-						error:
-							outcome === "aborted" || outcome === "failed"
-								? (current.error ??
-									new BetterFetchError(
-										408,
-										"Request Timeout",
-										"The session request timed out or was aborted",
-									))
-								: current.error,
+						error: resolvedError,
 					});
 				}
 			}
@@ -396,7 +405,10 @@ export function getSessionAtom(
 				}
 			}
 		};
-		void request.promise.then(settleFlight, () => settleFlight("failed"));
+		void request.promise.then(
+			(result) => settleFlight(result.outcome, result.error),
+			(err) => settleFlight("failed", err as BetterFetchError),
+		);
 		return request.promise.then(() => undefined);
 	};
 
