@@ -397,4 +397,14 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/qamarq.png",
 		},
 	},
+	{
+		name: "better-auth-sequelize-adapter",
+		url: "https://github.com/mfhassan22/better-auth-sequelize-adapter",
+		description: "Better Auth Sequelize Adapter.",
+		author: {
+			name: "mfhassan22",
+			github: "mfhassan22",
+			avatar: "https://github.com/mfhassan22.png",
+		},
+	},
 ];
