@@ -6,6 +6,7 @@ import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
 import {
+	createCheckoutSessionCompletedEvent,
 	createPrice,
 	createSubscription,
 	createSubscriptionEvent,
@@ -1778,7 +1779,7 @@ describe("stripe webhook", () => {
 			expect(data.message).toContain("Failed to construct Stripe event");
 		});
 
-		test("should handle async errors in webhook event processing", async ({
+		test("should fail the webhook when the Stripe API call in checkout.session.completed fails", async ({
 			memory,
 			stripeOptions,
 		}) => {
@@ -1854,13 +1855,11 @@ describe("stripe webhook", () => {
 			);
 
 			const response = await testAuth.handler(mockRequest);
-			// Errors inside event handlers are caught and logged but don't fail the webhook
-			// This prevents Stripe from retrying and is the expected behavior
-			expect(response.status).toBe(200);
-			const data = await response.json();
-			expect(data).toEqual({ success: true });
-			// Verify the error was logged (via the stripeClient.subscriptions.retrieve rejection)
+			// A failed Stripe API call means the subscription was not saved, so the
+			// webhook must return a non-2xx response and let Stripe retry it.
+			expect(response.status).toBe(400);
 			expect(stripeForTest.subscriptions.retrieve).toHaveBeenCalled();
+			expect(errorThrowingHandler).not.toHaveBeenCalled();
 		});
 
 		test("should successfully process webhook with valid async signature verification", async ({
@@ -2713,5 +2712,428 @@ describe("stripe webhook", () => {
 			// endedAt should be the actual termination time (now), not the cancellation request time
 			expect(updatedSub!.endedAt!.getTime()).toBe(now * 1000);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10534
+ */
+describe("stripe webhook: acknowledgement when processing fails", () => {
+	const starterItems = {
+		object: "list" as const,
+		data: [
+			createSubscriptionItem({
+				price: createPrice({ id: TEST_PRICES.starter }),
+			}),
+		],
+		has_more: false,
+		url: "/v1/subscription_items",
+	};
+
+	function sendWebhook(
+		auth: { handler: (request: Request) => Promise<Response> },
+		event: Stripe.Event,
+	) {
+		return auth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(event),
+			}),
+		);
+	}
+
+	test("returns non-2xx when saving checkout.session.completed fails, then applies it once on retry", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const onEvent = vi.fn();
+		const onSubscriptionComplete = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						onEvent,
+						subscription: {
+							...stripeOptions.subscription,
+							onSubscriptionComplete,
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const user = await ctx.adapter.create({
+			model: "user",
+			data: { email: "checkout-fail@email.com" },
+		});
+		const row = await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: user.id,
+				stripeCustomerId: "cus_checkout_fail",
+				status: "incomplete",
+				plan: "starter",
+			},
+		});
+		const event = createCheckoutSessionCompletedEvent({
+			subscription: "sub_checkout_fail",
+			metadata: { referenceId: user.id, subscriptionId: row.id },
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+		stripeMock.subscriptions.retrieve.mockResolvedValue(
+			createSubscription({ id: "sub_checkout_fail", items: starterItems }),
+		);
+
+		vi.spyOn(ctx.adapter, "update").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		const failed = await sendWebhook(auth, event);
+		expect(failed.status).toBeGreaterThanOrEqual(400);
+		expect(onEvent).not.toHaveBeenCalled();
+		expect(onSubscriptionComplete).not.toHaveBeenCalled();
+		const unchanged = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: row.id }],
+		});
+		expect(unchanged?.status).toBe("incomplete");
+
+		// Stripe redelivers the same event.
+		const retried = await sendWebhook(auth, event);
+		expect(retried.status).toBe(200);
+		const saved = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: row.id }],
+		});
+		expect(saved).toMatchObject({
+			status: "active",
+			stripeSubscriptionId: "sub_checkout_fail",
+		});
+		expect(onSubscriptionComplete).toHaveBeenCalledTimes(1);
+		expect(onEvent).toHaveBeenCalledTimes(1);
+	});
+
+	test("returns non-2xx when creating the row for customer.subscription.created fails, and the retry creates exactly one row", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const onSubscriptionCreated = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						subscription: {
+							...stripeOptions.subscription,
+							onSubscriptionCreated,
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "created-fail@email.com",
+				stripeCustomerId: "cus_created_fail",
+			},
+		});
+		const event = createSubscriptionEvent("customer.subscription.created", {
+			id: "sub_created_fail",
+			customer: "cus_created_fail",
+			items: starterItems,
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+
+		vi.spyOn(ctx.adapter, "create").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		const failed = await sendWebhook(auth, event);
+		expect(failed.status).toBeGreaterThanOrEqual(400);
+		expect(onSubscriptionCreated).not.toHaveBeenCalled();
+
+		const retried = await sendWebhook(auth, event);
+		expect(retried.status).toBe(200);
+		const rows = await ctx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_created_fail" }],
+		});
+		expect(rows).toHaveLength(1);
+		expect(onSubscriptionCreated).toHaveBeenCalledTimes(1);
+	});
+
+	test("returns non-2xx when saving customer.subscription.updated fails, and the retry still fires onSubscriptionCancel once", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const onSubscriptionCancel = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						subscription: {
+							...stripeOptions.subscription,
+							onSubscriptionCancel,
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const row = await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: "user_updated_fail",
+				stripeCustomerId: "cus_updated_fail",
+				stripeSubscriptionId: "sub_updated_fail",
+				status: "active",
+				plan: "starter",
+				cancelAtPeriodEnd: false,
+			},
+		});
+		const event = createSubscriptionEvent("customer.subscription.updated", {
+			id: "sub_updated_fail",
+			customer: "cus_updated_fail",
+			status: "active",
+			cancel_at_period_end: true,
+			items: starterItems,
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+
+		vi.spyOn(ctx.adapter, "update").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		const failed = await sendWebhook(auth, event);
+		expect(failed.status).toBeGreaterThanOrEqual(400);
+		expect(onSubscriptionCancel).not.toHaveBeenCalled();
+
+		const retried = await sendWebhook(auth, event);
+		expect(retried.status).toBe(200);
+		const saved = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: row.id }],
+		});
+		expect(saved?.cancelAtPeriodEnd).toBe(true);
+		expect(onSubscriptionCancel).toHaveBeenCalledTimes(1);
+	});
+
+	test("returns non-2xx when saving customer.subscription.deleted fails", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const { auth } = await getTestInstance(
+			{ database: memory, plugins: [stripe(stripeOptions)] },
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const row = await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: "user_deleted_fail",
+				stripeCustomerId: "cus_deleted_fail",
+				stripeSubscriptionId: "sub_deleted_fail",
+				status: "active",
+				plan: "starter",
+			},
+		});
+		const event = createSubscriptionEvent("customer.subscription.deleted", {
+			id: "sub_deleted_fail",
+			customer: "cus_deleted_fail",
+			status: "canceled",
+			items: starterItems,
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+
+		vi.spyOn(ctx.adapter, "update").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		const failed = await sendWebhook(auth, event);
+		expect(failed.status).toBeGreaterThanOrEqual(400);
+		const unchanged = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: row.id }],
+		});
+		expect(unchanged?.status).toBe("active");
+
+		const retried = await sendWebhook(auth, event);
+		expect(retried.status).toBe(200);
+		const saved = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: row.id }],
+		});
+		expect(saved?.status).toBe("canceled");
+	});
+
+	test("acknowledges the webhook when a lifecycle callback throws after the row is saved", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const onEvent = vi.fn();
+		const onSubscriptionComplete = vi
+			.fn()
+			.mockRejectedValue(new Error("welcome email failed"));
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						onEvent,
+						subscription: {
+							...stripeOptions.subscription,
+							onSubscriptionComplete,
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const user = await ctx.adapter.create({
+			model: "user",
+			data: { email: "hook-fail@email.com" },
+		});
+		const row = await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: user.id,
+				stripeCustomerId: "cus_hook_fail",
+				status: "incomplete",
+				plan: "starter",
+			},
+		});
+		const event = createCheckoutSessionCompletedEvent({
+			subscription: "sub_hook_fail",
+			metadata: { referenceId: user.id, subscriptionId: row.id },
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+		stripeMock.subscriptions.retrieve.mockResolvedValue(
+			createSubscription({ id: "sub_hook_fail", items: starterItems }),
+		);
+		const logError = vi.spyOn(ctx.logger, "error");
+
+		const response = await sendWebhook(auth, event);
+		expect(response.status).toBe(200);
+		expect(onSubscriptionComplete).toHaveBeenCalledTimes(1);
+		expect(onEvent).toHaveBeenCalledTimes(1);
+		const saved = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: row.id }],
+		});
+		expect(saved?.status).toBe("active");
+		expect(logError).toHaveBeenCalledWith(
+			expect.stringContaining("onSubscriptionComplete failed"),
+			expect.any(Error),
+		);
+	});
+
+	test("a throwing lifecycle callback does not stop the next one", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const onSubscriptionCancel = vi
+			.fn()
+			.mockRejectedValue(new Error("cancel email failed"));
+		const onSubscriptionUpdate = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						subscription: {
+							...stripeOptions.subscription,
+							onSubscriptionCancel,
+							onSubscriptionUpdate,
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: "user_hook_chain",
+				stripeCustomerId: "cus_hook_chain",
+				stripeSubscriptionId: "sub_hook_chain",
+				status: "active",
+				plan: "starter",
+				cancelAtPeriodEnd: false,
+			},
+		});
+		const event = createSubscriptionEvent("customer.subscription.updated", {
+			id: "sub_hook_chain",
+			customer: "cus_hook_chain",
+			status: "active",
+			cancel_at_period_end: true,
+			items: starterItems,
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+
+		const response = await sendWebhook(auth, event);
+		expect(response.status).toBe(200);
+		expect(onSubscriptionCancel).toHaveBeenCalledTimes(1);
+		expect(onSubscriptionUpdate).toHaveBeenCalledTimes(1);
+	});
+
+	test("acknowledges checkout.session.completed for a one-time payment without calling Stripe", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const onEvent = vi.fn();
+		const { auth } = await getTestInstance(
+			{ database: memory, plugins: [stripe({ ...stripeOptions, onEvent })] },
+			{ disableTestUser: true },
+		);
+		const event = createCheckoutSessionCompletedEvent({
+			mode: "payment",
+			subscription: null,
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+
+		const response = await sendWebhook(auth, event);
+		expect(response.status).toBe(200);
+		expect(stripeMock.subscriptions.retrieve).not.toHaveBeenCalled();
+		expect(onEvent).toHaveBeenCalledTimes(1);
+	});
+
+	test("acknowledges customer.subscription.updated for a subscription the app does not track", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const onEvent = vi.fn();
+		const { auth } = await getTestInstance(
+			{ database: memory, plugins: [stripe({ ...stripeOptions, onEvent })] },
+			{ disableTestUser: true },
+		);
+		const event = createSubscriptionEvent("customer.subscription.updated", {
+			id: "sub_untracked",
+			customer: "cus_untracked",
+			items: starterItems,
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+
+		const response = await sendWebhook(auth, event);
+		expect(response.status).toBe(200);
+		expect(onEvent).toHaveBeenCalledTimes(1);
 	});
 });

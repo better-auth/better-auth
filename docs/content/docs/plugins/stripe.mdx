@@ -637,6 +637,14 @@ subscription: {
 }
 ```
 
+#### Webhook errors and retries
+
+If the plugin can't save a subscription change, for example because a database write or a Stripe API call fails, the webhook endpoint returns a non-2xx response and skips `onEvent`. Stripe then retries the event, and the retry applies the change.
+
+Lifecycle hooks (the callbacks above and the `freeTrial` callbacks) run after the subscription is saved, on a best-effort basis. If a hook throws, the error is logged, the remaining hooks and `onEvent` still run, and the webhook returns `200`, so Stripe doesn't retry the event because of it. This keeps a retry from repeating hooks that already succeeded.
+
+If a side effect has to be retried when it fails, run it in `onEvent` instead. An error thrown from `onEvent` makes the webhook return a non-2xx response, so Stripe redelivers the event and the plugin processes it again. Stripe can deliver the same event more than once, so keep hooks and `onEvent` idempotent, for example by recording each `event.id` you've handled.
+
 ### Trial Periods
 
 You can configure trial periods for your plans:
