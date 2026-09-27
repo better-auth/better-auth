@@ -697,6 +697,53 @@ type CommunityHeroStats = {
 	contributors: number;
 };
 
+/**
+ * Below-the-fold media (contributor avatars, the demo video) stays out of the
+ * initial load. On a fast connection it's fetched as soon as the page has
+ * finished loading, so it's ready before anyone scrolls to it; on slow or
+ * data-saver connections it waits until it's about a screen away.
+ */
+function useIdlePrefetch() {
+	const [prefetch, setPrefetch] = useState(false);
+
+	useEffect(() => {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const start = () => {
+			if (isSlowConnection()) return;
+			// Give the browser a beat after `load` so this never competes with
+			// the page's own resources.
+			timer = setTimeout(() => setPrefetch(true), 300);
+		};
+		if (document.readyState === "complete") start();
+		else window.addEventListener("load", start, { once: true });
+		return () => {
+			window.removeEventListener("load", start);
+			clearTimeout(timer);
+		};
+	}, []);
+
+	return prefetch;
+}
+
+function isSlowConnection() {
+	// Chromium only; Safari and Firefox don't expose the Network Information API.
+	const connection = (
+		navigator as Navigator & {
+			connection?: { saveData?: boolean; effectiveType?: string };
+		}
+	).connection;
+	if (connection?.saveData) return true;
+	if (/^(slow-2g|2g|3g)$/.test(connection?.effectiveType ?? "")) return true;
+	// Everywhere else, judge by how long this page took to load.
+	const [navigation] = performance.getEntriesByType(
+		"navigation",
+	) as PerformanceNavigationTiming[];
+	return (navigation?.loadEventStart || performance.now()) > 4000;
+}
+
+/** Starts loading ahead of time: roughly one screen before it's visible. */
+const NEAR_VIEWPORT_MARGIN = "100% 0px";
+
 function ContributorsSection({
 	contributors = EMPTY_CONTRIBUTORS,
 	contributorCount,
@@ -706,11 +753,12 @@ function ContributorsSection({
 }) {
 	const wallRef = useRef<HTMLDivElement>(null);
 	const [wallNearViewport, setWallNearViewport] = useState(false);
+	const prefetch = useIdlePrefetch();
+	const showAvatars = prefetch || wallNearViewport;
 
 	// Hundreds of avatars scroll through the wall; the links always render,
-	// but the avatar images are only mounted once the wall is close to the
-	// viewport instead of relying on the browser's generous native
-	// lazy-loading distance.
+	// but the avatar images are only mounted after the page has loaded (fast
+	// connections) or once the wall is about a screen away (slow ones).
 	useEffect(() => {
 		const wall = wallRef.current;
 		if (!wall) return;
@@ -721,7 +769,7 @@ function ContributorsSection({
 					observer.disconnect();
 				}
 			},
-			{ rootMargin: "200px" },
+			{ rootMargin: NEAR_VIEWPORT_MARGIN },
 		);
 		observer.observe(wall);
 		return () => observer.disconnect();
@@ -803,14 +851,18 @@ function ContributorsSection({
 											aria-label={c.login}
 											className="relative group shrink-0"
 										>
-											{wallNearViewport ? (
+											{showAvatars ? (
+												// Eager once prefetching: Safari's native lazy-loading
+												// only starts right at the viewport, so avatars would
+												// still pop in one by one as the marquee scrolls. The
+												// tile background covers any that land a beat late.
 												<img
 													src={`${c.avatar_url}&s=64`}
 													alt={c.login}
 													width={32}
 													height={32}
-													loading="lazy"
-													className="rounded-sm grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
+													loading={prefetch ? "eager" : "lazy"}
+													className="rounded-sm bg-foreground/10 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
 												/>
 											) : (
 												<span className="block size-8 rounded-sm bg-foreground/5" />
@@ -1016,12 +1068,26 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 
 /**
  * Both theme variants are rendered so CSS picks the right one without a
- * hydration flash, but neither autoplays or preloads. Only the visible
- * variant is fetched and played, once it scrolls near the viewport.
+ * hydration flash, but neither autoplays or preloads up front. Only the
+ * visible variant is fetched: right after load on fast connections, or once
+ * it's about a screen away on slow ones.
  */
 function DemoVideo() {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const { resolvedTheme } = useTheme();
+	const prefetch = useIdlePrefetch();
+
+	// On fast connections, buffer the visible variant once the page has
+	// loaded so it's already playing by the time it scrolls into view.
+	useEffect(() => {
+		if (!prefetch || !containerRef.current) return;
+		for (const video of containerRef.current.querySelectorAll("video")) {
+			if (video.offsetParent === null || !video.paused) continue;
+			video.preload = "auto";
+			// Safari won't resume a `preload="none"` video on its own.
+			if (video.readyState === 0) video.load();
+		}
+	}, [prefetch, resolvedTheme]);
 
 	useEffect(() => {
 		const container = containerRef.current;
@@ -1038,7 +1104,7 @@ function DemoVideo() {
 					}
 				}
 			},
-			{ rootMargin: "200px" },
+			{ rootMargin: NEAR_VIEWPORT_MARGIN },
 		);
 		observer.observe(container);
 		return () => observer.disconnect();
