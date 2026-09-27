@@ -323,8 +323,15 @@ export async function onSubscriptionUpdated(
 				}
 				subscription = activeSub;
 			} else {
-				subscription = subs[0]!;
+				subscription = subs[0];
 			}
+		}
+
+		if (!subscription) {
+			ctx.context.logger.warn(
+				`Stripe webhook warning: Subscription ${stripeSubscriptionUpdated.id} not found in database, skipping update`,
+			);
+			return;
 		}
 
 		const seats = plan
