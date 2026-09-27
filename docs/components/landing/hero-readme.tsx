@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import {
 	useCallback,
 	useEffect,
@@ -984,6 +985,60 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 	);
 }
 
+/**
+ * Both theme variants are rendered so CSS picks the right one without a
+ * hydration flash, but neither autoplays or preloads. Only the visible
+ * variant is fetched and played, once it scrolls near the viewport.
+ */
+function DemoVideo() {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const { resolvedTheme } = useTheme();
+
+	useEffect(() => {
+		const container = containerRef.current;
+		if (!container) return;
+		const videos = Array.from(container.querySelectorAll("video"));
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				for (const video of videos) {
+					const visible = video.offsetParent !== null;
+					if (entry.isIntersecting && visible) {
+						video.play().catch(() => {});
+					} else {
+						video.pause();
+					}
+				}
+			},
+			{ rootMargin: "200px" },
+		);
+		observer.observe(container);
+		return () => observer.disconnect();
+	}, [resolvedTheme]);
+
+	return (
+		<div ref={containerRef}>
+			<video
+				src="/demo-dark.mp4"
+				poster="/demo-dark-poster.webp"
+				preload="none"
+				loop
+				muted
+				playsInline
+				className="w-full h-auto -mt-[2px] dark:block hidden"
+			/>
+			<video
+				src="/demo-light.mp4"
+				poster="/demo-light-poster.webp"
+				preload="none"
+				loop
+				muted
+				playsInline
+				className="w-full h-auto -mt-[2px] dark:hidden"
+			/>
+		</div>
+	);
+}
+
 export function HeroReadMe({
 	contributors,
 	stats,
@@ -1866,24 +1921,7 @@ export function HeroReadMe({
 									</div>
 								</div>
 								<div className="overflow-hidden" suppressHydrationWarning>
-									<video
-										src={"/demo-dark.mp4"}
-										autoPlay
-										loop
-										muted
-										playsInline
-										className="w-full h-auto -mt-[2px] dark:block hidden"
-										suppressHydrationWarning
-									/>
-									<video
-										src={"/demo-light.mp4"}
-										autoPlay
-										loop
-										muted
-										playsInline
-										className="w-full h-auto -mt-[2px] dark:hidden"
-										suppressHydrationWarning
-									/>
+									<DemoVideo />
 								</div>
 							</div>
 
