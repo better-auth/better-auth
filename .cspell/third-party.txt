@@ -49,3 +49,4 @@ elif
 zitadel
 anthropics
 nextjs
+botid

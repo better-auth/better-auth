@@ -10,6 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { formatErrorURL, validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
+import { verifyOAuthQueryParams } from "./index";
 import { oauthProvider } from "./oauth";
 import {
 	canonicalizeOAuthQueryParams,
@@ -19,7 +20,6 @@ import {
 } from "./signed-query";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
-import { verifyOAuthQueryParams } from "./utils";
 
 const signedQueryParameterNameParam = "ba_param";
 

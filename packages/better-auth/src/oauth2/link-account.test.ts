@@ -1868,7 +1868,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.issuer).toBe("local:oauth:github");
 		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 
@@ -1883,6 +1882,59 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
+	});
+});
+
+describe("oauth2 - ambiguous account identity", () => {
+	it("does not issue a session for an ambiguous provider key", async () => {
+		const { auth } = await getTestInstance(
+			{
+				logger: { disabled: true },
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		for (const name of ["first", "second"]) {
+			const user = await ctx.internalAdapter.createUser(
+				{ name, email: `${name}@ambiguous-account.test` },
+				{ method: "test" },
+			);
+			await ctx.internalAdapter.createAccount({
+				userId: user.id,
+				providerId: "google",
+				accountId: "shared-subject",
+			});
+		}
+		const token = await signJWT(
+			{
+				sub: "shared-subject",
+				email: "second@ambiguous-account.test",
+				email_verified: true,
+				name: "Second",
+				iss: "https://accounts.google.com",
+				aud: "test",
+			},
+			DEFAULT_SECRET,
+		);
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider: "google", idToken: { token } }),
+			}),
+		);
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toContain(
+			"error=internal_server_error",
+		);
+		expect(await ctx.adapter.findMany({ model: "session" })).toEqual([]);
 	});
 });
 
@@ -1920,7 +1972,6 @@ describe("oauth2 - orphaned account identity", () => {
 				model: "account",
 				data: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId,
 					userId: "missing-account-owner",
 					createdAt: new Date(),

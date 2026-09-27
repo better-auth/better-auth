@@ -502,8 +502,8 @@ function loadPreviousPrereleaseChangesets(version: string): Set<string> {
 }
 
 /**
- * Collects release entries using git history as the ground truth,
- * enriched with changeset descriptions where available.
+ * Collects release entries from consumed changesets and enriches them with
+ * pull request metadata from git history.
  *
  * Handles the cherry-pick history gap (where the previous tag is not
  * a direct ancestor) using PR-number deduplication.
@@ -650,18 +650,13 @@ export async function collectEntries(
 
 		if (seenPRs.has(prNumber)) continue;
 
-		// A PR with a changeset should appear even if its type is docs:/chore:/etc.
+		// A consumed changeset is the release intent. Git history only provides
+		// metadata for that entry.
 		const subject = parsed.subject.replace(/\s*\(#\d+\)$/, "").trim();
 		const descMatch = changesetByDesc.get(subject.toLowerCase());
 		const changeset = changesetByPR.get(prNumber) ?? descMatch;
 		if (descMatch) consumedOrphans.add(descMatch);
-
-		if (
-			!changeset &&
-			["chore", "docs", "ci", "test", "style", "build"].includes(parsed.type)
-		) {
-			continue;
-		}
+		if (!changeset) continue;
 
 		seenPRs.add(prNumber);
 
@@ -671,13 +666,13 @@ export async function collectEntries(
 		let packageName: string;
 		let breaking = parsed.breaking;
 
-		const changesetDescription = changeset?.description ?? null;
-		if (changeset?.breaking) breaking = true;
+		const changesetDescription = changeset.description;
+		if (changeset.breaking) breaking = true;
 
 		title = subject;
 		domain = resolveDomain(parsed.scope || undefined, []);
 		packageName =
-			changeset?.packageNames.length === 1
+			changeset.packageNames.length === 1
 				? changeset.packageNames[0]!
 				: resolvePackage(parsed.scope || undefined, []);
 
@@ -687,20 +682,20 @@ export async function collectEntries(
 			title = prInfo.title;
 			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
 			packageName =
-				changeset?.packageNames.length === 1
+				changeset.packageNames.length === 1
 					? changeset.packageNames[0]!
 					: resolvePackage(parsed.scope || undefined, prInfo.files);
 			if (prInfo.labels.includes("breaking")) breaking = true;
 		}
 
 		const releasePackages =
-			changeset?.packageNames.length && changeset.packageNames.length > 0
+			changeset.packageNames.length > 0
 				? [...new Set(changeset.packageNames)]
 				: [packageName];
 
 		for (const releasePackage of releasePackages) {
 			entries.push({
-				id: `${changeset ? `pr-${prNumber}` : `git-${prNumber}`}:${releasePackage}`,
+				id: `pr-${prNumber}:${releasePackage}`,
 				rewriteKey: `pr-${prNumber}`,
 				title,
 				changesetDescription,

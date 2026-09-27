@@ -35,31 +35,9 @@ For a change whose `changeType` is `breaking`, also write a single-line
 `migration` explaining what users must change. Do not add `migration` to any
 other change type.
 
-## Output contract
-
-Return one JSON object as the structured output.
-
-The object must have exactly this shape:
-
-```json
-{
-	"rewrites": [
-		{
-			"id": "<change-id>",
-			"title": "<single-line user-focused title>",
-			"migration": null
-		},
-		{
-			"id": "<breaking-change-id>",
-			"title": "<single-line user-focused title>",
-			"migration": "<single-line migration action>"
-		}
-	]
-}
-```
+## Output rules
 
 - Include every input change ID exactly once
 - Do not add unknown change IDs
 - Use `migration: null` for non-breaking changes
 - Use a migration string for breaking changes
-- Return only the structured result without Markdown fences or commentary

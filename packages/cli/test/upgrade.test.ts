@@ -71,6 +71,27 @@ describe("upgradeAction", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11127#discussion_r3920511930
+	 */
+	it("keeps valid dependencies when another entry is malformed", async () => {
+		mockGetPackageInfo.mockReturnValue({
+			dependencies: {
+				"better-auth": "^1.6.26",
+				invalid: 123,
+			},
+		});
+
+		await upgradeAction({ cwd: process.cwd(), yes: true });
+
+		expect(mockInstallDependencies).toHaveBeenCalledWith({
+			dependencies: ["better-auth@1.7.0-rc.4"],
+			packageManager: "pnpm",
+			cwd: process.cwd(),
+			type: "prod",
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10760
 	 */
 	it("upgrades every package in the Changesets fixed release group", async () => {
@@ -111,6 +132,29 @@ describe("upgradeAction", () => {
 
 		await upgradeAction({ cwd: process.cwd(), yes: true });
 
+		expect(mockDetectPackageManager).not.toHaveBeenCalled();
+		expect(mockInstallDependencies).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11072
+	 */
+	it.each([
+		"catalog:",
+		"file:../better-auth",
+	])("skips unsupported dependency specifier %s", async (specifier) => {
+		const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+		mockGetPackageInfo.mockReturnValue({
+			dependencies: {
+				"better-auth": specifier,
+			},
+		});
+
+		await upgradeAction({ cwd: process.cwd(), yes: true });
+
+		expect(warning).toHaveBeenCalledWith(
+			expect.stringContaining("Automatic upgrades require a semver range"),
+		);
 		expect(mockDetectPackageManager).not.toHaveBeenCalled();
 		expect(mockInstallDependencies).not.toHaveBeenCalled();
 	});

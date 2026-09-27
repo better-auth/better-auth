@@ -1,5 +1,17 @@
 # @better-auth/mongo-adapter
 
+## 1.7.6
+
+### Patch Changes
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+## 1.7.5
+
+## 1.7.4
+
+## 1.7.3
+
 ## 1.7.2
 
 ## 1.7.1

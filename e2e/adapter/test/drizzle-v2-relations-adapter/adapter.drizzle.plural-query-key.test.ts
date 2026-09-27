@@ -232,3 +232,62 @@ describe("drizzle relations-v2 adapter: query key via relations internal", () =>
 		]);
 	});
 });
+
+describe("drizzle relations-v2 adapter: model identity", () => {
+	it("uses the user schema when its table name matches the account model key", async ({
+		onTestFinished,
+	}) => {
+		const sqliteDb = new Database(":memory:");
+		onTestFinished(() => {
+			sqliteDb.close();
+		});
+		sqliteDb.exec(`
+			CREATE TABLE account (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				email TEXT NOT NULL,
+				emailVerified INTEGER NOT NULL,
+				image TEXT,
+				createdAt INTEGER NOT NULL,
+				updatedAt INTEGER NOT NULL
+			);
+		`);
+		const account = sqliteTable("account", {
+			id: text("id").primaryKey(),
+			name: text("name").notNull(),
+			email: text("email").notNull(),
+			emailVerified: integer("emailVerified", { mode: "boolean" }).notNull(),
+			image: text("image"),
+			createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+			updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+		});
+		const db = drizzle({ client: sqliteDb, schema: { account } });
+		const adapter = drizzleAdapter(db, {
+			provider: "sqlite",
+			schema: { account },
+		})({
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+		});
+		const now = new Date();
+
+		await adapter.create({
+			model: "user",
+			data: {
+				id: "user-id",
+				name: "Ada",
+				email: "ada@example.com",
+				emailVerified: false,
+				createdAt: now,
+				updatedAt: now,
+			},
+			forceAllowId: true,
+		});
+		const user = await adapter.findOne<{ email: string }>({
+			model: "user",
+			where: [{ field: "email", value: "ada@example.com" }],
+		});
+
+		expect(user?.email).toBe("ada@example.com");
+	});
+});
