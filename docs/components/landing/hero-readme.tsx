@@ -732,7 +732,9 @@ function isSlowConnection() {
 		}
 	).connection;
 	if (connection?.saveData) return true;
-	if (/^(slow-2g|2g|3g)$/.test(connection?.effectiveType ?? "")) return true;
+	if (connection?.effectiveType) {
+		return /^(slow-2g|2g|3g)$/.test(connection.effectiveType);
+	}
 	// Everywhere else, judge by how long this page took to load.
 	const [navigation] = performance.getEntriesByType(
 		"navigation",
