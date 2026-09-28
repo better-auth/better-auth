@@ -731,6 +731,25 @@ export interface OAuthOptions<
 	 */
 	allowDynamicClientRegistration?: boolean;
 	/**
+	 * Opt-in predicate for non-loopback `http:` redirect URIs.
+	 *
+	 * Redirect URIs default to HTTPS, with HTTP allowed only for loopback
+	 * hosts. Self-hosted deployments on a LAN, VPN, or private DNS name have
+	 * no other supported path unless this callback returns `true` for the
+	 * already-parsed URL. The callback is authoritative for any non-loopback
+	 * HTTP URL, including hosts classified as public (for example
+	 * `http://myapp.homelab.lan`).
+	 *
+	 * When omitted or when it returns a non-true value, the HTTPS-only default
+	 * stays in effect. The same predicate is applied on authorize, token,
+	 * logout (`post_logout_redirect_uri`), and dynamic client registration.
+	 * Authorize failures of this policy are returned on the authorization
+	 * server itself and are not redirected to the rejected URI.
+	 *
+	 * @default undefined
+	 */
+	allowInsecureRedirectUri?: (url: URL) => boolean;
+	/**
 	 * Validates an RFC 7591 initial access token for protected dynamic client
 	 * registration, read from the `Authorization: Bearer <token>` header on
 	 * `POST /oauth2/register`.

@@ -30,7 +30,10 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { authorizationQuerySchema } from "./types/zod";
+import {
+	createAuthorizationQuerySchema,
+	createSafeUrlSchema,
+} from "./types/zod";
 
 import {
 	clientAllowsGrant,
@@ -378,6 +381,17 @@ export function authorizeRedirectOnError(
 			typeof raw.client_id === "string" ? raw.client_id : undefined;
 		const redirectUriRaw =
 			typeof raw.redirect_uri === "string" ? raw.redirect_uri : undefined;
+		// Never bounce an error to a URI the active scheme policy rejected.
+		// A registered LAN/HTTP redirect_uri used to look "trusted" even when
+		// SafeUrlSchema had already failed, which hid invalid_request on the RP.
+		if (
+			redirectUriRaw &&
+			!createSafeUrlSchema(opts.allowInsecureRedirectUri).safeParse(
+				redirectUriRaw,
+			).success
+		) {
+			return handleRedirect(ctx, getErrorURL(ctx, error, error_description));
+		}
 		const trusted = await resolveTrustedRedirectUri(
 			ctx,
 			opts,
@@ -486,7 +500,9 @@ export async function authorizeEndpoint(
 		}
 	}
 	ctx.query = query;
-	const parsedQuery = authorizationQuerySchema.safeParse(query);
+	const parsedQuery = createAuthorizationQuerySchema(
+		opts.allowInsecureRedirectUri,
+	).safeParse(query);
 	if (!parsedQuery.success) {
 		const mappedError = mapIssuesToOAuthError(
 			parsedQuery.error.issues,
