@@ -129,6 +129,48 @@ describe("Node CIMD metadata transport", () => {
 		expect(mocks.request).not.toHaveBeenCalled();
 	});
 
+	it("caps outstanding resolver work even after callers abort", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/11423
+		const resolveLookups: Array<
+			(addresses: { address: string; family: number }[]) => void
+		> = [];
+		mocks.lookup.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveLookups.push(resolve);
+				}),
+		);
+
+		for (let i = 0; i < 16; i++) {
+			const controller = new AbortController();
+			const pending = fetchClientMetadataResource(
+				"https://client.example.com/client.json",
+				{ signal: controller.signal },
+			);
+			await Promise.resolve(); // let the async transport reach the lookup first
+			controller.abort(new Error("deadline exceeded"));
+			await expect(pending).rejects.toThrow("deadline exceeded");
+		}
+		expect(mocks.lookup).toHaveBeenCalledTimes(16);
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).rejects.toThrow("metadata DNS lookup limit exceeded");
+		expect(mocks.lookup).toHaveBeenCalledTimes(16);
+
+		for (const resolve of resolveLookups) {
+			resolve([{ address: "93.184.216.34", family: 4 }]);
+		}
+		await new Promise((resolve) => setImmediate(resolve));
+		mocks.lookup.mockResolvedValueOnce([
+			{ address: "93.184.216.34", family: 4 },
+		]);
+		mockHttpsResponse();
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).resolves.toBeInstanceOf(Response);
+		expect(mocks.lookup).toHaveBeenCalledTimes(17);
+	});
+
 	it("cleans up the abort listener when the lookup settles first", async () => {
 		// @see https://github.com/better-auth/better-auth/issues/11423
 		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
