@@ -173,6 +173,8 @@ Optimizing database performance is essential to get the best out of Better Auth.
 | passkey       | `userId`                   | passkey      |
 | twoFactor     | `secret`                   | twoFactor    |
 
+If you [delete expired sessions](/docs/concepts/session-management#deleting-expired-sessions) on a schedule, also index `expiresAt` on sessions, and on verifications if the job deletes those too.
+
 <Callout>
   We intend to add indexing support in our schema generation tool in the future.
 </Callout>
