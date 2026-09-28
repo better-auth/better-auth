@@ -397,4 +397,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/qamarq.png",
 		},
 	},
+	{
+		name: "@eusend_dev/better-auth",
+		url: "https://github.com/eusend-dev/eusend-better-auth",
+		description:
+			"Auth emails (verification, password reset, OTP, magic link, organization invitations) through eusend, an EU-hosted email API, with brandable templates, non-blocking sends, and optional contact sync for verified users.",
+		author: {
+			name: "eusend",
+			github: "eusend-dev",
+			avatar: "https://github.com/eusend-dev.png",
+		},
+	},
 ];
