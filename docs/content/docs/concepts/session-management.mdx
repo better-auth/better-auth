@@ -392,7 +392,7 @@ await adapter.deleteMany({
 });
 ```
 
-This bypasses `databaseHooks`. On a large table, add an index on the session's expiry column.
+This bypasses `databaseHooks`. On a large table, add an index on the session's expiry column. With `preserveSessionInDatabase`, a revoked session keeps its row with `expiresAt` set to the revocation time, so use an older cutoff if you keep those rows for auditing. Expired `verification` rows can be removed the same way with `model: "verification"`.
 
 ## Stateless Session Management
 
