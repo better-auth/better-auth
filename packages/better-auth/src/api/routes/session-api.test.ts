@@ -447,6 +447,49 @@ describe("session", async () => {
 		expect(revokeRes.data?.status).toBe(true);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11433
+	 */
+	it("should revoke other sessions with a single delete", async () => {
+		for (let i = 0; i < 3; i++) {
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+		}
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const context = await auth.$context;
+		const deleteOne = vi.spyOn(context.adapter, "delete");
+		const deleteMany = vi.spyOn(context.adapter, "deleteMany");
+		onTestFinished(() => {
+			deleteOne.mockRestore();
+			deleteMany.mockRestore();
+		});
+
+		const res = await client.revokeOtherSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(deleteOne).not.toHaveBeenCalled();
+		expect(deleteMany).toHaveBeenCalledOnce();
+		const sessions = await client.listSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessions.data).toHaveLength(1);
+	});
+
 	it("should return session headers", async () => {
 		const context = await auth.$context;
 		await runWithEndpointContext(
