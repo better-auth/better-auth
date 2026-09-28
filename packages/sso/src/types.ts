@@ -183,7 +183,10 @@ export interface AuthnRequestRecord {
 export interface SAMLSessionRecord {
 	/** Session row id, used to key the by-id lookup index. */
 	sessionId: string;
-	/** Session token, used to revoke the session during Single Logout. */
+	/**
+	 * Stored session token (its hash when `session.storeTokenHash` is
+	 * enabled), used to revoke the session during Single Logout.
+	 */
 	sessionToken: string;
 	providerId: string;
 	nameID: string;

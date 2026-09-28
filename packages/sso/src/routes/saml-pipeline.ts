@@ -3,6 +3,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
+import { getStoredSessionToken } from "@better-auth/core/utils/session-token";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setAccountCookie, setSessionCookie } from "better-auth/cookies";
@@ -846,7 +847,12 @@ export async function processSAMLResponse(
 		const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
 		const samlSessionData: SAMLSessionRecord = {
 			sessionId: session.id,
-			sessionToken: session.token,
+			// With `session.storeTokenHash`, keep the stored hash rather than the
+			// raw token; Single Logout revokes by either.
+			sessionToken: await getStoredSessionToken(
+				ctx.context.options,
+				session.token,
+			),
 			providerId,
 			nameID: extract.nameID,
 			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex

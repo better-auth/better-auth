@@ -1879,6 +1879,89 @@ describe("SAML SSO", async () => {
 		});
 	});
 
+	it("should keep only the hashed session token in the SLO record when storeTokenHash is enabled", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			session: { storeTokenHash: true },
+			plugins: [
+				sso({
+					saml: {
+						enableInResponseToValidation: false,
+						enableSingleLogout: true,
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-hashed-slo",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+		const response = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-hashed-slo",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+		let samlResponse: any;
+		await betterFetch(response.response?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+		const callbackResponse = await auth.api.acsEndpoint({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState:
+					new URL(response.response?.url).searchParams.get("RelayState") ?? "",
+			},
+			headers: { Cookie: response.headers.get("set-cookie") ?? "" },
+			params: { providerId: "saml-hashed-slo" },
+			asResponse: true,
+		});
+		const rawToken = parseSetCookieHeader(
+			callbackResponse.headers.get("set-cookie") ?? "",
+		)
+			.get("better-auth.session_token")
+			?.value.split(".")[0];
+		expect(rawToken).toBeTruthy();
+
+		const ctx = await auth.$context;
+		const records = await ctx.adapter.findMany<{
+			identifier: string;
+			value: string;
+		}>({ model: "verification" });
+		const sloRecord = records.find((r) =>
+			r.identifier.startsWith("saml-session:saml-hashed-slo:"),
+		);
+		expect(sloRecord).toBeDefined();
+		expect(sloRecord!.value).not.toContain(rawToken!);
+		const { sessionToken } = JSON.parse(sloRecord!.value) as {
+			sessionToken: string;
+		};
+		expect(await ctx.internalAdapter.findSession(sessionToken)).toBeNull();
+		expect(await ctx.internalAdapter.findSession(rawToken!)).not.toBeNull();
+		// Single Logout revokes by the stored value.
+		await ctx.internalAdapter.deleteSession(sessionToken);
+		expect(await ctx.internalAdapter.findSession(rawToken!)).toBeNull();
+	});
+
 	it("should initiate SAML login and validate RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
