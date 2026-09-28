@@ -162,21 +162,9 @@ describe("Feature", () => {
 });
 ```
 
-### Running Tests
-
-Run targeted tests against a specific directory or file rather than running the entire monorepo suite:
-
-```bash
-# Filter by directory or file
-pnpm vitest packages/better-auth/src/plugins/organization --run
-
-# Filter by test name
-pnpm vitest packages/better-auth/src/ -t "should work as expected"
-```
-
 ### Using the Test Instance Helper
 
-The test instance helper includes async context support for managing user sessions:
+The test instance helper now includes improved async context support for managing user sessions:
 
 ```ts
 const { client, runWithUser, signInWithTestUser } = await getTestInstance();
@@ -195,26 +183,13 @@ await runWithDefaultUser(async (headers) => {
 });
 ```
 
-### Regression Tests
-
-When adding a test for a reported bug or issue, add a `@see` JSDoc comment linking to the relevant GitHub issue:
-
-```ts
-/**
- * @see https://github.com/better-auth/better-auth/issues/1234
- */
-it("should handle the previously broken behavior", async () => {
-    // ...
-});
-```
-
 ### Testing Best Practices
 
-* Always use `getTestInstance()` from `better-auth/test` (never instantiate separate clients with `createAuthClient()` in tests)
-* Pass client plugins via `clientOptions.plugins` in `getTestInstance`
-* Run targeted tests using `pnpm vitest <path>` instead of running all package tests
-* Add deterministic unit and regression tests for any bug fixes and new features
-* Run `pnpm typecheck` to verify TypeScript types pass before submitting
+* Write clear commit messages
+* Update documentation to reflect your changes
+* Add tests for new features
+* Follow our coding standards
+* Keep pull requests focused on a single change
 
 ## Need Help?
 
