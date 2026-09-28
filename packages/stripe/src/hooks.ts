@@ -147,16 +147,6 @@ export async function onCheckoutSessionCompleted(
 				],
 			});
 
-			if (trial.trialStart) {
-				await runLifecycleHook(
-					ctx,
-					event,
-					"onTrialStart",
-					plan.freeTrial?.onTrialStart,
-					dbSubscription as Subscription,
-				);
-			}
-
 			if (!dbSubscription) {
 				dbSubscription = await ctx.context.adapter.findOne<Subscription>({
 					model: "subscription",
@@ -168,6 +158,25 @@ export async function onCheckoutSessionCompleted(
 					],
 				});
 			}
+			// The customer paid for a subscription the app has no row for, so the
+			// change was not saved. Fail the webhook so the failed delivery shows
+			// up in Stripe instead of being acknowledged.
+			if (!dbSubscription) {
+				throw new Error(
+					`Subscription ${subscriptionId} not found for event ${event.id} (${event.type}), so Stripe subscription ${subscription.id} was not saved`,
+				);
+			}
+
+			if (trial.trialStart) {
+				await runLifecycleHook(
+					ctx,
+					event,
+					"onTrialStart",
+					plan.freeTrial?.onTrialStart,
+					dbSubscription,
+				);
+			}
+
 			await runLifecycleHook(
 				ctx,
 				event,
@@ -175,7 +184,7 @@ export async function onCheckoutSessionCompleted(
 				options.subscription.onSubscriptionComplete,
 				{
 					event,
-					subscription: dbSubscription as Subscription,
+					subscription: dbSubscription,
 					stripeSubscription: subscription,
 					plan,
 				},
@@ -434,7 +443,7 @@ export async function onSubscriptionUpdated(
 	// Practically unreachable. A null here means the row was deleted between the read above and this update.
 	if (!subscriptionUpdated) {
 		ctx.context.logger.warn(
-			`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+			`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently) for event ${event.id} (${event.type}), Stripe subscription ${stripeSubscriptionUpdated.id}. Skipping callbacks`,
 		);
 		return;
 	}
@@ -555,7 +564,7 @@ export async function onSubscriptionDeleted(
 		// Practically unreachable. A null here means the row was deleted between the read above and this update.
 		if (!subscriptionUpdated) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+				`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently) for event ${event.id} (${event.type}), Stripe subscription ${stripeSubscriptionDeleted.id}. Skipping callbacks`,
 			);
 			return;
 		}
