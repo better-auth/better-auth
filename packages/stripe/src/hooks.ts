@@ -166,8 +166,9 @@ async function callStripeApi<T>(
 			throw error;
 		}
 		if (!isPermanentStripeError(error)) {
-			ctx.context.logger.error(
-				`Stripe webhook error: ${describeStripeApiFailure(event, name, error)}. The webhook will fail so Stripe retries the event.`,
+			// A warning, because the webhook endpoint logs the failure as an error.
+			ctx.context.logger.warn(
+				`Stripe webhook warning: ${describeStripeApiFailure(event, name, error)}. The webhook will fail so Stripe retries the event.`,
 			);
 			throw error;
 		}
