@@ -896,6 +896,129 @@ describe("seat-based billing", () => {
 	});
 
 	describe("seat sync on member changes", () => {
+		/**
+		 * @see https://www.better-auth.com/docs/plugins/stripe#schema
+		 */
+		test.for([
+			"active",
+			"trialing",
+			"canceled",
+		] as const)("should select an eligible subscription from history when the replacement is %s", async (status, {
+			stripeMock,
+		}) => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [organization(), stripe(buildSeatPlanOptions(stripeMock))],
+			});
+			const { headers } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const org = await auth.api.createOrganization({
+				body: { name: "Resubscribed Org", slug: "resubscribed-org" },
+				headers,
+			});
+			const orgId = org!.id;
+			await ctx.adapter.update({
+				model: "organization",
+				where: [{ field: "id", value: orgId }],
+				update: { stripeCustomerId: "cus_seat_org" },
+			});
+
+			// Cancellation keeps the old row; a replacement subscription gets
+			// its own row with the same organization reference.
+			const canceled = await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_seat_org",
+					stripeSubscriptionId: "sub_canceled",
+					status: "canceled",
+					plan: "team",
+					seats: 5,
+				},
+			});
+			const replacement = await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_seat_org",
+					stripeSubscriptionId: "sub_replacement",
+					status,
+					plan: "team",
+					seats: 1,
+				},
+			});
+			const stripeSubscription = {
+				id: "sub_replacement",
+				status,
+				items: {
+					data: [
+						{
+							id: "si_seat",
+							price: { id: "price_team_seat" },
+							quantity: 1,
+						},
+					],
+				},
+			};
+			stripeMock.subscriptions.retrieve.mockResolvedValue(stripeSubscription);
+			const user = await ctx.adapter.create({
+				model: "user",
+				data: { email: "resubscribed-member@test.com", name: "New Member" },
+			});
+
+			const member = await auth.api.addMember({
+				body: { organizationId: orgId, userId: user.id, role: "member" },
+			});
+			if (status !== "canceled") {
+				expect(
+					stripeMock.subscriptions.retrieve,
+				).toHaveBeenCalledExactlyOnceWith("sub_replacement");
+				expect(stripeMock.subscriptions.update).toHaveBeenCalledExactlyOnceWith(
+					"sub_replacement",
+					{
+						items: [{ id: "si_seat", quantity: 2 }],
+						proration_behavior: "create_prorations",
+					},
+				);
+				expect(
+					await ctx.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [{ field: "id", value: replacement.id }],
+					}),
+				).toMatchObject({ seats: 2 });
+				stripeSubscription.items.data[0]!.quantity = 2;
+			}
+
+			await auth.api.removeMember({
+				body: { organizationId: orgId, memberIdOrEmail: member!.id },
+				headers,
+			});
+			if (status === "canceled") {
+				expect(stripeMock.subscriptions.retrieve).not.toHaveBeenCalled();
+				expect(stripeMock.subscriptions.update).not.toHaveBeenCalled();
+			} else {
+				expect(stripeMock.subscriptions.update).toHaveBeenCalledTimes(2);
+				expect(stripeMock.subscriptions.update).toHaveBeenLastCalledWith(
+					"sub_replacement",
+					{
+						items: [{ id: "si_seat", quantity: 1 }],
+						proration_behavior: "create_prorations",
+					},
+				);
+			}
+			expect(
+				await ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "id", value: replacement.id }],
+				}),
+			).toMatchObject({ seats: 1 });
+			expect(
+				await ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "id", value: canceled.id }],
+				}),
+			).toMatchObject({ status: "canceled", seats: 5 });
+		});
+
 		test("should sync seat quantity when a member accepts an invitation", async ({
 			stripeMock,
 		}) => {

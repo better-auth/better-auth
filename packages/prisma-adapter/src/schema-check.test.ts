@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	getExpectedSchema,
+	runtimeSchemaCheckFor,
 	SchemaMismatchError,
 	schemaCheckFor,
 } from "@better-auth/core/db/internal";
@@ -164,24 +165,25 @@ describe("prismaAdapter", () => {
 
 	it("registers a check the first request awaits", async () => {
 		await expect(
-			schemaCheckFor(adapterFor({ _runtimeDataModel: dataModelFor({}) }))?.(),
+			runtimeSchemaCheckFor(
+				adapterFor({ _runtimeDataModel: dataModelFor({}) }),
+			)?.(),
 		).resolves.toBeUndefined();
 
 		const { Account: _account, ...models } = dataModelFor({}).models;
 		await expect(
-			schemaCheckFor(adapterFor({ _runtimeDataModel: { models } }))?.(),
+			runtimeSchemaCheckFor(adapterFor({ _runtimeDataModel: { models } }))?.(),
 		).rejects.toThrow(SchemaMismatchError);
 	});
 
-	it("registers nothing without a data model or when disabled", () => {
+	it("requires a data model and keeps explicit checks when runtime validation is disabled", async () => {
+		expect(runtimeSchemaCheckFor(adapterFor({}))).toBeUndefined();
 		expect(schemaCheckFor(adapterFor({}))).toBeUndefined();
-		expect(
-			schemaCheckFor(
-				adapterFor(
-					{ _runtimeDataModel: dataModelFor({}) },
-					{ advanced: { database: { validateSchema: false } } },
-				),
-			),
-		).toBeUndefined();
+		const adapter = adapterFor(
+			{ _runtimeDataModel: dataModelFor({}) },
+			{ advanced: { database: { validateSchema: false } } },
+		);
+		expect(runtimeSchemaCheckFor(adapter)).toBeUndefined();
+		await expect(schemaCheckFor(adapter)?.()).resolves.toBeUndefined();
 	});
 });

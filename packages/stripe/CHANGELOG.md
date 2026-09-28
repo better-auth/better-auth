@@ -1,5 +1,11 @@
 # @better-auth/stripe
 
+## 1.7.6
+
+### Patch Changes
+
+- [#11347](https://github.com/better-auth/better-auth/pull/11347) [`f95d5f1`](https://github.com/better-auth/better-auth/commit/f95d5f1c2ccb7f96b189fdb7bc6cfe8d0044d607) Thanks [@rwieruch](https://github.com/rwieruch)! - Fix automatic seat synchronization after an organization cancels and resubscribes, so member changes update the active or trialing subscription even when canceled subscriptions remain in its history.
+
 ## 1.7.5
 
 ## 1.7.4

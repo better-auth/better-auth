@@ -1,5 +1,12 @@
 # @better-auth/mcp
 
+## 1.7.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.6
+
 ## 1.7.5
 
 ### Patch Changes

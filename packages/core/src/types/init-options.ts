@@ -1307,7 +1307,7 @@ export type BetterAuthOptions = {
 				 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
 				 * on external services.
 				 *
-				 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+				 * When enabled, tokens are encrypted using XChaCha20-Poly1305 before storage, providing protection against:
 				 * - Database breaches and unauthorized access to raw token data
 				 * - Internal threats from database administrators or compromised credentials
 				 * - Token exposure in database backups and logs

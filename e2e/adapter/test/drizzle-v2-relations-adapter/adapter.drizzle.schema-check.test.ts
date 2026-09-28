@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	getExpectedSchema,
+	runtimeSchemaCheckFor,
 	schemaCheckFor,
 } from "@better-auth/core/db/internal";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
@@ -136,7 +137,7 @@ describe("relations-v2 schema validation", () => {
 		});
 	});
 
-	it("does not register a check when validation is disabled", ({
+	it("keeps explicit validation when runtime validation is disabled", async ({
 		onTestFinished,
 	}) => {
 		const client = new Database(":memory:");
@@ -147,6 +148,11 @@ describe("relations-v2 schema validation", () => {
 		const adapter = drizzleAdapter(db, { provider: "sqlite" })({
 			advanced: { database: { validateSchema: false } },
 		});
-		expect(schemaCheckFor(adapter)).toBeUndefined();
+		const explicitCheck = schemaCheckFor(adapter);
+		expect(runtimeSchemaCheckFor(adapter)).toBeUndefined();
+		expect(explicitCheck).toBeTypeOf("function");
+		await expect(explicitCheck!()).rejects.toMatchObject({
+			code: "SCHEMA_MISMATCH",
+		});
 	});
 });

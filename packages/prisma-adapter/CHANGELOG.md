@@ -1,5 +1,13 @@
 # @better-auth/prisma-adapter
 
+## 1.7.6
+
+### Patch Changes
+
+- [#11319](https://github.com/better-auth/better-auth/pull/11319) [`41b7dc1`](https://github.com/better-auth/better-auth/commit/41b7dc15de41a8726422c392a4857d8764828891) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix schema validation for capitalized custom Prisma model names.
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
 ## 1.7.5
 
 ## 1.7.4

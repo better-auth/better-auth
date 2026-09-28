@@ -685,3 +685,60 @@ describe("email case insensitivity", async () => {
 		).rejects.toThrow();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("sign-in password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth, testUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: "x".repeat(129),
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+
+	it("should reject the same length for an unknown email", async () => {
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: "unknown-long-password@test.com",
+					password: "x".repeat(129),
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+});

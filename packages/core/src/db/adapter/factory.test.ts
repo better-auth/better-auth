@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
 import type { CleanedWhere, CustomAdapter, Where } from "./index";
@@ -66,6 +66,36 @@ function createTestAdapter({
 		},
 	});
 }
+
+describe("createAdapterFactory model identity", () => {
+	it("keeps the schema model when its custom name matches another schema key", async () => {
+		const findOne = vi.fn(async () => null);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: { adapterId: "test-adapter" },
+			adapter: () => createCustomAdapter({ findOne }),
+		})({
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+			advanced: { database: { joins: true } },
+		});
+
+		await adapter.findOne({
+			model: "session",
+			where: [{ field: "id", value: "session-id" }],
+			join: { user: true },
+		});
+
+		expect(findOne).toHaveBeenCalledWith(
+			expect.objectContaining({
+				model: "session",
+				modelKey: "session",
+				join: {
+					account: expect.objectContaining({ modelKey: "user" }),
+				},
+			}),
+		);
+	});
+});
 
 describe("createAdapterFactory atomic primitives", () => {
 	it("delegates consumeOne to the native adapter with transformed where and output", async () => {

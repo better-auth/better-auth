@@ -1,5 +1,7 @@
 # @better-auth/test-utils
 
+## 1.7.6
+
 ## 1.7.5
 
 ## 1.7.4
