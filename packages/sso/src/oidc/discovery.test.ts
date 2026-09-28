@@ -277,24 +277,35 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it("should handle trailing slash normalization in issuer comparison", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11434
+		 */
+		it("should reject a trailing slash mismatch in the discovered issuer", () => {
 			const doc = createMockDiscoveryDocument({
 				issuer: "https://idp.example.com/",
 			});
-			// Should NOT throw - trailing slash difference is normalized
+
 			expect(() =>
 				validateDiscoveryDocument(doc, "https://idp.example.com"),
-			).not.toThrow();
+			).toThrow(
+				expect.objectContaining({
+					code: "issuer_mismatch",
+				}),
+			);
 		});
 
-		it("should handle trailing slash in configured issuer", () => {
+		it("should reject a trailing slash mismatch in the configured issuer", () => {
 			const doc = createMockDiscoveryDocument({
 				issuer: "https://idp.example.com",
 			});
-			// Should NOT throw - trailing slash difference is normalized
+
 			expect(() =>
 				validateDiscoveryDocument(doc, "https://idp.example.com/"),
-			).not.toThrow();
+			).toThrow(
+				expect.objectContaining({
+					code: "issuer_mismatch",
+				}),
+			);
 		});
 	});
 
