@@ -412,7 +412,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "@stellartools/betterauth-adapter",
 		url: "https://github.com/payrouteshq/stellartools",
 		description:
-			"Integrates Stellar Tools billing into your Better Auth authentication setup.",
+			"Integrate Stellar blockchain payments to your Better Auth setup.",
 		author: {
 			name: "Emmanuel Odii",
 			github: "devodii",
