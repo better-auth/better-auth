@@ -3608,15 +3608,13 @@ describe("stripe webhook: acknowledgement when processing fails", () => {
 		expect(result.onSubscriptionComplete).not.toHaveBeenCalled();
 		expect(result.onEvent).not.toHaveBeenCalled();
 		expect(result.saved?.status).toBe("incomplete");
-		expect(result.logWarn).toHaveBeenCalledWith(
-			expect.stringContaining(
-				`subscriptions.retrieve failed for event ${result.event.id} (checkout.session.completed, live mode, account acct_connected) with StripeInvalidRequestError 404 (resource_missing)`,
-			),
-		);
-		// The endpoint logs the failure as an error once; the plugin doesn't repeat it.
+		// One error-level line, from the endpoint, carrying the plugin's diagnostic.
 		expect(result.logError).toHaveBeenCalledTimes(1);
 		expect(result.logError).toHaveBeenCalledWith(
-			expect.stringContaining("Stripe webhook failed"),
+			`Stripe webhook failed. Error: subscriptions.retrieve failed for event ${result.event.id} (checkout.session.completed, live mode, account acct_connected) with StripeInvalidRequestError 404 (resource_missing): No such subscription: 'sub_retrieve_error'. Stripe will retry the event.`,
+		);
+		expect(result.logWarn).not.toHaveBeenCalledWith(
+			expect.stringContaining("subscriptions.retrieve"),
 		);
 	});
 
@@ -3692,6 +3690,13 @@ describe("stripe webhook: acknowledgement when processing fails", () => {
 			expect(result.onEvent).not.toHaveBeenCalled();
 			expect(result.saved?.status).toBe("incomplete");
 			expect(result.logError).toHaveBeenCalledTimes(1);
+			if (error instanceof Stripe.errors.StripeError) {
+				expect(result.logError).toHaveBeenCalledWith(
+					expect.stringContaining(
+						`subscriptions.retrieve failed for event ${result.event.id} (checkout.session.completed, test mode) with ${error.type}`,
+					),
+				);
+			}
 		});
 	}
 });

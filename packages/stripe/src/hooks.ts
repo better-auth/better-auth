@@ -89,6 +89,7 @@ const RETRYABLE_STRIPE_CLIENT_STATUS_CODES = new Set([401, 403, 404, 409, 429]);
  */
 type StripeApiError = {
 	type: string;
+	message?: string | undefined;
 	statusCode?: number | undefined;
 	code?: string | undefined;
 };
@@ -147,8 +148,10 @@ function describeStripeApiFailure(
 }
 
 /**
- * Call the Stripe API from a webhook handler. A transient failure is rethrown
- * so the webhook returns non-2xx and Stripe retries the event. A permanent one
+ * Call the Stripe API from a webhook handler. A transient Stripe failure is
+ * rethrown with the event and error details in its message (the original error
+ * is its `cause`), so the webhook returns non-2xx, Stripe retries the event,
+ * and the endpoint's error log says what failed. A permanent one
  * is logged and resolves to `null`, so the handler can return early and Stripe
  * doesn't retry for days with no chance of success.
  * @internal
@@ -166,11 +169,12 @@ async function callStripeApi<T>(
 			throw error;
 		}
 		if (!isPermanentStripeError(error)) {
-			// A warning, because the webhook endpoint logs the failure as an error.
-			ctx.context.logger.warn(
-				`Stripe webhook warning: ${describeStripeApiFailure(event, name, error)}. The webhook will fail so Stripe retries the event.`,
+			// Not logged here: the webhook endpoint logs this error's message once,
+			// at error level, and doesn't send it back to Stripe.
+			throw new Error(
+				`${describeStripeApiFailure(event, name, error)}${error.message ? `: ${error.message}` : ""}. Stripe will retry the event.`,
+				{ cause: error },
 			);
-			throw error;
 		}
 		ctx.context.logger.warn(
 			`Stripe webhook warning: ${describeStripeApiFailure(event, name, error)}. The subscription was not updated, and Stripe won't retry because of this error.`,
