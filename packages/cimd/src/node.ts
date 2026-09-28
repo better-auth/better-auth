@@ -97,6 +97,19 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			},
 			(response) => {
 				const status = response.statusCode ?? 500;
+				if (status < 200 || status > 599) {
+					// `new Response` throws a RangeError for out-of-range statuses,
+					// which would escape this callback and leave the promise pending
+					// forever. Drain the socket and reject with a descriptive error
+					// instead.
+					response.resume();
+					reject(
+						new TypeError(
+							`metadata endpoint returned an invalid HTTP status (${status})`,
+						),
+					);
+					return;
+				}
 				const body =
 					webRequest.method === "HEAD" ||
 					BODY_FORBIDDEN_RESPONSE_STATUSES.has(status)
