@@ -7,6 +7,48 @@ import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([204, 205, 304]);
 
+/**
+ * Resolve a hostname while honoring the caller's AbortSignal.
+ *
+ * `dns.lookup` itself cannot be cancelled, so an aborted call leaves one
+ * bounded lookup outstanding per request; it settles in the background and
+ * its result is discarded. What changes is that we stop *awaiting* it as
+ * soon as the caller's deadline fires instead of letting a stalled resolver
+ * defeat the deadline.
+ */
+function lookupWithAbort(
+	hostname: string,
+	signal: AbortSignal | undefined,
+): ReturnType<typeof lookup> {
+	if (signal?.aborted) {
+		return Promise.reject(signal.reason);
+	}
+	const lookupPromise = lookup(hostname, {
+		all: true,
+		verbatim: true,
+	});
+	if (!signal) {
+		return lookupPromise;
+	}
+	return new Promise((resolve, reject) => {
+		const onAbort = () => {
+			reject(signal.reason);
+		};
+		signal.addEventListener("abort", onAbort, { once: true });
+		const cleanup = () => signal.removeEventListener("abort", onAbort);
+		lookupPromise.then(
+			(addresses) => {
+				cleanup();
+				resolve(addresses);
+			},
+			(error) => {
+				cleanup();
+				reject(error);
+			},
+		);
+	});
+}
+
 function responseHeaders(
 	headers: Record<string, string | string[] | undefined>,
 ): Headers {
@@ -43,10 +85,11 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 		throw new TypeError("CIMD Node transport supports only GET and HEAD");
 	}
 
-	const addresses = await lookup(url.hostname, {
-		all: true,
-		verbatim: true,
-	});
+	const signal =
+		init?.signal ??
+		(input instanceof Request ? input.signal : webRequest.signal);
+
+	const addresses = await lookupWithAbort(url.hostname, signal);
 	if (addresses.length === 0) {
 		throw new TypeError("metadata hostname returned no DNS addresses");
 	}
@@ -61,9 +104,6 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 
 	const headers = Object.fromEntries(webRequest.headers.entries());
 	headers.host = url.host;
-	const signal =
-		init?.signal ??
-		(input instanceof Request ? input.signal : webRequest.signal);
 
 	return new Promise<Response>((resolve, reject) => {
 		const request = httpsRequest(
