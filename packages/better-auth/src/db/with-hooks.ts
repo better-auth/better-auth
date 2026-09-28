@@ -417,6 +417,98 @@ export function getWithHooks(
 	}
 
 	/**
+	 * Like `deleteManyWithHooks`, but a `delete.before` hook returning `false`
+	 * only keeps that row instead of cancelling the whole delete. The remaining
+	 * rows are still removed with a single statement. Returns the rows a hook
+	 * kept.
+	 */
+	async function deleteEachWithHooks<T extends Record<string, any>>(
+		where: Where[],
+		model: BaseModelNames,
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
+	): Promise<T[]> {
+		const context = tryGetCurrentAuthEndpointContext();
+		const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
+			model,
+			where,
+		});
+
+		const deleted: T[] = [];
+		const vetoed: T[] = [];
+		for (const entity of entities) {
+			let approved = true;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.before;
+				if (!toRun) continue;
+				const result = await withSpan(
+					`db delete.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "delete.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(entity as any, context),
+				);
+				if (result === false) {
+					approved = false;
+					break;
+				}
+			}
+			(approved ? deleted : vetoed).push(entity);
+		}
+
+		const deleteWhere: Where[] = vetoed.length
+			? [
+					...where,
+					{
+						field: "id",
+						value: vetoed.map((entity) => entity.id),
+						operator: "not_in",
+					},
+				]
+			: where;
+		if (customDeleteFn) {
+			await customDeleteFn.fn(deleteWhere);
+		}
+		if (!customDeleteFn || customDeleteFn.executeMainFn) {
+			await (await getCurrentAdapter(adapter)).deleteMany({
+				model,
+				where: deleteWhere,
+			});
+		}
+
+		for (const entity of deleted) {
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.after;
+				if (toRun) {
+					await queueAfterTransactionHook(async () => {
+						await withSpan(
+							`db delete.after ${model}`,
+							{
+								[ATTR_HOOK_TYPE]: "delete.after",
+								[ATTR_DB_COLLECTION_NAME]: model,
+								[ATTR_CONTEXT]: source,
+							},
+							() =>
+								// @ts-expect-error context type mismatch
+								toRun(entity as any, context),
+						);
+					});
+				}
+			}
+		}
+
+		return vetoed;
+	}
+
+	/**
 	 * Wraps an atomic consume operation in the plugin `delete.before` and
 	 * `delete.after` hook lifecycle. The caller supplies a `consumeFn` that
 	 * performs the actual single-row delete-and-return (typically the
@@ -508,6 +600,7 @@ export function getWithHooks(
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		deleteEachWithHooks,
 		consumeOneWithHooks,
 	};
 }

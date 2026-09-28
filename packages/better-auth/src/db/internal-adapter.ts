@@ -70,8 +70,24 @@ export const createInternalAdapter = (
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		deleteEachWithHooks,
 		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
+
+	const liveSessions = (where: Where[]): Where[] => [
+		...where,
+		{ field: "expiresAt", value: new Date(), operator: "gt" },
+	];
+	const endSessionRows = {
+		fn: async (where: Where[]) => {
+			await (await getCurrentAdapter(adapter)).updateMany({
+				model: "session",
+				where,
+				update: { expiresAt: new Date() },
+			});
+		},
+		executeMainFn: false,
+	};
 
 	/**
 	 * Ends the live session rows matched by `where` without physically deleting
@@ -88,22 +104,8 @@ export const createInternalAdapter = (
 	 * or `deleteUserSessions` sweeping a user's accumulated preserved rows) would
 	 * re-match it and re-fire the hooks, re-dispatching back-channel logout.
 	 */
-	const endPreservedSessions = (where: Where[]) => {
-		const liveSessions: Where[] = [
-			...where,
-			{ field: "expiresAt", value: new Date(), operator: "gt" },
-		];
-		return deleteManyWithHooks(liveSessions, "session", {
-			fn: async () => {
-				await (await getCurrentAdapter(adapter)).updateMany({
-					model: "session",
-					where: liveSessions,
-					update: { expiresAt: new Date() },
-				});
-			},
-			executeMainFn: false,
-		});
-	};
+	const endPreservedSessions = (where: Where[]) =>
+		deleteManyWithHooks(liveSessions(where), "session", endSessionRows);
 
 	async function refreshUserSessions(user: User) {
 		if (!secondaryStorage) return;
@@ -201,6 +203,38 @@ export const createInternalAdapter = (
 				},
 			},
 		);
+	}
+
+	/**
+	 * Drops the given tokens from secondary storage and from their owners'
+	 * `active-sessions` lists once the surrounding transaction commits.
+	 */
+	async function queueCachedSessionDeletion(tokens: readonly string[]) {
+		if (!secondaryStorage || tokens.length === 0) return;
+
+		await queueAfterTransactionHook(async () => {
+			const cachedSessions = await Promise.all(
+				tokens.map(async (token) => ({
+					token,
+					cached: safeJSONParse<{ session: Session }>(
+						await secondaryStorage.get(token),
+					),
+				})),
+			);
+			const referencesByUser = new Map<string, ActiveSessionReference[]>();
+			for (const { token, cached } of cachedSessions) {
+				if (!cached?.session) continue;
+				const references = referencesByUser.get(cached.session.userId) ?? [];
+				references.push({
+					token,
+					expiresAt: new Date(cached.session.expiresAt).getTime(),
+				});
+				referencesByUser.set(cached.session.userId, references);
+			}
+			for (const [userId, references] of referencesByUser) {
+				await deleteCachedUserSessions(userId, references);
+			}
+		});
 	}
 
 	async function withVerificationConsumeLock<T>(
@@ -972,31 +1006,25 @@ export const createInternalAdapter = (
 			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
-			if (secondaryStorage) {
-				await Promise.all(
-					sessionTokens.map((token) => secondaryStorage.delete(token)),
-				);
-
-				if (!options.session?.storeSessionInDatabase) {
-					return;
-				}
-				if (ctx.options.session?.preserveSessionInDatabase) {
-					await endPreservedSessions([
-						{ field: "token", value: sessionTokens, operator: "in" },
-					]);
-					return;
-				}
+			const where: Where[] = [
+				{ field: "token", value: sessionTokens, operator: "in" },
+			];
+			let vetoed: Session[] = [];
+			if (!secondaryStorage) {
+				vetoed = await deleteEachWithHooks<Session>(where, "session");
+			} else if (options.session?.storeSessionInDatabase) {
+				vetoed = ctx.options.session?.preserveSessionInDatabase
+					? await deleteEachWithHooks<Session>(
+							liveSessions(where),
+							"session",
+							endSessionRows,
+						)
+					: await deleteEachWithHooks<Session>(where, "session");
 			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
-					},
-				],
-				"session",
-				undefined,
+			// A session a hook kept stays cached and listed.
+			const kept = new Set(vetoed.map((session) => session.token));
+			await queueCachedSessionDeletion(
+				sessionTokens.filter((token) => !kept.has(token)),
 			);
 		},
 		findAccountOwnerByKey: async ({ providerId, accountId }) => {

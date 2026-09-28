@@ -4,6 +4,7 @@ import {
 	runWithEndpointContext,
 	runWithRequestState,
 } from "@better-auth/core/context";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import {
@@ -447,49 +448,6 @@ describe("session", async () => {
 		expect(revokeRes.data?.status).toBe(true);
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11433
-	 */
-	it("should revoke other sessions with a single delete", async () => {
-		for (let i = 0; i < 3; i++) {
-			await client.signIn.email({
-				email: testUser.email,
-				password: testUser.password,
-			});
-		}
-		const headers = new Headers();
-		await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
-				onSuccess: sessionSetter(headers),
-			},
-		});
-		const context = await auth.$context;
-		const deleteOne = vi.spyOn(context.adapter, "delete");
-		const deleteMany = vi.spyOn(context.adapter, "deleteMany");
-		onTestFinished(() => {
-			deleteOne.mockRestore();
-			deleteMany.mockRestore();
-		});
-
-		const res = await client.revokeOtherSessions({
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		expect(res.data?.status).toBe(true);
-		expect(deleteOne).not.toHaveBeenCalled();
-		expect(deleteMany).toHaveBeenCalledOnce();
-		const sessions = await client.listSessions({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(sessions.data).toHaveLength(1);
-	});
-
 	it("should return session headers", async () => {
 		const context = await auth.$context;
 		await runWithEndpointContext(
@@ -686,6 +644,213 @@ describe("session storage", async () => {
 			const revokedSession = await client.getSession();
 			expect(revokedSession.data).toBeNull();
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11433
+ */
+describe("revoke other sessions", () => {
+	function createMapStorage(store: Map<string, string>): SecondaryStorage {
+		return {
+			set(key, value) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		};
+	}
+
+	async function setup(options: Parameters<typeof getTestInstance>[0] = {}) {
+		const vetoedTokens = new Set<string>();
+		const instance = await getTestInstance({
+			...options,
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async (session) =>
+							vetoedTokens.has(session.token) ? false : undefined,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { headers, user } = await instance.signInWithTestUser();
+		const current = await instance.client.getSession({
+			fetchOptions: { headers, throw: true },
+		});
+		const context = await instance.auth.$context;
+		const createOtherSessions = async (count: number) => {
+			const tokens: string[] = [];
+			for (let i = 0; i < count; i++) {
+				tokens.push(
+					(await context.internalAdapter.createSession(user.id)).token,
+				);
+			}
+			return tokens;
+		};
+		const listTokens = async () => {
+			const res = await instance.client.listSessions({
+				fetchOptions: { headers, throw: true },
+			});
+			return res.map((session) => session.token).sort();
+		};
+		return {
+			...instance,
+			context,
+			headers,
+			user,
+			currentToken: current!.session.token,
+			vetoedTokens,
+			createOtherSessions,
+			listTokens,
+		};
+	}
+
+	it("skips only the session a delete.before hook vetoes", async () => {
+		const {
+			client,
+			headers,
+			currentToken,
+			vetoedTokens,
+			createOtherSessions,
+			listTokens,
+		} = await setup();
+		const [vetoed] = await createOtherSessions(3);
+		vetoedTokens.add(vetoed!);
+
+		const res = await client.revokeOtherSessions({ fetchOptions: { headers } });
+
+		expect(res.data?.status).toBe(true);
+		expect(await listTokens()).toEqual([currentToken, vetoed].sort());
+	});
+
+	it("keeps the adapter call count constant as sessions grow", async () => {
+		const { client, context, headers, vetoedTokens, createOtherSessions } =
+			await setup();
+		const methods = [
+			"create",
+			"findOne",
+			"findMany",
+			"count",
+			"update",
+			"updateMany",
+			"delete",
+			"deleteMany",
+		] as const;
+		const countCalls = async (otherSessions: number) => {
+			await createOtherSessions(otherSessions);
+			const spies = methods.map((method) => vi.spyOn(context.adapter, method));
+			try {
+				await client.revokeOtherSessions({ fetchOptions: { headers } });
+				return Object.fromEntries(
+					methods.map((method, i) => [method, spies[i]!.mock.calls.length]),
+				);
+			} finally {
+				for (const spy of spies) spy.mockRestore();
+			}
+		};
+		const [vetoed] = await createOtherSessions(1);
+		vetoedTokens.add(vetoed!);
+
+		const few = await countCalls(2);
+		const many = await countCalls(8);
+
+		expect(many).toEqual(few);
+		expect(many.delete).toBe(0);
+		expect(many.deleteMany).toBe(1);
+	});
+
+	it.each([
+		{ mode: "storeSessionInDatabase", preserveSessionInDatabase: false },
+		{ mode: "preserveSessionInDatabase", preserveSessionInDatabase: true },
+	])("keeps a vetoed session cached and listed with $mode", async ({
+		preserveSessionInDatabase,
+	}) => {
+		const store = new Map<string, string>();
+		const {
+			client,
+			headers,
+			user,
+			currentToken,
+			vetoedTokens,
+			createOtherSessions,
+			listTokens,
+		} = await setup({
+			secondaryStorage: createMapStorage(store),
+			session: { storeSessionInDatabase: true, preserveSessionInDatabase },
+		});
+		const [vetoed, ...revoked] = await createOtherSessions(3);
+		vetoedTokens.add(vetoed!);
+
+		const res = await client.revokeOtherSessions({
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(await listTokens()).toEqual([currentToken, vetoed].sort());
+		expect(store.has(vetoed!)).toBe(true);
+		const index = JSON.parse(store.get(`active-sessions-${user.id}`)!) as {
+			token: string;
+		}[];
+		expect(index.map((entry) => entry.token).sort()).toEqual(
+			[currentToken, vetoed].sort(),
+		);
+		for (const token of revoked) {
+			expect(store.has(token)).toBe(false);
+		}
+	});
+
+	it.each([
+		{ mode: "secondary storage only", session: {} },
+		{
+			mode: "storeSessionInDatabase",
+			session: { storeSessionInDatabase: true },
+		},
+		{
+			mode: "preserveSessionInDatabase",
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: true,
+			},
+		},
+	])("removes revoked tokens from the active-sessions list with $mode", async ({
+		session,
+	}) => {
+		const store = new Map<string, string>();
+		const { client, headers, user, currentToken, createOtherSessions } =
+			await setup({
+				secondaryStorage: createMapStorage(store),
+				session,
+			});
+		const revoked = await createOtherSessions(3);
+
+		const res = await client.revokeOtherSessions({
+			fetchOptions: { headers },
+		});
+
+		expect(res.data?.status).toBe(true);
+		const index = JSON.parse(store.get(`active-sessions-${user.id}`)!) as {
+			token: string;
+		}[];
+		expect(index.map((entry) => entry.token)).toEqual([currentToken]);
+		for (const token of revoked) {
+			expect(store.has(token)).toBe(false);
+		}
 	});
 });
 
