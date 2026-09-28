@@ -382,29 +382,17 @@ export const auth = betterAuth({
 
 ## Deleting Expired Sessions
 
-Better Auth deletes an expired session when its token comes back: `getSession` finds the row, sees that it has expired, and removes it. Signing out and revoking a session delete the row too. A session whose cookie never comes back, because the user cleared their cookies or stopped using that browser, stays in the table with its `ipAddress` and `userAgent` until you delete it.
+Better Auth deletes an expired session when its token comes back to `getSession` (only on POST requests when `deferSessionRefresh` is enabled), and when the user signs out or a session is revoked. A session whose cookie never comes back stays in the table, with its IP address and user agent, until you delete it. You can do that from a scheduled job:
 
-To remove those rows, delete sessions past their `expiresAt` on a schedule, for example from a cron route on a serverless host or a timer in a long-running server:
-
-```ts title="delete-expired-sessions.ts"
-import { auth } from "@/lib/auth";
-
-export async function deleteExpiredSessions() {
-    const { adapter } = await auth.$context;
-    return adapter.deleteMany({
-        model: "session",
-        where: [{ field: "expiresAt", operator: "lt", value: new Date() }],
-    });
-}
+```ts
+const { adapter } = await auth.$context;
+await adapter.deleteMany({
+    model: "session",
+    where: [{ field: "expiresAt", operator: "lt", value: new Date() }],
+});
 ```
 
-`deleteMany` calls the database adapter directly, so `databaseHooks.session.delete` hooks don't run for these rows.
-
-* Add an index on the session `expiresAt` column in your own migration. The generated schema doesn't create one, and without it every run scans the whole table.
-* Sessions kept only in [secondary storage](#sessions-in-secondary-storage) are written with a TTL that matches `expiresAt`, so the store drops them on its own. With `storeSessionInDatabase`, the database rows still need this job.
-* With `preserveSessionInDatabase`, revoked rows are kept on purpose and their `expiresAt` is the revocation time. Use a cutoff that matches how long you want to keep them, such as `new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)` for 30 days.
-
-Expired rows in the `verification` table are deleted in bulk during some verification lookups, such as the OAuth state check or opening a password reset link, unless `verification.disableCleanup` is set. If your app rarely goes through those paths, or you set `disableCleanup`, delete them in the same job with `model: "verification"`.
+This bypasses `databaseHooks`. On a large table, add an index on the session's expiry column.
 
 ## Stateless Session Management
 
