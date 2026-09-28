@@ -100,9 +100,8 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 				if (status < 200 || status > 599) {
 					// `new Response` throws a RangeError for out-of-range statuses,
 					// which would escape this callback and leave the promise pending
-					// forever. Drain the socket and reject with a descriptive error
-					// instead.
-					response.resume();
+					// forever. Close the unusable response and its socket.
+					response.destroy();
 					reject(
 						new TypeError(
 							`metadata endpoint returned an invalid HTTP status (${status})`,
@@ -126,6 +125,14 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 				);
 			},
 		);
+		request.once("upgrade", (response) => {
+			response.destroy();
+			reject(
+				new TypeError(
+					`metadata endpoint returned an invalid HTTP status (${response.statusCode ?? 101})`,
+				),
+			);
+		});
 		request.once("error", reject);
 		request.end();
 	});
