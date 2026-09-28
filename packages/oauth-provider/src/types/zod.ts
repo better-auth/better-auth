@@ -172,6 +172,7 @@ export const verificationValueSchema = z
 		referenceId: z.string().optional(),
 		authTime: z.number().optional(),
 		resource: z.array(z.string()).optional(),
+		consentId: z.string().optional(),
 	})
 	.passthrough();
 

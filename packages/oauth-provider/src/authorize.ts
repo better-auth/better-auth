@@ -950,6 +950,9 @@ export async function authorizeEndpoint(
 		authTime: new Date(session.session.createdAt).getTime(),
 		referenceId,
 		resource: requestedResources,
+		// Bind the code to the consent that authorized it, so revoking that
+		// consent also invalidates codes already issued under it.
+		consentId: consent.id,
 	});
 }
 
@@ -981,6 +984,7 @@ async function redirectWithAuthorizationCode(
 		authTime: number;
 		referenceId?: string;
 		resource?: string[];
+		consentId?: string;
 	},
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
@@ -999,6 +1003,7 @@ async function redirectWithAuthorizationCode(
 			referenceId: verificationValue.referenceId,
 			authTime: verificationValue.authTime,
 			resource: verificationValue.resource,
+			consentId: verificationValue.consentId,
 		} satisfies VerificationValue),
 	};
 	await ctx.context.internalAdapter.createVerificationValue({
