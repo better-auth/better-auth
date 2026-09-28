@@ -1,3 +1,4 @@
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
@@ -6,37 +7,63 @@ import { isPublicRoutableHost } from "@better-auth/core/utils/host";
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([204, 205, 304]);
+// `dns.lookup` uses the shared libuv thread pool and cannot be cancelled. Keep
+// abandoned lookups in this count until they actually settle.
+const MAX_OUTSTANDING_DNS_LOOKUPS = 16;
+let outstandingDNSLookups = 0;
 
 /**
  * Resolve a hostname while honoring the caller's AbortSignal.
  *
  * `dns.lookup` itself cannot be cancelled, so an aborted call leaves one
- * bounded lookup outstanding per request; it settles in the background and
- * its result is discarded. What changes is that we stop *awaiting* it as
- * soon as the caller's deadline fires instead of letting a stalled resolver
- * defeat the deadline.
+ * lookup outstanding until it settles in the background, capped across
+ * requests by MAX_OUTSTANDING_DNS_LOOKUPS. We stop awaiting it when the
+ * caller's deadline fires instead of letting a stalled resolver defeat it.
  */
 function lookupWithAbort(
 	hostname: string,
 	signal: AbortSignal | undefined,
-): ReturnType<typeof lookup> {
+): Promise<LookupAddress[]> {
 	if (signal?.aborted) {
 		return Promise.reject(signal.reason);
 	}
-	const lookupPromise = lookup(hostname, {
-		all: true,
-		verbatim: true,
-	});
+	if (outstandingDNSLookups >= MAX_OUTSTANDING_DNS_LOOKUPS) {
+		return Promise.reject(new TypeError("metadata DNS lookup limit exceeded"));
+	}
+	outstandingDNSLookups += 1;
+	let lookupPromise: Promise<LookupAddress[]>;
+	try {
+		lookupPromise = lookup(hostname, {
+			all: true,
+			verbatim: true,
+		});
+	} catch (error) {
+		outstandingDNSLookups -= 1;
+		return Promise.reject(error);
+	}
+	// Attach both handlers immediately, including when the caller has already
+	// stopped waiting. A late error cannot become an unhandled rejection.
+	const countedLookup = lookupPromise.then(
+		(addresses) => {
+			outstandingDNSLookups -= 1;
+			return addresses;
+		},
+		(error) => {
+			outstandingDNSLookups -= 1;
+			throw error;
+		},
+	);
 	if (!signal) {
-		return lookupPromise;
+		return countedLookup;
 	}
 	return new Promise((resolve, reject) => {
 		const onAbort = () => {
 			reject(signal.reason);
 		};
 		signal.addEventListener("abort", onAbort, { once: true });
+		if (signal.aborted) onAbort();
 		const cleanup = () => signal.removeEventListener("abort", onAbort);
-		lookupPromise.then(
+		countedLookup.then(
 			(addresses) => {
 				cleanup();
 				resolve(addresses);
