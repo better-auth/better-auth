@@ -177,8 +177,8 @@ await runWithUser("user@example.com", "password", async (headers) => {
 });
 
 // Or use the test user with async context
-const { runWithDefaultUser } = await signInWithTestUser();
-await runWithDefaultUser(async (headers) => {
+const { runWithUser } = await signInWithTestUser();
+await runWithUser(async (headers) => {
     // Code here runs with the test user's session context
 });
 ```
