@@ -384,6 +384,35 @@ const auth = betterAuth({
 })
 ```
 
+### Sign Up Without Email
+
+By default, sign-up needs an email as well as a username. For users who have no email address (for example, accounts a parent or administrator creates for children, or internal staff accounts), set `getTempEmail`. When a `/sign-up/email` request has a `username` but no `email`, the plugin calls `getTempEmail` with the normalized username and uses the result as the user's email.
+
+* the user is created with `emailVerified: false`
+* the username is validated and checked for availability before `getTempEmail` is called
+* requests that include an `email` are unchanged
+* the returned value must be a valid email address
+
+Return an address that can't receive mail, such as one under a domain you control or the reserved `.invalid` top-level domain. If you send verification emails on sign-up (`emailVerification.sendOnSignUp`), skip addresses under that domain in your `sendVerificationEmail`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            getTempEmail: (username) => `${username}@users.example.invalid`
+        })
+    ]
+})
+```
+
+The client's `signUp.email` types still require `email`; send the request with `authClient.$fetch("/sign-up/email", { method: "POST", body: { username, password, name } })`.
+
 ### Disable Is Username Available
 
 By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disabledPaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
