@@ -8,14 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useSessionQuery } from "@/data/user/session-query";
 import { authClient } from "@/lib/auth-client";
-
-/**
- * Client IDs this app registered, mapped to names users recognize. A device
- * chooses its own `client_id`, so never present an unknown ID as a trusted name.
- */
-const KNOWN_CLIENTS: Record<string, string> = {
-	"demo-cli": "Better Auth demo CLI",
-};
+import { deviceClients } from "@/lib/device-clients";
 
 export default function Page() {
 	const router = useRouter();
@@ -113,7 +106,8 @@ export default function Page() {
 							{request ? (
 								<>
 									<p>
-										{KNOWN_CLIENTS[request.client_id] ?? "Unrecognized client"}
+										{deviceClients.get(request.client_id) ??
+											"Unrecognized client"}
 									</p>
 									<p className="font-mono text-xs text-muted-foreground">
 										ID sent by the device: {request.client_id}
