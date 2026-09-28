@@ -1,10 +1,11 @@
 import type { User } from "better-auth";
+import type { memoryAdapter } from "better-auth/adapters/memory";
 import { getTestInstance } from "better-auth/test";
-import type Stripe from "stripe";
+import Stripe from "stripe";
 import { assert, describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
-import type { StripeOptions, Subscription } from "../src/types";
+import type { StripeOptions, StripePlan, Subscription } from "../src/types";
 import {
 	createCheckoutSessionCompletedEvent,
 	createPrice,
@@ -12,6 +13,7 @@ import {
 	createSubscriptionEvent,
 	createSubscriptionItem,
 } from "./_factories";
+import type { StripeMock } from "./_fixtures";
 import { TEST_PRICES, test } from "./_fixtures";
 
 const testUser = {
@@ -3476,6 +3478,182 @@ describe("stripe webhook: acknowledgement when processing fails", () => {
 				expect.stringContaining(`${hook} failed`),
 				expect.any(Error),
 			);
+		});
+	}
+
+	async function setupCheckoutWithRetrieveError(
+		{
+			memory,
+			stripeOptions,
+			stripeMock,
+		}: {
+			memory: ReturnType<typeof memoryAdapter>;
+			stripeOptions: StripeOptions & {
+				subscription: { enabled: true; plans: StripePlan[] };
+			};
+			stripeMock: StripeMock;
+		},
+		error: unknown,
+	) {
+		const onEvent = vi.fn();
+		const onSubscriptionComplete = vi.fn();
+		const onTrialStart = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						onEvent,
+						subscription: {
+							...stripeOptions.subscription,
+							plans: [
+								{
+									...stripeOptions.subscription.plans[0]!,
+									freeTrial: { days: 14, onTrialStart },
+								},
+							],
+							onSubscriptionComplete,
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const row = await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: "user_retrieve_error",
+				stripeCustomerId: "cus_retrieve_error",
+				status: "incomplete",
+				plan: "starter",
+			},
+		});
+		const event = createCheckoutSessionCompletedEvent({
+			subscription: "sub_retrieve_error",
+			metadata: { referenceId: "user_retrieve_error", subscriptionId: row.id },
+		});
+		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+		stripeMock.subscriptions.retrieve.mockRejectedValue(error);
+		const logWarn = vi.spyOn(ctx.logger, "warn");
+		const response = await sendWebhook(auth, event);
+		const saved = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: row.id }],
+		});
+		return {
+			response,
+			event,
+			saved,
+			logWarn,
+			onEvent,
+			onSubscriptionComplete,
+			onTrialStart,
+		};
+	}
+
+	for (const { name, error, code } of [
+		{
+			name: "a 404 for a subscription deleted in Stripe",
+			error: new Stripe.errors.StripeInvalidRequestError({
+				statusCode: 404,
+				code: "resource_missing",
+				message: "No such subscription: 'sub_retrieve_error'",
+			}),
+			code: "resource_missing",
+		},
+		{
+			name: "a 400 invalid request",
+			error: new Stripe.errors.StripeInvalidRequestError({
+				statusCode: 400,
+				code: "parameter_invalid_empty",
+				message: "Invalid request",
+			}),
+			code: "parameter_invalid_empty",
+		},
+	]) {
+		test(`acknowledges checkout.session.completed without hooks when Stripe returns ${name}`, async ({
+			memory,
+			stripeOptions,
+			stripeMock,
+		}) => {
+			const result = await setupCheckoutWithRetrieveError(
+				{ memory, stripeOptions, stripeMock },
+				error,
+			);
+			expect(result.response.status).toBe(200);
+			expect(result.onSubscriptionComplete).not.toHaveBeenCalled();
+			expect(result.onTrialStart).not.toHaveBeenCalled();
+			expect(result.onEvent).toHaveBeenCalledTimes(1);
+			expect(result.saved?.status).toBe("incomplete");
+			expect(result.logWarn).toHaveBeenCalledWith(
+				expect.stringContaining(
+					`subscriptions.retrieve failed for event ${result.event.id} (checkout.session.completed)`,
+				),
+			);
+			expect(result.logWarn).toHaveBeenCalledWith(
+				expect.stringContaining(`(${code})`),
+			);
+		});
+	}
+
+	for (const { name, error } of [
+		{
+			name: "a 500 from Stripe",
+			error: new Stripe.errors.StripeAPIError({
+				statusCode: 500,
+				message: "Internal error",
+			}),
+		},
+		{
+			name: "a 429 rate limit",
+			error: new Stripe.errors.StripeRateLimitError({
+				statusCode: 429,
+				code: "rate_limit",
+				message: "Too many requests",
+			}),
+		},
+		{
+			name: "a rate limit reported as a 400",
+			error: new Stripe.errors.StripeRateLimitError({
+				statusCode: 400,
+				code: "rate_limit",
+				message: "Too many requests",
+			}),
+		},
+		{
+			name: "a 401 for an invalid API key",
+			error: new Stripe.errors.StripeAuthenticationError({
+				statusCode: 401,
+				message: "Invalid API Key provided",
+			}),
+		},
+		{
+			name: "a connection error",
+			error: new Stripe.errors.StripeConnectionError({
+				message: "An error occurred with our connection to Stripe",
+			}),
+		},
+		{
+			name: "an error that doesn't come from Stripe",
+			error: new Error("socket hang up"),
+		},
+	]) {
+		test(`returns non-2xx for checkout.session.completed when Stripe fails with ${name}`, async ({
+			memory,
+			stripeOptions,
+			stripeMock,
+		}) => {
+			const result = await setupCheckoutWithRetrieveError(
+				{ memory, stripeOptions, stripeMock },
+				error,
+			);
+			expect(result.response.status).toBeGreaterThanOrEqual(400);
+			expect(result.onSubscriptionComplete).not.toHaveBeenCalled();
+			expect(result.onTrialStart).not.toHaveBeenCalled();
+			expect(result.onEvent).not.toHaveBeenCalled();
+			expect(result.saved?.status).toBe("incomplete");
 		});
 	}
 });

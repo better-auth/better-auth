@@ -71,6 +71,81 @@ async function runLifecycleHook<Args extends unknown[]>(
 	}
 }
 
+/**
+ * Stripe API status codes that a later delivery can succeed past once the
+ * cause clears: a bad or rotated API key (401), missing permissions (403), a
+ * conflicting concurrent request (409) and rate limiting (429).
+ * @internal
+ */
+const RETRYABLE_STRIPE_CLIENT_STATUS_CODES = new Set([401, 403, 409, 429]);
+
+/**
+ * The fields of a `stripe` error this plugin reads.
+ * @internal
+ */
+type StripeApiError = {
+	type: string;
+	statusCode?: number | undefined;
+	code?: string | undefined;
+};
+
+/**
+ * Whether a Stripe API error will fail the same way on every retry, such as a
+ * 404 for a subscription deleted in Stripe before the event was delivered.
+ *
+ * Only 4xx responses from Stripe count, minus the retryable codes above.
+ * Server errors, connection errors and timeouts, and errors that don't come
+ * from Stripe (a database failure, for example) are treated as transient.
+ * Stripe errors are recognized by shape (`type` and `statusCode`) rather than
+ * `instanceof`, so the check works across the supported `stripe` versions.
+ * @internal
+ */
+function isPermanentStripeError(error: unknown): error is StripeApiError {
+	if (!error || typeof error !== "object") {
+		return false;
+	}
+	const { type, statusCode } = error as Partial<StripeApiError>;
+	if (typeof type !== "string" || !type.startsWith("Stripe")) {
+		return false;
+	}
+	// Stripe can report rate limiting as a 400 with code `rate_limit`.
+	if (type === "StripeRateLimitError") {
+		return false;
+	}
+	return (
+		typeof statusCode === "number" &&
+		statusCode >= 400 &&
+		statusCode < 500 &&
+		!RETRYABLE_STRIPE_CLIENT_STATUS_CODES.has(statusCode)
+	);
+}
+
+/**
+ * Call the Stripe API from a webhook handler. A transient failure is rethrown
+ * so the webhook returns non-2xx and Stripe retries the event. A permanent one
+ * is logged and resolves to `null`, so the handler can return early and the
+ * webhook is acknowledged instead of retried for days with no chance of success.
+ * @internal
+ */
+async function callStripeApi<T>(
+	ctx: GenericEndpointContext,
+	event: Stripe.Event,
+	name: string,
+	call: () => Promise<T>,
+): Promise<T | null> {
+	try {
+		return await call();
+	} catch (error) {
+		if (!isPermanentStripeError(error)) {
+			throw error;
+		}
+		ctx.context.logger.warn(
+			`Stripe webhook warning: ${name} failed for event ${event.id} (${event.type}) with ${error.type} ${error.statusCode}${error.code ? ` (${error.code})` : ""}. Retrying can't succeed, so the event was acknowledged without updating the subscription.`,
+		);
+		return null;
+	}
+}
+
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
@@ -85,9 +160,15 @@ export async function onCheckoutSessionCompleted(
 	) {
 		return;
 	}
-	const subscription = await client.subscriptions.retrieve(
-		checkoutSession.subscription as string,
+	const subscription = await callStripeApi(
+		ctx,
+		event,
+		"subscriptions.retrieve",
+		() => client.subscriptions.retrieve(checkoutSession.subscription as string),
 	);
+	if (!subscription) {
+		return;
+	}
 	const resolved = await resolvePlanItem(options, subscription.items.data);
 	if (!resolved) {
 		ctx.context.logger.warn(
