@@ -2,7 +2,7 @@
 
 import { Check, Loader2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,6 +17,17 @@ export default function Page() {
 	const [isApprovePending, startApproveTransition] = useTransition();
 	const [isDenyPending, startDenyTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
+	const [request, setRequest] = useState<{
+		client_id?: string;
+		scope?: string;
+	} | null>(null);
+
+	useEffect(() => {
+		if (!session || !userCode) return;
+		authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
+			if (data) setRequest(data);
+		});
+	}, [session, userCode]);
 
 	const handleApprove = () => {
 		if (!userCode) return;
@@ -74,6 +85,21 @@ export default function Page() {
 						</div>
 
 						<div className="rounded-lg bg-muted p-4">
+							<p className="text-sm font-medium">Requesting client</p>
+							<p className="font-mono">{request?.client_id ?? "Loading..."}</p>
+						</div>
+
+						<div className="rounded-lg bg-muted p-4">
+							<p className="text-sm font-medium">Requested scopes</p>
+							<p>{request ? request.scope || "None" : "Loading..."}</p>
+						</div>
+
+						<p className="text-sm text-muted-foreground">
+							Approve only if this code is showing right now on a device you
+							have.
+						</p>
+
+						<div className="rounded-lg bg-muted p-4">
 							<p className="text-sm font-medium">Signed in as</p>
 							<p>{session.user.email}</p>
 						</div>
@@ -103,7 +129,7 @@ export default function Page() {
 							<Button
 								onClick={handleApprove}
 								className="flex-1"
-								disabled={isApprovePending}
+								disabled={isApprovePending || !request}
 							>
 								{isApprovePending ? (
 									<Loader2 className="h-4 w-4 animate-spin" />
