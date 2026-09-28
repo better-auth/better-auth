@@ -852,6 +852,91 @@ describe("revoke other sessions", () => {
 			expect(store.has(token)).toBe(false);
 		}
 	});
+
+	it("runs delete hooks for sessions past the default findMany limit", async () => {
+		const {
+			client,
+			headers,
+			currentToken,
+			vetoedTokens,
+			createOtherSessions,
+			listTokens,
+		} = await setup({
+			secondaryStorage: createMapStorage(new Map()),
+			session: { storeSessionInDatabase: true },
+			advanced: { database: { defaultFindManyLimit: 2 } },
+		});
+		// More vetoes than the limit, so at least one sits past it whatever
+		// order the database returns rows in.
+		const [revoked, ...vetoed] = await createOtherSessions(4);
+		for (const token of vetoed) vetoedTokens.add(token);
+
+		const res = await client.revokeOtherSessions({ fetchOptions: { headers } });
+
+		expect(res.data?.status).toBe(true);
+		const remaining = await listTokens();
+		expect(remaining).toEqual([currentToken, ...vetoed].sort());
+		expect(remaining).not.toContain(revoked);
+	});
+
+	it("still revokes the sessions when the hook lookup fails", async () => {
+		const {
+			client,
+			context,
+			headers,
+			currentToken,
+			createOtherSessions,
+			listTokens,
+		} = await setup();
+		await createOtherSessions(3);
+		const findMany = context.adapter.findMany;
+		const spy = vi
+			.spyOn(context.adapter, "findMany")
+			.mockImplementation(async (args) => {
+				if (args.where?.some((w) => w.field === "token")) {
+					throw new Error("lookup failed");
+				}
+				return findMany(args);
+			});
+
+		try {
+			const res = await client.revokeOtherSessions({
+				fetchOptions: { headers },
+			});
+			expect(res.data?.status).toBe(true);
+		} finally {
+			spy.mockRestore();
+		}
+		expect(await listTokens()).toEqual([currentToken]);
+	});
+
+	it("logs a failed cache cleanup instead of failing the request", async () => {
+		const log = vi.fn();
+		const storage = createMapStorage(new Map());
+		let failDeletes = false;
+		const { client, headers, createOtherSessions } = await setup({
+			secondaryStorage: {
+				...storage,
+				delete(key) {
+					if (failDeletes) throw new Error("storage unavailable");
+					return storage.delete(key);
+				},
+			},
+			logger: { level: "error", log },
+		});
+		await createOtherSessions(2);
+		failDeletes = true;
+
+		const res = await client.revokeOtherSessions({ fetchOptions: { headers } });
+
+		expect(res.error).toBeNull();
+		expect(res.data?.status).toBe(true);
+		expect(log).toHaveBeenCalledWith(
+			"error",
+			"Failed to delete committed sessions from secondary storage",
+			expect.any(Error),
+		);
+	});
 });
 
 describe("cookie cache", () => {

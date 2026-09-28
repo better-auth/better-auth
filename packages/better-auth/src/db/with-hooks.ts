@@ -421,22 +421,37 @@ export function getWithHooks(
 	 * only keeps that row instead of cancelling the whole delete. The remaining
 	 * rows are still removed with a single statement. Returns the rows a hook
 	 * kept.
+	 *
+	 * `limit` must cover every row `where` can match; rows past it would be
+	 * deleted without running their hooks.
 	 */
 	async function deleteEachWithHooks<T extends Record<string, any>>(
 		where: Where[],
 		model: BaseModelNames,
-		customDeleteFn?:
-			| {
-					fn: (where: Where[]) => void | Promise<any>;
-					executeMainFn?: boolean;
-			  }
-			| undefined,
+		{
+			limit,
+			customDeleteFn,
+		}: {
+			limit: number;
+			customDeleteFn?:
+				| {
+						fn: (where: Where[]) => void | Promise<any>;
+						executeMainFn?: boolean;
+				  }
+				| undefined;
+		},
 	): Promise<T[]> {
 		const context = tryGetCurrentAuthEndpointContext();
-		const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
-			model,
-			where,
-		});
+		let entities: T[] = [];
+		try {
+			entities = await (await getCurrentAdapter(adapter)).findMany<T>({
+				model,
+				where,
+				limit,
+			});
+		} catch {
+			// If we can't find the entities, we'll still proceed with deletion
+		}
 
 		const deleted: T[] = [];
 		const vetoed: T[] = [];

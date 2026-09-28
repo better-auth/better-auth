@@ -212,29 +212,39 @@ export const createInternalAdapter = (
 	async function queueCachedSessionDeletion(tokens: readonly string[]) {
 		if (!secondaryStorage || tokens.length === 0) return;
 
-		await queueAfterTransactionHook(async () => {
-			const cachedSessions = await Promise.all(
-				tokens.map(async (token) => ({
-					token,
-					cached: safeJSONParse<{ session: Session }>(
-						await secondaryStorage.get(token),
-					),
-				})),
-			);
-			const referencesByUser = new Map<string, ActiveSessionReference[]>();
-			for (const { token, cached } of cachedSessions) {
-				if (!cached?.session) continue;
-				const references = referencesByUser.get(cached.session.userId) ?? [];
-				references.push({
-					token,
-					expiresAt: new Date(cached.session.expiresAt).getTime(),
-				});
-				referencesByUser.set(cached.session.userId, references);
-			}
-			for (const [userId, references] of referencesByUser) {
-				await deleteCachedUserSessions(userId, references);
-			}
-		});
+		await queueAfterTransactionHook(
+			async () => {
+				const cachedSessions = await Promise.all(
+					tokens.map(async (token) => ({
+						token,
+						cached: safeJSONParse<{ session: Session }>(
+							await secondaryStorage.get(token),
+						),
+					})),
+				);
+				const referencesByUser = new Map<string, ActiveSessionReference[]>();
+				for (const { token, cached } of cachedSessions) {
+					if (!cached?.session) continue;
+					const references = referencesByUser.get(cached.session.userId) ?? [];
+					references.push({
+						token,
+						expiresAt: new Date(cached.session.expiresAt).getTime(),
+					});
+					referencesByUser.set(cached.session.userId, references);
+				}
+				for (const [userId, references] of referencesByUser) {
+					await deleteCachedUserSessions(userId, references);
+				}
+			},
+			{
+				onError(error) {
+					logger.error(
+						"Failed to delete committed sessions from secondary storage",
+						error,
+					);
+				},
+			},
+		);
 	}
 
 	async function withVerificationConsumeLock<T>(
@@ -1009,17 +1019,20 @@ export const createInternalAdapter = (
 			const where: Where[] = [
 				{ field: "token", value: sessionTokens, operator: "in" },
 			];
+			// Tokens are unique, so the lookup can't match more rows than this.
+			const limit = sessionTokens.length;
 			let vetoed: Session[] = [];
 			if (!secondaryStorage) {
-				vetoed = await deleteEachWithHooks<Session>(where, "session");
+				vetoed = await deleteEachWithHooks<Session>(where, "session", {
+					limit,
+				});
 			} else if (options.session?.storeSessionInDatabase) {
 				vetoed = ctx.options.session?.preserveSessionInDatabase
-					? await deleteEachWithHooks<Session>(
-							liveSessions(where),
-							"session",
-							endSessionRows,
-						)
-					: await deleteEachWithHooks<Session>(where, "session");
+					? await deleteEachWithHooks<Session>(liveSessions(where), "session", {
+							limit,
+							customDeleteFn: endSessionRows,
+						})
+					: await deleteEachWithHooks<Session>(where, "session", { limit });
 			}
 			// A session a hook kept stays cached and listed.
 			const kept = new Set(vetoed.map((session) => session.token));
