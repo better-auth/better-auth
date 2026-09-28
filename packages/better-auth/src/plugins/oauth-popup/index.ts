@@ -233,7 +233,7 @@ const oauthPopupStart = createAuthEndpoint(
 				errorURL: c.query.errorCallbackURL,
 				newUserURL: c.query.newUserCallbackURL,
 				requestSignUp: c.query.requestSignUp === "true" ? true : undefined,
-				expiresAt: Date.now() + 10 * 60 * 1000,
+				expiresAt: Date.now() + c.context.oauthConfig.stateExpiresIn * 1000,
 			};
 			await setOAuthState(stateData);
 			const { state } = await generateGenericState(c, stateData);

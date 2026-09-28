@@ -32,7 +32,7 @@ export async function generateRelayState(
 		/**
 		 * This is the actual expiry time of the state
 		 */
-		expiresAt: Date.now() + 10 * 60 * 1000,
+		expiresAt: Date.now() + c.context.oauthConfig.stateExpiresIn * 1000,
 		requestSignUp: c.body.requestSignUp,
 		serverContext: providerReference
 			? { [SSO_PROVIDER_STATE_KEY]: providerReference }
