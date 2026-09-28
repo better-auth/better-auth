@@ -644,7 +644,9 @@ If the plugin can't save a subscription change, for example because a database w
 Two cases work differently:
 
 * If a completed checkout points to a subscription row that no longer exists, the webhook returns a non-2xx response and skips the lifecycle hooks, so the failed delivery shows up in the Stripe dashboard. Each retry fails the same way until the row is restored.
-* If Stripe rejects an API call with an error a retry can't fix, such as a 404 for a subscription deleted in Stripe before the event arrived, the plugin logs a warning and acknowledges the event with a `200`. The subscription isn't updated and the lifecycle hooks don't run, but `onEvent` does. Authentication, permission, conflict and rate-limit errors (401, 403, 409 and 429) are still retried.
+* If Stripe rejects an API call as an invalid request (a 4xx status other than those listed below), the plugin logs a warning and acknowledges the event with a `200`, because retrying the same request can't succeed. The subscription isn't updated and the lifecycle hooks don't run, but `onEvent` does.
+
+Stripe API errors with status 401, 403, 404, 409 or 429 are retried like server errors. They're usually an account or key setup problem you can fix before Stripe stops retrying: an API key for a different account, test mode versus live mode, a Connect event handled without the connected account, a missing permission, or a rate limit. A canceled subscription can still be retrieved from Stripe, so a 404 rarely means the subscription is gone. The logs include the event's mode and connected account to help you find the cause.
 
 Lifecycle hooks (the callbacks above and the `freeTrial` callbacks) run after the subscription is saved, on a best-effort basis. If a hook throws, the error is logged, the remaining hooks and `onEvent` still run, and the webhook returns `200`, so Stripe doesn't retry the event because of it. This keeps a retry from repeating hooks that already succeeded.
 

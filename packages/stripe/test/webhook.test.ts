@@ -3494,6 +3494,7 @@ describe("stripe webhook: acknowledgement when processing fails", () => {
 			stripeMock: StripeMock;
 		},
 		error: unknown,
+		eventOverrides: Partial<Stripe.Event> = {},
 	) {
 		const onEvent = vi.fn();
 		const onSubscriptionComplete = vi.fn();
@@ -3530,13 +3531,20 @@ describe("stripe webhook: acknowledgement when processing fails", () => {
 				plan: "starter",
 			},
 		});
-		const event = createCheckoutSessionCompletedEvent({
-			subscription: "sub_retrieve_error",
-			metadata: { referenceId: "user_retrieve_error", subscriptionId: row.id },
-		});
+		const event = {
+			...createCheckoutSessionCompletedEvent({
+				subscription: "sub_retrieve_error",
+				metadata: {
+					referenceId: "user_retrieve_error",
+					subscriptionId: row.id,
+				},
+			}),
+			...eventOverrides,
+		} as Stripe.Event;
 		stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
 		stripeMock.subscriptions.retrieve.mockRejectedValue(error);
 		const logWarn = vi.spyOn(ctx.logger, "warn");
+		const logError = vi.spyOn(ctx.logger, "error");
 		const response = await sendWebhook(auth, event);
 		const saved = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
@@ -3547,56 +3555,65 @@ describe("stripe webhook: acknowledgement when processing fails", () => {
 			event,
 			saved,
 			logWarn,
+			logError,
 			onEvent,
 			onSubscriptionComplete,
 			onTrialStart,
 		};
 	}
 
-	for (const { name, error, code } of [
-		{
-			name: "a 404 for a subscription deleted in Stripe",
-			error: new Stripe.errors.StripeInvalidRequestError({
-				statusCode: 404,
-				code: "resource_missing",
-				message: "No such subscription: 'sub_retrieve_error'",
-			}),
-			code: "resource_missing",
-		},
-		{
-			name: "a 400 invalid request",
-			error: new Stripe.errors.StripeInvalidRequestError({
+	test("acknowledges checkout.session.completed without hooks when Stripe rejects the request as invalid", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const result = await setupCheckoutWithRetrieveError(
+			{ memory, stripeOptions, stripeMock },
+			new Stripe.errors.StripeInvalidRequestError({
 				statusCode: 400,
 				code: "parameter_invalid_empty",
 				message: "Invalid request",
 			}),
-			code: "parameter_invalid_empty",
-		},
-	]) {
-		test(`acknowledges checkout.session.completed without hooks when Stripe returns ${name}`, async ({
-			memory,
-			stripeOptions,
-			stripeMock,
-		}) => {
-			const result = await setupCheckoutWithRetrieveError(
-				{ memory, stripeOptions, stripeMock },
-				error,
-			);
-			expect(result.response.status).toBe(200);
-			expect(result.onSubscriptionComplete).not.toHaveBeenCalled();
-			expect(result.onTrialStart).not.toHaveBeenCalled();
-			expect(result.onEvent).toHaveBeenCalledTimes(1);
-			expect(result.saved?.status).toBe("incomplete");
-			expect(result.logWarn).toHaveBeenCalledWith(
-				expect.stringContaining(
-					`subscriptions.retrieve failed for event ${result.event.id} (checkout.session.completed)`,
-				),
-			);
-			expect(result.logWarn).toHaveBeenCalledWith(
-				expect.stringContaining(`(${code})`),
-			);
-		});
-	}
+		);
+		expect(result.response.status).toBe(200);
+		expect(result.onSubscriptionComplete).not.toHaveBeenCalled();
+		expect(result.onTrialStart).not.toHaveBeenCalled();
+		expect(result.onEvent).toHaveBeenCalledTimes(1);
+		expect(result.saved?.status).toBe("incomplete");
+		expect(result.logWarn).toHaveBeenCalledWith(
+			expect.stringContaining(
+				`subscriptions.retrieve failed for event ${result.event.id} (checkout.session.completed, test mode) with StripeInvalidRequestError 400 (parameter_invalid_empty)`,
+			),
+		);
+		expect(result.logWarn).toHaveBeenCalledWith(
+			expect.stringContaining("Stripe won't retry because of this error"),
+		);
+	});
+
+	test("returns non-2xx and logs the account and mode when Stripe returns a 404 for a Connect event", async ({
+		memory,
+		stripeOptions,
+		stripeMock,
+	}) => {
+		const result = await setupCheckoutWithRetrieveError(
+			{ memory, stripeOptions, stripeMock },
+			new Stripe.errors.StripeInvalidRequestError({
+				statusCode: 404,
+				code: "resource_missing",
+				message: "No such subscription: 'sub_retrieve_error'",
+			}),
+			{ account: "acct_connected", livemode: true },
+		);
+		expect(result.response.status).toBeGreaterThanOrEqual(400);
+		expect(result.onSubscriptionComplete).not.toHaveBeenCalled();
+		expect(result.onEvent).not.toHaveBeenCalled();
+		expect(result.saved?.status).toBe("incomplete");
+		expect(result.logError).toHaveBeenCalledWith(
+			expect.stringContaining(
+				`subscriptions.retrieve failed for event ${result.event.id} (checkout.session.completed, live mode, account acct_connected) with StripeInvalidRequestError 404 (resource_missing)`,
+			),
+		);
+	});
 
 	for (const { name, error } of [
 		{
@@ -3620,6 +3637,21 @@ describe("stripe webhook: acknowledgement when processing fails", () => {
 				statusCode: 400,
 				code: "rate_limit",
 				message: "Too many requests",
+			}),
+		},
+		{
+			name: "a 404 for a missing object",
+			error: new Stripe.errors.StripeInvalidRequestError({
+				statusCode: 404,
+				code: "resource_missing",
+				message: "No such subscription: 'sub_retrieve_error'",
+			}),
+		},
+		{
+			name: "a 403 for a missing permission",
+			error: new Stripe.errors.StripePermissionError({
+				statusCode: 403,
+				message: "The provided key does not have access to this resource",
 			}),
 		},
 		{
