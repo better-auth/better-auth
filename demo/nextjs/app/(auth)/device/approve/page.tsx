@@ -9,6 +9,14 @@ import { Card } from "@/components/ui/card";
 import { useSessionQuery } from "@/data/user/session-query";
 import { authClient } from "@/lib/auth-client";
 
+/**
+ * Client IDs this app registered, mapped to names users recognize. A device
+ * chooses its own `client_id`, so never present an unknown ID as a trusted name.
+ */
+const KNOWN_CLIENTS: Record<string, string> = {
+	"demo-cli": "Better Auth demo CLI",
+};
+
 export default function Page() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -18,15 +26,31 @@ export default function Page() {
 	const [isDenyPending, startDenyTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
 	const [request, setRequest] = useState<{
-		client_id?: string;
+		client_id: string;
 		scope?: string;
 	} | null>(null);
 
 	useEffect(() => {
+		setRequest(null);
+		setError(null);
 		if (!session || !userCode) return;
-		authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
-			if (data) setRequest(data);
-		});
+		let active = true;
+		void authClient
+			.device({ query: { user_code: userCode } })
+			.then(({ data, error }) => {
+				if (!active) return;
+				if (!data?.client_id) {
+					setError(
+						error?.message ||
+							"This code is invalid, expired, or was claimed by another session.",
+					);
+					return;
+				}
+				setRequest({ client_id: data.client_id, scope: data.scope });
+			});
+		return () => {
+			active = false;
+		};
 	}, [session, userCode]);
 
 	const handleApprove = () => {
@@ -86,7 +110,18 @@ export default function Page() {
 
 						<div className="rounded-lg bg-muted p-4">
 							<p className="text-sm font-medium">Requesting client</p>
-							<p className="font-mono">{request?.client_id ?? "Loading..."}</p>
+							{request ? (
+								<>
+									<p>
+										{KNOWN_CLIENTS[request.client_id] ?? "Unrecognized client"}
+									</p>
+									<p className="font-mono text-xs text-muted-foreground">
+										ID sent by the device: {request.client_id}
+									</p>
+								</>
+							) : (
+								<p>Loading...</p>
+							)}
 						</div>
 
 						<div className="rounded-lg bg-muted p-4">
