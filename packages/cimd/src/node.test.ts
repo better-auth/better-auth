@@ -85,6 +85,29 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 }
 
 describe("Node CIMD metadata transport", () => {
+	it("rejects an out-of-range response status instead of hanging", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/11422
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		mockHttpsResponse({ status: 999 });
+
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).rejects.toThrow("invalid HTTP status (999)");
+	});
+
+	it.each([
+		200, 404, 500,
+	])("accepts a valid %i response status", async (status) => {
+		// @see https://github.com/better-auth/better-auth/issues/11422
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		mockHttpsResponse({ status });
+
+		const response = await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+		);
+		expect(response.status).toBe(status);
+	});
+
 	it("rejects private DNS answers before opening a connection", async () => {
 		mocks.lookup.mockResolvedValue([
 			{ address: "93.184.216.34", family: 4 },
