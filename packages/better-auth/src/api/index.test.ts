@@ -378,12 +378,25 @@ describe("enabledPaths", () => {
 
 	it("does not affect server-side api calls", async () => {
 		const { auth } = await getTestInstance({
-			enabledPaths: ["/sign-up/email"],
+			enabledPaths: ["/ok"],
 		});
 
-		const session = await auth.api.getSession({
-			headers: new Headers(),
+		const blocked = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: signUpBody,
+			}),
+		);
+		expect(blocked.status).toBe(404);
+
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "user@example.com",
+				password: "password12345",
+				name: "Test User",
+			},
 		});
-		expect(session).toBeNull();
+		expect(res.user.email).toBe("user@example.com");
 	});
 });
