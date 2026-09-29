@@ -41,6 +41,52 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
+/**
+ * Sign-ins that overlap in time share one cookie, so each response rewrites it
+ * from the snapshot its own request carried. Sequential flows (a second tab, a
+ * retry, a stale authorize URL) are preserved. Two requests genuinely in flight
+ * at the same instant still resolve last-write-wins, which is what a single
+ * cookie can express; the database strategy has no such limit.
+ */
+const MAX_PENDING_STATES = 5;
+
+/**
+ * Browsers keep about 4KB per cookie including its name and attributes, and
+ * silently drop anything larger. This budgets the encrypted value, leaving room
+ * for the name and for `Path`, `SameSite`, `Secure` and `Max-Age`.
+ */
+const MAX_STATE_COOKIE_LENGTH = 3800;
+
+/** Cookies written before multi-flow support hold one state rather than a list. */
+const stateCookieSchema = z.union([z.array(stateDataSchema), stateDataSchema]);
+
+export function toPendingStates(value: unknown): StateData[] {
+	const parsed = stateCookieSchema.parse(value);
+	return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+async function readPendingStates(
+	c: GenericEndpointContext,
+	cookieName: string,
+): Promise<StateData[]> {
+	const encryptedData = c.getCookie(cookieName);
+	if (!encryptedData) return [];
+
+	try {
+		return toPendingStates(
+			JSON.parse(
+				await symmetricDecrypt({
+					key: c.context.secretConfig,
+					data: encryptedData,
+				}),
+			),
+		);
+	} catch {
+		// An unreadable cookie is replaced rather than failing the new sign-in.
+		return [];
+	}
+}
+
 export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
 	Object.keys(stateDataSchema.shape),
 );
@@ -93,10 +139,6 @@ export async function generateGenericState(
 	// no verification record created
 	if (storeStateStrategy === "cookie") {
 		const payload: StateData = { ...stateData, oauthState: state };
-		const encryptedData = await symmetricEncrypt({
-			key: c.context.secretConfig,
-			data: JSON.stringify(payload),
-		});
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "oauth_state",
@@ -104,6 +146,39 @@ export async function generateGenericState(
 				maxAge: 10 * 60, // 10 minutes
 			},
 		);
+
+		const pending = await readPendingStates(c, stateCookie.name);
+		const nextStates = [
+			...pending.filter((entry) => entry.expiresAt > Date.now()),
+			payload,
+		].slice(-MAX_PENDING_STATES);
+
+		const encryptStates = async (states: StateData[]) =>
+			symmetricEncrypt({
+				key: c.context.secretConfig,
+				data: JSON.stringify(states),
+			});
+
+		// Drop the oldest pending flows until the cookie fits. This flow is the one
+		// the caller is about to be redirected into, so it is never dropped.
+		let encryptedData = await encryptStates(nextStates);
+		while (
+			encryptedData.length > MAX_STATE_COOKIE_LENGTH &&
+			nextStates.length > 1
+		) {
+			nextStates.shift();
+			encryptedData = await encryptStates(nextStates);
+		}
+
+		// Trimming cannot help once a single flow is too large on its own. The
+		// browser would drop the cookie and the callback would fail with a
+		// `state_mismatch` that names nothing, so fail where the cause is visible.
+		if (encryptedData.length > MAX_STATE_COOKIE_LENGTH) {
+			throw new StateError(
+				`OAuth state is ${encryptedData.length} bytes, larger than a browser will store in a cookie. Shorten callbackURL, errorCallbackURL or any additional state data.`,
+				{ code: "state_generation_error" },
+			);
+		}
 
 		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
 
@@ -176,9 +251,13 @@ export async function parseGenericState(
 	let parsedData: StateData;
 
 	if (storeStateStrategy === "cookie") {
-		// Retrieve state data from encrypted cookie
+		// Retrieve state data from encrypted cookie. Carries write attributes so
+		// the remaining flows can be stored back below.
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "oauth_state",
+			{
+				maxAge: 10 * 60, // 10 minutes
+			},
 		);
 		const encryptedData = c.getCookie(stateCookie.name);
 
@@ -189,13 +268,14 @@ export async function parseGenericState(
 			});
 		}
 
+		let pendingStates: StateData[];
 		try {
 			const decryptedData = await symmetricDecrypt({
 				key: c.context.secretConfig,
 				data: encryptedData,
 			});
 
-			parsedData = stateDataSchema.parse(JSON.parse(decryptedData));
+			pendingStates = toPendingStates(JSON.parse(decryptedData));
 		} catch (error) {
 			throw new StateError(
 				"State invalid: Failed to decrypt or parse auth state",
@@ -207,19 +287,42 @@ export async function parseGenericState(
 			);
 		}
 
-		if (!parsedData.oauthState || parsedData.oauthState !== state) {
+		// Expired entries match here so the check below still reports them as
+		// `state_mismatch` rather than as a security mismatch.
+		const matchedState = pendingStates.find(
+			(entry) => entry.oauthState === state,
+		);
+
+		if (!matchedState) {
 			throw new StateError(
 				"State mismatch: OAuth state parameter does not match stored state",
 				{
 					code: "state_security_mismatch",
 					details: { state },
-					errorURL: parsedData.errorURL,
+					// Origin-validated at sign-in, so the newest is a safe fallback.
+					errorURL: pendingStates.at(-1)?.errorURL,
 				},
 			);
 		}
 
-		// Clear the cookie after successful parsing
-		expireCookie(c, stateCookie);
+		parsedData = matchedState;
+
+		const remainingStates = pendingStates.filter(
+			(entry) => entry.oauthState !== state && entry.expiresAt > Date.now(),
+		);
+
+		if (remainingStates.length === 0) {
+			expireCookie(c, stateCookie);
+		} else {
+			c.setCookie(
+				stateCookie.name,
+				await symmetricEncrypt({
+					key: c.context.secretConfig,
+					data: JSON.stringify(remainingStates),
+				}),
+				stateCookie.attributes,
+			);
+		}
 	} else {
 		// Default: database strategy
 		const data = await c.context.internalAdapter.findVerificationValue(state);
