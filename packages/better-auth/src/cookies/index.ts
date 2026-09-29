@@ -366,6 +366,11 @@ export async function setSessionCookie(
 		ctx.context.authCookies.dontRememberToken.name,
 		ctx.context.secret,
 	);
+	// Preserve the marker when the choice is inherited, but clear it for
+	// a new persistent session.
+	if (dontRememberMe === false && dontRememberMeCookie) {
+		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+	}
 	// if dontRememberMe is not set, use the cookie value
 	dontRememberMe =
 		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
