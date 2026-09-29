@@ -143,7 +143,7 @@ export const cimdOptionsType = {
 		default:
 			"{ minimumFetchInterval: 1, maximumConcurrentFetches: 16, maximumConcurrentFetchesPerOrigin: 4, maximumFetchesPerMinute: 120, maximumFetchesPerOriginPerMinute: 30 }",
 		description:
-			"Reject-immediately request-amplification limits. Numeric minimumFetchInterval values are seconds. Minute limits use a rolling 60-second window. Set minimumFetchInterval to 0 only to disable per-client pacing.",
+			"Reject-immediately request-amplification limits. Numeric minimumFetchInterval values are seconds and pace retries after failed fetches. Successful fetches remain governed by HTTP freshness and the origin/global budgets. Minute limits use a rolling 60-second window. Set minimumFetchInterval to 0 only to disable failed-fetch pacing.",
 	},
 	originBoundFields: {
 		type: "string[]",
@@ -200,7 +200,7 @@ Discovered clients are stored in `oauthClient` with `clientDiscoveryId: "cimd"`.
 
 Valid documents follow shared-cache semantics. `s-maxage` takes precedence over `max-age` and `Expires`; validators support conditional revalidation. `Cache-Control: no-store`, `private`, and `Vary: *` prevent cache insertion. A `304` is accepted only when the request sent `If-None-Match` or `If-Modified-Since` for an existing validated entry. Modified responses must be exactly `200`.
 
-The metadata fetch governor is independent from HTTP freshness. Fresh-cache hits and concurrent callers joining the same client fetch consume no budget. Every new fetch consumes its concurrency and rolling-window budget when it starts, and excess work is rejected instead of queued. A no-store response is never retained or reused; another request inside `minimumFetchInterval` therefore fails closed rather than causing an immediate refetch. The metadata cache, client pacing records, and origin budget records are each bounded by `maxCacheEntries`. The governor evicts only inactive records; if every record still protects a live interval, rolling window, or fetch, a new client or origin fails closed.
+The metadata fetch governor is independent from HTTP freshness. Fresh-cache hits and concurrent callers joining the same client fetch consume no budget. Every new fetch consumes its concurrency and rolling-window budget when it starts, and excess work is rejected instead of queued. A successful fetch clears its per-client pacing record, so a response that cannot be cached or is immediately stale can be fetched again while origin and global budgets continue to apply. Failed fetches retain the `minimumFetchInterval` backoff. The metadata cache, client pacing records, and origin budget records are each bounded by `maxCacheEntries`. The governor evicts only inactive records; if every record still protects a live interval, rolling window, or fetch, a new client or origin fails closed.
 
 Refresh remains fail closed. A network, validation, or persistence failure preserves the previous database/cache state but rejects the current OAuth request. `onClientRefreshed` receives `previousClient`; operators can compare security-sensitive metadata and choose whether to revoke grants, tokens, or consent.
 

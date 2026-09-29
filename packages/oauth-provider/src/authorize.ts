@@ -242,10 +242,66 @@ function getErrorURL(
 }
 
 /**
- * Finds the matching entry in a client's registered redirect_uris for a
- * requested redirect_uri. Honors RFC 8252 §7.3 loopback port variance for
- * the full 127.0.0.0/8 range and [::1], matching on scheme+host+path+query
- * and ignoring port. DNS names like "localhost" are excluded per §8.3.
+ * Based on the loopback port matching approach in node-oidc-provider.
+ *
+ * @see https://github.com/panva/node-oidc-provider/blob/ea1456f987de7750b6af8a89a1881e70c70827fe/lib/models/client.js#L36-L76
+ */
+function stripLoopbackRedirectPort(uri: string): string | undefined {
+	let parsed: URL;
+	try {
+		parsed = new URL(uri);
+	} catch {
+		return undefined;
+	}
+
+	const isLoopback =
+		isLoopbackIP(parsed.hostname) || parsed.hostname === "localhost";
+
+	if (parsed.protocol !== "http:" || !isLoopback) {
+		return undefined;
+	}
+
+	const schemeSeparatorIndex = uri.indexOf("://");
+	if (schemeSeparatorIndex < 0) return undefined;
+
+	const authorityStart = schemeSeparatorIndex + 3;
+	const authorityEndOffset = uri.slice(authorityStart).search(/[/?#]/u);
+	let authorityEnd = uri.length;
+	if (authorityEndOffset >= 0) {
+		authorityEnd = authorityStart + authorityEndOffset;
+	}
+	const authority = uri.slice(authorityStart, authorityEnd);
+
+	let portStart: number;
+	if (authority.startsWith("[")) {
+		const closingBracket = authority.indexOf("]");
+		if (closingBracket < 0) return undefined;
+		if (authority[closingBracket + 1] !== ":") return uri;
+
+		portStart = closingBracket + 1;
+	} else {
+		portStart = authority.lastIndexOf(":");
+		if (portStart < 0) return uri;
+	}
+
+	const port = authority.slice(portStart + 1);
+	if (!/^\d*$/u.test(port)) {
+		return undefined;
+	}
+
+	const portStartInUri = authorityStart + portStart;
+	return `${uri.slice(0, portStartInUri)}${uri.slice(authorityEnd)}`;
+}
+
+/**
+ * Finds the matching entry in a client's registered redirect URIs.
+ *
+ * Registration limits loopback redirects to native-compatible HTTP forms.
+ * Within that boundary, only the port may vary; every other character must
+ * match the registered URI.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9700.html#section-4.1.3
+ * @see https://www.rfc-editor.org/rfc/rfc8252.html#section-8.3
  */
 function findRegisteredRedirectUri(
 	registered: readonly string[] | undefined,
@@ -253,28 +309,29 @@ function findRegisteredRedirectUri(
 ): string | undefined {
 	if (!registered || !requested) return undefined;
 
-	let req: URL | undefined;
+	let requestedUrl: URL;
 	try {
-		req = new URL(requested);
+		requestedUrl = new URL(requested);
 	} catch {
-		// malformed requested — only exact-match branch can succeed below
+		return undefined;
 	}
+
+	/**
+	 * A trailing `#` yields an empty `URL.hash` but still defines a fragment.
+	 */
+	const hasFragment = requested.includes("#");
+	const hasUserinfo =
+		requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
+
+	if (hasFragment || hasUserinfo) {
+		return undefined;
+	}
+	const requestedWithoutPort = stripLoopbackRedirectPort(requested);
 
 	return registered.find((url) => {
 		if (url === requested) return true;
-		if (!req) return false;
-		try {
-			const reg = new URL(url);
-			return (
-				isLoopbackIP(reg.hostname) &&
-				reg.hostname === req.hostname &&
-				reg.pathname === req.pathname &&
-				reg.protocol === req.protocol &&
-				reg.search === req.search
-			);
-		} catch {
-			return false;
-		}
+		if (!requestedWithoutPort) return false;
+		return stripLoopbackRedirectPort(url) === requestedWithoutPort;
 	});
 }
 

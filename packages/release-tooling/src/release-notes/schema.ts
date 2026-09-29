@@ -98,6 +98,7 @@ export const releaseRewriteFallbacksSchema = z
 		z.strictObject({
 			title: releaseTitleSchema,
 			prNumber: z.int().positive().nullable(),
+			reason: z.string().trim().min(1).max(500),
 		}),
 	)
 	.max(250);

@@ -42,26 +42,25 @@ function fbProfile(id: string, email = `${id}@example.com`) {
 	};
 }
 
-/**
- * Routes the two Graph calls (`debug_token` then `/me`) the access-token path
- * makes, based on the request URL.
- */
-function mockGraph(opts: {
+function mockGraphResponses(responses: {
 	debug?: ReturnType<typeof debugTokenResponse>;
 	me?: ReturnType<typeof profileResponse>;
 }) {
-	mockedBetterFetch.mockImplementation(((url: unknown) => {
-		const u = String(url);
-		if (u.includes("debug_token")) {
-			return Promise.resolve(
-				opts.debug ??
-					({ data: null, error: { message: "no debug mock" } } as any),
-			);
-		}
-		return Promise.resolve(
-			opts.me ?? ({ data: null, error: { message: "no /me mock" } } as any),
-		);
-	}) as unknown as typeof betterFetch);
+	const graphFetch = vi.when(mockedBetterFetch, { onUnmatched: "throw" });
+	if (responses.debug) {
+		graphFetch
+			.calledWith("https://graph.facebook.com/debug_token", expect.anything())
+			.thenResolve(responses.debug, { times: 1 });
+	}
+	if (responses.me) {
+		graphFetch
+			.calledWith(
+				"https://graph.facebook.com/me?fields=id,name,email,picture",
+				expect.anything(),
+			)
+			.thenResolve(responses.me, { times: 1 });
+	}
+	return graphFetch;
 }
 
 describe("facebook.getUserInfo (opaque access token)", () => {
@@ -70,7 +69,7 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 	});
 
 	it("returns the profile for a token bound to the configured app", async () => {
-		mockGraph({
+		const graphFetch = mockGraphResponses({
 			debug: debugTokenResponse({
 				is_valid: true,
 				app_id: "fb-app",
@@ -84,6 +83,7 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 		} as any);
 		expect(res?.user).not.toHaveProperty("id");
 		expect(res?.user.email).toBe("u1@example.com");
+		expect(graphFetch).toHaveBeenExhausted();
 		expect(typeof provider.accountSubject).toBe("function");
 		if (typeof provider.accountSubject !== "function" || !res) return;
 		expect(
@@ -95,23 +95,23 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 	});
 
 	it("rejects a token issued to a different app (token substitution)", async () => {
-		mockGraph({
+		const graphFetch = mockGraphResponses({
 			debug: debugTokenResponse({
 				is_valid: true,
 				app_id: "someone-elses-app",
 				user_id: "other-user",
 			}),
-			me: profileResponse(fbProfile("other-user")),
 		});
 		const provider = facebook(options);
 		const res = await provider.getUserInfo({
 			accessToken: "foreign-app-token",
 		} as any);
 		expect(res).toBeNull();
+		expect(graphFetch).toHaveBeenExhausted();
 	});
 
 	it("rejects when the profile id does not match the validated token", async () => {
-		mockGraph({
+		const graphFetch = mockGraphResponses({
 			debug: debugTokenResponse({
 				is_valid: true,
 				app_id: "fb-app",
@@ -124,10 +124,10 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 			accessToken: "opaque-access-token",
 		} as any);
 		expect(res).toBeNull();
+		expect(graphFetch).toHaveBeenExhausted();
 	});
 
 	it("rejects when no access token is supplied", async () => {
-		mockGraph({});
 		const provider = facebook(options);
 		const res = await provider.getUserInfo({} as any);
 		expect(res).toBeNull();

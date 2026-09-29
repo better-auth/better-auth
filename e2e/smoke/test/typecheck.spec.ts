@@ -33,3 +33,27 @@ const typecheckTimeoutMilliseconds = 60 * 1000;
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11013
+ */
+test("typecheck cloudflare with skipLibCheck disabled", {
+	skip: "Blocked by #11013",
+}, () => {
+	const cwd = resolve(fixturesDir, "cloudflare");
+	const output = spawnSync("pnpm", ["run", "typecheck:skip-lib-check-false"], {
+		stdio: "inherit",
+		cwd,
+		timeout: typecheckTimeoutMilliseconds,
+	});
+	assert.equal(
+		output.error,
+		undefined,
+		`Running typecheck in ${cwd} should not throw an error`,
+	);
+	assert.equal(
+		output.status,
+		0,
+		`Running typecheck in ${cwd} should exit with status 0`,
+	);
+});

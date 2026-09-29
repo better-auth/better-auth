@@ -1,10 +1,10 @@
 ---
 icon: conceptsCLI
 title: CLI
-description: Learn about the Better Auth CLI commands for generating and migrating database schemas, creating initial admins, initializing projects, generating secret keys, and gathering diagnostic info.
+description: Learn about the Better Auth CLI commands for generating, migrating, and checking database schemas, creating initial admins, initializing projects, generating secret keys, and gathering diagnostic info.
 ---
 
-Better Auth comes with a built-in CLI to help you manage the database schemas, create initial admin users, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
+Better Auth comes with a built-in CLI to help you manage and check database schemas, create initial admin users, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
 
 ## Generate
 
@@ -54,46 +54,47 @@ If `--adapter` is omitted, the CLI uses the adapter configured in your Better Au
 
 ## Migrate
 
-The `migrate` command can inspect or apply the Better Auth schema directly to your database. It supports the built-in SQL database configuration and SQL-backed Drizzle or Prisma adapters. Use `generate` and your own migration tooling for other adapters.
+The migrate command applies the Better Auth schema directly to your database. This is available if you're using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
 
 ```package-install title="Terminal"
-npx auth@latest migrate plan
-npx auth@latest migrate apply
+npx auth@latest migrate
 ```
 
 ### Options
 
 * `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
-* `--json` - Print one deterministic JSON document instead of human-readable output.
-* `--yes` - Skip the confirmation prompt for `migrate apply`.
-
-### Inspect before applying
-
-`migrate plan` only reads the database. Add `--json` in CI or when sharing the plan with a coding agent:
-
-```package-install title="Terminal"
-npx auth@latest migrate plan
-npx auth@latest migrate plan --json > better-auth-migration-plan.json
-```
-
-The JSON plan includes the adapter, dialect, selected and detected account identity strategies, sorted schema changes, blockers, and any release migration actions. A blocked plan exits with status `1`.
-
-### Apply a migration
-
-`migrate apply` confirms and applies the planned data and schema changes together. When a release migration needs decisions that the CLI cannot derive, it saves them to `better-auth-migration.json`; the file identifies the release transition and pins configuration-derived values so another run can review and replay the same choices. Pass the file positionally to either action:
-
-```package-install title="Terminal"
-npx auth@latest migrate plan better-auth-migration.json
-npx auth@latest migrate apply better-auth-migration.json
-```
-
-For non-interactive JSON application, also pass `--yes`; otherwise the command exits without changing the database. Running plain `npx auth@latest migrate` invokes `migrate apply` and prints a deprecation warning. For the current release migration procedure, including Drizzle and Prisma preparation, see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#migrate-from-16-to-17).
+* `--yes` - Skip the confirmation prompt and apply the schema directly.
 
 <Callout type="info">
   **Using PostgreSQL with a non-default schema?**
 
-  The migrate command automatically detects your configured `search_path` and creates tables in the correct schema. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
+  Set `database.schemaName` to select the schema explicitly. Otherwise, the migrate command uses the connection's `search_path`. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
 </Callout>
+
+## Check
+
+The `check` command runs all available checks. Run it whenever you want to verify your Better Auth setup, manually or in automation:
+
+```bash title="Terminal"
+npx auth@latest check --config ./src/auth.ts
+```
+
+### Schema
+
+The `check schema` command verifies that your configured schema can hold what Better Auth writes. It does not create schema files or apply migrations.
+
+```bash title="Terminal"
+npx auth@latest check schema --config ./src/auth.ts
+```
+
+The schema check reads the live database for Kysely, the configured schema object for Drizzle, and the generated client model for Prisma. Drizzle and Prisma checks do not confirm that migrations have been applied to the database. If validation is unavailable for your adapter, the command fails instead of silently skipping it. It also runs when runtime validation is disabled with `advanced.database.validateSchema: false`.
+
+### Options
+
+Both `check` and `check schema` accept:
+
+* `-c, --cwd` - The working directory. Defaults to the current directory.
+* `--config` - The path to your Better Auth config file. By default, the CLI searches the usual config locations.
 
 ## Create Admin
 
@@ -132,8 +133,6 @@ npx auth@latest init
 * `--plugins` - The plugins you want to use. You can specify multiple plugins by separating them with a comma.
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
-
-The generated `auth.ts` includes `account: { identityStrategy: "provider-id" }` so new projects choose their account identity namespace explicitly. Existing configurations that omit this option remain in v1.7 compatibility mode with issuer identity and receive a one-time warning; set `"issuer"` explicitly when that is the intended policy.
 
 ## Upgrade
 
