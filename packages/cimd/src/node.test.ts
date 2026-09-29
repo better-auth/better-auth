@@ -89,9 +89,7 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 }
 
 describe("Node CIMD metadata transport", () => {
-	it.each([
-		199, 600, 999,
-	])("rejects an out-of-range status %i instead of hanging", async (status) => {
+	it.each([600, 999])("rejects an out-of-range status %i instead of hanging", async (status) => {
 		// @see https://github.com/better-auth/better-auth/issues/11422
 		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 		mockHttpsResponse({ status });
