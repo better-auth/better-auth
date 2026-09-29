@@ -355,6 +355,17 @@ describe("open-api", async () => {
 		const schema = await authWithEnabledPaths.api.generateOpenAPISchema();
 		expect(schema.paths["/sign-in/email"]).toBeDefined();
 		expect(schema.paths["/sign-up/email"]).toBeUndefined();
+		expect(schema.paths["/reset-password/{token}"]).toBeUndefined();
+	});
+
+	it("should keep parameterized routes enabled by a concrete path", async () => {
+		const { auth: authWithEnabledPaths } = await getTestInstance({
+			plugins: [openAPI()],
+			enabledPaths: ["/reset-password/some-token"],
+		});
+		const schema = await authWithEnabledPaths.api.generateOpenAPISchema();
+		expect(schema.paths["/reset-password/{token}"]).toBeDefined();
+		expect(schema.paths["/reset-password"]).toBeUndefined();
 	});
 
 	it("should mark model id fields as required and read-only", async () => {

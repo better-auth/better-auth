@@ -952,7 +952,7 @@ export const auth = betterAuth({
 
 ## `enabledPaths`
 
-Serve only the listed auth paths and return `404 Not Found` for every other path. Entries match exactly, or as a wildcard pattern when they contain `*`. Server-side `auth.api` calls are not affected, and paths listed in `disabledPaths` stay disabled.
+Serve only the listed auth paths and return `404 Not Found` for every other path. Entries match the request path exactly, or as a wildcard pattern when they contain `*`, so a route with parameters such as `/callback/:id` is enabled with `/callback/*` or a concrete path like `/callback/google`. Server-side `auth.api` calls are not affected, and paths listed in `disabledPaths` stay disabled.
 
 ```ts
 import { betterAuth } from "better-auth";

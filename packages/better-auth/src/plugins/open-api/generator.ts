@@ -13,7 +13,7 @@ import type {
 import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
-import { isPathEnabled } from "../../utils/enabled-paths";
+import { isEndpointEnabled } from "../../utils/enabled-paths";
 
 export interface Path {
 	get?: OpenAPIOperation | undefined;
@@ -943,7 +943,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		if (
 			!value.path ||
 			ctx.options.disabledPaths?.includes(value.path) ||
-			!isPathEnabled(value.path, ctx.options.enabledPaths)
+			!isEndpointEnabled(value.path, ctx.options.enabledPaths)
 		)
 			return;
 		const options = value.options as EndpointOptions;
@@ -1049,7 +1049,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			if (
 				!value.path ||
 				ctx.options.disabledPaths?.includes(value.path) ||
-				!isPathEnabled(value.path, ctx.options.enabledPaths)
+				!isEndpointEnabled(value.path, ctx.options.enabledPaths)
 			)
 				return;
 			const options = value.options as EndpointOptions;
