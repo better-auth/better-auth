@@ -1,0 +1,95 @@
+---
+icon: pluginsStellarTools
+title: StellarTools
+description: Stellar blockchain payments and subscriptions for Better Auth.
+---
+
+[StellarTools](https://github.com/payrouteshq/stellartools) is a billing toolkit built on the Stellar blockchain. This adapter links a Stellar customer to every Better Auth user and exposes customer, subscription, and refund endpoints directly on your auth server.
+
+<Callout>
+  This plugin is maintained by the StellarTools team. For bugs, issues or feature requests, please
+  visit the [StellarTools GitHub repo](https://github.com/payrouteshq/stellartools).
+</Callout>
+
+## Features
+
+* Automatic Stellar customer creation on sign-up
+* Customer create, retrieve, and update endpoints
+* Subscription create and list endpoints
+* Refund creation
+* Lifecycle hooks for customer, checkout, and subscription events
+
+## Installation
+
+<Steps>
+  <Step title="Install dependencies">
+    Run the following command in your project root:
+
+    ```bash
+    npm install @stellartools/betterauth-adapter better-auth
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Add this to your `.env` file:
+
+    ```txt
+    STELLARTOOLS_API_KEY=st_live_...
+    ```
+  </Step>
+
+  <Step title="Set up server-side integration">
+    Add the plugin to your `betterAuth` config:
+
+    ```typescript
+    import { betterAuth } from "better-auth";
+    import { stellarTools } from "@stellartools/betterauth-adapter";
+
+    export const auth = betterAuth({
+      plugins: [
+        stellarTools({
+          apiKey: process.env.STELLARTOOLS_API_KEY!,
+          createCustomerOnSignUp: true,
+          onCustomerCreated: async (customer) => {
+            console.log("StellarTools customer created:", customer.id);
+          },
+        }),
+      ],
+    });
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+Once installed, the plugin registers the following server endpoints, callable through `auth.api`:
+
+```typescript
+// Create or retrieve the current user's Stellar customer
+await auth.api.createCustomer({ headers });
+
+// Retrieve the linked customer
+await auth.api.retrieveCustomer({ headers });
+
+// Update the linked customer
+await auth.api.updateCustomer({ body: { name: "New Name" }, headers });
+
+// Create a subscription for the current user
+await auth.api.createSubscription({ body: { plan_id: "plan_..." }, headers });
+
+// List the current user's subscriptions
+await auth.api.listSubscriptions({ headers });
+
+// Create a refund
+await auth.api.createRefund({ body: { payment_id: "pay_...", reason: "requested_by_customer" }, headers });
+```
+
+## Options
+
+* `apiKey`: your StellarTools API key.
+* `createCustomerOnSignUp`: automatically create a Stellar customer when a user signs up. Defaults to `false`.
+* `onCustomerCreated`: called after a customer is created or linked.
+* `onCheckoutComplete`: called when a checkout is completed.
+* `onSubscriptionCreated`: called when a subscription is created.
+* `onSubscriptionCanceled`: called when a subscription is canceled.
+* `onSubscriptionUpdated`: called when a subscription is updated.

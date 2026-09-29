@@ -197,6 +197,11 @@ const pluginMeta: Record<
 		icon: "CommetIcon",
 		tagline: "Commet billing, subscriptions and usage-based pricing",
 	},
+	stellartools: {
+		category: "Payments",
+		icon: "StellarToolsIcon",
+		tagline: "Stellar blockchain payments and subscriptions",
+	},
 };
 
 export const categories = [
