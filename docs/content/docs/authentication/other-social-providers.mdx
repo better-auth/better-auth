@@ -87,6 +87,7 @@ Provider helpers package provider-specific endpoints, scopes, and profile mappin
 Better Auth includes helpers for these providers:
 
 * **Auth0** - `auth0(options)`
+* **ChatGPT** - [`chatgpt(options)`](/docs/authentication/chatgpt)
 * **Gumroad** - `gumroad(options)`
 * **HubSpot** - `hubspot(options)`
 * **Keycloak** - `keycloak(options)`
@@ -124,7 +125,7 @@ const response = await authClient.signIn.social({
 })
 ```
 
-Each helper accepts common OAuth options through `BaseOAuthProviderOptions`, plus these provider-specific fields:
+Most helpers accept common OAuth options through `BaseOAuthProviderOptions`, plus these provider-specific fields. The [ChatGPT helper](/docs/authentication/chatgpt) fixes identity scopes, PKCE, and local-only sign-out to match OpenAI's website sign-in contract.
 
 * **Auth0**: Requires `domain` (for example, `dev-xxx.eu.auth0.com`)
 * **HubSpot**: Accepts optional `scopes`, which default to `["oauth"]`
@@ -133,7 +134,7 @@ Each helper accepts common OAuth options through `BaseOAuthProviderOptions`, plu
 * **Microsoft Entra ID**: Requires a concrete tenant GUID. Use the built-in [Microsoft social provider](/docs/authentication/microsoft) for the multi-tenant `"common"`, `"organizations"`, or `"consumers"` authorities
 * **Okta**: Requires `issuer` (for example, `https://dev-xxxxx.okta.com/oauth2/default`)
 
-All helpers accept these common options:
+Except for ChatGPT's narrower options, helpers accept these common options:
 
 * `clientId`
 * `clientSecret`

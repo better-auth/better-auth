@@ -1,0 +1,85 @@
+---
+title: ChatGPT
+description: Sign in with ChatGPT using the Generic OAuth provider helper.
+---
+
+Use the `chatgpt` helper with [Generic OAuth](/docs/plugins/generic-oauth) to add **Continue with ChatGPT** to your website.
+
+<Callout type="info">
+  OpenAI currently offers website sign-in to selected commercial partners. [Request a client ID](https://developers.openai.com/siwc/request-client-id) before using this integration. ChatGPT plan usage and the open-source dynamic registration flow are separate integrations and are not supported by this helper.
+</Callout>
+
+## Register your client
+
+Obtain an OpenAI client ID and its provisioned token endpoint authentication method. Register the exact callback URL for each environment:
+
+```text
+http://localhost:3000/api/auth/callback/chatgpt
+https://example.com/api/auth/callback/chatgpt
+```
+
+Adjust the origin and base path to match your Better Auth configuration. A public client uses `none` without a secret. A confidential client uses its registered `client_secret_basic` or `client_secret_post` method and a server-side secret. An OpenAI API key is not an OAuth client secret.
+
+## Configure the provider
+
+For a public client:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { chatgpt, genericOAuth } from "better-auth/plugins/generic-oauth";
+
+export const auth = betterAuth({
+  account: {
+    accountLinking: { disableImplicitLinking: true },
+  },
+  plugins: [
+    genericOAuth({
+      config: [
+        chatgpt({
+          clientId: process.env.CHATGPT_CLIENT_ID as string,
+          tokenEndpointAuth: { method: "none" },
+        }),
+      ],
+    }),
+  ],
+});
+```
+
+For a confidential client, replace the helper options with:
+
+```ts
+chatgpt({
+  clientId: process.env.CHATGPT_CLIENT_ID as string,
+  clientSecret: process.env.CHATGPT_CLIENT_SECRET,
+  tokenEndpointAuth: { method: "client_secret_basic" },
+});
+```
+
+Use `client_secret_post` only if OpenAI provisioned that method. Set the method explicitly for confidential clients: Better Auth then rejects a missing secret during initialization. If omitted, the helper selects `client_secret_basic` when a secret is supplied and `none` otherwise.
+
+The helper discovers OpenAI's endpoints, requires verification metadata, and uses S256 PKCE and a fresh transaction nonce. Its scopes are `openid profile email`. Identity comes from the verified ID token; access and refresh tokens are not required, and the helper does not call UserInfo.
+
+## Sign in
+
+```ts title="sign-in.ts"
+import { createAuthClient } from "better-auth/client";
+
+const authClient = createAuthClient();
+
+await authClient.signIn.social({
+  provider: "chatgpt",
+  callbackURL: "/dashboard",
+});
+```
+
+Label your sign-in button **Continue with ChatGPT** and follow [OpenAI's branding guidance](https://developers.openai.com/siwc/website).
+
+## Accounts and sessions
+
+The helper maps `name`, `email`, `picture`, and `email_verified` from the verified ID token. A missing name falls back to the email; only a boolean `true` marks the email verified. Better Auth requires an email to create a user. If OpenAI omits it, sign-in fails unless your `mapProfileToUser` supplies an appropriate email.
+
+Account IDs encode the OpenAI issuer, client ID, and `sub` as a JSON array. Changing the registered client therefore creates a different external identity. `mapProfileToUser` can customize local profile fields without changing that identity.
+
+OpenAI recommends explicit account linking rather than relying on an email match. The example disables automatic account linking; provide a signed-in, user-initiated flow using [`linkSocial`](/docs/concepts/users-accounts#account-linking) when an existing user wants to add ChatGPT. Review this application-wide setting if you already use other providers.
+
+`authClient.signOut()` clears the Better Auth session without signing the user out of ChatGPT. The helper also accepts `redirectURI`, `disableSignUp`, `disableImplicitSignUp`, `overrideUserInfo`, `requireEmailVerification`, and `mapProfileToUser`.
