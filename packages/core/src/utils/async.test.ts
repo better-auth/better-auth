@@ -206,4 +206,28 @@ describe("settleByDeadline", () => {
 
 		await Promise.all(assertions);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10315
+	 */
+	it("settles like the promise when the runtime refuses a timer", async ({
+		onTestFinished,
+	}) => {
+		const refusal = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => {
+				throw new Error("Disallowed operation called within global scope.");
+			});
+		onTestFinished(() => {
+			refusal.mockRestore();
+		});
+
+		const settled = settleByDeadline(
+			Promise.resolve("value"),
+			Date.now() + 1000,
+			() => "late",
+		);
+
+		await expect(settled).resolves.toBe("value");
+	});
 });

@@ -110,6 +110,19 @@ app.get("/_test/cloudflare/module-scope", async (c) =>
 	c.json({ outcome: await settlesInBudget(moduleScopeAuth.$context) }),
 );
 
+// A separate instance, so the route above still starts initialization inside
+// a request.
+const moduleScopeReadAuth = betterAuth(withCloudflare(cloudflareOptions));
+
+const moduleScopeRead = moduleScopeReadAuth.$context.then(
+	() => "settled",
+	(error: unknown) => `rejected:${String(error)}`,
+);
+
+app.get("/_test/cloudflare/module-scope/read", async (c) =>
+	c.json({ outcome: await moduleScopeRead }),
+);
+
 const slowInitOptions = {
 	...cloudflareOptions,
 	plugins: [

@@ -30,6 +30,16 @@ it("serves a request from an instance wrapped at module scope", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/10315
  */
+it("settles a context read at module scope", async () => {
+	const response = await server.fetch(
+		"http://localhost:8787/_test/cloudflare/module-scope/read",
+	);
+	expect(await response.json()).toEqual({ outcome: "settled" });
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10315
+ */
 it("settles initialization for a later request after the request that started it responded", async () => {
 	const started = await server.fetch(
 		"http://localhost:8787/_test/cloudflare/init/start",
