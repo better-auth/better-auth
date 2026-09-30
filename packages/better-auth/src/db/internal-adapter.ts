@@ -548,12 +548,26 @@ export const createInternalAdapter = (
 					);
 				}
 
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+				let user = await (await getCurrentAdapter(adapter)).findOne<User>({
 					model: "user",
 					where: [{ field: "id", value: userId }],
 				});
+				if (!user) {
+					// The user row can be momentarily unreadable right after it's
+					// created (e.g. replica lag). Retry once before caching a
+					// session with no user, since the cache is read back without
+					// this database lookup.
+					user = await (await getCurrentAdapter(adapter)).findOne<User>({
+						model: "user",
+						where: [{ field: "id", value: userId }],
+					});
+				}
 				const sessionTTL = getTTLSeconds(data.expiresAt, now);
 				if (sessionTTL > 0) {
+					// `user` may still be null here if the lag outlasts the retry.
+					// The session is cached anyway so it isn't dropped when
+					// secondary storage is the only store; findSession/findSessions
+					// know how to repair or gracefully miss a null cached user.
 					await secondaryStorage.set(
 						data.token,
 						JSON.stringify({ session: sessionData, user }),
@@ -620,24 +634,56 @@ export const createInternalAdapter = (
 				if (sessionStringified) {
 					const s = safeJSONParse<{
 						session: Session;
-						user: User;
+						user: User | null;
 					}>(sessionStringified);
 					if (!s) return null;
-					const parsedSession = parseSessionOutput(ctx.options, {
-						...s.session,
-						expiresAt: new Date(s.session.expiresAt),
-						createdAt: new Date(s.session.createdAt),
-						updatedAt: new Date(s.session.updatedAt),
-					});
-					const parsedUser = parseUserOutput(ctx.options, {
-						...s.user,
-						createdAt: new Date(s.user.createdAt),
-						updatedAt: new Date(s.user.updatedAt),
-					});
-					return {
-						session: parsedSession,
-						user: parsedUser,
-					};
+					let cachedUser = s.user;
+					if (!cachedUser) {
+						// The user was missing when this entry was written (e.g.
+						// replica lag outlasting the write-time retry). Resolve it
+						// now instead of throwing on a null user.
+						cachedUser = await (await getCurrentAdapter(adapter)).findOne<User>(
+							{
+								model: "user",
+								where: [{ field: "id", value: s.session.userId }],
+							},
+						);
+						if (cachedUser) {
+							const sessionTTL = getTTLSeconds(
+								new Date(s.session.expiresAt).getTime(),
+							);
+							if (sessionTTL > 0) {
+								await secondaryStorage.set(
+									token,
+									JSON.stringify({ session: s.session, user: cachedUser }),
+									sessionTTL,
+								);
+							}
+						} else if (!options.session?.storeSessionInDatabase) {
+							// No database fallback available and the user genuinely
+							// doesn't exist (or still doesn't): treat as a cache miss.
+							return null;
+						}
+					}
+					if (cachedUser) {
+						const parsedSession = parseSessionOutput(ctx.options, {
+							...s.session,
+							expiresAt: new Date(s.session.expiresAt),
+							createdAt: new Date(s.session.createdAt),
+							updatedAt: new Date(s.session.updatedAt),
+						});
+						const parsedUser = parseUserOutput(ctx.options, {
+							...cachedUser,
+							createdAt: new Date(cachedUser.createdAt),
+							updatedAt: new Date(cachedUser.updatedAt),
+						});
+						return {
+							session: parsedSession,
+							user: parsedUser,
+						};
+					}
+					// `cachedUser` is still null and storeSessionInDatabase is
+					// enabled: fall through to the database lookup below.
 				}
 			}
 
@@ -690,22 +736,43 @@ export const createInternalAdapter = (
 									: sessionStringified
 							) as {
 								session: Session;
-								user: User;
+								user: User | null;
 							};
 							if (!s) continue;
 							const expiresAt = new Date(s.session.expiresAt);
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
 							}
+							let cachedUser = s.user;
+							if (!cachedUser) {
+								// The user was missing when this entry was written
+								// (e.g. replica lag). Resolve it now, or skip this
+								// session instead of throwing on a null user.
+								cachedUser = await (
+									await getCurrentAdapter(adapter)
+								).findOne<User>({
+									model: "user",
+									where: [{ field: "id", value: s.session.userId }],
+								});
+								if (!cachedUser) continue;
+								const sessionTTL = getTTLSeconds(expiresAt.getTime());
+								if (sessionTTL > 0) {
+									await secondaryStorage.set(
+										sessionToken,
+										JSON.stringify({ session: s.session, user: cachedUser }),
+										sessionTTL,
+									);
+								}
+							}
 							const session = {
 								session: {
 									...s.session,
-									expiresAt: new Date(s.session.expiresAt),
+									expiresAt,
 								},
 								user: {
-									...s.user,
-									createdAt: new Date(s.user.createdAt),
-									updatedAt: new Date(s.user.updatedAt),
+									...cachedUser,
+									createdAt: new Date(cachedUser.createdAt),
+									updatedAt: new Date(cachedUser.updatedAt),
 								},
 							} as {
 								session: Session;
