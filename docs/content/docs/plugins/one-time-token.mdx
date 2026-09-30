@@ -183,4 +183,6 @@ oneTimeToken({
 
   <Callout type="warn">
     Because this request is cross-origin and credentialed, the destination has to opt in explicitly. Its response needs `Access-Control-Allow-Credentials: true` and an `Access-Control-Allow-Origin` naming the calling origin — `*` is rejected once credentials are included. Sending `content-type: application/json` also triggers a preflight, so the destination's `OPTIONS` handling has to allow the `content-type` header. See [Cross-Domain Setups](/docs/concepts/cookies#safari-itp-and-cross-domain-setups) if the two apps do not share a parent domain.
+
+    CORS headers do not satisfy origin validation. Once the browser sends a cookie for the destination, Better Auth checks the request's `Origin` against the destination's [`trustedOrigins`](/docs/reference/options#trustedorigins), so the destination must list the calling origin there too — otherwise verification is rejected with `INVALID_ORIGIN` ("Invalid origin", `403`) and no session cookie is set.
   </Callout>
