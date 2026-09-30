@@ -219,6 +219,38 @@ describe("Email Verification", () => {
 		);
 	});
 
+	it("should compose verification URL with encoded token and callbackURL", async () => {
+		let capturedUrl = "";
+		let capturedToken = "";
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignUp: false,
+				async sendVerificationEmail({ url, token }) {
+					capturedUrl = url;
+					capturedToken = token;
+				},
+			},
+		});
+
+		const callbackURL =
+			"https://example.com/callback?next=/dash&ref=mail#section";
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+				callbackURL,
+			},
+		});
+
+		expect(capturedUrl).toContain("/verify-email?");
+		const parsed = new URL(capturedUrl);
+		expect(parsed.searchParams.get("token")).toBe(capturedToken);
+		expect(parsed.searchParams.get("callbackURL")).toBe(callbackURL);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8757
 	 */
