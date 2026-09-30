@@ -39,10 +39,14 @@ export const auth = betterAuth({
 })
 ```
 
-In addition to the default settings, Better Auth provides custom rules for specific paths. These built-in special rules apply on top of the default limit:
+In addition to the default settings, Better Auth provides custom rules for specific paths. When a request matches one of these built-in special rules, it replaces the default limit — the request is checked against only the resolved limit:
 
-* Authentication paths (`/sign-in/*`, `/sign-up/*`, `/change-password/*`, `/change-email/*`): limited to 3 requests within 10 seconds.
+* Authentication paths (`/sign-in/*`, `/sign-up/*`, `/change-password`, `/change-email`): limited to 3 requests within 10 seconds.
 * Sensitive email flows (`/request-password-reset`, `/send-verification-email`, `/forget-password/*`, `/email-otp/send-verification-otp`, `/email-otp/request-password-reset`): limited to 3 requests within 60 seconds.
+
+<Callout type="info">
+  When the [email-OTP plugin](/docs/plugins/email-otp) is installed, `/sign-in/email-otp` uses the plugin's limit (3 requests within 60 seconds by default) instead of the built-in 10-second authentication limit. Plugin rules override the built-in special rules.
+</Callout>
 
 In addition, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has custom rules:
 
