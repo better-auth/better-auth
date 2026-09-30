@@ -1,6 +1,5 @@
 import type {
 	AuthContext,
-	Awaitable,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
@@ -18,6 +17,8 @@ import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
 import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import type { AuthContextSource } from "./auth-context-source";
+import { resolveAuthContext } from "./auth-context-source";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
 import {
@@ -171,7 +172,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Awaitable<AuthContext>,
+	ctx: AuthContextSource,
 	options: Option,
 ) {
 	const withSpan = createWithSpan(options);
@@ -200,7 +201,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			?.map((plugin) =>
 				plugin.middlewares?.map((m) => {
 					const middleware = (async (context: any) => {
-						const authContext = await ctx;
+						const authContext = await resolveAuthContext(ctx);
 						return withSpan(
 							`middleware ${m.path} ${plugin.id}`,
 							{
