@@ -166,6 +166,11 @@
       "types": "./dist/integrations/node.d.mts",
       "default": "./dist/integrations/node.mjs"
     },
+    "./cloudflare": {
+      "dev-source": "./src/integrations/cloudflare.ts",
+      "types": "./dist/integrations/cloudflare.d.mts",
+      "default": "./dist/integrations/cloudflare.mjs"
+    },
     "./db/adapter": {
       "dev-source": "./src/db/adapter-kysely.ts",
       "types": "./dist/db/adapter-kysely.d.mts",
@@ -322,6 +327,9 @@
       ],
       "node": [
         "./dist/integrations/node.d.mts"
+      ],
+      "cloudflare": [
+        "./dist/integrations/cloudflare.d.mts"
       ],
       "react": [
         "./dist/client/react/index.d.mts"
