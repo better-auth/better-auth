@@ -93,6 +93,18 @@ oneTimeToken({
 
 * **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as parameters.
 
+* **`disableSetSessionCookie`** (boolean): Optional. If `true`, the session cookie is not set when the token is verified. Default: `false`.
+
+  The token is still consumed and the resolved session is still returned in the response body — this option only skips writing the session cookie on the verify response.
+
+  Use it when the request that verifies the token does not come from the browser that will use the session. The most common case is a cross-domain flow where the cookie set on the verifying domain is not reachable from the app the user lands on. In that case, read the session from the verify response and set the session cookie on the destination domain yourself.
+
+```ts
+oneTimeToken({
+    disableSetSessionCookie: true
+})
+```
+
 * **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
 
   * **`plain`**: The token is stored in plain text. (Default)
@@ -126,4 +138,35 @@ oneTimeToken({
         }
     }
 })
+```
+
+* **`setOttHeaderOnNewSession`** (boolean): Optional. If `true`, a one-time token is generated and returned in the `set-ott` response header every time a new session is created. Default: `false`.
+
+  This runs as an after-hook on all requests, so it applies to any flow that creates a session — for example a sign-up or a sign-in. The token is produced by the same generation path as the `generate` endpoint, so it also honors `generateToken`, `expiresIn`, and `storeToken`.
+
+  The plugin also adds `set-ott` to `Access-Control-Expose-Headers`, so the header is readable from a cross-origin request instead of being hidden by the browser.
+
+```ts
+oneTimeToken({
+    setOttHeaderOnNewSession: true
+})
+```
+
+Read the header off the sign-in response, then exchange it for the session on the other domain:
+
+```ts title="client.ts"
+const res = await fetch("/api/auth/sign-in/email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+});
+
+const token = res.headers.get("set-ott");
+
+// Send it to the destination app, which runs the verify step.
+await fetch("https://app.example.com/api/one-time-token/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+});
 ```
