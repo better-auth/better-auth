@@ -175,7 +175,44 @@ describe("verification record purpose", () => {
 		}
 	});
 
-	it("rejects a namespaced record without Magic Link purpose", async () => {
+	it.each([
+		"database",
+		"secondaryStorage",
+	] as const)("preserves date-shaped display names during Magic Link verification on %s", async (backend) => {
+		let sentToken = "";
+		const name = "2025-01-01T00:00:00Z";
+		const email = `date-name-${backend.toLowerCase()}@test.com`;
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							sentToken = data.token;
+						},
+					}),
+				],
+				...(backend === "secondaryStorage"
+					? { secondaryStorage: createSecondaryStorage() }
+					: {}),
+			},
+			{ clientOptions: { plugins: [magicLinkClient()] } },
+		);
+		await client.signIn.magicLink({ email, name });
+		const result = await client.magicLink.verify({
+			query: { token: sentToken },
+		});
+		expect(result.error).toBeNull();
+		expect(result.data?.user.email).toBe(email);
+		const user = await (await auth.$context).internalAdapter.findUserByEmail(
+			email,
+		);
+		expect(user?.user.name).toBe(name);
+	});
+
+	it.each([
+		"wrong-purpose",
+		"malformed",
+	] as const)("rejects a namespaced %s record", async (mode) => {
 		const { auth, client, testUser } = await getTestInstance(
 			{
 				plugins: [magicLink({ async sendMagicLink() {} })],
@@ -186,7 +223,10 @@ describe("verification record purpose", () => {
 		const token = "synthetic-wrong-purpose";
 		await adapter.createVerificationValue({
 			identifier: `magic-link:${token}`,
-			value: JSON.stringify({ email: testUser.email }),
+			value:
+				mode === "malformed"
+					? "invalid JSON"
+					: JSON.stringify({ email: testUser.email }),
 			expiresAt: new Date(Date.now() + 60_000),
 		});
 

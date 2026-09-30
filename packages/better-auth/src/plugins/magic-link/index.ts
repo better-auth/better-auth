@@ -4,7 +4,6 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { formCsrfMiddleware, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -407,9 +406,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
-					const record = magicLinkRecordSchema.safeParse(
-						safeJSONParse<unknown>(tokenValue.value),
-					);
+					let parsedRecord: unknown;
+					try {
+						parsedRecord = JSON.parse(tokenValue.value);
+					} catch {
+						redirectWithError("INVALID_TOKEN");
+					}
+					const record = magicLinkRecordSchema.safeParse(parsedRecord);
 					if (!record.success) {
 						redirectWithError("INVALID_TOKEN");
 					}
