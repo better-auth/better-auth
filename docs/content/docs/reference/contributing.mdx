@@ -166,17 +166,17 @@ The helper seeds a test user and sets up a sensible default configuration: an in
 
 ### Running Tests
 
-Run the tests you are working on. `pnpm test` runs the test project of every package, so keep it for CI:
+Run only the tests you are working on. `pnpm test` fans out to the `test` script of every package plus the shared `test/` workspace, so keep it for CI:
 
 ```bash
 # One file
-vitest packages/better-auth/src/api/routes/account.test.ts --run
+pnpm vitest packages/better-auth/src/api/routes/account.test.ts --run
 
 # One directory
-vitest packages/better-auth/src/plugins/organization --run
+pnpm vitest packages/better-auth/src/plugins/organization --run
 
 # One test name
-vitest packages/better-auth/src/api/routes/account.test.ts --run -t "should reject an unverified email"
+pnpm vitest packages/better-auth/src/api/routes/account.test.ts --run -t "should list all accounts"
 ```
 
 ### Configuring the Test Instance
@@ -187,7 +187,7 @@ vitest packages/better-auth/src/api/routes/account.test.ts --run -t "should reje
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 
-const { client, auth } = await getTestInstance(
+await getTestInstance(
 	{
 		plugins: [organization()],
 	},
@@ -199,14 +199,14 @@ const { client, auth } = await getTestInstance(
 
 The second argument accepts the following options:
 
-| Option            | Type                                             | Description                                                                                         |
-| ----------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `clientOptions`   | `BetterAuthClientOptions`                        | Options forwarded to the returned `client`. Use `clientOptions.plugins` to register client plugins. |
-| `testWith`        | `"sqlite" \| "postgres" \| "mongodb" \| "mysql"` | Database to run against. Defaults to `"sqlite"`, which is in-memory.                                |
-| `transaction`     | `boolean`                                        | Runs each test inside a database transaction. Applies to `postgres` and `mysql`.                    |
-| `testUser`        | `Partial<User>`                                  | Overrides fields on the seeded test user, which defaults to `test@test.com` and `test123456`.       |
-| `disableTestUser` | `boolean`                                        | Skips seeding the test user. `signInWithTestUser` then throws.                                      |
-| `port`            | `number`                                         | Port used to build `baseURL`. Defaults to `3000`.                                                   |
+| Option            | Type                                             | Description                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clientOptions`   | `BetterAuthClientOptions`                        | Options forwarded to the returned `client`. Use `clientOptions.plugins` to register client plugins.                                                                                                           |
+| `testWith`        | `"sqlite" \| "postgres" \| "mongodb" \| "mysql"` | Database to run against. Defaults to `"sqlite"`, which is in-memory.                                                                                                                                          |
+| `transaction`     | `boolean`                                        | Lets the adapter run multi-statement operations in a database transaction. Forwarded to `database.transaction`; set to `false` to execute operations sequentially. Only forwarded for `postgres` and `mysql`. |
+| `testUser`        | `Partial<User>`                                  | Overrides fields on the seeded test user, which defaults to `test@test.com` and `test123456`.                                                                                                                 |
+| `disableTestUser` | `boolean`                                        | Skips seeding the test user. `signInWithTestUser` then throws.                                                                                                                                                |
+| `port`            | `number`                                         | Port used to build `baseURL`. Defaults to `3000`.                                                                                                                                                             |
 
 The instance always resolves with `{ auth, client, testUser, signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl, sessionSetter, db, runWithUser }`. `auth` is the server instance, `client` is a client already bound to it, `testUser` is the seeded user, and `db` is the adapter for the test database.
 
@@ -224,16 +224,16 @@ const current = await auth.api.getSession({ headers });
 expect(current?.user.id).toBe(user.id);
 ```
 
-`runWithUser` returned by the instance takes an email, a password, and a callback. The test client attaches the session cookie to every request made inside the callback:
+`runWithUser` returned by the instance takes an email, a password, and a callback, so the seeded `testUser` credentials are a convenient pair to pass. The test client attaches the session cookie to every request made inside the callback:
 
 ```ts
-const { client, runWithUser } = await getTestInstance();
+const { client, testUser, runWithUser } = await getTestInstance();
 
-// Run tests with a specific user context
-await runWithUser("user@example.com", "password", async (headers) => {
+// Run tests with the seeded user's context
+await runWithUser(testUser.email, testUser.password, async (headers) => {
 	// All client calls within this block will use the user's session
-	const response = await client.getSession();
-	// headers are automatically applied
+	const { data } = await client.getSession();
+	expect(data?.user.email).toBe(testUser.email);
 });
 ```
 
@@ -281,7 +281,7 @@ await client.signIn.anonymous();
 
 ### Calling the Server API
 
-Server endpoints are declared with `requireHeaders: true`, so calling `auth.api.getSession` without `headers` is invalid usage. Passing headers that carry no session cookie is a valid request and resolves to `null` instead of throwing:
+`/get-session` is declared with `requireHeaders: true`, so calling `auth.api.getSession` without `headers` is invalid usage (most other endpoints do not require them). Passing headers that carry no session cookie is a valid request and resolves to `null` instead of throwing:
 
 ```ts
 const { auth } = await getTestInstance();
@@ -327,6 +327,9 @@ it("should handle the previously broken behavior", async () => {
 
 Adapter tests run against real databases, so start the containers before running them:
 
+> **Note:** On macOS, the MSSQL container requires Rosetta emulation and at
+> least 2 GB of allocated memory.
+
 ```bash
 docker compose up -d
 ```
@@ -334,7 +337,7 @@ docker compose up -d
 Then pick the database with `testWith`:
 
 ```ts
-const { auth } = await getTestInstance({}, { testWith: "postgres" });
+await getTestInstance({}, { testWith: "postgres" });
 ```
 
 ### Testing Best Practices
