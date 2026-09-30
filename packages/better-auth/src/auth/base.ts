@@ -8,6 +8,7 @@ import {
 	settleByDeadline,
 } from "@better-auth/core/utils/async";
 import { getEndpoints, router } from "../api";
+import type { InstallReport } from "../context/create-context";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
@@ -58,7 +59,7 @@ type InitializationAttempt = {
 
 type InitializeAuthContext<Options extends BetterAuthOptions> = (
 	options: Options,
-	install: { reported: boolean },
+	install: InstallReport,
 ) => Promise<AuthContext>;
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
@@ -67,10 +68,10 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 ): Auth<Options> => {
 	let settledContext: Promise<AuthContext> | undefined;
 	let attempt: InitializationAttempt | undefined;
-	// Telemetry reports one install for each Auth Instance, not for each
-	// Initialization Attempt. The initializer flips this, because an attempt
+	// Telemetry reports one install for each Auth Instance, across all its
+	// Initialization Attempts. The initializer flips this, because an attempt
 	// that fails before it reaches telemetry has reported nothing.
-	const install = { reported: false };
+	const install: InstallReport = { reported: false };
 
 	const start = (): InitializationAttempt => {
 		const entry: InitializationAttempt = {
