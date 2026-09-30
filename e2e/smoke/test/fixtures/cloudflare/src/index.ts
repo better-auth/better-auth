@@ -114,13 +114,10 @@ app.get("/_test/cloudflare/module-scope", async (c) =>
 // a request.
 const moduleScopeReadAuth = betterAuth(withCloudflare(cloudflareOptions));
 
-const moduleScopeRead = moduleScopeReadAuth.$context.then(
-	() => "settled",
-	(error: unknown) => `rejected:${String(error)}`,
-);
+const moduleScopeRead = moduleScopeReadAuth.$context;
 
 app.get("/_test/cloudflare/module-scope/read", async (c) =>
-	c.json({ outcome: await moduleScopeRead }),
+	c.json({ outcome: await settlesInBudget(moduleScopeRead) }),
 );
 
 const slowInitOptions = {
