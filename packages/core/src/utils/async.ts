@@ -68,6 +68,8 @@ export const EVICTION_TIMEOUT_MS = 30_000;
 /**
  * Settles like `promise`, unless `deadlineMs` (a `Date.now()` timestamp)
  * passes first. Then it settles like `onDeadline`.
+ *
+ * A runtime that refuses the timer leaves `promise` unbounded.
  */
 export function settleByDeadline<T>(
 	promise: Promise<T>,
@@ -75,16 +77,22 @@ export function settleByDeadline<T>(
 	onDeadline: () => T,
 ): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
-		const timer = setTimeout(
-			() => {
-				try {
-					resolve(onDeadline());
-				} catch (error) {
-					reject(error);
-				}
-			},
-			Math.max(0, deadlineMs - Date.now()),
-		);
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			timer = setTimeout(
+				() => {
+					try {
+						resolve(onDeadline());
+					} catch (error) {
+						reject(error);
+					}
+				},
+				Math.max(0, deadlineMs - Date.now()),
+			);
+		} catch {
+			// The Workers runtime refuses timers at global scope. No request
+			// exists there to abandon the promise, so it needs no bound.
+		}
 		promise.then(
 			(value) => {
 				clearTimeout(timer);
