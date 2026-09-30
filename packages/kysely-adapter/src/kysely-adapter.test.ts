@@ -123,7 +123,7 @@ describe("kysely-adapter", () => {
 		expect(result).toEqual(deleted);
 		expect(selectQuery.select).toHaveBeenCalledWith("verification.id");
 		expect(selectQuery.where).toHaveBeenCalledTimes(1);
-		expect(deleteQuery.where).toHaveBeenCalledTimes(1);
+		expect(deleteQuery.where).toHaveBeenCalledTimes(2);
 		expect(deleteQuery.where).toHaveBeenCalledWith(
 			"verification.id",
 			"in",
