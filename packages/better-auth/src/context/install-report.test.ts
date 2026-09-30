@@ -34,20 +34,15 @@ const recordInitEvents = () => {
 };
 
 /** Makes the next attempt stall inside telemetry until the test settles it. */
-const stallFirstAttempt = () => {
-	let settle = {
-		resolve: (_telemetry: Telemetry) => {},
-		reject: (_error: Error) => {},
-	};
+const stallNextAttempt = () => {
+	const settle = Promise.withResolvers<Telemetry>();
 	vi.mocked(createTelemetry).mockImplementationOnce((_options, context) =>
-		new Promise<Telemetry>((resolve, reject) => {
-			settle = { resolve, reject };
-		}).then(async (telemetry) => {
+		settle.promise.then(async (telemetry) => {
 			if (!context?.deferInitEvent) await telemetry.reportInstall();
 			return telemetry;
 		}),
 	);
-	return () => settle;
+	return settle;
 };
 
 const createAuth = () =>
@@ -69,13 +64,13 @@ describe("install report across initialization attempts", () => {
 
 	it("reports one install when an abandoned attempt settles after its replacement", async () => {
 		const { initEvents, telemetry } = recordInitEvents();
-		const firstAttempt = stallFirstAttempt();
+		const firstAttempt = stallNextAttempt();
 		const auth = createAuth();
 
 		void auth.$context.catch(() => undefined);
 		await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
 		await auth.$context;
-		firstAttempt().resolve(telemetry);
+		firstAttempt.resolve(telemetry);
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(initEvents).toEqual(["init"]);
@@ -83,13 +78,13 @@ describe("install report across initialization attempts", () => {
 
 	it("reports the install when an abandoned attempt fails after its replacement settled", async () => {
 		const { initEvents } = recordInitEvents();
-		const firstAttempt = stallFirstAttempt();
+		const firstAttempt = stallNextAttempt();
 		const auth = createAuth();
 
 		void auth.$context.catch(() => undefined);
 		await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
 		await auth.$context;
-		firstAttempt().reject(new Error("detector"));
+		firstAttempt.reject(new Error("telemetry"));
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(initEvents).toEqual(["init"]);
@@ -97,7 +92,7 @@ describe("install report across initialization attempts", () => {
 
 	it("reports the install when an abandoned attempt never settles", async () => {
 		const { initEvents } = recordInitEvents();
-		stallFirstAttempt();
+		stallNextAttempt();
 		const auth = createAuth();
 
 		void auth.$context.catch(() => undefined);
@@ -109,10 +104,10 @@ describe("install report across initialization attempts", () => {
 
 	it("reports the install from the retry after a failed attempt", async () => {
 		const { initEvents } = recordInitEvents();
-		vi.mocked(createTelemetry).mockRejectedValueOnce(new Error("detector"));
+		vi.mocked(createTelemetry).mockRejectedValueOnce(new Error("telemetry"));
 		const auth = createAuth();
 
-		await expect(auth.$context).rejects.toThrow("detector");
+		await expect(auth.$context).rejects.toThrow("telemetry");
 		await auth.$context;
 
 		expect(initEvents).toEqual(["init"]);

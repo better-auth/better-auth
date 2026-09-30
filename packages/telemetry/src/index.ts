@@ -58,15 +58,14 @@ export async function createTelemetry(
 	};
 
 	const enabled = await isEnabled();
-	let anonymousId: string | undefined;
+	let anonymousId: Promise<string> | undefined;
+	const getAnonymousId = () =>
+		(anonymousId ??= getProjectId(
+			typeof options.baseURL === "string" ? options.baseURL : undefined,
+		));
 
 	const reportInstall = async () => {
 		if (!enabled) return;
-		if (!anonymousId) {
-			anonymousId = await getProjectId(
-				typeof options.baseURL === "string" ? options.baseURL : undefined,
-			);
-		}
 
 		const payload = {
 			config: await getTelemetryAuthConfig(options, context),
@@ -78,7 +77,11 @@ export async function createTelemetry(
 			packageManager: detectPackageManager(),
 		};
 
-		void track({ type: "init", payload, anonymousId });
+		void track({
+			type: "init",
+			payload,
+			anonymousId: await getAnonymousId(),
+		});
 	};
 
 	if (!context?.deferInitEvent) await reportInstall();
@@ -87,15 +90,10 @@ export async function createTelemetry(
 		reportInstall,
 		publish: async (event: TelemetryEvent) => {
 			if (!enabled) return;
-			if (!anonymousId) {
-				anonymousId = await getProjectId(
-					typeof options.baseURL === "string" ? options.baseURL : undefined,
-				);
-			}
 			await track({
 				type: event.type,
 				payload: event.payload,
-				anonymousId,
+				anonymousId: await getAnonymousId(),
 			});
 		},
 	};
