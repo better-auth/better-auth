@@ -1,5 +1,13 @@
 # @better-auth/oauth-provider
 
+## 1.7.7
+
+### Patch Changes
+
+- [#8686](https://github.com/better-auth/better-auth/pull/8686) [`683ac1d`](https://github.com/better-auth/better-auth/commit/683ac1ddc31f1007171b045230827edb08b99f91) Thanks [@lennondotw](https://github.com/lennondotw)! - Add an optional `validateRedirectUri` callback for trusted deployments with dynamic OAuth redirect URIs. Existing configurations keep their registered URI validation behavior.
+
+- [#11402](https://github.com/better-auth/better-auth/pull/11402) [`b26057e`](https://github.com/better-auth/better-auth/commit/b26057e23a3c4fc8c97c346857751564d57324c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Export `verifyOAuthQueryParams` from the package root, so an application that renders its own consent page can verify the `sig`/`exp` this plugin's `signParams` puts on the authorization query before it renders anything.
+
 ## 1.7.6
 
 ## 1.7.5
