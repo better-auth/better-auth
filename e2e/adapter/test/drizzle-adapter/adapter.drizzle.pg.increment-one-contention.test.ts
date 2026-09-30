@@ -2,8 +2,8 @@
  * @see https://github.com/better-auth/better-auth/issues/10557
  *
  * `incrementOne` is the adapter's compare-and-swap primitive: the `where`
- * clause is the guard, and callers rely on at most one concurrent call
- * winning it. The rate limiter increments `count` guarded by `count < max`,
+ * clause is the guard, and a call must fail if a concurrent writer makes
+ * that condition false. The rate limiter increments `count` guarded by `count < max`,
  * the organization plugin flips an invitation guarded by `status = pending`,
  * and two-factor consumes a backup code guarded by the old code list.
  *
@@ -19,6 +19,7 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { integer, pgSchema, text } from "drizzle-orm/pg-core";
+import type { PoolClient } from "pg";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -37,9 +38,13 @@ const counters = schema.table("counters", {
 const CONCURRENT_CALLS = 20;
 const MAX = 5;
 
+type CounterRow = { id: string; used: number; status: string };
+
 describe("drizzle adapter (pg): incrementOne under contention", () => {
 	const pool = new Pool({
-		connectionString: "postgres://user:password@localhost:5432/better_auth",
+		connectionString:
+			process.env.BETTER_AUTH_ADAPTER_TEST_DATABASE_URL ??
+			"postgres://user:password@localhost:5432/better_auth",
 		max: CONCURRENT_CALLS,
 	});
 	// The server can drop an idle client between queries; without a handler
@@ -47,24 +52,27 @@ describe("drizzle adapter (pg): incrementOne under contention", () => {
 	pool.on("error", (error) => {
 		console.error("idle client error", error);
 	});
-	const adapter = drizzleAdapter(drizzle(pool, { schema: { counters } }), {
-		provider: "pg",
-		schema: { counters },
-	})({
-		plugins: [
-			{
-				id: "counters-test",
-				schema: {
-					counters: {
-						fields: {
-							used: { type: "number" },
-							status: { type: "string" },
+	const createAdapter = (client: Pool | PoolClient) =>
+		drizzleAdapter(drizzle(client, { schema: { counters } }), {
+			provider: "pg",
+			schema: { counters },
+		})({
+			plugins: [
+				{
+					id: "counters-test",
+					schema: {
+						counters: {
+							fields: {
+								used: { type: "number" },
+								status: { type: "string" },
+							},
 						},
 					},
 				},
-			},
-		],
-	});
+			],
+		});
+
+	const adapter = createAdapter(pool);
 
 	const seed = (ids: string[]) =>
 		pool.query(
@@ -89,6 +97,58 @@ describe("drizzle adapter (pg): incrementOne under contention", () => {
 			],
 			increment: { used: 1 },
 		});
+
+	async function whileGuardChanges(
+		operation: (
+			adapter: ReturnType<typeof createAdapter>,
+		) => Promise<CounterRow | null>,
+	) {
+		const blocker = await pool.connect();
+		const updater = await pool.connect();
+		let transactionOpen = false;
+		let pending: Promise<CounterRow | null> | undefined;
+		try {
+			await blocker.query("BEGIN");
+			transactionOpen = true;
+			await blocker.query(
+				`UPDATE "increment_one_contention"."counters" SET "used" = 0, "status" = 'accepted' WHERE "id" = 'shared'`,
+			);
+			const { rows } = await updater.query<{ pid: number }>(
+				"SELECT pg_backend_pid() AS pid",
+			);
+			pending = operation(createAdapter(updater));
+			void pending.catch(() => {});
+			// Keep the changed row uncommitted until the guarded statement is
+			// known to be waiting with the old condition in its snapshot.
+			const deadline = Date.now() + 3000;
+			let waiting = false;
+			while (Date.now() < deadline) {
+				const result = await pool.query<{ blocked: boolean }>(
+					"SELECT wait_event_type = 'Lock' AS blocked FROM pg_stat_activity WHERE pid = $1",
+					[rows[0]!.pid],
+				);
+				if (result.rows[0]?.blocked) {
+					waiting = true;
+					break;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			if (!waiting) {
+				throw new Error("The guarded update did not reach the held row lock");
+			}
+			await blocker.query("COMMIT");
+			transactionOpen = false;
+			return await pending;
+		} finally {
+			try {
+				if (transactionOpen) await blocker.query("ROLLBACK");
+			} finally {
+				await pending?.catch(() => {});
+				blocker.release();
+				updater.release();
+			}
+		}
+	}
 
 	beforeAll(async () => {
 		expect(pool.options.max).toBe(CONCURRENT_CALLS);
@@ -169,6 +229,50 @@ describe("drizzle adapter (pg): incrementOne under contention", () => {
 		);
 
 		expect(results.filter((result) => result !== null)).toHaveLength(1);
+		expect(await rows()).toEqual([
+			{ id: "shared", used: 0, status: "accepted" },
+		]);
+	});
+
+	it("rejects a set-only update whose guard changes while waiting", async () => {
+		await seed(["shared"]);
+
+		const result = await whileGuardChanges((adapter) =>
+			adapter.incrementOne<CounterRow>({
+				model: "counters",
+				where: [
+					{ field: "id", value: "shared" },
+					{ field: "status", value: "pending" },
+				],
+				increment: {},
+				set: { status: "stale" },
+			}),
+		);
+
+		expect(result).toBeNull();
+		expect(await rows()).toEqual([
+			{ id: "shared", used: 0, status: "accepted" },
+		]);
+	});
+
+	it("rejects a decrement whose guard changes while waiting", async () => {
+		await seed(["shared"]);
+		await pool.query(
+			`UPDATE "increment_one_contention"."counters" SET "used" = 1 WHERE "id" = 'shared'`,
+		);
+
+		const result = await whileGuardChanges((adapter) =>
+			adapter.incrementOne<CounterRow>({
+				model: "counters",
+				where: [
+					{ field: "id", value: "shared" },
+					{ field: "used", operator: "gt", value: 0 },
+				],
+				increment: { used: -1 },
+			}),
+		);
+
+		expect(result).toBeNull();
 		expect(await rows()).toEqual([
 			{ id: "shared", used: 0, status: "accepted" },
 		]);
