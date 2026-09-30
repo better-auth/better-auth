@@ -95,10 +95,7 @@ function validateSecret(
 	}
 }
 
-/**
- * Receives the telemetry install report of one Initialization Attempt. Only
- * the attempt that becomes the Auth Instance's context sends it.
- */
+/** Receives the telemetry install report of one Initialization Attempt. */
 export type InstallReport = { send?: (() => Promise<void>) | undefined };
 
 export async function createAuthContext<Options extends BetterAuthOptions>(
