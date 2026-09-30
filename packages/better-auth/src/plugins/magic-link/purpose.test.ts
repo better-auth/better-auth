@@ -71,6 +71,11 @@ describe("verification record purpose", () => {
 		if (!signIn.url) throw new Error("OAuth authorization URL missing");
 		const state = new URL(signIn.url).searchParams.get("state");
 		expect(state).toBeTruthy();
+		const adapter = (await auth.$context).internalAdapter;
+		const stateBefore = await adapter.findVerificationValue(
+			`auth-state:${state}`,
+		);
+		expect(stateBefore).not.toBeNull();
 
 		const onError = vi.fn();
 		await client.magicLink.verify(
@@ -82,6 +87,9 @@ describe("verification record purpose", () => {
 			onError.mock.calls[0]?.[0].response.headers.get("location"),
 		).toContain("error=INVALID_TOKEN");
 
+		expect(await adapter.findVerificationValue(`auth-state:${state}`)).toEqual(
+			stateBefore,
+		);
 		await client.signIn.magicLink({ email: testUser.email });
 		expect(sentToken).not.toBe("");
 		const result = await client.magicLink.verify({
@@ -209,6 +217,56 @@ describe("verification record purpose", () => {
 		expect(user?.user.name).toBe(name);
 	});
 
+	it("validates the atomically consumed record again before issuing a session", async () => {
+		let sentToken = "";
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							sentToken = data.token;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [magicLinkClient()] } },
+		);
+		await client.signIn.magicLink({ email: testUser.email });
+		const adapter = (await auth.$context).internalAdapter;
+		const consume = adapter.consumeVerificationValue.bind(adapter);
+		const createSession = vi.spyOn(adapter, "createSession");
+		const spy = vi
+			.spyOn(adapter, "consumeVerificationValue")
+			.mockImplementation(async (identifier) => {
+				const consumed = await consume(identifier);
+				return consumed
+					? {
+							...consumed,
+							value: JSON.stringify({
+								type: "magic-link",
+								email: testUser.email,
+								callbackURL: "/dashboard",
+							}),
+						}
+					: null;
+			});
+		try {
+			const onError = vi.fn();
+			await client.magicLink.verify(
+				{ query: { token: sentToken } },
+				{ onError },
+			);
+			expect(onError).toHaveBeenCalledOnce();
+			expect(
+				onError.mock.calls[0]?.[0].response.headers.get("location"),
+			).toContain("error=INVALID_TOKEN");
+			expect(createSession).not.toHaveBeenCalled();
+		} finally {
+			spy.mockRestore();
+			createSession.mockRestore();
+		}
+	});
+
 	it.each([
 		"wrong-purpose",
 		"malformed",
@@ -238,7 +296,7 @@ describe("verification record purpose", () => {
 		).toContain("error=INVALID_TOKEN");
 		expect(
 			await adapter.findVerificationValue(`magic-link:${token}`),
-		).toBeNull();
+		).not.toBeNull();
 	});
 
 	it.each([

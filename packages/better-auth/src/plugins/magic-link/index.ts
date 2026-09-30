@@ -167,6 +167,15 @@ const magicLinkRecordSchema = z
 		name: z.string().optional(),
 	})
 	.strict();
+function parseMagicLinkRecord(value: string) {
+	try {
+		const parsed: unknown = JSON.parse(value);
+		return magicLinkRecordSchema.safeParse(parsed);
+	} catch {
+		return null;
+	}
+}
+
 const magicLinkIdentifier = (storedToken: string) =>
 	`magic-link:${storedToken}`;
 export const magicLink = (options: MagicLinkOptions) => {
@@ -399,21 +408,27 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					).toString();
 					const storedToken = await storeToken(ctx, token);
+					const identifier = magicLinkIdentifier(storedToken);
+					const pendingValue =
+						await ctx.context.internalAdapter.findVerificationValue(identifier);
+					// Reject a known cross-purpose collision without consuming the
+					// other flow's record. Session issuance still requires atomic
+					// consumption and validation of the returned value below.
+					if (
+						!pendingValue ||
+						!parseMagicLinkRecord(pendingValue.value)?.success
+					) {
+						redirectWithError("INVALID_TOKEN");
+					}
 					const tokenValue =
 						await ctx.context.internalAdapter.consumeVerificationValue(
-							magicLinkIdentifier(storedToken),
+							identifier,
 						);
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
-					let parsedRecord: unknown;
-					try {
-						parsedRecord = JSON.parse(tokenValue.value);
-					} catch {
-						redirectWithError("INVALID_TOKEN");
-					}
-					const record = magicLinkRecordSchema.safeParse(parsedRecord);
-					if (!record.success) {
+					const record = parseMagicLinkRecord(tokenValue.value);
+					if (!record?.success) {
 						redirectWithError("INVALID_TOKEN");
 					}
 					const { email, name } = record.data;

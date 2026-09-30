@@ -156,7 +156,7 @@ The `storeToken` option can be one of the following:
 * `"hashed"`: The token is hashed using the default hasher before the identifier is created.
 * `{ type: "custom-hasher", hash: (token: string) => Promise<string> }`: Your hasher transforms the token before the identifier is created.
 
-Better Auth adds `magic-link:` to the transformed token before applying the global [`verification.storeIdentifier`](/docs/reference/options#verification) setting. The token in the link and the `sendMagicLink` callback is unchanged. Custom `storeToken` hashers receive the original token; they do not need to add the prefix.
+Better Auth adds `magic-link:` to the transformed token before applying the global [`verification.storeIdentifier`](/docs/reference/options#verification) setting. The token value sent in the link and to `sendMagicLink` is unchanged. Custom `storeToken` hashers receive the original token; they do not need to add the prefix.
 
 The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config. If you configure `secondaryStorage`, magic link verification records can be stored there instead of the database.
 

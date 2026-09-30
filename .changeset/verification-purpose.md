@@ -10,3 +10,7 @@ Upgrade servers sharing verification storage together, and update
 `verification.storeIdentifier.overrides` rules for these flows to match the new
 `magic-link:` and `auth-state:` prefixes. The link token, callback state,
 endpoints, and public option types are unchanged.
+
+Upgrade installed Better Auth adapters, plugins, and integrations released
+with `better-auth` alongside it so participating packages use the same release
+version.

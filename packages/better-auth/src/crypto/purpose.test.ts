@@ -40,7 +40,9 @@ describe("OAuth encryption purposes", () => {
 		).rejects.toThrow();
 	});
 
-	it("decrypts bare ciphertext with a purpose-derived legacy key", async () => {
+	it.each(
+		purposes,
+	)("decrypts bare %s ciphertext with its purpose-derived legacy key", async (purpose) => {
 		const oldSecret = "old-secret-at-least-32-characters!!";
 		const rotatedConfig: SecretConfig = {
 			keys: new Map([[2, "new-secret-at-least-32-characters!!"]]),
@@ -48,25 +50,32 @@ describe("OAuth encryption purposes", () => {
 			legacySecret: oldSecret,
 		};
 		const ciphertext = await symmetricEncrypt({
-			key: derivePurposeKey(oldSecret, "oauth-proxy-profile"),
+			key: derivePurposeKey(oldSecret, purpose),
 			data: "in-flight derived profile",
 		});
 		expect(ciphertext).not.toMatch(/^\$ba\$/);
 		expect(
 			await symmetricDecrypt({
-				key: derivePurposeKey(rotatedConfig, "oauth-proxy-profile"),
+				key: derivePurposeKey(rotatedConfig, purpose),
 				data: ciphertext,
 			}),
 		).toBe("in-flight derived profile");
 		await expect(
 			symmetricDecrypt({
-				key: derivePurposeKey(rotatedConfig, "oauth-proxy-package"),
+				key: derivePurposeKey(
+					rotatedConfig,
+					purpose === "oauth-proxy-package"
+						? "oauth-state-cookie"
+						: "oauth-proxy-package",
+				),
 				data: ciphertext,
 			}),
 		).rejects.toThrow();
 	});
 
-	it("preserves versioned rotation without accepting the shared key", async () => {
+	it.each(
+		purposes,
+	)("preserves %s rotation without accepting the shared key", async (purpose) => {
 		const oldSecret = "old-secret-at-least-32-characters!!";
 		const newSecret = "new-secret-at-least-32-characters!!";
 		const oldConfig: SecretConfig = {
@@ -82,19 +91,24 @@ describe("OAuth encryption purposes", () => {
 			legacySecret: oldSecret,
 		};
 		const oldCiphertext = await symmetricEncrypt({
-			key: derivePurposeKey(oldConfig, "oauth-proxy-profile"),
+			key: derivePurposeKey(oldConfig, purpose),
 			data: "old profile",
 		});
 		expect(oldCiphertext).toMatch(/^\$ba\$1\$/);
 		expect(
 			await symmetricDecrypt({
-				key: derivePurposeKey(rotatedConfig, "oauth-proxy-profile"),
+				key: derivePurposeKey(rotatedConfig, purpose),
 				data: oldCiphertext,
 			}),
 		).toBe("old profile");
 		await expect(
 			symmetricDecrypt({
-				key: derivePurposeKey(rotatedConfig, "oauth-proxy-package"),
+				key: derivePurposeKey(
+					rotatedConfig,
+					purpose === "oauth-proxy-package"
+						? "oauth-state-cookie"
+						: "oauth-proxy-package",
+				),
 				data: oldCiphertext,
 			}),
 		).rejects.toThrow();
@@ -104,7 +118,7 @@ describe("OAuth encryption purposes", () => {
 		});
 		await expect(
 			symmetricDecrypt({
-				key: derivePurposeKey(rotatedConfig, "oauth-proxy-profile"),
+				key: derivePurposeKey(rotatedConfig, purpose),
 				data: legacyCiphertext,
 			}),
 		).rejects.toThrow();
