@@ -13,4 +13,5 @@ export interface TelemetryContext {
 	database?: string | undefined;
 	adapter?: string | undefined;
 	skipTestCheck?: boolean | undefined;
+	skipInitEvent?: boolean | undefined;
 }

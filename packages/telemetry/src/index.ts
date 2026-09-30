@@ -28,6 +28,7 @@ export async function createTelemetry(
 	if (!telemetryEndpoint && !context?.customTrack) {
 		return {
 			publish: noop,
+			initEventEmitted: false,
 		};
 	}
 	const track = async (event: TelemetryEvent) => {
@@ -58,8 +59,9 @@ export async function createTelemetry(
 
 	const enabled = await isEnabled();
 	let anonymousId: string | undefined;
+	const initEventEmitted = enabled && !context?.skipInitEvent;
 
-	if (enabled) {
+	if (initEventEmitted) {
 		anonymousId = await getProjectId(
 			typeof options.baseURL === "string" ? options.baseURL : undefined,
 		);
@@ -78,6 +80,7 @@ export async function createTelemetry(
 	}
 
 	return {
+		initEventEmitted,
 		publish: async (event: TelemetryEvent) => {
 			if (!enabled) return;
 			if (!anonymousId) {

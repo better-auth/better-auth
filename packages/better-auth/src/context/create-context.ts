@@ -95,10 +95,14 @@ function validateSecret(
 	}
 }
 
+/** Whether telemetry has reported the install of this Auth Instance. */
+export type InstallReport = { reported: boolean };
+
 export async function createAuthContext<Options extends BetterAuthOptions>(
 	adapter: DBAdapter,
 	options: Options,
 	getDatabaseType: (database: Options["database"]) => string,
+	install?: InstallReport,
 ): Promise<AuthContext<Options>> {
 	// secondaryStorage is a durable server-side session store, so treat it like
 	// a database for session cache defaults.
@@ -265,13 +269,25 @@ Most of the features of Better Auth will not work correctly.`,
 		return generateId(size);
 	};
 
-	const { publish } = await createTelemetry(options, {
+	// Claim the report before awaiting telemetry, so an overlapping attempt
+	// skips it. An attempt that emits no init event hands the claim back.
+	const claimed = install?.reported === false;
+	if (install) install.reported = true;
+	const releaseClaim = () => {
+		if (install && claimed) install.reported = false;
+	};
+	const { publish, initEventEmitted } = await createTelemetry(options, {
 		adapter: adapter.id,
 		database:
 			typeof options.database === "function"
 				? "adapter"
 				: getDatabaseType(options.database),
+		skipInitEvent: install !== undefined && !claimed,
+	}).catch((error: unknown) => {
+		releaseClaim();
+		throw error;
 	});
+	if (!initEventEmitted) releaseClaim();
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 
