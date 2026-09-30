@@ -62,7 +62,7 @@ export async function sendVerificationEmailFn(
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const callbackURL = ctx.body.callbackURL ?? "/";
+	const callbackURL = ctx.body.callbackURL || "/";
 	const url = appendQueryParams(
 		`${ctx.context.baseURL}/verify-email`,
 		new URLSearchParams({ token, callbackURL }),
@@ -345,7 +345,7 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.options.emailVerification?.expiresIn,
 						{ requestType: "change-email-verification" },
 					);
-					const updateCallbackURL = ctx.query.callbackURL ?? "/";
+					const updateCallbackURL = ctx.query.callbackURL || "/";
 					const url = appendQueryParams(
 						`${ctx.context.baseURL}/verify-email`,
 						new URLSearchParams({
@@ -449,7 +449,7 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.secret,
 						parsed.updateTo,
 					);
-					const updateCallbackURL = ctx.query.callbackURL ?? "/";
+					const updateCallbackURL = ctx.query.callbackURL || "/";
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
