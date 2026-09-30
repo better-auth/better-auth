@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mapConcurrent } from "./async";
+import { mapConcurrent, settleByDeadline } from "./async";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -169,5 +169,41 @@ describe("mapConcurrent", () => {
 		controller.abort(new Error("cancel"));
 		await expect(run).rejects.toThrow("cancel");
 		expect(processed.length).toBeLessThan(20);
+	});
+});
+
+describe("settleByDeadline", () => {
+	it("settles like the promise when it settles before the deadline", async () => {
+		const onDeadline = vi.fn(() => "late");
+		const settled = settleByDeadline(
+			Promise.resolve("value"),
+			Date.now() + 1000,
+			onDeadline,
+		);
+		await expect(settled).resolves.toBe("value");
+		expect(onDeadline).not.toHaveBeenCalled();
+	});
+
+	it("settles like onDeadline when the deadline passes first", async ({
+		onTestFinished,
+	}) => {
+		vi.useFakeTimers();
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		const pending = new Promise<string>(() => {});
+		const failure = new Error("deadline");
+
+		const resolved = settleByDeadline(pending, Date.now() + 1000, () => "late");
+		const rejected = settleByDeadline(pending, Date.now() + 1000, () => {
+			throw failure;
+		});
+		const assertions = [
+			expect(resolved).resolves.toBe("late"),
+			expect(rejected).rejects.toBe(failure),
+		];
+		await vi.advanceTimersByTimeAsync(1000);
+
+		await Promise.all(assertions);
 	});
 });

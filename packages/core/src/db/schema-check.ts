@@ -5,9 +5,19 @@
  * adapter authors once the registration and lifecycle contracts are stabilized.
  */
 
+import type { InternalLogger } from "../env";
+import { logger as defaultLogger } from "../env";
 import type { Awaitable, BetterAuthOptions } from "../types";
+import { EVICTION_TIMEOUT_MS, settleByDeadline } from "../utils/async";
 import type { SchemaFinding, SchemaSource } from "./schema-diff";
 import { SchemaMismatchError } from "./schema-diff";
+
+type Verdict = {
+	promise: Promise<void>;
+	deadlineMs: number;
+	settled: boolean;
+	reported: boolean;
+};
 
 /**
  * Whether the adapter validates its schema. Enabled in every environment
@@ -20,8 +30,13 @@ export function checksSchema(options: BetterAuthOptions): boolean {
 /**
  * Resolves when the schema can hold what Better Auth writes. Returns nothing
  * once that is known and the database schema revision is unchanged.
+ *
+ * A caller passes the Auth Instance logger, so a lookup it abandons is
+ * reported there.
  */
-export type SchemaCheck = (() => Promise<void> | undefined) & {
+export type SchemaCheck = ((
+	logger?: InternalLogger | undefined,
+) => Promise<void> | undefined) & {
 	source?: SchemaSource;
 };
 
@@ -82,6 +97,10 @@ export function runtimeSchemaCheckFor(
  * the new check if their revision is invalidated. A failure to reach
  * the store is not kept, so the next call asks again.
  *
+ * No caller waits on a lookup longer than {@link EVICTION_TIMEOUT_MS}. A
+ * caller that reaches that bound resolves without a verdict, and the next call
+ * asks the store again.
+ *
  * @example
  * ```ts
  * const checkSchema = createSchemaCheck(
@@ -104,10 +123,52 @@ export function createSchemaCheck(
 	}
 	let checkedRevision = revision?.value;
 	let clean = false;
-	let verdict: Promise<void> | undefined;
-	const checkSchema: SchemaCheck = function checkSchema():
-		| Promise<void>
-		| undefined {
+	let verdict: Verdict | undefined;
+
+	const reportAbandoned = (entry: Verdict, logger: InternalLogger) => {
+		if (entry.reported) return;
+		entry.reported = true;
+		logger.warn(
+			`Schema validation did not settle within ${EVICTION_TIMEOUT_MS}ms and was dropped. Database operations proceed without it. On a runtime that ends I/O with the request that started it, this happens when that request responded before the lookup finished.`,
+		);
+	};
+
+	const start = (
+		currentRevision: number | undefined,
+		logger: InternalLogger,
+	): Verdict => {
+		const entry: Verdict = {
+			deadlineMs: Date.now() + EVICTION_TIMEOUT_MS,
+			settled: false,
+			reported: false,
+			promise: Promise.resolve()
+				.then(find)
+				.then(
+					(findings) => {
+						entry.settled = true;
+						if (revision?.value !== currentRevision) return checkSchema(logger);
+						if (findings.length)
+							throw new SchemaMismatchError(findings, source);
+						if (checkedRevision === currentRevision && verdict === entry) {
+							clean = true;
+						}
+					},
+					(error: unknown) => {
+						entry.settled = true;
+						if (revision?.value !== currentRevision) return checkSchema(logger);
+						if (checkedRevision === currentRevision && verdict === entry) {
+							verdict = undefined;
+						}
+						throw error;
+					},
+				),
+		};
+		return entry;
+	};
+
+	const checkSchema: SchemaCheck = function checkSchema(
+		logger = defaultLogger,
+	): Promise<void> | undefined {
 		const currentRevision = revision?.value;
 		if (checkedRevision !== currentRevision) {
 			checkedRevision = currentRevision;
@@ -115,20 +176,15 @@ export function createSchemaCheck(
 			verdict = undefined;
 		}
 		if (clean) return;
-		return (verdict ??= Promise.resolve()
-			.then(find)
-			.then(
-				(findings) => {
-					if (revision?.value !== currentRevision) return checkSchema();
-					if (findings.length) throw new SchemaMismatchError(findings, source);
-					if (checkedRevision === currentRevision) clean = true;
-				},
-				(error: unknown) => {
-					if (revision?.value !== currentRevision) return checkSchema();
-					if (checkedRevision === currentRevision) verdict = undefined;
-					throw error;
-				},
-			));
+		if (verdict && !verdict.settled && Date.now() >= verdict.deadlineMs) {
+			reportAbandoned(verdict, logger);
+			verdict = undefined;
+		}
+		const entry = (verdict ??= start(currentRevision, logger));
+		if (entry.settled) return entry.promise;
+		return settleByDeadline(entry.promise, entry.deadlineMs, () =>
+			reportAbandoned(entry, logger),
+		);
 	};
 	checkSchema.source = source;
 	return checkSchema;
