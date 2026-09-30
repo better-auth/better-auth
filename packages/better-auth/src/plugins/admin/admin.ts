@@ -8,6 +8,7 @@ import { defaultRoles } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
 	adminUpdateUser,
+	banExpiresInSchema,
 	banUser,
 	createUser,
 	getUser,
@@ -50,6 +51,14 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		Required<
 			Pick<AdminOptions, "defaultRole" | "adminRoles" | "bannedUserMessage">
 		>;
+
+	if (options?.defaultBanExpiresIn !== undefined) {
+		if (!banExpiresInSchema.safeParse(options.defaultBanExpiresIn).success) {
+			throw new BetterAuthError(
+				`Invalid defaultBanExpiresIn: ${options.defaultBanExpiresIn}. It must be a positive number of seconds.`,
+			);
+		}
+	}
 
 	if (options?.adminRoles) {
 		const adminRoles = Array.isArray(options.adminRoles)

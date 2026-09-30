@@ -1045,6 +1045,17 @@ export const unbanUser = (opts: AdminOptions) =>
 		},
 	);
 
+/**
+ * A ban duration, in seconds.
+ *
+ * Must be a positive integer: `0` or a negative value would resolve to an
+ * expiry that is already in the past, leaving the user banned until the next
+ * sign-in silently clears it.
+ */
+export const banExpiresInSchema = z.number().int().positive().meta({
+	description: "The number of seconds until the ban expires",
+});
+
 const banUserBodySchema = z.object({
 	userId: z.coerce.string().meta({
 		description: "The user id",
@@ -1061,12 +1072,7 @@ const banUserBodySchema = z.object({
 	/**
 	 * Number of seconds until the ban expires
 	 */
-	banExpiresIn: z
-		.number()
-		.meta({
-			description: "The number of seconds until the ban expires",
-		})
-		.optional(),
+	banExpiresIn: banExpiresInSchema.optional(),
 });
 
 /**

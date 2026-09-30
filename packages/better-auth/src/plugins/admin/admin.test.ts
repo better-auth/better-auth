@@ -591,6 +591,73 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.banExpires).toBeDefined();
 	});
 
+	it("should reject a non-positive banExpiresIn and still accept a positive one", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Ban Duration User",
+				email: "ban-duration@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id || "";
+
+		const zero = await client.admin.banUser(
+			{
+				userId,
+				banExpiresIn: 0,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(zero.error?.status).toBe(400);
+
+		const negative = await client.admin.banUser(
+			{
+				userId,
+				banExpiresIn: -60,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(negative.error?.status).toBe(400);
+
+		// the rejected requests must not have banned the user
+		const stillActive = await client.admin.getUser(
+			{
+				query: {
+					id: userId,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(stillActive.error).toBeNull();
+		expect(stillActive.data?.banned).toBe(false);
+		expect(stillActive.data?.banExpires).toBeNull();
+
+		const valid = await client.admin.banUser(
+			{
+				userId,
+				banExpiresIn: 60 * 60,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(valid.error).toBeNull();
+		expect(valid.data?.user?.banned).toBe(true);
+		expect(
+			new Date(valid.data?.user?.banExpires ?? 0).getTime(),
+		).toBeGreaterThan(Date.now());
+	});
+
 	it("should not allow banned user to sign in", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
@@ -2302,6 +2369,19 @@ describe("access control", async () => {
 				adminRoles: ["non-existent-role"],
 			}),
 		).toThrowError(BetterAuthError);
+	});
+
+	it("should throw error when defaultBanExpiresIn is not a positive integer", async () => {
+		expect(() => admin({ defaultBanExpiresIn: 0 })).toThrowError(
+			BetterAuthError,
+		);
+		expect(() => admin({ defaultBanExpiresIn: -60 })).toThrowError(
+			BetterAuthError,
+		);
+		expect(() => admin({ defaultBanExpiresIn: 1.5 })).toThrowError(
+			BetterAuthError,
+		);
+		expect(() => admin({ defaultBanExpiresIn: 60 * 60 })).not.toThrow();
 	});
 
 	it("should properly type custom roles in createUser", async () => {

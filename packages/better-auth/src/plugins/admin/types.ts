@@ -39,6 +39,8 @@ export interface AdminOptions {
 	/**
 	 * Number of seconds until the ban expires
 	 *
+	 * Must be a positive integer.
+	 *
 	 * By default, the ban never expires
 	 */
 	defaultBanExpiresIn?: number | undefined;
