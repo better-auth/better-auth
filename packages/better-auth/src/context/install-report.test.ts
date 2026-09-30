@@ -45,8 +45,8 @@ const stallNextAttempt = () => {
 	return settle;
 };
 
-const createAuth = () =>
-	createBetterAuth(options, async (opts, install) =>
+const createAuth = (authOptions: BetterAuthOptions = options) =>
+	createBetterAuth(authOptions, async (opts, install) =>
 		createAuthContext(await getAdapter(opts), opts, () => "memory", install),
 	);
 
@@ -108,6 +108,49 @@ describe("install report across initialization attempts", () => {
 		const auth = createAuth();
 
 		await expect(auth.$context).rejects.toThrow("telemetry");
+		await auth.$context;
+
+		expect(initEvents).toEqual(["init"]);
+	});
+
+	it("hands the install report to the background task handler", async () => {
+		const report = Promise.withResolvers<void>();
+		vi.mocked(createTelemetry).mockResolvedValue({
+			publish: async () => {},
+			reportInstall: () => report.promise,
+		});
+		const tasks: Promise<unknown>[] = [];
+		const auth = createAuth({
+			...options,
+			advanced: { backgroundTasks: { handler: (task) => tasks.push(task) } },
+		});
+
+		await auth.$context;
+		let tasksSettled = false;
+		void Promise.all(tasks).then(() => {
+			tasksSettled = true;
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(tasksSettled).toBe(false);
+
+		report.resolve();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(tasksSettled).toBe(true);
+	});
+
+	it("reports the install when the background task handler throws", async () => {
+		const { initEvents } = recordInitEvents();
+		const auth = createAuth({
+			...options,
+			advanced: {
+				backgroundTasks: {
+					handler: () => {
+						throw new Error("no request scope");
+					},
+				},
+			},
+		});
+
 		await auth.$context;
 
 		expect(initEvents).toEqual(["init"]);

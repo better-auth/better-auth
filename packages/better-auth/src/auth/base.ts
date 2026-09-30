@@ -85,12 +85,20 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 							settledContext = entry.context;
 							// One attempt becomes the context, so telemetry reports one
 							// install for each Auth Instance.
-							void install.send?.().catch((error: unknown) => {
+							const report = install.send?.().catch((error: unknown) => {
 								ctx.logger.error(
 									"Could not report the install to telemetry.",
 									error,
 								);
 							});
+							try {
+								if (report) ctx.runInBackground(report);
+							} catch (error) {
+								ctx.logger.debug(
+									"advanced.backgroundTasks.handler threw, so the install report was not handed to it.",
+									error,
+								);
+							}
 						}
 						return ctx;
 					},
