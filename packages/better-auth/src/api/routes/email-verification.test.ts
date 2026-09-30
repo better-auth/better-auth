@@ -316,6 +316,67 @@ describe("Email Verification", () => {
 		expect(parsed.searchParams.get("callbackURL")).toBe(callbackURL);
 	});
 
+	it("should fall back to / as callbackURL in follow-up verification URL when omitted", async () => {
+		let confirmationToken = "";
+		let followUpUrl = "";
+		let followUpToken = "";
+		const { auth, client, testUser, db, signInWithTestUser } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: false,
+					async sendVerificationEmail({ url, token }) {
+						followUpUrl = url;
+						followUpToken = token;
+					},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+						async sendChangeEmailConfirmation({ token }) {
+							confirmationToken = token;
+						},
+					},
+				},
+			});
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: {
+					newEmail: "followup-no-callback@example.com",
+				},
+				headers,
+			});
+			expect(confirmationToken).not.toBe("");
+			await client.verifyEmail({
+				query: {
+					token: confirmationToken,
+				},
+				fetchOptions: {
+					headers,
+				},
+			});
+		});
+		expect(followUpUrl).toContain("/verify-email?");
+		const parsed = new URL(followUpUrl);
+		expect(parsed.searchParams.get("token")).toBe(followUpToken);
+		expect(parsed.searchParams.get("callbackURL")).toBe("/");
+	});
+
 	it("should compose follow-up verification URL for legacy email-change flow", async () => {
 		let followUpUrl = "";
 		let followUpToken = "";
