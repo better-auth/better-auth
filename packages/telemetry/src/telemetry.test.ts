@@ -346,4 +346,24 @@ describe("telemetry", () => {
 		// Verify that betterFetch was never called since endpoint is undefined
 		expect(betterFetch).not.toHaveBeenCalled();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10315
+	 */
+	it("defers the init event until the install is reported", async () => {
+		const track = vi.fn(async (_event: TelemetryEvent) => {});
+		const telemetry = await createTelemetry(
+			{ baseURL: "http://localhost", telemetry: { enabled: true } },
+			{ customTrack: track, skipTestCheck: true, deferInitEvent: true },
+		);
+		expect(track).not.toHaveBeenCalled();
+
+		await telemetry.reportInstall();
+
+		expect(track).toHaveBeenCalledTimes(1);
+		expect(track.mock.calls[0]![0]).toMatchObject({
+			type: "init",
+			anonymousId: "anon-123",
+		});
+	});
 });

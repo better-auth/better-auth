@@ -68,12 +68,9 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 ): Auth<Options> => {
 	let settledContext: Promise<AuthContext> | undefined;
 	let attempt: InitializationAttempt | undefined;
-	// Telemetry reports one install for each Auth Instance, across all its
-	// Initialization Attempts. The initializer flips this, because an attempt
-	// that fails before it reaches telemetry has reported nothing.
-	const install: InstallReport = { reported: false };
 
 	const start = (): InitializationAttempt => {
+		const install: InstallReport = {};
 		const entry: InitializationAttempt = {
 			deadlineMs: Date.now() + EVICTION_TIMEOUT_MS,
 			context: Promise.resolve()
@@ -84,7 +81,17 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 						// An evicted attempt the background task handler kept alive
 						// still settles, after the attempt that replaced it started.
 						// It must not take that attempt's place.
-						if (attempt === entry) settledContext = entry.context;
+						if (attempt === entry) {
+							settledContext = entry.context;
+							// One attempt becomes the context, so telemetry reports one
+							// install for each Auth Instance.
+							void install.send?.().catch((error: unknown) => {
+								ctx.logger.error(
+									"Could not report the install to telemetry.",
+									error,
+								);
+							});
+						}
 						return ctx;
 					},
 					(error: unknown) => {
