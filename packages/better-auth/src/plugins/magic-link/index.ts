@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { formCsrfMiddleware, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -158,6 +159,17 @@ const magicLinkVerifyQuerySchema = z.object({
 		})
 		.optional(),
 });
+// Require the exact record shape even if a custom identifier hasher maps
+// different verification purposes to the same storage key.
+const magicLinkRecordSchema = z
+	.object({
+		type: z.literal("magic-link"),
+		email: z.email(),
+		name: z.string().optional(),
+	})
+	.strict();
+const magicLinkIdentifier = (storedToken: string) =>
+	`magic-link:${storedToken}`;
 export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
@@ -243,8 +255,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
 					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: storedToken,
-						value: JSON.stringify({ email, name: ctx.body.name }),
+						identifier: magicLinkIdentifier(storedToken),
+						value: JSON.stringify({
+							type: "magic-link",
+							email,
+							name: ctx.body.name,
+						}),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
 					const realBaseURL = new URL(ctx.context.baseURL);
@@ -386,15 +402,18 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
 						await ctx.context.internalAdapter.consumeVerificationValue(
-							storedToken,
+							magicLinkIdentifier(storedToken),
 						);
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
-					const { email, name } = JSON.parse(tokenValue.value) as {
-						email: string;
-						name?: string | undefined;
-					};
+					const record = magicLinkRecordSchema.safeParse(
+						safeJSONParse<unknown>(tokenValue.value),
+					);
+					if (!record.success) {
+						redirectWithError("INVALID_TOKEN");
+					}
+					const { email, name } = record.data;
 
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter
