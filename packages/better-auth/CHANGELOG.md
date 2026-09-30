@@ -1,5 +1,43 @@
 # better-auth
 
+## 1.7.7
+
+### Patch Changes
+
+- [#11476](https://github.com/better-auth/better-auth/pull/11476) [`4186e36`](https://github.com/better-auth/better-auth/commit/4186e36d1505f881585dea03353a4fc4ff864474) Thanks [@bytaesu](https://github.com/bytaesu)! - Return CAPTCHA errors with the correct JSON Content-Type header.
+
+- [#11469](https://github.com/better-auth/better-auth/pull/11469) [`8620aa9`](https://github.com/better-auth/better-auth/commit/8620aa94fdb9e158824cbba0d0fcf364143c56fe) Thanks [@aryan1306](https://github.com/aryan1306)! - Return rate limit errors with a JSON Content-Type header.
+
+- [#11491](https://github.com/better-auth/better-auth/pull/11491) [`55cb92e`](https://github.com/better-auth/better-auth/commit/55cb92e940e6ac26e746bbb06b92c445050cdb09) Thanks [@bytaesu](https://github.com/bytaesu)! - Respect social provider `disableSignUp` when signing in with an ID token.
+
+- [#11375](https://github.com/better-auth/better-auth/pull/11375) [`69defbc`](https://github.com/better-auth/better-auth/commit/69defbcabae430ca48e4ff1088c52a051566905e) Thanks [@bytaesu](https://github.com/bytaesu)! - Refresh the active organization after sign-in when a session hook selects the initial organization.
+
+- [#11494](https://github.com/better-auth/better-auth/pull/11494) [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Isolate OAuth state cookies and each OAuth Proxy payload with purpose-specific encryption keys. The `oAuthProxy` options and supported configuration remain unchanged.
+
+  Upgrade all Better Auth nodes that handle the same cookie-backed OAuth or SAML relay-state flow together. Upgrade every OAuth Proxy participant, including production and preview or development deployments, in the same cutover. OAuth sign-in, account-linking, and cookie-backed SAML sign-in flows started before the upgrade must be restarted. Mixed old and new participants cannot exchange existing state or proxy payloads, and there is no fallback to the previous shared key.
+
+- [#11494](https://github.com/better-auth/better-auth/pull/11494) [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Magic Link verification now accepts only records issued for Magic Link. Magic
+  Link records and database-backed OAuth or SAML state use separate verification
+  identifier prefixes. Links and database-backed sign-ins started before the
+  upgrade cannot complete; request new Magic Links and restart those sign-ins.
+  Upgrade servers sharing verification storage together, and update
+  `verification.storeIdentifier.overrides` rules for these flows to match the new
+  `magic-link:` and `auth-state:` prefixes. The link token, callback state,
+  endpoints, and public option types are unchanged.
+
+  Upgrade installed Better Auth adapters, plugins, and integrations released
+  with `better-auth` alongside it so participating packages use the same release
+  version.
+
+- Updated dependencies [[`35d7cd3`](https://github.com/better-auth/better-auth/commit/35d7cd389220f99cfc98ac699e6a42b48313a740), [`07bdf7e`](https://github.com/better-auth/better-auth/commit/07bdf7ecafb75222f7a24e0733cc3b056f84e9e8)]:
+  - @better-auth/drizzle-adapter@1.7.7
+  - @better-auth/kysely-adapter@1.7.7
+  - @better-auth/core@1.7.7
+  - @better-auth/memory-adapter@1.7.7
+  - @better-auth/mongo-adapter@1.7.7
+  - @better-auth/prisma-adapter@1.7.7
+  - @better-auth/telemetry@1.7.7
+
 ## 1.7.6
 
 ### Patch Changes
