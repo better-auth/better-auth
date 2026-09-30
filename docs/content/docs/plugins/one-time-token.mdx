@@ -97,7 +97,9 @@ oneTimeToken({
 
   The token is still consumed and the resolved session is still returned in the response body — this option only skips writing the session cookie on the verify response.
 
-  Use it when the request that verifies the token does not come from the browser that will use the session. The most common case is a cross-domain flow where the cookie set on the verifying domain is not reachable from the app the user lands on. In that case, read the session from the verify response and set the session cookie on the destination domain yourself.
+  Use it when the request that verifies the token does not come from the browser that will use the session. The most common case is a cross-domain flow where the cookie set on the verifying domain is not reachable from the app the user lands on.
+
+  In that case, establish the session from a server route on the destination domain rather than in the browser. The verify response body is the resolved session, and its `session.token` is the raw session token — not a cookie value. Better Auth normally writes the session as a signed cookie whose signature is derived from the auth instance's `secret`, so the browser cannot turn the response body into a valid session cookie on its own. Have the destination's server route establish the session through Better Auth on the instance that will read it, and return the session cookie from that route's own response.
 
 ```ts
 oneTimeToken({
@@ -144,7 +146,7 @@ oneTimeToken({
 
   This runs as an after-hook on all requests, so it applies to any flow that creates a session — for example a sign-up or a sign-in. The token is produced by the same generation path as the `generate` endpoint, so it also honors `generateToken`, `expiresIn`, and `storeToken`.
 
-  The plugin also adds `set-ott` to `Access-Control-Expose-Headers`, so the header is readable from a cross-origin request instead of being hidden by the browser.
+  The plugin also adds `set-ott` to `Access-Control-Expose-Headers`. That only un-hides the header from JavaScript once your CORS configuration already permits the request — the plugin never sends `Access-Control-Allow-Origin` itself. A cross-origin reader still needs your own `Access-Control-Allow-Origin` for the calling origin, plus `Access-Control-Allow-Credentials: true` when the request is credentialed.
 
 ```ts
 oneTimeToken({
@@ -152,21 +154,33 @@ oneTimeToken({
 })
 ```
 
-Read the header off the sign-in response, then exchange it for the session on the other domain:
+  Verification reads the token from the verification value store and then loads the session it points to. So if the destination app runs its own auth instance against its own database, verification fails with `Invalid token` unless that instance shares the verification and session storage with the generating one — or unless the request is forwarded to the instance that generated the token.
 
-```ts title="client.ts"
-const res = await fetch("/api/auth/sign-in/email", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
-});
+  Read the header off the sign-in response, then exchange it for the session on the other domain:
 
-const token = res.headers.get("set-ott");
+  ```ts title="client.ts"
+  const res = await fetch("/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+  });
 
-// Send it to the destination app, which runs the verify step.
-await fetch("https://app.example.com/api/one-time-token/verify", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token }),
-});
-```
+  const token = res.headers.get("set-ott");
+
+  // Send it to the destination app, which runs the verify step.
+  // `credentials: "include"` is required — fetch defaults to "same-origin",
+  // so without it the browser neither sends cookies on the request nor
+  // stores the session cookie set on the destination's verify response.
+  await fetch("https://app.example.com/api/auth/one-time-token/verify", {
+      method: "POST",
+      credentials: "include", // [!code highlight]
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+  });
+  ```
+
+  The verify endpoint is served under `basePath`, so the URL above uses the default `/api/auth` prefix and the plugin's `/one-time-token/verify` path.
+
+  <Callout type="warn">
+    Because this request is cross-origin and credentialed, the destination has to opt in explicitly. Its response needs `Access-Control-Allow-Credentials: true` and an `Access-Control-Allow-Origin` naming the calling origin — `*` is rejected once credentials are included. Sending `content-type: application/json` also triggers a preflight, so the destination's `OPTIONS` handling has to allow the `content-type` header. See [Cross-Domain Setups](/docs/concepts/cookies#safari-itp-and-cross-domain-setups) if the two apps do not share a parent domain.
+  </Callout>
