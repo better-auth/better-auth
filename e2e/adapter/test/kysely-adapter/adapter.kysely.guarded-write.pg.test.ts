@@ -10,6 +10,10 @@ const pool = new Pool({
 		"postgres://user:password@localhost:5433/better_auth",
 	max: 4,
 });
+// Report dropped idle connections without an unhandled pool error.
+pool.on("error", (error) => {
+	console.error("idle client error", error);
+});
 type GuardedRow = { id: string; authority: string | null; attempts: number };
 
 function createAdapter(client: PoolClient) {
@@ -82,6 +86,7 @@ async function whileGuardChanges(
 beforeAll(async () => {
 	await pool.query(`
 		CREATE SCHEMA IF NOT EXISTS kysely_guard_contract;
+		DROP TABLE IF EXISTS kysely_guard_contract."user";
 		CREATE TABLE kysely_guard_contract."user" (
 			id text PRIMARY KEY, name text NOT NULL, email text NOT NULL,
 			"emailVerified" boolean NOT NULL, image text,

@@ -129,6 +129,7 @@ describe("kysely-adapter", () => {
 			"in",
 			selectQuery,
 		);
+		expect(deleteQuery.where).toHaveBeenNthCalledWith(2, expect.any(Function));
 		expect(deleteQuery.returningAll).toHaveBeenCalledTimes(1);
 	});
 
@@ -171,6 +172,7 @@ describe("kysely-adapter", () => {
 			"in",
 			selectQuery,
 		);
+		expect(deleteQuery.where).toHaveBeenNthCalledWith(2, expect.any(Function));
 		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
 	});
 });
