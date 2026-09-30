@@ -148,7 +148,7 @@ and a `ctx` context object as the second parameter.
 
 **disableSignUp**: If set to `true`, the user will not be able to sign up using the magic link. The default value is `false`.
 
-**rateLimit**: Rate limiting for the magic link endpoints (`/sign-in/magic-link` and `/magic-link/verify`). The default is `{ window: 60, max: 5 }` — at most 5 requests per 60 seconds per IP. Customize it when you need stricter or looser limits:
+**rateLimit**: Rate limiting for the magic link endpoints (`/sign-in/magic-link` and `/magic-link/verify`). The default is `{ window: 60, max: 5 }` — at most 5 requests per 60 seconds per IP. Rate limiting applies in production by default (disabled outside production unless enabled) and falls back to a shared endpoint-wide bucket when no trusted client IP can be resolved, or is skipped when IP tracking is disabled — see [Rate Limit](/docs/concepts/rate-limit). Customize it when you need stricter or looser limits:
 
 ```ts title="server.ts"
 import { betterAuth } from "better-auth";
@@ -162,7 +162,7 @@ export const auth = betterAuth({
             },
             rateLimit: {
                 window: 60, // 60 seconds
-                max: 5, // 5 requests per window
+                max: 3, // 3 requests per window (stricter than the default of 5)
             },
         })
     ]
