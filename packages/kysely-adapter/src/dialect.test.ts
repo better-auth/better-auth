@@ -301,6 +301,47 @@ describe("D1 table introspection", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11483
+ */
+describe("D1 query concurrency", () => {
+	it("does not serialize concurrent queries behind a connection mutex", async ({
+		onTestFinished,
+	}) => {
+		const started: string[] = [];
+		const pending: (() => void)[] = [];
+		const prepare = vi.fn((query: string) => ({
+			bind: () => ({
+				all: () =>
+					new Promise((resolve) => {
+						started.push(query);
+						pending.push(() =>
+							resolve({ results: [], meta: { changes: 0, last_row_id: 0 } }),
+						);
+					}),
+			}),
+		}));
+		const database = {
+			batch: vi.fn(),
+			exec: vi.fn(),
+			prepare,
+		} as unknown as D1Database;
+		const db = new Kysely<{ user: { id: string }; session: { id: string } }>({
+			dialect: new D1SqliteDialect({ database }),
+		});
+		onTestFinished(() => db.destroy());
+
+		const queries = Promise.all([
+			db.selectFrom("user").select("id").execute(),
+			db.selectFrom("session").select("id").execute(),
+		]);
+		await vi.waitFor(() => expect(started).toHaveLength(2));
+		for (const resolve of pending) resolve();
+
+		await expect(queries).resolves.toEqual([[], []]);
+	});
+});
+
 describe("createKyselyAdapter schema namespace", () => {
 	it("qualifies every statement with the configured PostgreSQL schema", async () => {
 		const { kysely, schemaName } = await createKyselyAdapter({

@@ -81,7 +81,17 @@ export function createD1IndexIntrospector(
 	};
 }
 
-class D1SqliteAdapter extends SqliteAdapter {}
+class D1SqliteAdapter extends SqliteAdapter {
+	/**
+	 * D1 keeps no per-connection state and rejects interactive transactions,
+	 * so there is nothing for Kysely's single-connection mutex to protect.
+	 * Holding it would make requests on a shared Workers isolate wait on each
+	 * other's queries.
+	 */
+	get supportsMultipleConnections(): boolean {
+		return true;
+	}
+}
 
 /**
  * Config for the D1 SQLite dialect.
