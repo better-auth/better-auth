@@ -48,6 +48,38 @@ export function normalizePathname(
 	return pathname;
 }
 
+/**
+ * Appends raw path segments to an absolute URL, encoding each segment.
+ *
+ * @example
+ * const baseURL = "https://example.com/api/auth";
+ * const tokenURL = appendURLPath(baseURL, "oauth2", "token");
+ * // tokenURL === "https://example.com/api/auth/oauth2/token"
+ */
+export function appendURLPath(
+	url: string,
+	segment: string,
+	...segments: string[]
+): string {
+	const parsedURL = new URL(url);
+
+	const pathSegments = [segment, ...segments].map((value) => {
+		if (value === "") {
+			throw new TypeError("URL path segments must be nonempty");
+		}
+		return encodeURIComponent(value);
+	});
+
+	const existingPath = parsedURL.pathname.replace(/\/+$/, "");
+	const pathname = [existingPath, ...pathSegments].join("/");
+	parsedURL.pathname = pathname;
+	if (parsedURL.pathname !== pathname) {
+		throw new TypeError("URL path segments could not be appended");
+	}
+
+	return parsedURL.href;
+}
+
 const URL_REFERENCE_ORIGIN = "https://better-auth.invalid";
 
 /**
