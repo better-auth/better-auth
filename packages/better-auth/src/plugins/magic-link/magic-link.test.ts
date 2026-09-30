@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { admin } from "../admin";
 import { magicLink } from ".";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
@@ -601,6 +602,61 @@ describe("magic link verify origin validation", async () => {
 
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+});
+
+/**
+ * A `session.create.before` hook that rejects with an `APIError` (e.g. the
+ * admin plugin banning the user) must be forwarded to `errorCallbackURL` the
+ * same way a `user.create.before` rejection already is on this endpoint,
+ * instead of escaping verify as a raw error response from the auth server.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/7406
+ */
+describe("magic link verify session creation errors", async () => {
+	it("redirects to errorCallbackURL when session creation is rejected", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { auth, testUser, db } = await getTestInstance({
+			trustedOrigins: ["http://localhost:5173"],
+			plugins: [
+				admin(),
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const user = await db.findOne<{ id: string }>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: user!.id }],
+			update: { banned: true },
+		});
+
+		await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+				callbackURL: "http://localhost:5173/",
+				errorCallbackURL: "http://localhost:5173/sign-in",
+			},
+			headers: new Headers(),
+		});
+
+		const res = await auth.handler(new Request(verificationEmail.url));
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toContain(
+			"http://localhost:5173/sign-in",
+		);
+		expect(res.headers.get("location")).toContain("error=BANNED_USER");
 	});
 });
 
