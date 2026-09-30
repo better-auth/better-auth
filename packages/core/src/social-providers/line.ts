@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
@@ -6,6 +5,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface LineIdTokenPayload {
 	iss: string;
@@ -104,7 +104,7 @@ export const line = (options: LineOptions) => {
 				body.set("id_token", token);
 				body.set("client_id", options.clientId);
 				if (nonce) body.set("nonce", nonce);
-				const { data, error } = await betterFetch<LineIdTokenPayload>(
+				const { data, error } = await fetchPublicResource<LineIdTokenPayload>(
 					verifyIdTokenEndpoint,
 					{
 						method: "POST",
@@ -136,11 +136,14 @@ export const line = (options: LineOptions) => {
 			}
 			// Fallback to UserInfo endpoint
 			if (!profile) {
-				const { data } = await betterFetch<LineUserInfo>(userInfoEndpoint, {
-					headers: {
-						authorization: `Bearer ${token.accessToken}`,
+				const { data } = await fetchPublicResource<LineUserInfo>(
+					userInfoEndpoint,
+					{
+						headers: {
+							authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				});
+				);
 				profile = data || null;
 			}
 			if (!profile) return null;

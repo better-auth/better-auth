@@ -89,6 +89,8 @@ Default: `/api/auth`
 
 By default, Better Auth trusts the base URL of your app (i.e. [`baseURL`](#baseurl)). You can specify additional trusted origins via this option. Values can be a static array of origins, a function that returns origins dynamically, or wildcard patterns to match multiple domains.
 
+On SSO and Generic OAuth fetch paths, matching origins also bypass outgoing literal-host and DNS validation. Approve only services you operate or have independently authorized. Wildcards approve every matched origin, so use them only when you control every matching host. Keep required approvals available during initialization and subsequent auth operations; never derive them from unvalidated request headers or registration URLs. Other integrations have distinct policies; see [server-side fetch behavior](/docs/reference/security#outbound-oauth-requests).
+
 ### Static Origins
 
 You can provide a static array of origins:
@@ -105,16 +107,13 @@ export const auth = betterAuth({
 You can provide a function that returns origins dynamically:
 
 ```ts
+import { betterAuth } from "better-auth";
+
+const approvedOrigins = ["https://app.example.com", "https://idp.internal.example.com"];
+
 export const auth = betterAuth({
-	trustedOrigins: async (request) => {
-		// request is undefined during initialization and auth.api calls
-		if (!request) {
-			return ["https://my-frontend.com"];
-		}
-		// Dynamic logic based on the request
-		return ["https://dynamic-origin.com"];
-	}
-})
+  trustedOrigins: async () => approvedOrigins,
+});
 ```
 
 <Callout type="info">

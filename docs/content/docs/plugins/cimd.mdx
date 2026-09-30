@@ -58,6 +58,8 @@ The transport must:
 * Connect to that approved address while preserving TLS hostname and certificate verification for the original host.
 * Refuse redirects and honor the supplied method, headers, and abort signal.
 
+Global `trustedOrigins` does not relax the transport policy for CIMD metadata or discovery-owned JWKS. An application URL policy can add a veto, but it cannot replace the required network guarantees.
+
 Do not perform a DNS check and then call `globalThis.fetch`. Standard Fetch exposes neither the connected peer address nor a portable way to pin it, so that pattern re-resolves the hostname and remains vulnerable to DNS rebinding.
 
 ## MCP configuration
@@ -204,7 +206,7 @@ Refresh remains fail closed. A network, validation, or persistence failure prese
 
 ## Security boundary
 
-The plugin enforces a five-second timeout with portable `AbortController`/`setTimeout`, a streaming 5 KB metadata-document limit, a streaming 64 KiB discovery-owned JWKS limit, JSON and `application/*+json` media types, and redirect rejection. These application-layer checks complement rather than replace the required network transport's DNS resolution and connection-pinning guarantees.
+The plugin requests cancellation after five seconds with portable `AbortController`/`setTimeout` and enforces a streaming 5 KB metadata-document limit, a streaming 64 KiB discovery-owned JWKS limit, JSON and `application/*+json` media types, and redirect rejection. These application-layer checks complement rather than replace the required network transport's DNS resolution and connection-pinning guarantees. The transport must honor cancellation during its own work. The Node transport's DNS lookup precedes its HTTP abort handling, so DNS latency can extend the overall wait beyond this cancellation deadline.
 
 Loopback Client Identifier URLs are not supported. Tests can route HTTPS `.test` origins to in-process handlers through the injected transport without disabling URL or certificate policy. Native client loopback `redirect_uris` remain governed separately by OAuth redirect validation.
 

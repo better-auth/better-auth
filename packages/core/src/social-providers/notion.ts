@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface NotionProfile {
 	object: "user";
@@ -79,7 +79,7 @@ export const notion = (options: NotionOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<{
+			const { data: profile, error } = await fetchPublicResource<{
 				bot: {
 					owner: {
 						user: NotionProfile;

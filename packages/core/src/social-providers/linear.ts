@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface LinearUser {
 	id: string;
@@ -79,7 +79,7 @@ export const linear = (options: LinearOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			const { data: profile, error } = await betterFetch<LinearProfile>(
+			const { data: profile, error } = await fetchPublicResource<LinearProfile>(
 				"https://api.linear.app/graphql",
 				{
 					method: "POST",

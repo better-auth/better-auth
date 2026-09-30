@@ -4,6 +4,10 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
+import {
+	fetchPublicResponse,
+	isRedirectResponse,
+} from "@better-auth/core/utils/public-fetch";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "better-call";
@@ -190,7 +194,7 @@ async function fetchJwksFromUri(
 			headers: { accept: "application/json" },
 			redirect: "error",
 		});
-		if (response.redirected) {
+		if (response.redirected || isRedirectResponse(response)) {
 			throw new Error("JWKS fetch redirected");
 		}
 		if (response.status !== 200) {
@@ -270,7 +274,15 @@ async function fetchClientJwks(
 	try {
 		result = await fetchJwksFromUri(
 			client.jwksUri,
-			discovery?.fetchClientMetadataResource,
+			discovery?.fetchClientMetadataResource ??
+				((url, init) =>
+					fetchPublicResponse(
+						url instanceof Request ? url.url : url,
+						init ?? {},
+						{
+							isTrustedOrigin: (target) => ctx.context.isTrustedOrigin(target),
+						},
+					)),
 		);
 	} catch {
 		// Return stale cache on transient failures, but only within a grace period.
@@ -292,6 +304,7 @@ async function fetchClientJwks(
  * Handles key rotation: the client may have published a new key that isn't in our cache yet.
  */
 async function refetchClientJwks(
+	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
 ): Promise<JSONWebKeySet | null> {
@@ -307,7 +320,15 @@ async function refetchClientJwks(
 	try {
 		const result = await fetchJwksFromUri(
 			client.jwksUri,
-			discovery?.fetchClientMetadataResource,
+			discovery?.fetchClientMetadataResource ??
+				((url, init) =>
+					fetchPublicResponse(
+						url instanceof Request ? url.url : url,
+						init ?? {},
+						{
+							isTrustedOrigin: (target) => ctx.context.isTrustedOrigin(target),
+						},
+					)),
 		);
 		if (!result.valid) return null;
 		setJwksCache(
@@ -565,7 +586,7 @@ export async function verifyClientAssertion(
 			verifyErr instanceof Error &&
 			/no matching key|no applicable key/i.test(verifyErr.message);
 		if (isKeyError) {
-			const refreshed = await refetchClientJwks(opts, client);
+			const refreshed = await refetchClientJwks(ctx, opts, client);
 			if (refreshed) {
 				try {
 					({ payload } = await jwtVerify(

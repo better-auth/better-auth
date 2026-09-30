@@ -384,6 +384,10 @@ Provider configurations with the same `accountIssuer` and subject deduplicate on
 
 **userInfoUrl**: (Optional) The endpoint to fetch user profile information. Not required if using `discoveryUrl`.
 
+<Callout type="warn">
+  Built-in discovery, token, refresh, UserInfo, and discovered JWKS requests apply public-host validation, including when you configure token and UserInfo URLs directly. Approve an exact private IdP origin in [`trustedOrigins`](/docs/reference/options#trustedorigins) only after confirming that the service is authorized for your deployment. Matching origins bypass outgoing host and DNS checks and also participate in origin and redirect trust. Keep approvals available during initialization and every relevant auth request. See [runtime requirements and DNS limits](/docs/reference/security#outbound-oauth-requests).
+</Callout>
+
 **endSessionEndpoint**: (Optional) The OIDC RP-Initiated Logout endpoint. Not required if using `discoveryUrl` and the provider returns `end_session_endpoint`.
 
 **postLogoutRedirectURI**: (Optional) Default URI to send as `post_logout_redirect_uri` when `authClient.signOut()` redirects to the provider. This URI must be registered with the provider.
@@ -508,64 +512,90 @@ genericOAuth({
 
 ### Custom Token Exchange
 
-For providers with non-standard token endpoints that use GET requests or custom parameters, you can provide a custom `getToken` function:
+Custom `getToken` and `getUserInfo` hooks own their HTTP requests. Better Auth does not automatically apply its fetch policy inside them. Use fixed operator-approved URLs, refuse redirects, encode parameters, set a timeout, and validate HTTP status and response fields before returning tokens or identity data.
+
+Use a GET token exchange only when your provider requires it, and keep credential-bearing URLs out of logs. This example uses Zod, which must be a direct dependency of your application. Its response schemas describe one non-standard provider; match them to the provider's actual contract. It implements the authorization-code exchange and profile request. Configure a supported refresh exchange before retaining that provider's refresh tokens.
 
 ```ts
-genericOAuth({
-  config: [
-    {
-      providerId: "custom-provider",
-      clientId: process.env.CUSTOM_CLIENT_ID!,
-      clientSecret: process.env.CUSTOM_CLIENT_SECRET,
-      authorizationUrl: "https://provider.example.com/oauth/authorize",
-      scopes: ["profile", "email"],
-      // Custom token exchange for non-standard endpoints
-      getToken: async ({ code, redirectURI }) => {
-        // Example: GET request instead of POST
-        const response = await fetch(
-          `https://provider.example.com/oauth/token?` +
-          `client_id=${process.env.CUSTOM_CLIENT_ID}&` +
-          `client_secret=${process.env.CUSTOM_CLIENT_SECRET}&` +
-          `code=${code}&` +
-          `redirect_uri=${redirectURI}&` +
-          `grant_type=authorization_code`,
-          { method: "GET" }
-        );
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+import * as z from "zod";
 
-        const data = await response.json();
-
-        return {
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-          accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
-          scopes: data.scope?.split(" ") ?? [],
-          // Preserve provider-specific fields in raw
-          raw: data,
-        };
-      },
-      getUserInfo: async (tokens) => {
-        // Access provider-specific fields from raw token data
-        const userId = tokens.raw?.user_id as string;
-
-        const response = await fetch(
-          `https://provider.example.com/api/user?` +
-          `access_token=${tokens.accessToken}`
-        );
-
-        const data = await response.json();
-
-        return {
-          id: userId,
-          name: data.display_name,
-          email: data.email,
-          image: data.avatar_url,
-          emailVerified: data.email_verified,
-        };
-      },
-    },
-  ],
+const tokenSchema = z.object({
+  access_token: z.string().min(1),
+  expires_in: z.number().positive(),
+  scope: z.string().optional(),
+  user_id: z.string().min(1),
 });
+const profileSchema = z.object({
+  display_name: z.string(),
+  email: z.email(),
+  avatar_url: z.url().optional(),
+  email_verified: z.boolean(),
+});
+
+// Supply credentials from your server's environment or secret store.
+export function createCustomProviderAuth(clientId: string, clientSecret: string) {
+  return betterAuth({
+    baseURL: "https://auth.example.com",
+    plugins: [genericOAuth({
+      config: [{
+        providerId: "custom-provider",
+        accountIssuer: "https://provider.example.com",
+        clientId,
+        clientSecret,
+        authorizationUrl: "https://provider.example.com/oauth/authorize",
+        scopes: ["profile", "email"],
+        getToken: async ({ code, redirectURI, codeVerifier }) => {
+          const endpoint = new URL("https://provider.example.com/oauth/token");
+          endpoint.search = new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            code,
+            redirect_uri: redirectURI,
+            grant_type: "authorization_code",
+            ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
+          }).toString();
+          const response = await fetch(endpoint, {
+            method: "GET",
+            redirect: "manual",
+            signal: AbortSignal.timeout(5000),
+          });
+          if (!response.ok) throw new Error("Token exchange failed");
+          const data = tokenSchema.parse(await response.json());
+          return {
+            accessToken: data.access_token,
+            accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
+            scopes: data.scope?.split(" ") ?? [],
+            raw: data,
+          };
+        },
+        getUserInfo: async (tokens) => {
+          const tokenData = tokenSchema.parse(tokens.raw);
+          const endpoint = new URL("https://provider.example.com/api/user");
+          endpoint.search = new URLSearchParams({ access_token: tokenData.access_token }).toString();
+          const response = await fetch(endpoint, {
+            method: "GET",
+            redirect: "manual",
+            signal: AbortSignal.timeout(5000),
+          });
+          if (!response.ok) throw new Error("Profile request failed");
+          const data = profileSchema.parse(await response.json());
+          return {
+            id: tokenData.user_id,
+            name: data.display_name,
+            email: data.email,
+            image: data.avatar_url,
+            emailVerified: data.email_verified,
+          };
+        },
+      }],
+    })],
+  });
+}
 ```
+
+The profile identity and verification status above come from the authenticated, fixed provider endpoint. Do not replace them with values supplied by the application client.
 
 ### Custom User Info Fetching
 

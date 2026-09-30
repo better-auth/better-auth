@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { fetchPublicResponse } from "@better-auth/core/utils/public-fetch";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
@@ -299,16 +300,19 @@ async function deliverBackchannelLogoutTokens(
 						jti,
 					},
 				);
-				const response = await fetch(client.backchannelLogoutUri!, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-						Accept: "application/json",
+				const response = await fetchPublicResponse(
+					client.backchannelLogoutUri!,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Accept: "application/json",
+						},
+						body: new URLSearchParams({ logout_token: token }),
+						signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
 					},
-					body: new URLSearchParams({ logout_token: token }),
-					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
-					redirect: "error",
-				});
+					{ isTrustedOrigin: () => false },
+				);
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
 				// bodies to 204, which is commonly accepted.
 				if (response.status !== 200 && response.status !== 204) {

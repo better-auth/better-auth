@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { refreshAccessToken } from "./refresh-access-token";
-import { fetchRefusingRedirects } from "./reject-redirects";
+import { refreshAccessToken } from "../oauth2/refresh-access-token";
+
+import { fetchPublicResource } from "./public-fetch";
 
 /**
  * Exercises the real `betterFetch` (only `globalThis.fetch` is mocked) to prove
@@ -51,7 +52,7 @@ describe("server-side OAuth fetch refuses redirects via real betterFetch", () =>
 			}),
 		);
 
-		const result = await fetchRefusingRedirects("https://idp.example/token", {
+		const result = await fetchPublicResource("https://idp.example/token", {
 			onError,
 		});
 
@@ -69,7 +70,7 @@ describe("server-side OAuth fetch refuses redirects via real betterFetch", () =>
 		);
 
 		await expect(
-			fetchRefusingRedirects("https://idp.example/token", { throw: true }),
+			fetchPublicResource("https://idp.example/token", { throw: true }),
 		).rejects.toThrow(/refuse redirects to prevent SSRF/);
 	});
 });

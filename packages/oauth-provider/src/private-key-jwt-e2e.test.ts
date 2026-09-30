@@ -10,6 +10,10 @@ import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
 
+vi.mock("node:dns/promises", () => ({
+	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
 /**
  * End-to-end test: full OAuth2 sign-in flow using private_key_jwt
  * across the entire stack.
@@ -118,6 +122,7 @@ describe("private_key_jwt e2e", async () => {
 	}) => {
 		// Set up the Relying Party with genericOAuth using private_key_jwt
 		const { customFetchImpl: rpFetchImpl } = await getTestInstance({
+			trustedOrigins: [authServerBaseUrl],
 			account: {
 				accountLinking: {
 					trustedProviders: [providerId],
@@ -260,6 +265,7 @@ describe("private_key_jwt e2e", async () => {
 		});
 
 		const { customFetchImpl: rpFetchImpl } = await getTestInstance({
+			trustedOrigins: [authServerBaseUrl],
 			account: {
 				accountLinking: {
 					trustedProviders: [providerId],
@@ -345,7 +351,7 @@ describe("private_key_jwt e2e", async () => {
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
-				redirect: "error",
+				redirect: "manual",
 			}),
 		);
 		expect(callbackUrl).toContain("/success");
