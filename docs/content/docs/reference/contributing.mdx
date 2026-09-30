@@ -147,40 +147,194 @@ Community helpers can be developed independently using the [Generic OAuth plugin
 
 ## Testing
 
-We use Vitest for testing. Place test files next to the source files they test:
+We use Vitest for testing. Place test files next to the source files they test and build the auth instance with `getTestInstance` from `better-auth/test` instead of calling `betterAuth` directly:
 
 ```ts
 import { describe, it, expect } from "vitest";
 import { getTestInstance } from "better-auth/test";
 
 describe("Feature", () => {
-    it("should work as expected", async () => {
-        const { client } = await getTestInstance();
-        // Test code here
-        expect(result).toBeDefined();
-    });
+	it("should work as expected", async () => {
+		const { client } = await getTestInstance();
+		const { error } = await client.getSession();
+		expect(error).toBeNull();
+	});
 });
 ```
 
-### Using the Test Instance Helper
+The helper seeds a test user and sets up a sensible default configuration: an in-memory SQLite database, email and password enabled, rate limiting disabled, and the `bearer` plugin registered. Most tests therefore need no extra setup.
 
-The test instance helper now includes improved async context support for managing user sessions:
+### Running Tests
+
+Run the tests you are working on. `pnpm test` runs the test project of every package, so keep it for CI:
+
+```bash
+# One file
+vitest packages/better-auth/src/api/routes/account.test.ts --run
+
+# One directory
+vitest packages/better-auth/src/plugins/organization --run
+
+# One test name
+vitest packages/better-auth/src/api/routes/account.test.ts --run -t "should reject an unverified email"
+```
+
+### Configuring the Test Instance
+
+`getTestInstance` takes server options as its first argument and test-only configuration as its second:
 
 ```ts
-const { client, runWithUser, signInWithTestUser } = await getTestInstance();
+import { organization } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
+
+const { client, auth } = await getTestInstance(
+	{
+		plugins: [organization()],
+	},
+	{
+		testUser: { email: "owner@example.com", password: "test123456" },
+	},
+);
+```
+
+The second argument accepts the following options:
+
+| Option            | Type                                             | Description                                                                                         |
+| ----------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `clientOptions`   | `BetterAuthClientOptions`                        | Options forwarded to the returned `client`. Use `clientOptions.plugins` to register client plugins. |
+| `testWith`        | `"sqlite" \| "postgres" \| "mongodb" \| "mysql"` | Database to run against. Defaults to `"sqlite"`, which is in-memory.                                |
+| `transaction`     | `boolean`                                        | Runs each test inside a database transaction. Applies to `postgres` and `mysql`.                    |
+| `testUser`        | `Partial<User>`                                  | Overrides fields on the seeded test user, which defaults to `test@test.com` and `test123456`.       |
+| `disableTestUser` | `boolean`                                        | Skips seeding the test user. `signInWithTestUser` then throws.                                      |
+| `port`            | `number`                                         | Port used to build `baseURL`. Defaults to `3000`.                                                   |
+
+The instance always resolves with `{ auth, client, testUser, signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl, sessionSetter, db, runWithUser }`. `auth` is the server instance, `client` is a client already bound to it, `testUser` is the seeded user, and `db` is the adapter for the test database.
+
+### Using the Test Instance Helper
+
+`signInWithTestUser` signs in the seeded user and resolves with `{ session, user, headers, setCookie, runWithUser }`. Pass the returned `headers` to server-side calls:
+
+```ts
+const { auth, signInWithTestUser } = await getTestInstance();
+
+const { user, session, headers } = await signInWithTestUser();
+expect(session.token).toBeDefined();
+
+const current = await auth.api.getSession({ headers });
+expect(current?.user.id).toBe(user.id);
+```
+
+`runWithUser` returned by the instance takes an email, a password, and a callback. The test client attaches the session cookie to every request made inside the callback:
+
+```ts
+const { client, runWithUser } = await getTestInstance();
 
 // Run tests with a specific user context
 await runWithUser("user@example.com", "password", async (headers) => {
-    // All client calls within this block will use the user's session
-    const response = await client.getSession();
-    // headers are automatically applied
+	// All client calls within this block will use the user's session
+	const response = await client.getSession();
+	// headers are automatically applied
+});
+```
+
+`runWithUser` returned by `signInWithTestUser` only takes the callback, because that user is already signed in:
+
+```ts
+const { signInWithTestUser } = await getTestInstance();
+const { runWithUser: runWithTestUser } = await signInWithTestUser();
+
+await runWithTestUser(async (headers) => {
+	// Code here runs with the test user's session context
+});
+```
+
+To sign in a user you created yourself, call `signInWithUser(email, password)`, which resolves with `{ res, headers }`:
+
+```ts
+const { client, signInWithUser } = await getTestInstance();
+await client.signUp.email({
+	email: "user@example.com",
+	password: "password",
+	name: "User",
 });
 
-// Or use the test user with async context
-const { runWithUser: runWithTestUser } = await signInWithTestUser();
-await runWithTestUser(async (headers) => {
-    // Code here runs with the test user's session context
+const { res, headers } = await signInWithUser("user@example.com", "password");
+expect(res.user.email).toBe("user@example.com");
+```
+
+### Using Client Plugins
+
+Pass client plugins through `clientOptions.plugins`. Never create a second client with `createAuthClient` inside a test: the `client` returned by `getTestInstance` is already bound to the auth instance and to its custom fetch implementation.
+
+```ts
+import { anonymousClient } from "better-auth/client/plugins";
+import { anonymous } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
+
+const { client } = await getTestInstance(
+	{ plugins: [anonymous()] },
+	{ clientOptions: { plugins: [anonymousClient()] } },
+);
+
+await client.signIn.anonymous();
+```
+
+### Calling the Server API
+
+Server endpoints are declared with `requireHeaders: true`, so calling `auth.api.getSession` without `headers` is invalid usage. Passing headers that carry no session cookie is a valid request and resolves to `null` instead of throwing:
+
+```ts
+const { auth } = await getTestInstance();
+
+await expect(
+	auth.api.getSession({ headers: new Headers() }),
+).resolves.toBeNull();
+```
+
+### Keeping Headers in Sync
+
+`sessionSetter` builds the `onSuccess` callback that copies the session cookie out of a response into a `Headers` object, which is how you keep server-side calls authenticated after a client sign-up or sign-in:
+
+```ts
+const { client, sessionSetter } = await getTestInstance();
+const headers = new Headers();
+
+await client.signUp.email({
+	email: "user@example.com",
+	password: "password",
+	name: "User",
+	fetchOptions: { onSuccess: sessionSetter(headers) },
 });
+
+const { data } = await client.getSession({ fetchOptions: { headers } });
+expect(data).not.toBeNull();
+```
+
+### Regression Tests
+
+Link a regression test to the issue it covers with a `@see` comment. Put it above the `it()`, or above the `describe()` when several tests share the same reference, and never reference the pull request or its review comments:
+
+```ts
+/**
+ * @see https://github.com/better-auth/better-auth/issues/1234
+ */
+it("should handle the previously broken behavior", async () => {
+	// ...
+});
+```
+
+### Adapter Tests
+
+Adapter tests run against real databases, so start the containers before running them:
+
+```bash
+docker compose up -d
+```
+
+Then pick the database with `testWith`:
+
+```ts
+const { auth } = await getTestInstance({}, { testWith: "postgres" });
 ```
 
 ### Testing Best Practices
