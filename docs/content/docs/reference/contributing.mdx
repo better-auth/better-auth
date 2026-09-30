@@ -199,14 +199,14 @@ await getTestInstance(
 
 The second argument accepts the following options:
 
-| Option            | Type                                             | Description                                                                                                                                                                                                   |
-| ----------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clientOptions`   | `BetterAuthClientOptions`                        | Options forwarded to the returned `client`. Use `clientOptions.plugins` to register client plugins.                                                                                                           |
-| `testWith`        | `"sqlite" \| "postgres" \| "mongodb" \| "mysql"` | Database to run against. Defaults to `"sqlite"`, which is in-memory.                                                                                                                                          |
-| `transaction`     | `boolean`                                        | Lets the adapter run multi-statement operations in a database transaction. Forwarded to `database.transaction`; set to `false` to execute operations sequentially. Only forwarded for `postgres` and `mysql`. |
-| `testUser`        | `Partial<User>`                                  | Overrides fields on the seeded test user, which defaults to `test@test.com` and `test123456`.                                                                                                                 |
-| `disableTestUser` | `boolean`                                        | Skips seeding the test user. `signInWithTestUser` then throws.                                                                                                                                                |
-| `port`            | `number`                                         | Port used to build `baseURL`. Defaults to `3000`.                                                                                                                                                             |
+| Option            | Type                                             | Description                                                                                                                                                                                                             |
+| ----------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clientOptions`   | `BetterAuthClientOptions`                        | Options forwarded to the returned `client`. Use `clientOptions.plugins` to register client plugins.                                                                                                                     |
+| `testWith`        | `"sqlite" \| "postgres" \| "mongodb" \| "mysql"` | Database to run against. Defaults to `"sqlite"`, which is in-memory.                                                                                                                                                    |
+| `transaction`     | `boolean`                                        | Lets the adapter run multi-statement operations in a database transaction. Forwarded to `database.transaction`; defaults to `false`, which executes operations sequentially. Only forwarded for `postgres` and `mysql`. |
+| `testUser`        | `Partial<User>`                                  | Overrides fields on the seeded test user, which defaults to `test@test.com` and `test123456`.                                                                                                                           |
+| `disableTestUser` | `boolean`                                        | Skips seeding the test user. `signInWithTestUser` then throws.                                                                                                                                                          |
+| `port`            | `number`                                         | Port used to build `baseURL`. Defaults to `3000`.                                                                                                                                                                       |
 
 The instance always resolves with `{ auth, client, testUser, signInWithTestUser, signInWithUser, cookieSetter, customFetchImpl, sessionSetter, db, runWithUser }`. `auth` is the server instance, `client` is a client already bound to it, `testUser` is the seeded user, and `db` is the adapter for the test database.
 
@@ -230,7 +230,7 @@ expect(current?.user.id).toBe(user.id);
 const { client, testUser, runWithUser } = await getTestInstance();
 
 // Run tests with the seeded user's context
-await runWithUser(testUser.email, testUser.password, async (headers) => {
+await runWithUser(testUser.email, testUser.password, async () => {
 	// All client calls within this block will use the user's session
 	const { data } = await client.getSession();
 	expect(data?.user.email).toBe(testUser.email);
@@ -243,7 +243,7 @@ await runWithUser(testUser.email, testUser.password, async (headers) => {
 const { signInWithTestUser } = await getTestInstance();
 const { runWithUser: runWithTestUser } = await signInWithTestUser();
 
-await runWithTestUser(async (headers) => {
+await runWithTestUser(async () => {
 	// Code here runs with the test user's session context
 });
 ```
@@ -258,7 +258,7 @@ await client.signUp.email({
 	name: "User",
 });
 
-const { res, headers } = await signInWithUser("user@example.com", "password");
+const { res } = await signInWithUser("user@example.com", "password");
 expect(res.user.email).toBe("user@example.com");
 ```
 
@@ -293,10 +293,10 @@ await expect(
 
 ### Keeping Headers in Sync
 
-`sessionSetter` builds the `onSuccess` callback that copies the session cookie out of a response into a `Headers` object, which is how you keep server-side calls authenticated after a client sign-up or sign-in:
+`sessionSetter` builds the `onSuccess` callback that copies the session cookie out of a response into a `Headers` object, which is how you keep server-side calls authenticated after a client sign-up or sign-in. The same `Headers` also works for client calls when passed as `fetchOptions: { headers }`:
 
 ```ts
-const { client, sessionSetter } = await getTestInstance();
+const { auth, client, sessionSetter } = await getTestInstance();
 const headers = new Headers();
 
 await client.signUp.email({
@@ -306,8 +306,8 @@ await client.signUp.email({
 	fetchOptions: { onSuccess: sessionSetter(headers) },
 });
 
-const { data } = await client.getSession({ fetchOptions: { headers } });
-expect(data).not.toBeNull();
+const current = await auth.api.getSession({ headers });
+expect(current?.user.id).toBeDefined();
 ```
 
 ### Regression Tests
