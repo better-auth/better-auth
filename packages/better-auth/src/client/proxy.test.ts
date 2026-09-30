@@ -136,4 +136,47 @@ describe("createDynamicPathProxy", () => {
 
 		vi.useRealTimers();
 	});
+
+	it("should preserve FormData bodies without coercing them to JSON", async () => {
+		const client = vi.fn(async (_path, options) => {
+			return {
+				data: {
+					body: options?.body,
+					method: options?.method,
+				},
+				error: null,
+			};
+		});
+
+		const proxy = createDynamicPathProxy(
+			{
+				upload: {},
+			},
+			client as any,
+			{},
+			{},
+			[],
+		);
+
+		const formData = new FormData();
+
+		formData.append(
+			"file",
+			new Blob(["hello"], {
+				type: "text/plain",
+			}),
+			"test.txt",
+		);
+
+		const res = await (proxy.upload as any)(formData);
+
+		expect(client).toHaveBeenCalledTimes(1);
+
+		const [, options] = client.mock.calls[0]!;
+
+		expect(options.body).toBe(formData);
+		expect(options.method).toBe("POST");
+
+		expect(res.error).toBeNull();
+	});
 });
