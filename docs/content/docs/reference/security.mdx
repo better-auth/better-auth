@@ -239,6 +239,8 @@ The most basic usage is to specify exact origins, below is an example of a trust
 
 ### Wildcard Origins
 
+Approve a wildcard only when you control every origin it matches. Use protocol-specific HTTPS patterns in production. Protocol-agnostic patterns also accept HTTP; reserve HTTP examples for controlled local development. Matching origins can also exempt SSO and Generic OAuth requests from outgoing host and DNS checks.
+
 Better Auth supports wildcard patterns in trusted origins, which allows you to trust multiple subdomains with a single entry:
 
 ```typescript
@@ -268,20 +270,31 @@ When using a wildcard pattern without a protocol prefix (like `*.example.com`):
 
 ### Custom Schemes
 
-Trusted origins also support custom schemes for mobile apps and browser extensions:
+Trusted origins also support custom schemes for mobile apps and browser extensions. Use a reverse-domain scheme based on a domain you control, as required by [OAuth for native apps](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1). Another app may register the same scheme, so a scheme match alone does not establish the app's identity.
 
 ```typescript
 {
   trustedOrigins: [
-    "myapp://",                               // Mobile app scheme
+    "com.example.app:/",                      // Native app scheme
     "chrome-extension://YOUR_EXTENSION_ID",   // Browser extension
-    "exp://**",                               // Trust all Expo development URLs
-    "exp://10.0.0.*:*/**",                    // Trust 10.0.0.x IP range with any port
+  ]
+}
+```
+
+Use broad Expo patterns only in a separate development auth instance. Omit them from production:
+
+```typescript
+{
+  trustedOrigins: [
+    "exp://**",              // Expo development URLs
+    "exp://10.0.0.*:*/**",   // Local development network
   ]
 }
 ```
 
 ### Dynamic origin list
+
+Return only origins from an operator-controlled registry of independently approved services. Do not populate that registry from unvalidated request headers or registration URLs. Include the origins needed for initialization and subsequent auth operations.
 
 You can also dynamically set the list of trusted origins by providing a function that returns it:
 
@@ -300,7 +313,21 @@ You can also dynamically set the list of trusted origins by providing a function
 
 ## Outbound OAuth Requests
 
-During sign-in, Better Auth makes server-side requests to OAuth and OIDC provider endpoints: the token exchange, token refresh, token introspection, and key-set (JWKS) requests. These requests do not follow HTTP redirects. A conformant provider answers these endpoints with a direct response and never redirects, so standard integrations are unaffected. Refusing redirects keeps a provider endpoint from steering a server-side request to an unintended internal address.
+Better Auth refuses HTTP redirects for built-in server-side OAuth and OIDC requests, including discovery, token, refresh, introspection, UserInfo, and JWKS requests. Configure those endpoints to answer directly. The Electron avatar proxy follows a bounded redirect chain and validates each destination.
+
+SSO and Generic OAuth requests also reject non-public hosts and resolved addresses unless the auth server explicitly approves the origin. These checks require working `node:dns/promises` APIs. The check first uses `lookup`; runtimes where that operation is unsupported use A and AAAA record queries. Resolution has a five-second deadline. A missing DNS module, a failed query, or no usable IP answer refuses the gated request. Public IP literals and approved origins do not require DNS. Cloudflare Workers must have Node.js compatibility active; see the [runtime's DNS support](https://developers.cloudflare.com/workers/runtime-apis/nodejs/dns/).
+
+DNS validation happens before the HTTP request. It does not pin the later connection to the checked address, so it does not provide a complete DNS-rebinding guarantee. The DNS deadline bounds waiting for validation, but does not cancel an underlying resolver that lacks cancellation support.
+
+For SSO and Generic OAuth, `trustedOrigins` also approves an exception to outgoing literal-host and DNS validation. Add only exact origins of private services you operate or have independently approved. Keep these approvals available during initialization and every relevant request. A wildcard approves every matching origin, so use one only when you control every matched host. Do not copy an origin from a registration payload, rejected request, or client-supplied header into the list.
+
+Other fetch paths have distinct policies:
+
+* Configured built-in social providers refuse redirects without enabling the DNS host gate.
+* [OAuth Provider](/docs/plugins/oauth-provider) requires an approved HTTPS origin and a public-looking hostname for ordinary remote client JWKS. An approved hostname may resolve privately, but private literals are rejected before origin approval. Back-channel logout requires public HTTPS targets and has no private-origin exception.
+* [CIMD](/docs/plugins/cimd) requires a transport that resolves once, rejects non-public addresses, pins the connection, and refuses redirects. Global `trustedOrigins` does not relax that transport's policy for metadata or discovery-owned JWKS.
+* Custom token, UserInfo, refresh, and function-valued JWKS hooks own their HTTP transport. Better Auth does not automatically validate requests made inside them.
+* Core OAuth helpers retain redirect-only behavior when `isTrustedOrigin` is omitted. Supplying a predicate enables the host gate: return false for all targets to require public hosts, or approve only an exact private origin under your control.
 
 ## Email Enumeration Protection
 

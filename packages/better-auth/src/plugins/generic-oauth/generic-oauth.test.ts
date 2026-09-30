@@ -58,6 +58,7 @@ describe("oauth2", async () => {
 	});
 
 	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+		trustedOrigins: ["http://localhost:*"],
 		databaseHooks: {
 			user: {
 				create: {
@@ -177,6 +178,7 @@ describe("oauth2", async () => {
 		vi.stubGlobal("fetch", fetchMock);
 		try {
 			const { auth } = await getTestInstance({
+				trustedOrigins: ["https://idp.example.com"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -336,6 +338,7 @@ describe("oauth2", async () => {
 	it("encodes callbackURL in the verify-email link for a new unverified OAuth user", async () => {
 		let capturedUrl = "";
 		const { customFetchImpl: localFetch } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			emailVerification: {
 				sendOnSignUp: true,
 				async sendVerificationEmail({ url }) {
@@ -393,6 +396,7 @@ describe("oauth2", async () => {
 	 */
 	it("should resolve getAccessToken after first-time generic-oauth sign-in (storeAccountCookie + JWE)", async () => {
 		const { customFetchImpl, auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			advanced: {
 				useSecureCookies: true,
 			},
@@ -522,6 +526,7 @@ describe("oauth2", async () => {
 
 		try {
 			const { customFetchImpl } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -618,6 +623,7 @@ describe("oauth2", async () => {
 
 		try {
 			const { customFetchImpl } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -692,6 +698,7 @@ describe("oauth2", async () => {
 
 		try {
 			const { customFetchImpl } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -805,6 +812,7 @@ describe("oauth2", async () => {
 		try {
 			const { customFetchImpl, cookieSetter: localCookieSetter } =
 				await getTestInstance({
+					trustedOrigins: ["http://localhost:*"],
 					plugins: [
 						genericOAuth({
 							config: [
@@ -1092,6 +1100,7 @@ describe("oauth2", async () => {
 
 	it("should work with custom redirect uri", async () => {
 		const { customFetchImpl } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -1146,6 +1155,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -1192,6 +1202,7 @@ describe("oauth2", async () => {
 	 */
 	it("blocks the session with error=email_not_verified when requireEmailVerification is set", async () => {
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -1255,6 +1266,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -1313,7 +1325,7 @@ describe("oauth2", async () => {
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance(
 			{
-				trustedOrigins: ["https://frontend.example.com"],
+				trustedOrigins: ["https://frontend.example.com", "http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -1385,6 +1397,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -1428,6 +1441,7 @@ describe("oauth2", async () => {
 	it("should delete oauth user with verification flow without password", async () => {
 		let token = "";
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -1529,6 +1543,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -1626,6 +1641,7 @@ describe("oauth2", async () => {
 
 	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			databaseHooks: {
 				user: {
 					create: {
@@ -1725,6 +1741,7 @@ describe("oauth2", async () => {
 
 	it("rejects sign-in when a custom getUserInfo returns an empty id", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			databaseHooks: {
 				user: {
 					create: {
@@ -1791,6 +1808,7 @@ describe("oauth2", async () => {
 	it("does not switch a plain OAuth account from id to sub", async () => {
 		const { customFetchImpl, auth, cookieSetter, client } =
 			await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				databaseHooks: {
 					user: {
 						create: {
@@ -1864,6 +1882,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -1941,6 +1960,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2010,6 +2030,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2079,6 +2100,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2136,6 +2158,7 @@ describe("oauth2", async () => {
 
 	it("recognizes one OIDC account across provider aliases when mutable profile fields change", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2220,6 +2243,7 @@ describe("oauth2", async () => {
 
 	it("keeps different OIDC subjects separate when a mutable id field is reused", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2291,6 +2315,7 @@ describe("oauth2", async () => {
 		const numericId = 987654321;
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2368,6 +2393,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2443,6 +2469,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2534,6 +2561,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2584,6 +2612,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2643,6 +2672,7 @@ describe("oauth2", async () => {
 	 */
 	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2717,6 +2747,7 @@ describe("oauth2", async () => {
 
 	it("should await async mapProfileToUser", async () => {
 		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -2758,6 +2789,7 @@ describe("oauth2", async () => {
 
 	it("keeps provider sub in raw data when the plain OAuth id is empty", async () => {
 		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3445,6 +3477,7 @@ describe("oauth2", async () => {
 
 	it("should integrate okta provider helper with genericOAuth", async () => {
 		const { auth: testAuth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3463,6 +3496,7 @@ describe("oauth2", async () => {
 
 	it("should integrate auth0 provider helper with genericOAuth", async () => {
 		const { auth: testAuth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3495,6 +3529,7 @@ describe("oauth2", async () => {
 			),
 		);
 		const { auth: testAuth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3513,6 +3548,7 @@ describe("oauth2", async () => {
 
 	it("should integrate slack provider helper with genericOAuth", async () => {
 		const { auth: testAuth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3530,6 +3566,7 @@ describe("oauth2", async () => {
 
 	it("should integrate keycloak provider helper with genericOAuth", async () => {
 		const { auth: testAuth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3560,6 +3597,7 @@ describe("oauth2", async () => {
 		let capturedCode = "";
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3657,6 +3695,7 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3726,6 +3765,7 @@ describe("oauth2", async () => {
 		let userInfoTokenUsed = "";
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -3827,6 +3867,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3857,6 +3898,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3902,6 +3944,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3930,6 +3973,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3952,6 +3996,7 @@ describe("oauth2", async () => {
 			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 			await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -3999,6 +4044,7 @@ describe("oauth2", async () => {
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				verification: {
 					storeIdentifier: "hashed" as const,
 				},
@@ -4047,6 +4093,7 @@ describe("oauth2", async () => {
 
 	it("should merge client-requested scopes with config scopes", async () => {
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -4091,6 +4138,7 @@ describe("oauth2", async () => {
 	it("should warn when generic provider ID shadows a built-in social provider", async () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			socialProviders: {
 				google: {
 					clientId: "google-client-id",
@@ -4118,6 +4166,7 @@ describe("oauth2", async () => {
 
 	it("should pass discovered issuer to the provider for RFC 9207 validation", async () => {
 		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -4149,6 +4198,7 @@ describe("oauth2", async () => {
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4213,6 +4263,7 @@ describe("oauth2", async () => {
 
 			await expect(
 				getTestInstance({
+					trustedOrigins: ["http://localhost:*"],
 					plugins: [
 						genericOAuth({
 							config: [
@@ -4242,6 +4293,7 @@ describe("oauth2", async () => {
 		] as const)("should reject %s token endpoint auth without clientSecret", async (method) => {
 			await expect(
 				getTestInstance({
+					trustedOrigins: ["http://localhost:*"],
 					plugins: [
 						genericOAuth({
 							config: [
@@ -4266,6 +4318,7 @@ describe("oauth2", async () => {
 
 	it("should use custom name when provided in config", async () => {
 		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			plugins: [
 				genericOAuth({
 					config: [
@@ -4291,6 +4344,7 @@ describe("oauth2", async () => {
 	describe("IDP-initiated bounce (allowIdpInitiated)", () => {
 		it("should bounce a stateless callback to the provider's authorize endpoint when the provider opts in", async () => {
 			const { customFetchImpl } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4328,6 +4382,7 @@ describe("oauth2", async () => {
 
 		it("should redirect to the error page when a stateless callback arrives for a provider without the flag", async () => {
 			const { customFetchImpl } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4353,6 +4408,7 @@ describe("oauth2", async () => {
 
 		it("should not bounce on an empty `state=` parameter, only on truly stateless callbacks", async () => {
 			const { customFetchImpl } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4381,6 +4437,7 @@ describe("oauth2", async () => {
 
 		it("should not bounce when state is present even if allowIdpInitiated is on", async () => {
 			const { customFetchImpl } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4424,6 +4481,7 @@ describe("oauth2", async () => {
 
 			let capturedProfile: unknown;
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				user: {
 					validateUserInfo({ user, source }) {
 						if (source.method !== "oauth") {
@@ -4495,6 +4553,7 @@ describe("oauth2", async () => {
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				database: undefined,
 				user: {
 					validateUserInfo({ user, source }) {
@@ -4573,6 +4632,7 @@ describe("oauth2", async () => {
 		it("should reject an id_token not signed by the discovery JWKS", async () => {
 			const forged = await forgeIdToken();
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4645,6 +4705,7 @@ describe("oauth2", async () => {
 		it("should bind a discovery id_token to the authorization request nonce", async () => {
 			let authorizationNonce = "";
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4711,6 +4772,7 @@ describe("oauth2", async () => {
 		 */
 		it("should reject a discovery id_token with a mismatched nonce", async () => {
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4770,6 +4832,7 @@ describe("oauth2", async () => {
 		 */
 		it("should reject a discovery id_token that omits the nonce claim", async () => {
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4825,6 +4888,7 @@ describe("oauth2", async () => {
 
 		it("should not bind a nonce when id_token nonce binding is disabled", async () => {
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4884,6 +4948,7 @@ describe("oauth2", async () => {
 
 		it("should drop a configured nonce param for providers without nonce binding", async () => {
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4919,6 +4984,7 @@ describe("oauth2", async () => {
 		 */
 		it("should reject a discovery id_token when state carries no expected nonce", async () => {
 			const { customFetchImpl, cookieSetter, auth } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4999,6 +5065,7 @@ describe("oauth2", async () => {
 		it("should keep the decode posture for providers without discovery", async () => {
 			const forged = await forgeIdToken();
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				trustedOrigins: ["http://localhost:*"],
 				plugins: [
 					genericOAuth({
 						config: [
@@ -5058,6 +5125,7 @@ describe("oauth2", async () => {
 			try {
 				const { auth } = await getTestInstance(
 					{
+						trustedOrigins: ["http://localhost:*"],
 						plugins: [
 							genericOAuth({
 								config: [
@@ -5100,6 +5168,7 @@ describe("oauth2", async () => {
 			try {
 				const { auth } = await getTestInstance(
 					{
+						trustedOrigins: ["http://localhost:*"],
 						plugins: [
 							genericOAuth({
 								config: [
@@ -5149,6 +5218,7 @@ describe("oauth2", async () => {
 			try {
 				const { auth } = await getTestInstance(
 					{
+						trustedOrigins: ["http://localhost:*"],
 						plugins: [
 							genericOAuth({
 								config: [
@@ -5172,6 +5242,286 @@ describe("oauth2", async () => {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
 				);
+			}
+		});
+	});
+
+	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-sub-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		// A userinfo response that includes email/name but no `sub`/`id`.
+		const respondWithoutSub = (email: string, name: string) => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email,
+					name,
+					picture: "https://test.com/picture.png",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+		};
+
+		// First user signs in — must be rejected, not stored under an empty id.
+		respondWithoutSub("first-no-sub@test.com", "First No Sub");
+		const firstHeaders = new Headers();
+		const firstSignIn = await authClient.signIn.social({
+			provider: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
+		});
+		const firstFlow = await simulateOAuthFlow(
+			firstSignIn.data?.url || "",
+			firstHeaders,
+			customFetchImpl,
+		);
+		// Rejected at the error page rather than landing on a success URL.
+		expect(firstFlow.callbackURL).toContain("error=");
+		expect(firstFlow.callbackURL).not.toContain("/dashboard");
+		expect(firstFlow.callbackURL).not.toContain("/new_user");
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: { headers: firstFlow.headers },
+		});
+		expect(firstSession.data).toBeNull();
+
+		// No account should have been created with an empty/undefined account id.
+		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
+			model: "account",
+			where: [{ field: "providerId", value: "no-sub-test" }],
+		});
+		expect(emptyIdAccounts).toHaveLength(0);
+
+		// A second, different user signing in through the same provider must not
+		// resolve to the first user's account.
+		respondWithoutSub("second-no-sub@test.com", "Second No Sub");
+		const secondHeaders = new Headers();
+		const secondSignIn = await authClient.signIn.social({
+			provider: "no-sub-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
+		});
+		const secondFlow = await simulateOAuthFlow(
+			secondSignIn.data?.url || "",
+			secondHeaders,
+			customFetchImpl,
+		);
+		expect(secondFlow.callbackURL).toContain("error=");
+		const secondSession = await authClient.getSession({
+			fetchOptions: { headers: secondFlow.headers },
+		});
+		// Must NOT have resolved to the first user (the collision being fixed).
+		expect(secondSession.data).toBeNull();
+	});
+
+	it("rejects sign-in when a custom getUserInfo returns an empty id", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "empty-id-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							// A misconfigured custom mapper that yields no account id.
+							getUserInfo: async () => ({
+								id: "",
+								email: "empty-id@test.com",
+								name: "Empty Id",
+								emailVerified: true,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const signIn = await authClient.signIn.social({
+			provider: "empty-id-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		// The callback guard rejects the empty resolved account id.
+		expect(flow.callbackURL).toContain("error=unable_to_get_user_info");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+		expect(session.data).toBeNull();
+
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "empty-id-test" }],
+		});
+		expect(accounts).toHaveLength(0);
+	});
+
+	/**
+	 * Generic-oauth providers are operator-registered and their endpoints can be
+	 * discovery-derived, so the discovery, token, userinfo and JWKS fetches run
+	 * through the SSRF boundary's host gate. A provider whose host is not publicly
+	 * routable is refused unless its origin is listed in `trustedOrigins`.
+	 *
+	 * @see https://github.com/better-auth/better-auth
+	 */
+	describe("SSRF host gate on server-side fetches", () => {
+		async function authorizationUrlFor(
+			discoveryUrl: string,
+			extraTrustedOrigins: string[],
+		): Promise<string | undefined> {
+			const { customFetchImpl, cookieSetter: localCookieSetter } =
+				await getTestInstance({
+					trustedOrigins: ["http://localhost:*", ...extraTrustedOrigins],
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "ssrf-gate",
+									discoveryUrl,
+									clientId,
+									clientSecret,
+									pkce: true,
+								},
+							],
+						}),
+					],
+				});
+			const localClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const signInRes = await localClient.signIn.social({
+				provider: "ssrf-gate",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: localCookieSetter(headers) },
+			});
+			return signInRes.data?.url ?? undefined;
+		}
+
+		it("allows discovery from an operator-approved loopback host", async () => {
+			const url = await authorizationUrlFor(
+				`http://localhost:${port}/.well-known/openid-configuration`,
+				[],
+			);
+			expect(url).toContain(`http://localhost:${port}/authorize`);
+		});
+
+		it("rejects discovery from a non-public host absent trustedOrigins", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: `http://localhost:${port}`,
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+						userinfo_endpoint: `http://localhost:${port}/userinfo`,
+					}),
+				);
+			});
+			await new Promise<void>((resolve) =>
+				discoveryServer.listen(0, "127.0.0.1", resolve),
+			);
+			const privatePort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				await expect(
+					authorizationUrlFor(
+						`http://127.0.0.1:${privatePort}/.well-known/openid-configuration`,
+						[],
+					),
+				).rejects.toThrow("discovery returned no valid data");
+			} finally {
+				discoveryServer.close();
+			}
+		});
+
+		it("rejects a cloud metadata endpoint absent trustedOrigins", async () => {
+			await expect(
+				authorizationUrlFor(
+					"http://169.254.169.254/.well-known/openid-configuration",
+					[],
+				),
+			).rejects.toThrow("discovery returned no valid data");
+		});
+
+		it("allows a non-public host listed in trustedOrigins", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: `http://localhost:${port}`,
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+						userinfo_endpoint: `http://localhost:${port}/userinfo`,
+					}),
+				);
+			});
+			await new Promise<void>((resolve) =>
+				discoveryServer.listen(0, "127.0.0.1", resolve),
+			);
+			const privatePort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				const url = await authorizationUrlFor(
+					`http://127.0.0.1:${privatePort}/.well-known/openid-configuration`,
+					[`http://127.0.0.1:${privatePort}`],
+				);
+				expect(url).toContain(`http://localhost:${port}/authorize`);
+			} finally {
+				discoveryServer.close();
 			}
 		});
 	});
@@ -5219,6 +5569,7 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 
 	it("composes an absolute redirect_uri for a generic-oauth provider at the default basePath", async () => {
 		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			baseURL: { allowedHosts: ["localhost:3000"] },
 			plugins: [
 				genericOAuth({
@@ -5248,6 +5599,7 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 
 	it("composes an absolute redirect_uri for a generic-oauth provider at a custom basePath", async () => {
 		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			baseURL: { allowedHosts: ["localhost:3000"] },
 			basePath: "/auth",
 			plugins: [
@@ -5278,6 +5630,7 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 
 	it("composes an absolute redirect_uri for a built-in social provider", async () => {
 		const { auth } = await getTestInstance({
+			trustedOrigins: ["http://localhost:*"],
 			baseURL: { allowedHosts: ["localhost:3000"] },
 			socialProviders: {
 				google: {

@@ -33,6 +33,12 @@ import * as z from "zod";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 
+const dns = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock("node:dns/promises", async (importOriginal) => ({
+	...(await importOriginal<typeof import("node:dns/promises")>()),
+	lookup: dns.lookup,
+}));
+
 interface ReceivedLogoutRequest {
 	contentType: string | undefined;
 	logoutToken: string | undefined;
@@ -106,6 +112,7 @@ describe("oauth back-channel logout", async () => {
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
+		trustedOrigins: [baseUrl, "https://rp-*.example.com"],
 		database: memoryAdapter(database),
 		databaseHooks: {
 			session: {
@@ -230,6 +237,7 @@ describe("oauth back-channel logout", async () => {
 	});
 	beforeEach(async () => {
 		shouldVetoSessionDeletion = false;
+		dns.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 		rp = await startMockRp();
 		const networkFetch = globalThis.fetch.bind(globalThis);
 		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
@@ -626,6 +634,22 @@ describe("oauth back-channel logout", async () => {
 			where: [{ field: "clientId", value: oauthClient.client_id }],
 		});
 		for (const t of accessAfter) expect(t.revoked).toBeInstanceOf(Date);
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#Backchannel
+	 */
+	it("refuses private DNS answers even for an approved RP origin", async () => {
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		dns.lookup.mockResolvedValue([{ address: "10.0.0.4", family: 4 }]);
+		const result = await client.signOut({ fetchOptions: { headers } });
+		expect(result.error).toBeNull();
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		expect(dns.lookup).toHaveBeenCalledWith(new URL(rp.publicUrl).hostname, {
+			all: true,
+		});
+		expect(rp.received).toHaveLength(0);
 	});
 
 	it("does not dispatch to clients without a backchannel_logout_uri", async () => {

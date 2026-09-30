@@ -11,7 +11,6 @@ export {
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
-	fetchOIDCEndpoint,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
 	normalizeUrl,
@@ -22,7 +21,7 @@ export {
 	validateOIDCIdToken,
 } from "./discovery";
 
-export { mapDiscoveryErrorToAPIError } from "./errors";
+export { mapDiscoveryErrorToAPIError, remapSsrfError } from "./errors";
 
 export {
 	type DiscoverOIDCConfigParams,

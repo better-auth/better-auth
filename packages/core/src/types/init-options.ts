@@ -1344,7 +1344,9 @@ export type BetterAuthOptions = {
 	/**
 	 * Additional trusted origins. By default, Better Auth trusts your
 	 * app's {@link baseURL}. Use this option to allow additional origins
-	 * (e.g. a separate frontend domain).
+	 * (e.g. a separate frontend domain). On SSO and Generic OAuth fetch paths,
+	 * matching origins also bypass outgoing host and DNS checks. Approve only
+	 * origins you control or independently authorize, never unvalidated input.
 	 *
 	 * Can be a static array, a function that returns origins dynamically,
 	 * or use wildcard patterns (e.g. `"https://*.example.com"`).
@@ -1359,13 +1361,10 @@ export type BetterAuthOptions = {
 	 *
 	 * @example
 	 * ```ts
-	 * trustedOrigins: async (request) => {
-	 *   return [
-	 *    "https://better-auth.com",
-	 *    "https://*.better-auth.com",
-	 *    request.headers.get("x-custom-origin")
-	 *   ];
-	 * }
+	 * trustedOrigins: [
+	 *   "https://app.example.com",
+	 *   "https://idp.internal.example.com",
+	 * ],
 	 * ```
 	 * @returns An array of trusted origins.
 	 */

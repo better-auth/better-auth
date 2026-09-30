@@ -3,6 +3,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
+import { fetchPublicResource } from "@better-auth/core/utils/public-fetch";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
@@ -44,8 +45,8 @@ import {
 	DiscoveryError,
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
-	fetchOIDCEndpoint,
 	mapDiscoveryErrorToAPIError,
+	remapSsrfError,
 	validateOIDCEndpointUrls,
 	validateOIDCIdToken,
 } from "../oidc";
@@ -1493,16 +1494,12 @@ async function handleOIDCCallback(
 			tokenEndpoint,
 			tokenEndpointAuth,
 		});
-		const { data, error } = await fetchOIDCEndpoint<object>(
-			"tokenEndpoint",
-			tokenEndpoint,
-			{
-				method: "POST",
-				body,
-				headers,
-			},
-			(url) => ctx.context.isTrustedOrigin(url),
-		);
+		const { data, error } = await fetchPublicResource<object>(tokenEndpoint, {
+			method: "POST",
+			body,
+			headers,
+			isTrustedOrigin: (url) => ctx.context.isTrustedOrigin(url),
+		}).catch(remapSsrfError);
 		if (error) {
 			redirectOIDCError(
 				"invalid_provider",
@@ -1588,21 +1585,22 @@ async function handleOIDCCallback(
 	}
 
 	if (config.userInfoEndpoint) {
-		const userInfoResponse = await fetchOIDCEndpoint<Record<string, unknown>>(
-			"userInfoEndpoint",
+		const userInfoResponse = await fetchPublicResource<Record<string, unknown>>(
 			config.userInfoEndpoint,
 			{
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
+				isTrustedOrigin: (url) => ctx.context.isTrustedOrigin(url),
 			},
-			(url) => ctx.context.isTrustedOrigin(url),
-		).catch((e) => {
-			if (e instanceof DiscoveryError) {
-				redirectOIDCError("invalid_provider", e.message);
-			}
-			throw e;
-		});
+		)
+			.catch(remapSsrfError)
+			.catch((e) => {
+				if (e instanceof DiscoveryError) {
+					redirectOIDCError("invalid_provider", e.message);
+				}
+				throw e;
+			});
 		if (userInfoResponse.error) {
 			redirectOIDCError(
 				"invalid_provider",

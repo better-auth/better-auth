@@ -1,6 +1,6 @@
 import type { AwaitableFunction } from "../types";
+import { fetchPublicResource } from "../utils/public-fetch";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
-import { fetchRefusingRedirects } from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
@@ -28,6 +28,11 @@ interface RefreshAccessTokenRequestBaseInput {
 interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
 	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
+	/**
+	 * Origins exempt from the public-routable gate, for an operator whose token
+	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
+	 */
+	isTrustedOrigin?: (url: string) => boolean;
 }
 
 /**
@@ -127,6 +132,7 @@ export async function refreshAccessToken({
 	tokenEndpointAuth,
 	extraParams,
 	resource,
+	isTrustedOrigin,
 }: RefreshAccessTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
@@ -138,7 +144,7 @@ export async function refreshAccessToken({
 		resource,
 	});
 
-	const { data, error } = await fetchRefusingRedirects<{
+	const { data, error } = await fetchPublicResource<{
 		access_token: string;
 		refresh_token?: string | undefined;
 		expires_in?: number | undefined;
@@ -150,6 +156,7 @@ export async function refreshAccessToken({
 		method: "POST",
 		body,
 		headers,
+		isTrustedOrigin,
 	});
 	if (error) {
 		throw error;

@@ -473,7 +473,7 @@ The `authenticate` bridge sends the authorization code to the main process, whic
 
 ### User Image Proxy
 
-To avoid CSP issues, the Electron plugin securely proxies user avatar images through a custom `user-image://` protocol.
+To avoid CSP issues, the Electron plugin securely proxies user avatar images through a custom `user-image://` protocol. The proxy validates the initial destination and each redirect destination, with at most five HTTP requests in the chain. Production rejects non-public targets. Development permits loopback targets only, rather than other private networks. If target validation, redirects, or image decoding fail, the proxy returns no image; display your normal fallback avatar.
 
 You can use the image URL directly in your renderer:
 
