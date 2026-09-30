@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { AuthEndpointContext } from "@better-auth/core/context";
 import {
 	getCurrentAdapter,
@@ -9,6 +11,8 @@ import type {
 	DBAdapter,
 	DBTransactionAdapter,
 } from "@better-auth/core/db/adapter";
+import { betterAuth } from "better-auth";
+import { withCloudflare } from "better-auth/cloudflare";
 import { getMigrations } from "better-auth/db/migration";
 import { Hono } from "hono";
 import { auth } from "./auth";
@@ -74,6 +78,97 @@ app.get("/_test/async-context/concurrency", async (c) => {
 				currentAdapter.value === adapters[index]?.transactionAdapter,
 		).length,
 		total: contexts.length,
+	});
+});
+
+/**
+ * Settling within this budget shows the runtime kept a promise alive. The
+ * library bounds a dropped promise at 30 seconds, well past it.
+ */
+const SETTLE_BUDGET_MS = 5_000;
+
+const settlesInBudget = (promise: Promise<unknown>) =>
+	Promise.race([
+		promise.then(
+			() => "settled",
+			(error: unknown) => `rejected:${String(error)}`,
+		),
+		new Promise<string>((resolve) => {
+			setTimeout(() => resolve("hung"), SETTLE_BUDGET_MS);
+		}),
+	]);
+
+const cloudflareOptions = {
+	baseURL: "http://localhost:4000",
+	database: env.DB,
+	emailAndPassword: { enabled: true },
+} satisfies BetterAuthOptions;
+
+const moduleScopeAuth = betterAuth(withCloudflare(cloudflareOptions));
+
+app.get("/_test/cloudflare/module-scope", async (c) =>
+	c.json({ outcome: await settlesInBudget(moduleScopeAuth.$context) }),
+);
+
+const slowInitOptions = {
+	...cloudflareOptions,
+	plugins: [
+		{
+			id: "slow-init",
+			init: async () => {
+				await env.DB.prepare("select 1").first();
+				await new Promise<void>((resolve) => {
+					setTimeout(resolve, 1_500);
+				});
+			},
+		},
+	],
+} satisfies BetterAuthOptions;
+
+let slowInitAuth:
+	| ReturnType<typeof betterAuth<typeof slowInitOptions>>
+	| undefined;
+
+/** Responds while initialization is still pending. */
+app.get("/_test/cloudflare/init/start", (c) => {
+	slowInitAuth ??= betterAuth(withCloudflare(slowInitOptions));
+	void slowInitAuth.$context.catch(() => undefined);
+	return c.body(null, 204);
+});
+
+app.get("/_test/cloudflare/init/join", async (c) =>
+	c.json({
+		outcome: slowInitAuth
+			? await settlesInBudget(slowInitAuth.$context)
+			: "no-instance",
+	}),
+);
+
+const schemaCheckOptions = {
+	...cloudflareOptions,
+	disabledPaths: ["/ok"],
+} satisfies BetterAuthOptions;
+
+let schemaCheckAuth:
+	| ReturnType<typeof betterAuth<typeof schemaCheckOptions>>
+	| undefined;
+
+/** Responds with a 404 without waiting for the schema check. */
+app.get("/_test/cloudflare/schema-check/start", async (c) => {
+	schemaCheckAuth ??= betterAuth(withCloudflare(schemaCheckOptions));
+	await schemaCheckAuth.$context;
+	const response = await schemaCheckAuth.handler(
+		new Request("http://localhost:4000/api/auth/ok"),
+	);
+	return c.body(null, response.status === 404 ? 204 : 500);
+});
+
+app.get("/_test/cloudflare/schema-check/join", async (c) => {
+	const ctx = await schemaCheckAuth?.$context;
+	if (!ctx?.checkSchema) return c.json({ outcome: "no-check" });
+	const pending = ctx.checkSchema();
+	return c.json({
+		outcome: pending ? await settlesInBudget(pending) : "settled",
 	});
 });
 
