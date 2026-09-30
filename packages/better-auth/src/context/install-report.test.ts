@@ -1,73 +1,119 @@
+import { EVICTION_TIMEOUT_MS } from "@better-auth/core/utils/async";
 import { createTelemetry } from "@better-auth/telemetry";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createBetterAuth } from "../auth/base";
 import { getAdapter } from "../db/adapter-kysely";
 import type { BetterAuthOptions } from "../types";
-import type { InstallReport } from "./create-context";
 import { createAuthContext } from "./create-context";
 
 vi.mock("@better-auth/telemetry", () => ({
 	createTelemetry: vi.fn(),
 }));
 
+type Telemetry = Awaited<ReturnType<typeof createTelemetry>>;
+
 const options: BetterAuthOptions = { baseURL: "http://localhost:3000" };
 
 /**
- * Stands in for telemetry that emits the init event unless told to skip it,
- * after awaiting its detectors.
+ * Stands in for telemetry that sends the init event on `reportInstall`, and
+ * during `createTelemetry` unless the caller defers it.
  */
 const recordInitEvents = () => {
 	const initEvents: string[] = [];
+	const telemetry: Telemetry = {
+		publish: async () => {},
+		reportInstall: async () => {
+			initEvents.push("init");
+		},
+	};
 	vi.mocked(createTelemetry).mockImplementation(async (_options, context) => {
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		const initEventEmitted = !context?.skipInitEvent;
-		if (initEventEmitted) initEvents.push("init");
-		return { publish: async () => {}, initEventEmitted };
+		if (!context?.deferInitEvent) await telemetry.reportInstall();
+		return telemetry;
 	});
-	return initEvents;
+	return { initEvents, telemetry };
 };
 
-const attempt = async (install: InstallReport) =>
-	createAuthContext(
-		await getAdapter(options),
-		options,
-		() => "memory",
-		install,
+/** Makes the next attempt stall inside telemetry until the test settles it. */
+const stallFirstAttempt = () => {
+	let settle = {
+		resolve: (_telemetry: Telemetry) => {},
+		reject: (_error: Error) => {},
+	};
+	vi.mocked(createTelemetry).mockImplementationOnce((_options, context) =>
+		new Promise<Telemetry>((resolve, reject) => {
+			settle = { resolve, reject };
+		}).then(async (telemetry) => {
+			if (!context?.deferInitEvent) await telemetry.reportInstall();
+			return telemetry;
+		}),
+	);
+	return () => settle;
+};
+
+const createAuth = () =>
+	createBetterAuth(options, async (opts, install) =>
+		createAuthContext(await getAdapter(opts), opts, () => "memory", install),
 	);
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/10315
  */
 describe("install report across initialization attempts", () => {
-	it("reports one install when two attempts reach telemetry together", async () => {
-		const initEvents = recordInitEvents();
-		const install: InstallReport = { reported: false };
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
 
-		await Promise.all([attempt(install), attempt(install)]);
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("reports one install when an abandoned attempt settles after its replacement", async () => {
+		const { initEvents, telemetry } = recordInitEvents();
+		const firstAttempt = stallFirstAttempt();
+		const auth = createAuth();
+
+		void auth.$context.catch(() => undefined);
+		await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+		await auth.$context;
+		firstAttempt().resolve(telemetry);
+		await vi.advanceTimersByTimeAsync(0);
 
 		expect(initEvents).toEqual(["init"]);
 	});
 
-	it("leaves the install to the next attempt when telemetry fails", async () => {
-		const initEvents = recordInitEvents();
+	it("reports the install when an abandoned attempt fails after its replacement settled", async () => {
+		const { initEvents } = recordInitEvents();
+		const firstAttempt = stallFirstAttempt();
+		const auth = createAuth();
+
+		void auth.$context.catch(() => undefined);
+		await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+		await auth.$context;
+		firstAttempt().reject(new Error("detector"));
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(initEvents).toEqual(["init"]);
+	});
+
+	it("reports the install when an abandoned attempt never settles", async () => {
+		const { initEvents } = recordInitEvents();
+		stallFirstAttempt();
+		const auth = createAuth();
+
+		void auth.$context.catch(() => undefined);
+		await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+		await auth.$context;
+
+		expect(initEvents).toEqual(["init"]);
+	});
+
+	it("reports the install from the retry after a failed attempt", async () => {
+		const { initEvents } = recordInitEvents();
 		vi.mocked(createTelemetry).mockRejectedValueOnce(new Error("detector"));
-		const install: InstallReport = { reported: false };
+		const auth = createAuth();
 
-		await expect(attempt(install)).rejects.toThrow("detector");
-		await attempt(install);
-
-		expect(initEvents).toEqual(["init"]);
-	});
-
-	it("leaves the install to the next attempt when telemetry emits nothing", async () => {
-		const initEvents = recordInitEvents();
-		vi.mocked(createTelemetry).mockResolvedValueOnce({
-			publish: async () => {},
-			initEventEmitted: false,
-		});
-		const install: InstallReport = { reported: false };
-
-		await attempt(install);
-		await attempt(install);
+		await expect(auth.$context).rejects.toThrow("detector");
+		await auth.$context;
 
 		expect(initEvents).toEqual(["init"]);
 	});

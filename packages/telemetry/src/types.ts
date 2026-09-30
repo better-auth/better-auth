@@ -13,5 +13,8 @@ export interface TelemetryContext {
 	database?: string | undefined;
 	adapter?: string | undefined;
 	skipTestCheck?: boolean | undefined;
-	skipInitEvent?: boolean | undefined;
+	/**
+	 * Holds the init event until the caller invokes `reportInstall`.
+	 */
+	deferInitEvent?: boolean | undefined;
 }

@@ -95,8 +95,11 @@ function validateSecret(
 	}
 }
 
-/** Whether telemetry has reported the install of this Auth Instance. */
-export type InstallReport = { reported: boolean };
+/**
+ * Receives the telemetry install report of one Initialization Attempt. Only
+ * the attempt that becomes the Auth Instance's context sends it.
+ */
+export type InstallReport = { send?: (() => Promise<void>) | undefined };
 
 export async function createAuthContext<Options extends BetterAuthOptions>(
 	adapter: DBAdapter,
@@ -269,25 +272,15 @@ Most of the features of Better Auth will not work correctly.`,
 		return generateId(size);
 	};
 
-	// Claim the report before awaiting telemetry, so an overlapping attempt
-	// skips it. An attempt that emits no init event hands the claim back.
-	const claimed = install?.reported === false;
-	if (install) install.reported = true;
-	const releaseClaim = () => {
-		if (install && claimed) install.reported = false;
-	};
-	const { publish, initEventEmitted } = await createTelemetry(options, {
+	const { publish, reportInstall } = await createTelemetry(options, {
 		adapter: adapter.id,
 		database:
 			typeof options.database === "function"
 				? "adapter"
 				: getDatabaseType(options.database),
-		skipInitEvent: install !== undefined && !claimed,
-	}).catch((error: unknown) => {
-		releaseClaim();
-		throw error;
+		deferInitEvent: install !== undefined,
 	});
-	if (!initEventEmitted) releaseClaim();
+	if (install) install.send = reportInstall;
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 

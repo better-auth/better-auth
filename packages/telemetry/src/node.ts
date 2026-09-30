@@ -315,7 +315,7 @@ export async function createTelemetry(
 	if (!telemetryEndpoint && !context?.customTrack) {
 		return {
 			publish: noop,
-			initEventEmitted: false,
+			reportInstall: async () => {},
 		};
 	}
 	const track = async (event: TelemetryEvent) => {
@@ -346,12 +346,14 @@ export async function createTelemetry(
 
 	const enabled = await isEnabled();
 	let anonymousId: string | undefined;
-	const initEventEmitted = enabled && !context?.skipInitEvent;
 
-	if (initEventEmitted) {
-		anonymousId = await getProjectId(
-			typeof options.baseURL === "string" ? options.baseURL : undefined,
-		);
+	const reportInstall = async () => {
+		if (!enabled) return;
+		if (!anonymousId) {
+			anonymousId = await getProjectId(
+				typeof options.baseURL === "string" ? options.baseURL : undefined,
+			);
+		}
 
 		const payload = {
 			config: await getTelemetryAuthConfig(options, context),
@@ -364,10 +366,12 @@ export async function createTelemetry(
 		};
 
 		void track({ type: "init", payload, anonymousId });
-	}
+	};
+
+	if (!context?.deferInitEvent) await reportInstall();
 
 	return {
-		initEventEmitted,
+		reportInstall,
 		publish: async (event: TelemetryEvent) => {
 			if (!enabled) return;
 			if (!anonymousId) {
