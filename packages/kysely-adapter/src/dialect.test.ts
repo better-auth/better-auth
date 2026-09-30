@@ -305,6 +305,19 @@ describe("D1 table introspection", () => {
  * @see https://github.com/better-auth/better-auth/issues/11483
  */
 describe("D1 query concurrency", () => {
+	/**
+	 * Kysely 0.29+ serializes every query behind a mutex when the adapter
+	 * reports `supportsMultipleConnections: false`, which `SqliteAdapter` does.
+	 * The pinned Kysely 0.28 has no such mutex, so assert the flag directly.
+	 */
+	it("reports multiple-connection support so Kysely skips its connection mutex", () => {
+		const adapter = new D1SqliteDialect({
+			database: fakeD1Database(),
+		}).createAdapter();
+
+		expect(adapter).toHaveProperty("supportsMultipleConnections", true);
+	});
+
 	it("does not serialize concurrent queries behind a connection mutex", async ({
 		onTestFinished,
 	}) => {
