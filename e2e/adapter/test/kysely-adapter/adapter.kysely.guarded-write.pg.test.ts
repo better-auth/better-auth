@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 const pool = new Pool({
 	connectionString:
 		process.env.BETTER_AUTH_ADAPTER_TEST_DATABASE_URL ??
-		"postgres://user:password@localhost:5432/better_auth",
+		"postgres://user:password@localhost:5433/better_auth",
 	max: 4,
 });
 type GuardedRow = { id: string; authority: string | null; attempts: number };
