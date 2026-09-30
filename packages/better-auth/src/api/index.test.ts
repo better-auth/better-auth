@@ -240,6 +240,31 @@ describe("skipTrailingSlashes option", () => {
 	});
 });
 
+describe("disabledPaths", () => {
+	it("should return a JSON 404 with application/json content-type", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-up/email"],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: "user@example.com",
+					password: "password12345",
+					name: "Test User",
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(404);
+		expect(response.headers.get("content-type")).toContain("application/json");
+		const body = await response.json();
+		expect(body).toEqual({ code: "NOT_FOUND", message: "Not Found" });
+	});
+});
+
 describe("base path leading-prefix enforcement", () => {
 	it("rejects a path where basePath is not a leading prefix", async () => {
 		const { auth } = await getTestInstance({

@@ -299,7 +299,10 @@ export const router = <Option extends BetterAuthOptions>(
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const normalizedPath = normalizePathname(req.url, basePath);
 			if (disabledPaths.includes(normalizedPath)) {
-				return new Response("Not Found", { status: 404 });
+				return Response.json(
+					{ code: "NOT_FOUND", message: "Not Found" },
+					{ status: 404 },
+				);
 			}
 
 			const pendingSchemaCheck = ctx.checkSchema?.();
