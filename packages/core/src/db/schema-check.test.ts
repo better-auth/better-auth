@@ -1,5 +1,15 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
+import { createLogger, logger } from "../env";
 import type { BetterAuthOptions } from "../types";
+import { EVICTION_TIMEOUT_MS } from "../utils/async";
 import {
 	createSchemaCheck,
 	invalidateSchemaChecks,
@@ -116,6 +126,122 @@ describe("createSchemaCheck", () => {
 		expect(second).toBe(first);
 		expect((first as SchemaMismatchError).findings).toEqual([issuerDrift]);
 		expect(find).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10315
+	 */
+	describe("a lookup abandoned by the caller that started it", () => {
+		const abandoned = () => new Promise<SchemaFinding[]>(() => {});
+
+		beforeEach(() => {
+			vi.useFakeTimers();
+			vi.spyOn(logger, "warn").mockImplementation(() => {});
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+			vi.restoreAllMocks();
+		});
+
+		it("releases a later caller at the bound", async () => {
+			const find = vi.fn(abandoned);
+			const check = createSchemaCheck(find, "database");
+
+			void check();
+			const later = check();
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+
+			await expect(later).resolves.toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(1);
+		});
+
+		it("warns once however many callers joined the same lookup", async () => {
+			const check = createSchemaCheck(vi.fn(abandoned), "database");
+
+			void check();
+			void check();
+			void check();
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+
+			expect(logger.warn).toHaveBeenCalledTimes(1);
+		});
+
+		it("warns through the logger its caller passes", async () => {
+			const configured = createLogger({ disabled: true });
+			vi.spyOn(configured, "warn");
+			const check = createSchemaCheck(vi.fn(abandoned), "database");
+
+			void check(configured);
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+
+			expect(configured.warn).toHaveBeenCalledTimes(1);
+			expect(logger.warn).not.toHaveBeenCalled();
+		});
+
+		it("warns again when a later lookup is abandoned too", async () => {
+			const find = vi.fn(abandoned);
+			const check = createSchemaCheck(find, "database");
+
+			void check();
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+			expect(logger.warn).toHaveBeenCalledTimes(1);
+
+			void check();
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+
+			expect(logger.warn).toHaveBeenCalledTimes(2);
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+
+		it("asks the store again once the bound has passed", async () => {
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockImplementationOnce(abandoned)
+				.mockResolvedValueOnce([]);
+			const check = createSchemaCheck(find, "database");
+
+			void check();
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+
+			await expect(check()).resolves.toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+
+		it("keeps a mismatch past the bound without asking again", async () => {
+			const find = vi.fn(async () => [issuerDrift]);
+			const check = createSchemaCheck(find, "database");
+			const first = await check()?.catch((error: unknown) => error);
+
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+			const later = await check()?.catch((error: unknown) => error);
+
+			expect(later).toBe(first);
+			expect(find).toHaveBeenCalledTimes(1);
+			expect(logger.warn).not.toHaveBeenCalled();
+		});
+
+		it("keeps the replacement's mismatch when the abandoned lookup settles clean", async () => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(
+					new Promise((resolve) => {
+						finish = resolve;
+					}),
+				)
+				.mockResolvedValueOnce([issuerDrift]);
+			const check = createSchemaCheck(find, "database");
+
+			void check();
+			await vi.advanceTimersByTimeAsync(EVICTION_TIMEOUT_MS);
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			finish([]);
+			await vi.advanceTimersByTimeAsync(0);
+
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			expect(find).toHaveBeenCalledTimes(2);
+		});
 	});
 
 	it("asks again after the store could not be reached", async () => {
