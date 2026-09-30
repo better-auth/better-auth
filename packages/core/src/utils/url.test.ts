@@ -3,7 +3,64 @@ import {
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
-import { appendQueryParams, isSafeUrlScheme, normalizePathname } from "./url";
+import {
+	appendQueryParams,
+	appendURLPath,
+	isSafeUrlScheme,
+	normalizePathname,
+} from "./url";
+
+describe("appendURLPath", () => {
+	it("keeps the base path and joins segments at one slash boundary", () => {
+		expect(
+			appendURLPath("https://auth.example.com/api/auth/", "oauth2", "token"),
+		).toBe("https://auth.example.com/api/auth/oauth2/token");
+		expect(
+			appendURLPath("https://auth.example.com/", "oauth2", "userinfo"),
+		).toBe("https://auth.example.com/oauth2/userinfo");
+		expect(
+			appendURLPath("https://auth.example.com/api/auth///", "oauth2"),
+		).toBe("https://auth.example.com/api/auth/oauth2");
+		expect(appendURLPath("https://auth.example.com/api//auth/", "oauth2")).toBe(
+			"https://auth.example.com/api//auth/oauth2",
+		);
+	});
+
+	it("encodes each segment without changing an encoded base path", () => {
+		expect(
+			appendURLPath(
+				"https://auth.example.com/tenant%2Fone/",
+				"team/member",
+				"x?y#z",
+			),
+		).toBe("https://auth.example.com/tenant%2Fone/team%2Fmember/x%3Fy%23z");
+		expect(
+			appendURLPath("https://auth.example.com", "hello world", "한글"),
+		).toBe("https://auth.example.com/hello%20world/%ED%95%9C%EA%B8%80");
+	});
+
+	it("preserves existing query and fragment components", () => {
+		expect(
+			appendURLPath(
+				"https://auth.example.com/api/auth?lang=ko#details",
+				"oauth2",
+				"token",
+			),
+		).toBe("https://auth.example.com/api/auth/oauth2/token?lang=ko#details");
+	});
+
+	it("rejects values that could change the endpoint authority or path", () => {
+		expect(() => appendURLPath("/api/auth", "oauth2")).toThrow(TypeError);
+		expect(() => appendURLPath("mailto:user@example.com", "oauth2")).toThrow(
+			TypeError,
+		);
+		for (const segment of ["", ".", ".."] as const) {
+			expect(() =>
+				appendURLPath("https://auth.example.com/api/auth", segment),
+			).toThrow(TypeError);
+		}
+	});
+});
 
 describe("appendQueryParams", () => {
 	it("should append query parameters before the fragment", () => {
