@@ -254,14 +254,13 @@ describe("schema check timing", () => {
 		});
 	});
 
-	it("reports drift during initialization without an auth request", async ({
-		onTestFinished,
-	}) => {
+	it("reports drift without an auth request", async ({ onTestFinished }) => {
 		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
 		onTestFinished(() => database.close());
 		const log = vi.fn();
 		const { auth } = createAuth(database, { logger: { log } });
 
+		await auth.$context;
 		await vi.waitFor(() => {
 			expect(log).toHaveBeenCalledWith(
 				"error",
