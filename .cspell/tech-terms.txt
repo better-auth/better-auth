@@ -70,6 +70,7 @@ GHEOF
 denoland
 zizmor
 zizmorcore
+artipacked
 IMDS
 WHATWG
 CIMD

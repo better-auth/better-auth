@@ -1,6 +1,6 @@
 // cspell:ignore workerd
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { withSpan } from "./pure.index";
 
 type CorePackageJSON = {
@@ -42,9 +42,24 @@ describe("instrumentation (pure entry)", () => {
 		).rejects.toThrow("boom");
 	});
 
-	it("does not reference `@opentelemetry/api` at runtime", async () => {
-		const mod = await import("./pure.index");
-		expect(mod.withSpan.toString()).not.toContain("opentelemetry");
+	it("does not load `@opentelemetry/api` at runtime", async () => {
+		vi.resetModules();
+		const loadOpenTelemetry = vi.fn(() => {
+			throw new Error("OpenTelemetry is unavailable");
+		});
+		vi.doMock("@opentelemetry/api", loadOpenTelemetry);
+		try {
+			const mod = await import("./pure.index");
+			expect(mod.withSpan("pure", {}, () => 42)).toBe(42);
+			const run = mod.createWithSpan({
+				experimental: { instrumentation: { enabled: true } },
+			});
+			await expect(run("pure async", {}, async () => 42)).resolves.toBe(42);
+			expect(loadOpenTelemetry).not.toHaveBeenCalled();
+		} finally {
+			vi.doUnmock("@opentelemetry/api");
+			vi.resetModules();
+		}
 	});
 
 	it("does not export symbols beyond the public surface of ./index", async () => {

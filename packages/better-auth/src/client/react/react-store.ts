@@ -3,6 +3,8 @@ import { listenKeys } from "nanostores";
 import type { DependencyList } from "react";
 import { useCallback, useRef, useSyncExternalStore } from "react";
 
+import { isAuthQueryStore } from "../query-atom";
+
 type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	? K
 	: never;
@@ -69,5 +71,11 @@ export function useStore<SomeStore extends Store>(
 
 	const get = () => snapshotRef.current as StoreValue<SomeStore>;
 
-	return useSyncExternalStore(subscribe, get, get);
+	// A query may resolve before a streamed subtree hydrates. React must
+	// replay its initial pending state before subscribing to the live value.
+	return useSyncExternalStore(
+		subscribe,
+		get,
+		isAuthQueryStore(store) ? () => store.init : get,
+	);
 }
