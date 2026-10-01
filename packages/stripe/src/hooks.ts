@@ -46,10 +46,10 @@ export async function onCheckoutSessionCompleted(
 	try {
 		const client = options.stripeClient;
 		const checkoutSession = event.data.object as Stripe.Checkout.Session;
-		// Only `subscription` mode carries a subscription id we can retrieve.
-		// `setup` and `payment` (one-time purchase) modes do not, so bail out
-		// to avoid `subscriptions.retrieve(null)` throwing inside the try/catch.
-		// @see https://github.com/better-auth/better-auth/issues/4565
+		/**
+		 * Only `subscription` mode is currently supported.
+		 * @see https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-mode
+		 */
 		if (
 			checkoutSession.mode !== "subscription" ||
 			!options.subscription?.enabled
