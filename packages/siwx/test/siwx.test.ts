@@ -1,8 +1,7 @@
 import { getTestInstance } from "better-auth/test";
-import { it as baseIt, describe, expect } from "vitest";
+import { describe, expect } from "vitest";
 import { siwxClient } from "../src/client";
 import { siwx } from "../src/index";
-import { getOrigin } from "../src/utils";
 
 describe("siwx", async (it) => {
 	const evmAddress = "0x000000000000000000000000000000000000dEaD";
@@ -611,8 +610,8 @@ describe("siwx", async (it) => {
 		expect(first.data?.user.id).not.toBe(second.data?.user.id);
 	});
 
-	it("should allow sign-in without email when anonymous is true", async () => {
-		const { client } = await getTestInstance(
+	it("should use a placeholder email for anonymous sign-in", async () => {
+		const { auth, client } = await getTestInstance(
 			{
 				plugins: [
 					siwx({
@@ -648,6 +647,16 @@ describe("siwx", async (it) => {
 
 		expect(error).toBeNull();
 		expect(data?.success).toBe(true);
+
+		const user = await (await auth.$context).adapter.findOne<{ email: string }>(
+			{
+				model: "user",
+				where: [{ field: "id", operator: "eq", value: data!.user.id }],
+			},
+		);
+		expect(user?.email).toBe(
+			`${evmAddress.toLowerCase()}@siwx.placeholder.invalid`,
+		);
 	});
 
 	it("should require email when anonymous is false", async () => {
@@ -1173,24 +1182,5 @@ describe("siwx", async (it) => {
 		expect(receivedCacao.p.nonce).toBe("A1b2C3d4E5f6G7h8J");
 		expect(receivedCacao.s.t).toBe("evm:eip191");
 		expect(receivedCacao.s.s).toBe("valid_evm_signature");
-	});
-});
-
-describe("siwx utils", () => {
-	// getOrigin must return null (not the string "null") for custom URL schemes so
-	// callers can fall back to a real domain instead of building `address@null`
-	// synthetic emails.
-	baseIt("getOrigin returns the origin for http(s) URLs", () => {
-		expect(getOrigin("https://example.com/api/auth")).toBe(
-			"https://example.com",
-		);
-	});
-
-	baseIt("getOrigin returns null for custom URL schemes", () => {
-		expect(getOrigin("exp://localhost:8081")).toBeNull();
-	});
-
-	baseIt("getOrigin returns null for invalid URLs", () => {
-		expect(getOrigin("not a url")).toBeNull();
 	});
 });

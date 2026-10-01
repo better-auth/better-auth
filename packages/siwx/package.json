@@ -59,7 +59,7 @@
   "dependencies": {
     "@better-auth/core": "workspace:*",
     "@noble/hashes": "^2.0.0",
-    "zod": "^4.1.12"
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"

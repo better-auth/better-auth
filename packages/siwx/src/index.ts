@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { User } from "better-auth/types";
@@ -13,7 +14,7 @@ import type {
 	SIWXVerifyMessageArgs,
 	SignatureType,
 } from "./types";
-import { getOrigin, toChecksumAddress } from "./utils";
+import { toChecksumAddress } from "./utils";
 
 export interface SIWXPluginOptions {
 	domain: string;
@@ -363,12 +364,13 @@ export const siwx = (options: SIWXPluginOptions) => {
 
 							// Create new user if none exists
 							if (!user) {
-								const domain =
-									options.emailDomainName ??
-									getOrigin(ctx.context.baseURL) ??
-									options.domain;
-								const userEmail =
-									!isAnon && email ? email : `${normalizedAddress}@${domain}`;
+								const walletEmail = options.emailDomainName
+									? `${normalizedAddress}@${options.emailDomainName}`
+									: createPlaceholderEmail({
+											identifier: normalizedAddress,
+											namespace: PROVIDER_ID,
+										});
+								const userEmail = !isAnon && email ? email : walletEmail;
 								const { name, avatar } =
 									(await options.nameLookup?.({
 										address: normalizedAddress,

@@ -298,7 +298,7 @@ siwx({
 | Option            | Type                                  | Default                      | Description                         |
 | ----------------- | ------------------------------------- | ---------------------------- | ----------------------------------- |
 | `domain`          | `string`                              | Required                     | The domain name of your application |
-| `emailDomainName` | `string`                              | Base URL domain              | Email domain for user accounts      |
+| `emailDomainName` | `string`                              | `siwx.placeholder.invalid`   | Email domain for anonymous accounts |
 | `anonymous`       | `boolean`                             | `true`                       | Allow sign-ins without email        |
 | `statement`       | `string`                              | `"Sign in with your wallet"` | Message statement shown to users    |
 | `supportedChains` | `ChainType[]`                         | `["evm", "solana"]`          | Supported blockchain types          |
@@ -308,18 +308,14 @@ siwx({
 
 ### Client Options
 
-The SIWX client plugin doesn't require any configuration options, but you can pass them if needed for future extensibility:
+The SIWX client plugin doesn't require any configuration options:
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
-import { siwxClient } from "better-auth/client/plugins";
+import { siwxClient } from "@better-auth/siwx/client";
 
 export const authClient = createAuthClient({
-  plugins: [
-    siwxClient({
-      // Optional client configuration can go here
-    }),
-  ],
+  plugins: [siwxClient()],
 });
 ```
 
@@ -377,7 +373,7 @@ Here's a complete example with both EVM and Solana support:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { siwx } from "better-auth/plugins";
+import { siwx } from "@better-auth/siwx";
 import { generateRandomString } from "better-auth/crypto";
 import { verifyMessage, createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";

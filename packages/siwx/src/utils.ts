@@ -24,14 +24,3 @@ export function toChecksumAddress(address: string) {
 
 	return ret;
 }
-
-export function getOrigin(url: string) {
-	try {
-		const parsedUrl = new URL(url);
-		// For custom URL schemes (like exp://), the origin property returns the string "null"
-		// instead of null. We need to handle this case and return null so the fallback logic works.
-		return parsedUrl.origin === "null" ? null : parsedUrl.origin;
-	} catch {
-		return null;
-	}
-}
