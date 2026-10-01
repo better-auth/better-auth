@@ -67,7 +67,7 @@
 		},
 		"packages/electron": {
 			"entry": ["src/index.ts!", "src/client.typecheck.ts"],
-			"project": ["src/**/*.ts!"]
+			"project": ["src/**/*.ts!", "test/**/*.ts"]
 		}
 	},
 	"vitest": {

@@ -17,7 +17,7 @@
     "@actions/core": "3.0.1",
     "@octokit/request-error": "7.1.1",
     "@octokit/rest": "22.0.1",
-    "ai": "7.0.77",
+    "ai": "7.0.112",
     "conventional-changelog-conventionalcommits": "10.4.0",
     "conventional-commits-parser": "7.1.2",
     "mdast-util-from-markdown": "^2.0.3",

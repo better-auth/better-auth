@@ -184,9 +184,11 @@ function createChangesetStateFixture(
 interface ReleaseFixtureOptions {
 	mergeVersionPR?: boolean;
 	consumeLaterChangeset?: boolean;
+	includePRWithoutChangeset?: boolean;
 	splitVersionCommit?: boolean;
 	separateChangesetCommit?: boolean;
 	staleReleaseTag?: boolean;
+	supersedeChangeset?: boolean;
 	uppercaseChangesetId?: boolean;
 }
 
@@ -220,7 +222,7 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 		: options.separateChangesetCommit
 			? "standalone-description"
 			: "pr-42";
-	const changesetPath = `.changeset/${changesetId}.md`;
+	let changesetPath = `.changeset/${changesetId}.md`;
 	const changesetDescription = options.separateChangesetCommit
 		? "Require explicit migration"
 		: "Require an explicit migration after the release.";
@@ -245,6 +247,38 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 		"-m",
 		"fix(session): require explicit migration (#42)",
 	]);
+
+	if (options.includePRWithoutChangeset) {
+		writeFixtureFile(
+			workspace,
+			"packages/better-auth/vitest.config.ts",
+			"export default {};",
+		);
+		git(workspace, ["add", "."]);
+		git(workspace, ["commit", "-m", "fix: isolate package tests (#43)"]);
+	}
+
+	if (options.supersedeChangeset) {
+		rmSync(resolve(workspace, changesetPath));
+		changesetPath = ".changeset/pr-44.md";
+		writeFixtureFile(
+			workspace,
+			changesetPath,
+			[
+				"---",
+				'"better-auth": patch',
+				"---",
+				"",
+				"Replace the superseded release intent.",
+			].join("\n"),
+		);
+		git(workspace, ["add", "."]);
+		git(workspace, [
+			"commit",
+			"-m",
+			"revert: replace the superseded change (#44)",
+		]);
+	}
 
 	rmSync(resolve(workspace, changesetPath));
 	if (options.splitVersionCommit) {
@@ -528,6 +562,28 @@ describe("release changeset collection", () => {
 			expect(result.status, result.stderr).toBe(0);
 			expect(result.stdout).toContain("Found 1 entries");
 			expect(result.stdout).toContain("Require explicit migration");
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("uses consumed changesets as the release entry source", () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			includePRWithoutChangeset: true,
+			supersedeChangeset: true,
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain("Replace the superseded release intent.");
+			expect(result.stdout).toContain("pull/44");
+			expect(result.stdout).not.toContain("pull/42");
+			expect(result.stdout).not.toContain("pull/43");
 		} finally {
 			rmSync(fixture.workspace, { recursive: true });
 		}

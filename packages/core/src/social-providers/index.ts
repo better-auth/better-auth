@@ -2,6 +2,7 @@ import * as z from "zod";
 import type { AwaitableFunction } from "../types";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
+import { cloudflare } from "./cloudflare";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { dropbox } from "./dropbox";
@@ -39,6 +40,7 @@ import { zoom } from "./zoom";
 export const socialProviders = {
 	apple,
 	atlassian,
+	cloudflare,
 	cognito,
 	discord,
 	facebook,
@@ -95,6 +97,7 @@ export type SocialProviders = {
 
 export * from "./apple";
 export * from "./atlassian";
+export * from "./cloudflare";
 export * from "./cognito";
 export * from "./discord";
 export * from "./dropbox";
