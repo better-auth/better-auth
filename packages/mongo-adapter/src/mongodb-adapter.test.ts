@@ -411,9 +411,10 @@ describe("transactions", () => {
 			abortTransaction: vi.fn(async () => {}),
 			endSession: vi.fn(async () => {}),
 			// Mirrors the driver: a callback that rejects with the
-			// `TransientTransactionError` label runs again in a new transaction.
+			// `TransientTransactionError` label runs again in a new transaction,
+			// within a bounded budget.
 			withTransaction: vi.fn(async (fn: () => Promise<unknown>) => {
-				for (;;) {
+				for (let attempt = 1; ; attempt++) {
 					try {
 						return await fn();
 					} catch (error) {
@@ -422,7 +423,7 @@ describe("transactions", () => {
 							"hasErrorLabel" in error &&
 							typeof error.hasErrorLabel === "function" &&
 							error.hasErrorLabel("TransientTransactionError");
-						if (!transient) throw error;
+						if (!transient || attempt >= 3) throw error;
 					}
 				}
 			}),

@@ -1,6 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	queueAfterTransactionHook,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -305,13 +308,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						 * between existing and non-existing emails.
 						 */
 						await ctx.context.password.hash(password);
-						if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
-							await ctx.context.runInBackgroundOrAwait(
-								ctx.context.options.emailAndPassword.onExistingUserSignUp(
-									{ user: dbUser.user },
-									safeCloneRequest(ctx.request),
-								),
-							);
+						const onExistingUserSignUp =
+							ctx.context.options.emailAndPassword?.onExistingUserSignUp;
+						if (onExistingUserSignUp) {
+							const request = safeCloneRequest(ctx.request);
+							await queueAfterTransactionHook(async () => {
+								await ctx.context.runInBackgroundOrAwait(
+									onExistingUserSignUp({ user: dbUser.user }, request),
+								);
+							});
 						}
 						return buildGenericDuplicateResponse();
 					}
@@ -393,17 +398,18 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
-					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
-						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-								safeCloneRequest(ctx.request),
-							),
-						);
+					const sendVerificationEmail =
+						ctx.context.options.emailVerification?.sendVerificationEmail;
+					if (sendVerificationEmail) {
+						// The adapter may run this callback again after a transient abort,
+						// so the email waits for the commit.
+						const user = createdUser;
+						const request = safeCloneRequest(ctx.request);
+						await queueAfterTransactionHook(async () => {
+							await ctx.context.runInBackgroundOrAwait(
+								sendVerificationEmail({ user, url, token }, request),
+							);
+						});
 					}
 				}
 
