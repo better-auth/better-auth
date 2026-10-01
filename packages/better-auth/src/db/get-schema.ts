@@ -4,7 +4,21 @@ import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
 import { getAuthTablesWithResolvedIndexes } from "@better-auth/core/db/internal";
 
 export function getSchema(config: BetterAuthOptions) {
+	return buildSchema(config).schema;
+}
+
+/**
+ * @internal
+ */
+export function buildSchema(config: BetterAuthOptions) {
 	const { indexesByTable, tables } = getAuthTablesWithResolvedIndexes(config);
+	const referenceKeys = new Map<
+		DBFieldAttribute,
+		{
+			modelKey: string;
+			fieldKey: string;
+		}
+	>();
 	const schema: Record<
 		string,
 		{
@@ -19,16 +33,24 @@ export function getSchema(config: BetterAuthOptions) {
 		const fields = table.fields;
 		const actualFields: Record<string, DBFieldAttribute> = {};
 		Object.entries(fields).forEach(([key, field]) => {
-			actualFields[field.fieldName || key] = field;
-			if (field.references) {
-				const refTable = tables[field.references.model];
-				if (refTable) {
-					actualFields[field.fieldName || key]!.references = {
-						...field.references,
-						model: refTable.modelName,
-						field: field.references.field,
-					};
-				}
+			const reference = field.references;
+			const refTable = reference ? tables[reference.model] : undefined;
+			const actualField: DBFieldAttribute =
+				reference && refTable
+					? {
+							...field,
+							references: {
+								...reference,
+								model: refTable.modelName,
+							},
+						}
+					: field;
+			actualFields[field.fieldName || key] = actualField;
+			if (reference) {
+				referenceKeys.set(actualField, {
+					modelKey: reference.model,
+					fieldKey: reference.field,
+				});
 			}
 		});
 		if (schema[table.modelName]) {
@@ -52,5 +74,10 @@ export function getSchema(config: BetterAuthOptions) {
 			schema[tableName].indexes = indexes;
 		}
 	}
-	return schema;
+
+	return {
+		schema,
+		tables,
+		referenceKeys,
+	};
 }
