@@ -45,7 +45,7 @@ type FallbackContext = {
 
 type FallbackRequest = {
 	model: string;
-	logicalModel: string;
+	modelKey: string;
 	where: CleanedWhere[];
 };
 
@@ -95,10 +95,15 @@ export function createAtomicFallbacks(context: FallbackContext) {
 	}
 	async function readRow({
 		model,
+		modelKey,
 		where,
 	}: FallbackRequest): Promise<StoredRow | null> {
 		const result = readSchema.safeParse(
-			await adapter.findOne<unknown>({ model, where }),
+			await adapter.findOne<unknown>({
+				model,
+				modelKey,
+				where,
+			}),
 		);
 		if (!result.success) {
 			throw new BetterAuthError(
@@ -114,7 +119,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 		request: FallbackRequest,
 		action: "consumeOne" | "incrementOne",
 	): Promise<CleanedWhere[]> {
-		const id = await idWhere(row, request.logicalModel, action);
+		const id = await idWhere(row, request.modelKey, action);
 		const hasOr = request.where.some((clause) => clause.connector === "OR");
 		const guard: CleanedWhere[] = hasOr ? [id] : [...request.where, id];
 		const keys = new Set(fields);
@@ -162,7 +167,11 @@ export function createAtomicFallbacks(context: FallbackContext) {
 			request,
 			"consumeOne",
 		);
-		const count = await adapter.deleteMany({ model, where: guard });
+		const count = await adapter.deleteMany({
+			model,
+			modelKey: request.modelKey,
+			where: guard,
+		});
 		return changedOne(count) ? row : null;
 	}
 
@@ -220,6 +229,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 				return row;
 			const count = await adapter.updateMany({
 				model,
+				modelKey: request.modelKey,
 				where: guard,
 				update,
 			});

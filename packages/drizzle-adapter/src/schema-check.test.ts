@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import {
 	getExpectedSchema,
+	runtimeSchemaCheckFor,
 	SchemaMismatchError,
 	schemaCheckFor,
 } from "@better-auth/core/db/internal";
@@ -9,6 +10,7 @@ import { relations } from "drizzle-orm";
 import { pgTable, text } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
+import { drizzleAdapter as relationsV2Adapter } from "./relations-v2";
 import { findDrizzleSchemaProblems } from "./schema-check";
 
 const secret = "test-secret-that-is-at-least-32-chars-long!!";
@@ -113,20 +115,37 @@ describe("drizzleAdapter", () => {
 
 	it("registers a check the first request awaits", async () => {
 		await expect(
-			schemaCheckFor(adapterFor(tablesFor({})))?.(),
+			runtimeSchemaCheckFor(adapterFor(tablesFor({})))?.(),
 		).resolves.toBeUndefined();
 
 		const { account: _account, ...partial } = tablesFor({});
-		await expect(schemaCheckFor(adapterFor(partial))?.()).rejects.toThrow(
-			SchemaMismatchError,
-		);
+		await expect(
+			runtimeSchemaCheckFor(adapterFor(partial))?.(),
+		).rejects.toThrow(SchemaMismatchError);
 	});
 
-	it("registers nothing when the check is disabled", () => {
+	it("keeps explicit validation when runtime checks are disabled", async () => {
 		const adapter = adapterFor(
 			{},
 			{ advanced: { database: { validateSchema: false } } },
 		);
-		expect(schemaCheckFor(adapter)).toBeUndefined();
+		expect(runtimeSchemaCheckFor(adapter)).toBeUndefined();
+		await expect(schemaCheckFor(adapter)?.()).rejects.toThrow(
+			SchemaMismatchError,
+		);
+	});
+
+	it("keeps explicit validation for Relations v2 when runtime checks are disabled", async () => {
+		const adapter = relationsV2Adapter(
+			{ _: { fullSchema: {} } },
+			{ provider: "pg" },
+		)({
+			advanced: { database: { validateSchema: false } },
+			secret,
+		});
+		expect(runtimeSchemaCheckFor(adapter)).toBeUndefined();
+		await expect(schemaCheckFor(adapter)?.()).rejects.toThrow(
+			SchemaMismatchError,
+		);
 	});
 });

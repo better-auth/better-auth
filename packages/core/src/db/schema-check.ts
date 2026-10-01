@@ -5,7 +5,7 @@
  * adapter authors once the registration and lifecycle contracts are stabilized.
  */
 
-import type { BetterAuthOptions } from "../types";
+import type { Awaitable, BetterAuthOptions } from "../types";
 import type { SchemaFinding, SchemaSource } from "./schema-diff";
 import { SchemaMismatchError } from "./schema-diff";
 
@@ -21,10 +21,19 @@ export function checksSchema(options: BetterAuthOptions): boolean {
  * Resolves when the schema can hold what Better Auth writes. Returns nothing
  * once that is known and the database schema revision is unchanged.
  */
-export type SchemaCheck = () => Promise<void> | undefined;
+export type SchemaCheck = (() => Promise<void> | undefined) & {
+	source?: SchemaSource;
+};
 
-const schemaChecks = new WeakMap<object, SchemaCheck>();
+const schemaChecks = new WeakMap<
+	object,
+	{ check: SchemaCheck; runtimeEnabled: boolean }
+>();
 const schemaRevisions = new WeakMap<object, { value: number }>();
+
+type SchemaCheckRegistrationOptions = {
+	runtimeEnabled?: boolean;
+};
 
 /** Invalidates cached checks after Better Auth changes this database's schema. */
 export function invalidateSchemaChecks(database: object): void {
@@ -36,15 +45,30 @@ export function invalidateSchemaChecks(database: object): void {
  * Attaches a check to the adapter it verifies. The adapter object itself is
  * left untouched, so this works for adapters Better Auth does not own.
  */
-export function registerSchemaCheck(adapter: object, check: SchemaCheck): void {
-	schemaChecks.set(adapter, check);
+export function registerSchemaCheck(
+	adapter: object,
+	check: SchemaCheck,
+	options: SchemaCheckRegistrationOptions = {},
+): void {
+	const runtimeEnabled = options.runtimeEnabled ?? true;
+	schemaChecks.set(adapter, { check, runtimeEnabled });
 }
 
 /**
- * The check registered for an adapter, if its store is checked at all.
+ * The registered check, regardless of whether runtime validation is enabled.
  */
 export function schemaCheckFor(adapter: object): SchemaCheck | undefined {
-	return schemaChecks.get(adapter);
+	return schemaChecks.get(adapter)?.check;
+}
+
+/**
+ * The check used by runtime paths, when runtime validation is enabled.
+ */
+export function runtimeSchemaCheckFor(
+	adapter: object,
+): SchemaCheck | undefined {
+	const registration = schemaChecks.get(adapter);
+	return registration?.runtimeEnabled ? registration.check : undefined;
 }
 
 /**
@@ -69,7 +93,7 @@ export function schemaCheckFor(adapter: object): SchemaCheck | undefined {
  * ```
  */
 export function createSchemaCheck(
-	find: () => Promise<SchemaFinding[]>,
+	find: () => Awaitable<SchemaFinding[]>,
 	source: SchemaSource,
 	database?: object,
 ): SchemaCheck {
@@ -81,7 +105,9 @@ export function createSchemaCheck(
 	let checkedRevision = revision?.value;
 	let clean = false;
 	let verdict: Promise<void> | undefined;
-	return function checkSchema(): Promise<void> | undefined {
+	const checkSchema: SchemaCheck = function checkSchema():
+		| Promise<void>
+		| undefined {
 		const currentRevision = revision?.value;
 		if (checkedRevision !== currentRevision) {
 			checkedRevision = currentRevision;
@@ -104,4 +130,6 @@ export function createSchemaCheck(
 				},
 			));
 	};
+	checkSchema.source = source;
+	return checkSchema;
 }

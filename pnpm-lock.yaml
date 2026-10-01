@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@better-auth/utils':
-      specifier: 0.4.2
-      version: 0.4.2
+      specifier: 0.5.0
+      version: 0.5.0
     '@better-fetch/fetch':
       specifier: 1.3.2
       version: 1.3.2
@@ -27,6 +27,10 @@ catalogs:
     zod:
       specifier: ^4.5.4
       version: 4.5.4
+  peer:
+    '@better-auth/utils':
+      specifier: ^0.4.2 || ^0.5.0
+      version: 0.5.0
   react19:
     '@types/react':
       specifier: ^19.2.17
@@ -196,7 +200,7 @@ importers:
         version: 3.0.210(react@19.2.7)(zod@4.5.4)
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -338,9 +342,6 @@ importers:
       fumadocs-ui:
         specifier: 16.12.0
         version: 16.12.0(@types/mdx@2.0.14)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(fumadocs-core@16.12.0(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.17)(lucide-react@1.21.0(react@19.2.7))(next@16.3.4(@babel/core@8.0.1)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.5.4))(next@16.3.4(@babel/core@8.0.1)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
-      geist:
-        specifier: ^1.7.2
-        version: 1.7.2(next@16.3.4(@babel/core@8.0.1)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -976,8 +977,8 @@ importers:
   packages/api-key:
     dependencies:
       '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.4.2
+        specifier: catalog:peer
+        version: 0.5.0
       better-call:
         specifier: 'catalog:'
         version: 1.4.0(zod@4.5.4)
@@ -1020,7 +1021,7 @@ importers:
         version: link:../telemetry
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -1109,6 +1110,9 @@ importers:
       '@types/react-dom':
         specifier: catalog:react19
         version: 19.2.3(@types/react@19.2.17)
+      botid:
+        specifier: ^1.5.10
+        version: 1.5.11(next@16.3.4(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       happy-dom:
         specifier: '>=20.8.9 <21'
         version: 20.8.9
@@ -1196,7 +1200,7 @@ importers:
         version: link:../telemetry
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       '@clack/prompts':
         specifier: ^1.6.0
         version: 1.6.0
@@ -1288,7 +1292,7 @@ importers:
     devDependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -1327,7 +1331,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(@upstash/redis@1.38.0)(better-sqlite3@12.11.1)(bun-types@1.3.14)(kysely@0.28.17)(mysql2@3.24.2(@types/node@25.9.4))(pg@8.22.0)(postgres@3.4.8)(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3))
@@ -1341,8 +1345,8 @@ importers:
   packages/electron:
     dependencies:
       '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.4.2
+        specifier: catalog:peer
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -1434,7 +1438,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       '@cloudflare/workers-types':
         specifier: ^4.20250121.0
         version: 4.20260226.1
@@ -1489,7 +1493,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       tsdown:
         specifier: 'catalog:'
         version: 0.21.10(@arethetypeswrong/core@0.18.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)
@@ -1504,7 +1508,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       mongodb:
         specifier: ^7.1.0
         version: 7.1.0
@@ -1518,8 +1522,8 @@ importers:
   packages/oauth-provider:
     dependencies:
       '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.4.2
+        specifier: catalog:peer
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -1552,8 +1556,8 @@ importers:
   packages/passkey:
     dependencies:
       '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.4.2
+        specifier: catalog:peer
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -1597,7 +1601,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.4.2
+        version: 0.5.0
       tsdown:
         specifier: 'catalog:'
         version: 0.21.10(@arethetypeswrong/core@0.18.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)
@@ -1638,8 +1642,8 @@ importers:
         specifier: 22.0.1
         version: 22.0.1
       ai:
-        specifier: 7.0.77
-        version: 7.0.77(zod@4.5.4)
+        specifier: 7.0.112
+        version: 7.0.112(zod@4.5.4)
       conventional-changelog-conventionalcommits:
         specifier: 10.4.0
         version: 10.4.0
@@ -1687,8 +1691,8 @@ importers:
   packages/scim:
     dependencies:
       '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.4.2
+        specifier: catalog:peer
+        version: 0.5.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -1727,8 +1731,8 @@ importers:
   packages/sso:
     dependencies:
       '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.4.2
+        specifier: catalog:peer
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -1816,8 +1820,8 @@ importers:
   packages/telemetry:
     dependencies:
       '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.4.2
+        specifier: catalog:peer
+        version: 0.5.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.2
@@ -1859,8 +1863,8 @@ importers:
         specifier: workspace:*
         version: link:../packages/better-auth
       undici:
-        specifier: ^7.29.0
-        version: 7.29.0
+        specifier: ^7.30.0
+        version: 7.30.0
       vitest:
         specifier: catalog:vitest
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(@vitest/coverage-istanbul@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.8.9)(msw@2.14.6(@types/node@25.9.4)(typescript@6.0.3))(vite@8.2.0(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
@@ -1899,8 +1903,8 @@ packages:
     peerDependencies:
       zod: 4.5.4
 
-  '@ai-sdk/gateway@4.0.62':
-    resolution: {integrity: sha512-zR3pustGWhw5eUZHG+fJZx/V/PBe+LxdDpc5hDFWxozG/3MB/+eY62jn+YiR+9uOH+Hx63e5zJoeKLfZfPktWQ==}
+  '@ai-sdk/gateway@4.0.90':
+    resolution: {integrity: sha512-mtmiicpMapQU8K0ynNXCRcO55GVyBv6kjbwsD15RMxJKZUUPR99HfQ7/BsdRLdjSQcL7YcCauMLbguw6J+JFjQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: 4.5.4
@@ -1923,8 +1927,8 @@ packages:
     peerDependencies:
       zod: 4.5.4
 
-  '@ai-sdk/provider-utils@5.0.29':
-    resolution: {integrity: sha512-7EIbwXiXKGa7EFk6tDZpuZBs6lxhEJpOuHeqrDb3Vd85uYdjwkdRuHnZDVDIIb2+QTSRmyph2NrXcbvuO/KAjQ==}
+  '@ai-sdk/provider-utils@5.0.46':
+    resolution: {integrity: sha512-XYpiJbd3jW12HC4yzqNmUuPbZ7ooKXVxQjnXCC3O/VzzV2OvRWD6lDFUYYPLs/ZJgTcWWUkmHL/vIyvnxyplVA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: 4.5.4
@@ -1933,8 +1937,8 @@ packages:
     resolution: {integrity: sha512-Q3BZ27qfpYqnCYGvE3vt+Qi6LGOF9R5Nmzn+9JoM1lCRsD9mYaIhfJLkSunN48nfGXJ6n+XNV0J/XVpqGQl7Dw==}
     engines: {node: '>=18'}
 
-  '@ai-sdk/provider@4.0.7':
-    resolution: {integrity: sha512-6or44XprPzKbr8zkmzosowSE0pxkvJcoojBL+mCZvPUt3kvXp3XSNqeVun9golb1acEfSo6yaEBRT18h2VU+1Q==}
+  '@ai-sdk/provider@4.0.18':
+    resolution: {integrity: sha512-+GZJIgz1jk86pwEbb3f1BD2bdoSKyWE4Jg4YUc7NMnMozbWemSKYZcw2F4nMaO5qwsL5A8RmioAKW81YktRpIQ==}
     engines: {node: '>=22'}
 
   '@ai-sdk/react@3.0.210':
@@ -2650,9 +2654,6 @@ packages:
   '@babel/types@8.0.4':
     resolution: {integrity: sha512-eY+Yn3dCqTGmyiq2QRU66lA5FL8lqqqvecHt0fF3uHONIa7ToYsaCiWV8lOKqAs0Rb2SjixiKFROngnulPtt2g==}
     engines: {node: ^22.18.0 || >=24.11.0}
-
-  '@better-auth/utils@0.4.2':
-    resolution: {integrity: sha512-AUxrvu+HaaODsUyzDxFgwd/8RZ1yZaYo42LXKSrU2oGgR38pS1ij8nqQKNgtTWoYGpNevNXtCfgTy6loHveW9A==}
 
   '@better-auth/utils@0.5.0':
     resolution: {integrity: sha512-BL8W4EfIZFwlu0r54m3v1ztjDhu6dDe/amLTm0xybmbZaNgYUqhD3SjpAsnq0q8YD6/ki4iwIgxJNLP/N3TxiA==}
@@ -4146,10 +4147,6 @@ packages:
 
   '@noble/ciphers@2.2.0':
     resolution: {integrity: sha512-Z6pjIZ/8IJcCGzb2S/0Px5J81yij85xASuk1teLNeg75bfT07MV3a/O2Mtn1I2se43k3lkVEcFaR10N4cgQcZA==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/hashes@2.0.1':
-    resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
     engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@2.2.0':
@@ -8025,8 +8022,8 @@ packages:
     peerDependencies:
       zod: 4.5.4
 
-  ai@7.0.77:
-    resolution: {integrity: sha512-muLtBSTAUCreR77L16w4AFBiX2gK/RNt84EKp8m03SN9+MfNlC5EGqYYttRjYKV3xe0a33yj1Zawj1EnjejIWw==}
+  ai@7.0.112:
+    resolution: {integrity: sha512-JDIaxfynFQoV/MPh8AUeHIpuFAUjA2uPBXd6Aa8oZBHtiQ58gJ+Q3NHsQUgavIHsA734oCIr3y9QWkhlgCEA0g==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: 4.5.4
@@ -8388,6 +8385,17 @@ packages:
 
   boolbase@1.0.0:
     resolution: {integrity: sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==}
+
+  botid@1.5.11:
+    resolution: {integrity: sha512-KOO1A3+/vFVJk5aFoG3sNwiogKFPVR+x4aw4gQ1b2e0XoE+i5xp48/EZn+WqR07jRHeDGwHWQUOtV5WVm7xiww==}
+    peerDependencies:
+      next: '*'
+      react: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      next:
+        optional: true
+      react:
+        optional: true
 
   boxen@8.0.1:
     resolution: {integrity: sha512-F3PH5k5juxom4xktynS7MoFY+NUWH5LC4CnH11YB8NPew+HLpmBLCybSAEyb2F+4pRXhuhWqFesoQd6DAyc2hw==}
@@ -10436,11 +10444,6 @@ packages:
 
   fzf@0.5.2:
     resolution: {integrity: sha512-Tt4kuxLXFKHy8KT40zwsUPUkg1CrsgY25FxA2U/j/0WgEDCk3ddc/zLTCCcbSHX9FcKtLuVaDGtGE/STWC+j3Q==}
-
-  geist@1.7.2:
-    resolution: {integrity: sha512-Gu5lDFa3pLRyoBlBPf0QIFHVdWAnpco7fS1bJm41jyLPFoguBgiubseUN2oLXMgqZ7uxAxDoXcHMhCY/fOTTgg==}
-    peerDependencies:
-      next: '>=13.2.0'
 
   generate-function@2.3.1:
     resolution: {integrity: sha512-eeB5GfMNeevm/GRYq20ShmsaGcmI81kIX2K9XQx5miC8KdHaC6Jm0qQ8ZNeGOi7wYB8OsdxKs+Y2oVuTFuVwKQ==}
@@ -14857,6 +14860,10 @@ packages:
     resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
     engines: {node: '>=20.18.1'}
 
+  undici@7.30.0:
+    resolution: {integrity: sha512-dkrQXeHSaoamnItlYbmzG0wFYrM0ZwDxCIg0A7aKjTyyhh9svRzCNFEzV+Vm05/yehjCzjDZ31KXfGEjYSztDQ==}
+    engines: {node: '>=20.18.1'}
+
   undici@8.10.0:
     resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
     engines: {node: '>=22.19.0'}
@@ -15921,10 +15928,10 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.5.4
 
-  '@ai-sdk/gateway@4.0.62(zod@4.5.4)':
+  '@ai-sdk/gateway@4.0.90(zod@4.5.4)':
     dependencies:
-      '@ai-sdk/provider': 4.0.7
-      '@ai-sdk/provider-utils': 5.0.29(zod@4.5.4)
+      '@ai-sdk/provider': 4.0.18
+      '@ai-sdk/provider-utils': 5.0.46(zod@4.5.4)
       '@vercel/oidc': 3.2.0
       zod: 4.5.4
 
@@ -15947,9 +15954,9 @@ snapshots:
       eventsource-parser: 3.1.0
       zod: 4.5.4
 
-  '@ai-sdk/provider-utils@5.0.29(zod@4.5.4)':
+  '@ai-sdk/provider-utils@5.0.46(zod@4.5.4)':
     dependencies:
-      '@ai-sdk/provider': 4.0.7
+      '@ai-sdk/provider': 4.0.18
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
@@ -15960,7 +15967,7 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/provider@4.0.7':
+  '@ai-sdk/provider@4.0.18':
     dependencies:
       json-schema: 0.4.0
 
@@ -17426,10 +17433,6 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 8.0.0
       '@babel/helper-validator-identifier': 8.0.4
-
-  '@better-auth/utils@0.4.2':
-    dependencies:
-      '@noble/hashes': 2.0.1
 
   '@better-auth/utils@0.5.0':
     dependencies:
@@ -19347,8 +19350,6 @@ snapshots:
     optional: true
 
   '@noble/ciphers@2.2.0': {}
-
-  '@noble/hashes@2.0.1': {}
 
   '@noble/hashes@2.2.0': {}
 
@@ -24098,11 +24099,11 @@ snapshots:
       '@opentelemetry/api': 1.9.1
       zod: 4.5.4
 
-  ai@7.0.77(zod@4.5.4):
+  ai@7.0.112(zod@4.5.4):
     dependencies:
-      '@ai-sdk/gateway': 4.0.62(zod@4.5.4)
-      '@ai-sdk/provider': 4.0.7
-      '@ai-sdk/provider-utils': 5.0.29(zod@4.5.4)
+      '@ai-sdk/gateway': 4.0.90(zod@4.5.4)
+      '@ai-sdk/provider': 4.0.18
+      '@ai-sdk/provider-utils': 5.0.46(zod@4.5.4)
       zod: 4.5.4
 
   ajv-formats@3.0.1(ajv@8.18.0):
@@ -24564,6 +24565,11 @@ snapshots:
       - supports-color
 
   boolbase@1.0.0: {}
+
+  botid@1.5.11(next@16.3.4(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7):
+    optionalDependencies:
+      next: 16.3.4(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react: 19.2.7
 
   boxen@8.0.1:
     dependencies:
@@ -26693,10 +26699,6 @@ snapshots:
   fuse.js@7.5.0: {}
 
   fzf@0.5.2: {}
-
-  geist@1.7.2(next@16.3.4(@babel/core@8.0.1)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)):
-    dependencies:
-      next: 16.3.4(@babel/core@8.0.1)(@opentelemetry/api@1.9.1)(@playwright/test@1.58.2)(@types/node@25.9.4)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
 
   generate-function@2.3.1:
     dependencies:
@@ -32851,6 +32853,8 @@ snapshots:
   undici@6.28.0: {}
 
   undici@7.29.0: {}
+
+  undici@7.30.0: {}
 
   undici@8.10.0: {}
 
