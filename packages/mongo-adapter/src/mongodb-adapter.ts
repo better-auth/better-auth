@@ -766,8 +766,6 @@ export const mongodbAdapter = (
 							const session = config.client.startSession();
 
 							try {
-								session.startTransaction();
-
 								const adapter = createAdapterFactory({
 									config: {
 										...adapterOptions!.config,
@@ -776,13 +774,10 @@ export const mongodbAdapter = (
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
 
-								const result = await cb(adapter);
-
-								await session.commitTransaction();
-								return result;
-							} catch (err) {
-								await session.abortTransaction();
-								throw err;
+								// `withTransaction` retries a `TransientTransactionError` (such as a
+								// WriteConflict between concurrent transactions) and an unknown
+								// commit result, so `cb` can run more than once.
+								return await session.withTransaction(() => cb(adapter));
 							} finally {
 								await session.endSession();
 							}
