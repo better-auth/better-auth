@@ -157,7 +157,7 @@ Local development [allows requests by default](https://vercel.com/docs/botid/loc
 
 * **`provider` (required)**: your captcha provider.
 * **`secretKey` (required for all providers except `vercel-botid`)**: your provider's secret key used for the server-side validation.
-* `endpoints` (optional): replaces the default array of paths where captcha verification is enforced. If set, only the specified paths will be protected. Paths match exactly unless they include wildcards, such as `/sign-in/*` for one segment or `/sign-in/**` for nested routes. Default is `["/sign-up/email", "/sign-in/email", "/request-password-reset"]`.
+* `endpoints` (optional): Choose which paths require CAPTCHA. By default, CAPTCHA protects `/sign-up/email`, `/sign-in/email`, and `/request-password-reset`. Requests to other paths don't require CAPTCHA. When you set `endpoints`, include every path you want to protect because it replaces the defaults. You can use exact paths or wildcard patterns like `/sign-in/*` for one segment and `/sign-in/**` for nested routes.
 * `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
 * `siteKey` (optional - only *hCaptcha* and *CaptchaFox*): prevents tokens issued on one sitekey from being redeemed elsewhere.
 * `siteVerifyURLOverride` (optional - token-based providers only): overrides the captcha verification URL.
