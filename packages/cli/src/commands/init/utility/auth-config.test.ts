@@ -21,6 +21,8 @@ describe("Init CLI - auth config generation", () => {
 			installDependency: mockInstallDependency,
 		});
 		expect(config).toContain("apiKey: process.env.STEAM_API_KEY,");
+		expect(config).not.toContain("STEAM_CLIENT_ID");
+		expect(config).not.toContain("STEAM_CLIENT_SECRET");
 		expect(config).toContain("clientId: process.env.GOOGLE_CLIENT_ID!,");
 		expect(config).toContain(
 			"clientSecret: process.env.GOOGLE_CLIENT_SECRET!,",
