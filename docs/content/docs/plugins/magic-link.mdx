@@ -148,26 +148,7 @@ and a `ctx` context object as the second parameter.
 
 **disableSignUp**: If set to `true`, the user will not be able to sign up using the magic link. The default value is `false`.
 
-**rateLimit**: Rate limiting for the magic link endpoints (`/sign-in/magic-link` and `/magic-link/verify`). The default is `{ window: 60, max: 5 }` — at most 5 requests per 60 seconds per IP. Rate limiting applies in production by default (disabled outside production unless enabled) and falls back to a shared endpoint-wide bucket when no trusted client IP can be resolved, or is skipped when IP tracking is disabled — see [Rate Limit](/docs/concepts/rate-limit). Customize it when you need stricter or looser limits:
-
-```ts title="server.ts"
-import { betterAuth } from "better-auth";
-import { magicLink } from "better-auth/plugins";
-
-export const auth = betterAuth({
-    plugins: [
-        magicLink({
-            sendMagicLink: async ({ email, url }) => {
-                // send email to user
-            },
-            rateLimit: {
-                window: 60, // 60 seconds
-                max: 3, // 3 requests per window (stricter than the default of 5)
-            },
-        })
-    ]
-})
-```
+**rateLimit**: Rate limit for the `/sign-in/magic-link` and `/magic-link/verify` endpoints. The default value is `{ window: 60, max: 5 }`. See [Rate Limit](/docs/concepts/rate-limit) for details.
 
 **generateToken**: The `generateToken` function is called to generate a token which is used to uniquely identify the user. The default value is a random string. There is one parameter:
 
