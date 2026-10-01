@@ -136,7 +136,7 @@ oneTimeToken({
 })
 ```
 
-* **`setOttHeaderOnNewSession`** (boolean): Optional. If `true`, a one-time token is included in the `set-ott` response header whenever a new session is created (e.g. sign-in, sign-up). The plugin also exposes `set-ott` via `Access-Control-Expose-Headers` so the header is readable cross-origin. Default: `false`.
+* **`setOttHeaderOnNewSession`** (boolean): Optional. If `true`, a one-time token is included in the `set-ott` response header whenever a new session is created (e.g. sign-in, sign-up). The plugin also exposes `set-ott` via `Access-Control-Expose-Headers` so the header is readable from JavaScript once your CORS configuration permits the cross-origin request. Default: `false`.
 
 ```ts
 oneTimeToken({
