@@ -970,10 +970,11 @@ export async function getMigrations(
 
 	// Helper function to safely resolve model and field names, falling back to
 	// user-supplied strings for external tables not in the BetterAuth schema
-	function getReferencePath(
-		field: DBFieldAttribute,
-		reference: NonNullable<DBFieldAttribute["references"]>,
-	): string {
+	function getReferencePath(field: DBFieldAttribute): string {
+		const reference = field.references;
+		if (!reference) {
+			throw new BetterAuthError("Cannot resolve a field without references.");
+		}
 		const keys = referenceKeys.get(field);
 		if (!keys) {
 			throw new BetterAuthError(
@@ -1075,7 +1076,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(getReferencePath(field, field.references))
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 					if (timestampDefault) {
@@ -1141,7 +1142,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(getReferencePath(field, field.references))
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 
