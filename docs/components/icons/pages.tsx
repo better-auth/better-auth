@@ -464,6 +464,7 @@ export const pageIcons = {
 	integrationsElysia: brandIcons.elysia,
 	integrationsNitro: brandIcons.nitro,
 	integrationsNestJS: brandIcons.nestJS,
+	integrationsRhythm: brandIcons.rhythm,
 	integrationsConvex: brandIcons.convex,
 	integrationsExpo: brandIcons.expo,
 	integrationsLynx: brandIcons.lynx,

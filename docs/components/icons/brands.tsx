@@ -545,6 +545,22 @@ export const brandIcons = {
 			/>
 		</svg>
 	),
+	rhythm: (props?: SVGProps<SVGSVGElement>) => (
+		<svg
+			className={props?.className}
+			xmlns="http://www.w3.org/2000/svg"
+			width="1.2em"
+			height="1.2em"
+			viewBox="6 6 20 20"
+		>
+			<g fill="currentColor">
+				<rect x="7.8" y="15" width="2.6" height="10" />
+				<rect x="12.4" y="7" width="2.6" height="18" />
+				<rect x="17" y="18" width="2.6" height="7" />
+				<rect x="21.6" y="11" width="2.6" height="14" />
+			</g>
+		</svg>
+	),
 	gitHub: (props?: SVGProps<SVGSVGElement>) => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

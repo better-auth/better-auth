@@ -1,0 +1,162 @@
+---
+icon: integrationsRhythm
+sidebarTitle: "Rhythm"
+title: Rhythm Integration
+description: Integrate Better Auth with Rhythm.
+---
+
+[Rhythm](https://rhythmjs.github.io) is a TypeScript framework built on the Web Standard `Request` and `Response` APIs, so you can mount Better Auth's handler directly without an adapter.
+
+Before you begin, make sure you have a Better Auth instance configured. If not, follow the [installation guide](/docs/installation). For Rhythm's side of this setup, see the [Rhythm Better Auth guide](https://rhythmjs.github.io/integrations/better-auth/).
+
+A complete app with tests is available in the [Rhythm examples repository](https://github.com/rhythmjs/examples/tree/main/examples/better-auth), built from the [Rhythm template](https://github.com/rhythmjs/template).
+
+## Setup
+
+### Install the Packages
+
+```package-install
+better-auth @rhythmjs/http @rhythmjs/security
+```
+
+### Mount the Auth Handler
+
+Use Rhythm's [`mount`](https://rhythmjs.github.io/http/mount/) middleware to hand every request under `/api/auth` to Better Auth:
+
+```ts title="src/app.module.ts"
+import { mount } from "@rhythmjs/http/mount";
+import { Rhythm } from "@rhythmjs/rhythm";
+import type { RhythmHttpContext } from "@rhythmjs/router/adapters/context";
+import { auth } from "./lib/auth";
+
+export const appModule = new Rhythm<RhythmHttpContext>({
+	name: "app",
+	type: "module",
+})
+	.use(mount("/api/auth/**", (ctx) => auth.handler(ctx.request))); // [!code highlight]
+```
+
+Serve the module with any Fetch-compatible runtime:
+
+```ts title="src/main.ts"
+import { toFetchHandler } from "@rhythmjs/router/fetch";
+import { appModule } from "./app.module";
+
+Bun.serve({ port: 3007, fetch: toFetchHandler(appModule) });
+```
+
+<Callout type="info">
+  The mounted path must match your Better Auth `basePath`, which defaults to
+  `/api/auth`.
+</Callout>
+
+## CORS
+
+To allow cross-origin authentication requests, register `cors()` from `@rhythmjs/security` before the mounted handler, so preflights are answered and Better Auth's responses carry the CORS headers:
+
+```ts title="src/app.module.ts"
+import { cors } from "@rhythmjs/security/cors"; // [!code highlight]
+
+export const appModule = new Rhythm<RhythmHttpContext>({
+	name: "app",
+	type: "module",
+})
+	.use( // [!code highlight]
+		cors({ // [!code highlight]
+			origin: "http://localhost:3001", // [!code highlight]
+			credentials: true, // [!code highlight]
+			allowHeaders: ["Content-Type", "Authorization"], // [!code highlight]
+		}), // [!code highlight]
+	) // [!code highlight]
+	.use(mount("/api/auth/**", (ctx) => auth.handler(ctx.request)));
+```
+
+Add the same origin to Better Auth's `trustedOrigins`. Better Auth checks origins itself, separately from CORS:
+
+```ts title="src/lib/auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	trustedOrigins: ["http://localhost:3001"], // [!code highlight]
+});
+```
+
+When `credentials` is enabled, configure an explicit origin instead of `*`. See [Cookies](/docs/concepts/cookies) for cross-domain and cross-subdomain cookie behavior.
+
+## Middleware
+
+Better Auth has no Rhythm middleware, but you can build one on `auth.api.getSession`. `withSession` puts the session and user on the context, and `requireSession` answers 401 and narrows their types for the handler:
+
+```ts title="src/lib/session.ts"
+import { derive } from "@rhythmjs/rhythm";
+import type { DeriveMiddleware, Middleware } from "@rhythmjs/rhythm/types";
+import type { RhythmHttpContext } from "@rhythmjs/router/adapters/context";
+import { auth } from "./auth";
+
+type Session = typeof auth.$Infer.Session;
+
+export interface SessionContext {
+	session: Session["session"] | null;
+	user: Session["user"] | null;
+}
+
+export const withSession = derive(
+	async (ctx: RhythmHttpContext): Promise<SessionContext> => {
+		const result = await auth.api.getSession({
+			headers: ctx.request.headers,
+		});
+		return { session: result?.session ?? null, user: result?.user ?? null };
+	},
+);
+
+type SessionGuard = DeriveMiddleware<
+	RhythmHttpContext & SessionContext,
+	{ session: Session["session"]; user: Session["user"] }
+>;
+
+const guard: Middleware<RhythmHttpContext & SessionContext> = async (
+	ctx,
+	next,
+) => {
+	if (!ctx.session || !ctx.user) {
+		ctx.error(401, "Unauthorized");
+		return;
+	}
+	await next();
+};
+
+export const requireSession = guard as SessionGuard;
+```
+
+Register `withSession` after the mounted handler, then guard individual routes with `requireSession`:
+
+```ts title="src/app.controller.ts"
+import { RhythmRouter } from "@rhythmjs/router";
+import type { RhythmHttpContext } from "@rhythmjs/router/adapters/context";
+import { requireSession, type SessionContext } from "./lib/session";
+
+export const appController = new RhythmRouter<
+	RhythmHttpContext & SessionContext
+>().get("/me", requireSession, (ctx) => {
+	ctx.json({ id: ctx.user.id, name: ctx.user.name, email: ctx.user.email });
+});
+```
+
+```ts title="src/app.module.ts"
+export const appModule = new Rhythm<RhythmHttpContext>({
+	name: "app",
+	type: "module",
+})
+	.use(cors({ origin: "http://localhost:3001", credentials: true }))
+	.use(mount("/api/auth/**", (ctx) => auth.handler(ctx.request)))
+	.use(withSession) // [!code highlight]
+	.use(appController.middleware());
+```
+
+<Callout type="info">
+  Put the guard on the route rather than the router: a router-level guard
+  narrows the router's context, and the router would then not type-check when
+  mounted.
+</Callout>
+
+Rhythm middleware does not see requests that `mount` answers, so Better Auth's own [rate limiting](/docs/concepts/rate-limit) applies to its endpoints.
