@@ -973,7 +973,9 @@ export const auth = betterAuth({
 							`${providerUpper}_CLIENT_SECRET`,
 						];
 					}
-					return config.options.map((opt) => opt.envVar);
+					return config.options
+						.filter((opt) => !opt.optional)
+						.map((opt) => opt.envVar);
 				},
 			);
 
@@ -1586,13 +1588,16 @@ export const auth = betterAuth({
 					return `\n     - ${chalk.cyan(`${providerUpper}_CLIENT_ID`)} and ${chalk.cyan(`${providerUpper}_CLIENT_SECRET`)}`;
 				}
 				const envVars = config.options
-					.map((opt) => chalk.cyan(opt.envVar))
+					.map(
+						(opt) =>
+							`${chalk.cyan(opt.envVar)}${opt.optional ? " (optional, for profile lookup)" : ""}`,
+					)
 					.join(" and ");
 				return `\n     - ${envVars}`;
 			})
 			.join("");
 		logs.push(
-			`  ${nextStepNum}. Add social provider credentials to .env:${providerList}`,
+			`  ${nextStepNum}. Configure social provider credentials in .env:${providerList}`,
 		);
 		nextStepNum++;
 	}

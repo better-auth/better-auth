@@ -70,7 +70,7 @@ const getSocialProvidersCode = (providers?: string[]) => {
 			// Generate config based on provider-specific options
 			const options = config.options
 				.map((opt) => {
-					return `			${opt.name}: process.env.${opt.envVar}!,`;
+					return `			${opt.name}: process.env.${opt.envVar}${opt.optional ? "" : "!"},`;
 				})
 				.join("\n");
 

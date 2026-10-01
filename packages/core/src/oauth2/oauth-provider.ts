@@ -140,6 +140,8 @@ export interface OAuthProvider<
 	O extends object = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
+	/** Callback protocol. Defaults to OAuth 2.0 authorization-code exchange. */
+	protocol?: "oauth2" | "openid2" | undefined;
 	/**
 	 * Optional path under the resolved per-request `baseURL` where this
 	 * provider's OAuth callback handler is mounted. Providers that use the

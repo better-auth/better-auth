@@ -44,6 +44,7 @@ function getSteamId(tokens: OAuth2Tokens) {
 export const steam = (options: SteamOptions) => {
 	return {
 		id: "steam",
+		protocol: "openid2",
 		name: "Steam",
 		accountSubject: ({ tokens }) => {
 			const steamId = getSteamId(tokens);
@@ -157,19 +158,18 @@ export const steam = (options: SteamOptions) => {
 			let profile: SteamProfile = { steamid: steamId };
 			if (options.apiKey) {
 				const params = new URLSearchParams({
-					key: options.apiKey,
 					steamids: steamId,
 				});
-				const { data, error } = await betterFetch<{
+				const { data } = await betterFetch<{
 					response: { players: SteamProfile[] };
 				}>(
 					`https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?${params}`,
-				);
-				const player = data?.response?.players?.find(
-					(player) => player.steamid === steamId,
-				);
-				if (error || !player) return null;
-				profile = player;
+					{ headers: { "x-webapi-key": options.apiKey } },
+				).catch(() => ({ data: null }));
+				const players = data?.response?.players;
+				const player = players?.find((player) => player.steamid === steamId);
+				if (players?.length && !player) return null;
+				if (player) profile = player;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {

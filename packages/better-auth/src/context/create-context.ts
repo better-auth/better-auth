@@ -14,10 +14,7 @@ import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
-import {
-	openId2Providers,
-	socialProviders,
-} from "@better-auth/core/social-providers";
+import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
 import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
 import { createTelemetry } from "@better-auth/telemetry";
@@ -238,15 +235,14 @@ Most of the features of Better Auth will not work correctly.`,
 				if (config.enabled === false) {
 					return null;
 				}
-				if (!config.clientId && !openId2Providers.includes(key)) {
+				const provider = socialProviders[key](config as never) as OAuthProvider;
+				if (!config.clientId && provider.protocol !== "openid2") {
 					logger.warn(
 						`Social provider ${key} is missing clientId or clientSecret`,
 					);
 				}
-				const provider = socialProviders[key](config as never);
-				(provider as OAuthProvider).disableImplicitSignUp =
-					config.disableImplicitSignUp;
-				return provider as OAuthProvider;
+				provider.disableImplicitSignUp = config.disableImplicitSignUp;
+				return provider;
 			}),
 		)
 	).filter((x) => x !== null);

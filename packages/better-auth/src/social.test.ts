@@ -31,6 +31,8 @@ import { getOAuthState } from "./api/state/oauth";
 import { parseSetCookieHeader, setCookieToHeader } from "./cookies";
 import { signJWT } from "./crypto";
 import { getMigrations } from "./db/get-migration";
+import { genericOAuth } from "./plugins/generic-oauth";
+import { oAuthProxy } from "./plugins/oauth-proxy";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
@@ -4400,13 +4402,25 @@ describe("Google Provider - includeGrantedScopes", async () => {
 	});
 });
 
+/** @see https://openid.net/specs/openid-authentication-2_0.html#verification */
 describe("Steam Provider", () => {
 	const steamId = "76561198000000000";
 	const namespace = "http://specs.openid.net/auth/2.0";
 	const endpoint = "https://steamcommunity.com/openid/login";
-	const verifyAssertion = vi.fn(() =>
-		HttpResponse.text(`ns:${namespace}\nis_valid:true\n`),
-	);
+	const usedNonces = new Set<string>();
+	const verifyAssertion = vi.fn(async ({ request }: { request: Request }) => {
+		const body = new URLSearchParams(await request.text());
+		expect(body.get("openid.mode")).toBe("check_authentication");
+		expect(body.get("openid.claimed_id")).toBe(
+			`https://steamcommunity.com/openid/id/${steamId}`,
+		);
+		expect(body.get("openid.sig")).toBe("signature");
+		const nonce = body.get("openid.response_nonce");
+		expect(nonce).toBeTruthy();
+		const valid = !usedNonces.has(nonce!);
+		usedNonces.add(nonce!);
+		return HttpResponse.text(`ns:${namespace}\nis_valid:${valid}\n`);
+	});
 
 	beforeAll(() => {
 		mswServer.use(
@@ -4428,7 +4442,10 @@ describe("Steam Provider", () => {
 			),
 		);
 	});
-	afterEach(() => verifyAssertion.mockClear());
+	afterEach(() => {
+		verifyAssertion.mockClear();
+		usedNonces.clear();
+	});
 
 	function assertion(authorizationURL: string) {
 		const returnTo = new URL(authorizationURL).searchParams.get(
@@ -4442,7 +4459,7 @@ describe("Steam Provider", () => {
 			"openid.claimed_id": `https://steamcommunity.com/openid/id/${steamId}`,
 			"openid.identity": `https://steamcommunity.com/openid/id/${steamId}`,
 			"openid.return_to": returnTo,
-			"openid.response_nonce": `${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}nonce`,
+			"openid.response_nonce": `${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}${url.searchParams.get("state")}`,
 			"openid.assoc_handle": "association",
 			"openid.signed":
 				"op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle",
@@ -4516,6 +4533,25 @@ describe("Steam Provider", () => {
 		]);
 	});
 
+	it("creates a session when optional profile lookup is rate-limited", async () => {
+		mswServer.use(
+			http.get(
+				"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/",
+				() => HttpResponse.json({}, { status: 429 }),
+				{ once: true },
+			),
+		);
+		const { auth, headers, start, complete } = await setup();
+		expect((await complete(await start())).headers.get("location")).toBe(
+			"/welcome",
+		);
+		expect((await auth.api.getSession({ headers }))?.user).toMatchObject({
+			name: steamId,
+			image: null,
+			emailVerified: false,
+		});
+	});
+
 	it("preserves the missing-code error for other providers", async () => {
 		const { start, complete } = await setup();
 		const callback = await start();
@@ -4524,6 +4560,86 @@ describe("Steam Provider", () => {
 			"error=no_code",
 		);
 		expect(verifyAssertion).not.toHaveBeenCalled();
+	});
+
+	it("requires a code for a Generic OAuth provider named steam", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: { steam: {} },
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "steam",
+							clientId: "client-id",
+							authorizationUrl: "https://oauth.example/authorize",
+							tokenUrl: "https://oauth.example/token",
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const signIn = await client.signIn.social({
+			provider: "steam",
+			callbackURL: "/signed-in",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signIn.data!.url!).searchParams.get("state")!;
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/callback/steam?state=${state}`,
+				{ headers },
+			),
+		);
+		expect(response.headers.get("location")).toContain("error=no_code");
+		expect(verifyAssertion).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		"database",
+		"cookie",
+	] as const)("uses a direct callback with OAuth Proxy and %s state", async (storeStateStrategy) => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				baseURL: "http://preview.example.com",
+				socialProviders: { steam: {} },
+				account: { storeStateStrategy },
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview.example.com",
+						productionURL: "http://production.example.com",
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		const signIn = await client.signIn.social({
+			provider: "steam",
+			callbackURL: "/signed-in",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const callback = assertion(signIn.data!.url!);
+		expect(callback.origin).toBe("http://preview.example.com");
+		const response = await auth.handler(new Request(callback, { headers }));
+		expect(response.headers.get("location")).toBe("/signed-in");
+		setCookieToHeader(headers)({ response });
+		expect((await auth.api.getSession({ headers }))?.user.name).toBe(steamId);
+	});
+
+	it("rejects a Steam nonce reused with fresh callback state", async () => {
+		const { start, complete } = await setup();
+		const first = await start();
+		expect((await complete(first)).headers.get("location")).toBe("/welcome");
+		const second = await start();
+		second.searchParams.set(
+			"openid.response_nonce",
+			first.searchParams.get("openid.response_nonce")!,
+		);
+		expect((await complete(second)).headers.get("location")).toContain(
+			"error=invalid_code",
+		);
+		expect(verifyAssertion).toHaveBeenCalledTimes(2);
 	});
 
 	it.each([
@@ -4601,7 +4717,7 @@ describe("Steam Provider", () => {
 		const callback = await start();
 		if (kind === "cancel") callback.searchParams.set("openid.mode", "cancel");
 		if (kind === "forged")
-			verifyAssertion.mockImplementationOnce(() =>
+			verifyAssertion.mockImplementationOnce(async () =>
 				HttpResponse.text(`ns:${namespace}\nis_valid:false\n`),
 			);
 		if (kind === "duplicate")

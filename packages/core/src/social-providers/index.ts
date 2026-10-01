@@ -78,9 +78,6 @@ export const socialProviders = {
 	wechat,
 };
 
-/** Providers that use OpenID 2.0 instead of OAuth authorization codes. */
-export const openId2Providers: readonly string[] = ["steam"];
-
 export const socialProviderList = Object.keys(socialProviders) as [
 	"github",
 	...(keyof typeof socialProviders)[],
