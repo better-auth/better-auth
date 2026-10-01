@@ -6,8 +6,17 @@ import { appendQueryParams } from "@better-auth/core/utils/url";
  * URL-safe strings, not API error objects. Some also serve as the OAuth seam's
  * machine-readable `result.error` value, which non-redirect callers (e.g.
  * id-token sign-in) remap to an API error code.
+ *
+ * Covers every code Better Auth itself redirects with. The redirect can also
+ * carry an `error` the provider sent to the callback, or the `code` of an
+ * `APIError` thrown from a hook, both passed through unchanged.
  */
 export const OAUTH_CALLBACK_ERROR_CODES = {
+	INVALID_CALLBACK_REQUEST: "invalid_callback_request",
+	INTERNAL_SERVER_ERROR: "internal_server_error",
+	STATE_NOT_FOUND: "state_not_found",
+	STATE_INVALID: "state_invalid",
+	STATE_MISMATCH: "state_mismatch",
 	NO_CODE: "no_code",
 	PROVIDER_NOT_FOUND: "oauth_provider_not_found",
 	ISSUER_MISSING: "issuer_missing",
@@ -22,7 +31,18 @@ export const OAUTH_CALLBACK_ERROR_CODES = {
 		"account_already_linked_to_different_user",
 	EMAIL_NOT_FOUND: "email_not_found",
 	EMAIL_NOT_VERIFIED: "email_not_verified",
+	ACCOUNT_NOT_LINKED: "account_not_linked",
+	UNABLE_TO_UPDATE_ACCOUNT: "unable_to_update_account",
+	SIGNUP_DISABLED: "signup_disabled",
+	UNABLE_TO_CREATE_USER: "unable_to_create_user",
+	UNABLE_TO_CREATE_SESSION: "unable_to_create_session",
 } as const;
+
+/**
+ * A code from {@link OAUTH_CALLBACK_ERROR_CODES}.
+ */
+export type OAuthCallbackErrorCode =
+	(typeof OAUTH_CALLBACK_ERROR_CODES)[keyof typeof OAUTH_CALLBACK_ERROR_CODES];
 
 const HANDLING_DOCS_URL =
 	"https://www.better-auth.com/docs/concepts/oauth#handling-providers-without-email";
