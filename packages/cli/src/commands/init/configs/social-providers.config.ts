@@ -27,6 +27,7 @@ export const SOCIAL_PROVIDERS = [
 	"salesforce",
 	"slack",
 	"spotify",
+	"steam",
 	"tiktok",
 	"twitch",
 	"twitter",
@@ -219,6 +220,9 @@ export const SOCIAL_PROVIDER_CONFIGS: Record<SocialProvider, ProviderConfig> = {
 			{ name: "clientId", envVar: "SPOTIFY_CLIENT_ID" },
 			{ name: "clientSecret", envVar: "SPOTIFY_CLIENT_SECRET" },
 		],
+	},
+	steam: {
+		options: [{ name: "apiKey", envVar: "STEAM_API_KEY" }],
 	},
 	tiktok: {
 		options: [

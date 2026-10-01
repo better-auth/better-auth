@@ -8,6 +8,7 @@ import type {
 	GoogleProfile,
 	MicrosoftEntraIDProfile,
 	RailwayProfile,
+	SteamOptions,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { reddit } from "@better-auth/core/social-providers";
@@ -16,10 +17,18 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthMiddleware } from "./api";
 import { getOAuthState } from "./api/state/oauth";
-import { parseSetCookieHeader } from "./cookies";
+import { parseSetCookieHeader, setCookieToHeader } from "./cookies";
 import { signJWT } from "./crypto";
 import { getMigrations } from "./db/get-migration";
 import { getTestInstance } from "./test-utils/test-instance";
@@ -4388,5 +4397,304 @@ describe("Google Provider - includeGrantedScopes", async () => {
 
 		const authUrl = new URL(signInRes.data!.url!);
 		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
+	});
+});
+
+describe("Steam Provider", () => {
+	const steamId = "76561198000000000";
+	const namespace = "http://specs.openid.net/auth/2.0";
+	const endpoint = "https://steamcommunity.com/openid/login";
+	const verifyAssertion = vi.fn(() =>
+		HttpResponse.text(`ns:${namespace}\nis_valid:true\n`),
+	);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.post(endpoint, verifyAssertion),
+			http.get(
+				"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/",
+				() =>
+					HttpResponse.json({
+						response: {
+							players: [
+								{
+									steamid: steamId,
+									personaname: "Player",
+									avatarfull: "https://example.com/avatar.jpg",
+								},
+							],
+						},
+					}),
+			),
+		);
+	});
+	afterEach(() => verifyAssertion.mockClear());
+
+	function assertion(authorizationURL: string) {
+		const returnTo = new URL(authorizationURL).searchParams.get(
+			"openid.return_to",
+		)!;
+		const url = new URL(returnTo);
+		for (const [key, value] of Object.entries({
+			"openid.ns": namespace,
+			"openid.mode": "id_res",
+			"openid.op_endpoint": endpoint,
+			"openid.claimed_id": `https://steamcommunity.com/openid/id/${steamId}`,
+			"openid.identity": `https://steamcommunity.com/openid/id/${steamId}`,
+			"openid.return_to": returnTo,
+			"openid.response_nonce": `${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}nonce`,
+			"openid.assoc_handle": "association",
+			"openid.signed":
+				"op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle",
+			"openid.sig": "signature",
+		}))
+			url.searchParams.set(key, value);
+		return url;
+	}
+
+	async function setup(
+		options: SteamOptions = {},
+		storeStateStrategy: "database" | "cookie" = "database",
+		allowLinking = false,
+	) {
+		const instance = await getTestInstance(
+			{
+				socialProviders: { steam: { apiKey: "private-api-key", ...options } },
+				account: {
+					storeStateStrategy,
+					...(allowLinking
+						? {
+								accountLinking: {
+									trustedProviders: ["steam"],
+									allowDifferentEmails: true,
+								},
+							}
+						: {}),
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		async function start(requestSignUp?: boolean) {
+			const result = await instance.client.signIn.social({
+				provider: "steam",
+				callbackURL: "/signed-in",
+				newUserCallbackURL: "/welcome",
+				errorCallbackURL: "/failed?source=steam#retry",
+				requestSignUp,
+				fetchOptions: { onSuccess: instance.cookieSetter(headers) },
+			});
+			expect(result.error).toBeNull();
+			return assertion(result.data!.url!);
+		}
+		async function complete(url: URL, requestHeaders = headers) {
+			const response = await instance.auth.handler(
+				new Request(url, { headers: requestHeaders }),
+			);
+			setCookieToHeader(headers)({ response });
+			return response;
+		}
+		return { ...instance, headers, start, complete };
+	}
+
+	it("creates a session without a Steam Web API key", async () => {
+		const { auth, headers, start, complete } = await setup({
+			apiKey: undefined,
+		});
+		expect((await complete(await start())).headers.get("location")).toBe(
+			"/welcome",
+		);
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user).toMatchObject({
+			name: steamId,
+			image: null,
+			email: `${steamId}@steam.placeholder.invalid`,
+			emailVerified: false,
+		});
+		expect(await auth.api.listUserAccounts({ headers })).toEqual([
+			expect.objectContaining({ providerId: "steam", accountId: steamId }),
+		]);
+	});
+
+	it("preserves the missing-code error for other providers", async () => {
+		const { start, complete } = await setup();
+		const callback = await start();
+		callback.pathname = "/api/auth/callback/google";
+		expect((await complete(callback)).headers.get("location")).toContain(
+			"error=no_code",
+		);
+		expect(verifyAssertion).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		"database",
+		"cookie",
+	] as const)("creates a session and reuses the account with %s state", async (strategy) => {
+		const { auth, headers, start, complete } = await setup({}, strategy);
+		const callback = await start();
+		const response = await complete(callback);
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe("/welcome");
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.email).toBe(`${steamId}@steam.placeholder.invalid`);
+		expect(session?.user.emailVerified).toBe(false);
+		expect(session?.user.name).toBe("Player");
+		expect(session?.user.image).toBe("https://example.com/avatar.jpg");
+		const accounts = await auth.api.listUserAccounts({ headers });
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "steam",
+			accountId: steamId,
+		});
+		const account = await (
+			await auth.$context
+		).internalAdapter.findAccountByKey({
+			providerId: "steam",
+			accountId: steamId,
+		});
+		expect(account?.accessToken).toBeFalsy();
+		expect(account?.refreshToken).toBeFalsy();
+		const again = await complete(await start());
+		expect(again.headers.get("location")).toBe("/signed-in");
+		expect((await auth.api.getSession({ headers }))?.user.id).toBe(
+			session?.user.id,
+		);
+		expect(await auth.api.listUserAccounts({ headers })).toHaveLength(1);
+	});
+
+	it("rejects a replayed assertion", async () => {
+		const { headers, start, complete } = await setup();
+		const callback = await start();
+		// Keep the browser's cookies from the original request for the replay.
+		const originalCookies = new Headers(headers);
+		const first = await complete(callback);
+		expect(first.headers.get("location")).toBe("/welcome");
+		const replay = await complete(callback, originalCookies);
+		expect(replay.headers.get("location")).toContain("error=state_mismatch");
+		expect(verifyAssertion).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects a callback without the browser's state cookie", async () => {
+		const { auth, start, complete } = await setup();
+		const response = await complete(await start(), new Headers());
+		expect(response.headers.get("location")).toContain("error=state_mismatch");
+		expect(verifyAssertion).not.toHaveBeenCalled();
+		expect(await auth.api.getSession({ headers: new Headers() })).toBeNull();
+	});
+
+	it("rejects missing state before signature verification", async () => {
+		const { start, complete } = await setup();
+		const callback = await start();
+		callback.searchParams.delete("state");
+		expect((await complete(callback)).headers.get("location")).toContain(
+			"error=state_not_found",
+		);
+		expect(verifyAssertion).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		"cancel",
+		"forged",
+		"duplicate",
+	])("rejects a %s assertion without creating a session", async (kind) => {
+		const { auth, headers, start, complete } = await setup();
+		const callback = await start();
+		if (kind === "cancel") callback.searchParams.set("openid.mode", "cancel");
+		if (kind === "forged")
+			verifyAssertion.mockImplementationOnce(() =>
+				HttpResponse.text(`ns:${namespace}\nis_valid:false\n`),
+			);
+		if (kind === "duplicate")
+			callback.searchParams.append(
+				"openid.claimed_id",
+				"https://attacker.example",
+			);
+		const response = await complete(callback);
+		const location = new URL(
+			response.headers.get("location")!,
+			"http://localhost:3000",
+		);
+		expect(location.pathname).toBe("/failed");
+		expect(location.searchParams.get("source")).toBe("steam");
+		expect(location.searchParams.get("error")).toBe("invalid_code");
+		expect(location.hash).toBe("#retry");
+		expect(await auth.api.getSession({ headers })).toBeNull();
+	});
+
+	it("honors disableSignUp", async () => {
+		const { auth, headers, start, complete } = await setup({
+			disableSignUp: true,
+		});
+		expect((await complete(await start())).headers.get("location")).toContain(
+			"error=signup_disabled",
+		);
+		expect(await auth.api.getSession({ headers })).toBeNull();
+	});
+
+	it("honors disableImplicitSignUp and explicit requestSignUp", async () => {
+		const { auth, headers, start, complete } = await setup({
+			disableImplicitSignUp: true,
+		});
+		expect((await complete(await start())).headers.get("location")).toContain(
+			"error=signup_disabled",
+		);
+		expect(await auth.api.getSession({ headers })).toBeNull();
+		expect((await complete(await start(true))).headers.get("location")).toBe(
+			"/welcome",
+		);
+		expect(await auth.api.getSession({ headers })).not.toBeNull();
+	});
+
+	it.each([
+		false,
+		true,
+	])("preserves explicit account-linking trust settings: %s", async (allowLinking) => {
+		const { auth, client, headers, cookieSetter, complete } = await setup(
+			{},
+			"database",
+			allowLinking,
+		);
+		const result = await client.signUp.email({
+			email: "player@example.com",
+			password: "password123",
+			name: "Player",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const linked = await client.linkSocial({
+			provider: "steam",
+			callbackURL: "/linked",
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		expect(linked.error).toBeNull();
+		const response = await complete(assertion(linked.data!.url!));
+		const accounts = await auth.api.listUserAccounts({ headers });
+		if (allowLinking) {
+			expect(response.headers.get("location")).toBe("/linked");
+			expect(accounts).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ providerId: "steam", accountId: steamId }),
+				]),
+			);
+		} else {
+			expect(response.headers.get("location")).toContain(
+				"error=unable_to_link_account",
+			);
+			expect(accounts.some((account) => account.providerId === "steam")).toBe(
+				false,
+			);
+		}
+		expect((await auth.api.getSession({ headers }))?.user.id).toBe(
+			result.data?.user.id,
+		);
+	});
+
+	it("rejects client-submitted ID tokens", async () => {
+		const { client } = await setup();
+		const result = await client.signIn.social({
+			provider: "steam",
+			idToken: { token: steamId },
+		});
+		expect(result.error?.code).toBe("ID_TOKEN_NOT_SUPPORTED");
+		expect(verifyAssertion).not.toHaveBeenCalled();
 	});
 });

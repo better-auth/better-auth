@@ -1,0 +1,120 @@
+---
+icon: authenticationSteam
+title: Steam
+description: Steam provider setup and usage.
+---
+
+Steam sign-in uses [OpenID 2.0](https://partner.steamgames.com/doc/features/auth#website), through Better Auth's social sign-in API. It does not require an OAuth client ID or client secret.
+
+<Steps>
+  <Step>
+    ### Configure the provider
+
+    Add Steam to the `socialProviders` option of your auth instance.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            steam: { // [!code highlight]
+                apiKey: process.env.STEAM_API_KEY, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
+
+    The `apiKey` is optional. Set `STEAM_API_KEY` in your server environment with a [Steam Web API key](https://steamcommunity.com/dev/apikey) to fetch the player's display name and avatar. Keep it on the server. Without a key, the provider uses the verified Steam ID as the name and does not return an avatar. You can configure `steam: {}` for sign-in without profile lookup.
+
+    The callback URL is `http://localhost:3000/api/auth/callback/steam` for local development. For production, Better Auth uses your application's base URL. If you change the base path of the auth routes, the callback path changes accordingly. Steam does not require registering an OAuth redirect URL. The provider sends the callback URL and its origin as the OpenID return URL and realm.
+  </Step>
+
+  <Step>
+    ### Sign in with Steam
+
+    Use the `signIn.social` function provided by the client with `provider` set to `steam`.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+
+    const authClient = createAuthClient()
+
+    const signIn = async () => {
+        await authClient.signIn.social({
+            provider: "steam",
+            callbackURL: "/dashboard",
+        })
+    }
+    ```
+
+    <Callout type="warn">
+      Steam does not return an email address. Better Auth creates an unverified placeholder email in the form `STEAM_ID@steam.placeholder.invalid`. Collect and verify a real email separately if your application needs to send email.
+    </Callout>
+
+    Steam does not issue OAuth access tokens, refresh tokens, or ID tokens. The provider supports browser redirects, with a GET callback, and does not support `idToken` sign-in or OAuth scopes. The Steam Web API key belongs to your application and is never stored as a user's access token.
+
+    Use a direct callback in each environment. The OAuth Proxy plugin handles OAuth authorization-code flows and does not proxy Steam's OpenID assertions.
+  </Step>
+</Steps>
+
+## User data
+
+The following examples show the JSON representation of `session.user` after a new user's first Steam sign-in, without custom profile mapping. IDs and timestamps are illustrative.
+
+With a Steam Web API key, Better Auth stores the player's display name and avatar URL:
+
+```json
+{
+    "id": "generated-user-id",
+    "name": "Steam Player",
+    "image": "https://avatars.steamstatic.com/example_full.jpg",
+    "email": "76561198000000000@steam.placeholder.invalid",
+    "emailVerified": false,
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+Without a key, Steam still verifies the user's identity. Better Auth uses the Steam ID as the name and stores no avatar:
+
+```json
+{
+    "id": "generated-user-id",
+    "name": "76561198000000000",
+    "image": null,
+    "email": "76561198000000000@steam.placeholder.invalid",
+    "emailVerified": false,
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+`user.id` is Better Auth's application user ID. The verified Steam ID is stored in the linked account's `accountId`, with `providerId: "steam"` and `userId` pointing to `user.id`. It is not added to `session.user` automatically.
+
+The `user` table stores the name, avatar URL, and unverified placeholder email. Reading `session.user.name` or `session.user.image` returns the saved profile. Additional Steam profile fields are not stored automatically; declare them in `user.additionalFields` and return them from `mapProfileToUser` if needed. The API key is not saved in the user's account.
+
+Later sign-ins preserve the existing user profile by default. Set `overrideUserInfoOnSignIn: true` in the Steam provider options to update it from the provider on sign-in. See [OAuth provider options](/docs/concepts/oauth#overrideuserinfoonsignin).
+
+## Account linking
+
+Steam uses the same account-linking rules as other social providers. Its placeholder email is unverified and differs from an existing user's email. To allow a signed-in user to link Steam, explicitly trust the provider and allow different emails:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        steam: {
+            apiKey: process.env.STEAM_API_KEY,
+        },
+    },
+    account: {
+        accountLinking: {
+            trustedProviders: ["steam"],
+            allowDifferentEmails: true,
+        },
+    },
+})
+```
+
+Then call `authClient.linkSocial({ provider: "steam", callbackURL: "/settings" })` from an authenticated session. See [account linking](/docs/concepts/users-accounts#account-linking) for the effects of these options on other configured providers.

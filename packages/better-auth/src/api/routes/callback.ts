@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { AccountKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { openId2Providers } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
@@ -155,7 +156,7 @@ export const callbackOAuth = createAuthEndpoint(
 			redirectOnError(error, error_description);
 		}
 
-		if (!code) {
+		if (!code && !openId2Providers.includes(c.params.id)) {
 			c.context.logger.warn("Code not found");
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CODE);
 		}
@@ -198,10 +199,13 @@ export const callbackOAuth = createAuthEndpoint(
 		let tokens: OAuth2Tokens | null;
 		try {
 			tokens = await provider.validateAuthorizationCode({
-				code: code,
+				code: code ?? "",
 				codeVerifier,
 				deviceId: device_id,
 				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
+				...(openId2Providers.includes(provider.id)
+					? { request: c.request }
+					: {}),
 			});
 		} catch (e) {
 			c.context.logger.error("", e);

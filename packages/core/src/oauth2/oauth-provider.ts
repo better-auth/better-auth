@@ -187,6 +187,8 @@ export interface OAuthProvider<
 		redirectURI: string;
 		codeVerifier?: string | undefined;
 		deviceId?: string | undefined;
+		/** Original callback request for providers such as Steam that use OpenID. */
+		request?: Request | undefined;
 	}) => Promise<OAuth2Tokens | null>;
 	getUserInfo: (
 		token: OAuth2Tokens & {

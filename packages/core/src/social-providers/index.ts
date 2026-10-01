@@ -29,6 +29,7 @@ import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
 import { slack } from "./slack";
 import { spotify } from "./spotify";
+import { steam } from "./steam";
 import { tiktok } from "./tiktok";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
@@ -51,6 +52,7 @@ export const socialProviders = {
 	huggingface,
 	slack,
 	spotify,
+	steam,
 	twitch,
 	twitter,
 	dropbox,
@@ -75,6 +77,9 @@ export const socialProviders = {
 	vercel,
 	wechat,
 };
+
+/** Providers that use OpenID 2.0 instead of OAuth authorization codes. */
+export const openId2Providers: readonly string[] = ["steam"];
 
 export const socialProviderList = Object.keys(socialProviders) as [
 	"github",
@@ -124,6 +129,7 @@ export * from "./roblox";
 export * from "./salesforce";
 export * from "./slack";
 export * from "./spotify";
+export * from "./steam";
 export * from "./tiktok";
 export * from "./twitch";
 export * from "./twitter";
