@@ -439,13 +439,13 @@ export async function authorizeEndpoint(
 		throw new APIError("NOT_FOUND");
 	}
 
-	if (!ctx.request) {
+	const headers = ctx.request?.headers ?? ctx.headers;
+	if (!headers) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "request not found",
 			error: "invalid_request",
 		});
 	}
-	const request = ctx.request;
 
 	// Normalize GET query serialization and POST form serialization through one
 	// authorization-request path (OIDC Core §3.1.2.1).
@@ -834,7 +834,7 @@ export async function authorizeEndpoint(
 		opts.selectAccount
 	) {
 		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
-			headers: request.headers,
+			headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -856,7 +856,7 @@ export async function authorizeEndpoint(
 	// Redirect to complete registration steps
 	if (opts.signup?.shouldRedirect) {
 		const signupRedirect = await opts.signup.shouldRedirect({
-			headers: request.headers,
+			headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -879,7 +879,7 @@ export async function authorizeEndpoint(
 
 	if (!settings?.postLogin && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
-			headers: request.headers,
+			headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
