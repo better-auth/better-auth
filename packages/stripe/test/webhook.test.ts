@@ -2715,16 +2715,14 @@ describe("stripe webhook", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/4565
+	 */
 	describe("webhook: non-subscription checkout session modes", () => {
-		/**
-		 * @see https://github.com/better-auth/better-auth/issues/4565
-		 *
-		 * checkout.session.completed with mode "payment" has no subscription
-		 * id. The handler must bail out before calling subscriptions.retrieve,
-		 * otherwise Stripe throws:
-		 * "Argument 'subscription_exposed_id' must be a string, but got: null".
-		 */
-		test("mode: payment does not call subscriptions.retrieve or onSubscriptionComplete", async ({
+		test.for([
+			"payment",
+			"setup",
+		] as const)("mode: %s does not call subscriptions.retrieve or onSubscriptionComplete", async (mode, {
 			memory,
 			stripeOptions,
 		}) => {
@@ -2735,10 +2733,10 @@ describe("stripe webhook", () => {
 				type: "checkout.session.completed",
 				data: {
 					object: {
-						id: "cs_4565_payment",
-						mode: "payment",
+						id: `cs_4565_${mode}`,
+						mode,
 						subscription: null,
-						customer: "cus_4565",
+						customer: `cus_4565_${mode}`,
 						metadata: {},
 					},
 				},
@@ -2758,73 +2756,6 @@ describe("stripe webhook", () => {
 			const testOptions = {
 				...stripeOptions,
 				stripeClient: stripeForTest as unknown as Stripe,
-				stripeWebhookSecret: "test_secret",
-				subscription: {
-					...stripeOptions.subscription,
-					onSubscriptionComplete,
-				},
-			} satisfies StripeOptions;
-
-			const { auth: webhookAuth } = await getTestInstance(
-				{ database: memory, plugins: [stripe(testOptions)] },
-				{ disableTestUser: true },
-			);
-
-			const response = await webhookAuth.handler(
-				new Request("http://localhost:3000/api/auth/stripe/webhook", {
-					method: "POST",
-					headers: { "stripe-signature": "test_signature" },
-					body: JSON.stringify(webhookEvent),
-				}),
-			);
-
-			expect(response.status).toBe(200);
-			expect(subscriptionsRetrieve).not.toHaveBeenCalled();
-			expect(onSubscriptionComplete).not.toHaveBeenCalled();
-		});
-
-		/**
-		 * @see https://github.com/better-auth/better-auth/issues/4565
-		 *
-		 * setup mode also has no subscription id. This test guards the
-		 * existing early-return so that the fix for payment mode does not
-		 * regress the setup case.
-		 */
-		test("mode: setup does not call subscriptions.retrieve or onSubscriptionComplete", async ({
-			memory,
-			stripeOptions,
-		}) => {
-			const onSubscriptionComplete = vi.fn();
-			const subscriptionsRetrieve = vi.fn();
-
-			const webhookEvent = {
-				type: "checkout.session.completed",
-				data: {
-					object: {
-						id: "cs_4565_setup",
-						mode: "setup",
-						subscription: null,
-						customer: "cus_4565_setup",
-						metadata: {},
-					},
-				},
-			};
-
-			const stripeForTest = {
-				...stripeOptions.stripeClient,
-				subscriptions: {
-					...stripeOptions.stripeClient.subscriptions,
-					retrieve: subscriptionsRetrieve,
-				},
-				webhooks: {
-					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
-				},
-			};
-
-			const testOptions = {
-				...stripeOptions,
-				stripeClient: stripeForTest as unknown as Stripe,
-				stripeWebhookSecret: "test_secret",
 				subscription: {
 					...stripeOptions.subscription,
 					onSubscriptionComplete,
