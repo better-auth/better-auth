@@ -1,13 +1,12 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 
 interface BlogPostData {
 	title: string;
 	description?: string;
 	date?: Date;
 	author?: { name?: string; twitter?: string };
-	toc?: { title: ReactNode; url: string; depth: number }[];
 }
 
 interface BlogLeftPanelProps {
@@ -89,6 +88,9 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 							)}
 						</div>
 					</div>
+				</div>
+				<div className="hidden lg:block absolute left-10 right-6 bottom-4 z-[3]">
+					<SignatureMark compact />
 				</div>
 			</div>
 		);
@@ -197,6 +199,9 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 						</div>
 					)}
 				</div>
+			</div>
+			<div className="hidden lg:block absolute left-10 right-6 bottom-4 z-[3]">
+				<SignatureMark compact />
 			</div>
 		</div>
 	);

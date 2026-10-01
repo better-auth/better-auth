@@ -6,10 +6,15 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
 import {
 	getSessionFromCtx,
+	isStateful,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
@@ -250,24 +255,12 @@ export const changePassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
 		const session = ctx.context.session;
-		const minPasswordLength = ctx.context.password.config.minPasswordLength;
-		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
+		assertPasswordNotTooShort(ctx, newPassword);
+		assertPasswordNotTooLong(ctx, newPassword);
+		assertPasswordNotTooLong(ctx, currentPassword);
 
-		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-
-		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
-
-		const accounts = await ctx.context.internalAdapter.findAccounts(
+		const account = await ctx.context.internalAdapter.findCredentialAccount(
 			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
 		);
 		if (!account || !account.password) {
 			throw APIError.from(
@@ -288,7 +281,7 @@ export const changePassword = createAuthEndpoint(
 		});
 		let token = null;
 		if (revokeOtherSessions) {
-			await ctx.context.internalAdapter.deleteSessions(session.user.id);
+			await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
 			);
@@ -313,7 +306,7 @@ export const changePassword = createAuthEndpoint(
 	},
 );
 
-export const setPassword = createAuthEndpoint(
+export const setPassword = createAuthEndpoint.serverOnly(
 	{
 		method: "POST",
 		body: z.object({
@@ -329,24 +322,11 @@ export const setPassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword } = ctx.body;
 		const session = ctx.context.session;
-		const minPasswordLength = ctx.context.password.config.minPasswordLength;
-		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
+		assertPasswordNotTooShort(ctx, newPassword);
+		assertPasswordNotTooLong(ctx, newPassword);
 
-		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-
-		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
-
-		const accounts = await ctx.context.internalAdapter.findAccounts(
+		const account = await ctx.context.internalAdapter.findCredentialAccount(
 			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
 		);
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		if (!account) {
@@ -354,6 +334,14 @@ export const setPassword = createAuthEndpoint(
 				userId: session.user.id,
 				providerId: "credential",
 				accountId: session.user.id,
+				password: passwordHash,
+			});
+			return ctx.json({
+				status: true,
+			});
+		}
+		if (!account.password) {
+			await ctx.context.internalAdapter.updateAccount(account.id, {
 				password: passwordHash,
 			});
 			return ctx.json({
@@ -468,11 +456,9 @@ export const deleteUser = createAuthEndpoint(
 		const session = ctx.context.session;
 
 		if (ctx.body.password) {
-			const accounts = await ctx.context.internalAdapter.findAccounts(
+			assertPasswordNotTooLong(ctx, ctx.body.password);
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
 				session.user.id,
-			);
-			const account = accounts.find(
-				(account) => account.providerId === "credential" && account.password,
 			);
 			if (!account || !account.password) {
 				throw APIError.from(
@@ -549,7 +535,7 @@ export const deleteUser = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
@@ -619,20 +605,26 @@ export const deleteUserCallback = createAuthEndpoint(
 				code: "NOT_FOUND",
 			});
 		}
-		const session = await getSessionFromCtx(ctx);
+		// Account deletion is sensitive: bypass the cookie cache on stateful
+		// deployments so a revoked-but-cached session cannot complete the deletion
+		// even when paired with a valid delete-account token.
+		const session = await getSessionFromCtx(ctx, {
+			disableCookieCache: isStateful(ctx),
+		});
 		if (!session) {
 			throw APIError.from(
 				"NOT_FOUND",
 				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 			);
 		}
-		const token = await ctx.context.internalAdapter.findVerificationValue(
+		// Consume the single-use delete token atomically before any
+		// destructive work so concurrent callbacks with the same token can
+		// only delete the account once: the first caller wins, later racers
+		// get null. A wrong-owner token is still burned by this consume.
+		const token = await ctx.context.internalAdapter.consumeVerificationValue(
 			`delete-account-${ctx.query.token}`,
 		);
-		if (!token || token.expiresAt < new Date()) {
-			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
-		}
-		if (token.value !== session.user.id) {
+		if (!token || token.value !== session.user.id) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
@@ -640,11 +632,8 @@ export const deleteUserCallback = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteSessions(session.user.id);
+		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			`delete-account-${ctx.query.token}`,
-		);
 
 		deleteSessionCookie(ctx);
 
@@ -726,7 +715,7 @@ export const changeEmail = createAuthEndpoint(
 		const newEmail = ctx.body.newEmail.toLowerCase();
 
 		if (newEmail === ctx.context.session.user.email) {
-			ctx.context.logger.error("Email is the same");
+			ctx.context.logger.warn("Email is the same");
 			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Email is the same",
 			});
@@ -779,11 +768,9 @@ export const changeEmail = createAuthEndpoint(
 		 * If the email is not verified, we can update the email if the option is enabled
 		 */
 		if (canUpdateWithoutVerification) {
-			await ctx.context.internalAdapter.updateUserByEmail(
-				ctx.context.session.user.email,
-				{
-					email: newEmail,
-				},
+			await ctx.context.internalAdapter.updateUser(
+				ctx.context.session.user.id,
+				{ email: newEmail },
 			);
 			await setSessionCookie(ctx, {
 				session: ctx.context.session.session,

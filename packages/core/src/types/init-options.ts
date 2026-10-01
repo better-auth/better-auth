@@ -1,6 +1,5 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -14,7 +13,6 @@ import type {
 	Account,
 	DBFieldAttribute,
 	ModelNames,
-	RateLimit,
 	SecondaryStorage,
 	Session,
 	User,
@@ -29,10 +27,12 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
+import type { D1Database } from "./database";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
+
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
@@ -48,6 +48,98 @@ export type GenerateIdFn = (options: {
 }) => string | false;
 
 /**
+ * What Better Auth is about to do with an incoming identity when
+ * {@link BetterAuthOptions.user}'s `validateUserInfo` runs.
+ *
+ * - `create-user`: a brand-new user record is about to be created.
+ * - `link-account`: a new provider account is about to be linked to an
+ *   already-existing user.
+ * - `sign-in`: an existing OAuth or SSO user is signing in again. This is the
+ *   one case where the provider can assert *changed* data, so the hook receives
+ *   the fresh provider email and profile (not the stored row), letting a domain
+ *   or org policy reject a user whose provider identity moved out of bounds.
+ *
+ * Non-provider returning sign-ins are not re-validated: they carry only the
+ * stored row, which has not changed since `create-user` gated it. Use the admin
+ * plugin's ban controls or a `databaseHooks.session.create.before` hook to
+ * block those.
+ */
+export type ValidateUserInfoAction = "create-user" | "link-account" | "sign-in";
+
+/**
+ * The authentication method that produced the incoming user info. The named
+ * methods cover Better Auth's built-ins; the open `string` keeps it extensible
+ * for plugins (for example `"scim"`).
+ */
+export type ValidateUserInfoMethod =
+	| "oauth"
+	| "sso-oidc"
+	| "sso-saml"
+	| "email-password"
+	| "magic-link"
+	| "email-otp"
+	| "anonymous"
+	| "siwe"
+	| "phone-number"
+	| "admin"
+	| (string & {});
+
+/** OAuth-specific provisioning context; present only when `method` is `"oauth"`. */
+export type ValidateUserInfoOAuthInfo = {
+	/** The social or generic OAuth provider id (e.g. `"google"`). */
+	providerId: string;
+	/** The raw provider profile (userinfo or id-token claims), unmapped. */
+	profile?: Record<string, unknown> | undefined;
+};
+
+/** SSO-specific provisioning context; present for OIDC and SAML SSO methods. */
+export type ValidateUserInfoSSOInfo = {
+	/** The configured SSO provider id. */
+	providerId: string;
+	/** The raw OIDC claims or SAML assertion attributes, unmapped. */
+	profile?: Record<string, unknown> | undefined;
+};
+
+/** Provisioning origin passed to `createUser`; the creation seam adds `action: "create-user"` to build {@link ValidateUserInfoSource}. */
+export type UserProvisioningSource = {
+	method: ValidateUserInfoMethod;
+	/** Provider id and raw profile; present iff `method` is `"oauth"`. */
+	oauth?: ValidateUserInfoOAuthInfo | undefined;
+	/** Provider id and raw profile; present iff `method` is `"sso-oidc"` or `"sso-saml"`. */
+	sso?: ValidateUserInfoSSOInfo | undefined;
+};
+
+/**
+ * The context passed to `validateUserInfo`: the lifecycle
+ * {@link ValidateUserInfoAction}, the {@link ValidateUserInfoMethod}, and (for
+ * OAuth/SSO provider methods) protocol-specific provider metadata.
+ *
+ * ```ts
+ * // Scope to one OAuth provider:
+ * if (source.oauth?.providerId !== "google") return;
+ * // Branch on the method:
+ * if (source.method === "anonymous") return { error: "no_anonymous" };
+ * // Inspect SSO claims:
+ * if (source.method === "sso-saml" && source.sso?.profile?.department !== "eng") {
+ *   return { error: "invalid_department" };
+ * }
+ * ```
+ */
+export type ValidateUserInfoSource = UserProvisioningSource & {
+	action: ValidateUserInfoAction;
+};
+
+export type ValidateUserInfoResult = {
+	/** A short, machine-readable rejection code, surfaced to the client. */
+	error: string;
+	/**
+	 * A human-readable reason, surfaced to the client. Do not put sensitive
+	 * details here.
+	 */
+	errorDescription?: string | undefined;
+};
+
+/**
  * Configuration for dynamic base URL resolution.
  * Allows Better Auth to work with multiple domains (e.g., Vercel preview deployments).
  */
@@ -55,7 +147,8 @@ export type DynamicBaseURLConfig = {
 	/**
 	 * List of allowed hostnames. Supports wildcard patterns.
 	 *
-	 * The derived host from the request will be validated against this list.
+	 * `x-forwarded-host` is used only when `advanced.trustedProxyHeaders` is
+	 * enabled.
 	 * Uses the same wildcard matching as `trustedOrigins`.
 	 *
 	 * @example
@@ -70,8 +163,9 @@ export type DynamicBaseURLConfig = {
 	allowedHosts: string[];
 
 	/**
-	 * Fallback URL to use if the derived host doesn't match any allowed host.
-	 * If not set, Better Auth will throw an error when the host doesn't match.
+	 * Fallback URL used when no allowed request host can be resolved.
+	 * If omitted, Better Auth throws when the request host is unavailable or not
+	 * allowed.
 	 *
 	 * @example "https://myapp.com"
 	 */
@@ -81,7 +175,7 @@ export type DynamicBaseURLConfig = {
 	 * Protocol to use when constructing the URL.
 	 * - `"https"`: Always use HTTPS (recommended for production)
 	 * - `"http"`: Always use HTTP (for local development)
-	 * - `"auto"`: Derive from `x-forwarded-proto` header or default to HTTPS
+	 * - `"auto"`: Trust `x-forwarded-proto` only when proxy headers are enabled
 	 *
 	 * @default "auto"
 	 */
@@ -95,12 +189,27 @@ export type DynamicBaseURLConfig = {
 export type BaseURLConfig = string | DynamicBaseURLConfig;
 
 export interface BetterAuthRateLimitStorage {
-	get: (key: string) => Promise<RateLimit | null | undefined>;
-	set: (
+	/**
+	 * Atomically records one request against `key` within the rolling `window`
+	 * (in seconds) and reports whether it is allowed.
+	 *
+	 * When `allowed` is true the count was incremented within the active window,
+	 * or the window had elapsed and was reset to start at 1. When `allowed` is
+	 * false the limit was already reached and `retryAfter` is the number of
+	 * seconds until the window frees up.
+	 *
+	 * Performing the check and the increment in a single step closes the
+	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
+	 * requests can no longer all pass a stale read before any increment lands.
+	 *
+	 * Custom storages must implement this operation directly. Better Auth no
+	 * longer accepts separate `get`/`set` rate-limit storage because that shape
+	 * cannot enforce a distributed limit under concurrent requests.
+	 */
+	consume: (
 		key: string,
-		value: RateLimit,
-		update?: boolean | undefined,
-	) => Promise<void>;
+		rule: { window: number; max: number },
+	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 }
 
 export type BetterAuthRateLimitRule = {
@@ -197,7 +306,7 @@ export type BetterAuthAdvancedOptions = {
 				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 				 *
 				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
+				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
 				 */
 				ipAddressHeaders?: string[];
 				/**
@@ -214,6 +323,21 @@ export type BetterAuthAdvancedOptions = {
 				 * @default 64
 				 */
 				ipv6Subnet?: number;
+				/**
+				 * Trusted reverse-proxy IPs or CIDR ranges. When set, a forwarded IP
+				 * chain is walked right to left, trusted hops are skipped, and the
+				 * first untrusted address is the client IP. Unset trusts only
+				 * single-value IP headers. Use the actual address or subnet of your
+				 * proxies, not a broad private range that also covers clients.
+				 *
+				 * This only interprets the forwarded header chain and cannot verify
+				 * the direct sender. It is safe only when your origin is reachable
+				 * through these proxies and clients cannot set forwarded headers
+				 * directly.
+				 *
+				 * @example ["192.0.2.10", "10.0.0.0/24"]
+				 */
+				trustedProxies?: string[];
 		  }
 		| undefined;
 	/**
@@ -333,6 +457,32 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Enable database joins for adapters that support them.
+				 *
+				 * When disabled (default), related data is fetched via
+				 * separate queries. When enabled, adapters that support
+				 * native joins use them; otherwise Better Auth falls back
+				 * to separate queries.
+				 *
+				 * Please read the adapter documentation for more
+				 * information regarding joins before enabling this.
+				 * Not all adapters support joins.
+				 *
+				 * @default false
+				 */
+				joins?: boolean;
+				/**
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database; Drizzle and Prisma inspect
+				 * local schema metadata without opening a connection.
+				 * Set `false` to disable runtime schema validation.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
@@ -501,6 +651,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 				| {
 						/**
@@ -531,6 +691,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 		  )
 		| undefined;
@@ -777,6 +947,33 @@ export type BetterAuthOptions = {
 	 */
 	user?:
 		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
+				/**
+				 * Gate which identities Better Auth admits. Called just before
+				 * `create-user`, `link-account`, and (for OAuth) `sign-in`, across
+				 * every authentication method, including stateless setups with no
+				 * persistent database. On `sign-in` the hook receives the *fresh*
+				 * provider email and profile, so a domain policy can reject a user
+				 * whose provider identity moved out of bounds.
+				 *
+				 * Non-provider returning sign-ins are not re-validated; use the admin
+				 * plugin's ban controls or a `databaseHooks.session.create.before`
+				 * hook for those.
+				 *
+				 * Return nothing to allow; return `{ error }` to reject. Browser flows
+				 * redirect to the configured error URL; programmatic flows surface a
+				 * `403`.
+				 *
+				 * TODO: rename to `validateUser` (and the `ValidateUserInfo*` types).
+				 * "UserInfo" is the OIDC term and misleads for the email/password,
+				 * SIWE, phone, and admin methods.
+				 */
+				validateUserInfo?: (
+					data: {
+						user: Partial<User> & Record<string, unknown>;
+						source: ValidateUserInfoSource;
+					},
+					context: GenericEndpointContext,
+				) => Awaitable<void | ValidateUserInfoResult>;
 				/**
 				 * Changing email configuration
 				 */
@@ -1093,7 +1290,11 @@ export type BetterAuthOptions = {
 					 */
 					allowUnlinkingAll?: boolean;
 					/**
-					 * If enabled (true), this will update the user information based on the newly linked account
+					 * When enabled, linking an account copies the provider's profile onto
+					 * the local user, matching the fields persisted on sign-up (`name`,
+					 * `image`, and any `mapProfileToUser` fields). The local `email` and
+					 * `emailVerified` are never changed, so a link cannot rebind the
+					 * account's identity.
 					 *
 					 * @default false
 					 */
@@ -1106,7 +1307,7 @@ export type BetterAuthOptions = {
 				 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
 				 * on external services.
 				 *
-				 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+				 * When enabled, tokens are encrypted using XChaCha20-Poly1305 before storage, providing protection against:
 				 * - Database breaches and unauthorized access to raw token data
 				 * - Internal threats from database administrators or compromised credentials
 				 * - Token exposure in database backups and logs
@@ -1126,13 +1327,17 @@ export type BetterAuthOptions = {
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy?: "database" | "cookie";
 				/**
-				 * Store account data after oauth flow on a cookie
+				 * Store provider account data after an OAuth flow in an encrypted
+				 * cookie. This includes OAuth token material such as access tokens,
+				 * refresh tokens, ID tokens, scopes, and token expiry.
 				 *
-				 * This is useful for database-less flow
+				 * This is useful for database-less flows, but large provider tokens can
+				 * still hit browser or proxy cookie/header limits even though Better Auth
+				 * chunks oversized account cookies.
 				 *
 				 * @default false
 				 *
@@ -1614,17 +1819,23 @@ export type BetterAuthOptions = {
 		  }
 		| undefined;
 	/**
-	 * Experimental features
+	 * Experimental features.
 	 */
-	experimental?: {
-		/**
-		 * Enable experimental joins for your database adapter.
-		 *
-		 * 	Please read the adapter documentation for more information regarding joins before enabling this.
-		 * 	Not all adapters support joins.
-		 *
-		 * @default false
-		 */
-		joins?: boolean;
-	};
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
+		  }
+		| undefined;
 };

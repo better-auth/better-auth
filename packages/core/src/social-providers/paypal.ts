@@ -1,12 +1,20 @@
-import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL } from "../oauth2";
+import type {
+	OAuthProvider,
+	ProviderOptions,
+	TokenEndpointAuth,
+} from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface PayPalProfile {
+	sub?: string | undefined;
 	user_id: string;
 	name: string;
 	given_name: string;
@@ -74,11 +82,24 @@ export const paypal = (options: PayPalOptions) => {
 	const userInfoEndpoint = isSandbox
 		? "https://api-m.sandbox.paypal.com/v1/identity/oauth2/userinfo"
 		: "https://api-m.paypal.com/v1/identity/oauth2/userinfo";
+	const tokenRequestOptions = {
+		clientId: options.clientId,
+		clientSecret: options.clientSecret,
+	};
+	const tokenEndpointAuth = {
+		method: "client_secret_basic",
+	} satisfies TokenEndpointAuth;
 
 	return {
 		id: "paypal",
 		name: "PayPal",
-		async createAuthorizationURL({ state, codeVerifier, redirectURI }) {
+		accountSubject: ({ profile }) => profile.user_id,
+		async createAuthorizationURL({
+			state,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for PayPal. Make sure to provide them in the options.",
@@ -103,51 +124,21 @@ export const paypal = (options: PayPalOptions) => {
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams,
 			});
 			return url;
 		},
 
-		validateAuthorizationCode: async ({ code, redirectURI }) => {
-			/**
-			 * PayPal requires Basic Auth for token exchange
-			 **/
-
-			const credentials = base64.encode(
-				`${options.clientId}:${options.clientSecret}`,
-			);
-
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			try {
-				const response = await betterFetch(tokenEndpoint, {
-					method: "POST",
-					headers: {
-						Authorization: `Basic ${credentials}`,
-						Accept: "application/json",
-						"Accept-Language": "en_US",
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						grant_type: "authorization_code",
-						code: code,
-						redirect_uri: redirectURI,
-					}).toString(),
+				return await validateAuthorizationCode({
+					code,
+					codeVerifier,
+					redirectURI: options.redirectURI || redirectURI,
+					options: tokenRequestOptions,
+					tokenEndpoint,
+					tokenEndpointAuth,
 				});
-
-				if (!response.data) {
-					throw new BetterAuthError("FAILED_TO_GET_ACCESS_TOKEN");
-				}
-
-				const data = response.data as PayPalTokenResponse;
-
-				const result = {
-					accessToken: data.access_token,
-					refreshToken: data.refresh_token,
-					accessTokenExpiresAt: data.expires_in
-						? new Date(Date.now() + data.expires_in * 1000)
-						: undefined,
-					idToken: data.id_token,
-				};
-
-				return result;
 			} catch (error) {
 				logger.error("PayPal token exchange failed:", error);
 				throw new BetterAuthError("FAILED_TO_GET_ACCESS_TOKEN");
@@ -157,58 +148,18 @@ export const paypal = (options: PayPalOptions) => {
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
-					const credentials = base64.encode(
-						`${options.clientId}:${options.clientSecret}`,
-					);
-
 					try {
-						const response = await betterFetch(tokenEndpoint, {
-							method: "POST",
-							headers: {
-								Authorization: `Basic ${credentials}`,
-								Accept: "application/json",
-								"Accept-Language": "en_US",
-								"Content-Type": "application/x-www-form-urlencoded",
-							},
-							body: new URLSearchParams({
-								grant_type: "refresh_token",
-								refresh_token: refreshToken,
-							}).toString(),
+						return await refreshAccessToken({
+							refreshToken,
+							options: tokenRequestOptions,
+							tokenEndpoint,
+							tokenEndpointAuth,
 						});
-
-						if (!response.data) {
-							throw new BetterAuthError("FAILED_TO_REFRESH_ACCESS_TOKEN");
-						}
-
-						const data = response.data as any;
-						return {
-							accessToken: data.access_token,
-							refreshToken: data.refresh_token,
-							accessTokenExpiresAt: data.expires_in
-								? new Date(Date.now() + data.expires_in * 1000)
-								: undefined,
-						};
 					} catch (error) {
 						logger.error("PayPal token refresh failed:", error);
 						throw new BetterAuthError("FAILED_TO_REFRESH_ACCESS_TOKEN");
 					}
 				},
-
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			try {
-				const payload = decodeJwt(token);
-				return !!payload.sub;
-			} catch (error) {
-				logger.error("Failed to verify PayPal ID token:", error);
-				return false;
-			}
-		},
 
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -237,11 +188,30 @@ export const paypal = (options: PayPalOptions) => {
 				}
 
 				const userInfo = response.data;
+				if (token.idToken) {
+					let idTokenSubject: string | undefined;
+					try {
+						idTokenSubject = decodeJwt(token.idToken).sub;
+					} catch (error) {
+						logger.error("Failed to decode PayPal ID token:", error);
+						return null;
+					}
+
+					// OIDC binds UserInfo to the ID Token with `sub`. Keep `user_id`
+					// as the account id below for existing PayPal account mappings.
+					const userInfoSubject = userInfo.sub ?? userInfo.user_id;
+					if (!idTokenSubject || userInfoSubject !== idTokenSubject) {
+						logger.error(
+							"PayPal user info subject does not match ID token subject",
+						);
+						return null;
+					}
+				}
+
 				const userMap = await options.mapProfileToUser?.(userInfo);
 
 				const result = {
 					user: {
-						id: userInfo.user_id,
 						name: userInfo.name,
 						email: userInfo.email,
 						image: userInfo.picture,

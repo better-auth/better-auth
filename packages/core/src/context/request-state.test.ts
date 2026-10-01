@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { __getBetterAuthGlobal } from "./global";
 import type { RequestStateWeakMap } from "./request-state";
 import {
 	defineRequestState,
@@ -89,6 +90,51 @@ describe("request-state", () => {
 				const currentStore = await getCurrentRequestState();
 				expect(currentStore).toBe(store);
 			});
+		});
+	});
+
+	describe("concurrent first calls", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10832
+		 */
+		it("preserves each request state", async () => {
+			vi.resetModules();
+			const globalContext = __getBetterAuthGlobal().context;
+			const previousStorageDescriptor = Object.getOwnPropertyDescriptor(
+				globalContext,
+				"requestStateAsyncStorage",
+			);
+			onTestFinished(() => {
+				if (previousStorageDescriptor) {
+					Object.defineProperty(
+						globalContext,
+						"requestStateAsyncStorage",
+						previousStorageDescriptor,
+					);
+				} else {
+					Reflect.deleteProperty(globalContext, "requestStateAsyncStorage");
+				}
+			});
+			Reflect.deleteProperty(globalContext, "requestStateAsyncStorage");
+			const mod = await import("./request-state");
+
+			const stores: RequestStateWeakMap[] = Array.from(
+				{ length: 32 },
+				() => new WeakMap<object, unknown>(),
+			);
+			const currentStores = await Promise.all(
+				stores.map((store) =>
+					mod.runWithRequestState(store, async () => {
+						await Promise.resolve();
+						return mod.getCurrentRequestState();
+					}),
+				),
+			);
+
+			const matchingStoreCount = currentStores.filter(
+				(currentStore, index) => currentStore === stores[index],
+			).length;
+			expect(matchingStoreCount).toBe(stores.length);
 		});
 	});
 });

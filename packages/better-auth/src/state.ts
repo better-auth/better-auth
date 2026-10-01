@@ -7,6 +7,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "./crypto";
+import { derivePurposeKey } from "./crypto/purpose";
 
 const stateDataSchema = z.looseObject({
 	callbackURL: z.string(),
@@ -26,12 +27,32 @@ const stateDataSchema = z.looseObject({
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
+	/**
+	 * OIDC nonce sent as the authorization request `nonce` parameter when the
+	 * provider requires an ID token to be bound to this redirect flow.
+	 */
+	idTokenNonce: z.string().optional(),
+	/**
+	 * Server-controlled values that ride the state across the provider redirect.
+	 * Populated only by `generateState` from `addOAuthServerContext`, never from
+	 * the request body, so it is safe to trust on the callback.
+	 */
+	serverContext: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
+/** Verification key for database-backed OAuth and SAML relay state. */
+export const getAuthStateVerificationIdentifier = (state: string) =>
+	`auth-state:${state}`;
+
+export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
+	Object.keys(stateDataSchema.shape),
+);
+
 export type StateErrorCode =
 	| "state_generation_error"
+	| "state_not_found"
 	| "state_invalid"
 	| "state_mismatch"
 	| "state_security_mismatch";
@@ -39,17 +60,27 @@ export type StateErrorCode =
 export class StateError extends BetterAuthError {
 	code: string;
 	details?: Record<string, any>;
+	/**
+	 * The per-flow `errorCallbackURL` recovered from the parsed state, when the
+	 * failure happened after the state was successfully parsed (for example a
+	 * nonce or state-cookie mismatch). It was origin-validated at sign-in, so
+	 * the callback can safely redirect there instead of the default error page.
+	 * Absent when the state could not be parsed at all.
+	 */
+	errorURL?: string;
 
 	constructor(
 		message: string,
 		options: ErrorOptions & {
 			code: StateErrorCode;
 			details?: Record<string, any>;
+			errorURL?: string;
 		},
 	) {
 		super(message, options);
 		this.code = options.code;
 		this.details = options.details;
+		this.errorURL = options.errorURL;
 	}
 }
 
@@ -68,7 +99,7 @@ export async function generateGenericState(
 	if (storeStateStrategy === "cookie") {
 		const payload: StateData = { ...stateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
-			key: c.context.secretConfig,
+			key: derivePurposeKey(c.context.secretConfig, "oauth-state-cookie"),
 			data: JSON.stringify(payload),
 		});
 
@@ -113,7 +144,7 @@ export async function generateGenericState(
 			...stateData,
 			oauthState: state,
 		} satisfies StateData),
-		identifier: state,
+		identifier: getAuthStateVerificationIdentifier(state),
 		expiresAt,
 	});
 
@@ -137,9 +168,15 @@ export async function generateGenericState(
 
 export async function parseGenericState(
 	c: GenericEndpointContext,
-	state: string,
-	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
+	state: string | undefined,
+	settings?: { cookieName?: string; skipStateCookieCheck?: boolean },
 ) {
+	if (!state) {
+		throw new StateError("State not found in OAuth callback", {
+			code: "state_not_found",
+		});
+	}
+
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
 
@@ -159,7 +196,7 @@ export async function parseGenericState(
 
 		try {
 			const decryptedData = await symmetricDecrypt({
-				key: c.context.secretConfig,
+				key: derivePurposeKey(c.context.secretConfig, "oauth-state-cookie"),
 				data: encryptedData,
 			});
 
@@ -181,6 +218,7 @@ export async function parseGenericState(
 				{
 					code: "state_security_mismatch",
 					details: { state },
+					errorURL: parsedData.errorURL,
 				},
 			);
 		}
@@ -189,7 +227,9 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 	} else {
 		// Default: database strategy
-		const data = await c.context.internalAdapter.findVerificationValue(state);
+		const data = await c.context.internalAdapter.findVerificationValue(
+			getAuthStateVerificationIdentifier(state),
+		);
 		if (!data) {
 			throw new StateError("State mismatch: verification not found", {
 				code: "state_mismatch",
@@ -208,6 +248,7 @@ export async function parseGenericState(
 				{
 					code: "state_security_mismatch",
 					details: { state },
+					errorURL: parsedData.errorURL,
 				},
 			);
 		}
@@ -240,13 +281,16 @@ export async function parseGenericState(
 			throw new StateError("State mismatch: State not persisted correctly", {
 				code: "state_security_mismatch",
 				details: { state },
+				errorURL: parsedData.errorURL,
 			});
 		}
 
 		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationByIdentifier(state);
+		await c.context.internalAdapter.deleteVerificationByIdentifier(
+			getAuthStateVerificationIdentifier(state),
+		);
 	}
 
 	// Check expiration
@@ -256,6 +300,7 @@ export async function parseGenericState(
 			details: {
 				expiresAt: parsedData.expiresAt,
 			},
+			errorURL: parsedData.errorURL,
 		});
 	}
 

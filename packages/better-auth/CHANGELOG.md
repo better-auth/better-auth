@@ -1,64 +1,1673 @@
 # better-auth
 
-## 1.6.11
+## 1.7.7
 
 ### Patch Changes
 
-- [#9568](https://github.com/better-auth/better-auth/pull/9568) [`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `internalAdapter.consumeVerificationValue(identifier)`: atomically consume a verification row keyed by identifier. The first concurrent caller receives the row; later racers receive `null`. Backed by a new `DBAdapter.consumeOne` primitive implemented natively per adapter (memory, mongo, drizzle, kysely, prisma), with a `transaction(findMany + delete)` factory fallback. `SecondaryStorage.getAndDelete` is added as an optional companion; Redis ships it via an atomic Lua get-and-delete operation for compatibility with Redis versions before 6.2.
+- [#11476](https://github.com/better-auth/better-auth/pull/11476) [`4186e36`](https://github.com/better-auth/better-auth/commit/4186e36d1505f881585dea03353a4fc4ff864474) Thanks [@bytaesu](https://github.com/bytaesu)! - Return CAPTCHA errors with the correct JSON Content-Type header.
 
-- [#9162](https://github.com/better-auth/better-auth/pull/9162) [`a26333b`](https://github.com/better-auth/better-auth/commit/a26333b5fb1a044e76c18385441d3ecc2240ab70) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix: cleanup sessions when admin, anonymous, or SCIM deletes a user
+- [#11469](https://github.com/better-auth/better-auth/pull/11469) [`8620aa9`](https://github.com/better-auth/better-auth/commit/8620aa94fdb9e158824cbba0d0fcf364143c56fe) Thanks [@aryan1306](https://github.com/aryan1306)! - Return rate limit errors with a JSON Content-Type header.
 
-- [#9573](https://github.com/better-auth/better-auth/pull/9573) [`99a254a`](https://github.com/better-auth/better-auth/commit/99a254a79b59d5a3f5ca2123260118cddb5beed7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(device-authorization): require verify-time ownership claim for approve/deny
+- [#11491](https://github.com/better-auth/better-auth/pull/11491) [`55cb92e`](https://github.com/better-auth/better-auth/commit/55cb92e940e6ac26e746bbb06b92c445050cdb09) Thanks [@bytaesu](https://github.com/bytaesu)! - Respect social provider `disableSignUp` when signing in with an ID token.
 
-  Pending device codes were not bound to the user who entered the code on the verification page until approval, leaving a window where any authenticated user could approve or deny another user's pending code by knowing the `user_code`. `GET /device` now claims the pending row for the calling session, and `POST /device/approve` and `POST /device/deny` require the calling session to match the claimed owner. Custom verification pages must be served to an authenticated session for the flow to succeed.
+- [#11375](https://github.com/better-auth/better-auth/pull/11375) [`69defbc`](https://github.com/better-auth/better-auth/commit/69defbcabae430ca48e4ff1088c52a051566905e) Thanks [@bytaesu](https://github.com/bytaesu)! - Refresh the active organization after sign-in when a session hook selects the initial organization.
 
-- [#8948](https://github.com/better-auth/better-auth/pull/8948) [`ee93485`](https://github.com/better-auth/better-auth/commit/ee934854999390ee5ca73592fe205a470a810b83) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix: add error code to change-email-disabled
+- [#11494](https://github.com/better-auth/better-auth/pull/11494) [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Isolate OAuth state cookies and each OAuth Proxy payload with purpose-specific encryption keys. The `oAuthProxy` options and supported configuration remain unchanged.
 
-- [#9572](https://github.com/better-auth/better-auth/pull/9572) [`5f09d56`](https://github.com/better-auth/better-auth/commit/5f09d566a64ac9a0499d9664ce700edbf0630cea) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix race condition in the `magic-link` plugin's verify handler that allowed two concurrent requests to mint two sessions from the same single-use token. The handler now consumes the verification row atomically via `internalAdapter.consumeVerificationValue`, so a given magic link mints at most one session regardless of concurrency. The `allowedAttempts` option is retained for backward compatibility but no longer multiplies successful redemptions; tokens are single-use. The second-redeem error code changes from `ATTEMPTS_EXCEEDED` to `INVALID_TOKEN` (the token no longer exists after consumption).
+  Upgrade all Better Auth nodes that handle the same cookie-backed OAuth or SAML relay-state flow together. Upgrade every OAuth Proxy participant, including production and preview or development deployments, in the same cutover. OAuth sign-in, account-linking, and cookie-backed SAML sign-in flows started before the upgrade must be restarted. Mixed old and new participants cannot exchange existing state or proxy payloads, and there is no fallback to the previous shared key.
 
-- [`b4bc65a`](https://github.com/better-auth/better-auth/commit/b4bc65a007784b2eb0efb459e5fa6fd8055d3ec9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix race condition in the OAuth authorization-code grant: two concurrent token-exchange requests sharing the same `code` could both pass the find step before either delete completed and each mint an independent access/refresh/id token set. The `authorization_code` handler in `@better-auth/oauth-provider`, plus the legacy `oidc-provider` and `mcp` plugins in `better-auth`, now consume the verification row atomically via `internalAdapter.consumeVerificationValue`. The first caller mints tokens; concurrent racers receive `invalid_grant` (RFC 6749 §5.2). Malformed-verification-value branches in `@better-auth/oauth-provider` previously returned a project-specific `invalid_verification` code; those are now `invalid_grant` so spec-compliant clients can branch on the standard code.
+- [#11494](https://github.com/better-auth/better-auth/pull/11494) [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Magic Link verification now accepts only records issued for Magic Link. Magic
+  Link records and database-backed OAuth or SAML state use separate verification
+  identifier prefixes. Links and database-backed sign-ins started before the
+  upgrade cannot complete; request new Magic Links and restart those sign-ins.
+  Upgrade servers sharing verification storage together, and update
+  `verification.storeIdentifier.overrides` rules for these flows to match the new
+  `magic-link:` and `auth-state:` prefixes. The link token, callback state,
+  endpoints, and public option types are unchanged.
 
-- [#9578](https://github.com/better-auth/better-auth/pull/9578) [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `handleOAuthUserInfo` (used by every social provider, generic-oauth, oauth-proxy, SSO OIDC and SAML, and idToken sign-in) implicitly linked a returning OAuth identity into a local user row whenever the IdP's `email_verified` claim was true or the provider was trusted. The local row's own `emailVerified` flag was read only to flip it after linking, never as a precondition. `POST /sign-up/email` creates rows with `emailVerified: false` for any caller, so an attacker who pre-registered a victim's email at the application could wait for the legitimate user's first OAuth sign-in: the IdP's verified claim was treated as ownership proof, and the victim's IdP identity was linked into the attacker-owned row.
+  Upgrade installed Better Auth adapters, plugins, and integrations released
+  with `better-auth` alongside it so participating packages use the same release
+  version.
 
-  The implicit-link gate now requires `dbUser.user.emailVerified === true` in addition to the provider trust check by default. A new `account.accountLinking.requireLocalEmailVerified` option (default `true`) is the public surface for this gate. Apps whose users sign up via OAuth without verifying their email locally can opt back into the legacy behavior with `account: { accountLinking: { requireLocalEmailVerified: false } }`; understand the takeover risk before doing so. The option is `@deprecated`; a FIXME at each gate site points at the next-minor follow-up on `next` that drops the option and makes the gate unconditional.
+- Updated dependencies [[`35d7cd3`](https://github.com/better-auth/better-auth/commit/35d7cd389220f99cfc98ac699e6a42b48313a740), [`07bdf7e`](https://github.com/better-auth/better-auth/commit/07bdf7ecafb75222f7a24e0733cc3b056f84e9e8)]:
+  - @better-auth/drizzle-adapter@1.7.7
+  - @better-auth/kysely-adapter@1.7.7
+  - @better-auth/core@1.7.7
+  - @better-auth/memory-adapter@1.7.7
+  - @better-auth/mongo-adapter@1.7.7
+  - @better-auth/prisma-adapter@1.7.7
+  - @better-auth/telemetry@1.7.7
 
-  The `one-tap` plugin honored its own copy of the gate and was updated identically: `requireLocalEmailVerified` and `accountLinking.disableImplicitLinking` both apply on `/one-tap/callback`. The `email_verified` claim from the Google ID token is now normalized via `toBoolean` so a string `"false"` is treated as falsy.
+## 1.7.6
 
-  Test fixtures across `admin`, `oidc-provider`, `mcp`, `generic-oauth`, `last-login-method`, and `oauth-provider` suites now mark users `emailVerified: true` via a `databaseHooks.user.create.before` hook (or the `disableTestUser` opt-in on the oauth-provider RP) so the suites continue to exercise their role/flow logic rather than the new gate.
+### Patch Changes
 
-- [#9507](https://github.com/better-auth/better-auth/pull/9507) [`a1c9f3c`](https://github.com/better-auth/better-auth/commit/a1c9f3c08e7398e900e099839aa6dcc8d1d0b816) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Preserve exact access-control role statement types so predefined organization roles expose only their configured permissions in TypeScript.
+- [#11325](https://github.com/better-auth/better-auth/pull/11325) [`af88385`](https://github.com/better-auth/better-auth/commit/af883851ae9c3b55c0d8240fabea3dc797cd5cd0) Thanks [@Wadiou](https://github.com/Wadiou)! - Admin plugin `bannedUserMessage` can now be a function that receives the banned user, so sign-in errors can include details such as the ban reason.
 
-- [#9577](https://github.com/better-auth/better-auth/pull/9577) [`23094a6`](https://github.com/better-auth/better-auth/commit/23094a628f007f801be6d26e5b15dc5fc6fc4eb8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The organization plugin's invitation recipient endpoints (`acceptInvitation`, `rejectInvitation`, `getInvitation`, `listUserInvitations`) treated `invitation.email.toLowerCase() === session.user.email.toLowerCase()` as proof that the calling user owned the invited address. A session-authenticated user whose email matched but was never verified passed the gate, so anyone who could pre-register an unverified account at a victim's email could accept invitations addressed to that email. The `requireEmailVerificationOnInvitation` opt-in option closed the gap only when explicitly enabled and did not protect `getInvitation` or `listUserInvitations` at all.
+- [#11268](https://github.com/better-auth/better-auth/pull/11268) [`2fa501c`](https://github.com/better-auth/better-auth/commit/2fa501cdf9e022d5f7241fabce1a67f1828d777b) Thanks [@bytaesu](https://github.com/bytaesu)! - Support linking social accounts through the OAuth Proxy plugin.
 
-  The gate is now applied on all four recipient endpoints and the `requireEmailVerificationOnInvitation` option default flips from `false` to `true` so existing apps are secure by default. Apps that intentionally accept invitations from unverified accounts can keep the legacy permissive behavior with `organization({ requireEmailVerificationOnInvitation: false })`, but they should understand the takeover risk before doing so. Server-side calls to `listUserInvitations` with `ctx.query.email` and no session continue to bypass the gate (the caller is trusted).
+- [#11366](https://github.com/better-auth/better-auth/pull/11366) [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5) Thanks [@bytaesu](https://github.com/bytaesu)! - Use targeted PRAGMA queries when a Kysely dialect cannot introspect Cloudflare D1.
 
-  The option is `@deprecated`. The next-minor release on `next` removes it entirely and makes the gate unconditional.
+- [#11016](https://github.com/better-auth/better-auth/pull/11016) [`3d0efa3`](https://github.com/better-auth/better-auth/commit/3d0efa308d575c4aa184d65deaf29f2626add8fd) Thanks [@davbrito](https://github.com/davbrito)! - Support Vercel BotID checks on protected authentication routes in Vercel-hosted applications.
 
-- [#9548](https://github.com/better-auth/better-auth/pull/9548) [`142b86c`](https://github.com/better-auth/better-auth/commit/142b86c43d2e6b258236a298a31237e97f87d64d) Thanks [@dipan-ck](https://github.com/dipan-ck)! - anonymous plugin now correctly calls onLinkAccount when email verification triggers auto sign-in
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
 
-- [#9576](https://github.com/better-auth/better-auth/pull/9576) [`1f2ff42`](https://github.com/better-auth/better-auth/commit/1f2ff4215c4affff0b140b0c0a712c0dde35659c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oidc-provider, mcp): authenticate confidential clients on refresh_token grant and harden secret comparison
+- [#11324](https://github.com/better-auth/better-auth/pull/11324) [`8853419`](https://github.com/better-auth/better-auth/commit/88534192c1d0fd62b108b568243a134e6df61ab1) Thanks [@XXMOHAMED012](https://github.com/XXMOHAMED012)! - Passwords longer than `maxPasswordLength` are now rejected with `PASSWORD_TOO_LONG` before hashing on sign-in (email, username, phone number), verify-password, change-password (`currentPassword`), delete-user, the two-factor endpoints that take a password, and admin create-user, matching what sign-up and password reset already did.
 
-  Refresh-token grants on the legacy `oidc-provider` and `mcp` plugins now require the registered `client_secret` from confidential clients, matching the `authorization_code` path. Public clients (where `code_verifier` substitutes for the secret on the auth-code grant) continue to skip secret validation. Secret comparisons across both plugins now use constant-time equality. The `/mcp/token` endpoint no longer emits a wildcard CORS `Access-Control-Allow-Origin: *` header.
+- [#11316](https://github.com/better-auth/better-auth/pull/11316) [`2ee1545`](https://github.com/better-auth/better-auth/commit/2ee1545f244d87e5edd6a003b48b90a5539f8afa) Thanks [@Smidge](https://github.com/Smidge)! - Fix React hydration mismatches when a session or plugin auth query resolves before a streamed component hydrates. Preserve the server-rendered pending state during hydration, then update to the current client state without changing ordinary or computed plugin stores.
 
-  These plugins are deprecated in favor of `@better-auth/oauth-provider`, which is unaffected. New deployments should adopt the replacement; this patch keeps existing deployments protected while migrating.
+- [#11376](https://github.com/better-auth/better-auth/pull/11376) [`fc45d08`](https://github.com/better-auth/better-auth/commit/fc45d08b26ac8e433fc7899a12be392cc52735ba) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent older auth-query responses from replacing newer results when requests overlap.
 
-- [#9575](https://github.com/better-auth/better-auth/pull/9575) [`699b09a`](https://github.com/better-auth/better-auth/commit/699b09a2064dcb7d37046b5a90626c0b6f57af90) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oidc-provider, mcp): drop `"none"` from advertised signing algorithms, default `allowPlainCodeChallengeMethod` to `false`, and reject missing PKCE method
+- Updated dependencies [[`41b7dc1`](https://github.com/better-auth/better-auth/commit/41b7dc15de41a8726422c392a4857d8764828891), [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5), [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da), [`2b13e01`](https://github.com/better-auth/better-auth/commit/2b13e011b4a4f8be4e4c39573b9e962cbabb2094)]:
+  - @better-auth/prisma-adapter@1.7.6
+  - @better-auth/kysely-adapter@1.7.6
+  - @better-auth/core@1.7.6
+  - @better-auth/drizzle-adapter@1.7.6
+  - @better-auth/memory-adapter@1.7.6
+  - @better-auth/mongo-adapter@1.7.6
+  - @better-auth/telemetry@1.7.6
 
-  The legacy `oidc-provider` and `mcp` plugins now follow OAuth 2.1 (RFC 9700) on three protocol gates:
-  - `id_token_signing_alg_values_supported` (oidc-provider, mcp) and `resource_signing_alg_values_supported` (mcp) no longer include `"none"`. Relying parties that negotiate from this list will no longer be steered toward unsigned tokens.
-  - `allowPlainCodeChallengeMethod` defaults to `false`. Callers who need `plain` PKCE must opt in explicitly.
-  - Under the secure default the authorize endpoint no longer silently rewrites a missing `code_challenge_method` to `"plain"` before the allowlist check. A request that provides `code_challenge` without `code_challenge_method` is now rejected with `invalid_request`; the inverse case (`code_challenge_method` without `code_challenge`) is also rejected so no inconsistent PKCE state is persisted on the authorization code record.
+## 1.7.5
 
-  Non-breaking for callers who never relied on `"none"` advertisement or the plain default. Callers who explicitly set `allowPlainCodeChallengeMethod: true` keep `plain` on the allowlist **and** retain the legacy "missing method defaults to plain" behavior for backward compatibility, so existing integrations that opted into plain PKCE continue to work. The next-minor on `next` will drop both the `plain` allowlist entry and this fallback; until then, the option is the single explicit knob for legacy behavior. Migrate to `@better-auth/oauth-provider` for the canonical, spec-aligned implementation.
+### Patch Changes
 
-- Updated dependencies [[`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a), [`c6918ec`](https://github.com/better-auth/better-auth/commit/c6918ecc9e3a75892169415d7f6c95b591b6a52d), [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563), [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10), [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22)]:
-  - @better-auth/core@1.6.11
-  - @better-auth/drizzle-adapter@1.6.11
-  - @better-auth/kysely-adapter@1.6.11
-  - @better-auth/memory-adapter@1.6.11
-  - @better-auth/mongo-adapter@1.6.11
-  - @better-auth/prisma-adapter@1.6.11
-  - @better-auth/telemetry@1.6.11
+- [#11283](https://github.com/better-auth/better-auth/pull/11283) [`e56c45b`](https://github.com/better-auth/better-auth/commit/e56c45bddb8ca859175a47ab345b6c6dcc6da5d7) Thanks [@bytaesu](https://github.com/bytaesu)! - Log Cloudflare Turnstile error codes and binding mismatches on the server so CAPTCHA verification failures can be diagnosed.
+
+- [#11209](https://github.com/better-auth/better-auth/pull/11209) [`8d37cc3`](https://github.com/better-auth/better-auth/commit/8d37cc3b7732a04908b28d8abb7f010a286d6c43) Thanks [@siam923](https://github.com/siam923)! - Remove the unused optional `better-sqlite3` peer dependency to prevent installation conflicts.
+
+- [#11272](https://github.com/better-auth/better-auth/pull/11272) [`348fc26`](https://github.com/better-auth/better-auth/commit/348fc26c9904d800cd471947ba98abb5e8431b60) Thanks [@bytaesu](https://github.com/bytaesu)! - Use MySQL's reported byte lengths when validating indexes on existing string columns.
+
+- [#11203](https://github.com/better-auth/better-auth/pull/11203) [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8) Thanks [@dshukertjr](https://github.com/dshukertjr)! - Add a `database.schemaName` option for direct PostgreSQL connections. When set, the adapter and the CLI qualify every statement with that schema, so `auth generate` writes a schema-qualified migration that creates the schema before its tables instead of relying on the connection's `search_path`.
+
+- [#11270](https://github.com/better-auth/better-auth/pull/11270) [`133f6a2`](https://github.com/better-auth/better-auth/commit/133f6a27175ba21193742564d94aebfc9ec89920) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent PostgreSQL migrations from treating tables in other schemas or views in the active schema as Better Auth tables.
+
+- Updated dependencies [[`e18bc83`](https://github.com/better-auth/better-auth/commit/e18bc83172dca1804f0c5c3eff41d65e2849c557), [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8), [`dae97ed`](https://github.com/better-auth/better-auth/commit/dae97ed932a084a11faa96a2e1abf052fc85d2ea)]:
+  - @better-auth/drizzle-adapter@1.7.5
+  - @better-auth/kysely-adapter@1.7.5
+  - @better-auth/core@1.7.5
+  - @better-auth/memory-adapter@1.7.5
+  - @better-auth/mongo-adapter@1.7.5
+  - @better-auth/prisma-adapter@1.7.5
+  - @better-auth/telemetry@1.7.5
+
+## 1.7.4
+
+### Patch Changes
+
+- [#11205](https://github.com/better-auth/better-auth/pull/11205) [`3f890eb`](https://github.com/better-auth/better-auth/commit/3f890eb631e0278045b3b5b40d29b11bd9d4c332) Thanks [@bytaesu](https://github.com/bytaesu)! - Support Vitest 5 in the testing utilities while retaining support for previously supported Vitest versions.
+
+- [#11224](https://github.com/better-auth/better-auth/pull/11224) [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `experimental.instrumentation.enabled` to disable Better Auth OpenTelemetry span creation per auth instance. Instrumentation remains enabled by default and independent of usage reporting.
+
+- [#11217](https://github.com/better-auth/better-auth/pull/11217) [`9b9638e`](https://github.com/better-auth/better-auth/commit/9b9638ec99057ade649280fa1447408238158f1c) Thanks [@onmax](https://github.com/onmax)! - Allow `testUtils` auth helpers to accept additional session fields through the `session` option, including required fields without defaults and per-session overrides of configured defaults.
+
+- Updated dependencies [[`3ff842a`](https://github.com/better-auth/better-auth/commit/3ff842ab7fdf60746b5d7bd8c27becd2d0a79c2e), [`b905bfe`](https://github.com/better-auth/better-auth/commit/b905bfe3d97de3c88fc31f7f2820531702df583e), [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f)]:
+  - @better-auth/core@1.7.4
+  - @better-auth/drizzle-adapter@1.7.4
+  - @better-auth/kysely-adapter@1.7.4
+  - @better-auth/memory-adapter@1.7.4
+  - @better-auth/mongo-adapter@1.7.4
+  - @better-auth/prisma-adapter@1.7.4
+  - @better-auth/telemetry@1.7.4
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11060](https://github.com/better-auth/better-auth/pull/11060) [`3660f06`](https://github.com/better-auth/better-auth/commit/3660f062d6e7a9b02e3fc8eee5b99482117ebba0) Thanks [@bytaesu](https://github.com/bytaesu)! - Handle malformed custom-scheme callback URLs without excessive processing.
+
+- [#11037](https://github.com/better-auth/better-auth/pull/11037) [`5bd7096`](https://github.com/better-auth/better-auth/commit/5bd709640a14e03972420bbfe778e3c732df80d5) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent repeated TOTP enrollment from replacing an active authenticator and its backup codes.
+
+- [#11120](https://github.com/better-auth/better-auth/pull/11120) [`7ec7146`](https://github.com/better-auth/better-auth/commit/7ec71461f1b3dcc0f9852ced5cc1ed7252ded4f2) Thanks [@onmax](https://github.com/onmax)! - Prevent `getSession` from failing when cookie caching is disabled while clients still have cached session cookies.
+
+- [#9908](https://github.com/better-auth/better-auth/pull/9908) [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6) Thanks [@harshil1712](https://github.com/harshil1712)! - Add Cloudflare as a built-in social provider, with support for client-secret authentication and PKCE clients without a secret.
+
+- [#11188](https://github.com/better-auth/better-auth/pull/11188) [`c47b765`](https://github.com/better-auth/better-auth/commit/c47b76517d235d7cde07a1b4717f76b8f71a675f) Thanks [@bytaesu](https://github.com/bytaesu)! - Normalize Auth0 domains without a potentially slow trailing-slash regular expression.
+
+- [#11084](https://github.com/better-auth/better-auth/pull/11084) [`2d5c63d`](https://github.com/better-auth/better-auth/commit/2d5c63d512164d4e18c5e67b79a9c7d19b27b669) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent duplicate session requests and hydration mismatches when using the Vue client with Nuxt `useFetch`.
+
+- [#11147](https://github.com/better-auth/better-auth/pull/11147) [`a9d8c12`](https://github.com/better-auth/better-auth/commit/a9d8c12d14b99a2df35ae2fba98ad4e4bc512ad5) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `isPasswordCompromised` for checking passwords against Have I Been Pwned in custom server-side flows, while ignoring padded response entries with zero occurrences.
+
+- [#10988](https://github.com/better-auth/better-auth/pull/10988) [`9fc7498`](https://github.com/better-auth/better-auth/commit/9fc749867592536b6e472381581cee8f00f6b59b) Thanks [@bytaesu](https://github.com/bytaesu)! - Run callback hooks after proxied OAuth sign-ins and preserve server state when callback cookies are unavailable. The legacy `/oauth-proxy-callback` endpoint is deprecated and will be removed in the next minor release.
+
+- [#11178](https://github.com/better-auth/better-auth/pull/11178) [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9) Thanks [@bytaesu](https://github.com/bytaesu)! - Report missing tables, missing columns, and required columns Better Auth never writes during initialization, with guidance for fixing them. Kysely checks the live database schema. Authentication requests await the same check and are rejected if the schema does not match.
+
+  Validation is enabled by default, including in production. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` refuses to apply changes when required unwritten columns need manual repair.
+
+- [#11069](https://github.com/better-auth/better-auth/pull/11069) [`0bb0dbf`](https://github.com/better-auth/better-auth/commit/0bb0dbf6f38ab53a0c1f2fb639acd7bd602e2a24) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve dynamic organization role permission check performance.
+
+- [#11153](https://github.com/better-auth/better-auth/pull/11153) [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
+
+  If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
+
+- [#10978](https://github.com/better-auth/better-auth/pull/10978) [`5fe5bc2`](https://github.com/better-auth/better-auth/commit/5fe5bc21d1bf699655054192f4f833bcc33d0ba4) Thanks [@BetterAndBetterII](https://github.com/BetterAndBetterII)! - Skip a generic OAuth provider when discovery fails instead of taking down the rest of the auth API.
+
+- [#10963](https://github.com/better-auth/better-auth/pull/10963) [`74a7369`](https://github.com/better-auth/better-auth/commit/74a7369179cc6ab9fc2a9f13a67b33e8c00aa9ac) Thanks [@thisismert](https://github.com/thisismert)! - Track email OTP sign-ins in the last login method plugin.
+
+- [#11085](https://github.com/better-auth/better-auth/pull/11085) [`e16b40a`](https://github.com/better-auth/better-auth/commit/e16b40aeadde4203c883f121e7e5f7a2ec04d6b2) Thanks [@bytaesu](https://github.com/bytaesu)! - Provide type-safe Nuxt `useFetch` integration for the Vue client's `useSession` hook.
+
+- [#11066](https://github.com/better-auth/better-auth/pull/11066) [`c0444dc`](https://github.com/better-auth/better-auth/commit/c0444dc97928f46978c42083083d3b8642b89493) Thanks [@bytaesu](https://github.com/bytaesu)! - Upgrade the packaged Zod dependency to 4.5. Generated OpenAPI schemas now mark required request fields consistently with runtime validation, including passkey registration responses.
+
+- Updated dependencies [[`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c), [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6), [`3e9e197`](https://github.com/better-auth/better-auth/commit/3e9e19746e609004da31bea3356c0059611d9ed4), [`157ec8d`](https://github.com/better-auth/better-auth/commit/157ec8d8799ddda642f2fe40120fc364660a8864), [`baa08f4`](https://github.com/better-auth/better-auth/commit/baa08f4ee674f5cc39624063847c89f1bea73186), [`9e36635`](https://github.com/better-auth/better-auth/commit/9e36635eb2fbf27d58c70d3361724335ba9a9951), [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9), [`a2bae0c`](https://github.com/better-auth/better-auth/commit/a2bae0cad04ccc23c40555c77f86b0da1ba40ebc), [`1a1b7d5`](https://github.com/better-auth/better-auth/commit/1a1b7d56f51cb9ce6b06334b22fcbfa0d52be05a), [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc)]:
+  - @better-auth/core@1.7.3
+  - @better-auth/drizzle-adapter@1.7.3
+  - @better-auth/prisma-adapter@1.7.3
+  - @better-auth/kysely-adapter@1.7.3
+  - @better-auth/memory-adapter@1.7.3
+  - @better-auth/mongo-adapter@1.7.3
+  - @better-auth/telemetry@1.7.3
+
+## 1.7.2
+
+### Patch Changes
+
+- [#10875](https://github.com/better-auth/better-auth/pull/10875) [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix programmatic migrations failing on Cloudflare D1 while preserving existing-index validation across supported databases.
+
+- [#10982](https://github.com/better-auth/better-auth/pull/10982) [`b4ad5a1`](https://github.com/better-auth/better-auth/commit/b4ad5a110ca4f2e043c0f23a8e5f87e0b31c3fc6) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in placeholder emails now consistently use the namespaced `{identifier}@{namespace}.placeholder.invalid` format.
+
+- [#10934](https://github.com/better-auth/better-auth/pull/10934) [`c7a5c1a`](https://github.com/better-auth/better-auth/commit/c7a5c1a7ed65a5169e98bd347df91b16bb394692) Thanks [@bytaesu](https://github.com/bytaesu)! - Cookie-cache reads now warn when signed session data is invalid instead of silently appearing as a signed-out session.
+
+- [#10879](https://github.com/better-auth/better-auth/pull/10879) [`78f0c39`](https://github.com/better-auth/better-auth/commit/78f0c3922c273de29bd0b77213fbc37cc3b5917e) Thanks [@starslingdev](https://github.com/apps/starslingdev)! - Test suites using `getTestInstance` now run faster because the shared fixture avoids production password-hashing costs by default. Custom `emailAndPassword.password` implementations continue to take precedence.
+
+- [#10823](https://github.com/better-auth/better-auth/pull/10823) [`ce8a3ab`](https://github.com/better-auth/better-auth/commit/ce8a3ab5442fdd388f3b1346b71292cf617c3146) Thanks [@sosyz](https://github.com/sosyz)! - Ensure permanently banning a user clears any expiration from a previous temporary ban.
+
+- [#10907](https://github.com/better-auth/better-auth/pull/10907) [`a021eaf`](https://github.com/better-auth/better-auth/commit/a021eafaf235dd08c0835d91ee714aca24c4605e) Thanks [@heliohm](https://github.com/heliohm)! - A client created with more plugins is again assignable to a client type declaring fewer plugins, as in 1.6.
+
+- [#10959](https://github.com/better-auth/better-auth/pull/10959) [`c8dcfa5`](https://github.com/better-auth/better-auth/commit/c8dcfa57e11e22325dbb2a0cc1af6775f41b1315) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow same-origin form submissions from pages using `Referrer-Policy: no-referrer` while continuing to reject untrusted request origins.
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
+- [#10041](https://github.com/better-auth/better-auth/pull/10041) [`f6891a2`](https://github.com/better-auth/better-auth/commit/f6891a2d2d4f7ead7e9b13e65316a0cbd88f3fe4) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Allow `~` in relative callback URLs validated by trusted origin checks.
+
+- [#10877](https://github.com/better-auth/better-auth/pull/10877) [`649818a`](https://github.com/better-auth/better-auth/commit/649818a2969594e58147a2cc08157812ea0b75ef) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent disabled MyISAM indexes from satisfying migration index checks.
+
+- Updated dependencies [[`557e19b`](https://github.com/better-auth/better-auth/commit/557e19bfad0f2d2842903ddb1e768a0506aceaea), [`64da15b`](https://github.com/better-auth/better-auth/commit/64da15b0b1ca078d80f115ee0a5bd9ad4ca4d64e), [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e), [`b4ad5a1`](https://github.com/better-auth/better-auth/commit/b4ad5a110ca4f2e043c0f23a8e5f87e0b31c3fc6), [`ea77118`](https://github.com/better-auth/better-auth/commit/ea77118d4e00f69ddffed4fb42dfedc08594ea9e), [`5aea9f7`](https://github.com/better-auth/better-auth/commit/5aea9f77284dfb7b187e8e7bec0cebd4b8834123), [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1), [`e1d4011`](https://github.com/better-auth/better-auth/commit/e1d40116e2b6a797372ac82b9feea39f57285632)]:
+  - @better-auth/core@1.7.2
+  - @better-auth/kysely-adapter@1.7.2
+  - @better-auth/drizzle-adapter@1.7.2
+  - @better-auth/memory-adapter@1.7.2
+  - @better-auth/mongo-adapter@1.7.2
+  - @better-auth/prisma-adapter@1.7.2
+  - @better-auth/telemetry@1.7.2
+
+## 1.7.1
+
+### Patch Changes
+
+- [#10863](https://github.com/better-auth/better-auth/pull/10863) [`845bbd1`](https://github.com/better-auth/better-auth/commit/845bbd1de682ab87e03ce925f85087da81249a4e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `auth migrate` no longer attempts to add a required column with no default value to a table that already has rows. It stops with an error naming the column and the backfill to run first. Previously the generated statement failed on SQLite, Postgres, and SQL Server; on MySQL it filled the new column with an empty string for every existing row and reported success. If `auth migrate` already ran against a MySQL database on 1.7, run the check in the upgrade guide's account identity section.
+
+  `getMigrations` throws the new `UnsafeMigrationError` (exported from `better-auth/db/migration`) for this refusal, so callers can distinguish it from other migration errors such as an index-definition conflict.
+
+  `auth generate` still emits the statements for external migration tooling, with a comment banner naming any column that needs a manual backfill first.
+
+  A required field whose database column is still nullable logs a warning instead of blocking the migration.
+
+  A CLI command that fails now prints its error and exits with a non-zero code instead of an unhandled promise rejection.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.1
+  - @better-auth/drizzle-adapter@1.7.1
+  - @better-auth/kysely-adapter@1.7.1
+  - @better-auth/memory-adapter@1.7.1
+  - @better-auth/mongo-adapter@1.7.1
+  - @better-auth/prisma-adapter@1.7.1
+  - @better-auth/telemetry@1.7.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#8733](https://github.com/better-auth/better-auth/pull/8733) [`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `hydrateSession` to seed the client with a server-fetched session so `useSession` returns data on the first render.
+
+- [#9930](https://github.com/better-auth/better-auth/pull/9930) [`0cbaf81`](https://github.com/better-auth/better-auth/commit/0cbaf81bed9dec4c56880ee78a532262386e1ec5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Anonymous account linking now works after social and generic OAuth sign-in in Expo and other in-app browsers, where the OAuth callback returns without the session cookie. `onLinkAccount` fires and the anonymous user is migrated; before, it was silently skipped.
+
+  Plugins can now carry server-trusted data across an OAuth redirect with the new `addOAuthServerContext` API, read back on the callback via `getOAuthState().serverContext`. Unlike `additionalData`, it cannot be set from the request body, so it is the right place for values the server must trust.
+
+  For `@better-auth/oauth-provider`, the post-login authorization query now travels through that server-only channel, so it can no longer be injected through `additionalData`.
+
+- [#10004](https://github.com/better-auth/better-auth/pull/10004) [`b36c38f`](https://github.com/better-auth/better-auth/commit/b36c38f9842d3416689340552989449a32007819) Thanks [@bytaesu](https://github.com/bytaesu)! - The captcha plugin now requires endpoint entries to match full auth paths unless they use wildcard patterns. This prevents requests like `/sign-in//email` from bypassing captcha while preserving trailing-slash matches like `/sign-in/email/`. To protect multiple routes, replace partial paths like `/sign-in` with explicit wildcards such as `/sign-in/*` or `/sign-in/**`.
+
+- [#10746](https://github.com/better-auth/better-auth/pull/10746) [`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth device grants now use `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`. This single integration replaces both the standalone `deviceCodeGrant()` plugin and the shared-grant configuration. Standalone Device Authorization no longer accepts or stores RFC 8707 resources, and `onDeviceAuthRequest` receives only `clientId` and `scope`. The OAuth integration rejects resource indicators that are not absolute, fragment-free URIs.
+
+  The OAuth integration replaces the optional `resource` column with `oauthClientId` and `resources`. Regenerate and apply the schema when using it. Before upgrading from an earlier 1.7 prerelease, let pending OAuth device codes expire or delete them because they cannot be exchanged through the new integration.
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+- [#9766](https://github.com/better-auth/better-auth/pull/9766) [`bf39cbf`](https://github.com/better-auth/better-auth/commit/bf39cbf13f3b934f728cde72b1e7ebdc4c85f641) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a server-only `auth.api.consumePhoneNumberOTP` API for custom phone OTP flows that need to verify and consume a code without creating or updating users or sessions.
+
+- [#10330](https://github.com/better-auth/better-auth/pull/10330) [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Allow the username plugin's separate `displayUsername` field to be omitted by
+  setting `displayUsername: false` on both the server and client plugins.
+
+- [#10059](https://github.com/better-auth/better-auth/pull/10059) [`49b5cf6`](https://github.com/better-auth/better-auth/commit/49b5cf650e1264ecc4c917ca193ea05c3b58a3b9) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Device Authorization now creates unique database indexes for `deviceCode` and `userCode`, so each generated code must be unique in its column. Existing installations on every adapter must resolve duplicate values before applying the migration. MySQL and SQL Server installations must also convert both columns to bounded strings and clean up values longer than 191 characters before running it.
+
+  Generated codes are limited to 191 characters. Issuance makes up to 3 attempts to overcome unique-key collisions, then returns `server_error` if it cannot create a unique `deviceCode` and `userCode`. Default-generated user codes accept case changes and readability separators during verification, approval, and denial; custom codes outside the default alphabet are matched exactly. The `/device` limiter allows 5 requests over a window equal to the configured code lifetime, while `/device/token` polling keeps its separate interval behavior.
+
+- [#9645](https://github.com/better-auth/better-auth/pull/9645) [`e014029`](https://github.com/better-auth/better-auth/commit/e0140297a59ddb59cccbcb4ba46c513de8cb86a7) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Harden the Electron OAuth flow and tighten custom-scheme trusted-origin matching.
+
+  The Electron sign-in flow now mandates PKCE S256. Plain PKCE is rejected: the `code_challenge_method` parameter is gone and every authorization code is verified by hashing the verifier with SHA-256. The server no longer trusts an `electron-origin` header to set the request Origin. The Electron client now sends a real `Origin` (for example `myapp:/`), so upgrade the `@better-auth/electron` client and server together and make sure your app's scheme is in `trustedOrigins`. The unused `disableOriginOverride` option is removed.
+
+  Custom-scheme entries in `trustedOrigins` now match by scheme and authority instead of string prefix. A host-less entry such as `myapp://` or `exp://` still trusts every host of that scheme, but a host-bearing entry such as `myapp://callback` matches that host exactly, so it is no longer satisfied by `myapp://callback.attacker.tld`.
+
+- [#9948](https://github.com/better-auth/better-auth/pull/9948) [`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3) Thanks [@yordis](https://github.com/yordis)! - feat(generic-oauth): add `refreshTokenParams` config to forward extra params on token refresh
+
+  Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`) need to send extra body params on the refresh call to rescope tokens without a full authorization redirect. The generic-oauth plugin now accepts a `refreshTokenParams` option (object or sync/async function) that is merged into the refresh request body, with `grant_type` and `refresh_token` protected from override. The function form receives request metadata for the request that triggered the refresh, so request-scoped data (headers, cookies) is available without out-of-band state like AsyncLocalStorage.
+
+  `UpstreamProvider.refreshAccessToken` now accepts an optional second `ctx` argument; the change is backwards compatible because existing implementations that take only `refreshToken` remain valid. See [#7554](https://github.com/better-auth/better-auth/issues/7554).
+
+- [#9069](https://github.com/better-auth/better-auth/pull/9069) [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Rewrite the generic OAuth plugin as a first-class social provider with OAuth 2.1 security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE required by default (OAuth 2.1), RFC 9207 issuer validation, OIDC auto-discovery with `openid` scope injection, and typed provider IDs.
+
+  **Breaking changes:**
+  - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
+  - `oauth2.link()` replaced by `linkSocial()`
+  - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+  - `genericOAuthClient()` removed; generic OAuth providers now use the standard social client APIs
+  - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+  - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+  - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+  - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
+
+- [#9966](https://github.com/better-auth/better-auth/pull/9966) [`ec8a38c`](https://github.com/better-auth/better-auth/commit/ec8a38c08f5cfe2d922be0f8a49f2d0fa84de799) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - genericOAuth providers configured with a `discoveryUrl` now verify the provider's `id_token` against its published JWKS (signature, issuer, audience, and advertised algorithms) and bind it to the authorization request with a server-generated OIDC `nonce`. A sign-in whose `id_token` fails verification, or does not echo the expected `nonce`, is rejected.
+
+  Set `disableIdTokenNonceBinding: true` on a provider that does not return the `nonce` claim in the authorization-code flow.
+
+  These providers also accept client-submitted id_token sign-in through `signIn.social({ idToken })`, which previously returned `ID_TOKEN_NOT_SUPPORTED`.
+
+  Providers configured with explicit endpoints instead of `discoveryUrl` are unchanged.
+
+- [#9368](https://github.com/better-auth/better-auth/pull/9368) [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Generic OAuth users can now sign out from the configured OpenID provider when they call `authClient.signOut()`. When a provider exposes a discovered or configured logout endpoint, Better Auth redirects to it and includes the stored `id_token_hint` when available. Pass `callbackURL` or configure `postLogoutRedirectURI` for the return flow, with optional `state`, or set `disableRedirect` to handle the returned `url` yourself. When multiple linked providers support logout, Better Auth selects the most recently updated account. Set `disableProviderLogout: true` to keep sign-out local.
+
+- [#9431](https://github.com/better-auth/better-auth/pull/9431) [`523f95c`](https://github.com/better-auth/better-auth/commit/523f95c10db24b790bbd75fe85c86c34d3465267) Thanks [@pi0](https://github.com/pi0)! - feat: make `Auth` instance fetchable
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - MCP clients that hit a scope wall now learn exactly which scopes to ask for. Missing protected scopes produce a `403` with an RFC 6750 `insufficient_scope` `WWW-Authenticate` challenge that names every missing scope. Clients can union those scopes into one authorization request instead of opening one browser redirect per scope.
+  - Configure protected scopes with `requiredScopes` through `RequireMcpAuthOptions` or the matching `createMcpProtectedRequestHandler` verifier option. Exact membership remains the default; `isScopeSatisfied` can define hierarchical policies.
+  - Use `createInsufficientScopeError` when an operation determines its required scopes dynamically. `createResourceServerChallenge` converts that signal and recognized token failures into safe RFC 6750 challenges.
+  - Use `challengeScopes` only as the unauthenticated challenge hint.
+
+  Handler-produced responses, ordinary permission denials, configuration failures, and unrelated thrown values keep their original status and identity.
+
+- [#10403](https://github.com/better-auth/better-auth/pull/10403) [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Scope account identity by trusted issuer instead of provider configuration. Accounts now use the unique `(issuer, accountId)` key, so aliases for one OpenID Connect issuer deduplicate one external identity while equal subjects from different issuers remain separate. This identity deduplication does not introduce independent grant or provider lifecycle records for aliases.
+
+  This release requires `Account.issuer` but preserves `Account.accountId` as the provider-assigned account identifier. Account-specific APIs select the local `Account.id` through the `accountId` request property; token and provider-profile APIs can instead select the signed account cookie with `useAccountCookie: true`. Credential accounts use `local:credential` and the linked user's stable `id` as their provider identity.
+
+  OAuth provider identity now comes from raw verified profiles. OpenID Connect discovery uses `sub`, plain OAuth uses `id`, and providers can declare `accountSubject` for another immutable field; Better Auth no longer switches between `sub` and `id` at runtime. `getUserInfo().user` no longer carries provider identity, and `mapProfileToUser` cannot return `id`. Read the selected identity from `accountInfo.account.accountId` instead of `accountInfo.user.id`. The generic `microsoftEntraId` helper now requires a concrete tenant GUID; use the built-in Microsoft provider for multi-tenant authorities.
+
+  SSO account subjects are now protocol-defined. OIDC uses the verified `sub` claim, and SAML uses the signed `NameID`; `mapping.id` is removed from both configurations. A manual SAML configuration without metadata XML must set `idpMetadata.entityID`, because `samlConfig.issuer` identifies the service provider and no longer acts as the IdP identity.
+
+  Apply the reviewed account-identity backfill in the Better Auth 1.7 upgrade guide before deploying. The generated schema migration cannot assign trusted issuers or resolve existing identity collisions automatically.
+
+- [#10359](https://github.com/better-auth/better-auth/pull/10359) [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Database joins have moved out of `experimental` into a stable option at `advanced.database.joins` (default: `false`).
+
+  If you previously set `experimental: { joins: true }`, update your config to:
+
+  ```ts
+  advanced: {
+    database: {
+      joins: true,
+    },
+  }
+  ```
+
+  Adapters that support native joins use them when enabled. If an adapter cannot return joined data for a query, Better Auth falls back to additional queries and combines the results. Drizzle and Prisma users should ensure their schema includes the required relations (`npx auth@latest generate`).
+
+- [#9992](https://github.com/better-auth/better-auth/pull/9992) [`e53582c`](https://github.com/better-auth/better-auth/commit/e53582ce55a0ddbca62f52efeb3459523816f222) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The MCP plugin moves out of `better-auth` into its own package, `@better-auth/mcp`, built on `@better-auth/oauth-provider`. Import the authorization plugin and protected-request helpers from the package root. The in-core MCP client (`createMcpAuthClient` and its adapters) is removed; MCP protocol and transport clients come from the official version 2 `@modelcontextprotocol/client` and `@modelcontextprotocol/server` packages. The OAuth endpoints move from `/mcp/*` to `/oauth2/*`, with discovery at `/.well-known/oauth-authorization-server` and protected resource metadata at `/.well-known/oauth-protected-resource`. Discovery-based MCP clients pick up the new locations on their own.
+
+  The shared-auth route helper is renamed from `withMcpAuth` to `requireMcpAuth`. The standalone protected-resource factory is renamed from `mcpHandler` to `createMcpProtectedRequestHandler`; pass one flat `McpProtectedRequestHandlerOptions` object with `issuer`, a single `audience`, optional `jwtVerifyOptions`, token-verification fields, and challenge fields. Its callback receives `accessTokenClaims`. `requireMcpAuth` verifies the access token against the published JWKS, validates DPoP proofs for DPoP-bound tokens, and passes the verified access-token claims to your handler.
+
+  `createInsufficientScopeError` now validates a custom description against the RFC 6750 `error_description` character set when the error is constructed. Invalid descriptions throw `TypeError("invalid error_description")` before an error can reach resource-challenge serialization.
+
+  MCP 2026-07-28 uses a stateless request and response transport. Serve MCP routes with version 2 of `@modelcontextprotocol/server`, configure `createMcpHandler` with `legacy: "reject"`, wrap it with `requireMcpAuth`, and export only `POST`. Remove MCP-route `GET` and `DELETE` exports and session-store options such as `redisUrl`. OAuth clients, consent, authorization codes, refresh tokens, and security records remain durable authorization state.
+
+  To migrate, install `@better-auth/mcp`, `@better-auth/cimd`, and the official version 2 MCP client or server package needed by your application; add the `jwt()` plugin, which is now required for token signing; and move options that were nested under `oidcConfig` to flat options on `mcp({ ... })`. The database models change: `oauthApplication` becomes `oauthClient`, with new `oauthRefreshToken` and `oauthClientAssertion` tables. Regenerate or migrate your schema with `npx auth migrate` or `npx auth generate`.
+
+- [#10204](https://github.com/better-auth/better-auth/pull/10204) [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Microsoft sign-in now identifies Entra accounts with the stable `oid` claim in both the built-in `microsoft` provider and the Generic OAuth `microsoftEntraId` helper. Tokens without a valid `oid` are rejected, and the Generic OAuth helper refuses to initialize unless Microsoft discovery provides ID-token verification metadata. Existing Microsoft account rows created from `sub` must be migrated before upgrading.
+
+- [#9305](https://github.com/better-auth/better-auth/pull/9305) [`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth): per-request `additionalParams` and `loginHint` parity across `signIn.social`, `linkSocial`, and `signIn.sso`
+
+  Unified escape hatch for customizing the provider authorization URL on a per-request basis. Previously, dynamic parameters like Google's `access_type=offline` / `prompt=consent`, Cognito's `identity_provider=Google`, or Microsoft's `domain_hint` could only be set as static server configuration.
+
+  ### New capabilities
+  - `signIn.social`, `linkSocial`, and `signIn.sso` accept `additionalParams: Record<string, string>`. Values are appended to the authorization URL as query parameters.
+  - `linkSocial` also accepts `loginHint`, matching the surface of `signIn.social` and `signIn.sso`.
+  - `OAuthProvider.createAuthorizationURL` gains `additionalParams` in its input contract; every built-in provider forwards it to the shared helper.
+  - Generic-OAuth providers merge call-time `additionalParams` with the config-level `authorizationUrlParams`; call-time wins on key collision.
+  - Cognito exposes a typed `identityProvider?: string` config option that maps to the `identity_provider` query parameter, avoiding magic strings.
+
+  ### Security
+  - The shared `createAuthorizationURL` helper silently drops any caller-supplied key in `RESERVED_AUTHORIZATION_PARAMS` (`state`, `client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, `nonce`, `scope`). The request-body Zod schema rejects the same keys with 400, so misuse is visible at the edge rather than silently overriding security-critical parameters. `nonce` is reserved so a caller cannot replace the OIDC nonce Better Auth generates when binding a discovery provider's `id_token` to the authorization request.
+  - Providers that use non-standard client identifiers (`wechat` → `appid`, `tiktok` → `client_key`) additionally filter those keys so a caller cannot swap the configured OAuth app.
+  - Provider protocol constants that are required for the integration to function (`atlassian` → `audience`, `notion` → `owner`) are merged last so caller-supplied `additionalParams` cannot override them. Configured defaults that represent operator intent (e.g. Google `include_granted_scopes`, Cognito `identityProvider`) remain caller-overridable.
+  - `signIn.sso` rejects `additionalParams` with 400 when the resolved provider is SAML; the SAML AuthnRequest is signed and cannot carry caller-supplied query parameters, so silently dropping them would mislead integrators.
+
+  ### OpenAPI
+  - Added `ZodRecord` handling to the OpenAPI generator so `z.record()` fields emit `type: object` with typed `additionalProperties`. Incidentally fixes a long-standing bug where `additionalData` was rendered as `type: string`.
+
+  ### Refactors
+  - `discord`, `roblox`, `zoom`, and `slack` providers now delegate to the shared `createAuthorizationURL` helper and inherit its RFC behavior and reserved-key guard.
+  - `tiktok` and `wechat` keep their manual URL construction (non-standard OAuth2 parameter names and URL fragment requirements) but thread `additionalParams` with the same reserved-key filter.
+
+  Closes [#2351](https://github.com/better-auth/better-auth/issues/2351).
+  Closes [#5441](https://github.com/better-auth/better-auth/issues/5441).
+  Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
+  Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
+  Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+- [#10127](https://github.com/better-auth/better-auth/pull/10127) [`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth sign-in, account linking, callback, and proxy flows now build `redirect_uri` from the current request base URL when `baseURL.allowedHosts` is configured. Built-in social providers and generic OAuth providers now use the resolved request host for redirects in multi-host deployments.
+
+  Custom `OAuthProvider` implementations can omit `callbackPath` when using the shared `/callback/<provider-id>` route. Set `callbackPath` only for custom callback routes.
+
+- [#10039](https://github.com/better-auth/better-auth/pull/10039) [`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider)!: DPoP-bound access tokens (RFC 9449)
+
+  OAuth provider integrations can issue and verify DPoP sender-constrained tokens. Clients request them with `dpop_bound_access_tokens` at registration, `dpop_jkt` on the authorization request, or by targeting a resource configured with `dpopBoundAccessTokensRequired`. Issued tokens carry `cnf.jkt`, return `token_type: "DPoP"`, and stay bound through refresh-token rotation, introspection, and userinfo.
+
+  Resource servers verify DPoP requests with `verifyAccessTokenRequest`, which checks the `Authorization: DPoP` scheme, the proof, the request target, the access-token hash, and proof replay. The MCP package advertises DPoP in protected resource metadata and verifies DPoP-bound requests. Proof replay is rejected through the database-backed verification store, so anti-replay holds across instances. `verifyAccessTokenRequest` and `requireMcpAuth` use that store by default; build one with `createDpopReplayStore(internalAdapter)` or pass a custom `dpop.replayStore`. This needs database-backed verification storage: a secondary-storage-only deployment rejects DPoP requests rather than skipping replay protection.
+
+  Breaking: the raw-token verifier `verifyAccessToken` is renamed to `verifyBearerToken`, both in `better-auth/oauth2` and as the `oauthProviderResourceClient` action, and it rejects DPoP-bound tokens. Use `verifyAccessTokenRequest` on any endpoint that may receive them. The resource-request input type is renamed from `AccessTokenRequestInput` to `ResourceRequestInput`, and the DPoP algorithm option is `signingAlgorithms` everywhere.
+
+  Run a schema migration for the DPoP token-binding fields: the `confirmation` column on the access-token and refresh-token tables. DPoP-bound clients also gain `dpopBoundAccessTokens` and resources `dpopBoundAccessTokensRequired`. No dedicated replay table is added; proof replay reuses the verification store.
+
+- [#9828](https://github.com/better-auth/better-auth/pull/9828) [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify social-provider id_tokens with a single shared verifier.
+
+  Client-submitted id_token sign-in (`signIn.social({ idToken })` and account linking) is verified by one function instead of a per-provider `verifyIdToken` method. Each provider declares an `idToken` config with a JWKS source, issuer, and audience, and the core verifier runs the signature, issuer, audience, and nonce checks. A provider that declares no config rejects the client id_token path.
+
+  PayPal previously accepted any decodable id_token without verifying its signature. PayPal derives identity from the access token, so it now declares no `idToken` config, and the client id_token path returns `ID_TOKEN_NOT_SUPPORTED`. PayPal sign-in through the redirect flow is unchanged.
+
+  Custom providers that implement `UpstreamProvider` directly replace the removed `verifyIdToken` method with an `idToken` config:
+
+  ```ts
+  idToken: {
+  	jwks: createRemoteJWKSet(new URL("https://issuer.example/.well-known/jwks.json")),
+  	issuer: "https://issuer.example",
+  	audience: clientId,
+  },
+  ```
+
+  For verification that cannot use a local JWKS, pass `idToken: { verify: async (token, nonce) => boolean }`. The `verifyIdToken` and `disableIdTokenSignIn` provider options are unchanged.
+
+- [#9079](https://github.com/better-auth/better-auth/pull/9079) [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider): compute `at_hash` in ID tokens per OIDC Core §3.1.3.6
+
+  ID tokens issued alongside an access token now include the `at_hash` claim, which cryptographically binds the two tokens to prevent token substitution attacks. The hash algorithm is selected based on the actual signing key's algorithm (EdDSA/Ed25519 uses SHA-512, RS/ES/PS384 uses SHA-384, RS/ES/PS512 uses SHA-512, all others use SHA-256).
+
+  A new `resolveSigningKey()` export is available from `better-auth/plugins` to resolve the current JWKS signing key (including its algorithm). When using a custom `jwt.sign` callback, the signed ID token's header is validated against the declared algorithm to prevent `at_hash` mismatches.
+
+- [#10135](https://github.com/better-auth/better-auth/pull/10135) [`f68044d`](https://github.com/better-auth/better-auth/commit/f68044dcfbd9fb83763249ed9509cfacbcce47be) Thanks [@brentmitchell25](https://github.com/brentmitchell25)! - Registered OAuth clients can now use the RFC 8628 device flow to obtain OAuth access tokens. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`, request a code at `/device/code`, and exchange it at `/oauth2/token` after the user approves it. OAuth and OpenID discovery advertise the `device_authorization_endpoint`.
+
+  Device authorization requests can bind RFC 8707 resource indicators. `GET /device` returns the requested client, scopes, and resources to the authenticated user who owns the request. Token requests can reuse or narrow the approved resources, but cannot add new ones. Existing first-party device clients continue to receive Better Auth session tokens from `/device/token`.
+
+  Enabling `oauthDeviceAuthorization()` adds nullable `oauthClientId` and `resources` fields to `deviceCode`. Regenerate and apply the database schema after adding the integration.
+
+  Confidential clients authenticate at `/device/code` with their registered method, while public clients send `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication values are treated as omitted; multiple non-empty values for any of these parameters return `invalid_request`, while multiple `resource` values remain supported. Unknown OAuth client IDs enter the standalone device flow only when `oauthDeviceAuthorization({ validateClient })` accepts them.
+
+- [#9929](https://github.com/better-auth/better-auth/pull/9929) [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `requireEmailVerification` to OAuth provider options, for built-in social providers and the Generic OAuth plugin. When a provider reports an unverified email, the user and account are still created or linked, but no session is issued: the OAuth callback redirects with `?error=email_not_verified`, and ID token and One Tap sign-in return `403` `EMAIL_NOT_VERIFIED`. Verification emails follow the existing `emailVerification.sendOnSignUp` / `sendOnSignIn` settings.
+
+  It is opt-in per provider and does not inherit `emailAndPassword.requireEmailVerification`, so existing social logins keep working. The gate checks the local user's verification state, so a user verified through another method keeps access. Only enable it for providers that report a trustworthy `email_verified` signal.
+
+- [#9648](https://github.com/better-auth/better-auth/pull/9648) [`d2a79ba`](https://github.com/better-auth/better-auth/commit/d2a79bae79b88e2b28cb678f5eefd9759239b627) Thanks [@brentmitchell25](https://github.com/brentmitchell25)! - OAuth provider now models protected resources explicitly. Configure them with `resources` or create them through the `oauthResource` admin API. Each resource can define token TTLs, allowed scopes, custom JWT claims, and JWT signing pins.
+
+  `validAudiences` is removed. Move each existing resource identifier into `resources`; link clients that should be limited to specific resources through `oauthClientResource` or Dynamic Client Registration `resources`.
+
+  Access-token issuance now applies resource policy to the requested RFC 8707 `resource` values. The OAuth provider narrows scopes to resource allowlists, uses the shortest configured TTL, strips reserved RFC 9068 claim names from custom claims, emits `jti`, and keeps repeated `resource` form parameters.
+
+  Refresh-token TTLs now use the shortest applicable lifetime. Deployments with a per-resource `refreshTokenTtl` longer than `refreshTokenExpiresIn` will see refresh tokens expire at the provider default instead of the longer resource value.
+
+  JWT signing can now honor per-resource pins. `signJWT()` accepts `signingKeyId` and `signingAlgorithm`; JWKS adapters expose `getKeyById()` and `getLatestKeyByAlg()`. The `jwks` table adds nullable `alg` and `crv` columns, and `keyPairConfigs` can provision multiple algorithms in one keyring.
+
+  After upgrading, run `npx auth generate` and apply the migration before deploying. The migration adds `oauthResource`, `oauthClientResource`, and the new `jwks` columns. Without it, resources using `signingAlgorithm` cannot find matching keys.
+
+  Resource servers should publish RFC 9728 protected-resource metadata at their own origin. The OAuth provider exposes challenge helpers that point clients at that metadata.
+
+  `@better-auth/mcp` now requires an explicit `resource` option. The plugin stores that identifier as an OAuth resource, publishes RFC 9728 protected-resource metadata for it, and binds issued access tokens to that resource. Existing `mcp({ loginPage, consentPage })` setups should add a protected MCP resource identifier, for example `resource: "https://api.example.com/mcp"`.
+
+- [#10397](https://github.com/better-auth/better-auth/pull/10397) [`bb6c102`](https://github.com/better-auth/better-auth/commit/bb6c1021e8f6200e60ff852cbd95fb6841a0ec4b) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add `organization.getOrganization()` to fetch organization metadata without members or invitations.
+
+- [#8931](https://github.com/better-auth/better-auth/pull/8931) [`34558bc`](https://github.com/better-auth/better-auth/commit/34558bc52b0e043021a1072f78de5f5439ae1734) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add opt-in JWKS-backed asymmetric JWT support for `session_data` cookie cache tokens, so services can verify cookie-cache JWTs with public keys instead of shared secrets. Enable it with `jwt({ sessionCookieCache: true })` alongside `session.cookieCache.strategy = "jwt"`.
+
+- [#8977](https://github.com/better-auth/better-auth/pull/8977) [`954b664`](https://github.com/better-auth/better-auth/commit/954b664f4f251f8dd028451dab3ab43067dbf890) Thanks [@ruban-s](https://github.com/ruban-s)! - allow passing `userId` and `organizationId` to the `listUserTeams` API. `userId` lets callers list teams for another member of an organization (gated behind the `member:update` permission). `organizationId` scopes the result to a specific organization without needing to switch the session's active organization, matching the pattern used by `addTeamMember`/`removeTeamMember`.
+
+- [#9969](https://github.com/better-auth/better-auth/pull/9969) [`76a3342`](https://github.com/better-auth/better-auth/commit/76a33429fc2a3edcc85307bf81b9d92a95f9de6c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Signing out with `secondaryStorage` and `session.preserveSessionInDatabase` now runs your configured `session.delete` hooks and marks the preserved session row as ended. OAuth Provider access and refresh tokens bound to that session are revoked and back-channel logout is dispatched on sign-out. Previously these hooks were skipped in this setup, so the tokens stayed valid until they expired.
+
+- [#9657](https://github.com/better-auth/better-auth/pull/9657) [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden `private_key_jwt` and token endpoint client authentication, and add the helpers that make the fix structural.
+
+  `@better-auth/core/oauth2` now exposes `encodeBasicCredentials` and `decodeBasicCredentials`, a round-trip-tested pair that follows RFC 6749 §2.3.1 (`application/x-www-form-urlencoded` each value, split on the first `:` only). The decoder accepts the scheme case-insensitively and tolerates one or more spaces before the credentials per RFC 7235 §2.1. `client_secret_basic` on the client side and the Better Auth OAuth provider on the server side both go through these helpers, so credentials containing reserved characters round-trip cleanly across the stack and headers like `basic xxx` or `Basic  xxx` are accepted.
+
+  `createPrivateKeyJwtClientAssertionGetter` validates options eagerly. Unsupported algorithms (`HS256`, `none`), a JWK with no key material, and disagreement between an explicit `algorithm` and the JWK-embedded `alg` all throw at construction rather than on the first token request. `signPrivateKeyJwtClientAssertion` enforces the same checks for direct callers. **Breaking:** configurations that paired an unsupported JWK `alg` with a different explicit `algorithm` used to silently sign with the explicit option; they now fail at construction.
+
+  **Breaking:** `@better-auth/oauth-provider` accepts client `jwks` metadata only as an RFC 7517 JWK Set object with a non-empty `keys` array. Replace `jwks: [key]` with `jwks: { keys: [key] }` in DCR payloads, administrative and user client creation, Client ID Metadata Documents, test fixtures, and generated client code. Remotely fetched `jwks_uri` responses must use the same object shape. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. When a key declares `alg`, it must be a supported `private_key_jwt` algorithm that matches the key type and curve; omit `alg` when the client chooses the algorithm in its assertion header. OAuth client rows previously written through `oauthToSchema` are already stored as JWK Set objects, so this is a request, configuration, and type migration rather than another database rewrite; audit rows written outside Better Auth separately.
+
+  The SSO `private_key_jwt` flow redirects with `error_description=no_private_key_available` when a `resolvePrivateKey` callback returns no `privateKeyJwk` or `privateKeyPem`. The redirect path previously short-circuited only when the resolver was absent entirely; an empty resolver return fell through into an internal signing error.
+
+  `better-auth/test` adds `getHttpTestInstance`, a counterpart to `getTestInstance` that binds a real HTTP listener on an OS-assigned port and constructs the auth instance against the discovered URL. It removes the temp-server-then-rebind race that test files have been individually copy-pasting.
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add client authentication configuration for token endpoint requests across the stack, including `private_key_jwt` (RFC 7523).
+
+  Generic OAuth providers now accept `tokenEndpointAuth` for token endpoint client authentication. Use `tokenEndpointAuth: { method: "private_key_jwt", getClientAssertion }` for JWT client assertions, `{ method: "none" }` for public clients, and `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` with `clientSecret` for explicit secret-based client authentication. The existing `authentication: "basic" | "post"` option remains available for secret-based token requests.
+
+  Use `createPrivateKeyJwtClientAssertionGetter()` to sign RFC 7523 assertions from a private key. The assertion getter receives `{ clientId, tokenEndpoint, grantType }`, so integrations do not duplicate client ID or token endpoint values inside assertion helpers. Core OAuth2 now exports private-key JWT-specific helpers and types: `signPrivateKeyJwtClientAssertion`, `createPrivateKeyJwtClientAssertionGetter`, `PrivateKeyJwtSigningAlgorithm`, and `PRIVATE_KEY_JWT_SIGNING_ALGORITHMS`.
+
+  Token endpoint client authentication parameters are derived from `clientId`, `clientSecret`, and `tokenEndpointAuth`. Configured token endpoint authentication requires `clientId`; secret-based token endpoint authentication also requires `clientSecret`. Custom token parameters are for provider-specific fields and do not replace the configured client authentication values.
+
+  `refreshAccessToken()` now forwards `resource` values to refresh-token requests, so RFC 8707 resource indicators work through both the high-level refresh helper and `refreshAccessTokenRequest()`.
+
+  The synchronous OAuth2 request builders `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` have been removed. Use the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest` helpers instead.
+
+  Servers verify JWT client assertions signed with asymmetric keys, and clients can use the same token endpoint authentication contract for authorization code, refresh, and client credentials token requests.
+
+- [#9134](https://github.com/better-auth/better-auth/pull/9134) [`652fa53`](https://github.com/better-auth/better-auth/commit/652fa53e4912837fe234651e7c7705fb35abe188) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The dynamic `baseURL` config now ignores `x-forwarded-host` and `x-forwarded-proto` unless you set `advanced.trustedProxyHeaders: true`.
+
+  Requests using `baseURL: { allowedHosts }` now resolve the auth origin from `Host` by default, so forwarded headers cannot select another allowed host unless trusted proxy headers are enabled.
+
+  **Breaking change:** if your proxy exposes the public hostname only through `x-forwarded-host`, set `advanced.trustedProxyHeaders: true`. Deployments where the proxy rewrites `Host` to the public hostname (nginx default, Vercel, Cloudflare, and Netlify) are unaffected.
+
+  **Migration:**
+
+  ```ts
+  betterAuth({
+    baseURL: { allowedHosts: [...] },
+    advanced: {
+      trustedProxyHeaders: true,
+    },
+  });
+  ```
+
+- [#9240](https://github.com/better-auth/better-auth/pull/9240) [`729c00d`](https://github.com/better-auth/better-auth/commit/729c00d74c94f558893da1e3a9ee86451d1b23da) Thanks [@adrianmxb](https://github.com/adrianmxb)! - feat(username): add immutable username option
+
+  This allows users to set their username during sign-up or first update, but prevents changing it to a different value afterwards. Users can still update other profile fields.
+
+- [#10031](https://github.com/better-auth/better-auth/pull/10031) [`6fe9faa`](https://github.com/better-auth/better-auth/commit/6fe9faab65eb640dbe9bb762954a068586e8661c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Remove the deprecated `oidcProvider` plugin from `better-auth/plugins`. Migrate OIDC authorization-server integrations to `@better-auth/oauth-provider`.
+
+- [#10473](https://github.com/better-auth/better-auth/pull/10473) [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add transactional OIDC user resolution so applications can link verified issuer and subject pairs to exact existing users while preserving or updating the local profile.
+
+- [#10234](https://github.com/better-auth/better-auth/pull/10234) [`973fdde`](https://github.com/better-auth/better-auth/commit/973fdde79d9746b15d5ac0427049e8a008a7705c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The SIWE plugin now issues nonces before the wallet address or Chain ID is known. `authClient.siwe.nonce()` and `authClient.siwe.getNonce()` no longer accept wallet fields, `getNonce` must return an ERC-4361 nonce (8-250 alphanumeric characters), and SIWE verification now reads the wallet address and Chain ID from the signed ERC-4361 message.
+
+- [#9864](https://github.com/better-auth/better-auth/pull/9864) [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `user.validateUserInfo` provisioning gate that lets applications reject an identity before a user is created or a new account is linked. It runs once at the creation step for every method that provisions a user (OAuth, SSO/SAML, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database.
+
+  It also re-runs when an existing OAuth or SSO user signs in again (`source.action` is `"sign-in"`), where it receives the fresh provider email and profile so a domain or org policy can reject a user whose provider identity moved out of bounds. Non-provider returning sign-ins are not re-validated.
+
+  The callback receives the mapped `user` plus a `source` describing the `action` (`create-user`, `link-account`, or `sign-in`), the `method`, and provider metadata: `source.oauth` for OAuth providers and `source.sso` for OIDC/SAML SSO providers. Return `{ error, errorDescription }` to reject: browser flows redirect to the error URL and programmatic flows return a `403`.
+
+- [#10036](https://github.com/better-auth/better-auth/pull/10036) [`ad35ead`](https://github.com/better-auth/better-auth/commit/ad35eadd130162565a1b93c27f3a66910dca0b0e) Thanks [@bytaesu](https://github.com/bytaesu)! - Require Google One Tap server callbacks to resolve a Google client ID before verifying ID tokens. Configure `oneTap({ clientId })` or `socialProviders.google.clientId` when using the One Tap plugin.
+
+- [#9057](https://github.com/better-auth/better-auth/pull/9057) [`544f1c6`](https://github.com/better-auth/better-auth/commit/544f1c63c9826831d96a126fbe568d8a8a8fde68) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(two-factor)!: add OTP-only enablement and a discriminated response
+
+  `enableTwoFactor` now accepts a `method` parameter (`"otp" | "totp"`, default `"totp"`) and returns a discriminated response with a `method` field.
+
+  ### `method: "otp"`
+  - Sets `twoFactorEnabled: true` immediately.
+  - Returns `{ method: "otp" }`.
+  - Requires `otpOptions.sendOTP` to be configured on the server; rejects with `OTP_NOT_CONFIGURED` otherwise.
+
+  ### `method: "totp"` (default)
+  - Returns `{ method: "totp", totpURI, backupCodes }`.
+  - Rejects with `TOTP_NOT_CONFIGURED` if `totpOptions.disable` is set.
+
+  The existing `skipVerificationOnEnable` option remains supported for TOTP enrollment.
+
+  ### Breaking changes
+  - **Response shape changed**: `enableTwoFactor` includes a `method` field in the response (`"otp"` or `"totp"`).
+
+### Patch Changes
+
+- [#10014](https://github.com/better-auth/better-auth/pull/10014) [`73541c1`](https://github.com/better-auth/better-auth/commit/73541c119041113b1909fe244ff4b8210618b5b5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Cloudflare Workers apps can now start when importing Better Auth subpaths such as `better-auth/db`. Beta builds were crashing during module initialization before application code ran.
+
+- [#10299](https://github.com/better-auth/better-auth/pull/10299) [`cf8eaac`](https://github.com/better-auth/better-auth/commit/cf8eaac26e11bcdb7309d537f1730b2559963861) Thanks [@momomuchu](https://github.com/momomuchu)! - widen drizzle-kit peer dependency range
+
+- [#10501](https://github.com/better-auth/better-auth/pull/10501) [`65fc17c`](https://github.com/better-auth/better-auth/commit/65fc17c755c3e2c8c77d5b401d612737764c219d) Thanks [@KingIronMan2011](https://github.com/KingIronMan2011)! - Expand the optional `drizzle-orm` peer range to `^0.45.2 || >=1.0.0-rc.1 <2.0.0`, matching `@better-auth/drizzle-adapter` and allowing Drizzle ORM v1 RC installations without peer dependency warnings.
+
+- [#10622](https://github.com/better-auth/better-auth/pull/10622) [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Sign-up no longer deadlocks when session cookie caching uses the JWT strategy on a single-connection SQLite database with native transactions enabled. JWKS key lookups and creation now resolve the transaction-scoped adapter instead of always querying the root connection, so minting a signing key during sign-up joins the surrounding transaction instead of racing it for the only available connection. On multi-connection databases (Postgres, MySQL) this also fixes a silent atomicity gap where a JWKS key created mid-transaction could commit independently of the transaction it was minted in.
+
+- [#10293](https://github.com/better-auth/better-auth/pull/10293) [`fe4c820`](https://github.com/better-auth/better-auth/commit/fe4c8209479cc90a4c2e8692b2d84fde26926af2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `npx auth migrate` can now add required columns with static defaults and nullable
+  unique columns to existing SQLite, PostgreSQL, and MySQL tables. Required unique
+  columns still need distinct values to be backfilled manually before applying the
+  unique constraint.
+
+- [#9898](https://github.com/better-auth/better-auth/pull/9898) [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2) Thanks [@ItalyPaleAle](https://github.com/ItalyPaleAle)! - Add `clientAssertion` support to the Microsoft Entra ID social provider.
+
+- [#9301](https://github.com/better-auth/better-auth/pull/9301) [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `allowIdpInitiated` to `GenericOAuthConfig` and SSO `OIDCConfig` to support providers that initiate OAuth without a `state` parameter (e.g. Clever). When enabled, stateless callbacks restart the OAuth flow server-side with fresh state and PKCE, preserving CSRF protection. Also hardens `parseState` against undefined request bodies on GET callbacks.
+
+- [#10065](https://github.com/better-auth/better-auth/pull/10065) [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth and device-authorization responses that carry credentials now consistently send `Cache-Control: no-store` and `Pragma: no-cache`, so proxies, CDNs, and browsers never cache them. This covers the token, introspection, and userinfo endpoints, dynamic and admin client registration, client secret rotation, and the device code and device token responses, including the error responses from those endpoints.
+
+  Endpoints declare this with `metadata: { noStore: true }`, and the header set is exported from `@better-auth/core` as `NO_STORE_HEADERS` for responses built by hand.
+
+- [#10124](https://github.com/better-auth/better-auth/pull/10124) [`06daf70`](https://github.com/better-auth/better-auth/commit/06daf7011e548ef5a7d513c96e3a440331977a7d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Preserve the resolved OAuth user when `overrideUserInfo` returns `null` during account linking.
+
+- [#9304](https://github.com/better-auth/better-auth/pull/9304) [`e0d2b9e`](https://github.com/better-auth/better-auth/commit/e0d2b9eb9b4a515e1b73be71e1e3681faaa9b55f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Propagate sign-out to every connected app and cut off API access immediately, via OIDC Back-Channel Logout 1.0.
+
+  When a user's session ends at the OP (sign-out, `/oauth2/end-session`, admin revoke, ban), `@better-auth/oauth-provider` now notifies every Relying Party that holds tokens for that session. The user's API access is cut off right away, instead of access tokens staying usable until their own TTL. Each client opts in by registering a `backchannel_logout_uri` (and optionally `backchannel_logout_session_required`) via DCR or the admin client-create endpoint. The provider signs a `logout+jwt` Logout Token per client and POSTs it to that client in parallel, with a short per-RP timeout.
+
+  **Breaking change.** Introspection of an opaque or JWT access token whose bound session has ended now returns `{ active: false }`, and `/oauth2/userinfo` rejects it with `invalid_token`. Previously the token stayed active until its own TTL. If you relied on access tokens outliving the user's session, that no longer holds.
+
+  Refresh tokens without `offline_access` are revoked on session end; `offline_access` refresh tokens are preserved so long-lived API access can survive the browser session (OIDC Back-Channel Logout 1.0 §2.7). Access-token invalidation on session end is an additional OP hardening choice beyond §2.7, enforced by session liveness, so it holds even when the JWT plugin is disabled.
+
+  Delivery runs through the host's background task handler when one is configured (Vercel `waitUntil`, Cloudflare `ctx.waitUntil`); without a handler it completes inline so notifications are not lost on request teardown. Configure `advanced.backgroundTasks.handler` on serverless runtimes to keep sign-out fast.
+
+  Discovery at `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` when the JWT plugin is enabled. Every registered `backchannel_logout_uri` must be a credential-free public HTTPS URL without a fragment; loopback HTTP is rejected for both public and confidential clients. CIMD documents cannot register back-channel logout metadata. The SSRF host guard, which blocks private, reserved, tunneled, and cloud-metadata hosts, also covers a `private_key_jwt` client's `jwks_uri`.
+
+  Schema changes on `@better-auth/oauth-provider`:
+  - `oauthClient.backchannelLogoutUri: string | null`
+  - `oauthClient.backchannelLogoutSessionRequired: boolean`
+  - `oauthAccessToken.revoked: Date | null`
+
+  `better-auth`'s `signJWT` gains an optional `header` argument, forwarded to custom remote signers. JWT profiles that need an explicit media type, such as `typ: "logout+jwt"`, can now set it without reaching for the low-level signing primitives.
+
+- [#10125](https://github.com/better-auth/better-auth/pull/10125) [`a83152e`](https://github.com/better-auth/better-auth/commit/a83152e2e884b1ac1724f95cea2056795d60e5cc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Create new OAuth accounts in the user creation transaction. Adapters with native
+  transaction support roll back the user when the account write fails, while other
+  adapters still perform the writes sequentially.
+
+- [#10128](https://github.com/better-auth/better-auth/pull/10128) [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Preserve previously granted OAuth scopes across sign-in re-authentication and refresh-token requests. `account.scope` now accumulates monotonically: newly granted scopes are merged in only when added via `linkSocial`, and providers returning a narrower scope claim than the user has granted no longer shrink the stored value.
+
+- [#10170](https://github.com/better-auth/better-auth/pull/10170) [`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Bundled dependencies were refreshed to their latest compatible releases, including jose, nanostores, the noble crypto packages, and SimpleWebAuthn. These updates are backward compatible and require no changes to existing projects.
+
+- [#10390](https://github.com/better-auth/better-auth/pull/10390) [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM connections can now provision Users, Groups, and direct memberships into application-defined provisioning domains without the organization or SSO plugins. Applications can map Group membership to validated custom roles through projections. The service also supports SCIM 2.0 discovery, filtering, pagination, response attribute selection, atomic PATCH operations, and common request patterns used by Microsoft Entra ID and Okta.
+
+  This replaces the previous SCIM configuration, client APIs, database schema, and organization-backed Group model. Existing SCIM installations cannot migrate provisioning state in place. Follow the SCIM cutover in the 1.7 upgrade guide, including full directory reprovisioning, before resuming traffic.
+
+  Deferred database side effects now run only after a successful transaction. A rolled-back User update no longer refreshes its cached profile, and a rolled-back bulk session revocation no longer invalidates sessions.
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow test instances to enable native database transactions for postgres and mysql.
+
+- Updated dependencies [[`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1), [`5d38b13`](https://github.com/better-auth/better-auth/commit/5d38b138c3c73eb06fe247ef6631c66e86ccc92b), [`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417), [`ea06c5a`](https://github.com/better-auth/better-auth/commit/ea06c5a71f448dfc600f1c2f7b0de732730c79cd), [`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0), [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9), [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545), [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b), [`e4818b5`](https://github.com/better-auth/better-auth/commit/e4818b545984dce99e3c798ead5691c5bf775a70), [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2), [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59), [`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8), [`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2), [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9), [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b), [`34558bc`](https://github.com/better-auth/better-auth/commit/34558bc52b0e043021a1072f78de5f5439ae1734), [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a), [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a), [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c), [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f), [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a)]:
+  - @better-auth/core@1.7.0
+  - @better-auth/drizzle-adapter@1.7.0
+  - @better-auth/mongo-adapter@1.7.0
+  - @better-auth/kysely-adapter@1.7.0
+  - @better-auth/memory-adapter@1.7.0
+  - @better-auth/prisma-adapter@1.7.0
+  - @better-auth/telemetry@1.7.0
+
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10769](https://github.com/better-auth/better-auth/pull/10769) [`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent duplicate session requests during transient remounts while ensuring incomplete refreshes are revalidated.
+
+- [#10794](https://github.com/better-auth/better-auth/pull/10794) [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore client plugin declaration compatibility for downstream TypeScript consumers.
+
+- Updated dependencies [[`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417)]:
+  - @better-auth/drizzle-adapter@1.7.0-rc.6
+  - @better-auth/core@1.7.0-rc.6
+  - @better-auth/kysely-adapter@1.7.0-rc.6
+  - @better-auth/memory-adapter@1.7.0-rc.6
+  - @better-auth/mongo-adapter@1.7.0-rc.6
+  - @better-auth/prisma-adapter@1.7.0-rc.6
+  - @better-auth/telemetry@1.7.0-rc.6
+
+## 1.7.0-rc.5
+
+### Minor Changes
+
+- [#10746](https://github.com/better-auth/better-auth/pull/10746) [`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth device grants now use `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`. This single integration replaces both the standalone `deviceCodeGrant()` plugin and the shared-grant configuration. Standalone Device Authorization no longer accepts or stores RFC 8707 resources, and `onDeviceAuthRequest` receives only `clientId` and `scope`. The OAuth integration rejects resource indicators that are not absolute, fragment-free URIs.
+
+  The OAuth integration replaces the optional `resource` column with `oauthClientId` and `resources`. Regenerate and apply the schema when using it. Before upgrading from an earlier 1.7 prerelease, let pending OAuth device codes expire or delete them because they cannot be exchanged through the new integration.
+
+- [#10330](https://github.com/better-auth/better-auth/pull/10330) [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Allow the username plugin's separate `displayUsername` field to be omitted by setting `displayUsername: false` on both the server and client plugins.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.5
+  - @better-auth/drizzle-adapter@1.7.0-rc.5
+  - @better-auth/kysely-adapter@1.7.0-rc.5
+  - @better-auth/memory-adapter@1.7.0-rc.5
+  - @better-auth/mongo-adapter@1.7.0-rc.5
+  - @better-auth/prisma-adapter@1.7.0-rc.5
+  - @better-auth/telemetry@1.7.0-rc.5
+
+## 1.7.0-rc.4
+
+### Patch Changes
+
+- [#10676](https://github.com/better-auth/better-auth/pull/10676) [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839) Thanks [@bytaesu](https://github.com/bytaesu)! - Deduplicate in-flight session requests when React retries a suspended component.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.4
+  - @better-auth/drizzle-adapter@1.7.0-rc.4
+  - @better-auth/kysely-adapter@1.7.0-rc.4
+  - @better-auth/memory-adapter@1.7.0-rc.4
+  - @better-auth/mongo-adapter@1.7.0-rc.4
+  - @better-auth/prisma-adapter@1.7.0-rc.4
+  - @better-auth/telemetry@1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10059](https://github.com/better-auth/better-auth/pull/10059) [`49b5cf6`](https://github.com/better-auth/better-auth/commit/49b5cf650e1264ecc4c917ca193ea05c3b58a3b9) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Device Authorization now creates database indexes for device and user code lookups. Codes longer than 191 characters are rejected. Existing MySQL and SQL Server installations must convert these columns to bounded strings and resolve oversized values before running the migration.
+
+- [#9368](https://github.com/better-auth/better-auth/pull/9368) [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Generic OAuth users can now sign out from the configured OpenID provider when they call `authClient.signOut()`. When a provider exposes a discovered or configured logout endpoint, Better Auth redirects to it and includes the stored `id_token_hint` when available. Pass `callbackURL` or configure `postLogoutRedirectURI` for the return flow, with optional `state`, or set `disableRedirect` to handle the returned `url` yourself. When multiple linked providers support logout, Better Auth selects the most recently updated account. Set `disableProviderLogout: true` to keep sign-out local.
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - MCP clients that hit a scope wall now learn exactly which scopes to ask for. Missing protected scopes produce a `403` with an RFC 6750 `insufficient_scope` `WWW-Authenticate` challenge that names every missing scope. Clients can union those scopes into one authorization request instead of opening one browser redirect per scope.
+  - Configure protected scopes with `requiredScopes` through `RequireMcpAuthOptions` or the matching `createMcpProtectedRequestHandler` verifier option. Exact membership remains the default; `isScopeSatisfied` can define hierarchical policies.
+  - Use `createInsufficientScopeError` when an operation determines its required scopes dynamically. `createResourceServerChallenge` converts that signal and recognized token failures into safe RFC 6750 challenges.
+  - Use `challengeScopes` only as the unauthenticated challenge hint.
+
+  Handler-produced responses, ordinary permission denials, configuration failures, and unrelated thrown values keep their original status and identity.
+
+- [#10204](https://github.com/better-auth/better-auth/pull/10204) [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Microsoft sign-in now identifies Entra accounts with the stable `oid` claim in both the built-in `microsoft` provider and the Generic OAuth `microsoftEntraId` helper. Tokens without a valid `oid` are rejected, and the Generic OAuth helper refuses to initialize unless Microsoft discovery provides ID-token verification metadata. Existing Microsoft account rows created from `sub` must be migrated before upgrading.
+
+- [#10135](https://github.com/better-auth/better-auth/pull/10135) [`f68044d`](https://github.com/better-auth/better-auth/commit/f68044dcfbd9fb83763249ed9509cfacbcce47be) Thanks [@brentmitchell25](https://github.com/brentmitchell25)! - Registered OAuth clients can now use the RFC 8628 device flow to obtain provider-managed OAuth tokens. Add `deviceCodeGrant()` alongside `deviceAuthorization()` and `oauthProvider()`; clients request a code at `/device/code` and exchange it at `/oauth2/token` after the user approves it. OAuth and OpenID discovery now advertise `device_authorization_endpoint`.
+
+  Device authorization requests can bind RFC 8707 resource indicators. `GET /device` now returns the requesting `client_id`, `scope`, and `resource` values to the authenticated user who owns the request, and `onDeviceAuthRequest` receives the resource as its third argument. Token requests can reuse or narrow the approved resource set, but requests that add a resource are rejected. Existing first-party device clients continue to receive Better Auth session tokens from `/device/token`.
+
+  The `deviceCode` table adds an optional `resource` field. Run `npx @better-auth/cli generate` and apply the migration before deploying this update.
+
+### Patch Changes
+
+- [#10622](https://github.com/better-auth/better-auth/pull/10622) [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Sign-up no longer deadlocks when session cookie caching uses the JWT strategy on a single-connection SQLite database with native transactions enabled. JWKS key lookups and creation now resolve the transaction-scoped adapter instead of always querying the root connection, so minting a signing key during sign-up joins the surrounding transaction instead of racing it for the only available connection. On multi-connection databases (Postgres, MySQL) this also fixes a silent atomicity gap where a JWKS key created mid-transaction could commit independently of the transaction it was minted in.
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow test instances to enable native database transactions for postgres and mysql.
+
+- Updated dependencies [[`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560), [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b), [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59), [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a)]:
+  - @better-auth/core@1.7.0-rc.3
+  - @better-auth/kysely-adapter@1.7.0-rc.3
+  - @better-auth/drizzle-adapter@1.7.0-rc.3
+  - @better-auth/memory-adapter@1.7.0-rc.3
+  - @better-auth/mongo-adapter@1.7.0-rc.3
+  - @better-auth/prisma-adapter@1.7.0-rc.3
+  - @better-auth/telemetry@1.7.0-rc.3
+
+## 1.7.0-rc.2
+
+### Minor Changes
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+- [#10403](https://github.com/better-auth/better-auth/pull/10403) [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Scope account identity by trusted issuer instead of provider configuration. Accounts now use the unique `(issuer, providerAccountId)` key, so aliases for one OpenID Connect issuer deduplicate one external identity while equal subjects from different issuers remain separate. This identity deduplication does not introduce independent grant or provider lifecycle records for aliases.
+
+  This release is breaking. `Account.accountId` is renamed to `Account.providerAccountId`, and `Account.issuer` is required. Account-specific APIs select the local `Account.id` through `accountId`; token and provider-profile APIs can instead select the signed account cookie with `useAccountCookie: true`. Credential accounts use `local:credential` and the linked user's stable `id` as their provider identity.
+
+  OAuth provider identity now comes from raw verified profiles. OpenID Connect discovery uses `sub`, plain OAuth uses `id`, and providers can declare `accountSubject` for another immutable field; Better Auth no longer switches between `sub` and `id` at runtime. `getUserInfo().user` no longer carries provider identity, and `mapProfileToUser` cannot return `id`. Read the selected identity from `accountInfo.account.providerAccountId` instead of `accountInfo.user.id`. The generic `microsoftEntraId` helper now requires a concrete tenant GUID; use the built-in Microsoft provider for multi-tenant authorities.
+
+  SSO account subjects are now protocol-defined. OIDC uses the verified `sub` claim, and SAML uses the signed `NameID`; `mapping.id` is removed from both configurations. A manual SAML configuration without metadata XML must set `idpMetadata.entityID`, because `samlConfig.issuer` identifies the service provider and no longer acts as the IdP identity.
+
+  Apply the reviewed account-identity backfill in the Better Auth 1.7 upgrade guide before deploying. The generated schema migration cannot assign trusted issuers or resolve existing identity collisions automatically.
+
+- [#10359](https://github.com/better-auth/better-auth/pull/10359) [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Database joins have moved out of `experimental` into a stable option at `advanced.database.joins` (default: `false`).
+
+  If you previously set `experimental: { joins: true }`, update your config to:
+
+  ```ts
+  advanced: {
+    database: {
+      joins: true,
+    },
+  }
+  ```
+
+  Adapters that support native joins use them when enabled. If an adapter cannot return joined data for a query, Better Auth falls back to additional queries and combines the results. Drizzle and Prisma users should ensure their schema includes the required relations (`npx auth@latest generate`).
+
+- [#10397](https://github.com/better-auth/better-auth/pull/10397) [`bb6c102`](https://github.com/better-auth/better-auth/commit/bb6c1021e8f6200e60ff852cbd95fb6841a0ec4b) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add `organization.getOrganization()` to fetch organization metadata without members or invitations.
+
+- [#10473](https://github.com/better-auth/better-auth/pull/10473) [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add transactional OIDC user resolution so applications can link verified issuer and subject pairs to exact existing users while preserving or updating the local profile.
+
+- [#10234](https://github.com/better-auth/better-auth/pull/10234) [`973fdde`](https://github.com/better-auth/better-auth/commit/973fdde79d9746b15d5ac0427049e8a008a7705c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The SIWE plugin now issues nonces before the wallet address or Chain ID is known. `authClient.siwe.nonce()` and `authClient.siwe.getNonce()` no longer accept wallet fields, `getNonce` must return an ERC-4361 nonce (8-250 alphanumeric characters), and SIWE verification now reads the wallet address and Chain ID from the signed ERC-4361 message.
+
+### Patch Changes
+
+- [#10299](https://github.com/better-auth/better-auth/pull/10299) [`cf8eaac`](https://github.com/better-auth/better-auth/commit/cf8eaac26e11bcdb7309d537f1730b2559963861) Thanks [@momomuchu](https://github.com/momomuchu)! - widen drizzle-kit peer dependency range
+
+- [#10390](https://github.com/better-auth/better-auth/pull/10390) [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM connections can now provision Users, Groups, and direct memberships into application-defined provisioning domains without the organization or SSO plugins. Applications can map Group membership to validated custom roles through projections. The service also supports SCIM 2.0 discovery, filtering, pagination, response attribute selection, atomic PATCH operations, and common request patterns used by Microsoft Entra ID and Okta.
+
+  This replaces the previous SCIM configuration, client APIs, database schema, and organization-backed Group model. Existing SCIM installations cannot migrate provisioning state in place. Follow the SCIM cutover in the 1.7 upgrade guide, including full directory reprovisioning, before resuming traffic.
+
+  Deferred database side effects now run only after a successful transaction. A rolled-back User update no longer refreshes its cached profile, and a rolled-back bulk session revocation no longer invalidates sessions.
+
+- Updated dependencies [[`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1), [`5d38b13`](https://github.com/better-auth/better-auth/commit/5d38b138c3c73eb06fe247ef6631c66e86ccc92b), [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9), [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545), [`e4818b5`](https://github.com/better-auth/better-auth/commit/e4818b545984dce99e3c798ead5691c5bf775a70), [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a), [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15)]:
+  - @better-auth/core@1.7.0-rc.2
+  - @better-auth/drizzle-adapter@1.7.0-rc.2
+  - @better-auth/mongo-adapter@1.7.0-rc.2
+  - @better-auth/kysely-adapter@1.7.0-rc.2
+  - @better-auth/memory-adapter@1.7.0-rc.2
+  - @better-auth/prisma-adapter@1.7.0-rc.2
+  - @better-auth/telemetry@1.7.0-rc.2
+
+## 1.7.0-rc.1
+
+### Patch Changes
+
+- [#10293](https://github.com/better-auth/better-auth/pull/10293) [`fe4c820`](https://github.com/better-auth/better-auth/commit/fe4c8209479cc90a4c2e8692b2d84fde26926af2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `npx auth migrate` no longer aborts when adding a column to an existing table. A required column with a default value, or a unique column, now migrates on SQLite and on populated Postgres and MySQL databases. Upgrading a database that already has organization teams previously failed on the new `team.memberCount` and `teamMember.membershipKey` columns.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.1
+  - @better-auth/drizzle-adapter@1.7.0-rc.1
+  - @better-auth/kysely-adapter@1.7.0-rc.1
+  - @better-auth/memory-adapter@1.7.0-rc.1
+  - @better-auth/mongo-adapter@1.7.0-rc.1
+  - @better-auth/prisma-adapter@1.7.0-rc.1
+  - @better-auth/telemetry@1.7.0-rc.1
+
+## 1.7.0-rc.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.0
+  - @better-auth/drizzle-adapter@1.7.0-rc.0
+  - @better-auth/kysely-adapter@1.7.0-rc.0
+  - @better-auth/memory-adapter@1.7.0-rc.0
+  - @better-auth/mongo-adapter@1.7.0-rc.0
+  - @better-auth/prisma-adapter@1.7.0-rc.0
+  - @better-auth/telemetry@1.7.0-rc.0
+
+## 1.7.0-beta.10
+
+### Patch Changes
+
+- [#10170](https://github.com/better-auth/better-auth/pull/10170) [`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Bundled dependencies were refreshed to their latest compatible releases, including jose, nanostores, the noble crypto packages, and SimpleWebAuthn. These updates are backward compatible and require no changes to existing projects.
+
+- Updated dependencies [[`ea06c5a`](https://github.com/better-auth/better-auth/commit/ea06c5a71f448dfc600f1c2f7b0de732730c79cd)]:
+  - @better-auth/drizzle-adapter@1.7.0-beta.10
+  - @better-auth/core@1.7.0-beta.10
+  - @better-auth/kysely-adapter@1.7.0-beta.10
+  - @better-auth/memory-adapter@1.7.0-beta.10
+  - @better-auth/mongo-adapter@1.7.0-beta.10
+  - @better-auth/prisma-adapter@1.7.0-beta.10
+  - @better-auth/telemetry@1.7.0-beta.10
+
+## 1.7.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.9
+  - @better-auth/drizzle-adapter@1.7.0-beta.9
+  - @better-auth/kysely-adapter@1.7.0-beta.9
+  - @better-auth/memory-adapter@1.7.0-beta.9
+  - @better-auth/mongo-adapter@1.7.0-beta.9
+  - @better-auth/prisma-adapter@1.7.0-beta.9
+  - @better-auth/telemetry@1.7.0-beta.9
+
+## 1.7.0-beta.8
+
+### Minor Changes
+
+- [#10127](https://github.com/better-auth/better-auth/pull/10127) [`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth sign-in, account linking, callback, and proxy flows now build `redirect_uri` from the current request base URL when `baseURL.allowedHosts` is configured. Built-in social providers and generic OAuth providers now use the resolved request host for redirects in multi-host deployments.
+
+  Custom `OAuthProvider` implementations can omit `callbackPath` when using the shared `/callback/<provider-id>` route. Set `callbackPath` only for custom callback routes.
+
+### Patch Changes
+
+- [#10124](https://github.com/better-auth/better-auth/pull/10124) [`06daf70`](https://github.com/better-auth/better-auth/commit/06daf7011e548ef5a7d513c96e3a440331977a7d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Preserve the resolved OAuth user when `overrideUserInfo` returns `null` during account linking.
+
+- [#10125](https://github.com/better-auth/better-auth/pull/10125) [`a83152e`](https://github.com/better-auth/better-auth/commit/a83152e2e884b1ac1724f95cea2056795d60e5cc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Create new OAuth accounts in the user creation transaction so failed account writes roll back the user row.
+
+- [#10128](https://github.com/better-auth/better-auth/pull/10128) [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Preserve previously granted OAuth scopes across sign-in re-authentication and refresh-token requests. `account.scope` now accumulates monotonically: newly granted scopes are merged in only when added via `linkSocial`, and providers returning a narrower scope claim than the user has granted no longer shrink the stored value.
+
+- Updated dependencies [[`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c)]:
+  - @better-auth/core@1.7.0-beta.8
+  - @better-auth/drizzle-adapter@1.7.0-beta.8
+  - @better-auth/kysely-adapter@1.7.0-beta.8
+  - @better-auth/memory-adapter@1.7.0-beta.8
+  - @better-auth/mongo-adapter@1.7.0-beta.8
+  - @better-auth/prisma-adapter@1.7.0-beta.8
+  - @better-auth/telemetry@1.7.0-beta.8
+
+## 1.7.0-beta.7
+
+### Minor Changes
+
+- [#9948](https://github.com/better-auth/better-auth/pull/9948) [`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3) Thanks [@yordis](https://github.com/yordis)! - feat(generic-oauth): add `refreshTokenParams` config to forward extra params on token refresh
+
+  Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`) need to send extra body params on the refresh call to rescope tokens without a full authorization redirect. The generic-oauth plugin now accepts a `refreshTokenParams` option (object or sync/async function) that is merged into the refresh request body, with `grant_type` and `refresh_token` protected from override. The function form receives request metadata for the request that triggered the refresh, so request-scoped data (headers, cookies) is available without out-of-band state like AsyncLocalStorage.
+
+  `UpstreamProvider.refreshAccessToken` now accepts an optional second `ctx` argument; the change is backwards compatible because existing implementations that take only `refreshToken` remain valid. See [#7554](https://github.com/better-auth/better-auth/issues/7554).
+
+### Patch Changes
+
+- Updated dependencies [[`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0)]:
+  - @better-auth/core@1.7.0-beta.7
+  - @better-auth/drizzle-adapter@1.7.0-beta.7
+  - @better-auth/kysely-adapter@1.7.0-beta.7
+  - @better-auth/memory-adapter@1.7.0-beta.7
+  - @better-auth/mongo-adapter@1.7.0-beta.7
+  - @better-auth/prisma-adapter@1.7.0-beta.7
+  - @better-auth/telemetry@1.7.0-beta.7
+
+## 1.7.0-beta.6
+
+### Minor Changes
+
+- [#10004](https://github.com/better-auth/better-auth/pull/10004) [`b36c38f`](https://github.com/better-auth/better-auth/commit/b36c38f9842d3416689340552989449a32007819) Thanks [@bytaesu](https://github.com/bytaesu)! - The captcha plugin now requires endpoint entries to match full auth paths unless they use wildcard patterns. This prevents requests like `/sign-in//email` from bypassing captcha while preserving trailing-slash matches like `/sign-in/email/`. To protect multiple routes, replace partial paths like `/sign-in` with explicit wildcards such as `/sign-in/*` or `/sign-in/**`.
+
+- [#9766](https://github.com/better-auth/better-auth/pull/9766) [`bf39cbf`](https://github.com/better-auth/better-auth/commit/bf39cbf13f3b934f728cde72b1e7ebdc4c85f641) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a server-only `auth.api.consumePhoneNumberOTP` API for custom phone OTP flows that need to verify and consume a code without creating or updating users or sessions.
+
+- [#9992](https://github.com/better-auth/better-auth/pull/9992) [`e53582c`](https://github.com/better-auth/better-auth/commit/e53582ce55a0ddbca62f52efeb3459523816f222) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The MCP plugin moves out of `better-auth` into its own package, `@better-auth/mcp`, built on `@better-auth/oauth-provider`. Import the server plugin and its helpers from `@better-auth/mcp`, and the remote client and adapters from `@better-auth/mcp/client` and `@better-auth/mcp/client/adapters` (previously imported from `better-auth/plugins` and `better-auth/plugins/mcp/client`). The OAuth endpoints move from `/mcp/*` to `/oauth2/*`, with discovery at `/.well-known/oauth-authorization-server` and protected resource metadata at `/.well-known/oauth-protected-resource`. Discovery-based MCP clients pick up the new locations on their own.
+
+  The route helper is renamed `requireMcpAuth` (was `withMcpAuth`), and the remote client is `createMcpResourceClient` (was `createMcpAuthClient`). `requireMcpAuth` verifies the bearer token against the published JWKS and passes the verified JWT claims to your handler.
+
+  To migrate, install `@better-auth/mcp`, add the `jwt()` plugin (now required for token signing), and move options that were nested under `oidcConfig` to flat options on `mcp({ ... })`. The database models change: `oauthApplication` becomes `oauthClient`, with new `oauthRefreshToken` and `oauthClientAssertion` tables. Regenerate or migrate your schema with `npx auth migrate` or `npx auth generate`.
+
+- [#10039](https://github.com/better-auth/better-auth/pull/10039) [`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider)!: DPoP-bound access tokens (RFC 9449)
+
+  OAuth provider integrations can issue and verify DPoP sender-constrained tokens. Clients request them with `dpop_bound_access_tokens` at registration, `dpop_jkt` on the authorization request, or by targeting a resource configured with `dpopBoundAccessTokensRequired`. Issued tokens carry `cnf.jkt`, return `token_type: "DPoP"`, and stay bound through refresh-token rotation, introspection, and userinfo.
+
+  Resource servers verify DPoP requests with `verifyAccessTokenRequest`, which checks the `Authorization: DPoP` scheme, the proof, the request target, the access-token hash, and proof replay. The MCP package advertises DPoP in protected resource metadata and verifies DPoP-bound requests. Proof replay is rejected through the database-backed verification store, so anti-replay holds across instances. `verifyAccessTokenRequest` and `requireMcpAuth` use that store by default; build one with `createDpopReplayStore(internalAdapter)` or pass a custom `dpop.replayStore`. This needs database-backed verification storage: a secondary-storage-only deployment rejects DPoP requests rather than skipping replay protection.
+
+  Breaking: the raw-token verifier `verifyAccessToken` is renamed to `verifyBearerToken`, both in `better-auth/oauth2` and as the `oauthProviderResourceClient` action, and it rejects DPoP-bound tokens. Use `verifyAccessTokenRequest` on any endpoint that may receive them. The resource-request input type is renamed from `AccessTokenRequestInput` to `ResourceRequestInput`, and the DPoP algorithm option is `signingAlgorithms` everywhere.
+
+  Run a schema migration for the DPoP token-binding fields: the `confirmation` column on the access-token and refresh-token tables. DPoP-bound clients also gain `dpopBoundAccessTokens` and resources `dpopBoundAccessTokensRequired`. No dedicated replay table is added; proof replay reuses the verification store.
+
+- [#9648](https://github.com/better-auth/better-auth/pull/9648) [`d2a79ba`](https://github.com/better-auth/better-auth/commit/d2a79bae79b88e2b28cb678f5eefd9759239b627) Thanks [@brentmitchell25](https://github.com/brentmitchell25)! - OAuth provider now models protected resources explicitly. Configure them with `resources` or create them through the `oauthResource` admin API. Each resource can define token TTLs, allowed scopes, custom JWT claims, and JWT signing pins.
+
+  `validAudiences` is removed. Move each existing resource identifier into `resources`; link clients that should be limited to specific resources through `oauthClientResource` or Dynamic Client Registration `resources`.
+
+  Access-token issuance now applies resource policy to the requested RFC 8707 `resource` values. The OAuth provider narrows scopes to resource allowlists, uses the shortest configured TTL, strips reserved RFC 9068 claim names from custom claims, emits `jti`, and keeps repeated `resource` form parameters.
+
+  Refresh-token TTLs now use the shortest applicable lifetime. Deployments with a per-resource `refreshTokenTtl` longer than `refreshTokenExpiresIn` will see refresh tokens expire at the provider default instead of the longer resource value.
+
+  JWT signing can now honor per-resource pins. `signJWT()` accepts `signingKeyId` and `signingAlgorithm`; JWKS adapters expose `getKeyById()` and `getLatestKeyByAlg()`. The `jwks` table adds nullable `alg` and `crv` columns, and `keyPairConfigs` can provision multiple algorithms in one keyring.
+
+  After upgrading, run `npx @better-auth/cli generate` and apply the migration before deploying. The migration adds `oauthResource`, `oauthClientResource`, and the new `jwks` columns. Without it, resources using `signingAlgorithm` cannot find matching keys.
+
+  Resource servers should publish RFC 9728 protected-resource metadata at their own origin. The OAuth provider exposes challenge helpers that point clients at that metadata.
+
+  `@better-auth/mcp` now requires an explicit `resource` option. The plugin stores that identifier as an OAuth resource, publishes RFC 9728 protected-resource metadata for it, and binds issued access tokens to that resource. Existing `mcp({ loginPage, consentPage })` setups should add a protected MCP resource identifier, for example `resource: "https://api.example.com/mcp"`.
+
+- [#8931](https://github.com/better-auth/better-auth/pull/8931) [`34558bc`](https://github.com/better-auth/better-auth/commit/34558bc52b0e043021a1072f78de5f5439ae1734) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add opt-in JWKS-backed asymmetric JWT support for `session_data` cookie cache tokens, so services can verify cookie-cache JWTs with public keys instead of shared secrets.
+
+- [#9134](https://github.com/better-auth/better-auth/pull/9134) [`652fa53`](https://github.com/better-auth/better-auth/commit/652fa53e4912837fe234651e7c7705fb35abe188) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The dynamic `baseURL` config now ignores `x-forwarded-host` and `x-forwarded-proto` unless you set `advanced.trustedProxyHeaders: true`.
+
+  Requests using `baseURL: { allowedHosts }` now resolve the auth origin from `Host` by default, so forwarded headers cannot select another allowed host unless trusted proxy headers are enabled.
+
+  **Breaking change:** if your proxy exposes the public hostname only through `x-forwarded-host`, set `advanced.trustedProxyHeaders: true`. Deployments where the proxy rewrites `Host` to the public hostname (nginx default, Vercel, Cloudflare, and Netlify) are unaffected.
+
+  **Migration:**
+
+  ```ts
+  betterAuth({
+    baseURL: { allowedHosts: [...] },
+    advanced: {
+      trustedProxyHeaders: true,
+    },
+  });
+  ```
+
+- [#10031](https://github.com/better-auth/better-auth/pull/10031) [`6fe9faa`](https://github.com/better-auth/better-auth/commit/6fe9faab65eb640dbe9bb762954a068586e8661c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Remove the deprecated `oidcProvider` plugin from `better-auth/plugins`. Migrate OIDC authorization-server integrations to `@better-auth/oauth-provider`.
+
+- [#10036](https://github.com/better-auth/better-auth/pull/10036) [`ad35ead`](https://github.com/better-auth/better-auth/commit/ad35eadd130162565a1b93c27f3a66910dca0b0e) Thanks [@bytaesu](https://github.com/bytaesu)! - Require Google One Tap server callbacks to resolve a Google client ID before verifying ID tokens. Configure `oneTap({ clientId })` or `socialProviders.google.clientId` when using the One Tap plugin.
+
+### Patch Changes
+
+- [#10014](https://github.com/better-auth/better-auth/pull/10014) [`73541c1`](https://github.com/better-auth/better-auth/commit/73541c119041113b1909fe244ff4b8210618b5b5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Cloudflare Workers apps can now start when importing Better Auth subpaths such as `better-auth/db`. Beta builds were crashing during module initialization before application code ran.
+
+- [#10065](https://github.com/better-auth/better-auth/pull/10065) [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth and device-authorization responses that carry credentials now consistently send `Cache-Control: no-store` and `Pragma: no-cache`, so proxies, CDNs, and browsers never cache them. This covers the token, introspection, and userinfo endpoints, dynamic and admin client registration, client secret rotation, and the device code and device token responses, including the error responses from those endpoints.
+
+  Endpoints declare this with `metadata: { noStore: true }`, and the header set is exported from `@better-auth/core` as `NO_STORE_HEADERS` for responses built by hand.
+
+- Updated dependencies [[`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9)]:
+  - @better-auth/core@1.7.0-beta.6
+  - @better-auth/drizzle-adapter@1.7.0-beta.6
+  - @better-auth/kysely-adapter@1.7.0-beta.6
+  - @better-auth/memory-adapter@1.7.0-beta.6
+  - @better-auth/mongo-adapter@1.7.0-beta.6
+  - @better-auth/prisma-adapter@1.7.0-beta.6
+  - @better-auth/telemetry@1.7.0-beta.6
+
+## 1.7.0-beta.5
+
+### Minor Changes
+
+- [#9930](https://github.com/better-auth/better-auth/pull/9930) [`0cbaf81`](https://github.com/better-auth/better-auth/commit/0cbaf81bed9dec4c56880ee78a532262386e1ec5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Anonymous account linking now works after social and generic OAuth sign-in in Expo and other in-app browsers, where the OAuth callback returns without the session cookie. `onLinkAccount` fires and the anonymous user is migrated; before, it was silently skipped.
+
+  Plugins can now carry server-trusted data across an OAuth redirect with the new `addOAuthServerContext` API, read back on the callback via `getOAuthState().serverContext`. Unlike `additionalData`, it cannot be set from the request body, so it is the right place for values the server must trust.
+
+  For `@better-auth/oauth-provider`, the post-login authorization query now travels through that server-only channel, so it can no longer be injected through `additionalData`.
+
+- [#9645](https://github.com/better-auth/better-auth/pull/9645) [`e014029`](https://github.com/better-auth/better-auth/commit/e0140297a59ddb59cccbcb4ba46c513de8cb86a7) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Harden the Electron OAuth flow and tighten custom-scheme trusted-origin matching.
+
+  The Electron sign-in flow now mandates PKCE S256. Plain PKCE is rejected: the `code_challenge_method` parameter is gone and every authorization code is verified by hashing the verifier with SHA-256. The server no longer trusts an `electron-origin` header to set the request Origin. The Electron client now sends a real `Origin` (for example `myapp:/`), so upgrade the `@better-auth/electron` client and server together and make sure your app's scheme is in `trustedOrigins`. The unused `disableOriginOverride` option is removed.
+
+  Custom-scheme entries in `trustedOrigins` now match by scheme and authority instead of string prefix. A host-less entry such as `myapp://` or `exp://` still trusts every host of that scheme, but a host-bearing entry such as `myapp://callback` matches that host exactly, so it is no longer satisfied by `myapp://callback.attacker.tld`.
+
+- [#9966](https://github.com/better-auth/better-auth/pull/9966) [`ec8a38c`](https://github.com/better-auth/better-auth/commit/ec8a38c08f5cfe2d922be0f8a49f2d0fa84de799) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - genericOAuth providers configured with a `discoveryUrl` now verify the provider's `id_token` against its published JWKS (signature, issuer, audience, and advertised algorithms). A sign-in whose `id_token` fails verification is rejected.
+
+  These providers also accept client-submitted id_token sign-in through `signIn.social({ idToken })`, which previously returned `ID_TOKEN_NOT_SUPPORTED`.
+
+  Providers configured with explicit endpoints instead of `discoveryUrl` are unchanged.
+
+- [#9828](https://github.com/better-auth/better-auth/pull/9828) [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify social-provider id_tokens with a single shared verifier.
+
+  Client-submitted id_token sign-in (`signIn.social({ idToken })` and account linking) is verified by one function instead of a per-provider `verifyIdToken` method. Each provider declares an `idToken` config with a JWKS source, issuer, and audience, and the core verifier runs the signature, issuer, audience, and nonce checks. A provider that declares no config rejects the client id_token path.
+
+  PayPal previously accepted any decodable id_token without verifying its signature. PayPal derives identity from the access token, so it now declares no `idToken` config, and the client id_token path returns `ID_TOKEN_NOT_SUPPORTED`. PayPal sign-in through the redirect flow is unchanged.
+
+  Custom providers that implement `OAuthProvider` directly replace the removed `verifyIdToken` method with an `idToken` config:
+
+  ```ts
+  idToken: {
+  	jwks: createRemoteJWKSet(new URL("https://issuer.example/.well-known/jwks.json")),
+  	issuer: "https://issuer.example",
+  	audience: clientId,
+  },
+  ```
+
+  For verification that cannot use a local JWKS, pass `idToken: { verify: async (token, nonce) => boolean }`. The `verifyIdToken` and `disableIdTokenSignIn` provider options are unchanged.
+
+- [#9929](https://github.com/better-auth/better-auth/pull/9929) [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `requireEmailVerification` to OAuth provider options, for built-in social providers and the Generic OAuth plugin. When a provider reports an unverified email, the user and account are still created or linked, but no session is issued: the OAuth callback redirects with `?error=email_not_verified`, and ID token and One Tap sign-in return `403` `EMAIL_NOT_VERIFIED`. Verification emails follow the existing `emailVerification.sendOnSignUp` / `sendOnSignIn` settings.
+
+  It is opt-in per provider and does not inherit `emailAndPassword.requireEmailVerification`, so existing social logins keep working. The gate checks the local user's verification state, so a user verified through another method keeps access. Only enable it for providers that report a trustworthy `email_verified` signal.
+
+- [#9969](https://github.com/better-auth/better-auth/pull/9969) [`76a3342`](https://github.com/better-auth/better-auth/commit/76a33429fc2a3edcc85307bf81b9d92a95f9de6c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Signing out with `secondaryStorage` and `session.preserveSessionInDatabase` now runs your configured `session.delete` hooks and marks the preserved session row as ended. OAuth Provider access and refresh tokens bound to that session are revoked and back-channel logout is dispatched on sign-out. Previously these hooks were skipped in this setup, so the tokens stayed valid until they expired.
+
+- [#9864](https://github.com/better-auth/better-auth/pull/9864) [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `user.validateUserInfo` provisioning gate that lets applications reject an identity before a user is created or a new account is linked. It runs once at the creation step for every method that provisions a user (OAuth, SSO/SAML, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database.
+
+  It also re-runs when an existing OAuth or SSO user signs in again (`source.action` is `"sign-in"`), where it receives the fresh provider email and profile so a domain or org policy can reject a user whose provider identity moved out of bounds. Non-provider returning sign-ins are not re-validated.
+
+  The callback receives the mapped `user` plus a `source` describing the `action` (`create-user`, `link-account`, or `sign-in`), the `method`, and provider metadata: `source.oauth` for OAuth providers and `source.sso` for OIDC/SAML SSO providers. Return `{ error, errorDescription }` to reject: browser flows redirect to the error URL and programmatic flows return a `403`.
+
+### Patch Changes
+
+- [#9898](https://github.com/better-auth/better-auth/pull/9898) [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2) Thanks [@ItalyPaleAle](https://github.com/ItalyPaleAle)! - Add `clientAssertion` support to the Microsoft Entra ID social provider.
+
+- [#9304](https://github.com/better-auth/better-auth/pull/9304) [`e0d2b9e`](https://github.com/better-auth/better-auth/commit/e0d2b9eb9b4a515e1b73be71e1e3681faaa9b55f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Propagate sign-out to every connected app and cut off API access immediately, via OIDC Back-Channel Logout 1.0.
+
+  When a user's session ends at the OP (sign-out, `/oauth2/end-session`, admin revoke, ban), `@better-auth/oauth-provider` now notifies every Relying Party that holds tokens for that session. The user's API access is cut off right away, instead of access tokens staying usable until their own TTL. Each client opts in by registering a `backchannel_logout_uri` (and optionally `backchannel_logout_session_required`) via DCR or the admin client-create endpoint. The provider signs a `logout+jwt` Logout Token per client and POSTs it to that client in parallel, with a short per-RP timeout.
+
+  **Breaking change.** Introspection of an opaque or JWT access token whose bound session has ended now returns `{ active: false }`, and `/oauth2/userinfo` rejects it with `invalid_token`. Previously the token stayed active until its own TTL. If you relied on access tokens outliving the user's session, that no longer holds.
+
+  Refresh tokens without `offline_access` are revoked on session end; `offline_access` refresh tokens are preserved so long-lived API access can survive the browser session (OIDC Back-Channel Logout 1.0 §2.7). Access-token invalidation on session end is an additional OP hardening choice beyond §2.7, enforced by session liveness, so it holds even when the JWT plugin is disabled.
+
+  Delivery runs through the host's background task handler when one is configured (Vercel `waitUntil`, Cloudflare `ctx.waitUntil`); without a handler it completes inline so notifications are not lost on request teardown. Configure `advanced.backgroundTasks.handler` on serverless runtimes to keep sign-out fast.
+
+  Discovery at `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` when the JWT plugin is enabled. Registering a `backchannel_logout_uri` rejects fragments, non-http(s) schemes, and non-HTTPS targets on confidential clients. Its SSRF host guard, which blocks private, reserved, tunneled, and cloud-metadata hosts, now also covers a `private_key_jwt` client's `jwks_uri`.
+
+  Schema changes on `@better-auth/oauth-provider`:
+  - `oauthClient.backchannelLogoutUri: string | null`
+  - `oauthClient.backchannelLogoutSessionRequired: boolean`
+  - `oauthAccessToken.revoked: Date | null`
+
+  `better-auth`'s `signJWT` gains an optional `header` argument, forwarded to custom remote signers. JWT profiles that need an explicit media type, such as `typ: "logout+jwt"`, can now set it without reaching for the low-level signing primitives.
+
+- Updated dependencies [[`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2), [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f), [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b), [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f)]:
+  - @better-auth/core@1.7.0-beta.5
+  - @better-auth/drizzle-adapter@1.7.0-beta.5
+  - @better-auth/kysely-adapter@1.7.0-beta.5
+  - @better-auth/memory-adapter@1.7.0-beta.5
+  - @better-auth/mongo-adapter@1.7.0-beta.5
+  - @better-auth/prisma-adapter@1.7.0-beta.5
+  - @better-auth/telemetry@1.7.0-beta.5
+
+## 1.7.0-beta.4
+
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+  - @better-auth/drizzle-adapter@1.6.30
+  - @better-auth/kysely-adapter@1.6.30
+  - @better-auth/memory-adapter@1.6.30
+  - @better-auth/mongo-adapter@1.6.30
+  - @better-auth/prisma-adapter@1.6.30
+  - @better-auth/telemetry@1.6.30
+
+## 1.6.29
+
+### Patch Changes
+
+- [#10805](https://github.com/better-auth/better-auth/pull/10805) [`e6e1b4e`](https://github.com/better-auth/better-auth/commit/e6e1b4e8146a84d2a2c5fe2c497c81d03dfc2ad3) Thanks [@Emmaccen](https://github.com/Emmaccen)! - Speed up batch session revocation when secondary storage is enabled by deleting sessions in parallel.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.29
+  - @better-auth/drizzle-adapter@1.6.29
+  - @better-auth/kysely-adapter@1.6.29
+  - @better-auth/memory-adapter@1.6.29
+  - @better-auth/mongo-adapter@1.6.29
+  - @better-auth/prisma-adapter@1.6.29
+  - @better-auth/telemetry@1.6.29
+
+## 1.6.28
+
+### Patch Changes
+
+- [#10769](https://github.com/better-auth/better-auth/pull/10769) [`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent duplicate session requests during transient remounts while ensuring incomplete refreshes are revalidated.
+
+- [#10794](https://github.com/better-auth/better-auth/pull/10794) [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore client plugin declaration compatibility for downstream TypeScript consumers.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.28
+  - @better-auth/drizzle-adapter@1.6.28
+  - @better-auth/kysely-adapter@1.6.28
+  - @better-auth/memory-adapter@1.6.28
+  - @better-auth/mongo-adapter@1.6.28
+  - @better-auth/prisma-adapter@1.6.28
+  - @better-auth/telemetry@1.6.28
+
+## 1.6.27
+
+### Patch Changes
+
+- [#10657](https://github.com/better-auth/better-auth/pull/10657) [`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b) Thanks [@bytaesu](https://github.com/bytaesu)! - Aligned endpoint and middleware context types with runtime route parameters, and preserved response headers when resolving sessions from endpoint contexts.
+
+- [#10676](https://github.com/better-auth/better-auth/pull/10676) [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839) Thanks [@bytaesu](https://github.com/bytaesu)! - Deduplicate in-flight session requests when React retries a suspended component.
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b)]:
+  - @better-auth/core@1.6.27
+  - @better-auth/drizzle-adapter@1.6.27
+  - @better-auth/kysely-adapter@1.6.27
+  - @better-auth/memory-adapter@1.6.27
+  - @better-auth/mongo-adapter@1.6.27
+  - @better-auth/prisma-adapter@1.6.27
+  - @better-auth/telemetry@1.6.27
+
+## 1.6.26
+
+### Patch Changes
+
+- [#10619](https://github.com/better-auth/better-auth/pull/10619) [`9ede805`](https://github.com/better-auth/better-auth/commit/9ede8059b56e1415c1e8cfdd93ff72691b848bbf) Thanks [@jeroenvandermerwe](https://github.com/jeroenvandermerwe)! - Ensure database rate-limit cleanup completes when no background task handler is configured.
+
+- [#10608](https://github.com/better-auth/better-auth/pull/10608) [`5a811f1`](https://github.com/better-auth/better-auth/commit/5a811f1b4314b8bcf6f21c0b72de5cb67d552d97) Thanks [@bytaesu](https://github.com/bytaesu)! - Pass the email verification type to custom OTP generators after email sign-up.
+
+- [#10605](https://github.com/better-auth/better-auth/pull/10605) [`d8327f1`](https://github.com/better-auth/better-auth/commit/d8327f1fea92243b6fea1b0ab183e2a989792c0c) Thanks [@XXMOHAMED012](https://github.com/XXMOHAMED012)! - The email OTP verification check no longer reveals whether an email is registered before the OTP itself is verified.
+
+- [#10513](https://github.com/better-auth/better-auth/pull/10513) [`e2c73fb`](https://github.com/better-auth/better-auth/commit/e2c73fbec87f5e19f6a2b5ac371bc5bba9bd49ff) Thanks [@mrosberghaus](https://github.com/mrosberghaus)! - Fix `jwtClient()` collapsing `createAuthClient` type inference when combined with other client plugins such as `inferAdditionalFields`. Additional user fields (for example on `updateUser`) are preserved again.
+
+- [#10635](https://github.com/better-auth/better-auth/pull/10635) [`af50c45`](https://github.com/better-auth/better-auth/commit/af50c45553a62cfb6cdcdede86828731ca00c22c) Thanks [@krish-vachhani](https://github.com/krish-vachhani)! - Fix `oneTapClient()` collapsing `createAuthClient` type inference when combined with other client plugins. The `oneTap` action is available on the client again.
+
+- [#10633](https://github.com/better-auth/better-auth/pull/10633) [`701cd43`](https://github.com/better-auth/better-auth/commit/701cd43babac52784d855291a6adc0cf3fba7970) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Minting or reading a JWKS signing key inside an active database transaction now uses the transaction-scoped adapter instead of the root connection. On a single-connection SQLite database with native transactions enabled, this no longer deadlocks, and on Postgres and MySQL the key commits with the surrounding transaction instead of independently of it.
+
+- [#10599](https://github.com/better-auth/better-auth/pull/10599) [`e7b0eba`](https://github.com/better-auth/better-auth/commit/e7b0eba327e050f50764802e21484c6cabb56600) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve Apple user data from `form_post` callbacks when using `oAuthProxy`.
+
+- [#10552](https://github.com/better-auth/better-auth/pull/10552) [`2b4a14f`](https://github.com/better-auth/better-auth/commit/2b4a14f180ed2eeb9692d6933064b001f66ec52c) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow users to retry email OTP password resets after entering an invalid password.
+
+- [#10467](https://github.com/better-auth/better-auth/pull/10467) [`7552a3b`](https://github.com/better-auth/better-auth/commit/7552a3b563fe1ae922fb65db12d005c38a12614d) Thanks [@jlucaso1](https://github.com/jlucaso1)! - Improve `nextCookies` performance in instrumented Next.js applications.
+
+- [#10580](https://github.com/better-auth/better-auth/pull/10580) [`ea38fca`](https://github.com/better-auth/better-auth/commit/ea38fcac7435137604e9b3ba2fe149a1848d0eeb) Thanks [@Emmaccen](https://github.com/Emmaccen)! - Skip invalid secondary-storage session entries without discarding other valid sessions.
+
+- [#10520](https://github.com/better-auth/better-auth/pull/10520) [`a03e4c1`](https://github.com/better-auth/better-auth/commit/a03e4c18677e2dc01a9b47b2a8017b92dbf9ece7) Thanks [@bytaesu](https://github.com/bytaesu)! - Ensure deleting a user also removes their sessions from secondary storage.
+
+- Updated dependencies [[`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7)]:
+  - @better-auth/core@1.6.26
+  - @better-auth/drizzle-adapter@1.6.26
+  - @better-auth/kysely-adapter@1.6.26
+  - @better-auth/memory-adapter@1.6.26
+  - @better-auth/mongo-adapter@1.6.26
+  - @better-auth/prisma-adapter@1.6.26
+  - @better-auth/telemetry@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- [#10479](https://github.com/better-auth/better-auth/pull/10479) [`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95) Thanks [@krish-vachhani](https://github.com/krish-vachhani)! - Prevent Google One Tap from creating new users when sign-up is disabled for the Google provider.
+
+- [#10444](https://github.com/better-auth/better-auth/pull/10444) [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8) Thanks [@birkskyum](https://github.com/birkskyum)! - Expose the real `$fetch` instance and `$store` atoms from the Solid client instead of resolving them as dynamic API routes.
+
+- Updated dependencies [[`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b)]:
+  - @better-auth/core@1.6.25
+  - @better-auth/drizzle-adapter@1.6.25
+  - @better-auth/kysely-adapter@1.6.25
+  - @better-auth/memory-adapter@1.6.25
+  - @better-auth/mongo-adapter@1.6.25
+  - @better-auth/prisma-adapter@1.6.25
+  - @better-auth/telemetry@1.6.25
+
+## 1.6.24
+
+### Patch Changes
+
+- [#10235](https://github.com/better-auth/better-auth/pull/10235) [`03dc5a0`](https://github.com/better-auth/better-auth/commit/03dc5a046f536994950800ea557b8e2e2e0cdfdd) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Fixes silent foreign-key and adapter-join misrouting when a user remaps a built-in model name to a string that collides with another schema key
+
+- [#10357](https://github.com/better-auth/better-auth/pull/10357) [`7508940`](https://github.com/better-auth/better-auth/commit/750894037639c4158472cc1d4994b0e07bf1f59a) Thanks [@c-nicol](https://github.com/c-nicol)! - Fixes Kysely migration generation for new-table fields that are both unique: true and index: true.
+
+- [#10342](https://github.com/better-auth/better-auth/pull/10342) [`bae7198`](https://github.com/better-auth/better-auth/commit/bae71988ab79aeb4f19f245ceabac9eca8706a50) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Fix `organization.listMembers` failing with "User not found for member" for orgs with more than ~100 members by applying the same membership limit to the users query.
+
+- [#10336](https://github.com/better-auth/better-auth/pull/10336) [`ef4d273`](https://github.com/better-auth/better-auth/commit/ef4d27360cec8a0bc11a94e135ea4a3dd32b1969) Thanks [@Tushar-Khandelwal-2004](https://github.com/Tushar-Khandelwal-2004)! - Prevent verification callbacks from failing auth requests when cloning the request throws.
+
+- [#10333](https://github.com/better-auth/better-auth/pull/10333) [`99dbdd7`](https://github.com/better-auth/better-auth/commit/99dbdd7ea98740d11689394220a718dfb9579276) Thanks [@c-nicol](https://github.com/c-nicol)! - Fixes Drizzle schema generation for fields that are both unique: true and index: true.
+
+- [#10368](https://github.com/better-auth/better-auth/pull/10368) [`086ca91`](https://github.com/better-auth/better-auth/commit/086ca91f51dd8158aff6cbf54c4f9c7ce220914d) Thanks [@gaurav0107](https://github.com/gaurav0107)! - Force-validate the request `Origin` on the magic-link (`/sign-in/magic-link`) and email-otp (`/email-otp/send-verification-otp`) send endpoints, including cookieless requests, to match the built-in `/sign-in/email` and `/sign-up/email` routes. A cookieless cross-origin POST can no longer trigger a magic-link or verification-OTP email to an arbitrary address. Cookieless requests that carry no `Origin` (server-to-server) are unaffected.
+
+- [#10290](https://github.com/better-auth/better-auth/pull/10290) [`8f2dedd`](https://github.com/better-auth/better-auth/commit/8f2dedd89301da9fb52c1a64df6a9683f9be55fd) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Expose the remote MCP auth client's 401 challenge headers to browser clients using CORS.
+
+- [#10453](https://github.com/better-auth/better-auth/pull/10453) [`4e685ee`](https://github.com/better-auth/better-auth/commit/4e685eef420b5576913b9803b58c7e7ee7342203) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - OpenAPI now includes `user.additionalFields` and plugin user schema fields (e.g. username plugin `username` / `displayUsername`) on `/sign-up/email` and `/update-user` request bodies.
+
+- [#10190](https://github.com/better-auth/better-auth/pull/10190) [`3bf0e49`](https://github.com/better-auth/better-auth/commit/3bf0e4981e025ba9af684013a27b0102a04f7c56) Thanks [@gaurav-init](https://github.com/gaurav-init)! - Pass the endpoint context as the second argument to `beforeDeleteOrganization` and `afterDeleteOrganization` hooks in the organization plugin, matching the signature shown in the docs and the existing `databaseHooks` pattern. The Stripe plugin's `beforeDeleteOrganization` wrapper now forwards the context to user-supplied hooks instead of dropping it.
+
+- [#10040](https://github.com/better-auth/better-auth/pull/10040) [`f59a0ee`](https://github.com/better-auth/better-auth/commit/f59a0ee7895a024ddd4c5c387344173888e17be4) Thanks [@shiminshen](https://github.com/shiminshen)! - Organization invitations now let the database generate their `id` when ID generation is delegated to the database (e.g. `advanced.database.generateId: "uuid"` with a UUID-capable adapter such as Postgres), matching every other model. Previously `createInvitation` always generated the invitation `id` in application code, so invitation rows received an app-generated value instead of a database-generated one while organizations, members and teams correctly deferred to the database ([better-auth/better-auth#10024](https://github.com/better-auth/better-auth/issues/10024)). A caller-provided id (e.g. via `beforeCreateInvitation`) is still honored.
+
+- [#10302](https://github.com/better-auth/better-auth/pull/10302) [`0f2cc1b`](https://github.com/better-auth/better-auth/commit/0f2cc1b33b77850948dac4d889e5f46bba41e8d5) Thanks [@momomuchu](https://github.com/momomuchu)! - Prefer exact schema-key matches over `modelName` aliases in `getDefaultModelName`, so remapping a built-in table onto another table's schema key (e.g. `user.modelName = "account"`) does not reroute internal adapter queries to the wrong table.
+
+- [#9787](https://github.com/better-auth/better-auth/pull/9787) [`ae78109`](https://github.com/better-auth/better-auth/commit/ae781091186f321b4e4ec9e84f64b6e4d5ea1043) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Fixes an issue where `useSession({ throw: true })` incorrectly excluded `null` from its `data` type.
+
+- [#10222](https://github.com/better-auth/better-auth/pull/10222) [`46d2bf0`](https://github.com/better-auth/better-auth/commit/46d2bf02c98902da7b344753372d48cfe0e5ebb3) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix: add no-store cache-control headers to get-session route
+
+- [#10316](https://github.com/better-auth/better-auth/pull/10316) [`29a373e`](https://github.com/better-auth/better-auth/commit/29a373eaf1778820061a9380c29831c2de2ce704) Thanks [@vinay-oppuri](https://github.com/vinay-oppuri)! - Recognize SQLite `BIGINT` as a valid number type in migration diffs so database-backed rate limiter columns like `lastRequest` no longer report spurious pending changes on every run.
+
+- [#10379](https://github.com/better-auth/better-auth/pull/10379) [`f6d18fa`](https://github.com/better-auth/better-auth/commit/f6d18fa8f79b9323e10b50f72e2b1a088844e4bb) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix(client): restore auth query revalidation and signal listeners after remount
+
+- [#5753](https://github.com/better-auth/better-auth/pull/5753) [`f23ce50`](https://github.com/better-auth/better-auth/commit/f23ce5012ea47fac1a69b1dad203dfdef3830fd0) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - feat(last-login-method): beforeStoreCookie option for GDPR compliance
+
+- [#10376](https://github.com/better-auth/better-auth/pull/10376) [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Pass the request endpoint context as a third argument to `verifyIdToken`, so custom ID token verifiers can read request headers (for example Apple's `user-agent` requirement).
+
+- Updated dependencies [[`6758231`](https://github.com/better-auth/better-auth/commit/6758231905d2e86a7b3f058dd05c17ba739aa80f), [`54fab08`](https://github.com/better-auth/better-auth/commit/54fab084469a27257e66a0814523ebac7145ef5d), [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab)]:
+  - @better-auth/core@1.6.24
+  - @better-auth/drizzle-adapter@1.6.24
+  - @better-auth/kysely-adapter@1.6.24
+  - @better-auth/memory-adapter@1.6.24
+  - @better-auth/mongo-adapter@1.6.24
+  - @better-auth/prisma-adapter@1.6.24
+  - @better-auth/telemetry@1.6.24
+
+## 1.6.23
+
+### Patch Changes
+
+- [#9138](https://github.com/better-auth/better-auth/pull/9138) [`8581f97`](https://github.com/better-auth/better-auth/commit/8581f97ea0000e03edd6aa7911efabf694a9ff95) Thanks [@vladflotsky](https://github.com/vladflotsky)! - Add a pre-configured Yandex provider helper for the generic OAuth plugin.
+
+- Updated dependencies [[`930b260`](https://github.com/better-auth/better-auth/commit/930b260cfd402e9f8886719a3ced503b9ceff7f6)]:
+  - @better-auth/drizzle-adapter@1.6.23
+  - @better-auth/core@1.6.23
+  - @better-auth/kysely-adapter@1.6.23
+  - @better-auth/memory-adapter@1.6.23
+  - @better-auth/mongo-adapter@1.6.23
+  - @better-auth/prisma-adapter@1.6.23
+  - @better-auth/telemetry@1.6.23
+
+## 1.6.22
+
+### Patch Changes
+
+- [#10239](https://github.com/better-auth/better-auth/pull/10239) [`c06a56d`](https://github.com/better-auth/better-auth/commit/c06a56d83a40bbaeac12d3a8b8b67e59f92a9110) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Magic-link and email-OTP sign-in now reset the credentials on an account whose email had never been confirmed. When verification resolves to such an account, any existing password on it is removed and its sessions are revoked before the user is signed in, so proven control of the mailbox is the source of truth for the account.
+
+  If you signed up with email and password but first signed in through a magic link or email OTP rather than confirming the verification email, your password is cleared and you will need to set a new one through password reset.
+
+- [#10240](https://github.com/better-auth/better-auth/pull/10240) [`3a035e9`](https://github.com/better-auth/better-auth/commit/3a035e968e27bfdee1e53ad857e5569090d9f2d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add account-level lockout for two-factor verification. The attempt limit applies per account across sign-in challenges and across factors: TOTP, email-OTP, and backup codes share one counter, and a successful verification resets it.
+
+  Enabled by default: an account locks for 15 minutes after 10 consecutive failed verifications, and locked attempts return `429` with the `ACCOUNT_TEMPORARILY_LOCKED` error code. Configure it with `twoFactor({ accountLockout: { enabled, maxFailedAttempts, durationSeconds } })`.
+
+  Run a database migration after upgrading: this adds `failedVerificationCount` and `lockedUntil` columns to the `twoFactor` table.
+
+- Updated dependencies [[`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d)]:
+  - @better-auth/core@1.6.22
+  - @better-auth/drizzle-adapter@1.6.22
+  - @better-auth/kysely-adapter@1.6.22
+  - @better-auth/memory-adapter@1.6.22
+  - @better-auth/mongo-adapter@1.6.22
+  - @better-auth/prisma-adapter@1.6.22
+  - @better-auth/telemetry@1.6.22
+
+## 1.6.21
+
+### Patch Changes
+
+- [#10212](https://github.com/better-auth/better-auth/pull/10212) [`e0762a1`](https://github.com/better-auth/better-auth/commit/e0762a127ce351a96614e60866b3455e6eddffa1) Thanks [@bytaesu](https://github.com/bytaesu)! - In root-mounted deployments, requests whose path does not start with the configured `basePath` now return 404 instead of resolving to an endpoint.
+
+- [#10187](https://github.com/better-auth/better-auth/pull/10187) [`882cf9e`](https://github.com/better-auth/better-auth/commit/882cf9e592d1d305b5b78cadbb10aaeee7acd6dc) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Admin permission changes and bans now take effect immediately for admin APIs, even when session cookie cache is enabled. Sensitive session checks also continue to work in stateless apps where signed cookies are the session record.
+
+- [#9939](https://github.com/better-auth/better-auth/pull/9939) [`f52e1ab`](https://github.com/better-auth/better-auth/commit/f52e1ab50b60d289b64d6b06f1bff5a4358cdfd0) Thanks [@benpsnyder](https://github.com/benpsnyder)! - fixes a bug causing deviceAuthorization() throwing a ZodError at construction when called without a schema option
+
+- [#10196](https://github.com/better-auth/better-auth/pull/10196) [`b5bec19`](https://github.com/better-auth/better-auth/commit/b5bec193a56cec2f7b71c84d71dacb632f0b96a0) Thanks [@Paola3stefania](https://github.com/Paola3stefania)! - OAuth sign-up and account-link profile sync now ignore provider profile values for user fields marked `input: false`. Input-allowed additional fields still persist from `mapProfileToUser`, and schema defaults still apply when OAuth creates a user. Apps that used `mapProfileToUser` to fill `input: false` fields should set those fields in server-side provisioning code instead.
+
+- [#10197](https://github.com/better-auth/better-auth/pull/10197) [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86) Thanks [@Paola3stefania](https://github.com/Paola3stefania)! - Google sign-in now accepts `hd: "*"` to allow any Google Workspace hosted domain while still rejecting tokens with no hosted-domain claim.
+
+  Google One Tap now applies the configured Google hosted-domain restriction before creating a session.
+
+- [#10192](https://github.com/better-auth/better-auth/pull/10192) [`239bcc8`](https://github.com/better-auth/better-auth/commit/239bcc836cf39c4fb409a15333be45134f9e9e65) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate PayPal user info against the verified ID token subject during social sign-in.
+
+- [#10228](https://github.com/better-auth/better-auth/pull/10228) [`1bc370a`](https://github.com/better-auth/better-auth/commit/1bc370aef5c249e82127cb9d35972101087ecde6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The SIWE plugin no longer binds a provided email that already belongs to another account. With `anonymous` set to `false`, `/siwe/verify` previously created the new account using that email even when it was already in use; it now keeps the wallet-derived address in that case, so one email cannot be attached to two accounts.
+
+- [#10198](https://github.com/better-auth/better-auth/pull/10198) [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de) Thanks [@rachit367](https://github.com/rachit367)! - Honor `disableMigration` on plugin schema tables. Tables flagged with `disableMigration: true` are now skipped by `better-auth generate` (Drizzle and Prisma output) and by the runtime migrator, instead of being emitted and created anyway. The flag was previously dropped while assembling the table list, so it had no effect.
+
+- [#10182](https://github.com/better-auth/better-auth/pull/10182) [`461ca6f`](https://github.com/better-auth/better-auth/commit/461ca6fd2453a2e145fa18a1df543e435e884701) Thanks [@bytaesu](https://github.com/bytaesu)! - Only store display username fallbacks as usernames when they pass username validation during email sign-up.
+
+- [#10183](https://github.com/better-auth/better-auth/pull/10183) [`88409b0`](https://github.com/better-auth/better-auth/commit/88409b0078c2bfddcc6503031fff333bfa045cd2) Thanks [@bytaesu](https://github.com/bytaesu)! - Require OAuth proxy profile callbacks to match an issued OAuth state before creating sessions.
+
+- [#10203](https://github.com/better-auth/better-auth/pull/10203) [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055) Thanks [@bytaesu](https://github.com/bytaesu)! - Rate limiting no longer trusts multi-hop `X-Forwarded-For` chains, preventing a client behind an appending proxy from spoofing the leftmost hop to bypass the per-IP rate limit. Single-value IP headers continue to work. To key the real client behind a proxy chain, set `advanced.ipAddress.trustedProxies` to your reverse-proxy IPs or CIDR ranges (the chain is walked right to left, skipping trusted hops), or point `advanced.ipAddress.ipAddressHeaders` at a single trusted client-IP header.
+
+- [#10191](https://github.com/better-auth/better-auth/pull/10191) [`b046f9e`](https://github.com/better-auth/better-auth/commit/b046f9ec112b2cf547efea8dc870a4895602c53b) Thanks [@bytaesu](https://github.com/bytaesu)! - Rate limit client requests before plugin request handlers run.
+
+- [#10210](https://github.com/better-auth/better-auth/pull/10210) [`ae647b4`](https://github.com/better-auth/better-auth/commit/ae647b4abe5a4d606c326f1ce0ffa2500b5424d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Two-factor verification now locks out after five wrong codes per sign-in challenge for TOTP and backup codes. Once the limit is reached the challenge is rejected with `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE`, and a new sign-in is required to try again.
+
+  During a rolling deploy, two-factor challenges issued by the previous version may prompt the user to sign in again; this clears once the deploy completes.
+
+- Updated dependencies [[`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a), [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86), [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de), [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055)]:
+  - @better-auth/core@1.6.21
+  - @better-auth/kysely-adapter@1.6.21
+  - @better-auth/prisma-adapter@1.6.21
+  - @better-auth/drizzle-adapter@1.6.21
+  - @better-auth/memory-adapter@1.6.21
+  - @better-auth/mongo-adapter@1.6.21
+  - @better-auth/telemetry@1.6.21
+
+## 1.6.20
+
+### Patch Changes
+
+- [#10121](https://github.com/better-auth/better-auth/pull/10121) [`21448b1`](https://github.com/better-auth/better-auth/commit/21448b1b77681e71e80ae0728d8658c936c18eb8) Thanks [@adityachaudhary99](https://github.com/adityachaudhary99)! - OAuth account-linking and create-user error logs now respect a custom `logger` configured in `betterAuth()`, instead of always being written to the default console logger.
+
+- [#9621](https://github.com/better-auth/better-auth/pull/9621) [`8ecf238`](https://github.com/better-auth/better-auth/commit/8ecf23817f5e501bdd8ab63ad5fdf2554ff1dff5) Thanks [@dipan-ck](https://github.com/dipan-ck)! - Session refresh no longer emits a cookie Max-Age above the browser's 400-day ceiling when using a database without fractional-second precision.
+
+- [#8734](https://github.com/better-auth/better-auth/pull/8734) [`930f534`](https://github.com/better-auth/better-auth/commit/930f5341d956bf3075f43758392a5c7f50947104) Thanks [@sleepe229](https://github.com/sleepe229)! - declare inherited APIError properties to fix TypeScript inference errors
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.20
+  - @better-auth/drizzle-adapter@1.6.20
+  - @better-auth/kysely-adapter@1.6.20
+  - @better-auth/memory-adapter@1.6.20
+  - @better-auth/mongo-adapter@1.6.20
+  - @better-auth/prisma-adapter@1.6.20
+  - @better-auth/telemetry@1.6.20
+
+## 1.6.19
+
+### Patch Changes
+
+- [#10088](https://github.com/better-auth/better-auth/pull/10088) [`de4aa52`](https://github.com/better-auth/better-auth/commit/de4aa52e991f0a56786300af3e0d9ac8331f1996) Thanks [@bytaesu](https://github.com/bytaesu)! - Session and account cache cookies near the browser's per-cookie size limit (for example with a long `cookiePrefix` or many cached fields) are now split into chunks instead of being silently dropped by the browser. A cache too large to fit even when chunked is skipped with a warning rather than failing the request, so reads fall back to the database.
+
+- [#9995](https://github.com/better-auth/better-auth/pull/9995) [`b4b0266`](https://github.com/better-auth/better-auth/commit/b4b02660c760fe4c8889d1311a3dbf3165f88d0b) Thanks [@ElGauchooooo](https://github.com/ElGauchooooo)! - The device authorization plugin now accepts an optional `user_id` when issuing a device code via `/device/code`, pre-binding the code to that user. Only the bound user can approve or deny the code, so a publicly visible user code can no longer be claimed by someone else.
+
+- [#10086](https://github.com/better-auth/better-auth/pull/10086) [`5bd5e1c`](https://github.com/better-auth/better-auth/commit/5bd5e1cc73d2c9c38e69011f03038b61a4312a63) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refresh-token rotation and token revocation, two-factor backup-code regeneration, device-code claiming, and organization invitation acceptance now work on Prisma. Concurrent or repeat requests in these flows could previously return an error on Prisma instead of the expected result.
+
+  On MongoDB servers older than 5.0, these flows and other guarded value updates (rate-limit window resets, API-key refills) no longer fail with an empty-update error.
+
+  `@better-auth/core`: `incrementOne` now reports a clear error when called with no `increment` and no `set`.
+
+- [#9319](https://github.com/better-auth/better-auth/pull/9319) [`581f827`](https://github.com/better-auth/better-auth/commit/581f8271fb911cea2ce74810e086709909457cd3) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix(last-login-method): include domain when clearing cross-subdomain cookies
+
+- [#10067](https://github.com/better-auth/better-auth/pull/10067) [`8407885`](https://github.com/better-auth/better-auth/commit/840788502a13d6fa4aa4540b930ddb4a99dc1ed6) Thanks [@bytaesu](https://github.com/bytaesu)! - The `oauth-popup` plugin now ignores internal OAuth state fields passed through its `additionalData` parameter, so `additionalData` only ever carries your own custom values.
+
+- [#9555](https://github.com/better-auth/better-auth/pull/9555) [`c1a8a64`](https://github.com/better-auth/better-auth/commit/c1a8a64c146fab20c7ad0076ffdf12eff9adc17a) Thanks [@ChrisMGeo](https://github.com/ChrisMGeo)! - Fix invalid OpenAPI output for Better Auth callback, session, and passkey routes so client generators can consume the schema.
+
+- [#10071](https://github.com/better-auth/better-auth/pull/10071) [`635f190`](https://github.com/better-auth/better-auth/commit/635f1908702d0c63cf66b4e5f054e9d527a3c8f7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Auth clients exported from wrapper packages can now be emitted in TypeScript declaration builds without extra type annotations.
+
+- [#10070](https://github.com/better-auth/better-auth/pull/10070) [`a787e0b`](https://github.com/better-auth/better-auth/commit/a787e0b66b368a1af0b4ba17c9750c2839668246) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Single-use verification flows no longer hang on database adapters that use a one-connection pool. This fixes magic-link verification and similar token checks in connection-limited serverless database setups.
+
+- [#9348](https://github.com/better-auth/better-auth/pull/9348) [`c2f718f`](https://github.com/better-auth/better-auth/commit/c2f718fcdeec0c1767bb8acd5fefdd3810863b0a) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix: cookie cache fallback lookup
+
+- [#8863](https://github.com/better-auth/better-auth/pull/8863) [`7d18175`](https://github.com/better-auth/better-auth/commit/7d18175637a0b95a501fde0cf3db080879367a9d) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - `sendVerificationEmail` was invoked via `runInBackgroundOrAwait`, which could defer work when `advanced.backgroundTasks.handler` is configured (so the handler could return **200** before the email callback finished) and, in the default path, **caught and logged errors without rethrowing**. User callbacks that throw `APIError` (e.g. **429** from a rate limiter) were therefore not reliably reflected in the HTTP response ([better-auth/better-auth#8757](https://github.com/better-auth/better-auth/issues/8757)).
+
+  Now we await `sendVerificationEmailFn` so failures surface to the client with the correct status. The unauthenticated `/send-verification-email` path enforces a constant-time floor (500 ms) so that the response duration does not reveal whether the email belongs to a real unverified user.
+
+- Updated dependencies [[`0895993`](https://github.com/better-auth/better-auth/commit/08959936d29de8a37d469e42d9077859b643d6b3), [`5bd5e1c`](https://github.com/better-auth/better-auth/commit/5bd5e1cc73d2c9c38e69011f03038b61a4312a63), [`a787e0b`](https://github.com/better-auth/better-auth/commit/a787e0b66b368a1af0b4ba17c9750c2839668246)]:
+  - @better-auth/drizzle-adapter@1.6.19
+  - @better-auth/core@1.6.19
+  - @better-auth/mongo-adapter@1.6.19
+  - @better-auth/kysely-adapter@1.6.19
+  - @better-auth/memory-adapter@1.6.19
+  - @better-auth/prisma-adapter@1.6.19
+  - @better-auth/telemetry@1.6.19
+
+## 1.6.18
+
+### Patch Changes
+
+- [#9315](https://github.com/better-auth/better-auth/pull/9315) [`9ef7240`](https://github.com/better-auth/better-auth/commit/9ef7240fec4a9d8469dd5ed24249949d3400e732) Thanks [@GautamBytes](https://github.com/GautamBytes)! - fix OpenAPI requestBody generation for intersected and default-wrapped body schemas
+
+- [#9583](https://github.com/better-auth/better-auth/pull/9583) [`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Fix plugin-provided client methods and additional session fields not being inferred in composite monorepos.
+
+- Updated dependencies [[`b21a5f7`](https://github.com/better-auth/better-auth/commit/b21a5f7f6ca1f63c6b69666a498b4227b15e316c)]:
+  - @better-auth/core@1.6.18
+  - @better-auth/drizzle-adapter@1.6.18
+  - @better-auth/kysely-adapter@1.6.18
+  - @better-auth/memory-adapter@1.6.18
+  - @better-auth/mongo-adapter@1.6.18
+  - @better-auth/prisma-adapter@1.6.18
+  - @better-auth/telemetry@1.6.18
+
+## 1.6.17
+
+### Patch Changes
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When a team had a single open slot, accepting an invitation into it was wrongly rejected as over the member limit and left a dangling membership record. Two invitations accepted into a nearly-full team at the same time could also push it past its limit. Both are fixed.
+
+- [#9482](https://github.com/better-auth/better-auth/pull/9482) [`3e99e6c`](https://github.com/better-auth/better-auth/commit/3e99e6c77ef788377a3ddb7abe790c7dc3df1493) Thanks [@bytaesu](https://github.com/bytaesu)! - `admin.setUserPassword` now creates a credential account when the target user does not have one, matching the behavior of `resetPassword`. Previously the call returned `status: true` without doing anything for users without an existing credential account (e.g., social-only or magic-link signups), so admins migrating users from another auth system or assigning an initial password to a social-only user can now do so directly without poking the `account` table.
+
+- [`96c78c3`](https://github.com/better-auth/better-auth/commit/96c78c3e983ab3a2d914780fcc5d66d90537f9ac) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Downgrade expected auth validation failures from error logs to warnings.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Captcha provider verification requests now time out after 10 seconds and fail closed, so a slow or unreachable captcha provider can no longer tie up a request indefinitely.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A delete-account confirmation link can no longer delete the account more than once when its callback is opened concurrently.
+
+- [#9991](https://github.com/better-auth/better-auth/pull/9991) [`0c3856f`](https://github.com/better-auth/better-auth/commit/0c3856f098f4a130abc49e9003ebc285824b0ba7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Completing account deletion through `/delete-user/callback` now fails when the session has been revoked server-side, instead of proceeding within the cookie-cache window. Deployments that keep sessions only in the cookie are unaffected.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Polling for a device-authorization token can no longer redeem the same approved device code more than once when several polls arrive together.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Submitting the same email OTP from several requests at once can no longer sign in more than once or gain extra tries beyond the attempt limit.
+
+- [#10002](https://github.com/better-auth/better-auth/pull/10002) [`ed7b6c9`](https://github.com/better-auth/better-auth/commit/ed7b6c9ac0fa2bb7f246f552b41046302ef8138c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Adding a member to a team that is already at its `maximumMembersPerTeam` limit is now rejected on every path. `addMember` with a `teamId` and `add-team-member` previously skipped the limit that invitation acceptance enforced, so they could push a team over its cap. A rejected `addMember` no longer creates the organization member.
+
+- [#9677](https://github.com/better-auth/better-auth/pull/9677) [`e0a768c`](https://github.com/better-auth/better-auth/commit/e0a768c973f9d9ccd4aee959efcbe1fbcc2e608d) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Refactor `role.authorize` control flow while preserving existing authorization behavior.
+
+- [#9987](https://github.com/better-auth/better-auth/pull/9987) [`7343284`](https://github.com/better-auth/better-auth/commit/73432841493a2d99144786c986ee57c071d816d8) Thanks [@bytaesu](https://github.com/bytaesu)! - Generic OAuth sign-in works again for providers whose userinfo response has no `sub` or `id` field when `mapProfileToUser` derives the account id. An empty `id` field now falls back to `sub`.
+
+- [#9991](https://github.com/better-auth/better-auth/pull/9991) [`0c3856f`](https://github.com/better-auth/better-auth/commit/0c3856f098f4a130abc49e9003ebc285824b0ba7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `getCookieCache` now returns `null` for an expired session instead of the stale session data. Middleware that calls it to gate access no longer treats an expired signed cookie as a live session.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The Have I Been Pwned plugin now checks submitted passwords against the breach database on more password-setting endpoints by default, including the email-OTP and phone-number reset-password routes and the admin create-user and set-user-password routes. A breached password can no longer be set through those routes when the plugin is enabled with its default paths.
+
+- [#9987](https://github.com/better-auth/better-auth/pull/9987) [`7343284`](https://github.com/better-auth/better-auth/commit/73432841493a2d99144786c986ee57c071d816d8) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve the fresh account cookie issued while switching users in the same browser instead of expiring it from stale request cookie state.
+
+- [#9991](https://github.com/better-auth/better-auth/pull/9991) [`0c3856f`](https://github.com/better-auth/better-auth/commit/0c3856f098f4a130abc49e9003ebc285824b0ba7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Expired MCP access tokens are no longer accepted. A protected MCP resource now rejects a bearer token once it has expired, both on the server and through the remote client. A refresh token is accepted only when the original authorization included the `offline_access` scope.
+
+- [#9991](https://github.com/better-auth/better-auth/pull/9991) [`0c3856f`](https://github.com/better-auth/better-auth/commit/0c3856f098f4a130abc49e9003ebc285824b0ba7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The multi-session `set-active` and `revoke` endpoints now act only on the session the caller holds a signed cookie for. A request could previously activate or revoke a different session by naming its token in the request body without holding that session's cookie.
+
+- [#9890](https://github.com/better-auth/better-auth/pull/9890) [`d9c526b`](https://github.com/better-auth/better-auth/commit/d9c526b2a57afe9e01ff25da400f1d634b4c1ac7) Thanks [@bytaesu](https://github.com/bytaesu)! - Add an experimental `oauthPopup` plugin (with `oauthPopupClient` and `signIn.popup`) for popup-based OAuth sign-in. It lets an app sign in inside a cross-site iframe by completing OAuth in a popup and handing the session token back to the opener, where the `bearer` plugin authenticates with it. The API may change while it is experimental.
+
+- [#9991](https://github.com/better-auth/better-auth/pull/9991) [`0c3856f`](https://github.com/better-auth/better-auth/commit/0c3856f098f4a130abc49e9003ebc285824b0ba7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OIDC provider's RP-initiated logout endpoint (`/oauth2/endsession`) no longer logs a user out, or revokes their OAuth tokens, in response to a cross-site GET that carries only a session cookie. Logout authenticated by a valid `id_token_hint` is unaffected.
+
+- [#10003](https://github.com/better-auth/better-auth/pull/10003) [`fdef997`](https://github.com/better-auth/better-auth/commit/fdef997eb944d85254816f7a4b2d76c06e9b8ec7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Google One Tap now requires a configured Google client ID and rejects the sign-in callback when none is set. A Google ID token issued for a different application is no longer accepted. Set the client ID on the `oneTap` plugin or on `socialProviders.google`.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A one-time token can no longer be redeemed for a session more than once when redeemed concurrently.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A password reset token can no longer change the password more than once when used from several requests at the same time.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Submitting the same phone-number OTP from several requests at once can no longer sign in more than once or gain extra tries beyond the attempt limit.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Concurrent requests can no longer slip past the configured rate limit. The in-memory rate-limit store no longer grows without bound, and the database backend removes expired entries on its own. A custom rate-limit storage may implement a new optional `consume` method for strict enforcement; without it, the previous behavior is kept and a one-time warning is logged.
+
+- [#9987](https://github.com/better-auth/better-auth/pull/9987) [`7343284`](https://github.com/better-auth/better-auth/commit/73432841493a2d99144786c986ee57c071d816d8) Thanks [@bytaesu](https://github.com/bytaesu)! - Deleting a team no longer breaks its pending invitations. The removed team is dropped from those invitations, which stay valid for their remaining teams or as plain organization-level invitations. Accepting an invitation that still references a missing team fails without consuming the invitation.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `internalAdapter.reserveVerificationValue`. It atomically records a single-use marker (such as a replay tombstone) so that exactly one of several concurrent callers succeeds and the rest observe that the marker is already taken. Database-backed verification storage is atomic; secondary-storage-only verification is best-effort.
+
+- [#8760](https://github.com/better-auth/better-auth/pull/8760) [`8960f5f`](https://github.com/better-auth/better-auth/commit/8960f5f3bd2f0dccbfb768d69737d8a24d793a9e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Session refreshes now avoid duplicate `/get-session` requests from focus and other browser session events. Client hooks keep stable data references when refetches return unchanged data, reducing unnecessary renders. Unmounting during an in-flight session request no longer leaves session state stuck in a loading state.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A Sign-In with Ethereum nonce can no longer be used to sign in more than once when submitted from several requests at the same time.
+
+- [#9979](https://github.com/better-auth/better-auth/pull/9979) [`5c289b5`](https://github.com/better-auth/better-auth/commit/5c289b52bc166be3a36ec3c112b04195dc7621d8) Thanks [@SferaDev](https://github.com/SferaDev)! - Stateless OAuth deployments can now read account info, access tokens, and refresh tokens after different server instances handle sign-in and later requests. Session refresh also keeps the OAuth account cookie instead of clearing it in that case.
+
+- [#9990](https://github.com/better-auth/better-auth/pull/9990) [`1dbf5bb`](https://github.com/better-auth/better-auth/commit/1dbf5bb59de5d628f0d07d5e846eba8287b831d7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Hardens how requests are trusted across several flows. Rate limiting is now enforced even when a client IP cannot be determined, instead of being skipped. When `baseURL` is not configured, password-reset and verification links use the current request's host rather than the host of the first request the server handled, and a request-scoped `trustedOrigins` callback no longer affects other concurrent requests. The OAuth proxy, Google One Tap, and the Expo authorization proxy reject redirect and callback targets that are not in `trustedOrigins`. Google reCAPTCHA and Cloudflare Turnstile accept optional `expectedAction` and `allowedHostnames` to reject tokens minted for a different action or hostname. Server-side fetches reject additional reserved IPv6 ranges, and malformed redirect parameters return a 400 instead of a 500.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - An expired two-factor sign-in challenge can no longer complete login with a valid TOTP, OTP, or backup code, and the same challenge can no longer create more than one session when verified concurrently.
+
+- [#9993](https://github.com/better-auth/better-auth/pull/9993) [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Submitting the same two-factor OTP from several requests at once can no longer sign in more than once or gain extra tries beyond the attempt limit.
+
+- [#9777](https://github.com/better-auth/better-auth/pull/9777) [`59e0ccb`](https://github.com/better-auth/better-auth/commit/59e0ccbedc6c336b1e77f71c62484d654fd2fca3) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Client `updateSession` calls now accept inferred custom session fields from `inferAdditionalFields`.
+
+- [#9962](https://github.com/better-auth/better-auth/pull/9962) [`b803c61`](https://github.com/better-auth/better-auth/commit/b803c61fdcfc64be4e26bf6fa10953621f0070cc) Thanks [@Bekacru](https://github.com/Bekacru)! - Validate roles when updating an organization member. Roles are now normalized into individual tokens and checked against the configured static and dynamic roles, so unknown or malformed role values are rejected instead of being persisted.
+
+- Updated dependencies [[`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`7343284`](https://github.com/better-auth/better-auth/commit/73432841493a2d99144786c986ee57c071d816d8), [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`fdef997`](https://github.com/better-auth/better-auth/commit/fdef997eb944d85254816f7a4b2d76c06e9b8ec7), [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`fdef997`](https://github.com/better-auth/better-auth/commit/fdef997eb944d85254816f7a4b2d76c06e9b8ec7), [`baeaa00`](https://github.com/better-auth/better-auth/commit/baeaa00bc2a600c04f746c7cc2a07065b7691dcc), [`1dbf5bb`](https://github.com/better-auth/better-auth/commit/1dbf5bb59de5d628f0d07d5e846eba8287b831d7), [`fdef997`](https://github.com/better-auth/better-auth/commit/fdef997eb944d85254816f7a4b2d76c06e9b8ec7)]:
+  - @better-auth/memory-adapter@1.6.17
+  - @better-auth/kysely-adapter@1.6.17
+  - @better-auth/drizzle-adapter@1.6.17
+  - @better-auth/prisma-adapter@1.6.17
+  - @better-auth/mongo-adapter@1.6.17
+  - @better-auth/core@1.6.17
+  - @better-auth/telemetry@1.6.17
+
+## 1.6.16
+
+### Patch Changes
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Guard protected user fields in the admin plugin behind their dedicated permissions. `/admin/create-user` now requires `user:set-role` when a `role` is supplied (top-level or via `data.role`), validates requested roles against the configured roles, requires `user:ban` for ban fields passed in `data`, and no longer lets `data` override `email`, `name`, or `role`. `/admin/update-user` now requires `user:ban` for `banned`/`banReason`/`banExpires` (revoking the user's sessions when banning and rejecting self-bans), requires the new `user:set-email` permission for `email`/`emailVerified` (with email validation, lowercasing, and uniqueness checks), and rejects `password` updates in favor of `/admin/set-user-password`. If you use a custom access control, add `set-email` to your statements and grant it (and `ban`) to roles that should be able to change those fields through `update-user`.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Require a provider account id when signing in through generic OAuth. The default userinfo handler previously fell back to an empty string when the provider response had no `sub` (or `id`), and the callback never checked the resolved account id. With certain non-OIDC providers that omit `sub`, accounts could be stored under the same empty id and a later sign-in could resolve to an existing account. The generic OAuth callback now rejects sign-in when no account id can be resolved, the default userinfo handler returns no profile when neither `sub` nor `id` is present, and the built-in OAuth callback also rejects an empty account id.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Scope organization invitation team IDs to the invited organization. `createInvitation` now validates that every requested `teamId` belongs to the invitation's organization regardless of whether `teams.maximumMembersPerTeam` is set, and `acceptInvitation` re-checks each stored team's organization before adding team membership. Previously, with the default unlimited team size, a team ID from another organization could be stored on an invitation and applied on acceptance.
+
+- [#9973](https://github.com/better-auth/better-auth/pull/9973) [`87e7aa5`](https://github.com/better-auth/better-auth/commit/87e7aa5e0fd8f19b326beb5bec409a9ed1f245ca) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Email sign-in and sign-up now validate the `Origin` or `Referer` header against `trustedOrigins` even when the request carries no cookies. Requests that send no `Origin`/`Referer` header and no Fetch Metadata (such as curl or server-to-server clients) are unaffected. A non-browser client that sends an untrusted `Origin`/`Referer` without cookies now receives a 403 and must add that origin to `trustedOrigins`.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Require `/refresh-token` to only trust the account cookie when its `userId`, `providerId` and (when supplied) `accountId` match the resolved session user.
+
+- [#9967](https://github.com/better-auth/better-auth/pull/9967) [`893cf6c`](https://github.com/better-auth/better-auth/commit/893cf6cb3f1f2669b39f6ac8d3d49cf830e5732e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Deleting a session now immediately stops `/update-session` and the account token endpoints (`/get-access-token`, `/refresh-token`, `/account-info`) from accepting it, when cookie cache is enabled alongside a database or secondary storage. Before, these routes kept serving the deleted session from the cached cookie until the cache expired. Deployments that store the session only in the cookie are unaffected.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Bind the SIWE signed message to server state before creating a session. Previously `/siwe/verify` only checked that a nonce row existed for the wallet address and then delegated entirely to `verifyMessage`. Since the documented `verifyMessage` (viem) performs signature recovery only — without inspecting the message body — a signature the wallet produced for a different message (an earlier nonce, another domain, or arbitrary content) could also satisfy verification against a freshly minted nonce.
+
+  The plugin now parses the ERC-4361 message itself and requires its nonce, domain, address, and chain ID to match the server-issued nonce and configured `domain`, and enforces the message's `Expiration Time` / `Not Before` bounds, before verifying the signature. `message` must now be a valid ERC-4361 message (which all standard SIWE clients produce); non-conforming or mismatched messages are rejected with a 401 (`UNAUTHORIZED_SIWE_MESSAGE_MISMATCH`, `UNAUTHORIZED_SIWE_MESSAGE_EXPIRED`, or `UNAUTHORIZED_SIWE_MESSAGE_NOT_YET_VALID`). `verifyMessage` implementations should continue to perform signature recovery only.
+
+- [#9974](https://github.com/better-auth/better-auth/pull/9974) [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15) Thanks [@Bekacru](https://github.com/Bekacru)! - Separate SSO provider ids from the account-linking provider namespace used for social/OAuth providers. Previously an SSO provider registered with an id matching a configured `accountLinking.trustedProviders` entry (e.g. `google`) was treated as a trusted provider and could implicitly link to an existing verified account with the same email.
+
+  SSO registration now rejects provider ids that collide with a configured social provider, a `trustedProviders` entry, or a reserved built-in id. In addition, the OIDC and SAML callbacks no longer derive trust from a `trustedProviders` name match — SSO trust comes solely from verified domain ownership (`domainVerified`). `handleOAuthUserInfo` gains a `trustProviderByName` option (default `true`, preserving social-provider behavior) that the SSO plugin sets to `false`.
+
+- [#9965](https://github.com/better-auth/better-auth/pull/9965) [`5e49c56`](https://github.com/better-auth/better-auth/commit/5e49c56a9e12a9b6b3fd1202bbc7a2fc97aeeafd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Passing `activeOrganizationId`, `activeTeamId`, or `impersonatedBy` to `/update-session` now returns a 400. Change these plugin-managed session fields through their dedicated endpoints instead, such as `organization.setActive`.
+
+- Updated dependencies [[`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15), [`cb1cbfa`](https://github.com/better-auth/better-auth/commit/cb1cbfa4ccba1ce13f7fea419a6fc37dcbdc2f15)]:
+  - @better-auth/core@1.6.16
+  - @better-auth/drizzle-adapter@1.6.16
+  - @better-auth/kysely-adapter@1.6.16
+  - @better-auth/memory-adapter@1.6.16
+  - @better-auth/mongo-adapter@1.6.16
+  - @better-auth/prisma-adapter@1.6.16
+  - @better-auth/telemetry@1.6.16
+
+## 1.6.15
+
+### Patch Changes
+
+- [#9875](https://github.com/better-auth/better-auth/pull/9875) [`1012b69`](https://github.com/better-auth/better-auth/commit/1012b690466ccd7078441dbfb406eef166fca805) Thanks [@WilsonnnTan](https://github.com/WilsonnnTan)! - The admin plugin's `unbanUser`, `setRole` and `adminUpdateUser` endpoints used to call `internalAdapter.updateUser` without checking that the target user existed, so when the caller passed an unknown id the underlying database error (for example Prisma's `P2025`) bubbled up as a generic HTTP 500. those endpoints now mirror the existing guard in `banUser`: look the user up via `findUserById`, and throw a clean `NOT_FOUND` (`USER_NOT_FOUND`) when no row is returned. Closes [#9800](https://github.com/better-auth/better-auth/issues/9800).
+
+- [#9865](https://github.com/better-auth/better-auth/pull/9865) [`ad60333`](https://github.com/better-auth/better-auth/commit/ad60333d1517142d688c61b6ccee14b4c30864ae) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - list-session endpoint now requires a fresh-age session check.
+
+- [#9811](https://github.com/better-auth/better-auth/pull/9811) [`0933c05`](https://github.com/better-auth/better-auth/commit/0933c050ff8735466a273347c9aab0fdd8cd38ff) Thanks [@zeroknowledge0x](https://github.com/zeroknowledge0x)! - Restore Kysely 0.28 and 0.29 compatibility for SQLite dialect introspection. The dialects now mirror Kysely's stable migration table names locally, avoiding strict ESM build failures in Turbopack without forcing consumers onto Kysely 0.29.
+
+- [#9919](https://github.com/better-auth/better-auth/pull/9919) [`b0ddfd3`](https://github.com/better-auth/better-auth/commit/b0ddfd3433cafac312ee99ec5fb7dbb9a240da35) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Run configured hooks through the whole OAuth sign-in flow
+
+  `hooks.before` / `hooks.after` configured on the auth instance now run for the OAuth authorization that continues after a user signs in, selects an account, or consents. They were being skipped there.
+
+  Headers or cookies a `hooks.before` sets before returning its own response are no longer dropped, and a `hooks.after` that throws an `APIError` no longer loses either its cookies or the error's headers.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.15
+  - @better-auth/drizzle-adapter@1.6.15
+  - @better-auth/kysely-adapter@1.6.15
+  - @better-auth/memory-adapter@1.6.15
+  - @better-auth/mongo-adapter@1.6.15
+  - @better-auth/prisma-adapter@1.6.15
+  - @better-auth/telemetry@1.6.15
+
+## 1.6.14
+
+### Patch Changes
+
+- [#9877](https://github.com/better-auth/better-auth/pull/9877) [`2d9781a`](https://github.com/better-auth/better-auth/commit/2d9781a83ddc7b51ecffbd7d24c28e4b917e2323) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Restore the normal emailed-invitation flow while documenting the stricter verification posture for organization invitations.
+
+  Client-side `listUserInvitations` now always requires a verified session email because it enumerates invitation IDs from `session.user.email`. The `requireEmailVerificationOnInvitation` option now controls recipient calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth keeps the emailed-invitation sign-up flow for built-in opaque invitation IDs, including the default generator or `advanced.database.generateId: "uuid"`, and requires verified email when invitation IDs are externally controlled or predictable, such as `advanced.database.generateId: "serial"` / `false` or custom ID generation. Apps that expose invitation IDs outside the invited user's mailbox, expose organization invitation lists to members, or require stricter ownership proof should set `requireEmailVerificationOnInvitation: true` or require verified email before sign-in.
+
+- [#9841](https://github.com/better-auth/better-auth/pull/9841) [`5a2d642`](https://github.com/better-auth/better-auth/commit/5a2d642bc7d940f4242df9b304818a8653ea2a10) Thanks [@bytaesu](https://github.com/bytaesu)! - Optional fields (`required: false`) now accept `null`, not just omission. The
+  generated input validation previously rejected `null` even though the column is
+  nullable, so a nullable field could not be cleared by passing `null`.
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+- [#9806](https://github.com/better-auth/better-auth/pull/9806) [`9d3450a`](https://github.com/better-auth/better-auth/commit/9d3450ae23e8387d24adfb7bb1cb24cc6965b6e3) Thanks [@bytaesu](https://github.com/bytaesu)! - `getSessionCookie` now prefers the `__Secure-` cookie when both it and a non-secure cookie are present, so the non-secure cookie no longer shadows the current session cookie.
+
+- Updated dependencies [[`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f)]:
+  - @better-auth/core@1.6.14
+  - @better-auth/drizzle-adapter@1.6.14
+  - @better-auth/kysely-adapter@1.6.14
+  - @better-auth/memory-adapter@1.6.14
+  - @better-auth/mongo-adapter@1.6.14
+  - @better-auth/prisma-adapter@1.6.14
+  - @better-auth/telemetry@1.6.14
+
+## 1.6.13
+
+### Minor Changes
+
+- [#9305](https://github.com/better-auth/better-auth/pull/9305) [`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth): per-request `additionalParams` and `loginHint` parity across `signIn.social`, `linkSocial`, and `signIn.sso`
+
+  Unified escape hatch for customizing the provider authorization URL on a per-request basis. Previously, dynamic parameters like Google's `access_type=offline` / `prompt=consent`, Cognito's `identity_provider=Google`, or Microsoft's `domain_hint` could only be set as static server configuration.
+
+  ### New capabilities
+  - `signIn.social`, `linkSocial`, and `signIn.sso` accept `additionalParams: Record<string, string>`. Values are appended to the authorization URL as query parameters.
+  - `linkSocial` also accepts `loginHint`, matching the surface of `signIn.social` and `signIn.sso`.
+  - `OAuthProvider.createAuthorizationURL` gains `additionalParams` in its input contract; every built-in provider forwards it to the shared helper.
+  - Generic-OAuth providers merge call-time `additionalParams` with the config-level `authorizationUrlParams`; call-time wins on key collision.
+  - Cognito exposes a typed `identityProvider?: string` config option that maps to the `identity_provider` query parameter, avoiding magic strings.
+
+  ### Security
+  - The shared `createAuthorizationURL` helper silently drops any caller-supplied key in `RESERVED_AUTHORIZATION_PARAMS` (`state`, `client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, `scope`). The request-body Zod schema rejects the same keys with 400, so misuse is visible at the edge rather than silently overriding security-critical parameters.
+  - Providers that use non-standard client identifiers (`wechat` → `appid`, `tiktok` → `client_key`) additionally filter those keys so a caller cannot swap the configured OAuth app.
+  - Provider protocol constants that are required for the integration to function (`atlassian` → `audience`, `notion` → `owner`) are merged last so caller-supplied `additionalParams` cannot override them. Configured defaults that represent operator intent (e.g. Google `include_granted_scopes`, Cognito `identityProvider`) remain caller-overridable.
+  - `signIn.sso` rejects `additionalParams` with 400 when the resolved provider is SAML; the SAML AuthnRequest is signed and cannot carry caller-supplied query parameters, so silently dropping them would mislead integrators.
+
+  ### OpenAPI
+  - Added `ZodRecord` handling to the OpenAPI generator so `z.record()` fields emit `type: object` with typed `additionalProperties`. Incidentally fixes a long-standing bug where `additionalData` was rendered as `type: string`.
+
+  ### Refactors
+  - `discord`, `roblox`, `zoom`, and `slack` providers now delegate to the shared `createAuthorizationURL` helper and inherit its RFC behavior and reserved-key guard.
+  - `tiktok` and `wechat` keep their manual URL construction (non-standard OAuth2 parameter names and URL fragment requirements) but thread `additionalParams` with the same reserved-key filter.
+
+  Closes [#2351](https://github.com/better-auth/better-auth/issues/2351).
+  Closes [#5441](https://github.com/better-auth/better-auth/issues/5441).
+  Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
+  Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
+  Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+- [#9657](https://github.com/better-auth/better-auth/pull/9657) [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden `private_key_jwt` and token endpoint client authentication, and add the helpers that make the fix structural.
+
+  `@better-auth/core/oauth2` now exposes `encodeBasicCredentials` and `decodeBasicCredentials`, a round-trip-tested pair that follows RFC 6749 §2.3.1 (`application/x-www-form-urlencoded` each value, split on the first `:` only). The decoder accepts the scheme case-insensitively and tolerates one or more spaces before the credentials per RFC 7235 §2.1. `client_secret_basic` on the client side and the Better Auth OAuth provider on the server side both go through these helpers, so credentials containing reserved characters round-trip cleanly across the stack and headers like `basic xxx` or `Basic  xxx` are accepted.
+
+  `createPrivateKeyJwtClientAssertionGetter` validates options eagerly. Unsupported algorithms (`HS256`, `none`), a JWK with no key material, and disagreement between an explicit `algorithm` and the JWK-embedded `alg` all throw at construction rather than on the first token request. `signPrivateKeyJwtClientAssertion` enforces the same checks for direct callers. **Breaking:** configurations that paired an unsupported JWK `alg` with a different explicit `algorithm` used to silently sign with the explicit option; they now fail at construction.
+
+  `@better-auth/oauth-provider` rejects empty `jwks` payloads at the schema layer (`jwks: []` and `jwks: { keys: [] }`) so the documented client metadata contract matches what `checkOAuthClient` already enforces at runtime. Schema consumers (TypeScript, OpenAPI, generated SDKs) now see the constraint.
+
+  The SSO `private_key_jwt` flow redirects with `error_description=no_private_key_available` when a `resolvePrivateKey` callback returns no `privateKeyJwk` or `privateKeyPem`. The redirect path previously short-circuited only when the resolver was absent entirely; an empty resolver return fell through into an internal signing error.
+
+  `better-auth/test` adds `getHttpTestInstance`, a counterpart to `getTestInstance` that binds a real HTTP listener on an OS-assigned port and constructs the auth instance against the discovered URL. It removes the temp-server-then-rebind race that test files have been individually copy-pasting.
+
+### Patch Changes
+
+- [#9301](https://github.com/better-auth/better-auth/pull/9301) [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `allowIdpInitiated` to `GenericOAuthConfig` and SSO `OIDCConfig` to support providers that initiate OAuth without a `state` parameter (e.g. Clever). When enabled, stateless callbacks restart the OAuth flow server-side with fresh state and PKCE, preserving CSRF protection. Also hardens `parseState` against undefined request bodies on GET callbacks.
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+- Updated dependencies [[`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8), [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2), [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a), [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f)]:
+  - @better-auth/core@1.7.0-beta.4
+  - @better-auth/drizzle-adapter@1.7.0-beta.4
+  - @better-auth/kysely-adapter@1.7.0-beta.4
+  - @better-auth/memory-adapter@1.7.0-beta.4
+  - @better-auth/mongo-adapter@1.7.0-beta.4
+  - @better-auth/prisma-adapter@1.7.0-beta.4
+  - @better-auth/telemetry@1.7.0-beta.4
+
+## 1.7.0-beta.3
+
+### Minor Changes
+
+- [#8733](https://github.com/better-auth/better-auth/pull/8733) [`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `hydrateSession` to seed the client with a server-fetched session so `useSession` returns data on the first render.
+
+- [#9431](https://github.com/better-auth/better-auth/pull/9431) [`523f95c`](https://github.com/better-auth/better-auth/commit/523f95c10db24b790bbd75fe85c86c34d3465267) Thanks [@pi0](https://github.com/pi0)! - feat: make `Auth` instance fetchable
+
+- [#9240](https://github.com/better-auth/better-auth/pull/9240) [`729c00d`](https://github.com/better-auth/better-auth/commit/729c00d74c94f558893da1e3a9ee86451d1b23da) Thanks [@adrianmxb](https://github.com/adrianmxb)! - feat(username): add immutable username option
+
+  This allows users to set their username during sign-up or first update, but prevents changing it to a different value afterwards. Users can still update other profile fields.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.3
+  - @better-auth/drizzle-adapter@1.7.0-beta.3
+  - @better-auth/kysely-adapter@1.7.0-beta.3
+  - @better-auth/memory-adapter@1.7.0-beta.3
+  - @better-auth/mongo-adapter@1.7.0-beta.3
+  - @better-auth/prisma-adapter@1.7.0-beta.3
+  - @better-auth/telemetry@1.7.0-beta.3
+
+## 1.7.0-beta.2
+
+### Minor Changes
+
+- [#8977](https://github.com/better-auth/better-auth/pull/8977) [`954b664`](https://github.com/better-auth/better-auth/commit/954b664f4f251f8dd028451dab3ab43067dbf890) Thanks [@ruban-s](https://github.com/ruban-s)! - allow passing `userId` and `organizationId` to the `listUserTeams` API. `userId` lets callers list teams for another member of an organization (gated behind the `member:update` permission). `organizationId` scopes the result to a specific organization without needing to switch the session's active organization, matching the pattern used by `addTeamMember`/`removeTeamMember`.
+
+### Patch Changes
+
+- [#9205](https://github.com/better-auth/better-auth/pull/9205) [`9aed910`](https://github.com/better-auth/better-auth/commit/9aed910499eb4cbc3dd0c395ff5534893daab7a4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(two-factor): revert enforcement broadening from [#9122](https://github.com/better-auth/better-auth/issues/9122)
+
+  Restores the pre-[#9122](https://github.com/better-auth/better-auth/issues/9122) enforcement scope. 2FA is challenged only on `/sign-in/email`, `/sign-in/username`, and `/sign-in/phone-number`, matching the behavior that shipped through v1.6.2. Non-credential sign-in flows (magic link, email OTP, OAuth, SSO, passkey, SIWE, one-tap, phone-number OTP, device authorization, email-verification auto-sign-in) are no longer gated by a 2FA challenge by default.
+
+  A broader enforcement scope with per-method opt-outs and alignment to NIST SP 800-63B-4 authenticator assurance levels is planned for a future minor release.
+
+- [#9068](https://github.com/better-auth/better-auth/pull/9068) [`acbd6ef`](https://github.com/better-auth/better-auth/commit/acbd6ef69f88ea54174446ac0465a426bad7ca09) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Fix forced UUID user IDs from create hooks being ignored on PostgreSQL adapters when `advanced.database.generateId` is set to `"uuid"`.
+
+- [#9165](https://github.com/better-auth/better-auth/pull/9165) [`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - chore(adapters): require patched `drizzle-orm` and `kysely` peer versions
+
+  Narrows the `drizzle-orm` peer to `^0.45.2` and the `kysely` peer to `^0.28.14`. Both new ranges track the minor line that carries the vulnerability fix and nothing newer, so the adapters only advertise support for versions that have actually been tested against. Consumers on older ORM releases see an install-time warning and can upgrade alongside the adapter; the peer is marked optional, so installs do not hard-fail.
+
+- Updated dependencies [[`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9)]:
+  - @better-auth/drizzle-adapter@1.7.0-beta.2
+  - @better-auth/kysely-adapter@1.7.0-beta.2
+  - @better-auth/core@1.7.0-beta.2
+  - @better-auth/memory-adapter@1.7.0-beta.2
+  - @better-auth/mongo-adapter@1.7.0-beta.2
+  - @better-auth/prisma-adapter@1.7.0-beta.2
+  - @better-auth/telemetry@1.7.0-beta.2
+
+## 1.7.0-beta.1
+
+### Minor Changes
+
+- [#9069](https://github.com/better-auth/better-auth/pull/9069) [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Rewrite the generic OAuth plugin as a first-class social provider with OAuth 2.1 security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE required by default (OAuth 2.1), RFC 9207 issuer validation, OIDC auto-discovery with `openid` scope injection, and typed provider IDs.
+
+  **Breaking changes:**
+  - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
+  - `oauth2.link()` replaced by `linkSocial()`
+  - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+  - `genericOAuthClient()` removed; generic OAuth providers now use the standard social client APIs
+  - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+  - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+  - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+  - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
+
+- [#9079](https://github.com/better-auth/better-auth/pull/9079) [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider): compute `at_hash` in ID tokens per OIDC Core §3.1.3.6
+
+  ID tokens issued alongside an access token now include the `at_hash` claim, which cryptographically binds the two tokens to prevent token substitution attacks. The hash algorithm is selected based on the actual signing key's algorithm (EdDSA/Ed25519 uses SHA-512, RS/ES/PS384 uses SHA-384, RS/ES/PS512 uses SHA-512, all others use SHA-256).
+
+  A new `resolveSigningKey()` export is available from `better-auth/plugins` to resolve the current JWKS signing key (including its algorithm). When using a custom `jwt.sign` callback, the signed ID token's header is validated against the declared algorithm to prevent `at_hash` mismatches.
+
+### Patch Changes
+
+- [#9131](https://github.com/better-auth/better-auth/pull/9131) [`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - harden dynamic `baseURL` handling for direct `auth.api.*` calls and plugin metadata helpers
+
+  **Direct `auth.api.*` calls**
+  - Throw `APIError` with a clear message when the baseURL can't be resolved (no source and no `fallback`), instead of leaving `ctx.context.baseURL = ""` for downstream plugins to crash on.
+  - Convert `allowedHosts` mismatches on the direct-API path to `APIError`.
+  - Honor `advanced.trustedProxyHeaders` on the dynamic path (default `true`, unchanged). Previously `x-forwarded-host` / `-proto` were unconditionally trusted with `allowedHosts`; they now go through the same gate as the static path. The default flip to `false` ships in a follow-up PR.
+  - `resolveRequestContext` rehydrates `trustedProviders` and cookies per call (in addition to `trustedOrigins`). User-defined `trustedOrigins(req)` / `trustedProviders(req)` callbacks receive a `Request` synthesized from forwarded headers when no full `Request` is available.
+  - Infer `http` for loopback hosts (`localhost`, `127.0.0.1`, `[::1]`, `0.0.0.0`) on the headers-only protocol fallback, so local-dev calls don't silently resolve to `https://localhost:3000`.
+  - `hasRequest` uses `isRequestLike`, which now rejects objects that spoof `Symbol.toStringTag` without a real `url` / `headers.get` shape.
+
+  **Plugin metadata helpers**
+  - `oauthProviderAuthServerMetadata`, `oauthProviderOpenIdConfigMetadata`, `oAuthDiscoveryMetadata`, and `oAuthProtectedResourceMetadata` forward the incoming request to their chained `auth.api` calls, so `issuer` and discovery URLs reflect the request host on dynamic configs.
+  - `withMcpAuth` forwards the incoming request to `getMcpSession`, threads `trustedProxyHeaders`, and emits a bare `Bearer` challenge when `baseURL` can't be resolved (instead of `Bearer resource_metadata="undefined/..."`).
+  - `metadataResponse` in `@better-auth/oauth-provider` normalizes headers via `new Headers()` so callers can pass `Headers`, tuple arrays, or records without silently dropping entries.
+
+- [#9122](https://github.com/better-auth/better-auth/pull/9122) [`484ce6a`](https://github.com/better-auth/better-auth/commit/484ce6a262c39b9c1be91d37774a2a13de3a5a1f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(two-factor): enforce 2FA on all sign-in paths
+
+  The 2FA after-hook now triggers on any endpoint that creates a new session, covering magic-link, OAuth, passkey, email-OTP, SIWE, and all future sign-in methods. Authenticated requests (session refreshes, profile updates) are excluded.
+
+- [#7231](https://github.com/better-auth/better-auth/pull/7231) [`f875897`](https://github.com/better-auth/better-auth/commit/f8758975ae475429d56b34aa6067e304ee973c8f) Thanks [@Byte-Biscuit](https://github.com/Byte-Biscuit)! - fix(two-factor): preserve backup codes storage format after verification
+
+  After using a backup code, remaining codes are now re-saved using the same `storeBackupCodes` strategy (plain, encrypted, or custom) configured by the user. Previously, codes were always re-encrypted with the built-in symmetric encryption, breaking subsequent verifications for plain or custom storage modes.
+
+- [#9078](https://github.com/better-auth/better-auth/pull/9078) [`9a6d475`](https://github.com/better-auth/better-auth/commit/9a6d4759cd4451f0535d53f171bcfc8891c41db7) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix(client): prevent isMounted race condition causing many rps
+
+- [#9113](https://github.com/better-auth/better-auth/pull/9113) [`513dabb`](https://github.com/better-auth/better-auth/commit/513dabb132e2c08a5b6d3b7e88dd397fcd66c1af) Thanks [@bytaesu](https://github.com/bytaesu)! - resolve dynamic `baseURL` from request headers on direct `auth.api` calls
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.1
+  - @better-auth/drizzle-adapter@1.7.0-beta.1
+  - @better-auth/kysely-adapter@1.7.0-beta.1
+  - @better-auth/memory-adapter@1.7.0-beta.1
+  - @better-auth/mongo-adapter@1.7.0-beta.1
+  - @better-auth/prisma-adapter@1.7.0-beta.1
+  - @better-auth/telemetry@1.7.0-beta.1
+
+## 1.7.0-beta.0
+
+### Minor Changes
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `private_key_jwt` (RFC 7523) client authentication across the stack. Servers verify JWT client assertions signed with asymmetric keys; clients sign them for authorization code, refresh, and client credentials flows.
+
+- [#9057](https://github.com/better-auth/better-auth/pull/9057) [`544f1c6`](https://github.com/better-auth/better-auth/commit/544f1c63c9826831d96a126fbe568d8a8a8fde68) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(two-factor)!: add OTP-only enablement and remove `skipVerificationOnEnable`
+
+  `enableTwoFactor` now accepts a `method` parameter (`"otp" | "totp"`, default `"totp"`) and returns a discriminated response with a `method` field.
+
+  ### `method: "otp"`
+  - Sets `twoFactorEnabled: true` immediately.
+  - Returns `{ method: "otp" }`.
+  - Requires `otpOptions.sendOTP` to be configured on the server; rejects with `OTP_NOT_CONFIGURED` otherwise.
+
+  ### `method: "totp"` (default)
+  - Returns `{ method: "totp", totpURI, backupCodes }`.
+  - Rejects with `TOTP_NOT_CONFIGURED` if `totpOptions.disable` is set.
+
+  ### Breaking changes
+  - **Removed `skipVerificationOnEnable`**: use `method: "otp"` for immediate activation, or the standard TOTP verification flow.
+  - **Response shape changed**: `enableTwoFactor` includes a `method` field in the response (`"otp"` or `"totp"`).
+
+### Patch Changes
 
 ## 1.6.10
 
@@ -336,6 +1945,14 @@
 
 - [#9084](https://github.com/better-auth/better-auth/pull/9084) [`5f84335`](https://github.com/better-auth/better-auth/commit/5f84335815d75410320bdfa665a6712d3416b04f) Thanks [@bytaesu](https://github.com/bytaesu)! - support Stripe SDK v21 and v22
 
+- Updated dependencies [[`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656)]:
+  - @better-auth/core@1.7.0-beta.0
+  - @better-auth/drizzle-adapter@1.7.0-beta.0
+  - @better-auth/kysely-adapter@1.7.0-beta.0
+  - @better-auth/memory-adapter@1.7.0-beta.0
+  - @better-auth/mongo-adapter@1.7.0-beta.0
+  - @better-auth/prisma-adapter@1.7.0-beta.0
+  - @better-auth/telemetry@1.7.0-beta.0
 - Updated dependencies []:
   - @better-auth/core@1.6.3
   - @better-auth/drizzle-adapter@1.6.3

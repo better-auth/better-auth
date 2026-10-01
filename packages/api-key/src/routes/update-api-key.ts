@@ -275,7 +275,13 @@ export function updateApiKey({
 				rateLimitMax,
 			} = ctx.body;
 
-			const session = await getSessionFromCtx(ctx);
+			// Updating an API key mutates a credential, so resolve the session from
+			// the authoritative store rather than the signed cookie-cache snapshot,
+			// matching create-api-key. A revoked session must not modify a key within
+			// the cookie-cache window.
+			const session = await getSessionFromCtx(ctx, {
+				disableCookieCache: true,
+			});
 			const authRequired = ctx.request || ctx.headers;
 			const user =
 				authRequired && !session

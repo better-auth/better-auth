@@ -1,8 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { MemoryDB } from "@better-auth/memory-adapter";
+import {
+	runWithEndpointContext,
+	runWithRequestState,
+} from "@better-auth/core/context";
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import {
 	afterEach,
 	beforeEach,
@@ -10,13 +13,25 @@ import {
 	expect,
 	expectTypeOf,
 	it,
+	onTestFinished,
+	test,
 	vi,
 } from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
+import { jwt } from "../../plugins";
+import { admin } from "../../plugins/admin";
+import { organization } from "../../plugins/organization";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
-import { freshSessionMiddleware } from "./session";
+import {
+	freshSessionMiddleware,
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+} from "./session";
+
+const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -114,6 +129,53 @@ describe("session", async () => {
 		const response = await client.$fetch("/fresh-session-check", {
 			method: "GET",
 			headers,
+		});
+		expect(response.data).toBeNull();
+		expect(response.error).toMatchObject({
+			status: 403,
+			statusText: "FORBIDDEN",
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+
+	it("should require a fresh session to list sessions", async () => {
+		vi.useFakeTimers();
+		const now = new Date("2026-01-01T00:00:00.000Z");
+		vi.setSystemTime(now);
+
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			session: {
+				freshAge: 60,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const sessionId = currentSession.data?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(now.getTime() - 5 * 60 * 1000),
+				updatedAt: now,
+			},
+		});
+
+		const response = await client.listSessions({
+			fetchOptions: {
+				headers,
+			},
 		});
 		expect(response.data).toBeNull();
 		expect(response.error).toMatchObject({
@@ -439,6 +501,47 @@ describe("session", async () => {
 			},
 		);
 	});
+
+	/**
+   @see https://github.com/better-auth/better-auth/issues/9609
+   */
+	it("should not exceed the 400-day browser Max-Age ceiling on session refresh", async () => {
+		const BROWSER_MAX_AGE_CEILING = 400 * 24 * 60 * 60;
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				expiresIn: BROWSER_MAX_AGE_CEILING,
+				updateAge: 30,
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 31);
+
+		let refreshedMaxAge: number | undefined;
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedMaxAge = parsed.get("better-auth.session_token")?.[
+						"max-age"
+					];
+				},
+			},
+		});
+
+		expect(refreshedMaxAge).toBeDefined();
+		expect(refreshedMaxAge).toBeLessThanOrEqual(BROWSER_MAX_AGE_CEILING);
+	});
 });
 
 describe("session storage", async () => {
@@ -450,6 +553,16 @@ describe("session storage", async () => {
 			},
 			get(key) {
 				return store.get(key) || null;
+			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
 			},
 			delete(key) {
 				store.delete(key);
@@ -533,124 +646,99 @@ describe("session storage", async () => {
 	});
 });
 
-describe("cookie cache", async () => {
-	const database: MemoryDB = {
-		user: [],
-		account: [],
-		session: [],
-		verification: [],
-	};
-	const adapter = memoryAdapter(database);
-
-	const { client, testUser, auth, cookieSetter } = await getTestInstance({
-		database: adapter,
-		session: {
-			additionalFields: {
-				sensitiveData: {
-					type: "string",
-					returned: false,
-					defaultValue: "sensitive-data",
+describe("cookie cache", () => {
+	async function createCachedSession() {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				account: [],
+				session: [],
+				verification: [],
+			}),
+			session: {
+				additionalFields: {
+					sensitiveData: {
+						type: "string",
+						returned: false,
+						defaultValue: "sensitive-data",
+					},
+				},
+				cookieCache: {
+					enabled: true,
+					strategy: "compact",
+					maxAge: 300,
+					refreshCache: false,
 				},
 			},
-			cookieCache: {
-				enabled: true,
-				strategy: "compact",
-				refreshCache: false,
-			},
-		},
-	});
-	const ctx = await auth.$context;
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers), throw: true },
+		);
+		const context = await auth.$context;
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		onTestFinished(() => findOne.mockRestore());
+
+		return { client, context, headers, cookieSetter, findOne };
+	}
 
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
-	it("should cache cookies", async () => {});
-	const fn = vi.spyOn(ctx.adapter, "findOne");
+	it("serves cached sessions without querying the database", async () => {
+		const { client, headers, findOne } = await createCachedSession();
 
-	const headers = new Headers();
-	it("should cache cookies", async () => {
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: cookieSetter(headers),
-			},
-		);
-		expect(fn).toHaveBeenCalledTimes(1);
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session.data?.session).not.toHaveProperty("sensitiveData");
+		const session = await client.getSession({ fetchOptions: { headers } });
+
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(session.data?.session).not.toHaveProperty("sensitiveData");
+		expect(findOne).not.toHaveBeenCalled();
 	});
 
-	it("should disable cookie cache", async () => {
-		const ctx = await auth.$context;
+	it("reads fresh user data when cookie caching is bypassed", async () => {
+		const { client, context, headers, findOne } = await createCachedSession();
+		const cached = await client.getSession({ fetchOptions: { headers } });
+		expect(cached.data?.user.emailVerified).toBe(false);
 
-		const s = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(s.data?.user.emailVerified).toBe(false);
 		await runWithEndpointContext(
-			{
-				context: ctx,
-			} as unknown as GenericEndpointContext,
+			{ context } as unknown as GenericEndpointContext,
 			async () => {
-				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
+				await context.internalAdapter.updateUser(cached.data!.user.id, {
 					emailVerified: true,
 				});
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
 
 		const session = await client.getSession({
-			query: {
-				disableCookieCache: true,
-			},
-			fetchOptions: {
-				headers,
-			},
+			query: { disableCookieCache: true },
+			fetchOptions: { headers },
 		});
+
 		expect(session.data?.user.emailVerified).toBe(true);
-		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(2);
+		expect(findOne).toHaveBeenCalledOnce();
 	});
 
-	it("should reset cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(2);
-		await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
+	it("refreshes expired cache and reuses the replacement cookie", async () => {
 		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 60 * 10); // 10 minutes
-		await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					cookieSetter(headers)(context);
-				},
-			},
+		const { client, headers, cookieSetter, findOne } =
+			await createCachedSession();
+
+		await client.getSession({ fetchOptions: { headers } });
+		expect(findOne).not.toHaveBeenCalled();
+
+		await vi.advanceTimersByTimeAsync(301_000);
+
+		const refreshed = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
 		});
-		expect(fn).toHaveBeenCalledTimes(3);
-		await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					cookieSetter(headers)(context);
-				},
-			},
-		});
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(refreshed.data).not.toBeNull();
+		expect(findOne).toHaveBeenCalledOnce();
+
+		const cached = await client.getSession({ fetchOptions: { headers } });
+		expect(cached.data).toEqual(refreshed.data);
+		expect(findOne).toHaveBeenCalledOnce();
 	});
 });
 
@@ -749,7 +837,12 @@ describe("cookie cache with JWT strategy", async () => {
 				headers,
 			},
 		});
-		expect(res.data).toBeNull();
+		// When session_data verification fails, fall through to session_token DB validation.
+		// This is secure because the tampered data is not used, the real session from DB is returned.
+		// This behavior also handles cross-subdomain cookie migrations correctly.
+		expect(res.data).not.toBeNull();
+		expect(res.data?.user.id).not.toBe("tampered-id");
+		expect(res.data?.user.email).toBe(testUser.email);
 	});
 
 	it("should have max age expiry", async () => {
@@ -810,7 +903,7 @@ describe("cookie cache with JWT strategy", async () => {
 	});
 });
 
-describe("cookie cache with JWE strategy", async () => {
+describe("cookie cache with JWT strategy backed by JWKS", async () => {
 	const { auth, client, testUser, cookieSetter } = await getTestInstance({
 		session: {
 			additionalFields: {
@@ -822,10 +915,11 @@ describe("cookie cache with JWE strategy", async () => {
 			},
 			cookieCache: {
 				enabled: true,
-				strategy: "jwe",
+				strategy: "jwt",
 				refreshCache: false,
 			},
 		},
+		plugins: [jwt({ sessionCookieCache: true })],
 	});
 	const ctx = await auth.$context;
 
@@ -835,8 +929,9 @@ describe("cookie cache with JWE strategy", async () => {
 
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
-	const headers = new Headers();
-	it("should cache cookies with JWE strategy", async () => {
+	it("should cache cookies with JWKS-backed JWT strategy", async () => {
+		const headers = new Headers();
+
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -847,78 +942,254 @@ describe("cookie cache with JWE strategy", async () => {
 			},
 		);
 		expect(fn).toHaveBeenCalledTimes(1);
+
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
+
+		const token = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!token) {
+			throw new Error("JWT not found");
+		}
+
+		const protectedHeader = decodeProtectedHeader(token);
+		expect(protectedHeader.kid).toEqual(expect.any(String));
+		expect(protectedHeader.typ).toBe(COOKIE_CACHE_JWT_TYPE);
+
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+
+		expect(verified.payload.session).toBeDefined();
+		expect(verified.payload.iss).toEqual(expect.any(String));
+		expect(verified.payload.aud).toBe(COOKIE_CACHE_JWT_AUDIENCE);
+		expect(verified.payload.sub).toBe(session.data?.user.id);
+		expect(verified.payload.sid).toBe(session.data?.session.token);
 		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1); // Should still be 1 (cache hit)
+		expect(fn).toHaveBeenCalledTimes(1);
 	});
 
-	it("should disable cookie cache with JWE strategy", async () => {
-		const ctx = await auth.$context;
-
-		const s = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(s.data?.user.emailVerified).toBe(false);
-		await runWithEndpointContext(
+	it("should ignore a JWKS cookie cache from a different session token", async () => {
+		const firstHeaders = new Headers();
+		await client.signIn.email(
 			{
-				context: ctx,
-			} as unknown as GenericEndpointContext,
-			async () => {
-				await ctx.internalAdapter.updateUser(s.data?.user.id || "", {
-					emailVerified: true,
-				});
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(firstHeaders),
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
-
-		const session = await client.getSession({
-			query: {
-				disableCookieCache: true,
-			},
+		const firstSession = await client.getSession({
 			fetchOptions: {
-				headers,
+				headers: firstHeaders,
 			},
 		});
-		expect(session.data?.user.emailVerified).toBe(true);
-		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(2); // Database hit when cache disabled
+
+		const secondHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(secondHeaders),
+			},
+		);
+		const secondSession = await client.getSession({
+			fetchOptions: {
+				headers: secondHeaders,
+			},
+		});
+
+		const firstCookieCache = parseCookies(firstHeaders.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		const secondSessionCookie = parseCookies(
+			secondHeaders.get("cookie") || "",
+		).get("better-auth.session_token");
+		if (!firstCookieCache || !secondSessionCookie || !secondSession.data) {
+			throw new Error("Expected both session cookies to be present");
+		}
+
+		const mixedHeaders = new Headers();
+		mixedHeaders.set(
+			"cookie",
+			`better-auth.session_data=${firstCookieCache}; better-auth.session_token=${secondSessionCookie}`,
+		);
+
+		const mixedSession = await client.getSession({
+			fetchOptions: {
+				headers: mixedHeaders,
+			},
+		});
+
+		expect(mixedSession.data?.session.token).toBe(
+			secondSession.data.session.token,
+		);
+		expect(mixedSession.data?.session.token).not.toBe(
+			firstSession.data?.session.token,
+		);
 	});
 
-	it("should reset JWE cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(2);
-		await client.getSession({
+	it("should not allow tampering with the cookie in JWKS mode", async () => {
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const token = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!token) {
+			throw new Error("JWT not found");
+		}
+
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		const verifiedPayload = verified.payload as {
+			session: Record<string, any>;
+			user: Record<string, any>;
+		};
+
+		const tamperedToken = await signJWT(
+			{
+				session: verifiedPayload.session,
+				user: {
+					...verifiedPayload.user,
+					id: "tampered-id",
+				},
+			},
+			"tampered-secret",
+		);
+
+		const sessionCookie = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_token",
+		);
+		if (!sessionCookie) {
+			throw new Error("Session cookie not found");
+		}
+
+		headers.set(
+			"cookie",
+			`better-auth.session_data=${tamperedToken}; better-auth.session_token=${sessionCookie}`,
+		);
+		const res = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(2);
+		expect(res.data).not.toBeNull();
+		expect(res.data?.user.id).not.toBe("tampered-id");
+		expect(res.data?.user.email).toBe(testUser.email);
+	});
 
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 60 * 10);
+	it("should reject a secret-signed cookie cache and fall back to the database", async () => {
+		const headers = new Headers();
 
-		await client.getSession({
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		const token = cookies.get("better-auth.session_data");
+		const sessionCookie = cookies.get("better-auth.session_token");
+		if (!token || !sessionCookie) {
+			throw new Error("Session cookies not found");
+		}
+
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		const verifiedPayload = verified.payload as {
+			session: Record<string, unknown>;
+			user: Record<string, unknown>;
+		};
+
+		const secretSignedToken = await signJWT(
+			{
+				session: verifiedPayload.session,
+				user: verifiedPayload.user,
+				updatedAt: Date.now(),
+				version: "1",
+			},
+			ctx.secret,
+		);
+
+		headers.set(
+			"cookie",
+			`better-auth.session_data=${secretSignedToken}; better-auth.session_token=${sessionCookie}`,
+		);
+
+		let replacedCookieCache: string | undefined;
+		const res = await client.getSession({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
-					cookieSetter(headers)(context);
+					replacedCookieCache = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					).get("better-auth.session_data")?.value;
 				},
 			},
 		});
 
-		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(2);
-
-		vi.useRealTimers();
+		expect(res.data?.user.email).toBe(testUser.email);
+		expect(res.data?.session.token).toBe(verifiedPayload.session.token);
+		if (!replacedCookieCache) {
+			throw new Error("Cookie cache was not replaced");
+		}
+		expect(replacedCookieCache).not.toBe(secretSignedToken);
+		expect(decodeProtectedHeader(replacedCookieCache).typ).toBe(
+			COOKIE_CACHE_JWT_TYPE,
+		);
 	});
 
-	it("should handle multiple concurrent requests with JWE cache", async () => {
-		vi.useRealTimers();
+	it("should verify existing cookie-cache JWTs across JWKS rotation grace period", async () => {
+		vi.useFakeTimers();
+
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+				},
+			},
+			plugins: [
+				jwt({
+					sessionCookieCache: true,
+					jwks: {
+						rotationInterval: 1,
+						gracePeriod: 60,
+					},
+				}),
+			],
+		});
+
 		const headers = new Headers();
 		await client.signIn.email(
 			{
@@ -930,109 +1201,209 @@ describe("cookie cache with JWE strategy", async () => {
 			},
 		);
 
-		// Make multiple concurrent requests
-		const promises = Array(5)
-			.fill(0)
-			.map(() =>
-				client.getSession({
-					fetchOptions: {
-						headers,
-					},
-				}),
-			);
+		const originalToken = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!originalToken) {
+			throw new Error("JWT not found");
+		}
 
-		const results = await Promise.all(promises);
-
-		// All should return valid sessions
-		results.forEach((result) => {
-			expect(result.data).not.toBeNull();
-			expect(result.data?.user.email).toBe(testUser.email);
+		await vi.advanceTimersByTimeAsync(1_100);
+		await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "rotated-user",
+				},
+			},
 		});
+
+		const jwks = await auth.api.getJwks();
+		expect(jwks.keys.length).toBeGreaterThan(1);
+
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(originalToken, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		expect(verified.payload.session).toBeDefined();
 	});
 });
 
-describe("cookie cache refreshCache", async () => {
-	const { auth, client, testUser, cookieSetter } = await getTestInstance({
-		session: {
-			cookieCache: {
-				enabled: true,
-				strategy: "jwe",
-				maxAge: 300, // 5 minutes
-				refreshCache: {
-					updateAge: 60, // Refresh when 60 seconds remain
+describe("cookie cache with JWE strategy", () => {
+	async function createCachedSession() {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				additionalFields: {
+					sensitiveData: {
+						type: "string",
+						returned: false,
+						defaultValue: "sensitive-data",
+					},
+				},
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300,
+					refreshCache: false,
 				},
 			},
-		},
-	});
-	const ctx = await auth.$context;
-	const fn = vi.spyOn(ctx.adapter, "findOne");
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers), throw: true },
+		);
+		const context = await auth.$context;
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		onTestFinished(() => findOne.mockRestore());
+
+		return { client, context, headers, cookieSetter, testUser, findOne };
+	}
 
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
-	const headers = new Headers();
+	it("serves cached sessions without querying the database", async () => {
+		const { client, headers, findOne } = await createCachedSession();
 
-	it("should use cached data when refreshCache threshold has not been reached", async () => {
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: cookieSetter(headers),
-			},
-		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		const session = await client.getSession({ fetchOptions: { headers } });
 
-		const session1 = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session1.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
-
-		const session2 = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session2.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(session.data).not.toBeNull();
+		expect(session.data?.session).not.toHaveProperty("sensitiveData");
+		expect(findOne).not.toHaveBeenCalled();
 	});
 
-	it("should not perform stateless refresh when a database is configured", async () => {
-		const callsBefore = fn.mock.calls.length;
+	it("reads fresh user data when cookie caching is bypassed", async () => {
+		const { client, context, headers, findOne } = await createCachedSession();
+		const cached = await client.getSession({ fetchOptions: { headers } });
+		expect(cached.data?.user.emailVerified).toBe(false);
 
-		vi.useFakeTimers();
-		// Advance time by 241 seconds (300 - 60 = 240, so at 241 we're within the refresh window)
-		await vi.advanceTimersByTimeAsync(1000 * 241);
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await context.internalAdapter.updateUser(cached.data!.user.id, {
+					emailVerified: true,
+				});
+			},
+		);
 
 		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					cookieSetter(headers)(context);
+			query: { disableCookieCache: true },
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.emailVerified).toBe(true);
+		expect(findOne).toHaveBeenCalledOnce();
+	});
+
+	it("refreshes expired cache and reuses the replacement cookie", async () => {
+		vi.useFakeTimers();
+		const { client, headers, cookieSetter, findOne } =
+			await createCachedSession();
+
+		await client.getSession({ fetchOptions: { headers } });
+		expect(findOne).not.toHaveBeenCalled();
+
+		await vi.advanceTimersByTimeAsync(301_000);
+
+		const refreshed = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		expect(refreshed.data).not.toBeNull();
+		expect(findOne).toHaveBeenCalledOnce();
+
+		const cached = await client.getSession({ fetchOptions: { headers } });
+		expect(cached.data).toEqual(refreshed.data);
+		expect(findOne).toHaveBeenCalledOnce();
+	});
+
+	it("serves concurrent requests from the cache", async () => {
+		const { client, headers, testUser, findOne } = await createCachedSession();
+
+		const results = await Promise.all(
+			Array.from({ length: 5 }, () =>
+				client.getSession({ fetchOptions: { headers } }),
+			),
+		);
+
+		for (const result of results) {
+			expect(result.data?.user.email).toBe(testUser.email);
+		}
+		expect(findOne).not.toHaveBeenCalled();
+	});
+});
+
+const refreshCacheTest = test.extend(
+	"cachedSession",
+	async ({}, { onCleanup }) => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300,
+					refreshCache: { updateAge: 60 },
 				},
 			},
 		});
-		expect(session.data).not.toBeNull();
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers), throw: true },
+		);
+		const context = await auth.$context;
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		onCleanup(() => findOne.mockRestore());
 
-		// With a database configured, `refreshCache` is ignored (a warning is logged),
-		// so no additional DB call should be made here.
-		const callsAfterRefresh = fn.mock.calls.length;
-		expect(callsAfterRefresh).toBe(callsBefore);
+		return { client, headers, cookieSetter, findOne };
+	},
+);
 
-		await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(fn).toHaveBeenCalledTimes(callsAfterRefresh);
-
+describe("cookie cache refreshCache", () => {
+	afterEach(() => {
 		vi.useRealTimers();
 	});
+
+	refreshCacheTest(
+		"uses cached data before the refresh threshold",
+		async ({ cachedSession }) => {
+			const { client, headers, findOne } = cachedSession;
+
+			const firstSession = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(firstSession.data).not.toBeNull();
+			expect(findOne).not.toHaveBeenCalled();
+
+			const secondSession = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(secondSession.data).not.toBeNull();
+			expect(findOne).not.toHaveBeenCalled();
+		},
+	);
+
+	refreshCacheTest(
+		"does not perform stateless refresh when a database is configured",
+		async ({ cachedSession }) => {
+			const { client, headers, cookieSetter, findOne } = cachedSession;
+
+			vi.useFakeTimers();
+			await vi.advanceTimersByTimeAsync(241_000);
+
+			const session = await client.getSession({
+				fetchOptions: {
+					headers,
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			expect(session.data).not.toBeNull();
+			expect(findOne).not.toHaveBeenCalled();
+
+			await client.getSession({ fetchOptions: { headers } });
+			expect(findOne).not.toHaveBeenCalled();
+		},
+	);
 
 	it("should not refresh cache when refreshCache is disabled (false)", async () => {
 		const {
@@ -1145,6 +1516,98 @@ describe("cookie cache refreshCache", async () => {
 		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8817
+	 */
+	it("should preserve session expiry when refreshing stateless cookie cache", async () => {
+		const expiresIn = 60 * 60; // 1 hour
+		const cacheMaxAge = 300; // 5 minutes
+		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			// True stateless mode: no database configured
+			database: undefined as any,
+			session: {
+				expiresIn,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: cacheMaxAge,
+					refreshCache: {
+						updateAge: 60, // Refresh when less than 60 seconds remain
+					},
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(firstSession.data).not.toBeNull();
+		const sessionToken = firstSession.data?.session?.token;
+		const originalExpiresAt = new Date(
+			firstSession.data!.session.expiresAt,
+		).getTime();
+		const initialSessionDataCookie = parseCookies(
+			headers.get("cookie") || "",
+		).get("better-auth.session_data");
+		expect(initialSessionDataCookie).toBeDefined();
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken!);
+
+		vi.useFakeTimers();
+		// Advance time to trigger refresh (300 - 60 = 240, so at 241 we're in refresh window)
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		let refreshedSessionDataCookie: string | undefined;
+		let refreshedSessionTokenCookie: string | undefined;
+		const sessionFromCache = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedSessionDataCookie = parsed.get(
+						"better-auth.session_data",
+					)?.value;
+					refreshedSessionTokenCookie = parsed.get(
+						"better-auth.session_token",
+					)?.value;
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+
+		expect(sessionFromCache.data).not.toBeNull();
+		expect(refreshedSessionDataCookie).toBeDefined();
+		expect(refreshedSessionDataCookie).not.toBe(initialSessionDataCookie);
+		expect(refreshedSessionTokenCookie).toBeDefined();
+		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
+		expect(new Date(sessionFromCache.data!.session.expiresAt).getTime()).toBe(
+			originalExpiresAt,
+		);
+		expect(originalExpiresAt - Date.now()).toBeGreaterThan(
+			(cacheMaxAge + 1) * 1000,
+		);
+
+		vi.useRealTimers();
+	});
+
 	it("should work without database when refreshCache threshold is reached", async () => {
 		const { client, testUser, cookieSetter, auth } = await getTestInstance({
 			// True stateless mode: no database configured
@@ -1155,7 +1618,7 @@ describe("cookie cache refreshCache", async () => {
 					strategy: "jwe",
 					maxAge: 300, // 5 minutes
 					refreshCache: {
-						updateAge: 60, // Refresh when 60 seconds remain
+						updateAge: 60, // Refresh when less than 60 seconds remain
 					},
 				},
 			},
@@ -1206,6 +1669,71 @@ describe("cookie cache refreshCache", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8763
+	 */
+	it("should forward cookie cache headers from getSessionFromCtx", async () => {
+		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const requestCookies = parseCookies(headers.get("cookie") || "");
+		for (const name of requestCookies.keys()) {
+			if (
+				name === ctx.authCookies.sessionData.name ||
+				name.startsWith(`${ctx.authCookies.sessionData.name}.`)
+			) {
+				requestCookies.delete(name);
+			}
+		}
+		headers.set(
+			"cookie",
+			Array.from(requestCookies, ([name, value]) => `${name}=${value}`).join(
+				"; ",
+			),
+		);
+
+		const endpointCtx = {
+			context: ctx,
+			headers,
+			query: {},
+			responseHeaders: new Headers(),
+		} as unknown as GenericEndpointContext;
+
+		await runWithRequestState(new WeakMap(), async () => {
+			await runWithEndpointContext(endpointCtx, async () => {
+				const session = await getSessionFromCtx(endpointCtx);
+				expect(session?.user.email).toBe(testUser.email);
+
+				const parsed = parseSetCookieHeader(
+					endpointCtx.responseHeaders.get("set-cookie") || "",
+				);
+				const forwardedSessionDataCookie = Array.from(parsed.keys()).some(
+					(name) =>
+						name === ctx.authCookies.sessionData.name ||
+						name.startsWith(`${ctx.authCookies.sessionData.name}.`),
+				);
+				expect(forwardedSessionDataCookie).toBe(true);
+			});
+		});
+	});
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7994
 	 */
 	it("should extend session_token cookie expiry when refreshCache threshold is reached", async () => {
@@ -1219,7 +1747,7 @@ describe("cookie cache refreshCache", async () => {
 					strategy: "jwe",
 					maxAge: 300, // 5 minutes
 					refreshCache: {
-						updateAge: 60, // Refresh when 60 seconds remain
+						updateAge: 60, // Refresh when less than 60 seconds remain
 					},
 				},
 			},
@@ -2000,5 +2528,251 @@ describe("updateSession", async () => {
 			const session = await client.getSession();
 			expect((session.data?.session as any).theme).toBe("blue");
 		});
+	});
+});
+
+describe("updateSession plugin authority fields", async () => {
+	// Plugin-owned authority fields must not be writable through the generic
+	// session update route. They are set only by membership/permission-checked
+	// setters (setActiveOrganization, impersonateUser), so /update-session must
+	// reject them even though they live on the session schema.
+	const { client, signInWithTestUser } = await getTestInstance({
+		plugins: [organization({ teams: { enabled: true } }), admin()],
+	});
+
+	it.each([
+		"activeOrganizationId",
+		"activeTeamId",
+		"impersonatedBy",
+	])("should reject forging the %s session field", async (field) => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				[field]: "forged-value",
+			} as any);
+			expect(res.error?.status).toBe(400);
+		});
+	});
+});
+
+describe("update-session cookie cache revocation", async () => {
+	it("fails closed when the backing session is revoked in a stateful deployment", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: { enabled: true, maxAge: 60 },
+				additionalFields: {
+					theme: { type: "string", defaultValue: "light" },
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+		expect(headers.get("cookie")).toContain("session_data");
+
+		// Revoke server-side; only the cookie cache still vouches for the session.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		const update = await client.$fetch("/update-session", {
+			method: "POST",
+			body: { theme: "dark" },
+			headers,
+		});
+		expect(update.error?.status).toBe(401);
+
+		// The database is authoritative and says the session is gone.
+		const strict = await client.getSession({
+			query: { disableCookieCache: true },
+			fetchOptions: { headers },
+		});
+		expect(strict.data).toBeNull();
+	});
+
+	it("still refreshes the cookie in a DB-less deployment when no row exists", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			database: undefined as any,
+			session: {
+				additionalFields: { theme: { type: "string", defaultValue: "light" } },
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+
+		// Simulate an instance whose in-memory store never held this session: the
+		// cookie is the source of truth, so the update must still apply.
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		const update = await client.$fetch("/update-session", {
+			method: "POST",
+			body: { theme: "dark" },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(update.error).toBeNull();
+		expect(
+			(update.data as { session?: { theme?: string } } | null)?.session?.theme,
+		).toBe("dark");
+	});
+});
+
+describe("forced strict session validation", async () => {
+	it("a request cannot re-enable the cookie cache on a route that forces it off", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		// `/change-password` forces strict validation through
+		// `sensitiveSessionMiddleware`. An empty `disableCookieCache` query coerces
+		// to false, which must not weaken that forced check back to the cache.
+		const res = await client.$fetch("/change-password?disableCookieCache=", {
+			method: "POST",
+			body: {
+				currentPassword: testUser.password,
+				newPassword: "new-password-1234",
+			},
+			headers,
+		});
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("uses the signed cookie as the authoritative session record without a server store", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			database: undefined,
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const cachedSession = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		expect(cachedSession.data).not.toBeNull();
+
+		const ctx = await auth.$context;
+		ctx.session = null;
+		await ctx.internalAdapter.deleteSession(cachedSession.data!.session.token);
+		const endpointCtx = {
+			context: ctx,
+			headers,
+			query: {},
+		} as unknown as GenericEndpointContext;
+
+		await runWithRequestState(new WeakMap(), async () => {
+			await runWithEndpointContext(endpointCtx, async () => {
+				const session = await getAuthoritativeSessionFromCtx(endpointCtx);
+				expect(session?.user.email).toBe(testUser.email);
+			});
+		});
+	});
+});
+
+describe("get-session cache headers", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10217
+	 */
+	it("sets Cache-Control: no-store on authenticated GET /get-session responses", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance();
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { cookie: headers.get("cookie") || "" },
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { user?: { id: string } } | null;
+		expect(body?.user?.id).toBeTruthy();
+		expect(res.headers.get("cache-control")).toContain("no-store");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10217
+	 */
+	it("sets Cache-Control: no-store on unauthenticated GET /get-session responses", async () => {
+		const { auth } = await getTestInstance();
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session"),
+		);
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toBeNull();
+		expect(res.headers.get("cache-control")).toContain("no-store");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10222
+	 */
+	it("does not set Cache-Control: no-store on session-gated endpoints", async () => {
+		const sessionGatedPlugin = {
+			id: "session-gated-cache-test",
+			endpoints: {
+				sessionGatedCheck: createAuthEndpoint(
+					"/session-gated-cache-check",
+					{
+						method: "GET",
+						use: [freshSessionMiddleware],
+					},
+					async () => ({ status: true }),
+				),
+			},
+		};
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sessionGatedPlugin],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/session-gated-cache-check", {
+				headers: { cookie: headers.get("cookie") || "" },
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		expect(res.headers.get("cache-control")).toBeNull();
 	});
 });

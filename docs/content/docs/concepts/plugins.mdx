@@ -1,4 +1,5 @@
 ---
+icon: conceptsPlugins
 title: Plugins
 description: Learn how to use and create Better Auth plugins, including defining endpoints, schemas, hooks, middleware, rate limits, trusted origins, and building client plugins with custom actions and atoms.
 ---
@@ -85,13 +86,33 @@ export const myPlugin = () => {
   You don't have to make the plugin a function, but it's recommended to do so. This way, you can pass options to the plugin and it's consistent with the built-in plugins.
 </Callout>
 
+### Register a plugin type
+
+Reusable plugins can augment `BetterAuthPluginRegistry` so `getPlugin()` returns their exact type. The registry key must match the plugin's `id`:
+
+```ts title="plugin.ts"
+declare module "@better-auth/core" {
+  interface BetterAuthPluginRegistry<AuthOptions, Options> {
+    "my-plugin": {
+      creator: typeof myPlugin;
+    };
+  }
+}
+```
+
+This only affects TypeScript. Users must still add the plugin to their `plugins` array at runtime.
+
+<Callout type="info">
+  If you publish the plugin as a separate package, declare `@better-auth/core` as a peer dependency with the same supported version range as `better-auth`.
+</Callout>
+
 ### Endpoints
 
 To add endpoints to the server, you can pass `endpoints` which requires an object with the key being any `string` and the value being an `AuthEndpoint`.
 
 To create an Auth Endpoint you'll need to import `createAuthEndpoint` from `better-auth`.
 
-Better Auth uses wraps around another library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple ts web framework made by the same team behind Better Auth.
+Better Auth wraps around another library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple ts web framework made by the same team behind Better Auth.
 
 ```ts title="plugin.ts"
 import { createAuthEndpoint } from "better-auth/api";
@@ -136,9 +157,9 @@ For other properties, you can check the <Link href="https://github.com/bekacru/b
 
 **Rules for Endpoints**
 
-* Makes sure you use kebab-case for the endpoint path
+* Make sure you use kebab-case for the endpoint path
 * Make sure to only use `POST` or `GET` methods for the endpoints.
-* Any function that modifies a data should be a `POST` method.
+* Any function that modifies data should be a `POST` method.
 * Any function that fetches data should be a `GET` method.
 * Make sure to use the `createAuthEndpoint` function to create API endpoints.
 * Make sure your paths are unique to avoid conflicts with other plugins. If you're using a common path, add the plugin name as a prefix to the path. (`/my-plugin/hello-world` instead of `/hello-world`.)
@@ -178,6 +199,38 @@ The key is the column name and the value is the column definition. The column de
 `required`:  if the field should be required on a new record. (default: `true`)
 
 `unique`: if the field should be unique. (default: `false`)
+
+For indexes that span multiple fields, add an `indexes` array to the table. Index fields use the logical field keys from `fields`, even when a field has a custom database column name.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const directoryPlugin = {
+  id: "directory",
+  schema: {
+    directoryUser: {
+      fields: {
+        connectionId: {
+          type: "string",
+          fieldName: "connection_id",
+        },
+        externalId: {
+          type: "string",
+          fieldName: "external_id",
+        },
+      },
+      indexes: [
+        {
+          fields: ["connectionId", "externalId"],
+          unique: true,
+        },
+      ],
+    },
+  },
+} satisfies BetterAuthPlugin;
+```
+
+Each index can include up to 16 fields. Set `unique: true` when each field tuple must identify at most one row. Every field in a unique table-level index must be required so that null handling remains consistent across databases. You can also provide a schema-wide `name` of up to 63 UTF-8 bytes to control the database index name. Names must start with a letter or underscore and contain only letters, numbers, and underscores. Names are compared case-insensitively and cannot conflict with a table or another index. The CLI includes table-level indexes in SQL migrations and generated Drizzle or Prisma schemas. The MongoDB adapter creates them before the first indexed write to the collection.
 
 `references`: if the field is a reference to another table. (optional) It takes an object with the following properties:
 

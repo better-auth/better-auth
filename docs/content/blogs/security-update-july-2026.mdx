@@ -1,0 +1,67 @@
+---
+title: "Auth.js security update: July 2026"
+description: "Four security advisories fixed across Auth.js this cycle, in @auth/core, next-auth v4, and next-auth v5, with the release to update to for each."
+date: 2026-07-21
+author:
+  name: "Better Auth Maintainers"
+  avatar: ""
+tags: ["security", "advisories", "release", "authjs"]
+---
+
+# Auth.js security update: July 2026
+
+Keeping [Auth.js](https://authjs.dev) (NextAuth.js) secure is part of what we do. This cycle we closed four advisories across `@auth/core`, `next-auth` v4, and `next-auth` v5.
+
+If you use any of the affected packages, update to the release for your line:
+
+* **`next-auth` v5** (`beta` channel) → **5.0.0-beta.32**
+* **`next-auth` v4** (`latest` channel) → **4.24.15**
+* **`@auth/core`** → **0.41.3** (the `@auth/*` framework and adapter packages were republished on their own version lines to pick it up)
+
+```bash title="Terminal"
+# next-auth v4
+pnpm add next-auth@latest
+
+# next-auth v5
+pnpm add next-auth@beta
+```
+
+If you consume `@auth/core` through a framework or adapter package such as `@auth/sveltekit`, `@auth/express`, or one of the database adapters, update that package. Each `@auth/*` package pins `@auth/core` exactly, so the fixed core (`0.41.3`) arrives with the package update rather than on its own.
+
+Our dedicated security-review workstream, which covers report triage, focused code review, automated and manual scanning, variant analysis, patch review, release coordination, and advisory publication, now also covers Auth.js.
+
+## Published Advisories
+
+The table below covers the advisories published in this cycle. The full historical list remains available in the [Security Advisories tab](https://github.com/nextauthjs/next-auth/security/advisories).
+
+| Advisory                                                                                               | Area                                                                | Severity | Fixed in                                                            |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------- |
+| [GHSA-7rqj-j65f-68wh](https://github.com/nextauthjs/next-auth/security/advisories/GHSA-7rqj-j65f-68wh) | Email validated before Unicode normalization (homoglyph `@` bypass) | High     | `@auth/core@0.41.3`, `next-auth@4.24.15`, `next-auth@5.0.0-beta.32` |
+| [GHSA-xmf8-cvqr-rfgj](https://github.com/nextauthjs/next-auth/security/advisories/GHSA-xmf8-cvqr-rfgj) | `getToken` throws on malformed authorization headers                | High     | `@auth/core@0.41.3`, `next-auth@4.24.15`, `next-auth@5.0.0-beta.32` |
+| [GHSA-x445-f3h2-j279](https://github.com/nextauthjs/next-auth/security/advisories/GHSA-x445-f3h2-j279) | OAuth check cookies not bound to their issuing provider             | Medium   | `@auth/core@0.41.3`, `next-auth@4.24.15`, `next-auth@5.0.0-beta.32` |
+| [GHSA-8fpg-xm3f-6cx3](https://github.com/nextauthjs/next-auth/security/advisories/GHSA-8fpg-xm3f-6cx3) | Auth checks fail open on provider configuration errors              | Low      | `next-auth@5.0.0-beta.32`                                           |
+
+CVE identifiers have been requested for these advisories and will be added to each advisory as they are assigned. Each advisory has the exact affected ranges, fixed versions, and package names. The table is a quick index, not a replacement for the advisory body.
+
+## Release Channels
+
+These packages ship on three separate channels, and the right fix depends on which one you're on.
+
+* **`next-auth` v4** is the current LTS line and ships on the `latest` tag. The fixes land in **4.24.15**.
+* **`next-auth` v5** is still in beta and ships on the `beta` tag. A plain `pnpm add next-auth@latest` resolves to the v4 line, so v5 projects must install with the `beta` tag to reach **5.0.0-beta.32**. This release also pins `@auth/core@0.41.3`.
+* **`@auth/core`** ships at **0.41.3**. The `@auth/*` framework and adapter packages, which pin `@auth/core` exactly, were republished on their own version lines to depend on the fixed core.
+
+The fail-open advisory (GHSA-8fpg-xm3f-6cx3) affects only the v5 middleware, so its fix is in `5.0.0-beta.32` alone. The other three advisories affect `@auth/core` directly and are fixed across all three channels.
+
+## How to Stay Current
+
+* **Update `next-auth` v4 projects to `next-auth@latest`.** As of this update, that is 4.24.15.
+* **Update `next-auth` v5 projects to `next-auth@beta`.** As of this update, that is 5.0.0-beta.32.
+* **Update your `@auth/*` framework and adapter packages.** They pin `@auth/core` exactly, so updating them brings in the fixed 0.41.3.
+* **Watch the repository releases.** The [Releases page](https://github.com/nextauthjs/next-auth/releases) shows each release.
+* **Watch the advisory feed.** The [Security Advisories tab](https://github.com/nextauthjs/next-auth/security/advisories) is the source of truth for affected and fixed ranges.
+* **Run audit tools against your lockfile.** GitHub Dependabot and `npm audit` both consume advisory metadata.
+
+## Thanks
+
+Thanks to the researchers and users who reported these issues and tested the fixes. If you find a security problem in Auth.js (NextAuth.js), please follow the [security policy](https://github.com/nextauthjs/next-auth/security) to report it privately so we can ship a patch before it goes public.

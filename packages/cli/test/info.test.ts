@@ -1,13 +1,38 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cliPath } from "./utils";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 let tmpDir = ".";
+
+const runInfoCommand = (args: string[] = []) => {
+	return execFileAsync(process.execPath, [cliPath, "info", ...args, "--json"], {
+		cwd: tmpDir,
+	});
+};
+
+const runInfoTextCommand = (args: string[] = []) => {
+	return execFileAsync(process.execPath, [cliPath, "info", ...args], {
+		cwd: tmpDir,
+	});
+};
+
+const writeInstalledPackage = async (name: string, version: string) => {
+	const packageDirectory = path.join(
+		tmpDir,
+		"node_modules",
+		...name.split("/"),
+	);
+	await fs.mkdir(packageDirectory, { recursive: true });
+	await fs.writeFile(
+		path.join(packageDirectory, "package.json"),
+		JSON.stringify({ name, version }),
+	);
+};
 
 describe("info command", () => {
 	beforeEach(async () => {
@@ -43,9 +68,7 @@ describe("info command", () => {
 				},
 			}),
 		);
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -66,6 +89,64 @@ describe("info command", () => {
 		// Better Auth config should have an error since no auth file exists
 		expect(output.betterAuth).toHaveProperty("version");
 		expect(output.betterAuth.config).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10997
+	 */
+	it("reports installed versions for protocol-based dependencies", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "catalog:auth",
+					next: "catalog:frontend",
+					"drizzle-orm": "workspace:*",
+				},
+			}),
+		);
+		await Promise.all([
+			writeInstalledPackage("better-auth", "1.7.2"),
+			writeInstalledPackage("next", "16.1.0"),
+			writeInstalledPackage("drizzle-orm", "0.45.1"),
+		]);
+
+		const { stdout } = await runInfoCommand();
+		const output = JSON.parse(stdout);
+
+		expect(output.betterAuth.version).toBe("1.7.2");
+		expect(output.frameworks).toContainEqual({
+			name: "next",
+			version: "16.1.0",
+		});
+		expect(output.databases).toContainEqual({
+			name: "drizzle",
+			version: "0.45.1",
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11126#discussion_r3920527164
+	 */
+	it("reports the installed version when config loading fails", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				dependencies: { "better-auth": "catalog:" },
+			}),
+		);
+		await writeInstalledPackage("better-auth", "1.7.2");
+
+		const { stdout } = await runInfoTextCommand([
+			"--config",
+			"missing-auth.ts",
+		]);
+
+		expect(stdout).toContain("Version: 1.7.2");
+		expect(stdout).toContain("Error:");
 	});
 
 	it("should load and sanitize auth configuration", async () => {
@@ -107,9 +188,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -139,6 +218,44 @@ describe("info command", () => {
 		expect(output.betterAuth.config.baseURL).toBe("https://example.com");
 	});
 
+	it("should redact versioned secrets", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "^1.0.0",
+				},
+			}),
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			export const auth = betterAuth({
+				secrets: [
+					{ version: 1, value: "old-rotation-secret-123" },
+					{ version: 2, value: "new-rotation-secret-456" },
+				],
+				emailAndPassword: {
+					enabled: true,
+				}
+			})`,
+		);
+
+		const { stdout } = await runInfoCommand();
+
+		const output = JSON.parse(stdout);
+
+		expect(output.betterAuth.config).toBeDefined();
+		expect(output.betterAuth.config.secrets).toBe("[REDACTED]");
+		const configStr = JSON.stringify(output.betterAuth.config);
+		expect(configStr).not.toContain("old-rotation-secret-123");
+		expect(configStr).not.toContain("new-rotation-secret-456");
+	});
+
 	it("should detect installed frameworks", async () => {
 		// Create package.json with various frameworks
 		await fs.writeFile(
@@ -157,29 +274,33 @@ describe("info command", () => {
 				},
 			}),
 		);
+		await Promise.all([
+			writeInstalledPackage("next", "14.0.0"),
+			writeInstalledPackage("react", "18.0.0"),
+			writeInstalledPackage("@sveltejs/kit", "2.0.0"),
+			writeInstalledPackage("svelte", "4.0.0"),
+		]);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
 		// Check frameworks are detected
 		expect(output.frameworks).toContainEqual({
 			name: "next",
-			version: "^14.0.0",
+			version: "14.0.0",
 		});
 		expect(output.frameworks).toContainEqual({
 			name: "react",
-			version: "^18.0.0",
+			version: "18.0.0",
 		});
 		expect(output.frameworks).toContainEqual({
 			name: "@sveltejs/kit",
-			version: "^2.0.0",
+			version: "2.0.0",
 		});
 		expect(output.frameworks).toContainEqual({
 			name: "svelte",
-			version: "^4.0.0",
+			version: "4.0.0",
 		});
 	});
 
@@ -201,29 +322,33 @@ describe("info command", () => {
 				},
 			}),
 		);
+		await Promise.all([
+			writeInstalledPackage("@prisma/client", "5.0.0"),
+			writeInstalledPackage("kysely", "0.26.0"),
+			writeInstalledPackage("drizzle-orm", "0.29.0"),
+			writeInstalledPackage("better-sqlite3", "9.0.0"),
+		]);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
 		// Check database clients are detected
 		expect(output.databases).toContainEqual({
 			name: "@prisma/client",
-			version: "^5.0.0",
+			version: "5.0.0",
 		});
 		expect(output.databases).toContainEqual({
 			name: "kysely",
-			version: "^0.26.0",
+			version: "0.26.0",
 		});
 		expect(output.databases).toContainEqual({
 			name: "drizzle",
-			version: "^0.29.0",
+			version: "0.29.0",
 		});
 		expect(output.databases).toContainEqual({
 			name: "better-sqlite3",
-			version: "^9.0.0",
+			version: "9.0.0",
 		});
 	});
 
@@ -258,10 +383,10 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(
-			`node ${cliPath} info --config config/auth.config.ts --json`,
-			{ cwd: tmpDir },
-		);
+		const { stdout } = await runInfoCommand([
+			"--config",
+			"config/auth.config.ts",
+		]);
 
 		const output = JSON.parse(stdout);
 
@@ -308,9 +433,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -331,9 +454,7 @@ describe("info command", () => {
 
 	it("should handle missing package.json gracefully", async () => {
 		// Don't create package.json
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -346,4 +467,4 @@ describe("info command", () => {
 		expect(output.frameworks).toBeNull();
 		expect(output.databases).toBeNull();
 	});
-}, 20000);
+});

@@ -4,6 +4,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
+import { getBaseURL, getOrigin } from "../../utils/url";
 
 /**
  * Checks if CSRF should be skipped for backward compatibility.
@@ -31,9 +32,16 @@ function shouldSkipOriginCheck(ctx: GenericEndpointContext): boolean {
 		try {
 			const basePath = new URL(ctx.context.baseURL).pathname;
 			const currentPath = normalizePathname(ctx.request.url, basePath);
-			return skipOriginCheck.some((skipPath) =>
-				currentPath.startsWith(skipPath),
-			);
+			// Match only an exact path or a slash-boundary child, so a configured
+			// skip path like "/public/data" does not also skip "/public/database"
+			// or "/public/data-delete" and silently disable origin/CSRF checks there.
+			return skipOriginCheck.some((skipPath) => {
+				const normalizedSkipPath = skipPath.replace(/\/+$/, "");
+				return (
+					currentPath === normalizedSkipPath ||
+					currentPath.startsWith(`${normalizedSkipPath}/`)
+				);
+			});
 		} catch {
 			//
 		}
@@ -79,7 +87,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const newUserCallbackURL = body?.newUserCallbackURL;
 
 	const validateURL = (
-		url: string | undefined,
+		url: unknown,
 		label:
 			| "origin"
 			| "callbackURL"
@@ -89,6 +97,15 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	) => {
 		if (!url) {
 			return;
+		}
+		// These values are read from the raw body/query before endpoint schema
+		// validation. A JSON object/array body or duplicate query parameter
+		// yields a non-string here; reject it as a controlled 400 instead of
+		// letting a string method throw an uncontrolled 500. Never String()-coerce.
+		if (typeof url !== "string") {
+			throw APIError.fromStatus("BAD_REQUEST", {
+				message: `Invalid ${label}: expected a string`,
+			});
 		}
 		const isTrustedOrigin = ctx.context.isTrustedOrigin(url, {
 			allowRelativePaths: label !== "origin",
@@ -209,7 +226,8 @@ async function validateOrigin(
 	if (!headers || !ctx.request) {
 		return;
 	}
-	const originHeader = headers.get("origin") || headers.get("referer") || "";
+	const origin = headers.get("origin");
+	const originHeader = origin || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
 	if (ctx.context.skipCSRFCheck) {
@@ -232,7 +250,25 @@ async function validateOrigin(
 		return;
 	}
 
-	if (!originHeader || originHeader === "null") {
+	// A same-origin form using `no-referrer` can send `Origin: null`.
+	// Fetch Metadata lets us infer the origin from the request target.
+	const canInferOriginFromFetchMetadata =
+		origin === "null" && headers.get("sec-fetch-site") === "same-origin";
+	const inferredBaseURL = canInferOriginFromFetchMetadata
+		? getBaseURL(
+				undefined,
+				ctx.context.options.basePath,
+				ctx.request,
+				false,
+				ctx.context.options.advanced?.trustedProxyHeaders,
+			)
+		: undefined;
+	const inferredOrigin = inferredBaseURL
+		? getOrigin(inferredBaseURL)
+		: undefined;
+	const originToValidate = inferredOrigin ?? originHeader;
+
+	if (!originToValidate || originToValidate === "null") {
 		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 	}
 
@@ -248,12 +284,12 @@ async function validateOrigin(
 			];
 
 	const isTrustedOrigin = trustedOrigins.some((origin) =>
-		matchesOriginPattern(originHeader, origin),
+		matchesOriginPattern(originToValidate, origin),
 	);
 	if (!isTrustedOrigin) {
-		ctx.context.logger.error(`Invalid origin: ${originHeader}`);
+		ctx.context.logger.error(`Invalid origin: ${originToValidate}`);
 		ctx.context.logger.info(
-			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
+			`If it's a valid URL, please add ${originToValidate} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
 		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
@@ -326,6 +362,14 @@ async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 		return await validateOrigin(ctx, true);
 	}
 
-	// No cookies, no Fetch Metadata → fallback to old behavior (no validation)
+	// No Fetch Metadata. A present Origin/Referer is still trustworthy evidence of
+	// cross-site intent, so validate it even without cookies. Only requests that carry
+	// no origin header at all (non-browser clients like curl or server-to-server) keep
+	// the permissive fallback.
+	const originHeader = headers.get("origin") || headers.get("referer");
+	if (originHeader) {
+		return await validateOrigin(ctx, true);
+	}
+
 	return;
 }

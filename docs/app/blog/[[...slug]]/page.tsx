@@ -6,7 +6,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
+import { BlogTOC } from "@/components/blog/blog-toc";
 import Footer from "@/components/landing/footer";
+import { BlogTweet } from "@/components/mdx/tweet";
 import { Callout } from "@/components/ui/callout";
 import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
@@ -18,6 +20,89 @@ function formatDate(date: Date) {
 		day: "numeric",
 		year: "numeric",
 	});
+}
+
+function generatedCoverUrl(
+	title: string,
+	date: Date | undefined,
+	theme: "light" | "dark",
+) {
+	const params = new URLSearchParams();
+	params.set("title", title);
+	if (date) {
+		params.set(
+			"date",
+			new Date(date).toLocaleDateString("en-US", {
+				month: "long",
+				year: "numeric",
+			}),
+		);
+	}
+	params.set("theme", theme);
+	return `/api/og-blog?${params.toString()}`;
+}
+
+function BlogCover({
+	title,
+	date,
+	image,
+}: {
+	title: string;
+	date: Date;
+	image?: string | { light: string; dark: string };
+}) {
+	if (typeof image === "object") {
+		return (
+			<>
+				<Image
+					src={image.light}
+					alt={title}
+					width={320}
+					height={168}
+					className="w-full h-full object-cover dark:hidden"
+				/>
+				<Image
+					src={image.dark}
+					alt={title}
+					width={320}
+					height={168}
+					className="w-full h-full object-cover hidden dark:block"
+				/>
+			</>
+		);
+	}
+	if (image) {
+		return (
+			<Image
+				src={image}
+				alt={title}
+				width={320}
+				height={168}
+				className="w-full h-full object-cover"
+			/>
+		);
+	}
+	return (
+		<>
+			{/* Generated cover, one per theme */}
+			<img
+				src={generatedCoverUrl(title, date, "light")}
+				alt={title}
+				width={320}
+				height={168}
+				className="w-full h-full object-cover dark:hidden"
+				loading="lazy"
+			/>
+			<img
+				src={generatedCoverUrl(title, date, "dark")}
+				alt={title}
+				width={320}
+				height={168}
+				className="w-full h-full object-cover hidden dark:block"
+				loading="lazy"
+			/>
+		</>
+	);
 }
 
 function BlogList() {
@@ -49,17 +134,13 @@ function BlogList() {
 							className="group block border-b border-dashed border-foreground/[0.06] px-5 sm:px-6 lg:px-8 py-5 transition-colors hover:bg-foreground/[0.02]"
 						>
 							<div className="flex gap-5 items-center">
-								{post.data?.image && (
-									<div className="shrink-0 w-56 aspect-[1200/630] overflow-hidden border border-foreground/[0.06] hidden sm:block">
-										<Image
-											src={post.data.image}
-											alt={post.data.title}
-											width={320}
-											height={192}
-											className="w-full h-full object-cover"
-										/>
-									</div>
-								)}
+								<div className="shrink-0 w-56 aspect-[1200/630] overflow-hidden border border-foreground/[0.06] hidden sm:block">
+									<BlogCover
+										title={post.data.title}
+										date={post.data.date}
+										image={post.data.image}
+									/>
+								</div>
 								<div className="flex-1 min-w-0">
 									<h2 className="text-lg font-medium tracking-tight text-neutral-800 dark:text-neutral-200 group-hover:text-neutral-950 dark:group-hover:text-white transition-colors">
 										{post.data.title}
@@ -95,7 +176,9 @@ function BlogList() {
 						</Link>
 					))}
 				</div>
-				<Footer />
+				<div className="lg:hidden">
+					<Footer />
+				</div>
 			</div>
 		</div>
 	);
@@ -121,117 +204,144 @@ export default async function Page({
 	const toc = page.data.toc ?? [];
 
 	return (
-		<div className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0">
+		<div
+			id="fd-glass-layout"
+			className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0 [--fd-right-width:0px]"
+		>
 			<BlogLeftPanel
 				post={{
 					title,
 					description,
 					date,
 					author: page.data.author,
-					toc,
 				}}
 			/>
 
 			{/* Right panel — blog content */}
-			<div className="w-full lg:w-[70%] flex flex-col">
-				<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-24">
-					{/* Article body */}
-					<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none [&_[data-header-label]+h2]:mt-2 [&_[data-header-label]+h3]:mt-2 [&_[data-header-label]+h4]:mt-1">
-						<MDX
-							components={{
-								...defaultMdxComponents,
-								Step,
-								Steps,
-								Tab,
-								Tabs,
-								Accordion,
-								Accordions,
-								Callout: ({
-									children,
-									type,
-									...props
-								}: {
-									children: React.ReactNode;
-									type?:
-										| "info"
-										| "warn"
-										| "error"
-										| "success"
-										| "warning"
-										| "none";
-									[key: string]: any;
-								}) => (
-									<Callout type={type === "none" ? undefined : type} {...props}>
-										{children}
-									</Callout>
-								),
-								HeaderLabel: ({
-									children,
-									variant = "default",
-								}: {
-									children: React.ReactNode;
-									variant?: "default" | "info" | "warning";
-								}) => {
-									const colors = {
-										default: "text-neutral-600 dark:text-neutral-300",
-										info: "text-blue-500 dark:text-blue-400",
-										warning: "text-amber-600 dark:text-amber-400",
-									};
-									return (
-										<span
-											data-header-label="true"
-											className={`text-[11px] font-semibold tracking-wide not-prose block select-none ${colors[variant]}`}
+			<div
+				className="grid w-full lg:w-[70%] min-w-0"
+				style={{
+					gridTemplate:
+						'"content right" 1fr / minmax(0, 1fr) var(--fd-right-width)',
+				}}
+			>
+				<div className="flex min-w-0 flex-col [grid-area:content]">
+					<div className="relative min-w-0 pl-5 pr-7 lg:px-8 pb-24 pt-8 lg:py-24">
+						{/* Article body */}
+						<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none [&_[data-header-label]+h2]:mt-2 [&_[data-header-label]+h3]:mt-2 [&_[data-header-label]+h4]:mt-1">
+							<MDX
+								components={{
+									...defaultMdxComponents,
+									Step,
+									Steps,
+									Tab,
+									Tabs,
+									Accordion,
+									Accordions,
+									Tweet: BlogTweet,
+									TLDR: ({ children }: { children: React.ReactNode }) => (
+										<div className="not-prose relative my-8 bg-foreground/[0.02] px-5 py-4">
+											<span className="block mb-2 text-[11px] font-mono uppercase tracking-wider text-foreground/50 select-none">
+												TL;DR
+											</span>
+											<div className="text-sm leading-relaxed text-foreground/80 [&_p]:m-0 [&_p+p]:mt-3">
+												{children}
+											</div>
+										</div>
+									),
+									Callout: ({
+										children,
+										type,
+										...props
+									}: {
+										children: React.ReactNode;
+										type?:
+											| "info"
+											| "warn"
+											| "error"
+											| "success"
+											| "warning"
+											| "none";
+										[key: string]: any;
+									}) => (
+										<Callout
+											type={type === "none" ? undefined : type}
+											{...props}
 										>
 											{children}
-										</span>
-									);
-								},
-								Contributors: ({ usernames }: { usernames: string[] }) => (
-									<div className="flex flex-wrap gap-1.5 not-prose">
-										{usernames.map((username) => (
-											<a
-												key={username}
-												href={`https://github.com/${username}`}
-												target="_blank"
-												rel="noreferrer noopener"
-												className="text-xs font-mono px-2 py-1 border border-foreground/10 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-foreground/20 transition-colors"
-											>
-												@{username}
-											</a>
-										))}
-									</div>
-								),
-								a: ({ className, href, children, ...props }: any) => {
-									const isExternal =
-										typeof href === "string" && /^(https?:)?\/\//.test(href);
-									const classes = cn(
-										"font-medium underline decoration-dashed underline-offset-4",
-										className,
-									);
-									if (isExternal) {
+										</Callout>
+									),
+									HeaderLabel: ({
+										children,
+										variant = "default",
+									}: {
+										children: React.ReactNode;
+										variant?: "default" | "info" | "warning";
+									}) => {
+										const colors = {
+											default: "text-neutral-600 dark:text-neutral-300",
+											info: "text-blue-500 dark:text-blue-400",
+											warning: "text-amber-600 dark:text-amber-400",
+										};
 										return (
-											<a
-												className={classes}
-												href={href}
-												target="_blank"
-												rel="noreferrer noopener"
-												{...props}
+											<span
+												data-header-label="true"
+												className={`text-[11px] font-semibold tracking-wide not-prose block select-none ${colors[variant]}`}
 											>
 												{children}
-											</a>
+											</span>
 										);
-									}
-									return (
-										<Link className={classes} href={href} {...(props as any)}>
-											{children}
-										</Link>
-									);
-								},
-							}}
-						/>
-					</article>
+									},
+									Contributors: ({ usernames }: { usernames: string[] }) => (
+										<div className="flex flex-wrap gap-1.5 not-prose">
+											{usernames.map((username) => (
+												<a
+													key={username}
+													href={`https://github.com/${username}`}
+													target="_blank"
+													rel="noreferrer noopener"
+													className="text-xs font-mono px-2 py-1 border border-foreground/10 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-foreground/20 transition-colors"
+												>
+													@{username}
+												</a>
+											))}
+										</div>
+									),
+									a: ({ className, href, children, ...props }: any) => {
+										const isExternal =
+											typeof href === "string" && /^(https?:)?\/\//.test(href);
+										const classes = cn(
+											"font-medium underline decoration-dashed underline-offset-4",
+											className,
+										);
+										if (isExternal) {
+											return (
+												<a
+													className={classes}
+													href={href}
+													target="_blank"
+													rel="noreferrer noopener"
+													{...props}
+												>
+													{children}
+												</a>
+											);
+										}
+										return (
+											<Link className={classes} href={href} {...(props as any)}>
+												{children}
+											</Link>
+										);
+									},
+								}}
+							/>
+						</article>
+					</div>
+					<div className="lg:hidden">
+						<Footer />
+					</div>
 				</div>
-				<Footer />
+				<BlogTOC items={toc} />
 			</div>
 		</div>
 	);
@@ -253,22 +363,10 @@ export async function generateMetadata({
 	if (!page || page.data.draft) return notFound();
 	const { title, description, image, date } = page.data;
 
-	const ogSearchParams = new URLSearchParams();
-	ogSearchParams.set("heading", title);
-	if (description) ogSearchParams.set("description", description);
-	if (date) {
-		ogSearchParams.set(
-			"date",
-			new Date(date).toLocaleDateString("en-US", {
-				month: "short",
-				day: "numeric",
-				year: "numeric",
-			}),
-		);
-	}
-	const ogUrl = `/api/og-release?${ogSearchParams.toString()}`;
-
-	const ogImage = image || ogUrl;
+	// Social cards have no theme preference; always use the dark variant.
+	const ogImage =
+		(typeof image === "string" ? image : image?.dark) ??
+		generatedCoverUrl(title, date, "dark");
 
 	return createMetadata({
 		title,

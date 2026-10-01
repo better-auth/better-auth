@@ -9,13 +9,18 @@ import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	stripSecureCookiePrefix,
-} from "better-auth/cookies";
+} from "better-auth/cookies/utils";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
+import type { ExpoClientStorage } from "./client-storage";
+import { createManagedStorage } from "./client-storage";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
 import { PACKAGE_VERSION } from "./version";
+
+export type { ExpoClientStorage } from "./client-storage";
+export { normalizeCookieName, storageAdapter } from "./client-storage";
 
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
@@ -24,10 +29,7 @@ if (Platform.OS !== "web") {
 
 interface ExpoClientOptions {
 	scheme?: string | undefined;
-	storage: {
-		setItem: (key: string, value: string) => any;
-		getItem: (key: string) => string | null;
-	};
+	storage: ExpoClientStorage;
 	/**
 	 * Prefix for local storage keys (e.g., "my-app_cookie", "my-app_session_data")
 	 * @default "better-auth"
@@ -71,6 +73,12 @@ interface StoredCookie {
 	expires: string | null;
 }
 
+function defineExpoClientPlugin<Plugin extends BetterAuthClientPlugin>(
+	plugin: Plugin,
+): Plugin {
+	return plugin;
+}
+
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
 	const toSetCookie =
@@ -99,11 +107,8 @@ export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	return JSON.stringify(toSetCookie);
 }
 
-export function getCookie(cookie: string) {
-	let parsed = {} as Record<string, StoredCookie>;
-	try {
-		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
-	} catch {}
+export function getCookie(cookie: string | null) {
+	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookie) ?? {};
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
@@ -241,41 +246,64 @@ export function hasBetterAuthCookies(
 	return false;
 }
 
-/**
- * Expo secure store does not support colons in the keys.
- * This function replaces colons with underscores.
- *
- * @see https://github.com/better-auth/better-auth/issues/5426
- *
- * @param name cookie name to be saved in the storage
- * @returns normalized cookie name
- */
-export function normalizeCookieName(name: string) {
-	return name.replace(/:/g, "_");
-}
-
-export function storageAdapter(storage: {
-	getItem: (name: string) => string | null;
-	setItem: (name: string, value: string) => void;
-}) {
-	return {
-		getItem: (name: string) => {
-			return storage.getItem(normalizeCookieName(name));
-		},
-		setItem: (name: string, value: string) => {
-			return storage.setItem(normalizeCookieName(name), value);
-		},
-	};
-}
-
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: ClientStore | null = null;
 	const storagePrefix = opts?.storagePrefix || "better-auth";
 	const cookieName = `${storagePrefix}_cookie`;
 	const localCacheName = `${storagePrefix}_session_data`;
-	const storage = storageAdapter(opts?.storage);
+	const storage = createManagedStorage(opts.storage);
 	const isWeb = Platform.OS === "web";
 	const cookiePrefix = opts?.cookiePrefix || "better-auth";
+	let sessionCacheHydration: Promise<void> | undefined;
+	const restoreSessionCache = async () => {
+		if (isWeb || opts?.disableCache) {
+			return;
+		}
+
+		const sessionAtom = store?.atoms.session;
+		if (!sessionAtom) {
+			return;
+		}
+		const initialSessionState = sessionAtom.get();
+		if (initialSessionState.data !== null) {
+			return;
+		}
+
+		const raw = await storage.getItemAsync(localCacheName);
+		const cached = raw
+			? safeJSONParse<{ user: User; session: Session }>(raw)
+			: null;
+		const expiresAt = cached?.session?.expiresAt;
+		const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
+		const fresh =
+			!!cached?.user?.id && !!cached.session?.id && expiresAtMs > Date.now();
+		if (fresh && sessionAtom.get() === initialSessionState) {
+			sessionAtom.set({
+				...initialSessionState,
+				data: cached,
+				error: null,
+			});
+		}
+	};
+	const hydrateSessionCache = () => {
+		if (!sessionCacheHydration) {
+			sessionCacheHydration = restoreSessionCache().catch((error) => {
+				sessionCacheHydration = undefined;
+				throw error;
+			});
+		}
+		return sessionCacheHydration;
+	};
+	const clearSessionCache = async () => {
+		await storage.setItemAsync(cookieName, "{}");
+		store?.atoms.session?.set({
+			...store.atoms.session.get(),
+			data: null,
+			error: null,
+			isPending: false,
+		});
+		await storage.setItemAsync(localCacheName, "{}");
+	};
 
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
@@ -286,49 +314,28 @@ export const expoClient = (opts: ExpoClientOptions) => {
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
 	}
-	return {
+	return defineExpoClientPlugin({
 		id: "expo",
 		version: PACKAGE_VERSION,
-		getActions(_, $store) {
+		getActions(_fetch: unknown, $store) {
 			store = $store;
-			// Restore the last persisted session as the initial value of the session atom
-			const sessionAtom = $store.atoms.session;
-			if (!isWeb && !opts?.disableCache && sessionAtom) {
-				const raw = storage.getItem(localCacheName);
-				const cached = raw
-					? safeJSONParse<{ user: User; session: Session }>(raw)
-					: null;
-				const exp = cached?.session?.expiresAt;
-				const expMs = exp ? new Date(exp).getTime() : Number.NaN;
-				const isFresh =
-					!!cached?.user?.id && !!cached.session?.id && expMs > Date.now();
-				if (isFresh) {
-					sessionAtom.set({
-						...sessionAtom.get(),
-						data: cached,
-						error: null,
-					});
-				}
-			}
 			return {
 				/**
 				 * Get the stored cookie.
 				 *
-				 * You can use this to get the cookie stored in the device and use it in your fetch
-				 * requests.
-				 *
 				 * @example
 				 * ```ts
-				 * const cookie = client.getCookie();
+				 * const cookie = await client.getCookie();
 				 * fetch("https://api.example.com", {
 				 * 	headers: {
 				 * 		cookie,
 				 * 	},
 				 * });
+				 * ```
 				 */
-				getCookie: () => {
-					const cookie = storage.getItem(cookieName);
-					return getCookie(cookie || "{}");
+				getCookie: async () => {
+					const storedCookie = await storage.getItemAsync(cookieName);
+					return getCookie(storedCookie);
 				},
 			};
 		},
@@ -339,40 +346,42 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				hooks: {
 					async onSuccess(context) {
 						if (isWeb) return;
+						const { pathname } = new URL(context.request.url);
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = storage.getItem(cookieName);
-								const toSetCookie = getSetCookie(
-									setCookie || "",
-									prevCookie ?? undefined,
+								const update = await storage.updateItemAsync(
+									cookieName,
+									(currentValue) =>
+										getSetCookie(setCookie, currentValue ?? undefined),
 								);
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
-								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									storage.setItem(cookieName, toSetCookie);
+								if (
+									update &&
+									hasSessionCookieChanged(update.previousValue, update.value)
+								) {
 									store?.notify("$sessionSignal");
-								} else {
-									// Still update the storage to refresh expiry times, but don't trigger refetch
-									storage.setItem(cookieName, toSetCookie);
 								}
 							}
 						}
 
-						if (
-							context.request.url.toString().includes("/get-session") &&
-							!opts?.disableCache
-						) {
+						if (pathname.endsWith("/get-session") && !opts?.disableCache) {
 							const data = context.data;
-							storage.setItem(localCacheName, JSON.stringify(data));
+							await storage.setItemAsync(localCacheName, JSON.stringify(data));
+						}
+						if (pathname.endsWith("/sign-out")) {
+							await clearSessionCache();
 						}
 
+						const isSignInRequest =
+							pathname.endsWith("/sign-in") || pathname.includes("/sign-in/");
+						const isLinkSocialRequest = pathname.endsWith("/link-social");
 						if (
 							context.data?.redirect &&
-							(context.request.url.toString().includes("/sign-in") ||
-								context.request.url.toString().includes("/link-social")) &&
+							(isSignInRequest || isLinkSocialRequest) &&
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
@@ -401,7 +410,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								} catch {}
 							}
 
-							const storedCookieJson = storage.getItem(cookieName);
+							const storedCookieJson = await storage.getItemAsync(cookieName);
 							const oauthStateValue = getOAuthStateValue(
 								storedCookieJson,
 								cookiePrefix,
@@ -422,10 +431,14 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const url = new URL(result.url);
 							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
-							const prevCookie = storage.getItem(cookieName);
-							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
-							storage.setItem(cookieName, toSetCookie);
-							store?.notify("$sessionSignal");
+							const update = await storage.updateItemAsync(
+								cookieName,
+								(currentValue) =>
+									getSetCookie(cookie, currentValue ?? undefined),
+							);
+							if (update) {
+								store?.notify("$sessionSignal");
+							}
 						}
 					},
 				},
@@ -435,6 +448,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							url,
 							options: options as ClientFetchOption,
 						};
+					}
+					const { pathname } = new URL(url, options?.baseURL);
+					if (pathname.endsWith("/get-session")) {
+						await hydrateSessionCache();
 					}
 					options = options || {};
 					options.credentials = "omit";
@@ -450,13 +467,18 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
+						const storedCookie = pathname.endsWith("/link-social")
+							? await storage.getItemAsync(cookieName)
+							: null;
+						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
+							...(cookie ? { cookie } : {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
-						const storedCookie = storage.getItem(cookieName);
-						const cookie = getCookie(storedCookie || "{}");
+						const storedCookie = await storage.getItemAsync(cookieName);
+						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
@@ -481,15 +503,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								options.body.errorCallbackURL = url;
 							}
 						}
-						if (url.includes("/sign-out")) {
-							storage.setItem(cookieName, "{}");
-							store?.atoms.session?.set({
-								...store.atoms.session.get(),
-								data: null,
-								error: null,
-								isPending: false,
-							});
-							storage.setItem(localCacheName, "{}");
+						if (pathname.endsWith("/sign-out")) {
+							await clearSessionCache();
 						}
 					}
 					return {
@@ -499,9 +514,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				},
 			},
 		],
-	} satisfies BetterAuthClientPlugin;
+	});
 };
 
-export { parseSetCookieHeader } from "better-auth/cookies";
+export { parseSetCookieHeader } from "better-auth/cookies/utils";
 export * from "./focus-manager";
 export * from "./online-manager";

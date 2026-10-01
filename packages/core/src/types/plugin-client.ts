@@ -6,7 +6,21 @@ import type {
 import type { Atom, WritableAtom } from "nanostores";
 import type { LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
-import type { BetterAuthPlugin } from "./plugin";
+
+type InferableServerPlugin = {
+	id?: LiteralString | undefined;
+	endpoints?: Record<string, unknown> | undefined;
+	schema?: Record<string, { fields: Record<string, unknown> }> | undefined;
+	$ERROR_CODES?:
+		| Record<
+				string,
+				{
+					readonly code: string;
+					message: string;
+				}
+		  >
+		| undefined;
+};
 
 export interface ClientStore {
 	notify: (signal: string) => void;
@@ -84,7 +98,7 @@ export interface BetterAuthClientPlugin {
 	 * only used for type inference. don't pass the
 	 * actual plugin
 	 */
-	$InferServerPlugin?: BetterAuthPlugin | undefined;
+	$InferServerPlugin?: InferableServerPlugin | undefined;
 	/**
 	 * Custom actions
 	 */

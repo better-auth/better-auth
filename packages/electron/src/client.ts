@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { base64 } from "@better-auth/utils/base64";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type { BetterAuthClientPlugin, ClientStore } from "better-auth";
 import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
@@ -79,6 +80,16 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 		opts.storage,
 		new Set([cookieName, localCacheName]),
 	);
+	const clearSessionCache = () => {
+		setEncrypted(cookieName, "{}");
+		store?.atoms.session?.set({
+			...store.atoms.session.get(),
+			data: null,
+			error: null,
+			isPending: false,
+		});
+		setEncrypted(localCacheName, "{}");
+	};
 
 	if (
 		(isDevelopment() || isTest()) &&
@@ -108,22 +119,15 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 					options ||= {};
 					options.credentials = "omit";
 					options.headers = {
+						origin: `${scheme}:/`,
 						...options.headers,
 						cookie,
 						"user-agent": app.userAgentFallback,
-						"electron-origin": `${scheme}:/`,
 						"x-skip-oauth-proxy": "true",
 					};
 
 					if (url.endsWith("/sign-out")) {
-						setEncrypted(cookieName, "{}");
-						store?.atoms.session?.set({
-							...store.atoms.session.get(),
-							data: null,
-							error: null,
-							isPending: false,
-						});
-						setEncrypted(localCacheName, "{}");
+						clearSessionCache();
 					}
 
 					return {
@@ -159,6 +163,9 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 							const data = context.data;
 							setEncrypted(localCacheName, JSON.stringify(data));
 						}
+						if (context.request.url.toString().includes("/sign-out")) {
+							clearSessionCache();
+						}
 					},
 					onError: async (context) => {
 						webContents
@@ -174,7 +181,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 				},
 			},
 		],
-		getActions: ($fetch, $store, clientOptions) => {
+		getActions: ($fetch: BetterFetch, $store, clientOptions) => {
 			store = $store;
 			let getWindow: () => electron.BrowserWindow | null | undefined = () =>
 				null;

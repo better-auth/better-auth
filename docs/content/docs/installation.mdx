@@ -1,4 +1,5 @@
 ---
+icon: installation
 title: Installation
 description: Learn how to configure Better Auth in your project.
 ---
@@ -136,16 +137,17 @@ description: Learn how to configure Better Auth in your project.
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
-        // If your Prisma file is located elsewhere, you can change the path
-        import { PrismaClient } from "@/generated/prisma/client";
+        import { prisma } from "@/lib/prisma"; // your prisma client instance
 
-        const prisma = new PrismaClient();
         export const auth = betterAuth({
             database: prismaAdapter(prisma, {
-                provider: "sqlite", // or "mysql", "postgresql", ...etc
+                provider: "postgresql", // or "mysql", "sqlite", ...etc
             }),
         });
         ```
+
+        See the [Prisma adapter guide](/docs/adapters/prisma) for the Prisma 7
+        driver adapter and generated client setup.
       </Tab>
 
       <Tab value="mongodb">
@@ -161,10 +163,14 @@ description: Learn how to configure Better Auth in your project.
       </Tab>
     </Tabs>
 
+    If your database is not listed above, check out our other supported
+    [databases](/docs/adapters/other-relational-databases) for more information,
+    or use one of the supported ORMs.
+
     <Callout>
-      If your database is not listed above, check out our other supported
-      [databases](/docs/adapters/other-relational-databases) for more information,
-      or use one of the supported ORMs.
+      If you’re using a database adapter (Drizzle, Prisma, MongoDB, or a community adapter),
+      consider importing `betterAuth` from `better-auth/minimal` instead of `better-auth` to reduce bundle size.
+      See [Bundle Size Optimization](/docs/guides/optimizing-for-performance#bundle-size-optimization) for more information.
     </Callout>
   </Step>
 
@@ -378,8 +384,7 @@ description: Learn how to configure Better Auth in your project.
 
         app.all("/api/auth/*", toNodeHandler(auth));
 
-        // Mount express json middleware after Better Auth handler
-        // or only apply it to routes that don't interact with Better Auth
+        // Mount body-parsing middleware after the Better Auth handler.
         app.use(express.json());
 
         app.listen(port, () => {

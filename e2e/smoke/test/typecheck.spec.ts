@@ -5,9 +5,11 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
+const typecheckTimeoutMilliseconds = 60 * 1000;
 
 [
 	{ dir: "tsconfig-declaration", skip: false },
+	{ dir: "tsconfig-composite-client", skip: false },
 	{ dir: "tsconfig-exact-optional-property-types", skip: false },
 	{ dir: "tsconfig-verbatim-module-syntax-node10", skip: false },
 	{ dir: "tsconfig-isolated-module-bundler", skip: false },
@@ -17,7 +19,7 @@ const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 		const output = spawnSync("pnpm", ["run", "typecheck"], {
 			stdio: "inherit",
 			cwd,
-			timeout: 10 * 1000, // 10 seconds
+			timeout: typecheckTimeoutMilliseconds,
 		});
 		assert.equal(
 			output.error,
@@ -30,4 +32,28 @@ const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 			`Running typecheck in ${cwd} should exit with status 0`,
 		);
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11013
+ */
+test("typecheck cloudflare with skipLibCheck disabled", {
+	skip: "Blocked by #11013",
+}, () => {
+	const cwd = resolve(fixturesDir, "cloudflare");
+	const output = spawnSync("pnpm", ["run", "typecheck:skip-lib-check-false"], {
+		stdio: "inherit",
+		cwd,
+		timeout: typecheckTimeoutMilliseconds,
+	});
+	assert.equal(
+		output.error,
+		undefined,
+		`Running typecheck in ${cwd} should not throw an error`,
+	);
+	assert.equal(
+		output.status,
+		0,
+		`Running typecheck in ${cwd} should exit with status 0`,
+	);
 });

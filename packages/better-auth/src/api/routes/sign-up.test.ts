@@ -200,6 +200,131 @@ describe("sign-up with custom fields", async () => {
 	});
 });
 
+describe("validateUserInfo sign-up", async () => {
+	it("should allow email/password sign-up when validateUserInfo returns void", async () => {
+		let capturedSourceType: string | undefined;
+		let capturedEmail: string | undefined;
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.action).toBe("create-user");
+						capturedSourceType = source.method;
+						capturedEmail = user.email as string;
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "allowed@test.com",
+				password: "password",
+				name: "Allowed User",
+			},
+		});
+
+		expect(res.user.email).toBe("allowed@test.com");
+		expect(capturedSourceType).toBe("email-password");
+		expect(capturedEmail).toBe("allowed@test.com");
+	});
+
+	it("should reject email/password sign-up when validateUserInfo returns error", async () => {
+		const { auth, db } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.method).toBe("email-password");
+						if ((user.email as string).endsWith("@blocked.com")) {
+							return {
+								error: "email_not_allowed",
+								errorDescription: "Only company emails are allowed",
+							};
+						}
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "new@blocked.com",
+					password: "password",
+					name: "Blocked User",
+				},
+			}),
+		).rejects.toMatchObject({
+			statusCode: 403,
+			body: {
+				code: "email_not_allowed",
+				message: "Only company emails are allowed",
+			},
+		});
+
+		const users = await db.findMany({ model: "user" });
+		expect(
+			users.find(
+				(user) => (user as { email?: string }).email === "new@blocked.com",
+			),
+		).toBeUndefined();
+	});
+
+	// A blocking policy must not become an account-existence oracle. When the
+	// generic-duplicate response is enabled, a rejected new email has to return
+	// the same opaque success as an existing email rather than a 403.
+	it("hides gate rejections behind the generic-duplicate response", async () => {
+		const { auth, db } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+				},
+				user: {
+					validateUserInfo({ user }) {
+						if ((user.email as string).endsWith("@blocked.com")) {
+							return { error: "email_not_allowed" };
+						}
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "ghost@blocked.com",
+				password: "password",
+				name: "Ghost User",
+			},
+		});
+
+		expect(res.token).toBeNull();
+		expect(res.user.email).toBe("ghost@blocked.com");
+
+		const users = await db.findMany({ model: "user" });
+		expect(
+			users.find(
+				(user) => (user as { email?: string }).email === "ghost@blocked.com",
+			),
+		).toBeUndefined();
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/7972
  */
@@ -755,6 +880,68 @@ describe("sign-up enumeration protection — indistinguishable response", async 
 			disableTestUser: true,
 		},
 	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9346
+	 */
+	it("should have identical image key presence for real and synthetic user when image is omitted", async () => {
+		const body = {
+			email: "image-enum-test@test.com",
+			password: "password123",
+			name: "Image Enum Test",
+		};
+
+		const first = await auth.api.signUpEmail({ body });
+		const second = await auth.api.signUpEmail({ body });
+
+		expect("image" in first.user).toBe("image" in second.user);
+		expect(first.user.image).toBe(second.user.image);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9346
+	 */
+	it("should have identical image key presence in raw JSON response when image is omitted", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					autoSignIn: false,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			name: "A",
+			email: "image-raw-test@example.com",
+			password: "correct horse battery staple",
+		};
+
+		const firstResponse = await auth.handler(
+			new Request("http://localhost/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		const first = await firstResponse.json();
+
+		const secondResponse = await auth.handler(
+			new Request("http://localhost/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		const second = await secondResponse.json();
+
+		expect("image" in first.user).toBe("image" in second.user);
+		expect(first.user.image).toBe(second.user.image);
+	});
 
 	it("should return same keys in same order for real and synthetic user", async () => {
 		const first = await auth.api.signUpEmail({

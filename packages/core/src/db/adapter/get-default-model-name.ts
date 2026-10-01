@@ -20,26 +20,35 @@ export const initGetDefaultModelName = ({
 	 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
 	 */
 	const getDefaultModelName = (model: string) => {
+		// Resolve a model string (either a schema key or a user-defined
+		// `modelName`) back to its canonical schema key.
+		//
+		// An exact schema-key match must win over a `modelName` match.
+		// Better-auth internals (and `references.model`, see get-tables.ts)
+		// always pass canonical schema keys, so when a user remaps a
+		// built-in table onto another table's schema key (e.g.
+		// `user.modelName = "account"`), preferring the modelName alias
+		// would silently reroute every internal "account" query to the
+		// user table. The modelName lookup is only a fallback for
+		// externally supplied physical table names.
+		// @see https://github.com/better-auth/better-auth/issues/8111
+		// @see https://github.com/better-auth/better-auth/issues/10136
+		const resolve = (candidate: string): string | undefined => {
+			if (schema[candidate]) return candidate;
+			return Object.entries(schema).find(
+				([_, f]) => f.modelName === candidate,
+			)?.[0];
+		};
+
 		// It's possible this `model` could had applied `usePlural`.
 		// Thus we'll try the search but without the trailing `s`.
 		if (usePlural && model.charAt(model.length - 1) === "s") {
 			const pluralessModel = model.slice(0, -1);
-			let m = schema[pluralessModel] ? pluralessModel : undefined;
-			if (!m) {
-				m = Object.entries(schema).find(
-					([_, f]) => f.modelName === pluralessModel,
-				)?.[0];
-			}
-
-			if (m) {
-				return m;
-			}
+			const m = resolve(pluralessModel);
+			if (m) return m;
 		}
 
-		let m = schema[model] ? model : undefined;
-		if (!m) {
-			m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
-		}
+		const m = resolve(model);
 
 		if (!m) {
 			throw new BetterAuthError(`Model "${model}" not found in schema`);

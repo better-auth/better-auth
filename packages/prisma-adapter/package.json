@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/prisma-adapter",
-  "version": "1.6.11",
+  "version": "1.7.7",
   "description": "Prisma adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -27,7 +27,8 @@
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest"
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "files": [
     "dist"
@@ -44,7 +45,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
-    "@better-auth/utils": "catalog:",
+    "@better-auth/utils": "catalog:peer",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },

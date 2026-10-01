@@ -28,6 +28,9 @@ const { execute } = await testAdapter({
 	},
 	tests: [
 		normalTestSuite(),
+		// The conformance wrapper re-resolves the adapter on every operation, so it
+		// cannot observe an in-memory transaction's isolation: rollback and commit
+		// semantics for this adapter are covered directly in memory-adapter.test.ts.
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),

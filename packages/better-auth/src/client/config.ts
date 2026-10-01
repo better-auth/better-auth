@@ -8,7 +8,8 @@ import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
-import { getSessionAtom } from "./session-atom";
+import type { SessionData } from "./session-atom";
+import { getSessionAtom, hydrateSessionAtom } from "./session-atom";
 
 const resolvePublicAuthUrl = (basePath?: string) => {
 	if (typeof process === "undefined") return undefined;
@@ -37,6 +38,20 @@ const resolvePublicAuthUrl = (basePath?: string) => {
 	}
 	return undefined;
 };
+
+export const matchesSessionSignal = (path: string) =>
+	path === "/sign-out" ||
+	path === "/update-user" ||
+	path === "/update-session" ||
+	path === "/sign-up/email" ||
+	path === "/sign-in/email" ||
+	path === "/delete-user" ||
+	path === "/verify-email" ||
+	path === "/revoke-sessions" ||
+	path === "/revoke-session" ||
+	path === "/revoke-other-sessions" ||
+	path === "/change-email" ||
+	path === "/change-password";
 
 export const getClientConfig = (
 	options?: BetterAuthClientOptions | undefined,
@@ -94,6 +109,14 @@ export const getClientConfig = (
 		$fetch,
 		options,
 	);
+
+	let hasHydrated = false;
+	const hydrateSession = (sessionData: SessionData | null) => {
+		if (hasHydrated || sessionData === null) return;
+		hasHydrated = true;
+		hydrateSessionAtom(session, sessionData);
+	};
+
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	const pluginsAtoms = {
@@ -109,23 +132,7 @@ export const getClientConfig = (
 	const atomListeners: ClientAtomListener[] = [
 		{
 			signal: "$sessionSignal",
-			matcher(path) {
-				const matchesCommonPaths =
-					path === "/sign-out" ||
-					path === "/update-user" ||
-					path === "/update-session" ||
-					path === "/sign-up/email" ||
-					path === "/sign-in/email" ||
-					path === "/delete-user" ||
-					path === "/verify-email" ||
-					path === "/revoke-sessions" ||
-					path === "/revoke-session" ||
-					path === "/revoke-other-sessions" ||
-					path === "/change-email" ||
-					path === "/change-password";
-
-				return matchesCommonPaths;
-			},
+			matcher: matchesSessionSignal,
 			callback(path) {
 				if (path === "/sign-out") {
 					broadcastSessionUpdate("signout");
@@ -181,6 +188,8 @@ export const getClientConfig = (
 		pluginsAtoms,
 		pluginPathMethods,
 		atomListeners,
+		hydrateSession,
+		$sessionSignal,
 		$fetch,
 		$store,
 	};

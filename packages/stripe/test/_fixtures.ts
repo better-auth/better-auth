@@ -17,6 +17,19 @@ export const TEST_LOOKUP_KEYS = {
 
 export type StripeMock = ReturnType<typeof createStripeMock>;
 
+/**
+ * Mimic the Stripe SDK's auto-paginating list return for `for await ... of`.
+ * The real `subscriptions.list(...)` yields items across pages, so tests that
+ * iterate it need an async-iterable, not a resolved `{ data }` object.
+ */
+export function asyncList<T>(items: T[]): AsyncIterable<T> {
+	return {
+		async *[Symbol.asyncIterator]() {
+			yield* items;
+		},
+	};
+}
+
 export function createStripeMock(
 	overrides: {
 		customerId?: string;
@@ -58,6 +71,7 @@ export function createStripeMock(
 					url: "https://checkout.stripe.com/mock",
 					id: checkoutSessionId,
 				}),
+				retrieve: vi.fn(),
 			},
 		},
 		billingPortal: {

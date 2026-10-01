@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/electron",
-  "version": "1.6.11",
+  "version": "1.7.7",
   "description": "Better Auth integration for Electron applications.",
   "type": "module",
   "license": "MIT",
@@ -82,19 +82,19 @@
     }
   },
   "dependencies": {
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.6.2",
-    "electron": "^41.2.2",
+    "better-sqlite3": "^12.11.1",
+    "electron": "^43.1.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
-    "@better-auth/utils": "catalog:",
+    "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
     "better-call": "catalog:",

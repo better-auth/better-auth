@@ -51,9 +51,10 @@ provider was used to look up a verification record in the database, but no match
    running their own in-memory SQLite will not share verification records. The instance that created the
    record may not be the one that receives the callback.
 
-5. **Secret rotation with hashed identifiers.** If `verification.storeIdentifier` is `"hashed"`, the
-   identifier is hashed using the server secret. Changing `BETTER_AUTH_SECRET` between the start and
-   callback of the flow means the hash on lookup won't match the hash at rest.
+5. **Identifier storage settings changed mid-flow.** Changing `verification.storeIdentifier` or a
+   custom identifier hasher between creation and callback can make the stored record unreachable.
+   The built-in `"hashed"` strategy uses SHA-256 without a secret, so changing `BETTER_AUTH_SECRET`
+   does not change the identifier hash.
 
 6. **The OAuth provider altered the state parameter.** Some providers URL-encode, truncate, or otherwise
    modify the `state` query parameter during the redirect, causing a mismatch on lookup.
@@ -66,8 +67,7 @@ provider was used to look up a verification record in the database, but no match
 * Ensure your database (or Redis) is **shared across all instances** of your application.
 * If using `secondaryStorage`, either set `verification.storeInDatabase: true` as a fallback, or ensure
   your storage layer is reliable and the TTL is sufficient.
-* Do not rotate `BETTER_AUTH_SECRET` during active OAuth flows, or run both old and new secrets during
-  a transition window.
+* Keep identifier storage settings and custom hashers consistent across instances and active flows.
 * If users consistently time out, consider switching to the `"cookie"` strategy which does not depend
   on database lookups.
 
@@ -142,6 +142,7 @@ CSRF protection. This error means the cookie is missing or its value does not ma
 * Cross-origin POST callbacks (common with SAML IdPs) do not send `SameSite=Lax` cookies.
 * Preview vs. production domain mismatch.
 * The user opened multiple sign-in tabs - each overwrites the state cookie, so only the last one is valid.
+* **OAuth Proxy with mismatched secrets:** When using the [OAuth Proxy plugin](/docs/plugins/oauth-proxy) for development or preview sign-ins, different `BETTER_AUTH_SECRET` values on the production callback server and the development or preview deployment require a shared proxy `secret`. Without it, the proxy's before hook fails to decrypt the state package, causing the regular callback handler to run and fail. Share the proxy secret only with code and environments trusted to authenticate users in every participating deployment, including production.
 
 ### How to fix
 
@@ -189,19 +190,20 @@ verification record could not be written to the database.
 The table below ranks how frequently each root cause is seen in production, which error code it
 triggers, and what to do about it.
 
-| Likelihood    | Root cause                                                            | Error code                                                      | Fix                                                                                   |
-| ------------- | --------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Very high** | Cookie blocked or missing (Safari ITP, cross-domain, preview domains) | `state_security_mismatch` or `state_mismatch` (cookie strategy) | Use a stable custom domain; verify `SameSite` / `Secure` attributes                   |
-| **High**      | Callback URL replayed (refresh, back button, redirect loop)           | `state_mismatch` (DB)                                           | Ensure your error/redirect page does not re-trigger the callback                      |
-| **High**      | User took too long (>10 min) on the provider page                     | `state_mismatch` (DB) or request expired                        | Inform users to retry; consider switching to cookie strategy                          |
-| **High**      | Multiple tabs / concurrent sign-in attempts                           | `state_security_mismatch`                                       | Only the last-opened tab's cookie is valid; earlier tabs will fail                    |
-| **Medium**    | Secondary storage (Redis) key evicted without DB fallback             | `state_mismatch` (DB)                                           | Set `verification.storeInDatabase: true` or ensure Redis persistence                  |
-| **Medium**    | Serverless / multi-instance without shared database                   | `state_mismatch` (DB)                                           | Use a shared database or external storage accessible by all instances                 |
-| **Medium**    | Signed cookie expired (5 min) while DB record is still valid (10 min) | `state_security_mismatch`                                       | The cookie has a shorter TTL than the DB record; users between 5–10 min will hit this |
-| **Low**       | Secret rotation mid-flow                                              | `state_invalid` (cookie) or `state_mismatch` (DB + hashed)      | Rotate secrets during low-traffic windows                                             |
-| **Low**       | OAuth provider altered the state parameter                            | `state_mismatch` (DB)                                           | Verify the provider preserves `state` exactly; check for URL encoding issues          |
-| **Low**       | Missing verification table / migration not run                        | `state_generation_error`                                        | Run `npx auth migrate`                                                    |
-| **Very low**  | Clock skew between server instances                                   | request expired                                                 | Enable NTP on all servers                                                             |
+| Likelihood    | Root cause                                                            | Error code                                                       | Fix                                                                                                                       |
+| ------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Very high** | Cookie blocked or missing (Safari ITP, cross-domain, preview domains) | `state_security_mismatch` or `state_mismatch` (cookie strategy)  | Use a stable custom domain; verify `SameSite` / `Secure` attributes                                                       |
+| **Very high** | OAuth Proxy: different secrets on production vs preview               | `state_security_mismatch` or `state_mismatch`                    | Configure a shared proxy `secret` only across [trusted participating deployments](/docs/plugins/oauth-proxy#installation) |
+| **High**      | Callback URL replayed (refresh, back button, redirect loop)           | `state_mismatch` (DB)                                            | Ensure your error/redirect page does not re-trigger the callback                                                          |
+| **High**      | User took too long (>10 min) on the provider page                     | `state_mismatch` (DB) or request expired                         | Inform users to retry; consider switching to cookie strategy                                                              |
+| **High**      | Multiple tabs / concurrent sign-in attempts                           | `state_security_mismatch`                                        | Only the last-opened tab's cookie is valid; earlier tabs will fail                                                        |
+| **Medium**    | Secondary storage (Redis) key evicted without DB fallback             | `state_mismatch` (DB)                                            | Set `verification.storeInDatabase: true` or ensure Redis persistence                                                      |
+| **Medium**    | Serverless / multi-instance without shared database                   | `state_mismatch` (DB)                                            | Use a shared database or external storage accessible by all instances                                                     |
+| **Medium**    | Signed cookie expired (5 min) while DB record is still valid (10 min) | `state_security_mismatch`                                        | The cookie has a shorter TTL than the DB record; users between 5–10 min will hit this                                     |
+| **Low**       | Cookie signing or encryption secret changed mid-flow                  | `state_invalid` (cookie) or `state_security_mismatch` (database) | Keep cookie keys consistent during active flows; restart interrupted sign-ins                                             |
+| **Low**       | OAuth provider altered the state parameter                            | `state_mismatch` (DB)                                            | Verify the provider preserves `state` exactly; check for URL encoding issues                                              |
+| **Low**       | Missing verification table / migration not run                        | `state_generation_error`                                         | Run `npx auth migrate`                                                                                                    |
+| **Very low**  | Clock skew between server instances                                   | request expired                                                  | Enable NTP on all servers                                                                                                 |
 
 ***
 
@@ -212,8 +214,11 @@ triggers, and what to do about it.
 2. **Open DevTools → Application → Cookies.** Confirm the state cookie (`better-auth.state` or
    `better-auth.oauth_state`) is set before the redirect and still present when the callback arrives.
 3. **Inspect the callback URL.** Confirm the `state` query parameter is present and unmodified.
-4. **Check your server logs.** The `details` object in the error includes the `state` value - you can
-   cross-reference this with your `verification` table to see if the record exists, expired, or was
-   already deleted.
+4. **Check your server logs.** The `details` object in the error includes the `state` value. For
+   database-backed state, the verification identifier is `auth-state:${state}` before applying
+   [`verification.storeIdentifier`](/docs/reference/options#verification). Look up the resulting
+   identifier in your configured verification storage to see whether the record exists, expired, or
+   was already deleted. The built-in `"hashed"` strategy stores the SHA-256 digest of the full prefixed
+   identifier as base64url without padding.
 5. **Verify your deployment.** Ensure all instances share the same database and secret, and that your
    domain and cookie configuration are consistent.

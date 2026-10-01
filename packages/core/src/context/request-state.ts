@@ -6,11 +6,13 @@ export type RequestStateWeakMap = WeakMap<object, any>;
 
 const ensureAsyncStorage = async () => {
 	const betterAuthGlobal = __getBetterAuthGlobal();
-	if (!betterAuthGlobal.context.requestStateAsyncStorage) {
-		const AsyncLocalStorage = await getAsyncLocalStorage();
-		betterAuthGlobal.context.requestStateAsyncStorage =
-			new AsyncLocalStorage<RequestStateWeakMap>();
+	const existing = betterAuthGlobal.context.requestStateAsyncStorage;
+	if (existing) {
+		return existing as AsyncLocalStorage<RequestStateWeakMap>;
 	}
+	const AsyncLocalStorage = await getAsyncLocalStorage();
+	betterAuthGlobal.context.requestStateAsyncStorage ??=
+		new AsyncLocalStorage<RequestStateWeakMap>();
 	return betterAuthGlobal.context
 		.requestStateAsyncStorage as AsyncLocalStorage<RequestStateWeakMap>;
 };

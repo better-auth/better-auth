@@ -6,7 +6,7 @@ import {
 	getOAuth2Tokens,
 	refreshAccessToken,
 } from "../oauth2";
-import { createAuthorizationCodeRequest } from "../oauth2/validate-authorization-code";
+import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
 export interface GithubProfile {
 	login: string;
@@ -63,12 +63,14 @@ export const github = (options: GithubOptions) => {
 	return {
 		id: "github",
 		name: "GitHub",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,
 			loginHint,
 			codeVerifier,
 			redirectURI,
+			additionalParams,
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -85,10 +87,11 @@ export const github = (options: GithubOptions) => {
 				redirectURI,
 				loginHint,
 				prompt: options.prompt,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
-			const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
 				code,
 				codeVerifier,
 				redirectURI,
@@ -169,7 +172,6 @@ export const github = (options: GithubOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id,
 					name: profile.name || profile.login || "",
 					email: profile.email,
 					image: profile.avatar_url,

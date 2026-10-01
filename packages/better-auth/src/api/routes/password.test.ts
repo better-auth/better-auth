@@ -161,6 +161,10 @@ describe("forgot password", async () => {
 			],
 		});
 		expect(updatedAccounts.length).toBe(1);
+		expect(updatedAccounts[0]).toMatchObject({
+			providerId: "credential",
+			accountId: userId,
+		});
 		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
 
 		// Verify updatedAt was refreshed
@@ -206,7 +210,63 @@ describe("forgot password", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	// A single reset token is single-use: two requests racing the same valid
+	// token must yield exactly one password change. Otherwise a leaked token
+	// could still be replayed during the window between validating and deleting
+	// the verification row, letting an attacker overwrite the chosen password.
+	it("should reject a concurrent reset using the same token", async () => {
+		const email = "race-reset@email.com";
+		await client.signUp.email({
+			name: "Race Reset User",
+			email,
+			password: "originalPassword123",
+		});
+
+		await client.requestPasswordReset({
+			email,
+			redirectTo: "http://localhost:3000",
+		});
+		const raceToken = token;
+
+		const attackerPassword = "attacker-password-123";
+		const legitimatePassword = "legitimate-password-123";
+		const [first, second] = await Promise.all([
+			client.resetPassword(
+				{ newPassword: legitimatePassword },
+				{ query: { token: raceToken } },
+			),
+			client.resetPassword(
+				{ newPassword: attackerPassword },
+				{ query: { token: raceToken } },
+			),
+		]);
+
+		const results = [first, second];
+		const succeeded = results.filter((res) => res.data?.status === true);
+		const rejected = results.filter((res) => res.error?.status === 400);
+		expect(succeeded).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+
+		const winningPassword =
+			first.data?.status === true ? legitimatePassword : attackerPassword;
+		const losingPassword =
+			first.data?.status === true ? attackerPassword : legitimatePassword;
+
+		const winSignIn = await client.signIn.email({
+			email,
+			password: winningPassword,
+		});
+		expect(winSignIn.data?.user).toBeDefined();
+
+		const loseSignIn = await client.signIn.email({
+			email,
+			password: losingPassword,
+		});
+		expect(loseSignIn.error?.status).toBe(401);
+	});
+
 	it("should expire", async () => {
+		const onPasswordReset = vi.fn();
 		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
@@ -215,6 +275,7 @@ describe("forgot password", async () => {
 					await mockSendEmail();
 				},
 				resetPasswordTokenExpiresIn: 10,
+				onPasswordReset,
 			},
 		});
 		const { runWithUser } = await signInWithTestUser();
@@ -244,6 +305,7 @@ describe("forgot password", async () => {
 			token,
 		});
 		expect(res.data?.status).toBe(true);
+		expect(onPasswordReset).toHaveBeenCalledOnce();
 		await runWithUser(async () => {
 			await client.requestPasswordReset({
 				email: testUser.email,
@@ -256,7 +318,7 @@ describe("forgot password", async () => {
 			newPassword: "new-password",
 			token,
 		});
-		expect(mockOnPasswordReset).toHaveBeenCalled();
+		expect(onPasswordReset).toHaveBeenCalledOnce();
 		expect(res2.error?.status).toBe(400);
 	});
 
@@ -499,5 +561,43 @@ describe("verify password", async () => {
 				expect(error.status).toBe("UNAUTHORIZED");
 			}
 		}
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("verify password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth, signInWithTestUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		const { headers } = await signInWithTestUser();
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.verifyPassword({
+				body: {
+					password: "x".repeat(129),
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
 	});
 });

@@ -2,12 +2,10 @@
  * @see {@link https://github.com/dylanblokhuis/kysely-bun-sqlite} - Fork of the original kysely-bun-sqlite package by @dylanblokhuis
  */
 
-import type { Database } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
-	DatabaseMetadata,
-	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
 	DialectAdapterBase,
@@ -15,16 +13,9 @@ import type {
 	Kysely,
 	QueryCompiler,
 	QueryResult,
-	SchemaMetadata,
-	TableMetadata,
 } from "kysely";
-import {
-	CompiledQuery,
-	DEFAULT_MIGRATION_LOCK_TABLE,
-	DEFAULT_MIGRATION_TABLE,
-	DefaultQueryCompiler,
-	sql,
-} from "kysely";
+import { CompiledQuery, DefaultQueryCompiler } from "kysely";
+import { createSqliteIntrospector } from "./sqlite-introspector";
 
 class BunSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
@@ -130,10 +121,28 @@ class BunSqliteConnection implements DatabaseConnection {
 
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
-		const stmt = this.#db.prepare(sql);
+		const stmt = this.#db.prepare<O, SQLQueryBindings[]>(sql);
+		const params = parameters as SQLQueryBindings[];
+
+		// Row-producing statements (SELECT, RETURNING) expose column names, so
+		// they must read through `all()`. Plain mutations expose none; running
+		// them through `all()` would discard Bun's change metadata, leaving
+		// Kysely to report zero affected rows even when writes occurred.
+		if (stmt.columnNames.length > 0) {
+			return Promise.resolve({
+				rows: stmt.all(...params),
+			});
+		}
+
+		const { changes, lastInsertRowid } = stmt.run(...params);
 
 		return Promise.resolve({
-			rows: stmt.all(parameters as any) as O[],
+			rows: [],
+			numAffectedRows: BigInt(changes),
+			insertId:
+				typeof lastInsertRowid === "bigint"
+					? lastInsertRowid
+					: BigInt(lastInsertRowid),
 		});
 	}
 
@@ -163,97 +172,6 @@ class ConnectionMutex {
 		this.#resolve = undefined;
 
 		resolve?.();
-	}
-}
-
-class BunSqliteIntrospector implements DatabaseIntrospector {
-	readonly #db: Kysely<unknown>;
-
-	constructor(db: Kysely<unknown>) {
-		this.#db = db;
-	}
-
-	async getSchemas(): Promise<SchemaMetadata[]> {
-		// Sqlite doesn't support schemas.
-		return [];
-	}
-
-	async getTables(
-		options: DatabaseMetadataOptions = { withInternalKyselyTables: false },
-	): Promise<TableMetadata[]> {
-		let query = this.#db
-			// @ts-expect-error
-			.selectFrom("sqlite_schema")
-			// @ts-expect-error
-			.where("type", "=", "table")
-			// @ts-expect-error
-			.where("name", "not like", "sqlite_%")
-			.select("name")
-			.$castTo<{ name: string }>();
-
-		if (!options.withInternalKyselyTables) {
-			query = query
-				// @ts-expect-error
-				.where("name", "!=", DEFAULT_MIGRATION_TABLE)
-				// @ts-expect-error
-				.where("name", "!=", DEFAULT_MIGRATION_LOCK_TABLE);
-		}
-
-		const tables = await query.execute();
-		return Promise.all(tables.map(({ name }) => this.#getTableMetadata(name)));
-	}
-
-	async getMetadata(
-		options?: DatabaseMetadataOptions | undefined,
-	): Promise<DatabaseMetadata> {
-		return {
-			tables: await this.getTables(options),
-		};
-	}
-
-	async #getTableMetadata(table: string): Promise<TableMetadata> {
-		const db = this.#db;
-
-		// Get the SQL that was used to create the table.
-		const createSql = await db
-			// @ts-expect-error
-			.selectFrom("sqlite_master")
-			// @ts-expect-error
-			.where("name", "=", table)
-			.select("sql")
-			.$castTo<{ sql: string | undefined }>()
-			.execute();
-
-		// Try to find the name of the column that has `autoincrement` 🤦
-		const autoIncrementCol = createSql[0]?.sql
-			?.split(/[\(\),]/)
-			?.find((it) => it.toLowerCase().includes("autoincrement"))
-			?.split(/\s+/)?.[0]
-			?.replace(/["`]/g, "");
-
-		const columns = await db
-			.selectFrom(
-				sql<{
-					name: string;
-					type: string;
-					notnull: 0 | 1;
-					dflt_value: any;
-				}>`pragma_table_info(${table})`.as("table_info"),
-			)
-			.select(["name", "type", "notnull", "dflt_value"])
-			.execute();
-
-		return {
-			name: table,
-			columns: columns.map((col) => ({
-				name: col.name,
-				dataType: col.type,
-				isNullable: !col.notnull,
-				isAutoIncrementing: col.name === autoIncrementCol,
-				hasDefaultValue: col.dflt_value != null,
-			})),
-			isView: false,
-		};
 	}
 }
 
@@ -295,6 +213,6 @@ export class BunSqliteDialect implements Dialect {
 	}
 
 	createIntrospector(db: Kysely<any>): DatabaseIntrospector {
-		return new BunSqliteIntrospector(db);
+		return createSqliteIntrospector(db);
 	}
 }

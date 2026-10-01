@@ -1,4 +1,5 @@
 ---
+icon: pluginsLastLoginMethod
 title: Last Login Method
 description: Track and display the last authentication method used by users
 ---
@@ -77,7 +78,7 @@ export function SignInPage() {
     return (
         <div className="space-y-4">
             <h1>Sign In</h1>
-            
+
             {/* Email sign in */}
             <div className="relative">
                 <Button 
@@ -255,7 +256,15 @@ export const auth = betterAuth({
                 return null
             },
             
-            // Schema customization (when storeInDatabase is true)
+            // GDPR compliance hook
+	            beforeStoreCookie: async (ctx, lastUsedLoginMethod) => {
+	                // Check if user has given consent for non-essential cookies
+	                // Return false to prevent cookie storage
+	                const hasConsent = await checkUserCookieConsent(ctx)
+	                return hasConsent
+	            },
+
+	            // Schema customization (when storeInDatabase is true)
             schema: {
                 user: {
                     lastLoginMethod: "custom_field_name"
@@ -282,12 +291,46 @@ export const auth = betterAuth({
 * Whether to store the last login method in the database
 * Default: `false`
 * When enabled, adds a `lastLoginMethod` field to the user table
+* To store the method only in the database (no cookie), combine with `beforeStoreCookie: () => false`:
+
+```ts title="auth.ts"
+lastLoginMethod({
+    storeInDatabase: true,
+    beforeStoreCookie: () => false, // never set the non-essential cookie
+})
+```
 
 **customResolveMethod**: `(ctx: GenericEndpointContext) => string | null`
 
 * Custom function to determine the login method from the request context
 * Return `null` to use the default resolution logic
 * Useful for custom OAuth providers or authentication flows
+
+**beforeStoreCookie**: `(ctx: GenericEndpointContext, lastUsedLoginMethod: string) => Promise<boolean> | boolean`
+
+* Hook function that runs before storing the last login method cookie
+* Return `true` to allow the cookie to be set, `false` to prevent it
+* Useful for GDPR compliance or other regulations where cookie storage requires user consent
+* If the function throws an error, the cookie will not be set (error is logged but doesn't break authentication)
+* **Example**: Check user consent before storing the cookie
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        lastLoginMethod({
+            beforeStoreCookie: async (ctx, lastUsedLoginMethod) => {
+                // Check if user has given consent for non-essential cookies
+                // This is important for GDPR compliance
+                const hasConsent = await checkUserCookieConsent(ctx)
+                return hasConsent
+            }
+        })
+    ]
+})
+```
 
 **schema**: `object`
 
@@ -303,7 +346,8 @@ import { lastLoginMethodClient } from "better-auth/client/plugins"
 export const authClient = createAuthClient({
     plugins: [
         lastLoginMethodClient({
-            cookieName: "better-auth.last_used_login_method" // Default: "better-auth.last_used_login_method"
+            cookieName: "better-auth.last_used_login_method", // Default: "better-auth.last_used_login_method"
+            domain: ".example.com" // Required for cross-subdomain cookie clearing
         })
     ]
 })
@@ -315,19 +359,24 @@ export const authClient = createAuthClient({
 * Must match the server-side `cookieName` configuration
 * Default: `"better-auth.last_used_login_method"`
 
+**domain**: `string`
+
+* The domain to use when clearing the cookie
+* Required when using `crossSubDomainCookies` so the client can properly expire the cookie set by the server
+* Should match the `domain` value in your server's `crossSubDomainCookies` configuration
+
 ### Default Method Resolution
 
 By default, the plugin tracks these authentication methods:
 
 * **Email authentication**: `"email"`
 * **OAuth providers**: Provider ID (e.g., `"google"`, `"github"`, `"discord"`)
-* **OAuth2 callbacks**: Provider ID from URL path
+* **OAuth callbacks**: Provider ID from URL path
 * **Sign up methods**: Tracked the same as sign in methods
 
 The plugin automatically detects the method from these endpoints:
 
 * `/callback/:id` - OAuth callback with provider ID
-* `/oauth2/callback/:id` - OAuth2 callback with provider ID
 * `/sign-in/email` - Email sign in
 * `/sign-up/email` - Email sign up
 
@@ -339,6 +388,61 @@ The plugin automatically inherits cookie settings from Better Auth's centralized
 * **Cross-origin setups**: `api.company.com` → `app.different.com`
 
 When you enable `crossSubDomainCookies` or `crossOriginCookies` in your Better Auth config, the plugin will automatically use the same domain, secure, and sameSite settings as your session cookies, ensuring consistent behavior across your application.
+
+<Callout type="warn">
+  When using `crossSubDomainCookies`, you must pass the `domain` option to `lastLoginMethodClient()` so that `clearLastUsedLoginMethod()` can properly expire the cookie. Without it, browsers will silently ignore the clear request because the domain doesn't match.
+</Callout>
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { lastLoginMethodClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    plugins: [
+        lastLoginMethodClient({
+            domain: ".example.com" // Must match server crossSubDomainCookies domain // [!code highlight]
+        })
+    ]
+})
+```
+
+## GDPR Compliance
+
+The last login method cookie is considered a non-essential cookie under GDPR regulations.
+To comply with GDPR and similar privacy laws, you should only store this cookie if the user has given explicit consent.
+
+The `beforeStoreCookie` hook allows you to implement consent checks before storing the cookie:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { lastLoginMethod } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        lastLoginMethod({
+            beforeStoreCookie: async (ctx, lastUsedLoginMethod) => {
+                // Example 1: Check consent from session or database
+                const session = await getSessionFromCtx(ctx)
+                if (session?.user) {
+                    // custom function which hits your database to check if the user has given consent
+                    const userConsent = await checkUserConsent(session.user.id)
+                    return userConsent?.allowsNonEssentialCookies ?? false
+                }
+
+                // Example 2: Check consent from request headers (cookie banner)
+                // parseConsentCookie should return false/null/undefined when no consent is present
+                const consentCookie = ctx.request?.headers?.get("cookie")
+                const hasConsent = parseConsentCookie(consentCookie)
+                return !!hasConsent
+            }
+        })
+    ]
+})
+```
+
+<Callout type="warn">
+  When `beforeStoreCookie` returns `false` or throws an error, the cookie will not be set. Authentication will still succeed normally - only the cookie storage is prevented.
+</Callout>
 
 ## Advanced Examples
 

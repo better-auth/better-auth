@@ -1,4 +1,4 @@
-import { parseSetCookieHeader } from "better-auth/cookies";
+import { cookieNameRegex, parseSetCookieHeader } from "better-auth/cookies";
 
 interface StoredCookie {
 	value: string;
@@ -40,13 +40,13 @@ export function getCookie(cookie: string) {
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
 	} catch (_e) {}
-	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
-		if (value.expires && new Date(value.expires) < new Date()) {
-			return acc;
-		}
-		return `${acc}; ${key}=${value.value}`;
-	}, "");
-	return toSend;
+	const pairs: string[] = [];
+	for (const [key, value] of Object.entries(parsed)) {
+		if (value.expires && new Date(value.expires) < new Date()) continue;
+		if (!cookieNameRegex.test(key)) continue;
+		pairs.push(`${key}=${encodeURIComponent(value.value)}`);
+	}
+	return pairs.join("; ");
 }
 
 /**

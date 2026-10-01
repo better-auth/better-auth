@@ -46,8 +46,7 @@ function toBoolean(val: boolean | string | undefined) {
 	return val ? val !== "false" : false;
 }
 
-export const nodeENV =
-	(typeof process !== "undefined" && process.env && process.env.NODE_ENV) || "";
+export const nodeENV = env.NODE_ENV ?? "";
 
 /** Detect if `NODE_ENV` environment variable is `production` */
 export const isProduction = nodeENV === "production";

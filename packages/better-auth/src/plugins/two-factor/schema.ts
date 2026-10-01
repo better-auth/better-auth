@@ -42,6 +42,19 @@ export const schema = {
 				defaultValue: true,
 				input: false,
 			},
+			failedVerificationCount: {
+				type: "number",
+				required: false,
+				defaultValue: 0,
+				input: false,
+				returned: false,
+			},
+			lockedUntil: {
+				type: "date",
+				required: false,
+				input: false,
+				returned: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;

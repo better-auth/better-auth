@@ -3,6 +3,7 @@ import type {
 	ClientAtomListener,
 	ClientFetchOption,
 } from "@better-auth/core";
+import { toKebabCase } from "@better-auth/core/utils/string";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
@@ -67,13 +68,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 				return createProxy(fullPath);
 			},
 			apply: async (_, __, args) => {
-				const routePath =
-					"/" +
-					path
-						.map((segment) =>
-							segment.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
-						)
-						.join("/");
+				const routePath = "/" + path.map(toKebabCase).join("/");
 				const arg = (args[0] || {}) as ProxyRequest;
 				const fetchOptions = (args[1] || {}) as ClientFetchOption;
 				const { query, fetchOptions: argFetchOptions, ...body } = arg;

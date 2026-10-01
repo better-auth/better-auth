@@ -44,8 +44,10 @@ export const schemaRefJoinTestSuite = createTestSuite(
 	{
 		defaultBetterAuthOptions: {
 			...DEFAULT_BETTER_AUTH_OPTIONS,
-			experimental: {
-				joins: true,
+			advanced: {
+				database: {
+					joins: true,
+				},
 			},
 		},
 		alwaysMigrate: true,

@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import type { twoFactor as twoFa } from ".";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
@@ -68,7 +69,11 @@ export const twoFactorClient = (
 							}
 
 							// fallback for when `onTwoFactorRedirect` is not used and only `twoFactorPage` is provided
-							if (options?.twoFactorPage && typeof window !== "undefined") {
+							if (
+								options?.twoFactorPage &&
+								typeof window !== "undefined" &&
+								isSafeUrlScheme(options.twoFactorPage)
+							) {
 								window.location.href = options.twoFactorPage;
 							}
 						}

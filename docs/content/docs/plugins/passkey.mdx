@@ -1,4 +1,5 @@
 ---
+icon: pluginsPasskey
 title: Passkey
 description: Passkey
 ---
@@ -120,8 +121,11 @@ When using passkey-first flows (`registration.requireSession: false`), pass the 
 await authClient.passkey.addPasskey({
   name: "Primary passkey",
   context: "signed-registration-token",
+  createSession: true,
 })
 ```
+
+When `createSession` is `true`, successful verification sets the session cookie and returns the `session` and `user` with the registered passkey. If you want to avoid creating a user before the WebAuthn ceremony succeeds, create or load the user in `registration.afterVerification` and return its `userId`.
 
 ## Usage
 
@@ -152,6 +156,11 @@ To add or register a passkey make sure a user is authenticated and then call the
        * Optional context for passkey-first registration flows. Forwarded to `registration.resolveUser`.
        */
       context?: string
+      /**
+       * Create a session after successfully registering the passkey. The
+       * response includes the session and user when enabled.
+       */
+      createSession?: boolean
   }
   ```
 </APIMethod>
@@ -233,6 +242,53 @@ You can list all of the passkeys for the authenticated user by calling `passkey.
   }
   ```
 </APIMethod>
+
+### Naming passkeys by authenticator
+
+When a user registers a passkey without naming it, the stored `name` is left empty. You can show a friendly default in your UI instead, derived from the authenticator that created the credential.
+
+Every passkey row carries an `aaguid`, the identifier of the authenticator *model* (for example Google Password Manager or 1Password). Better Auth stores it at registration and returns it from `listPasskeys`, so you resolve a label at the point you render passkeys. Because resolution happens at read time, an updated provider list applies to passkeys that already exist.
+
+The plugin ships a small, best-effort lookup for the most common authenticators:
+
+```ts title="passkey-list.tsx"
+import { getAuthenticatorName } from "@better-auth/passkey";
+
+const passkeys = await authClient.passkey.listUserPasskeys();
+
+for (const passkey of passkeys.data ?? []) {
+    const label = passkey.name || getAuthenticatorName(passkey.aaguid) || "Passkey";
+}
+```
+
+The built-in list is intentionally small and not authoritative. Many authenticators are missing, and privacy-preserving platforms report an all-zero AAGUID that resolves to nothing (Apple devices do this under the default `attestation: "none"` flow). Extend it with the exported `commonAuthenticatorNames` map, or resolve against the community-maintained source for full coverage:
+
+* [passkeydeveloper/passkey-authenticator-aaguids](https://github.com/passkeydeveloper/passkey-authenticator-aaguids)
+
+```ts title="passkey-list.tsx"
+import { commonAuthenticatorNames } from "@better-auth/passkey";
+
+const names = { ...commonAuthenticatorNames, "your-aaguid": "Your Provider" };
+```
+
+To set a default label on the server at registration time, return a `name` from `registration.afterVerification`. The AAGUID is available on `verification.registrationInfo.aaguid`, and a client-supplied name always takes precedence:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { passkey, getAuthenticatorName } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+    plugins: [
+        passkey({
+            registration: {
+                afterVerification: async ({ verification }) => ({
+                    name: getAuthenticatorName(verification.registrationInfo?.aaguid),
+                }),
+            },
+        }),
+    ],
+});
+```
 
 ### Deleting passkeys
 

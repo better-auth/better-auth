@@ -51,10 +51,6 @@ export async function createAuthServer(
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					jwt(),
 				]

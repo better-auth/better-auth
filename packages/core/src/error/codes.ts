@@ -1,3 +1,4 @@
+import type {} from "@better-auth/core";
 import { defineErrorCodes } from "../utils/error-codes";
 
 declare module "@better-auth/core" {

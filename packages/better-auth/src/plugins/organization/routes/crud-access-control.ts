@@ -1071,7 +1071,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? { permission: JSON.stringify(updateData.permission) }
 					: {}),
 			};
-			await ctx.context.adapter.update<OrganizationRole>({
+			// Scoped by organization + role: updateMany applies the multi-clause
+			// filter portably, where a multi-clause `update` does not across adapters.
+			await ctx.context.adapter.updateMany({
 				model: "organizationRole",
 				where: [
 					{

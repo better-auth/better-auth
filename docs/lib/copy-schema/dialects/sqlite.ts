@@ -3,7 +3,12 @@ import type {
 	Resolver,
 	ResolverHandlerContext,
 } from "../types";
-import { filterForeignKeys, getTypeFactory } from "../utils";
+import {
+	filterForeignKeys,
+	filterNonUniqueIndexes,
+	getIndexName,
+	getTypeFactory,
+} from "../utils";
 
 type CustomResolverContext = ResolverHandlerContext & {
 	getType: ReturnType<typeof getTypeFactory>;
@@ -38,6 +43,9 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	newLine += ",";
 	return newLine;
 };
+
+const formatIndex = (field: DBFieldAttribute, tableName: string) =>
+	`CREATE INDEX IF NOT EXISTS "${getIndexName(tableName, field)}" ON "${tableName}" ("${field.fieldName}");`;
 
 export const sqliteResolver = {
 	handler: (ctx) => {
@@ -80,6 +88,9 @@ export const sqliteResolver = {
 		}
 		if (ctx.mode === "create") {
 			lines.push(`);`);
+		}
+		for (const field of filterNonUniqueIndexes(ctx.schema)) {
+			lines.push(formatIndex(field, ctx.schema.modelName));
 		}
 		return lines.join("\n");
 	},
