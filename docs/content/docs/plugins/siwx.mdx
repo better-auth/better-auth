@@ -30,6 +30,7 @@ The Sign In With X (SIWX) plugin enables wallet-based authentication across mult
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
     import { siwx } from "@better-auth/siwx";
+    import { generateRandomString } from "better-auth/crypto";
 
     export const auth = betterAuth({
         plugins: [
@@ -39,13 +40,16 @@ The Sign In With X (SIWX) plugin enables wallet-based authentication across mult
                 anonymous: true, // optional, default is true
                 supportedChains: ["evm", "solana"], // optional, defaults to both
                 getNonce: async () => {
-                    // Implement your nonce generation logic here
-                    return "your-secure-random-nonce";
+                    // Return a cryptographically secure, single-use nonce
+                    return generateRandomString(32, "a-z", "A-Z", "0-9");
                 },
                 verifyMessage: async (args) => {
-                    // Implement chain-specific message verification
-                    // args includes: message, signature, address, chainType, chainId, signatureType, cacao
-                    return true; // return true if signature is valid
+                    // Implement chain-specific signature verification and return
+                    // true only for a valid signature. args includes: message,
+                    // signature, address, chainType, chainId, signatureType, cacao.
+                    // Fail closed until this is implemented so no one is signed in
+                    // without a verified signature.
+                    throw new Error("verifyMessage not implemented");
                 },
                 nameLookup: async (args) => {
                     // Optional: Implement name service lookup (ENS, SNS, etc.)
@@ -68,13 +72,13 @@ The Sign In With X (SIWX) plugin enables wallet-based authentication across mult
     <Tabs items={["migrate", "generate"]}>
       <Tab value="migrate">
         ```package-install
-        npx @better-auth/cli migrate
+        npx auth migrate
         ```
       </Tab>
 
       <Tab value="generate">
         ```package-install
-        npx @better-auth/cli generate
+        npx auth generate
         ```
       </Tab>
     </Tabs>
@@ -111,7 +115,7 @@ const { data, error } = await authClient.siwx.nonce({
 });
 
 // For Solana
-const { data, error } = await authClient.siwx.nonce({
+const { data: solanaData, error: solanaError } = await authClient.siwx.nonce({
   address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
   chainType: "solana",
   chainId: "mainnet-beta", // optional, defaults to "mainnet-beta"

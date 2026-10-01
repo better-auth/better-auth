@@ -9,7 +9,5 @@ export default defineConfig({
 		"better-call",
 		"@better-fetch/fetch",
 		"@noble/hashes",
-		"bs58",
-		"tweetnacl",
 	],
 });

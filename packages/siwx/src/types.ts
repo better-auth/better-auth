@@ -4,7 +4,9 @@ export type SignatureType =
 	| "evm:eip191"
 	| "evm:eip1271"
 	| "solana:ed25519"
-	| string;
+	// `string & {}` keeps the literal members visible to autocomplete while
+	// still allowing custom signature types
+	| (string & {});
 
 export interface CacaoHeader {
 	t: "caip122";

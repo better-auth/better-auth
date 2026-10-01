@@ -5,7 +5,9 @@ import { siwx } from "../src/index";
 
 describe("siwx", async (it) => {
 	const evmAddress = "0x000000000000000000000000000000000000dEaD";
-	const solanaAddress = "11111111111111111111111111111111";
+	// A real base58 mint address with mixed case so address-case handling is
+	// actually exercised (an all-numeric address passes case assertions trivially)
+	const solanaAddress = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 	const domain = "example.com";
 
 	it("should generate a valid nonce for EVM address", async () => {
@@ -1168,6 +1170,10 @@ describe("siwx", async (it) => {
 			chainId: "1",
 		});
 
+		// The CAIP-122 message must carry an absolute URI (ERC-4361 requires the
+		// URI field to be a full RFC 3986 URI, not a bare host)
+		expect(nonceRes.data!.message).toContain(`URI: https://${domain}`);
+
 		await client.siwx.verify({
 			message: nonceRes.data!.message,
 			signature: "valid_evm_signature",
@@ -1178,9 +1184,44 @@ describe("siwx", async (it) => {
 
 		expect(receivedCacao.h.t).toBe("caip122");
 		expect(receivedCacao.p.domain).toBe(domain);
-		expect(receivedCacao.p.iss).toBe(`eip155:1:${evmAddress}`);
+		// CACAO issuer must be a did:pkh DID per CAIP-122, not a bare CAIP-10 account
+		expect(receivedCacao.p.iss).toBe(`did:pkh:eip155:1:${evmAddress}`);
+		// Audience must be the absolute URI, while `domain` stays the bare authority
+		expect(receivedCacao.p.aud).toBe(`https://${domain}`);
 		expect(receivedCacao.p.nonce).toBe("A1b2C3d4E5f6G7h8J");
 		expect(receivedCacao.s.t).toBe("evm:eip191");
 		expect(receivedCacao.s.s).toBe("valid_evm_signature");
+	});
+
+	it("should reject a malformed Solana address with a 400", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwx({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage() {
+							return true;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siwxClient()],
+				},
+			},
+		);
+
+		// Contains characters outside the base58 alphabet (0, O, I, l)
+		const { data, error } = await client.siwx.nonce({
+			address: "0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl",
+			chainType: "solana",
+		});
+
+		expect(data).toBeNull();
+		expect(error?.status).toBe(400);
 	});
 });

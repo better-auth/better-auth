@@ -22,9 +22,12 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json"
   },
@@ -57,14 +60,15 @@
     }
   },
   "dependencies": {
-    "@better-auth/core": "workspace:*",
     "@noble/hashes": "^2.0.0",
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*"
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^"
   },
   "devDependencies": {
+    "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
     "tsdown": "catalog:",

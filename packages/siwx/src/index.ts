@@ -1,6 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -38,7 +37,6 @@ export interface SIWXPluginOptions {
 }
 
 const PROVIDER_ID = "siwx";
-const ACCOUNT_ISSUER = createLocalAccountIssuer(PROVIDER_ID);
 
 const DEFAULT_CHAIN_IDS: Record<ChainType, string> = {
 	evm: "1",
@@ -51,6 +49,10 @@ const DEFAULT_SIGNATURE_TYPES: Record<ChainType, SignatureType> = {
 };
 
 const EVM_ADDRESS_REGEX = /^0[xX][a-fA-F0-9]{40}$/;
+// Base58 (no 0, O, I, l) at the length a 32-byte Solana public key encodes to.
+// Validating here keeps a malformed address out of the nonce identifier, the
+// accountId, and the placeholder email before verification ever runs.
+const SOLANA_ADDRESS_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 function normalizeAddress(chainType: ChainType, address: string): string {
 	if (chainType === "evm") {
@@ -65,6 +67,13 @@ function normalizeAddress(chainType: ChainType, address: string): string {
 			});
 		}
 		return toChecksumAddress(address);
+	}
+	if (!SOLANA_ADDRESS_REGEX.test(address)) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid Solana address format",
+			status: 400,
+			code: "INVALID_SOLANA_ADDRESS",
+		});
 	}
 	return address;
 }
@@ -108,7 +117,7 @@ function buildSiwxMessage(args: {
 		"",
 		statement,
 		"",
-		`URI: ${domain}`,
+		`URI: https://${domain}`,
 		"Version: 1",
 		`Chain ID: ${chainId}`,
 		`Nonce: ${nonce}`,
@@ -280,9 +289,11 @@ export const siwx = (options: SIWXPluginOptions) => {
 						const cacao: Cacao = {
 							h: { t: "caip122" },
 							p: {
+								// `domain` is the bare RFC 4501 authority; `iss` is a
+								// did:pkh DID and `aud` an absolute URI, per CAIP-122
 								domain: options.domain,
-								iss: buildCAIP10(chainType, chainId, normalizedAddress),
-								aud: options.domain,
+								iss: `did:pkh:${buildCAIP10(chainType, chainId, normalizedAddress)}`,
+								aud: `https://${options.domain}`,
 								version: "1",
 								nonce,
 								iat: issuedAt,
@@ -325,7 +336,7 @@ export const siwx = (options: SIWXPluginOptions) => {
 						// Check if there's an account record for this exact chainType:chainId:address combination
 						const existingAccount =
 							await ctx.context.internalAdapter.findAccountByKey({
-								issuer: ACCOUNT_ISSUER,
+								providerId: PROVIDER_ID,
 								accountId,
 							});
 
@@ -392,7 +403,6 @@ export const siwx = (options: SIWXPluginOptions) => {
 							await ctx.context.internalAdapter.createAccount({
 								userId: user.id,
 								providerId: PROVIDER_ID,
-								issuer: ACCOUNT_ISSUER,
 								accountId,
 								createdAt: new Date(),
 								updatedAt: new Date(),
