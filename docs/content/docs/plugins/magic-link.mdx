@@ -55,7 +55,7 @@ Magic link or email link is a way to authenticate users without a password. When
 
 To sign in with a magic link, you need to call `signIn.magicLink` with the user's email address. The `sendMagicLink` function is called to send the magic link to the user's email.
 
-<APIMethod path="/sign-in/magic-link" method="POST" requireHeaders headersComment="Pass the current request headers. No active session is required — this endpoint starts the sign-in flow.">
+<APIMethod path="/sign-in/magic-link" method="POST" requireHeaders>
   ```ts
   type signInMagicLink = {
       /**
