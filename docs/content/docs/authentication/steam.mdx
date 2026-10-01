@@ -24,7 +24,7 @@ Steam sign-in uses [OpenID 2.0](https://partner.steamgames.com/doc/features/auth
     })
     ```
 
-    The `apiKey` is optional. Set `STEAM_API_KEY` in your server environment with a [Steam Web API key](https://steamcommunity.com/dev/apikey) to fetch the player's display name and avatar. Keep it on the server. Without a key, the provider uses the verified Steam ID as the name and does not return an avatar. You can configure `steam: {}` for sign-in without profile lookup.
+    The `apiKey` is optional. Set `STEAM_API_KEY` in your server environment with a [Steam Web API key](https://steamcommunity.com/dev/apikey) to fetch the player's display name and avatar. Keep it on the server. Without a key, the provider uses the verified Steam ID as the name and does not return an avatar. You can configure `steam: {}` for sign-in without profile lookup. If the profile API is unavailable or returns no player summary, sign-in uses the same Steam ID fallback. A response containing only another player's profile is rejected.
 
     The callback URL is `http://localhost:3000/api/auth/callback/steam` for local development. For production, Better Auth uses your application's base URL. If you change the base path of the auth routes, the callback path changes accordingly. Steam does not require registering an OAuth redirect URL. The provider sends the callback URL and its origin as the OpenID return URL and realm.
   </Step>
@@ -53,7 +53,7 @@ Steam sign-in uses [OpenID 2.0](https://partner.steamgames.com/doc/features/auth
 
     Steam does not issue OAuth access tokens, refresh tokens, or ID tokens. The provider supports browser redirects, with a GET callback, and does not support `idToken` sign-in or OAuth scopes. The Steam Web API key belongs to your application and is never stored as a user's access token.
 
-    Use a direct callback in each environment. The OAuth Proxy plugin handles OAuth authorization-code flows and does not proxy Steam's OpenID assertions.
+    Steam uses a direct callback in each environment. When the OAuth Proxy plugin is enabled, it skips Steam and keeps the callback on the initiating environment. Other OAuth providers continue to use the proxy.
   </Step>
 </Steps>
 

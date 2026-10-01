@@ -41,6 +41,7 @@ export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 export type ProviderOption = {
 	name: string;
 	envVar: string;
+	optional?: boolean;
 };
 
 export type ProviderConfig = {
@@ -48,7 +49,7 @@ export type ProviderConfig = {
 };
 
 /**
- * Configuration for each social provider specifying what options are required
+ * Configuration for each social provider's environment options.
  */
 export const SOCIAL_PROVIDER_CONFIGS: Record<SocialProvider, ProviderConfig> = {
 	apple: {
@@ -222,7 +223,7 @@ export const SOCIAL_PROVIDER_CONFIGS: Record<SocialProvider, ProviderConfig> = {
 		],
 	},
 	steam: {
-		options: [{ name: "apiKey", envVar: "STEAM_API_KEY" }],
+		options: [{ name: "apiKey", envVar: "STEAM_API_KEY", optional: true }],
 	},
 	tiktok: {
 		options: [

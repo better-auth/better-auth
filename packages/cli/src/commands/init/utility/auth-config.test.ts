@@ -14,6 +14,18 @@ const formatConfigCode = async (code: string) => {
 const mockInstallDependency = async () => {};
 
 describe("Init CLI - auth config generation", () => {
+	/** @see https://partner.steamgames.com/doc/features/auth#website */
+	it("keeps Steam profile lookup optional and OAuth credentials required", async () => {
+		const config = await generateInnerAuthConfigCode({
+			socialProviders: ["steam", "google"],
+			installDependency: mockInstallDependency,
+		});
+		expect(config).toContain("apiKey: process.env.STEAM_API_KEY,");
+		expect(config).toContain("clientId: process.env.GOOGLE_CLIENT_ID!,");
+		expect(config).toContain(
+			"clientSecret: process.env.GOOGLE_CLIENT_SECRET!,",
+		);
+	});
 	it("should just generate the database code", async () => {
 		const authConfig = await generateInnerAuthConfigCode({
 			database: getDatabaseCode("prisma-sqlite"),
