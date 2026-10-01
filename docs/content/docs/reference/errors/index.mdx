@@ -26,3 +26,18 @@ This section contains all the errors that cause you to be redirected to the `/ap
 * [account\_not\_linked](/docs/reference/errors/account_not_linked)
 * [account\_already\_linked\_to\_different\_user](/docs/reference/errors/account_already_linked_to_different_user)
 * [signup\_disabled](/docs/reference/errors/signup_disabled)
+
+## Mapping error codes in your app
+
+If you send these redirects to your own page with `onAPIError.errorURL`, import `OAUTH_CALLBACK_ERROR_CODES` and the `OAuthCallbackErrorCode` type from `better-auth/oauth2` to handle every code Better Auth can send. With `satisfies`, TypeScript reports any code your mapping is missing.
+
+```ts title="sign-in-errors.ts"
+import type { OAuthCallbackErrorCode } from "better-auth/oauth2";
+
+const messages = {
+  state_not_found: "Your sign-in expired. Please try again.",
+  // ...one entry per code
+} satisfies Record<OAuthCallbackErrorCode, string>;
+```
+
+The `error` parameter can also hold a code the OAuth provider sent to the callback, or the `code` of an `APIError` thrown from a hook. Better Auth passes both through unchanged, so keep a fallback message for codes outside the type.

@@ -86,7 +86,7 @@ export const callbackOAuth = createAuthEndpoint(
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
 			const params = new URLSearchParams({
-				error: "invalid_callback_request",
+				error: OAUTH_CALLBACK_ERROR_CODES.INVALID_CALLBACK_REQUEST,
 			});
 			const redirectURL = appendQueryParams(defaultErrorURL, params);
 
@@ -124,7 +124,9 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			const params = new URLSearchParams({ error: "state_not_found" });
+			const params = new URLSearchParams({
+				error: OAUTH_CALLBACK_ERROR_CODES.STATE_NOT_FOUND,
+			});
 			const redirectURL = appendQueryParams(defaultErrorURL, params);
 
 			throw c.redirect(redirectURL);
