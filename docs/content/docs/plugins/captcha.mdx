@@ -16,6 +16,18 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
   The default endpoints cover <Link href="/docs/authentication/email-password">Email & Password</Link> authentication. Other authentication methods need an explicit <Link href="/docs/plugins/captcha#plugin-options">endpoints</Link> array. Vercel BotID also needs the client-side setup below.
 </Callout>
 
+Because the defaults are Email & Password only, enabling the plugin alongside another
+authentication method can leave that method unprotected without any obvious signal. When
+`captcha` is using its default `endpoints`, it logs a warning at startup naming any auth
+endpoint contributed by another plugin that the defaults leave uncovered, for example:
+
+```txt
+[better-auth] `captcha` is using its default `endpoints`, which only cover Email & Password sign-in, sign-up, and password reset. These auth endpoints added by other plugins are not captcha-protected: /sign-in/username (username). Add them to the captcha `endpoints` option (wildcards such as "/sign-in/*" are supported) if you want them challenged.
+```
+
+The check only runs when the default `endpoints` are in use. Setting `endpoints` yourself is
+treated as a deliberate choice and no warning is logged.
+
 ## Installation
 
 <Steps>

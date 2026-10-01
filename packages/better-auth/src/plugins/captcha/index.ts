@@ -3,7 +3,12 @@ import { getIP } from "@better-auth/core/utils/ip";
 import { middlewareResponse } from "../../utils/middleware-response";
 import { wildcardMatch } from "../../utils/wildcard";
 import { PACKAGE_VERSION } from "../../version";
-import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
+import {
+	authPathPrefixes,
+	defaultEndpoints,
+	Providers,
+	siteVerifyMap,
+} from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
 import type { CaptchaOptions } from "./types";
 
@@ -33,11 +38,53 @@ const normalizeEndpointPath = (pathname: string, basePath: string) => {
 	return normalizedPathname;
 };
 
+/**
+ * Whether a normalized request path is one of the paths captcha protects. Shared
+ * by the request handler and the startup check so the two cannot disagree about
+ * what is covered.
+ */
+const isProtectedPath = (pathname: string, endpoints: string[]) =>
+	endpoints.some((endpoint) =>
+		endpoint.includes("*")
+			? wildcardMatch(endpoint)(pathname)
+			: endpoint === pathname,
+	);
+
+/** Whether a path sits under one of the auth families captcha leaves to opt-in. */
+const isAuthPath = (pathname: string) =>
+	authPathPrefixes.some(
+		(prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+	);
+
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
 		version: PACKAGE_VERSION,
 		$ERROR_CODES: EXTERNAL_ERROR_CODES,
+		init(ctx) {
+			// An explicit `endpoints` array is a deliberate choice, so only advise
+			// when the defaults are in use and may not be what the user expects.
+			if (options.endpoints) return;
+
+			const basePath = ctx.options.basePath ?? "/api/auth";
+			const uncovered: string[] = [];
+			for (const plugin of ctx.options.plugins ?? []) {
+				for (const endpoint of Object.values(plugin.endpoints ?? {})) {
+					// Path-less endpoints are reachable directly rather than by URL,
+					// so they can never be captcha-protected and are skipped.
+					if (!endpoint.path) continue;
+					const path = normalizeEndpointPath(endpoint.path, basePath);
+					if (isAuthPath(path) && !isProtectedPath(path, defaultEndpoints)) {
+						uncovered.push(`${path} (${plugin.id})`);
+					}
+				}
+			}
+			if (uncovered.length === 0) return;
+
+			ctx.logger.warn(
+				`[better-auth] \`captcha\` is using its default \`endpoints\`, which only cover Email & Password sign-in, sign-up, and password reset. These auth endpoints added by other plugins are not captcha-protected: ${uncovered.join(", ")}. Add them to the captcha \`endpoints\` option (wildcards such as "/sign-in/*" are supported) if you want them challenged.`,
+			);
+		},
 		onRequest: async (request, ctx) => {
 			try {
 				const endpoints = options.endpoints?.length
@@ -48,13 +95,7 @@ export const captcha = (options: CaptchaOptions) =>
 				const basePath = ctx.options.basePath ?? "/api/auth";
 				const pathname = normalizeEndpointPath(url.pathname, basePath);
 
-				const match = endpoints.some((endpoint) =>
-					endpoint.includes("*")
-						? wildcardMatch(endpoint)(pathname)
-						: endpoint === pathname,
-				);
-
-				if (!match) {
+				if (!isProtectedPath(pathname, endpoints)) {
 					return undefined;
 				}
 

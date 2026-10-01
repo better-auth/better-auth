@@ -1,9 +1,13 @@
 import * as betterFetchModule from "@better-fetch/fetch";
 import { checkBotId as vercelCheckBotId } from "botid/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
 import { emailOTPClient } from "../email-otp/client";
+import { openAPI } from "../open-api";
+import { phoneNumber } from "../phone-number";
+import { username } from "../username";
+import { usernameClient } from "../username/client";
 import { captcha } from ".";
 import { CAPTCHA_VERIFY_TIMEOUT_MS } from "./constants";
 import type { CaptchaOptions } from "./types";
@@ -1173,6 +1177,144 @@ describe("captcha", async () => {
 				fetchOptions: { headers: { "x-captcha-response": "token" } },
 			});
 			expect(res.error?.status).not.toBe(403);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11477
+	 */
+	describe("uncovered auth endpoint warning", async () => {
+		let warnSpy: ReturnType<typeof vi.spyOn>;
+
+		const warnings = () =>
+			warnSpy.mock.calls
+				.map((call: unknown[]) => String(call[0]))
+				.filter((message: string) => message.includes("`captcha`"));
+
+		beforeEach(() => {
+			warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		});
+
+		afterEach(() => {
+			warnSpy.mockRestore();
+		});
+
+		it("warns when a plugin adds an auth endpoint the default list leaves uncovered", async () => {
+			await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+					username(),
+				],
+			});
+
+			const relevant = warnings();
+			expect(relevant).toHaveLength(1);
+			expect(relevant[0]).toContain("/sign-in/username");
+			expect(relevant[0]).toContain("username");
+			expect(relevant[0]).toContain("`endpoints`");
+		});
+
+		it("names every uncovered auth endpoint across plugins", async () => {
+			await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+					username(),
+					phoneNumber(),
+				],
+			});
+
+			const relevant = warnings();
+			expect(relevant).toHaveLength(1);
+			expect(relevant[0]).toContain("/sign-in/username");
+			expect(relevant[0]).toContain("/sign-in/phone-number");
+			expect(relevant[0]).toContain("/phone-number/send-otp");
+		});
+
+		it("does not warn when captcha is the only plugin", async () => {
+			await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			expect(warnings()).toHaveLength(0);
+		});
+
+		it("does not warn for plugin endpoints that are not auth endpoints", async () => {
+			await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+					openAPI(),
+				],
+			});
+
+			expect(warnings()).toHaveLength(0);
+		});
+
+		it("does not warn when the uncovered endpoint is opted in via `endpoints`", async () => {
+			await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/*"],
+					}),
+					username(),
+				],
+			});
+
+			expect(warnings()).toHaveLength(0);
+		});
+
+		it("leaves the default enforcement behaviour unchanged", async () => {
+			const { client } = await getTestInstance(
+				{
+					plugins: [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: "xx-secret-key",
+						}),
+						username(),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [usernameClient()],
+					},
+				},
+			);
+
+			mockBetterFetch.mockResolvedValue({ data: { success: true } });
+
+			// /sign-up/email is covered by the default list, so it needs a token.
+			const signUp = await client.signUp.email({
+				email: "captcha-warning@test.com",
+				name: "Captcha Warning",
+				username: "captcha_warning_user",
+				password: "test123456",
+				fetchOptions: { headers: { "x-captcha-response": "token" } },
+			});
+			expect(signUp.error).toBeNull();
+
+			// /sign-in/username is not, so no token is required: warning only.
+			const signIn = await client.signIn.username({
+				username: "captcha_warning_user",
+				password: "test123456",
+			});
+			expect(signIn.error).toBeNull();
+			expect(signIn.data?.token).toEqual(expect.any(String));
 		});
 	});
 });
