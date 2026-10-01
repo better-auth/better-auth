@@ -98,7 +98,8 @@ describe("Steam OpenID verification", () => {
 			.fn()
 			.mockResolvedValue(new Response(`ns:${namespace}\nis_valid:true\n`));
 		vi.stubGlobal("fetch", fetchMock);
-		const tokens = await validate();
+		const assertionURL = assertion();
+		const tokens = await validate(assertionURL);
 		expect(tokens).toEqual({ raw: { steamId } });
 		const [url, init] = fetchMock.mock.calls[0]!;
 		expect(url).toBe(endpoint);
@@ -106,6 +107,11 @@ describe("Steam OpenID verification", () => {
 		expect(init.redirect).toBe("manual");
 		expect(init.body.get("openid.mode")).toBe("check_authentication");
 		expect(init.body.get("openid.sig")).toBe("signature");
+		for (const [key, value] of assertionURL.searchParams) {
+			if (key.startsWith("openid.") && key !== "openid.mode") {
+				expect(init.body.get(key)).toBe(value);
+			}
+		}
 		expect(init.body.has("state")).toBe(false);
 	});
 
@@ -126,7 +132,7 @@ describe("Steam OpenID verification", () => {
 		["openid.signed", "op_endpoint,claimed_id,identity,return_to,assoc_handle"],
 		["openid.sig", ""],
 		["openid.assoc_handle", ""],
-	])("rejects invalid %s before contacting Steam", async (key, value) => {
+	])("rejects invalid %s = %s before contacting Steam", async (key, value) => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal("fetch", fetchMock);
 		const url = assertion();
@@ -212,19 +218,42 @@ describe("Steam OpenID verification", () => {
 		);
 		const url = new URL(fetchMock.mock.calls[0]![0]);
 		expect(url.origin).toBe("https://api.steampowered.com");
-		expect(url.searchParams.get("key")).toBe("private-api-key");
+		expect(url.searchParams.has("key")).toBe(false);
+		expect(
+			new Headers(fetchMock.mock.calls[0]![1].headers).get("x-webapi-key"),
+		).toBe("private-api-key");
 		expect(url.searchParams.get("steamids")).toBe(steamId);
 	});
 
-	it.each([
-		{ response: { players: [] } },
-		{ response: { players: [{ steamid: "76561198000000001" }] } },
-		{},
-	])("rejects a missing or mismatched API profile", async (response) => {
+	it("rejects a mismatched API profile", async () => {
+		const response = {
+			response: { players: [{ steamid: "76561198000000001" }] },
+		};
 		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(response)));
 		expect(
 			await steam({ apiKey: "key" }).getUserInfo({ raw: { steamId } }),
 		).toBeNull();
+	});
+
+	it.each([
+		Response.json({}, { status: 429 }),
+		Response.json({ response: { players: [] } }),
+		Response.json({}),
+	])("uses the verified ID when profile lookup is unavailable: %#", async (response) => {
+		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+		const info = await steam({ apiKey: "key" }).getUserInfo({
+			raw: { steamId },
+		});
+		expect(info?.user).toMatchObject({ name: steamId, emailVerified: false });
+		expect(info?.data).toEqual({ steamid: steamId });
+	});
+
+	it("uses the verified ID when the profile request fails", async () => {
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+		const info = await steam({ apiKey: "key" }).getUserInfo({
+			raw: { steamId },
+		});
+		expect(info?.user.name).toBe(steamId);
 	});
 
 	it("supports custom profile loading while binding account identity to the assertion", async () => {
