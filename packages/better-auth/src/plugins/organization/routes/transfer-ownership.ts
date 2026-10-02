@@ -18,6 +18,13 @@ const transferOwnershipTokenValueSchema = z.object({
 	organizationId: z.string(),
 	currentOwnerMemberId: z.string(),
 	newOwnerMemberId: z.string(),
+	/**
+	 * The mode the link was issued for. The GET callback only redeems
+	 * `"instant"` tokens, so an `"explicit"` one can't be turned into a
+	 * one-click transfer by a `callbackURL` that names another host serving
+	 * the same auth routes.
+	 */
+	confirmationMode: z.enum(["instant", "explicit"]),
 });
 
 function parseTransferOwnershipTokenValue(raw: string) {
@@ -75,7 +82,12 @@ async function resolveTransferOwnershipToken<O extends OrganizationOptions>(
 	if (!tokenValue) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	const { organizationId, currentOwnerMemberId, newOwnerMemberId } = tokenValue;
+	const {
+		organizationId,
+		currentOwnerMemberId,
+		newOwnerMemberId,
+		confirmationMode,
+	} = tokenValue;
 	// Ownership transfer is sensitive: re-read the session store on stateful
 	// deployments, even if an earlier hook already loaded a session from the
 	// cookie cache, so a revoked-but-cached session cannot complete it even
@@ -131,6 +143,7 @@ async function resolveTransferOwnershipToken<O extends OrganizationOptions>(
 	}
 	return {
 		organizationId,
+		confirmationMode,
 		organization,
 		creatorRole,
 		currentOwner: { ...currentOwner, user: currentOwnerUser },
@@ -265,7 +278,13 @@ export const transferOwnership = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const session = await ctx.context.getSession(ctx);
+			// Sensitive: re-read the session store on stateful deployments, even
+			// if an earlier hook already loaded a session from the cookie cache,
+			// so a revoked session can't hand an organization over.
+			const session = await getAuthoritativeSessionFromCtx<
+				Record<string, unknown>,
+				{ activeOrganizationId?: string | null }
+			>(ctx);
 			if (!session) {
 				throw APIError.fromStatus("UNAUTHORIZED");
 			}
@@ -361,6 +380,7 @@ export const transferOwnership = <O extends OrganizationOptions>(
 						organizationId,
 						currentOwnerMemberId: currentOwner.id,
 						newOwnerMemberId: newOwnerMember.id,
+						confirmationMode,
 					} satisfies z.infer<typeof transferOwnershipTokenValueSchema>),
 					identifier: `transfer-ownership-${token}`,
 					expiresAt: new Date(
@@ -456,11 +476,20 @@ export const transferOwnershipCallback = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const {
 				organizationId,
+				confirmationMode,
 				organization,
 				creatorRole,
 				currentOwner,
 				newOwner,
 			} = await resolveTransferOwnershipToken(ctx, options, ctx.query.token);
+			// An explicit-mode link is meant to be confirmed with a POST. Refused
+			// before the token is consumed, so it stays usable for `confirm`.
+			if (confirmationMode !== "instant") {
+				throw APIError.from(
+					"NOT_FOUND",
+					ORGANIZATION_ERROR_CODES.INVALID_TOKEN,
+				);
+			}
 			await consumeTransferOwnershipToken(ctx, ctx.query.token, {
 				organizationId,
 				currentOwnerMemberId: currentOwner.id,

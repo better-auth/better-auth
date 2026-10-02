@@ -935,6 +935,38 @@ describe("transferOwnership confirmation hardening", () => {
 		expect(confirmed.newOwner.role).toBe("owner");
 	});
 
+	it("an explicit-mode token can't be redeemed through the GET callback", async () => {
+		const { auth, capture, headers, org, newOwnerMember } = await setup({
+			confirmationMode: "explicit",
+		});
+		await auth.api.transferOwnership({
+			body: {
+				organizationId: org.id,
+				newOwnerMemberId: newOwnerMember!.id,
+				callbackURL: "https://app.example.com/org/settings",
+			},
+			headers,
+		});
+
+		// A trusted host that serves the same auth routes could be named in the
+		// callbackURL, so the token itself has to say it needs a POST.
+		await expect(
+			auth.api.transferOwnershipCallback({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+		const stillOwner = await auth.api.getActiveMember({ headers });
+		expect(stillOwner!.role).toBe("owner");
+
+		// The rejected visit didn't burn it: the explicit confirm still works.
+		const confirmed = await auth.api.transferOwnershipConfirm({
+			body: { token: capture.token },
+			headers,
+		});
+		expect(confirmed.newOwner.role).toBe("owner");
+	});
+
 	it("rejects an expired token without transferring anything", async () => {
 		const { auth, capture, headers, org, newOwnerMember } = await setup({
 			confirmationMode: "explicit",
@@ -994,20 +1026,24 @@ describe("transferOwnership confirmation is revocation-aware with cookie cache",
 		},
 	} satisfies BetterAuthPlugin;
 
-	async function setup() {
+	async function setup({ confirmation = true } = {}) {
 		const capture = { token: "" };
 		const instance = await getTestInstance({
 			baseURL: "http://localhost:3000",
 			plugins: [
 				preloadCachedSessionPlugin,
-				organization({
-					ownershipTransfer: {
-						confirmationMode: "explicit",
-						async sendTransferOwnershipVerification({ token }) {
-							capture.token = token;
-						},
-					},
-				}),
+				organization(
+					confirmation
+						? {
+								ownershipTransfer: {
+									confirmationMode: "explicit",
+									async sendTransferOwnershipVerification({ token }) {
+										capture.token = token;
+									},
+								},
+							}
+						: {},
+				),
 			],
 			session: { cookieCache: { enabled: true, maxAge: 60 } },
 		});
@@ -1053,22 +1089,31 @@ describe("transferOwnership confirmation is revocation-aware with cookie cache",
 				role: "member",
 			},
 		});
-		await instance.auth.api.transferOwnership({
-			body: {
-				organizationId: org!.id,
-				newOwnerMemberId: newOwnerMember!.id,
-				callbackURL: "https://app.example.com/org/settings",
-			},
-			headers,
-		});
-		expect(capture.token.length).toBe(32);
+		if (confirmation) {
+			await instance.auth.api.transferOwnership({
+				body: {
+					organizationId: org!.id,
+					newOwnerMemberId: newOwnerMember!.id,
+					callbackURL: "https://app.example.com/org/settings",
+				},
+				headers,
+			});
+			expect(capture.token.length).toBe(32);
+		}
 		// Revoke the backing session server-side; the signed session_data cookie
 		// is still present in `headers`.
 		await instance.db.delete({
 			model: "session",
 			where: [{ field: "token", value: sessionToken }],
 		});
-		return { ...instance, capture, headers, org: org!, ownerUserId };
+		return {
+			...instance,
+			capture,
+			headers,
+			org: org!,
+			ownerUserId,
+			newOwnerMember: newOwnerMember!,
+		};
 	}
 
 	async function ownerRoles(
@@ -1083,6 +1128,24 @@ describe("transferOwnership confirmation is revocation-aware with cookie cache",
 			.filter((member) => member.role.split(",").includes("owner"))
 			.map((member) => member.userId);
 	}
+
+	it("rejects an immediate transfer from a revoked but cached session", async () => {
+		const { auth, db, headers, org, ownerUserId, newOwnerMember } = await setup(
+			{
+				confirmation: false,
+			},
+		);
+		await expect(
+			auth.api.transferOwnership({
+				body: {
+					organizationId: org.id,
+					newOwnerMemberId: newOwnerMember.id,
+				},
+				headers,
+			}),
+		).rejects.toThrow();
+		expect(await ownerRoles(db, org.id)).toEqual([ownerUserId]);
+	});
 
 	it("rejects /organization/transfer-ownership/confirm from a revoked but cached session", async () => {
 		const { auth, db, capture, headers, org, ownerUserId } = await setup();
@@ -1114,5 +1177,76 @@ describe("transferOwnership confirmation is revocation-aware with cookie cache",
 			}),
 		).rejects.toThrow();
 		expect(await ownerRoles(db, org.id)).toEqual([ownerUserId]);
+	});
+});
+
+/**
+ * Two transfers that both start from the same owner snapshot: the second one
+ * must not succeed once the first has demoted that owner, or the organization
+ * is left with two owners.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11529
+ */
+describe("transferOwnership starting from a stale owner snapshot", () => {
+	it("refuses to apply once a concurrent transfer has already demoted the owner", async () => {
+		let nested = false;
+		let transferToY: (() => Promise<unknown>) | undefined;
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						// Runs after the route has checked the owner but before the swap:
+						// a second transfer completes in that gap, so the first one goes
+						// on with an owner that no longer holds the creator role.
+						async beforeTransferOwnership() {
+							if (nested) return;
+							nested = true;
+							await transferToY?.();
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const ownerUserId = (await auth.api.getSession({ headers }))!.user.id;
+		const org = await auth.api.createOrganization({
+			body: { name: "Acme", slug: "acme" },
+			headers,
+		});
+		const userX = await auth.api.signUpEmail({
+			body: { email: "x@test.com", name: "X", password: "password" },
+		});
+		const memberX = await auth.api.addMember({
+			body: { organizationId: org!.id, userId: userX.user.id, role: "member" },
+		});
+		const userY = await auth.api.signUpEmail({
+			body: { email: "y@test.com", name: "Y", password: "password" },
+		});
+		const memberY = await auth.api.addMember({
+			body: { organizationId: org!.id, userId: userY.user.id, role: "member" },
+		});
+		transferToY = () =>
+			auth.api.transferOwnership({
+				body: { organizationId: org!.id, newOwnerMemberId: memberY!.id },
+				headers,
+			});
+
+		await expect(
+			auth.api.transferOwnership({
+				body: { organizationId: org!.id, newOwnerMemberId: memberX!.id },
+				headers,
+			}),
+		).rejects.toThrow();
+
+		const members = (await db.findMany({
+			model: "member",
+			where: [{ field: "organizationId", value: org!.id }],
+		})) as Array<{ id: string; userId: string; role: string }>;
+		const roleOf = (id: string) => members.find((m) => m.id === id)?.role;
+		expect(members.filter((m) => m.role === "owner").map((m) => m.id)).toEqual([
+			memberY!.id,
+		]);
+		expect(roleOf(memberX!.id)).toBe("member");
+		expect(members.find((m) => m.userId === ownerUserId)?.role).toBe("member");
 	});
 });

@@ -175,6 +175,12 @@ function stripTeamMembershipKeys(members: StoredTeamMember[]): TeamMember[] {
 	return members.map(stripTeamMembershipKey);
 }
 
+/**
+ * How many times the previous owner's demotion is retried with a freshly read
+ * role before the transfer gives up and rolls back.
+ */
+const MAX_DEMOTION_ATTEMPTS = 3;
+
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
@@ -500,14 +506,20 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		 * which defeats the guard entirely. A bare guarded `incrementOne`,
 		 * by contrast, is evaluated against live state on every adapter --
 		 * the same primitive `updateInvitation`'s `fromStatus` guard above
-		 * actually relies on. If the demotion loses that race (someone else
-		 * already transferred ownership away from `currentOwnerMemberId`) or
-		 * throws outright, the just-applied promotion is rolled back --
-		 * guarded on it still holding exactly `promotedRole`, so an unrelated
-		 * concurrent role edit on the target (e.g. an admin re-running
-		 * `update-member-role` on them) is never overwritten by a rollback
-		 * that has nothing to do with it -- rather than leaving two owners
-		 * behind.
+		 * actually relies on. The owner has to still hold `creatorRole` when
+		 * the swap starts and again on every demotion attempt, so a transfer
+		 * that started from a stale snapshot can't succeed after a concurrent
+		 * one demoted that owner. If the owner's role string changes for an
+		 * unrelated reason the demotion is retried with the fresh value.
+		 *
+		 * If the demotion can't be applied or throws outright, the
+		 * just-applied promotion is rolled back, guarded on it still holding
+		 * exactly `promotedRole` so an unrelated concurrent role edit on the
+		 * target is never overwritten. This is best effort, not a guarantee:
+		 * promote and demote are two separate rows, and without a cross-row
+		 * transaction a third writer that edits the target in between can
+		 * make that guard fail too. In that case a distinct error asks for a
+		 * manual review of the organization's owners.
 		 */
 		transferOwnership: async ({
 			currentOwnerMemberId,
@@ -532,6 +544,22 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			if (!newOwnerBefore) {
 				throw new BetterAuthError("Member not found");
+			}
+			const holdsCreatorRole = (role: string) =>
+				role
+					.split(",")
+					.map((r: string) => r.trim())
+					.includes(creatorRole);
+			// A caller's snapshot of the owner can be stale: a concurrent
+			// transfer may already have demoted them. Demoting a row that no
+			// longer holds `creatorRole` is a no-op that still "succeeds", so
+			// without this a second transfer would promote its target and leave
+			// the organization with two owners.
+			if (!holdsCreatorRole(currentOwner.role)) {
+				throw new BetterAuthError("Ownership was already transferred");
+			}
+			if (holdsCreatorRole(newOwnerBefore.role)) {
+				throw new BetterAuthError("Target member is already the owner");
 			}
 			// "member" is the baseline default role, not extra privilege worth
 			// preserving -- treated the same way the demotion fallback below
@@ -562,12 +590,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				// been demoted yet, so there's nothing to roll back.
 				throw new BetterAuthError("Member not found");
 			}
-			const remainingRoles = currentOwner.role
-				.split(",")
-				.map((role: string) => role.trim())
-				.filter((role: string) => role && role !== creatorRole);
-			const demotedRole =
-				remainingRoles.length > 0 ? remainingRoles.join(",") : "member";
 			// Guarded on `promotedRole`: only undoes this transfer's own
 			// promotion, never an unrelated concurrent edit to the same
 			// member that happened to land in between. If that guard itself
@@ -603,34 +625,66 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					);
 				}
 			};
-			// The rollback above must run whether the demotion loses its CAS
-			// guard (resolves to a falsy value) or the call itself throws (a
-			// transport/adapter error) -- either way the promotion has
-			// already committed and must not be left in place unrolled-back.
-			let previousOwner: InferMember<O, false> | null;
-			try {
-				previousOwner = await adapter.incrementOne<InferMember<O, false>>({
+			// The rollback above must run whether the demotion keeps losing its
+			// CAS guard or the call itself throws (a transport/adapter error) --
+			// either way the promotion has already committed and must not be
+			// left in place unrolled-back.
+			let previousOwner: InferMember<O, false> | null = null;
+			let owner = currentOwner;
+			for (let attempt = 0; attempt < MAX_DEMOTION_ATTEMPTS; attempt++) {
+				if (!holdsCreatorRole(owner.role)) {
+					// Someone else already took `creatorRole` off this member,
+					// most likely a concurrent transfer from the same owner.
+					const alreadyTransferred = new BetterAuthError(
+						"Ownership was already transferred",
+					);
+					await rollbackPromotion(alreadyTransferred);
+					throw alreadyTransferred;
+				}
+				const remainingRoles = owner.role
+					.split(",")
+					.map((role: string) => role.trim())
+					.filter((role: string) => role && role !== creatorRole);
+				const demotedRole =
+					remainingRoles.length > 0 ? remainingRoles.join(",") : "member";
+				try {
+					previousOwner = await adapter.incrementOne<InferMember<O, false>>({
+						model: "member",
+						where: [
+							{ field: "id", value: currentOwnerMemberId },
+							{ field: "role", value: owner.role },
+						],
+						increment: {},
+						set: { role: demotedRole },
+					});
+				} catch (demoteError) {
+					await rollbackPromotion(demoteError);
+					throw demoteError;
+				}
+				if (previousOwner) {
+					break;
+				}
+				// The guard lost: the owner's role string changed since it was
+				// read. That can be a concurrent transfer, or just an unrelated
+				// edit (an admin adding a role), so look again instead of assuming
+				// the transfer already happened.
+				const fresh = await adapter.findOne<InferMember<O, false>>({
 					model: "member",
-					where: [
-						{ field: "id", value: currentOwnerMemberId },
-						{ field: "role", value: currentOwner.role },
-					],
-					increment: {},
-					set: { role: demotedRole },
+					where: [{ field: "id", value: currentOwnerMemberId }],
 				});
-			} catch (demoteError) {
-				await rollbackPromotion(demoteError);
-				throw demoteError;
+				if (!fresh) {
+					const gone = new BetterAuthError("Member not found");
+					await rollbackPromotion(gone);
+					throw gone;
+				}
+				owner = fresh;
 			}
 			if (!previousOwner) {
-				// Someone else already changed this member's role since it was
-				// read above -- most likely a concurrent transfer from the
-				// same owner.
-				const alreadyTransferred = new BetterAuthError(
-					"Ownership was already transferred",
+				const unsettled = new BetterAuthError(
+					"Ownership transfer could not be completed because the previous owner's roles kept changing",
 				);
-				await rollbackPromotion(alreadyTransferred);
-				throw alreadyTransferred;
+				await rollbackPromotion(unsettled);
+				throw unsettled;
 			}
 			return { newOwner, previousOwner };
 		},

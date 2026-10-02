@@ -544,8 +544,8 @@ export interface OrganizationOptions {
 				beforeTransferOwnership?: (
 					data: {
 						organization: Organization & Record<string, any>;
-						currentOwner: Member & Record<string, any>;
-						newOwner: Member & Record<string, any>;
+						currentOwner: Member & { user: User } & Record<string, any>;
+						newOwner: Member & { user: User } & Record<string, any>;
 					},
 					ctx?: GenericEndpointContext,
 				) => Promise<void>;
