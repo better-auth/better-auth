@@ -115,6 +115,9 @@ app.get("/_test/cloudflare/module-scope", async (c) =>
 const moduleScopeReadAuth = betterAuth(withCloudflare(cloudflareOptions));
 
 const moduleScopeRead = moduleScopeReadAuth.$context;
+// Reading `$context` here starts initialization at module evaluation, so a
+// rejection can land before the route attaches its handler.
+moduleScopeRead.catch(() => {});
 
 app.get("/_test/cloudflare/module-scope/read", async (c) =>
 	c.json({ outcome: await settlesInBudget(moduleScopeRead) }),
