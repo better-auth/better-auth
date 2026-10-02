@@ -26,6 +26,21 @@ export interface PhoneNumberOptions {
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
 	/**
+	 * Custom function to generate otp
+	 *
+	 * Return `undefined` to fall back to the default generator
+	 * (a random numeric code of `otpLength` digits).
+	 */
+	generateOTP?:
+		| ((
+				data: {
+					phoneNumber: string;
+					type: "phone-number-verification" | "forget-password";
+				},
+				ctx?: GenericEndpointContext,
+		  ) => string | undefined)
+		| undefined;
+	/**
 	 * Custom OTP verification function
 	 *
 	 * If provided, this function will be called instead of the internal verification logic.
