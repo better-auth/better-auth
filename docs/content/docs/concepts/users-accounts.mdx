@@ -129,11 +129,22 @@ export const auth = betterAuth({
 ```
 
 In `"explicit"` mode, the `url` passed to `emailVerification.sendVerificationEmail` is your
-app's own URL (built from `callbackURL`, which becomes required) with `token` attached, instead
-of better-auth's `/verify-email` endpoint — this holds whether that's the only email sent, or
-the follow-up sent after the user approves `sendChangeEmailConfirmation`'s own link (which is
-always better-auth's instant callback, regardless of `confirmationMode`). Your app renders a
-confirmation page from the app-owned URL, then:
+app's own URL (built from `callbackURL`) with `token` attached, instead of better-auth's
+`/verify-email` endpoint — this holds whether that's the only email sent, or the follow-up sent
+after the user approves `sendChangeEmailConfirmation`'s own link (which is always better-auth's
+instant callback, regardless of `confirmationMode`).
+
+Because that URL is emailed, every change request must pass a `callbackURL` that is an
+**absolute** URL to your confirmation page, for example `https://app.example.com/account/email`.
+If your app is on a different origin than the auth server, add that origin to
+[`trustedOrigins`](/docs/reference/options#trustedorigins), or HTTP requests are rejected with
+`INVALID_ORIGIN` (the request's own origin) or `INVALID_CALLBACK_URL` (the `callbackURL`) before
+they reach the handler. That origin check only applies to requests that arrive over HTTP: when
+you call `auth.api.changeEmail` directly from server code there is no request to check, so pass
+a `callbackURL` you control. A missing, relative or invalid `callbackURL`, or one that points at
+`/verify-email`, is rejected with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL` before
+anything is sent, and it fails the same way whether or not the new email is already registered.
+Your app renders a confirmation page from the app-owned URL, then:
 
 * `GET /change-email/preview` — validates the token and returns the pending email change
   without applying it.
