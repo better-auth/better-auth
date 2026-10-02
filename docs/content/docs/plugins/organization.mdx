@@ -825,7 +825,7 @@ To remove user owned organization, you can use `organization.delete`
        */
       organizationId?: string = "org-id"
       /**
-       * The callback URL to redirect to after the organization is deleted. Only used when a deletion confirmation email is sent. Required when `confirmationMode` is `"explicit"`.
+       * Only used when a deletion confirmation email is sent. In `"instant"` mode it is where the callback redirects after the organization is deleted. In `"explicit"` mode it is the app's confirmation page that the emailed link points to, not a post-deletion redirect, and it is required.
        */
       callbackURL?: string = "/dashboard"
       /**
@@ -892,11 +892,22 @@ const auth = betterAuth({
 With this configured, `organization.delete` no longer deletes immediately: it emails a
 confirmation link and responds with `{ success: true, message: "Verification email sent" }`
 instead of the deleted organization. Visiting the link (`GET /organization/delete/callback`)
-re-validates the session and permission, consumes the single-use token, then runs the same
-deletion path — including the `beforeDeleteOrganization`/`afterDeleteOrganization` hooks. The
-token is only consumed right before the deletion, so an unauthenticated or unauthorized visit
-— an email scanner following the link with no session, for instance — does not burn it, and
-`disableOrganizationDeletion` is re-checked when a pending token is used.
+while signed in as the member who requested the deletion re-validates the session and
+permission, consumes the single-use token, then runs the same deletion path — including the
+`beforeDeleteOrganization`/`afterDeleteOrganization` hooks. Opening it signed out, or as anyone
+else, returns an error. The token is only consumed right before the deletion, so an
+unauthenticated or unauthorized visit — an email scanner following the link with no session,
+for instance — does not burn it, and `disableOrganizationDeletion` is re-checked when a pending
+token is used.
+
+Once the token is consumed it is spent: if `beforeDeleteOrganization` rejects the deletion, or
+the deletion itself fails, the organization is untouched but the same link can't be used again,
+so the member requests a new one. That is what keeps a link redeemable at most once even when it
+is opened twice at the same time.
+
+The confirmation email is sent through the same background-task mechanism as the other emails
+Better Auth sends (`advanced.backgroundTasks`). A failure in `sendDeleteOrganizationVerification`
+is logged and does not fail the request, so surface delivery errors in your own sender.
 
 If `sendDeleteOrganizationVerification` is not set, behavior is unchanged and fully
 backward-compatible at runtime.
@@ -946,7 +957,7 @@ anything is sent. Your app renders a confirmation page from it, then:
 * `POST /organization/delete/confirm` — consumes the token and performs the deletion, the
   same way the instant callback does.
 
-Both require the signed-in member the token was issued for, checked against the session store rather than a cached cookie. An explicit-mode token is only accepted by these two endpoints: `GET /organization/delete/callback` rejects it, so a `callbackURL` can't turn it into a one-click deletion.
+Both require the signed-in member the token was issued for, checked against the session store rather than a cached cookie. An explicit-mode token is never redeemed by the `GET /organization/delete/callback` link: it is rejected there, so a `callbackURL` can't turn it into a one-click deletion. It can only be redeemed by a `POST` from the signed-in member, either `/organization/delete/confirm` or `POST /organization/delete` with the `token` in the body.
 
 ## Invitations
 
