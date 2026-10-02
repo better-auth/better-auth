@@ -241,6 +241,28 @@ describe("microsoft provider", () => {
 });
 
 describe("discord provider", () => {
+	it("encodes avatar path values without changing the image format", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				id: "123/456",
+				avatar: "a_hash?variant=1",
+				global_name: "Discord User",
+				username: "discord-user",
+				email: "user@example.com",
+				verified: true,
+			},
+			error: null,
+		});
+
+		const result = await discord({ ...credentials }).getUserInfo({
+			accessToken: "discord-access-token",
+		});
+
+		expect(result?.user.image).toBe(
+			"https://cdn.discordapp.com/avatars/123%2F456/a_hash%3Fvariant%3D1.gif",
+		);
+	});
+
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = discord({ ...credentials });
 		const url = await provider.createAuthorizationURL(baseInput);

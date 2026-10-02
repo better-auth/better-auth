@@ -5,6 +5,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { appendURLSegment } from "../utils/url";
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
 	id: string;
@@ -152,10 +153,16 @@ export const discord = (options: DiscordOptions) => {
 					profile.discriminator === "0"
 						? Number(BigInt(profile.id) >> BigInt(22)) % 6
 						: parseInt(profile.discriminator) % 5;
-				profile.image_url = `https://cdn.discordapp.com/embed/avatars/${defaultAvatarNumber}.png`;
+				profile.image_url = appendURLSegment(
+					"https://cdn.discordapp.com/embed/avatars",
+					`${defaultAvatarNumber}.png`,
+				);
 			} else {
 				const format = profile.avatar.startsWith("a_") ? "gif" : "png";
-				profile.image_url = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${format}`;
+				profile.image_url = appendURLSegment(
+					appendURLSegment("https://cdn.discordapp.com/avatars", profile.id),
+					`${profile.avatar}.${format}`,
+				);
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {

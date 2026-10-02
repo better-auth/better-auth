@@ -5,6 +5,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { appendURLPath } from "../utils/url";
 
 export interface GitlabProfile extends Record<string, any> {
 	id: number;
@@ -65,11 +66,11 @@ const cleanDoubleSlashes = (input: string = "") => {
 };
 
 const issuerToEndpoints = (issuer?: string | undefined) => {
-	const baseUrl = issuer || "https://gitlab.com";
+	const baseUrl = cleanDoubleSlashes(issuer || "https://gitlab.com");
 	return {
-		authorizationEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/authorize`),
-		tokenEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/token`),
-		userinfoEndpoint: cleanDoubleSlashes(`${baseUrl}/api/v4/user`),
+		authorizationEndpoint: appendURLPath(baseUrl, "/oauth/authorize"),
+		tokenEndpoint: appendURLPath(baseUrl, "/oauth/token"),
+		userinfoEndpoint: appendURLPath(baseUrl, "/api/v4/user"),
 	};
 };
 
