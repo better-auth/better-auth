@@ -1,3 +1,4 @@
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
@@ -6,6 +7,74 @@ import { isPublicRoutableHost } from "@better-auth/core/utils/host";
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([204, 205, 304]);
+// `dns.lookup` uses the shared libuv thread pool and cannot be cancelled. Keep
+// abandoned lookups in this count until they actually settle.
+const MAX_OUTSTANDING_DNS_LOOKUPS = 16;
+let outstandingDNSLookups = 0;
+
+/**
+ * Resolve a hostname while honoring the caller's AbortSignal.
+ *
+ * `dns.lookup` itself cannot be cancelled, so an aborted call leaves one
+ * lookup outstanding until it settles in the background, capped across
+ * requests by MAX_OUTSTANDING_DNS_LOOKUPS. We stop awaiting it when the
+ * caller's deadline fires instead of letting a stalled resolver defeat it.
+ */
+function lookupWithAbort(
+	hostname: string,
+	signal: AbortSignal | undefined,
+): Promise<LookupAddress[]> {
+	if (signal?.aborted) {
+		return Promise.reject(signal.reason);
+	}
+	if (outstandingDNSLookups >= MAX_OUTSTANDING_DNS_LOOKUPS) {
+		return Promise.reject(new TypeError("metadata DNS lookup limit exceeded"));
+	}
+	outstandingDNSLookups += 1;
+	let lookupPromise: Promise<LookupAddress[]>;
+	try {
+		lookupPromise = lookup(hostname, {
+			all: true,
+			verbatim: true,
+		});
+	} catch (error) {
+		outstandingDNSLookups -= 1;
+		return Promise.reject(error);
+	}
+	// Attach both handlers immediately, including when the caller has already
+	// stopped waiting. A late error cannot become an unhandled rejection.
+	const countedLookup = lookupPromise.then(
+		(addresses) => {
+			outstandingDNSLookups -= 1;
+			return addresses;
+		},
+		(error) => {
+			outstandingDNSLookups -= 1;
+			throw error;
+		},
+	);
+	if (!signal) {
+		return countedLookup;
+	}
+	return new Promise((resolve, reject) => {
+		const onAbort = () => {
+			reject(signal.reason);
+		};
+		signal.addEventListener("abort", onAbort, { once: true });
+		if (signal.aborted) onAbort();
+		const cleanup = () => signal.removeEventListener("abort", onAbort);
+		countedLookup.then(
+			(addresses) => {
+				cleanup();
+				resolve(addresses);
+			},
+			(error) => {
+				cleanup();
+				reject(error);
+			},
+		);
+	});
+}
 
 function responseHeaders(
 	headers: Record<string, string | string[] | undefined>,
@@ -43,10 +112,11 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 		throw new TypeError("CIMD Node transport supports only GET and HEAD");
 	}
 
-	const addresses = await lookup(url.hostname, {
-		all: true,
-		verbatim: true,
-	});
+	const signal =
+		init?.signal ??
+		(input instanceof Request ? input.signal : webRequest.signal);
+
+	const addresses = await lookupWithAbort(url.hostname, signal);
 	if (addresses.length === 0) {
 		throw new TypeError("metadata hostname returned no DNS addresses");
 	}
@@ -61,9 +131,6 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 
 	const headers = Object.fromEntries(webRequest.headers.entries());
 	headers.host = url.host;
-	const signal =
-		init?.signal ??
-		(input instanceof Request ? input.signal : webRequest.signal);
 
 	return new Promise<Response>((resolve, reject) => {
 		const request = httpsRequest(
