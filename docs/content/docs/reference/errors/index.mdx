@@ -29,15 +29,19 @@ This section contains all the errors that cause you to be redirected to the `/ap
 
 ## Mapping error codes in your app
 
-If you send these redirects to your own page with `onAPIError.errorURL`, import `OAUTH_CALLBACK_ERROR_CODES` and the `OAuthCallbackErrorCode` type from `better-auth/oauth2` to handle every code Better Auth can send. With `satisfies`, TypeScript reports any code your mapping is missing.
+If `onAPIError.errorURL` points at your own page, map each code to a message with `OAUTH_CALLBACK_ERROR_CODES` and the `OAuthCallbackErrorCode` type from `better-auth/oauth2`. With `satisfies`, leaving a code out is a type error.
 
 ```ts title="sign-in-errors.ts"
-import type { OAuthCallbackErrorCode } from "better-auth/oauth2";
+import {
+  OAUTH_CALLBACK_ERROR_CODES,
+  type OAuthCallbackErrorCode,
+} from "better-auth/oauth2";
 
 const messages = {
-  state_not_found: "Your sign-in expired. Please try again.",
+  [OAUTH_CALLBACK_ERROR_CODES.STATE_NOT_FOUND]:
+    "Your sign-in expired. Please try again.",
   // ...one entry per code
 } satisfies Record<OAuthCallbackErrorCode, string>;
 ```
 
-The `error` parameter can also hold a code the OAuth provider sent to the callback, or the `code` of an `APIError` thrown from a hook. Better Auth passes both through unchanged, so keep a fallback message for codes outside the type.
+The `error` parameter can also hold a code the OAuth provider sent, or the `code` of an `APIError` thrown from a hook. Better Auth passes both through unchanged, so keep a fallback message for codes outside the type.
