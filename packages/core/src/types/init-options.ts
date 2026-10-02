@@ -1002,6 +1002,30 @@ export type BetterAuthOptions = {
 					 * @default false
 					 */
 					updateEmailWithoutVerification?: boolean;
+					/**
+					 * How the emailed link resolves the email change.
+					 *
+					 * - `"instant"`: clicking the link changes the email immediately (`GET`).
+					 * - `"explicit"`: the link only previews the change; the app must call
+					 *   the confirm endpoint (`POST`) to apply it. Use this when the emailed
+					 *   link can be visited by something other than the user, e.g. mail
+					 *   clients and security scanners that open links automatically
+					 *   (Outlook Safe Links, link-preview proxies).
+					 *
+					 * In `"explicit"` mode the emailed link is built from the request's
+					 * `callbackURL`, so every change request that sends a verification
+					 * link must include one: an absolute URL to the app's confirmation
+					 * page that doesn't point at `/verify-email` and doesn't already
+					 * carry a `token` query parameter. Changes that apply immediately,
+					 * for an unverified user when `updateEmailWithoutVerification` is
+					 * enabled, send no such link and don't need one. For HTTP requests its origin must be in
+					 * `trustedOrigins`; calls made directly through `auth.api` skip that
+					 * check, so pass a URL you control. Otherwise the request is rejected
+					 * with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL`.
+					 *
+					 * @default "instant"
+					 */
+					confirmationMode?: "instant" | "explicit";
 				};
 				/**
 				 * User deletion configuration
