@@ -2552,6 +2552,50 @@ describe("2FA enforcement scope", async () => {
 		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 
+	it("should challenge 2FA on custom sign-in paths when challengePaths is configured", async () => {
+		let customMagicLinkURL = "";
+		const {
+			auth: customAuth,
+			signInWithTestUser: customSignIn,
+			testUser: customUser,
+		} = await getTestInstance({
+			plugins: [
+				twoFactor({
+					challengePaths: ["/magic-link/verify"],
+				}),
+				magicLink({
+					sendMagicLink({ url }) {
+						customMagicLinkURL = url;
+					},
+				}),
+			],
+		});
+
+		const { headers } = await customSignIn();
+		await customAuth.api.enableTwoFactor({
+			body: { password: customUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		await customAuth.api.signInMagicLink({
+			body: { email: customUser.email },
+			headers: new Headers(),
+		});
+
+		const url = new URL(customMagicLinkURL);
+		const token = url.searchParams.get("token")!;
+
+		const verifyRes = await customAuth.api.magicLinkVerify({
+			query: { token },
+			headers: new Headers(),
+			asResponse: true,
+		});
+
+		const json = await verifyRes.json();
+		expect(json.twoFactorRedirect).toBe(true);
+	});
+
 	it("should not challenge 2FA on authenticated non-sign-in endpoints", async () => {
 		const {
 			auth: instance,
