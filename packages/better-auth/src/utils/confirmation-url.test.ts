@@ -65,6 +65,50 @@ describe("assertExplicitCallbackURL", () => {
 		).toBe("INVALID_CALLBACK_URL");
 	});
 
+	it.each([
+		"https://auth.example.com/api/auth/delete%2Duser/callback",
+		"https://auth.example.com/api/auth/delete%2duser/callback",
+		"https://auth.example.com/api/auth/%64elete-user/callback",
+		"https://auth.example.com/api/%61uth/delete-user/callback",
+		"https://auth.example.com/api/auth/delete%252Duser/callback",
+		"https://auth.example.com/api/auth/x/%2e%2e/delete-user/callback",
+		"https://auth.example.com/api/auth/x%2f..%2fdelete-user/callback",
+		"https://auth.example.com/api/auth/delete-user%2Fcallback",
+	])("rejects a percent-encoded link back to the instant callback: %s", (callbackURL) => {
+		expect(
+			codeOf(() => assertExplicitCallbackURL(baseURL, callbackURL, blocked)),
+		).toBe("INVALID_CALLBACK_URL");
+	});
+
+	it("rejects a malformed percent-encoding instead of comparing it raw", () => {
+		expect(
+			codeOf(() =>
+				assertExplicitCallbackURL(
+					baseURL,
+					"https://auth.example.com/api/auth/%E0%A4%A",
+					blocked,
+				),
+			),
+		).toBe("INVALID_CALLBACK_URL");
+	});
+
+	it.each([
+		"https://app.example.com/confirm?token=stale",
+		"https://app.example.com/confirm?a=1&token=",
+		"https://app.example.com/confirm?TOKEN=x&b=2",
+		"myapp://confirm?token=x",
+	])("rejects a callbackURL that already carries a token: %s", (callbackURL) => {
+		expect(
+			codeOf(() => assertExplicitCallbackURL(baseURL, callbackURL, blocked)),
+		).toBe("INVALID_CALLBACK_URL");
+	});
+
+	it("allows unrelated query parameters and harmless encoding", () => {
+		const url =
+			"https://app.example.com/a%20b/confirm?next=%2Fhome&tokenizer=1";
+		expect(assertExplicitCallbackURL(baseURL, url, blocked)).toBe(url);
+	});
+
 	it("honors a base URL without a path", () => {
 		expect(
 			codeOf(() =>

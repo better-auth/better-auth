@@ -1055,9 +1055,10 @@ export type BetterAuthOptions = {
 					 *   (Outlook Safe Links, link-preview proxies).
 					 *
 					 * In `"explicit"` mode the emailed link is built from the request's
-					 * `callbackURL`, so every deletion request must include one: an
-					 * absolute URL to the app's confirmation page that doesn't point at
-					 * `/delete-user/callback`. For HTTP requests its origin must be in
+					 * `callbackURL`, so every deletion request that sends a verification
+					 * email must include one: an absolute URL to the app's confirmation
+					 * page that doesn't point at `/delete-user/callback` and doesn't
+					 * already carry a `token` query parameter. For HTTP requests its origin must be in
 					 * `trustedOrigins`; calls made directly through `auth.api` skip that
 					 * check, so pass a URL you control. Otherwise the request is rejected
 					 * with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL`.

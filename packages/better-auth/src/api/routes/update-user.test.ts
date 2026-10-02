@@ -1,6 +1,9 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
+import { createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
@@ -1563,5 +1566,121 @@ describe("password length on verify-only fields", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * An earlier hook can already have loaded the session from the cookie cache
+ * into `ctx.context.session`; `getSessionFromCtx` returns that without
+ * honoring `disableCookieCache`. The explicit-mode preview and confirm
+ * endpoints must still re-read the session store, so a revoked session that
+ * still carries a valid cached cookie can't authorize a deletion.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11527
+ */
+describe("explicit delete-user confirmation is revocation-aware with cookie cache", async () => {
+	const preloadCachedSessionPlugin = {
+		id: "preload-cached-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path?.startsWith("/delete-user/") === true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
+	async function setup() {
+		const capture = { token: "" };
+		const instance = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				plugins: [preloadCachedSessionPlugin],
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ token }) {
+							capture.token = token;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const email = `revoked-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await instance.client.signUp.email({ email, password, name: "Revoked" });
+		const headers = new Headers();
+		await instance.client.signIn.email({
+			email,
+			password,
+			fetchOptions: { onSuccess: instance.sessionSetter(headers) },
+		});
+		// Materialize the cookie cache: the signed `session_data` cookie comes
+		// back on the get-session response and has to be sent along explicitly.
+		const sessionRes = await instance.client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cached = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") ?? "",
+					).get("better-auth.session_data")?.value;
+					if (cached) {
+						headers.set(
+							"cookie",
+							`${headers.get("cookie")}; better-auth.session_data=${cached}`,
+						);
+					}
+				},
+			},
+		});
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+		expect(headers.get("cookie")).toContain("better-auth.session_data=");
+		await instance.client.deleteUser({
+			password,
+			callbackURL: "https://app.example.com/goodbye",
+			fetchOptions: { headers },
+		});
+		expect(capture.token.length).toBe(32);
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await instance.db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+		return { ...instance, capture, headers, email };
+	}
+
+	it("rejects /delete-user/confirm from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, email } = await setup();
+		await expect(
+			auth.api.deleteUserConfirm({
+				body: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		const user = await db.findOne({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user).not.toBeNull();
+	});
+
+	it("rejects /delete-user/preview from a revoked but cached session", async () => {
+		const { auth, capture, headers } = await setup();
+		await expect(
+			auth.api.deleteUserPreview({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
 	});
 });
