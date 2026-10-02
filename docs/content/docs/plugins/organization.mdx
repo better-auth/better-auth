@@ -855,6 +855,103 @@ const auth = betterAuth({
 });
 ```
 
+## Transfer Ownership
+
+To transfer ownership of an organization to another member, use `organization.transferOwnership`. Only a member who currently holds `creatorRole` may call it — the generic `member: ["update"]` permission (which a plain admin also holds) is not enough, since granting it would let an admin nominate a new owner while leaving the real owner untouched. It swaps the `creatorRole` between the current owner and the target member — the organization always has an owner, before and after. The target is promoted first, keeping any other roles it already holds, and only then is the current owner demoted; if the demotion fails or loses a race with a concurrent transfer, the promotion is rolled back.
+
+<APIMethod path="/organization/transfer-ownership" method="POST" requireSession>
+  ```ts
+  type transferOwnership = {
+      /**
+       * The organization id the transfer applies to. If not provided, the active organization from the session is used.
+       */
+      organizationId?: string = "organization-id"
+      /**
+       * The member id to transfer ownership to.
+       */
+      newOwnerMemberId: string = "member-id"
+      /**
+       * The callback URL to redirect to after ownership is transferred. Only used when a transfer confirmation email is sent. Required when `confirmationMode` is `"explicit"`.
+       */
+      callbackURL?: string = "/dashboard"
+  }
+  ```
+</APIMethod>
+
+You can run code around the swap with `organizationHooks`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [
+    organization({
+      organizationHooks: {
+        beforeTransferOwnership: async (data, ctx) => {
+          // a callback to run before transferring ownership
+        },
+        afterTransferOwnership: async (data, ctx) => {
+          // a callback to run after transferring ownership
+        },
+      },
+    }),
+  ],
+});
+```
+
+### Email confirmation before transferring
+
+By default, the swap happens immediately. To require email confirmation from the *current
+owner* first (they're the one giving up control, not the target member), configure
+`ownershipTransfer.sendTransferOwnershipVerification`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [
+    organization({
+      ownershipTransfer: {
+        async sendTransferOwnershipVerification({ organization, currentOwner, newOwner, url, token }) {
+          // send an email with `url` to `currentOwner.user`
+        },
+        // how long the token is valid for, in seconds. Defaults to 1 day.
+        transferTokenExpiresIn: 60 * 60 * 24,
+        confirmationMode: "instant", // or "explicit"
+      },
+    }),
+  ],
+});
+```
+
+With this configured, `organization.transferOwnership` emails the current owner a
+confirmation link instead of swapping immediately, responding with
+`{ success: true, message: "Verification email sent" }`. Visiting the link
+(`GET /organization/transfer-ownership/callback`) re-validates the session, the current
+owner's membership, and that they still hold `creatorRole`, re-checks the target hasn't
+already become the owner, consumes the single-use token, then performs the swap. The token
+is only consumed right before the swap, so an unauthenticated or unauthorized visit — an
+email scanner following the link with no session, for instance — does not burn it.
+
+#### Explicit confirmation mode
+
+The emailed link above is a plain `GET` that transfers ownership on visit. Some email clients
+and security scanners open links automatically to scan them (Outlook Safe Links, link-preview
+proxies), which can trigger it without the owner's intent. Set `confirmationMode: "explicit"`
+to require a separate confirmation step instead. The `url` passed to
+`sendTransferOwnershipVerification` is then your app's own URL (built from `callbackURL`,
+which becomes required) with `token` attached. Your app renders a confirmation page from it,
+then:
+
+* `GET /organization/transfer-ownership/preview` — validates the token and returns the
+  pending transfer without applying it.
+* `POST /organization/transfer-ownership/confirm` — consumes the token and performs the
+  swap, the same way the instant callback does.
+
+Both require the signed-in current owner the token was issued for.
+
 ## Invitations
 
 To add a member to an organization, we first need to send an invitation to the user. The user will receive an email/sms with the invitation link. Once the user accepts the invitation, they will be added to the organization.
@@ -2584,3 +2681,5 @@ await client.organization.create({
 **invitationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of invitations allowed for a user. By default, it's `100`. You can set it to any number you want or a function that returns a boolean.
 
 **requireEmailVerificationOnInvitation**: `boolean | undefined` - Whether to require email verification before recipient invitation calls that carry an invitation ID (`acceptInvitation`, `rejectInvitation`, `getInvitation`). When unset, Better Auth preserves the normal emailed-invitation flow for built-in opaque invitation IDs, including the default generator and `advanced.database.generateId: "uuid"`. It requires verification for externally controlled or predictable invitation IDs, such as `advanced.database.generateId: "serial"` / `false` or custom ID generation. Set this option to `true` when invitation IDs may be visible outside the invited user's mailbox, when organization invitation lists are exposed to members, or when you want verified email to be the ownership proof for by-ID invitation actions. Client-side `listUserInvitations` always requires a verified session email because it enumerates invitation IDs from the session email.
+
+**ownershipTransfer**: `{ sendTransferOwnershipVerification?, transferTokenExpiresIn?, confirmationMode? }` - Require email confirmation from the current owner before `organization.transferOwnership` swaps ownership. If `sendTransferOwnershipVerification` isn't set, the swap happens immediately. See [Email confirmation before transferring](#email-confirmation-before-transferring).
