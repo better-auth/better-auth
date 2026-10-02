@@ -10,6 +10,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
+import { assertExplicitCallbackURL } from "../../utils/confirmation-url";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -496,16 +497,18 @@ export const deleteUser = createAuthEndpoint(
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const confirmationMode =
 				ctx.context.options.user.deleteUser?.confirmationMode || "instant";
-			const callbackURL = ctx.body.callbackURL;
-			// In explicit mode the emailed link is the app's own URL, so there
-			// is nothing to send without one. Checked before the token exists so
-			// a rejected request leaves no orphaned verification row behind.
-			if (confirmationMode === "explicit" && !callbackURL) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					BASE_ERROR_CODES.CALLBACK_URL_REQUIRED,
-				);
-			}
+			// In explicit mode the emailed link is the app's own URL, so it must
+			// be a usable absolute URL that doesn't lead back to the instant
+			// callback. Checked before the token exists so a rejected request
+			// leaves no orphaned verification row behind.
+			const explicitURL =
+				confirmationMode === "explicit"
+					? assertExplicitCallbackURL(
+							ctx.context.baseURL,
+							ctx.body.callbackURL,
+							["/delete-user/callback"],
+						)
+					: undefined;
 			const token = generateRandomString(32, "0-9", "a-z");
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: session.user.id,
@@ -518,17 +521,16 @@ export const deleteUser = createAuthEndpoint(
 				),
 			});
 			// In explicit mode, callbackURL becomes the app-owned URL itself, not
-			// just a post-callback redirect target. It's already validated
+			// just a post-callback redirect target. Its origin is validated
 			// against trustedOrigins by the global originCheckMiddleware
 			// (api/index.ts) before this handler runs.
-			const url =
-				confirmationMode === "explicit" && callbackURL
-					? appendQueryParams(callbackURL, new URLSearchParams({ token }))
-					: `${
-							ctx.context.baseURL
-						}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
-							callbackURL || "/",
-						)}`;
+			const url = explicitURL
+				? appendQueryParams(explicitURL, new URLSearchParams({ token }))
+				: `${
+						ctx.context.baseURL
+					}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+						ctx.body.callbackURL || "/",
+					)}`;
 			await ctx.context.runInBackgroundOrAwait(
 				ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 					{

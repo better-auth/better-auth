@@ -853,7 +853,7 @@ describe("delete user", async () => {
 		await runWithUser(async () => {
 			await client.deleteUser({
 				password: testUser.password,
-				callbackURL: "/goodbye",
+				callbackURL: "https://app.example.com/goodbye",
 			});
 		});
 		expect(capturedToken.length).toBe(32);
@@ -901,14 +901,33 @@ describe("delete user", async () => {
 			},
 		});
 
-		it("requires a callbackURL, since the emailed link is the app's own URL", async () => {
+		it("rejects a callbackURL that can't be a usable emailed link, without creating a token", async () => {
 			const capture = { token: "" };
-			const { client, signInWithTestUser, testUser, db } =
+			const { client, auth, signInWithTestUser, testUser, db } =
 				await getTestInstance(explicitOptions(capture));
+			const { baseURL } = await auth.$context;
 			const { runWithUser } = await signInWithTestUser();
+
+			const cases: Array<[string | undefined, string]> = [
+				// the emailed link is the app's own URL, so there must be one
+				[undefined, "CALLBACK_URL_REQUIRED"],
+				// a mail client can't resolve a relative link
+				["/goodbye", "INVALID_CALLBACK_URL"],
+				// must not lead back to the instant GET callback, directly or via
+				// a trailing slash, a query string, a fragment or dot segments
+				[`${baseURL}/delete-user/callback`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/delete-user/callback/`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/delete-user/callback?x=1#y`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/foo/../delete-user/callback`, "INVALID_CALLBACK_URL"],
+			];
 			await runWithUser(async () => {
-				const res = await client.deleteUser({ password: testUser.password });
-				expect(res.error?.code).toBe("CALLBACK_URL_REQUIRED");
+				for (const [callbackURL, code] of cases) {
+					const res = await client.deleteUser({
+						password: testUser.password,
+						callbackURL,
+					});
+					expect(res.error?.code, String(callbackURL)).toBe(code);
+				}
 			});
 			expect(capture.token).toBe("");
 			const rows = await db.findMany({ model: "verification" });
@@ -929,7 +948,7 @@ describe("delete user", async () => {
 			await runWithUser(async () => {
 				await client.deleteUser({
 					password: testUser.password,
-					callbackURL: "/goodbye",
+					callbackURL: "https://app.example.com/goodbye",
 				});
 			});
 
@@ -956,7 +975,7 @@ describe("delete user", async () => {
 			await runWithUser(async () => {
 				await client.deleteUser({
 					password: testUser.password,
-					callbackURL: "/goodbye",
+					callbackURL: "https://app.example.com/goodbye",
 				});
 			});
 
@@ -1024,7 +1043,7 @@ describe("delete user", async () => {
 			await runWithUser(async () => {
 				await client.deleteUser({
 					password: testUser.password,
-					callbackURL: "/goodbye",
+					callbackURL: "https://app.example.com/goodbye",
 				});
 			});
 			vi.useFakeTimers({ toFake: ["Date"] });
@@ -1088,7 +1107,7 @@ describe("delete user", async () => {
 			await runWithUser(async () => {
 				await client.deleteUser({
 					password: testUser.password,
-					callbackURL: "/goodbye",
+					callbackURL: "https://app.example.com/goodbye",
 				});
 				const [first, second] = await Promise.all([
 					client.deleteUser.confirm({ token: capture.token }),

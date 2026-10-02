@@ -1054,6 +1054,12 @@ export type BetterAuthOptions = {
 					 *   clients and security scanners that open links automatically
 					 *   (Outlook Safe Links, link-preview proxies).
 					 *
+					 * In `"explicit"` mode the emailed link is built from the request's
+					 * `callbackURL`, so every deletion request must include one: an
+					 * absolute URL to the app's confirmation page that doesn't point at
+					 * `/delete-user/callback`. Otherwise the request is rejected with
+					 * `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL`.
+					 *
 					 * @default "instant"
 					 */
 					confirmationMode?: "instant" | "explicit";
