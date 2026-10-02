@@ -1788,7 +1788,9 @@ async function handleOIDCCallback(
 		}
 	}
 	if (linked.error) {
-		return redirectOIDCError(linked.error);
+		return redirectOIDCError(
+			linked.error === "signup disabled" ? "signup_disabled" : linked.error,
+		);
 	}
 	const { session, user } = linked.data!;
 
