@@ -878,6 +878,7 @@ export function resetSeedStateForTests(): void {
 export async function seedResources(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
+	seedOptions: { deferStorageErrors?: boolean } = {},
 ): Promise<void> {
 	const inputs = collectResourceInputs(opts);
 	if (inputs.length === 0) return;
@@ -915,41 +916,17 @@ export async function seedResources(
 			const { signingAlgorithm: _, ...rest } = input;
 			input = rest as typeof input;
 		}
-		let existing: OAuthResource | null;
+		// Validation stays outside this catch so application callback exceptions
+		// retain their initialization behavior. Only storage work can be deferred.
 		try {
-			existing = await ctx.adapter.findOne<OAuthResource>({
-				model: modelName,
-				where: [{ field: "identifier", value: input.identifier }],
-			});
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			if (MISSING_TABLE_PATTERN.test(message)) {
-				logger.debug(
-					"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
-				);
-				return;
-			}
-			throw err;
-		}
-		const now = new Date();
-
-		if (!existing) {
+			let existing: OAuthResource | null;
 			try {
-				await ctx.adapter.create({
+				existing = await ctx.adapter.findOne<OAuthResource>({
 					model: modelName,
-					data: buildSeedRow(input, now),
+					where: [{ field: "identifier", value: input.identifier }],
 				});
 			} catch (err) {
 				const message = err instanceof Error ? err.message : String(err);
-				// Race with a concurrent boot — another process inserted between
-				// our findOne and create. The UNIQUE constraint protects us; treat
-				// the conflict as a no-op so init doesn't fail.
-				if (/unique|duplicate|UNIQUE/i.test(message)) {
-					logger.debug(
-						`oauth-provider: resource ${input.identifier} already inserted by a concurrent process — skipping.`,
-					);
-					continue;
-				}
 				if (MISSING_TABLE_PATTERN.test(message)) {
 					logger.debug(
 						"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
@@ -958,16 +935,51 @@ export async function seedResources(
 				}
 				throw err;
 			}
-			continue;
+			const now = new Date();
+
+			if (!existing) {
+				try {
+					await ctx.adapter.create({
+						model: modelName,
+						data: buildSeedRow(input, now),
+					});
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					// Race with a concurrent boot — another process inserted between
+					// our findOne and create. The UNIQUE constraint protects us; treat
+					// the conflict as a no-op so init doesn't fail.
+					if (/unique|duplicate|UNIQUE/i.test(message)) {
+						logger.debug(
+							`oauth-provider: resource ${input.identifier} already inserted by a concurrent process — skipping.`,
+						);
+						continue;
+					}
+					if (MISSING_TABLE_PATTERN.test(message)) {
+						logger.debug(
+							"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
+						);
+						return;
+					}
+					throw err;
+				}
+				continue;
+			}
+
+			if (mode === "insertOnly") continue;
+
+			await ctx.adapter.update({
+				model: modelName,
+				where: [{ field: "identifier", value: input.identifier }],
+				update: buildSeedUpdate(input, mode, now),
+			});
+		} catch (error) {
+			if (!seedOptions.deferStorageErrors) throw error;
+			ctx.logger.warn(
+				"oauth-provider: startup resource seed failed; deferring resource seed to first access.",
+				error,
+			);
+			return;
 		}
-
-		if (mode === "insertOnly") continue;
-
-		await ctx.adapter.update({
-			model: modelName,
-			where: [{ field: "identifier", value: input.identifier }],
-			update: buildSeedUpdate(input, mode, now),
-		});
 	}
 }
 
