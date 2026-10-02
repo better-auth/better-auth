@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
@@ -78,7 +79,10 @@ async function revokeJwtAccessToken(
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			},
 		);
-		const userInfoAudience = `${ctx.context.baseURL}/oauth2/userinfo`;
+		const userInfoAudience = appendURLPath(
+			ctx.context.baseURL,
+			"/oauth2/userinfo",
+		);
 		if (
 			!verified.payload.azp ||
 			!(await isAudienceClaimAllowed(ctx, opts, verified.payload.aud, [
@@ -310,7 +314,7 @@ export async function revokeEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/revoke`,
+		appendURLPath(ctx.context.baseURL, "/oauth2/revoke"),
 	);
 	const {
 		clientId: client_id,

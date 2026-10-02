@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
@@ -404,7 +405,7 @@ function logoutPage(title: string, body: string, status = 200): Response {
 }
 
 function logoutConfirmationPath(ctx: GenericEndpointContext): string {
-	return `${ctx.context.baseURL.replace(/\/$/, "")}/oauth2/end-session/confirm`;
+	return appendURLPath(ctx.context.baseURL, "/oauth2/end-session/confirm");
 }
 
 function logoutConfirmationCookiePath(ctx: GenericEndpointContext): string {
@@ -699,7 +700,10 @@ async function verifyLogoutHint(
 			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 			const jwksUrl =
 				jwtPluginOptions?.jwks?.remoteUrl ??
-				`${ctx.context.baseURL}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`;
+				appendURLPath(
+					ctx.context.baseURL,
+					jwtPluginOptions?.jwks?.jwksPath ?? "/jwks",
+				);
 			const jwks = await getJwks(hint, { jwksFetch: jwksUrl });
 			const { payload: verifiedPayload } = await compactVerify(
 				hint,

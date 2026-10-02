@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
-import { appendQueryParams } from "@better-auth/core/utils/url";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
@@ -236,7 +236,8 @@ function getErrorURL(
 	description: string,
 ) {
 	const baseURL =
-		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
+		ctx.context.options.onAPIError?.errorURL ||
+		appendURLPath(ctx.context.baseURL, "/error");
 	const formattedURL = formatErrorURL(baseURL, error, description);
 	return formattedURL;
 }
@@ -1093,7 +1094,34 @@ async function redirectWithPromptCode(
 	} else if (type === "create") {
 		path = opts.signup?.page ?? opts.loginPage;
 	}
-	return handleRedirect(ctx, `${options?.page ?? path}?${queryParams}`);
+	return handleRedirect(
+		ctx,
+		appendPromptQueryParams(options?.page ?? path, queryParams),
+	);
+}
+
+function appendPromptQueryParams(
+	page: string,
+	params: URLSearchParams,
+): string {
+	if (page.startsWith("/") || URL.canParse(page)) {
+		return appendQueryParams(page, params);
+	}
+
+	// TODO: Path-relative page URLs like "page" still work for compatibility.
+	// Decide whether to require root-relative paths like "/page" and remove this branch.
+	const fragmentIndex = page.indexOf("#");
+	const beforeFragment =
+		fragmentIndex === -1 ? page : page.slice(0, fragmentIndex);
+	const fragment = fragmentIndex === -1 ? "" : page.slice(fragmentIndex);
+	let separator = "?";
+	if (beforeFragment.includes("?")) {
+		separator = "&";
+		if (beforeFragment.endsWith("?") || beforeFragment.endsWith("&")) {
+			separator = "";
+		}
+	}
+	return `${beforeFragment}${separator}${params.toString()}${fragment}`;
 }
 
 async function signParams(
@@ -1123,5 +1151,5 @@ async function signParams(
 		ctx.context.secret,
 	);
 	params.set("sig", signature);
-	return params.toString();
+	return params;
 }
