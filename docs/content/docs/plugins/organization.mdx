@@ -941,16 +941,28 @@ The emailed link above is a plain `GET` that transfers ownership on visit. Some 
 and security scanners open links automatically to scan them (Outlook Safe Links, link-preview
 proxies), which can trigger it without the owner's intent. Set `confirmationMode: "explicit"`
 to require a separate confirmation step instead. The `url` passed to
-`sendTransferOwnershipVerification` is then your app's own URL (built from `callbackURL`,
-which becomes required) with `token` attached. Your app renders a confirmation page from it,
-then:
+`sendTransferOwnershipVerification` is then your app's own URL (built from `callbackURL`) with
+`token` attached.
+
+Because that URL is emailed, every transfer request that sends a verification email must pass a
+`callbackURL` that is an **absolute** URL to your confirmation page, for example
+`https://app.example.com/org/settings`, and that doesn't already carry a `token` query
+parameter. If your app is on a different origin than the auth server, add that origin to
+[`trustedOrigins`](/docs/reference/options#trustedorigins), or HTTP requests are rejected with
+`INVALID_ORIGIN` (the request's own origin) or `INVALID_CALLBACK_URL` (the `callbackURL`) before
+they reach the handler. That origin check only applies to requests that arrive over HTTP: when
+you call `auth.api.transferOwnership` directly from server code there is no request to check, so
+pass a `callbackURL` you control. A missing, relative or invalid `callbackURL`, one that points
+at `/organization/transfer-ownership/callback` (however its path is encoded), or one that
+already contains `token`, is rejected with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL`
+before anything is sent. Your app renders a confirmation page from it, then:
 
 * `GET /organization/transfer-ownership/preview` — validates the token and returns the
   pending transfer without applying it.
 * `POST /organization/transfer-ownership/confirm` — consumes the token and performs the
   swap, the same way the instant callback does.
 
-Both require the signed-in current owner the token was issued for.
+Both require the signed-in current owner the token was issued for, checked against the session store rather than a cached cookie.
 
 ## Invitations
 
