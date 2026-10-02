@@ -1942,6 +1942,27 @@ async function handleRefreshTokenGrant(
 			? normalizeTimestampValue(refreshToken.authTime)
 			: undefined;
 
+	// Carry the issuance session's id onto the replacement tokens only while
+	// that session is still live. Introspection resolves `sid` authoritatively
+	// against the session row, so a stale id would make every replacement token
+	// report inactive. The grant itself stays valid: offline access does not
+	// depend on the login session outliving it. Adapter faults propagate.
+	let sessionId = refreshToken.sessionId ?? undefined;
+	if (sessionId) {
+		const session = await ctx.context.adapter.findOne<Session>({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId,
+				},
+			],
+		});
+		if (!session || session.expiresAt < new Date()) {
+			sessionId = undefined;
+		}
+	}
+
 	// Generate new tokens
 	return createUserTokens(ctx, opts, {
 		client,
@@ -1950,7 +1971,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
+		sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
