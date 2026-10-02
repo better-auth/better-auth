@@ -114,12 +114,12 @@ describe("assertExplicitCallbackURL", () => {
 		);
 	});
 
-	it("still rejects a blocked path that an encoded percent sign is mixed into", () => {
+	it("still rejects a blocked path that mixes single and double encoding", () => {
 		expect(
 			codeOf(() =>
 				assertExplicitCallbackURL(
 					baseURL,
-					"https://auth.example.com/api/auth/delete%252Duser/callback",
+					"https://auth.example.com/api/auth/%64elete%252Duser/callback",
 					blocked,
 				),
 			),
