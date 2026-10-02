@@ -26,6 +26,7 @@ import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
+import { OAUTH_CALLBACK_ERROR_CODES } from "./errors";
 
 let mockEmail = "";
 let mockEmailVerified = true;
@@ -147,7 +148,9 @@ describe("oauth2 - email verification on link", async () => {
 
 		// Callback redirects with the documented account_not_linked error code so
 		// the test can't pass on an unrelated redirect (e.g. server-side failure).
-		expect(redirectLocation).toContain("error=account_not_linked");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		// Link is rejected: no Google account row, local emailVerified untouched
 		const accounts = await ctx.adapter.findMany<{
@@ -553,7 +556,9 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=account_not_linked");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
 			model: "account",
@@ -619,7 +624,9 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 			},
 		});
 
-		expect(redirectLocation).not.toContain("error=account_not_linked");
+		expect(redirectLocation).not.toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		const user = await ctx.adapter.findOne<{ id: string }>({
 			model: "user",
@@ -715,7 +722,9 @@ describe("oauth2 - disableImplicitLinking", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=account_not_linked");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
 			model: "account",
@@ -1698,7 +1707,9 @@ describe("oauth2 - sign-up account creation rollback", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=unable_to_create_user");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_CREATE_USER}`,
+		);
 
 		const user = await ctx.adapter.findOne<User>({
 			model: "user",

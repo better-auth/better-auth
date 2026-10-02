@@ -19,7 +19,6 @@ export const OAUTH_CALLBACK_ERROR_CODES = {
 	STATE_MISMATCH: "state_mismatch",
 	NO_CODE: "no_code",
 	PROVIDER_NOT_FOUND: "oauth_provider_not_found",
-	ISSUER_MISSING: "issuer_missing",
 	ISSUER_MISMATCH: "issuer_mismatch",
 	INVALID_CODE: "invalid_code",
 	NONCE_BINDING_MISSING: "nonce_binding_missing",

@@ -8,6 +8,7 @@ import {
 	symmetricEncrypt,
 } from "./crypto";
 import { derivePurposeKey } from "./crypto/purpose";
+import { OAUTH_CALLBACK_ERROR_CODES } from "./oauth2/errors";
 
 const stateDataSchema = z.looseObject({
 	callbackURL: z.string(),
@@ -173,7 +174,7 @@ export async function parseGenericState(
 ) {
 	if (!state) {
 		throw new StateError("State not found in OAuth callback", {
-			code: "state_not_found",
+			code: OAUTH_CALLBACK_ERROR_CODES.STATE_NOT_FOUND,
 		});
 	}
 
@@ -189,7 +190,7 @@ export async function parseGenericState(
 
 		if (!encryptedData) {
 			throw new StateError("State mismatch: auth state cookie not found", {
-				code: "state_mismatch",
+				code: OAUTH_CALLBACK_ERROR_CODES.STATE_MISMATCH,
 				details: { state },
 			});
 		}
@@ -205,7 +206,7 @@ export async function parseGenericState(
 			throw new StateError(
 				"State invalid: Failed to decrypt or parse auth state",
 				{
-					code: "state_invalid",
+					code: OAUTH_CALLBACK_ERROR_CODES.STATE_INVALID,
 					details: { state },
 					cause: error,
 				},
@@ -232,7 +233,7 @@ export async function parseGenericState(
 		);
 		if (!data) {
 			throw new StateError("State mismatch: verification not found", {
-				code: "state_mismatch",
+				code: OAUTH_CALLBACK_ERROR_CODES.STATE_MISMATCH,
 				details: { state },
 			});
 		}
@@ -296,7 +297,7 @@ export async function parseGenericState(
 	// Check expiration
 	if (parsedData.expiresAt < Date.now()) {
 		throw new StateError("Invalid state: request expired", {
-			code: "state_mismatch",
+			code: OAUTH_CALLBACK_ERROR_CODES.STATE_MISMATCH,
 			details: {
 				expiresAt: parsedData.expiresAt,
 			},
