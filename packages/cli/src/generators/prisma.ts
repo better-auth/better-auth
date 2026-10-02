@@ -372,6 +372,29 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const prismaModel = builder.findByType("model", {
 				name: modelName,
 			});
+			const prismaIdLength = (() => {
+				const idField = prismaModel
+					? builder.findByType("field", {
+							name: "id",
+							within: prismaModel.properties,
+						})
+					: undefined;
+				if (
+					typeof idField?.fieldType !== "string" ||
+					getFieldTypeParts(idField.fieldType).fieldType !== "String"
+				) {
+					return PRISMA_MYSQL_ID_LENGTH;
+				}
+				const lengthAttribute = idField.attributes?.find(
+					(attribute) =>
+						attribute.group === "db" &&
+						(attribute.name === "VarChar" || attribute.name === "Char"),
+				);
+				const length = Number(lengthAttribute?.args?.[0]?.value);
+				return Number.isInteger(length) && length > 0
+					? length
+					: PRISMA_MYSQL_ID_LENGTH;
+			})();
 
 			if (!prismaModel) {
 				if (provider === "mongodb") {
@@ -463,7 +486,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								dialect: "mysql",
 								fields: fields ?? {},
 								generateId: options.advanced?.database?.generateId,
-								idLength: PRISMA_MYSQL_ID_LENGTH,
+								idLength: prismaIdLength,
 								indexes: resolvedTableIndexes,
 							});
 							if (tableIndexStringLength) {
@@ -633,7 +656,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						dialect: "mysql",
 						fields: fields ?? {},
 						generateId: options.advanced?.database?.generateId,
-						idLength: PRISMA_MYSQL_ID_LENGTH,
+						idLength: prismaIdLength,
 						indexes: resolvedTableIndexes,
 					});
 					const nativeType = tableIndexStringLength

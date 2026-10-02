@@ -948,6 +948,60 @@ model Directory_user {
 		expect(schema.code).toMatch(/\ba\s+String\s+@db\.VarChar\(144\)/);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it.each([
+		{ id: "String @id @db.VarChar(36)", expected: 183 },
+		{ id: "String @id", expected: 144 },
+	])("should size MySQL index lengths from an existing Prisma id ($id)", async ({
+		id,
+		expected,
+	}) => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-existing-id-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model WideLookup {
+  id ${id}
+  a  String @db.VarChar(153)
+  b  String @db.VarChar(153)
+
+  @@map("wideLookup")
+}
+`,
+		);
+
+		try {
+			const database = prismaAdapter({}, { provider: "mysql" });
+			const schema = await generatePrismaSchema({
+				file: path.relative(process.cwd(), filePath),
+				adapter: database({} as BetterAuthOptions),
+				options: { database, plugins: [wideLookupPlugin()] },
+			});
+
+			for (const field of ["a", "b", "c", "d"]) {
+				expect(schema.code).toMatch(
+					new RegExp(`\\b${field}\\s+String\\s+@db\\.VarChar\\(${expected}\\)`),
+				);
+			}
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
+	});
+
 	it("should reject duplicate Drizzle field-level and table-level indexes", async () => {
 		await expect(
 			generateDrizzleSchema({
