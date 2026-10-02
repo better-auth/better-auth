@@ -48,39 +48,68 @@ export function normalizePathname(
 	return pathname;
 }
 
+const URL_REFERENCE_ORIGIN = "https://better-auth.invalid";
+const DOT_SEGMENTS = new Set([".", "..", "%2e", ".%2e", "%2e.", "%2e%2e"]);
+const INVALID_PATH_CHARACTER = /[?#\\\t\n\r]/;
+
 /**
- * Appends raw path segments to an absolute URL, encoding each segment.
+ * Appends a pathname to an absolute or root-relative URL at one slash boundary.
+ * An empty base URL produces a root-relative URL.
+ * Preserves existing escapes, query, and fragment. Use `appendURLSegment` for
+ * raw dynamic values.
  *
  * @example
  * const baseURL = "https://example.com/api/auth";
- * const tokenURL = appendURLPath(baseURL, "oauth2", "token");
+ * const tokenURL = appendURLPath(baseURL, "/oauth2/token");
  * // tokenURL === "https://example.com/api/auth/oauth2/token"
  */
-export function appendURLPath(
-	url: string,
-	segment: string,
-	...segments: string[]
-): string {
-	const parsedURL = new URL(url);
-
-	const pathSegments = [segment, ...segments].map((value) => {
-		if (value === "") {
-			throw new TypeError("URL path segments must be nonempty");
-		}
-		return encodeURIComponent(value);
-	});
-
-	const existingPath = parsedURL.pathname.replace(/\/+$/, "");
-	const pathname = [existingPath, ...pathSegments].join("/");
-	parsedURL.pathname = pathname;
-	if (parsedURL.pathname !== pathname) {
-		throw new TypeError("URL path segments could not be appended");
+export function appendURLPath(url: string, path: string): string {
+	if (
+		!path.startsWith("/") ||
+		path.startsWith("//") ||
+		INVALID_PATH_CHARACTER.test(path) ||
+		path.split("/").some((segment) => DOT_SEGMENTS.has(segment.toLowerCase()))
+	) {
+		throw new TypeError("Path must be a valid root-relative URL pathname");
 	}
 
-	return parsedURL.href;
+	const relative = url === "" || url.startsWith("/");
+	if (relative && (url.startsWith("//") || url.startsWith("/\\"))) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+	const parsedURL = new URL(url, relative ? URL_REFERENCE_ORIGIN : undefined);
+	if (relative && parsedURL.origin !== URL_REFERENCE_ORIGIN) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+	parsedURL.pathname = `${parsedURL.pathname.replace(/\/+$/, "")}${path}`;
+	if (!parsedURL.pathname.startsWith("/")) {
+		throw new TypeError("URL does not support path appending");
+	}
+
+	const result = relative
+		? parsedURL.href.slice(parsedURL.origin.length)
+		: parsedURL.href;
+	if (relative && result.startsWith("//")) {
+		throw new TypeError("Root-relative URL cannot contain an authority");
+	}
+	return result;
 }
 
-const URL_REFERENCE_ORIGIN = "https://better-auth.invalid";
+/**
+ * Appends one raw path segment to an absolute or root-relative URL, encoding its value.
+ * An empty base URL produces a root-relative URL.
+ *
+ * @example
+ * const baseURL = "https://example.com/api/auth/callback";
+ * const callbackURL = appendURLSegment(baseURL, "team/member");
+ * // callbackURL === "https://example.com/api/auth/callback/team%2Fmember"
+ */
+export function appendURLSegment(url: string, segment: string): string {
+	if (segment === "") {
+		throw new TypeError("URL path segment must be nonempty");
+	}
+	return appendURLPath(url, `/${encodeURIComponent(segment)}`);
+}
 
 /**
  * Appends query parameters before the fragment of an absolute or root-relative URL.
