@@ -6,6 +6,7 @@ import {
 	runWithAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { logger } from "@better-auth/core/env";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
@@ -37,6 +38,7 @@ interface ReceivedLogoutRequest {
 	contentType: string | undefined;
 	logoutToken: string | undefined;
 	raw: string;
+	url?: string | undefined;
 }
 
 /**
@@ -44,7 +46,11 @@ interface ReceivedLogoutRequest {
  * returns a configurable status, with optional artificial latency.
  */
 async function startMockRp(
-	options: { status?: number; delayMs?: number } = {},
+	options: {
+		status?: number;
+		delayMs?: number;
+		headers?: Record<string, string>;
+	} = {},
 ) {
 	const received: ReceivedLogoutRequest[] = [];
 	const server = createServer((req, res) => {
@@ -58,7 +64,13 @@ async function startMockRp(
 				contentType: req.headers["content-type"],
 				logoutToken: params.get("logout_token") ?? undefined,
 				raw: body,
+				url: req.url,
 			});
+			if (options.headers) {
+				for (const [key, value] of Object.entries(options.headers)) {
+					res.setHeader(key, value);
+				}
+			}
 			if (options.delayMs) {
 				await new Promise((r) => setTimeout(r, options.delayMs));
 			}
@@ -652,6 +664,50 @@ describe("oauth back-channel logout", async () => {
 		expect(result.error).toBeNull();
 		await waitForDispatches();
 		expect(rp.received).toHaveLength(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11328
+	 */
+	it("uses manual redirect mode and refuses RP redirects during back-channel logout", async () => {
+		const capturedInits: RequestInit[] = [];
+		const currentFetch = globalThis.fetch;
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+			if (init) capturedInits.push(init);
+			return currentFetch(input, init);
+		});
+
+		const redirectTarget = `${rp.publicUrl}/logout/redirect-target`;
+		await rp.close();
+		rp = await startMockRp({
+			status: 302,
+			headers: { Location: redirectTarget },
+		});
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: `${rp.publicUrl}/logout/backchannel`,
+		});
+		await issueTokens({ client: oauthClient });
+
+		const ctx = await auth.$context;
+		const originalLogger = ctx.logger;
+		ctx.logger = logger;
+		const warnSpy = vi.spyOn(logger, "warn");
+
+		const result = await client.signOut({ fetchOptions: { headers } });
+		expect(result.error).toBeNull();
+		await waitForDispatches();
+
+		expect(capturedInits.some((init) => init.redirect === "manual")).toBe(true);
+		expect(rp.received).toHaveLength(1);
+		expect(rp.received[0]?.url).toBe("/logout/backchannel");
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("back-channel logout to client"),
+			expect.objectContaining({
+				message: expect.stringContaining("returned an HTTP redirect"),
+			}),
+		);
+		warnSpy.mockRestore();
+		ctx.logger = originalLogger;
 	});
 
 	it("isolates a malformed pairwise client from revocation and healthy RP delivery", async () => {

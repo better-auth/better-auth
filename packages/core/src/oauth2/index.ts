@@ -77,6 +77,11 @@ export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
+export {
+	assertResponseNotRedirect,
+	fetchRefusingRedirects,
+	noFollowRedirect,
+} from "./reject-redirects";
 export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,
