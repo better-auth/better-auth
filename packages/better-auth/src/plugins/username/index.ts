@@ -109,6 +109,19 @@ export type UsernameOptions = {
 	 * @default true
 	 */
 	displayUsername?: boolean | undefined;
+	/**
+	 * Allow sign-up with a username and no email.
+	 *
+	 * When set, a `/sign-up/email` request that has a `username` but no
+	 * `email` gets the email this function returns for the normalized
+	 * username. The user is created with `emailVerified: false`. Return an
+	 * address no mail is delivered to, such as one under a domain you
+	 * control or the reserved `.invalid` top-level domain. Requests that
+	 * include an email are unchanged.
+	 *
+	 * @example (username) => `${username}@users.example.invalid`
+	 */
+	getTempEmail?: ((username: string) => string | Promise<string>) | undefined;
 };
 
 function defaultUsernameValidator(username: string) {
@@ -748,6 +761,23 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 								}
 							}
 						}
+					}),
+				},
+				// Runs after the username has been validated and checked for availability.
+				{
+					matcher(context) {
+						return context.path === "/sign-up/email" && !!options?.getTempEmail;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (
+							ctx.body.email !== undefined ||
+							typeof ctx.body.username !== "string"
+						) {
+							return;
+						}
+						ctx.body.email = await options!.getTempEmail!(
+							normalizer(ctx.body.username),
+						);
 					}),
 				},
 				{
