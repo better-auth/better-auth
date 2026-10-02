@@ -927,15 +927,27 @@ organization({
 ```
 
 In `"explicit"` mode, the `url` passed to the callback is your app's own URL (built from
-`callbackURL`, which becomes required) rather than better-auth's `/organization/delete/callback`
-endpoint. Your app renders a confirmation page from it, then:
+`callbackURL`) rather than better-auth's `/organization/delete/callback` endpoint.
+
+Because that URL is emailed, every deletion request that sends a verification email must pass a
+`callbackURL` that is an **absolute** URL to your confirmation page, for example
+`https://app.example.com/org/settings`, and that doesn't already carry a `token` query
+parameter. If your app is on a different origin than the auth server, add that origin to
+[`trustedOrigins`](/docs/reference/options#trustedorigins), or HTTP requests are rejected with
+`INVALID_ORIGIN` (the request's own origin) or `INVALID_CALLBACK_URL` (the `callbackURL`) before
+they reach the handler. That origin check only applies to requests that arrive over HTTP: when
+you call `auth.api.deleteOrganization` directly from server code there is no request to check,
+so pass a `callbackURL` you control. A missing, relative or invalid `callbackURL`, one that
+points at `/organization/delete/callback` (however its path is encoded), or one that already
+contains `token`, is rejected with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL` before
+anything is sent. Your app renders a confirmation page from it, then:
 
 * `GET /organization/delete/preview` — validates the token and returns the pending
   organization without deleting it, so you can render "you're about to delete X".
 * `POST /organization/delete/confirm` — consumes the token and performs the deletion, the
   same way the instant callback does.
 
-Both require the signed-in member the token was issued for.
+Both require the signed-in member the token was issued for, checked against the session store rather than a cached cookie. An explicit-mode token is only accepted by these two endpoints: `GET /organization/delete/callback` rejects it, so a `callbackURL` can't turn it into a one-click deletion.
 
 ## Invitations
 
