@@ -174,6 +174,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 				redirectURI: string;
 				codeVerifier?: string | undefined;
 				deviceId?: string | undefined;
+				tokenUrl?: string | undefined;
 		  }) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**
