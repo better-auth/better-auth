@@ -67,6 +67,28 @@ describe("mongodb-adapter", () => {
 		await client.close();
 	});
 
+	/**
+	 * @see https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.md#aborttransaction
+	 */
+	it("preserves a transaction start error when no transaction is active", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession({ snapshot: true });
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const abort = vi.spyOn(session, "abortTransaction");
+		const adapter = mongodbAdapter(client.db("test"), { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(transaction(async () => "ok")).rejects.toThrow(
+			"Transactions are not supported in snapshot sessions",
+		);
+		expect(abort).not.toHaveBeenCalled();
+		expect(session.hasEnded).toBe(true);
+		await client.close();
+	});
+
 	it("creates configured compound indexes before the first write", async () => {
 		let resolveIndexSetup: (indexName: string) => void = () => {};
 		const indexSetup = new Promise<string>((resolve) => {
