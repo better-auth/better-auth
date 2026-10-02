@@ -728,9 +728,22 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const token = ctx.body.token;
+		const userId = ctx.context.session.user.id;
 		const session = await ctx.context.internalAdapter.findSession(token);
+		/**
+		 * With `session.storeTokenHash`, sessions listed by user carry the stored
+		 * hash instead of the raw token. Accept that value for revocation only,
+		 * scoped to the current user's own sessions.
+		 */
+		const ownsSession =
+			session?.session.userId === userId ||
+			(!session &&
+				ctx.context.options.session?.storeTokenHash === true &&
+				(await ctx.context.internalAdapter.listSessions(userId)).some(
+					(listed) => listed.token === token,
+				));
 
-		if (session?.session.userId === ctx.context.session.user.id) {
+		if (ownsSession) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
 			} catch (error) {
@@ -856,8 +869,13 @@ export const revokeOtherSessions = createAuthEndpoint(
 		const activeSessions = sessions.filter((session) => {
 			return session.expiresAt > new Date();
 		});
+		const currentSession = ctx.context.session.session;
+		// Listed sessions may carry the stored token hash (`storeTokenHash`), so
+		// also match the current session by id.
 		const otherSessions = activeSessions.filter(
-			(session) => session.token !== ctx.context.session.session.token,
+			(session) =>
+				session.token !== currentSession.token &&
+				session.id !== currentSession.id,
 		);
 		await Promise.all(
 			otherSessions.map((session) =>

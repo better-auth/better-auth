@@ -20,6 +20,29 @@ The session table stores the session data. The session table has the following f
 * `ipAddress`: The IP address of the user.
 * `userAgent`: The user agent of the user. It stores the user agent header from the request.
 
+### Hashing session tokens at rest
+
+By default the `token` column (and the secondary storage key, if you use one) holds the same value as the session cookie, so anyone who can read your database or secondary storage can use it to sign in as that user. Set `session.storeTokenHash` to store a SHA-256 hash of the token instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        storeTokenHash: true
+    }
+})
+```
+
+With this enabled, the raw token only exists in the session cookie, the `Authorization: Bearer` header, and the responses that create a session. A value read from the database cannot be used as a cookie or bearer token.
+
+Things to keep in mind:
+
+* `listSessions` (and plugin equivalents such as the admin plugin's `listUserSessions`) return the stored hash in `token`, not a usable session token. You can still pass that value to `revokeSession`, `admin.revokeUserSession` and other revoke endpoints.
+* `databaseHooks` for the session model receive the hashed token.
+* Turning it on for an existing app signs out sessions created before the change, because their stored tokens are not hashed.
+
 ## Session Expiration
 
 The session expires after 7 days by default. But whenever the session is used and the `updateAge` is reached, the session expiration is updated to the current time plus the `expiresIn` value.

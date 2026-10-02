@@ -19,6 +19,7 @@ import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { hashSessionToken } from "@better-auth/core/utils/session-token";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
@@ -72,6 +73,48 @@ export const createInternalAdapter = (
 		deleteManyWithHooks,
 		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
+	const hashSessionTokens = options.session?.storeTokenHash === true;
+
+	/**
+	 * The value stored for a raw session token (database `token` column and
+	 * secondary storage key). Used by every lookup: a stored hash passed here is
+	 * hashed again and never matches, so it cannot authenticate.
+	 */
+	const toStoredToken = async (token: string) =>
+		hashSessionTokens ? hashSessionToken(token) : token;
+
+	/**
+	 * Sessions returned from a lookup by token carry the raw token the caller
+	 * passed in, so callers that re-set the session cookie keep working.
+	 */
+	const withRawToken = <S extends { token: string }>(
+		session: S,
+		rawToken: string,
+	): S => (hashSessionTokens ? { ...session, token: rawToken } : session);
+
+	/**
+	 * Revocation-only resolution of a session token. With hashed tokens, sessions
+	 * listed by user only expose the stored hash, so deletes accept either the
+	 * raw token (hashed here) or the stored hash itself. Never use this for a
+	 * lookup that authenticates.
+	 */
+	async function resolveStoredTokenForDeletion(token: string) {
+		if (!hashSessionTokens) return token;
+		const hashed = await hashSessionToken(token);
+		if (secondaryStorage) {
+			if (await secondaryStorage.get(hashed)) return hashed;
+			if (await secondaryStorage.get(token)) return token;
+			if (!options.session?.storeSessionInDatabase) return hashed;
+		}
+		const storedAsGiven = await (await getCurrentAdapter(adapter)).findOne<{
+			id: string;
+		}>({
+			model: "session",
+			where: [{ field: "token", value: token }],
+			select: ["id"],
+		});
+		return storedAsGiven ? token : hashed;
+	}
 
 	/**
 	 * Ends the live session rows matched by `where` without physically deleting
@@ -517,6 +560,8 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
+			const rawToken = data.token;
+			data.token = await toStoredToken(rawToken);
 			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
 				if (!secondaryStorage) return sessionData;
 				const currentList = await secondaryStorage.get(
@@ -597,7 +642,7 @@ export const createInternalAdapter = (
 						: undefined,
 				);
 			}
-			return res as Session;
+			return res ? withRawToken(res as Session, rawToken) : (res as Session);
 		},
 		findSession: async (
 			token: string,
@@ -605,8 +650,9 @@ export const createInternalAdapter = (
 			session: Session & Record<string, any>;
 			user: User & Record<string, any>;
 		} | null> => {
+			const storedToken = await toStoredToken(token);
 			if (secondaryStorage) {
-				const sessionStringified = await secondaryStorage.get(token);
+				const sessionStringified = await secondaryStorage.get(storedToken);
 				// When preserveSessionInDatabase is enabled, revoked sessions
 				// remain in the database for audit purposes. Skip the database
 				// fallback to prevent those revoked sessions from being restored.
@@ -635,7 +681,7 @@ export const createInternalAdapter = (
 						updatedAt: new Date(s.user.updatedAt),
 					});
 					return {
-						session: parsedSession,
+						session: withRawToken(parsedSession, token),
 						user: parsedUser,
 					};
 				}
@@ -648,7 +694,7 @@ export const createInternalAdapter = (
 				model: "session",
 				where: [
 					{
-						value: token,
+						value: storedToken,
 						field: "token",
 					},
 				],
@@ -663,7 +709,7 @@ export const createInternalAdapter = (
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
 			return {
-				session: parsedSession,
+				session: withRawToken(parsedSession, token),
 				user: parsedUser,
 			};
 		},
@@ -675,13 +721,26 @@ export const createInternalAdapter = (
 				  }
 				| undefined,
 		) => {
+			const tokenPairs = await Promise.all(
+				sessionTokens.map(
+					async (sessionToken) =>
+						[await toStoredToken(sessionToken), sessionToken] as const,
+				),
+			);
+			const storedTokens = tokenPairs.map(([storedToken]) => storedToken);
+			const rawTokenByStored = new Map(tokenPairs);
+			const restoreRawToken = <S extends { token: string }>(session: S) =>
+				withRawToken(
+					session,
+					rawTokenByStored.get(session.token) ?? session.token,
+				);
 			if (secondaryStorage) {
 				const sessions: {
 					session: Session;
 					user: User;
 				}[] = [];
-				for (const sessionToken of sessionTokens) {
-					const sessionStringified = await secondaryStorage.get(sessionToken);
+				for (const [storedToken, sessionToken] of tokenPairs) {
+					const sessionStringified = await secondaryStorage.get(storedToken);
 					if (sessionStringified) {
 						try {
 							const s = (
@@ -698,10 +757,13 @@ export const createInternalAdapter = (
 								continue;
 							}
 							const session = {
-								session: {
-									...s.session,
-									expiresAt: new Date(s.session.expiresAt),
-								},
+								session: withRawToken(
+									{
+										...s.session,
+										expiresAt: new Date(s.session.expiresAt),
+									},
+									sessionToken,
+								),
 								user: {
 									...s.user,
 									createdAt: new Date(s.user.createdAt),
@@ -728,7 +790,7 @@ export const createInternalAdapter = (
 				where: [
 					{
 						field: "token",
-						value: sessionTokens,
+						value: storedTokens,
 						operator: "in",
 					},
 					...(options?.onlyActiveSessions
@@ -752,7 +814,7 @@ export const createInternalAdapter = (
 			return sessions.map((_session) => {
 				const { user, ...session } = _session;
 				return {
-					session,
+					session: restoreRawToken(session),
 					user: user!,
 				};
 			});
@@ -761,14 +823,15 @@ export const createInternalAdapter = (
 			sessionToken: string,
 			session: Partial<Session> & Record<string, any>,
 		) => {
+			const storedToken = await toStoredToken(sessionToken);
 			const updatedSession = await updateWithHooks<Session>(
 				session,
-				[{ field: "token", value: sessionToken }],
+				[{ field: "token", value: storedToken }],
 				"session",
 				secondaryStorage
 					? {
 							async fn(data) {
-								const currentSession = await secondaryStorage.get(sessionToken);
+								const currentSession = await secondaryStorage.get(storedToken);
 								if (!currentSession) {
 									return null;
 								}
@@ -802,7 +865,7 @@ export const createInternalAdapter = (
 
 								if (sessionTTL > 0) {
 									await secondaryStorage.set(
-										sessionToken,
+										storedToken,
 										JSON.stringify({
 											session: updatedSession,
 											user: parsedSession.user,
@@ -817,10 +880,8 @@ export const createInternalAdapter = (
 										: [];
 
 									const filtered = list
-										.filter(
-											(s) => s.token !== sessionToken && s.expiresAt > now,
-										)
-										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+										.filter((s) => s.token !== storedToken && s.expiresAt > now)
+										.concat([{ token: storedToken, expiresAt: expiresMs }]);
 
 									const sorted = filtered.sort(
 										(a, b) => a.expiresAt - b.expiresAt,
@@ -844,9 +905,12 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			return updatedSession;
+			return updatedSession
+				? withRawToken(updatedSession, sessionToken)
+				: updatedSession;
 		},
-		deleteSession: async (token: string) => {
+		deleteSession: async (sessionToken: string) => {
+			const token = await resolveStoredTokenForDeletion(sessionToken);
 			if (secondaryStorage) {
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
@@ -971,7 +1035,18 @@ export const createInternalAdapter = (
 				await queueCachedUserSessionDeletion(userId, sessionReferences);
 			}
 		},
-		deleteSessions: async (sessionTokens: string[]) => {
+		deleteSessions: async (tokens: string[]) => {
+			// Revocation only: accept raw tokens and stored hashes alike.
+			const sessionTokens = hashSessionTokens
+				? (
+						await Promise.all(
+							tokens.map(async (token) => [
+								await hashSessionToken(token),
+								token,
+							]),
+						)
+					).flat()
+				: tokens;
 			if (secondaryStorage) {
 				await Promise.all(
 					sessionTokens.map((token) => secondaryStorage.delete(token)),

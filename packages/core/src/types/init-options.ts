@@ -1100,6 +1100,26 @@ export type BetterAuthOptions = {
 				 */
 				preserveSessionInDatabase?: boolean;
 				/**
+				 * Store a SHA-256 hash of the session token instead of the raw
+				 * token, both in the database `token` column and as the
+				 * secondary storage key. The raw token only lives in the session
+				 * cookie, the bearer header, and the responses that create a
+				 * session, so a leaked database or secondary storage cannot be
+				 * used to hijack sessions.
+				 *
+				 * Sessions listed by user (for example `listSessions` or the
+				 * admin `listUserSessions`) carry the stored hash rather than a
+				 * usable token. That value can still be passed to the revoke
+				 * endpoints, but never authenticates a request.
+				 *
+				 * Enabling this on an existing deployment signs out sessions
+				 * created before it was turned on, because their stored tokens
+				 * are not hashed.
+				 *
+				 * @default false
+				 */
+				storeTokenHash?: boolean;
+				/**
 				 * Enable caching session in cookie
 				 */
 				cookieCache?: {

@@ -758,7 +758,13 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			ctx.context.setNewSession({ session, user });
-			if (ctx.context.options.secondaryStorage) {
+			// `createSession` already mirrors the session to secondary storage.
+			// With `storeTokenHash` it is keyed by the hash, so writing the raw
+			// token here would leak it.
+			if (
+				ctx.context.options.secondaryStorage &&
+				ctx.context.options.session?.storeTokenHash !== true
+			) {
 				await ctx.context.secondaryStorage?.set(
 					session.token,
 					JSON.stringify({ user, session }),
