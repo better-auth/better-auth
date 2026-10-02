@@ -59,6 +59,12 @@ import {
 	setActiveTeam,
 	updateTeam,
 } from "./routes/crud-team";
+import {
+	transferOwnership,
+	transferOwnershipCallback,
+	transferOwnershipConfirm,
+	transferOwnershipPreview,
+} from "./routes/transfer-ownership";
 import type {
 	InferInvitation,
 	InferMember,
@@ -142,6 +148,10 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	createOrganization: ReturnType<typeof createOrganization<O>>;
 	updateOrganization: ReturnType<typeof updateOrganization<O>>;
 	deleteOrganization: ReturnType<typeof deleteOrganization<O>>;
+	transferOwnership: ReturnType<typeof transferOwnership<O>>;
+	transferOwnershipCallback: ReturnType<typeof transferOwnershipCallback<O>>;
+	transferOwnershipPreview: ReturnType<typeof transferOwnershipPreview<O>>;
+	transferOwnershipConfirm: ReturnType<typeof transferOwnershipConfirm<O>>;
 	setActiveOrganization: ReturnType<typeof setActiveOrganization<O>>;
 	getOrganization: ReturnType<typeof getOrganization<O>>;
 	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
@@ -494,6 +504,57 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
 		 */
 		deleteOrganization: deleteOrganization(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/transfer-ownership`
+		 *
+		 * ### API Methods
+		 *
+		 * `auth.api.transferOwnership`
+		 *
+		 * **client:**
+		 * `authClient.organization.transferOwnership`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-transfer-ownership)
+		 */
+		transferOwnership: transferOwnership(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/transfer-ownership/callback`
+		 *
+		 * ### API Methods
+		 *
+		 * `auth.api.transferOwnershipCallback`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-transfer-ownership-callback)
+		 */
+		transferOwnershipCallback: transferOwnershipCallback(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/transfer-ownership/preview`
+		 *
+		 * ### API Methods
+		 *
+		 * `auth.api.transferOwnershipPreview`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-transfer-ownership-preview)
+		 */
+		transferOwnershipPreview: transferOwnershipPreview(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/transfer-ownership/confirm`
+		 *
+		 * ### API Methods
+		 *
+		 * `auth.api.transferOwnershipConfirm`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-transfer-ownership-confirm)
+		 */
+		transferOwnershipConfirm: transferOwnershipConfirm(opts),
 		/**
 		 * ### Endpoint
 		 *

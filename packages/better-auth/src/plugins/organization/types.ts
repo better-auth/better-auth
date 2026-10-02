@@ -358,6 +358,65 @@ export interface OrganizationOptions {
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
 	/**
+	 * Require email confirmation from the current owner before transferring
+	 * ownership of an organization.
+	 *
+	 * If not set, `organization.transferOwnership` swaps ownership
+	 * immediately once the caller passes the ownership check.
+	 */
+	ownershipTransfer?:
+		| {
+				/**
+				 * Send a verification email to the *current* owner before ownership
+				 * is transferred.
+				 *
+				 * If this is not set, ownership is transferred immediately.
+				 * @param data the data object
+				 * @param request the request object
+				 */
+				sendTransferOwnershipVerification?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						currentOwner: Member & { user: User };
+						newOwner: Member & { user: User };
+						url: string;
+						token: string;
+					},
+					request?: Request,
+				) => Promise<void>;
+				/**
+				 * The expiration time for the transfer token.
+				 *
+				 * @default 1 day (60 * 60 * 24) in seconds
+				 */
+				transferTokenExpiresIn?: number;
+				/**
+				 * How the emailed link resolves the transfer.
+				 *
+				 * - `"instant"`: clicking the link transfers ownership
+				 *   immediately (`GET`).
+				 * - `"explicit"`: the link only previews the transfer; the app
+				 *   must call the confirm endpoint (`POST`) to apply it. Use this
+				 *   when the emailed link can be visited by something other than
+				 *   the user, e.g. mail clients and security scanners that open
+				 *   links automatically (Outlook Safe Links, link-preview proxies).
+				 *
+				 * In `"explicit"` mode the emailed link is built from the request's
+				 * `callbackURL`, so every transfer request that sends a verification
+				 * email must include one: an absolute URL to the app's confirmation
+				 * page that doesn't point at
+				 * `/organization/transfer-ownership/callback` and doesn't already
+				 * carry a `token` query parameter. For HTTP requests its origin must
+				 * be in `trustedOrigins`; calls made directly through `auth.api` skip
+				 * that check, so pass a URL you control. Otherwise the request is
+				 * rejected with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL`.
+				 *
+				 * @default "instant"
+				 */
+				confirmationMode?: "instant" | "explicit";
+		  }
+		| undefined;
+	/**
 	 * Hooks for organization
 	 */
 	organizationHooks?:
@@ -475,6 +534,30 @@ export interface OrganizationOptions {
 					data: {
 						organization: Organization & Record<string, any>;
 						user: User & Record<string, any>;
+					},
+					ctx?: GenericEndpointContext,
+				) => Promise<void>;
+				/**
+				 * A callback that runs before ownership of the organization is
+				 * transferred to another member.
+				 */
+				beforeTransferOwnership?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						currentOwner: Member & { user: User } & Record<string, any>;
+						newOwner: Member & { user: User } & Record<string, any>;
+					},
+					ctx?: GenericEndpointContext,
+				) => Promise<void>;
+				/**
+				 * A callback that runs after ownership of the organization has
+				 * been transferred to another member.
+				 */
+				afterTransferOwnership?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						previousOwner: Member & Record<string, any>;
+						newOwner: Member & Record<string, any>;
 					},
 					ctx?: GenericEndpointContext,
 				) => Promise<void>;
