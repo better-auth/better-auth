@@ -55,7 +55,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
-    "@better-auth/utils": "catalog:",
+    "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:"
   }
 }
