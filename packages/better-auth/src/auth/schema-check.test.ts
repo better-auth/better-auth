@@ -207,6 +207,39 @@ describe.each([
 		expect(log).not.toHaveBeenCalled();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11353
+	 */
+	it("retries a transient plugin initialization failure on the next request", async () => {
+		const find = vi.fn(async () => []);
+		let fail = true;
+		const { auth } = createAuth(find, {
+			plugins: [
+				{
+					id: "flaky-init",
+					init: () => {
+						if (fail) throw new Error("db down");
+					},
+				},
+			],
+		});
+
+		await expect(
+			auth.handler(
+				new Request("https://auth.example.com/api/auth/get-session"),
+			),
+		).rejects.toThrow("db down");
+
+		fail = false;
+		const response = await auth.handler(
+			new Request("https://auth.example.com/api/auth/get-session"),
+		);
+		expect(response.status).toBe(200);
+
+		await expect(auth.$context).resolves.toBeDefined();
+		expect(find).toHaveBeenCalledTimes(1);
+	});
+
 	it("reports schema failures through the initialized context logger", async () => {
 		const contextLog = vi.fn();
 		const { auth, log } = createAuth(async () => issuerDrift, {
