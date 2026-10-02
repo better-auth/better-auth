@@ -913,6 +913,25 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 			}
+			const organization = await adapter.findOrganizationById(
+				ctx.body.organizationId,
+			);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			// Leaving is a member removal initiated by the member, so it runs the
+			// same hooks as removeMember (e.g. Stripe seat sync).
+			if (options?.organizationHooks?.beforeRemoveMember) {
+				await options.organizationHooks.beforeRemoveMember({
+					member,
+					user: session.user,
+					organization,
+				});
+			}
 			await adapter.deleteMember({
 				memberId: member.id,
 				organizationId: ctx.body.organizationId,
@@ -920,6 +939,13 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			}
+			if (options?.organizationHooks?.afterRemoveMember) {
+				await options.organizationHooks.afterRemoveMember({
+					member,
+					user: session.user,
+					organization,
+				});
 			}
 			return ctx.json(member);
 		},
