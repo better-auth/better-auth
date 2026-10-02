@@ -36,6 +36,7 @@ import {
 	vi,
 } from "vitest";
 import { getMigrations } from "../../better-auth/src/db/get-migration";
+import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
@@ -7569,7 +7570,7 @@ describe("SAML user resolution HTTP", () => {
 		if (relayStateCase === "legacy") {
 			const context = await instance.auth.$context;
 			const verification = await context.internalAdapter.findVerificationValue(
-				signIn.relayState,
+				getAuthStateVerificationIdentifier(signIn.relayState),
 			);
 			expect(verification).not.toBeNull();
 			const storedState = JSON.parse(verification!.value) as Record<
