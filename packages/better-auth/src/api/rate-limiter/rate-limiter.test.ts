@@ -439,6 +439,54 @@ describe("database rate-limit cleanup scheduling", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11519
+ */
+describe("database rate-limit with a string lastRequest", async () => {
+	const { auth, client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/sign-in/email": { window: 60, max: 1 },
+			},
+		},
+	});
+
+	it("should respond with a retry-after header within the window", async () => {
+		// node-postgres returns `int8` columns as strings by default.
+		const { adapter } = await auth.$context;
+		const findMany = adapter.findMany.bind(adapter);
+		vi.spyOn(adapter, "findMany").mockImplementation(async (args) => {
+			const rows = await findMany(args);
+			if (args.model !== "rateLimit") return rows;
+			return rows.map((row) => ({
+				...(row as RateLimit),
+				lastRequest: String((row as RateLimit).lastRequest),
+			})) as typeof rows;
+		});
+
+		let retryAfter = "";
+		for (let i = 0; i < 2; i++) {
+			await client.signIn.email(
+				{
+					email: testUser.email,
+					password: testUser.password,
+				},
+				{
+					onError(context) {
+						retryAfter = context.response.headers.get("X-Retry-After") ?? "";
+					},
+				},
+			);
+		}
+		vi.restoreAllMocks();
+
+		expect(Number(retryAfter)).toBeGreaterThan(0);
+		expect(Number(retryAfter)).toBeLessThanOrEqual(60);
+	});
+});
+
 describe("custom rate limiting storage", async () => {
 	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
