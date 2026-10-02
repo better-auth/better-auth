@@ -61,6 +61,7 @@ class WindowBroadcastChannel implements BroadcastChannel {
 		window.addEventListener("storage", handler);
 
 		return () => {
+			if (typeof window === "undefined") return;
 			window.removeEventListener("storage", handler);
 		};
 	}
