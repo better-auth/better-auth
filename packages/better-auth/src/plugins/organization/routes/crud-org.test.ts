@@ -1,5 +1,8 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
+import { createAuthMiddleware, getSessionFromCtx } from "../../../api";
 import { createAuthClient } from "../../../client";
+import { parseSetCookieHeader } from "../../../cookies";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -1156,7 +1159,10 @@ describe("deleteOrganization confirmation", () => {
 			headers,
 		});
 		await auth.api.deleteOrganization({
-			body: { organizationId: org!.id, callbackURL: "/org/settings" },
+			body: {
+				organizationId: org!.id,
+				callbackURL: "https://app.example.com/org/settings",
+			},
 			headers,
 		});
 		expect(capturedToken.length).toBe(32);
@@ -1221,17 +1227,37 @@ describe("deleteOrganization confirmation hardening", () => {
 		return { ...instance, capture, headers, org: org! };
 	}
 
-	it("explicit mode requires a callbackURL and leaves no token behind without one", async () => {
+	it("explicit mode rejects a callbackURL that can't be a usable emailed link, leaving no token behind", async () => {
 		const { auth, db, capture, headers, org } = await setup({
 			confirmationMode: "explicit",
 		});
-
-		await expect(
-			auth.api.deleteOrganization({
-				body: { organizationId: org.id },
-				headers,
-			}),
-		).rejects.toMatchObject({ body: { code: "CALLBACK_URL_REQUIRED" } });
+		const { baseURL } = await auth.$context;
+		const cases: Array<[string | undefined, string]> = [
+			// the emailed link is the app's own URL, so there must be one
+			[undefined, "CALLBACK_URL_REQUIRED"],
+			// a mail client can't resolve a relative link
+			["/org/settings", "INVALID_CALLBACK_URL"],
+			// must not lead back to the instant GET callback, however it's written
+			[`${baseURL}/organization/delete/callback`, "INVALID_CALLBACK_URL"],
+			[`${baseURL}/organization/delete/callback/`, "INVALID_CALLBACK_URL"],
+			[`${baseURL}/organization/delete%2Fcallback`, "INVALID_CALLBACK_URL"],
+			[`${baseURL}/organization/%64elete/callback`, "INVALID_CALLBACK_URL"],
+			[
+				`${baseURL}/organization/foo/../delete/callback?x=1#y`,
+				"INVALID_CALLBACK_URL",
+			],
+			// the real token is appended, so one that's already there is rejected
+			["https://app.example.com/org?token=stale", "INVALID_CALLBACK_URL"],
+		];
+		for (const [callbackURL, code] of cases) {
+			await expect(
+				auth.api.deleteOrganization({
+					body: { organizationId: org.id, callbackURL },
+					headers,
+				}),
+				String(callbackURL),
+			).rejects.toMatchObject({ body: { code } });
+		}
 
 		expect(capture.token).toBe("");
 		const rows = await db.findMany({ model: "verification" });
@@ -1244,12 +1270,49 @@ describe("deleteOrganization confirmation hardening", () => {
 		).toHaveLength(0);
 	});
 
+	it("an explicit-mode token can't be redeemed through the GET callback", async () => {
+		const { auth, db, capture, headers, org } = await setup({
+			confirmationMode: "explicit",
+		});
+		await auth.api.deleteOrganization({
+			body: {
+				organizationId: org.id,
+				callbackURL: "https://app.example.com/org",
+			},
+			headers,
+		});
+
+		// A trusted host that serves the same auth routes could be named in the
+		// callbackURL, so the token itself has to say it needs a POST.
+		await expect(
+			auth.api.deleteOrganizationCallback({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+		const stillThere = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: org.id }],
+		});
+		expect(stillThere).not.toBeNull();
+
+		// The rejected visit didn't burn it: the explicit confirm still works.
+		const confirmed = await auth.api.deleteOrganizationConfirm({
+			body: { token: capture.token },
+			headers,
+		});
+		expect(confirmed.id).toBe(org.id);
+	});
+
 	it("only the member the token was issued for can use it, and a rejected attempt does not burn it", async () => {
 		const { auth, signInWithUser, capture, headers, org } = await setup({
 			confirmationMode: "explicit",
 		});
 		await auth.api.deleteOrganization({
-			body: { organizationId: org.id, callbackURL: "/org/settings" },
+			body: {
+				organizationId: org.id,
+				callbackURL: "https://app.example.com/org/settings",
+			},
 			headers,
 		});
 
@@ -1312,7 +1375,10 @@ describe("deleteOrganization confirmation hardening", () => {
 			deleteTokenExpiresIn: 1,
 		});
 		await auth.api.deleteOrganization({
-			body: { organizationId: org.id, callbackURL: "/org/settings" },
+			body: {
+				organizationId: org.id,
+				callbackURL: "https://app.example.com/org/settings",
+			},
 			headers,
 		});
 
@@ -1333,5 +1399,150 @@ describe("deleteOrganization confirmation hardening", () => {
 			where: [{ field: "id", value: org.id }],
 		});
 		expect(stillThere).not.toBeNull();
+	});
+});
+
+/**
+ * An earlier hook can already have loaded the session from the cookie cache
+ * into `ctx.context.session`; `getSessionFromCtx` returns that without
+ * honoring `disableCookieCache`. The token endpoints must still re-read the
+ * session store, so a revoked session that still carries a valid cached
+ * cookie can't authorize a deletion.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11530
+ */
+describe("deleteOrganization confirmation is revocation-aware with cookie cache", () => {
+	const preloadCachedSessionPlugin = {
+		id: "preload-cached-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return (
+							ctx.path === "/organization/delete" ||
+							ctx.path?.startsWith("/organization/delete/") === true
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
+	async function setup() {
+		const capture = { token: "" };
+		const instance = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				preloadCachedSessionPlugin,
+				organization({
+					organizationDeletion: {
+						confirmationMode: "explicit",
+						async sendDeleteOrganizationVerification({ token }) {
+							capture.token = token;
+						},
+					},
+				}),
+			],
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+		});
+		const { headers } = await instance.signInWithTestUser();
+		// Materialize the cookie cache: the signed `session_data` cookie comes
+		// back on the get-session response and has to be sent along explicitly.
+		const sessionRes = await instance.client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cached = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") ?? "",
+					).get("better-auth.session_data")?.value;
+					if (cached) {
+						headers.set(
+							"cookie",
+							`${headers.get("cookie")}; better-auth.session_data=${cached}`,
+						);
+					}
+				},
+			},
+		});
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected a session");
+		expect(headers.get("cookie")).toContain("better-auth.session_data=");
+
+		const org = await instance.auth.api.createOrganization({
+			body: { name: "Delete Me", slug: "delete-me" },
+			headers,
+		});
+		await instance.auth.api.deleteOrganization({
+			body: {
+				organizationId: org!.id,
+				callbackURL: "https://app.example.com/org",
+			},
+			headers,
+		});
+		expect(capture.token.length).toBe(32);
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await instance.db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+		return { ...instance, capture, headers, org: org! };
+	}
+
+	async function orgStillExists(
+		db: Awaited<ReturnType<typeof setup>>["db"],
+		id: string,
+	) {
+		const row = await db.findOne({
+			model: "organization",
+			where: [{ field: "id", value: id }],
+		});
+		return row !== null;
+	}
+
+	it("rejects /organization/delete/confirm from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, org } = await setup();
+		await expect(
+			auth.api.deleteOrganizationConfirm({
+				body: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		expect(await orgStillExists(db, org.id)).toBe(true);
+	});
+
+	it("rejects /organization/delete/preview from a revoked but cached session", async () => {
+		const { auth, capture, headers } = await setup();
+		await expect(
+			auth.api.deleteOrganizationPreview({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+	});
+
+	it("rejects /organization/delete/callback from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, org } = await setup();
+		await expect(
+			auth.api.deleteOrganizationCallback({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		expect(await orgStillExists(db, org.id)).toBe(true);
+	});
+
+	it("rejects /organization/delete with a token from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, org } = await setup();
+		await expect(
+			auth.api.deleteOrganization({
+				body: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		expect(await orgStillExists(db, org.id)).toBe(true);
 	});
 });

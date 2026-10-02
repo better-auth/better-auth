@@ -4,8 +4,8 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import {
+	getAuthoritativeSessionFromCtx,
 	getSessionFromCtx,
-	isStateful,
 	originCheck,
 	requestOnlySessionMiddleware,
 } from "../../../api";
@@ -14,6 +14,7 @@ import { generateRandomString } from "../../../crypto";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { Session, User } from "../../../types";
+import { assertExplicitCallbackURL } from "../../../utils/confirmation-url";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -42,6 +43,13 @@ type OrgSession = Session & {
 const deleteOrganizationTokenValueSchema = z.object({
 	organizationId: z.string(),
 	userId: z.string(),
+	/**
+	 * The mode the link was issued for. The GET callback only redeems
+	 * `"instant"` tokens, so an `"explicit"` one can't be turned into a
+	 * one-click deletion by a `callbackURL` that names another host serving
+	 * the same auth routes.
+	 */
+	confirmationMode: z.enum(["instant", "explicit"]),
 });
 
 function parseDeleteOrganizationTokenValue(raw: string) {
@@ -90,13 +98,15 @@ async function resolveDeleteOrganizationToken<O extends OrganizationOptions>(
 	if (!tokenValue) {
 		throw APIError.from("NOT_FOUND", ORGANIZATION_ERROR_CODES.INVALID_TOKEN);
 	}
-	const { organizationId, userId } = tokenValue;
-	// Deletion is sensitive: bypass the cookie cache on stateful deployments
-	// so a revoked-but-cached session cannot complete it even when paired
-	// with a valid delete-organization token.
-	const session = (await getSessionFromCtx(ctx, {
-		disableCookieCache: isStateful(ctx),
-	})) as { user: User; session: OrgSession } | null;
+	const { organizationId, userId, confirmationMode } = tokenValue;
+	// Deletion is sensitive: re-read the session store on stateful deployments,
+	// even if an earlier hook already loaded a session from the cookie cache, so
+	// a revoked-but-cached session cannot complete it even when paired with a
+	// valid delete-organization token.
+	const session = (await getAuthoritativeSessionFromCtx(ctx)) as {
+		user: User;
+		session: OrgSession;
+	} | null;
 	if (!session || session.user.id !== userId) {
 		throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO);
 	}
@@ -133,7 +143,7 @@ async function resolveDeleteOrganizationToken<O extends OrganizationOptions>(
 			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 		);
 	}
-	return { organizationId, session, org };
+	return { organizationId, confirmationMode, session, org };
 }
 
 /**
@@ -821,21 +831,24 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			if (options?.organizationDeletion?.sendDeleteOrganizationVerification) {
 				const confirmationMode =
 					options.organizationDeletion?.confirmationMode || "instant";
-				const callbackURL = ctx.body.callbackURL;
-				// In explicit mode the emailed link is the app's own URL, so there
-				// is nothing to send without one. Checked before the token exists
-				// so a rejected request leaves no orphaned verification row.
-				if (confirmationMode === "explicit" && !callbackURL) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.CALLBACK_URL_REQUIRED,
-					);
-				}
+				// In explicit mode the emailed link is the app's own URL, so it must
+				// be a usable absolute URL that doesn't lead back to the instant
+				// callback. Checked before the token exists so a rejected request
+				// leaves no orphaned verification row behind.
+				const explicitURL =
+					confirmationMode === "explicit"
+						? assertExplicitCallbackURL(
+								ctx.context.baseURL,
+								ctx.body.callbackURL,
+								["/organization/delete/callback"],
+							)
+						: undefined;
 				const token = generateRandomString(32, "0-9", "a-z");
 				await ctx.context.internalAdapter.createVerificationValue({
 					value: JSON.stringify({
 						organizationId,
 						userId: session.user.id,
+						confirmationMode,
 					} satisfies z.infer<typeof deleteOrganizationTokenValueSchema>),
 					identifier: `delete-organization-${token}`,
 					expiresAt: new Date(
@@ -846,17 +859,16 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					),
 				});
 				// In explicit mode, callbackURL becomes the app-owned URL itself,
-				// not just a post-callback redirect target. It's already validated
-				// against trustedOrigins by the global originCheckMiddleware
-				// (api/index.ts) before this handler runs.
-				const url =
-					confirmationMode === "explicit" && callbackURL
-						? appendQueryParams(callbackURL, new URLSearchParams({ token }))
-						: `${
-								ctx.context.baseURL
-							}/organization/delete/callback?token=${token}&callbackURL=${encodeURIComponent(
-								callbackURL || "/",
-							)}`;
+				// not just a post-callback redirect target. For HTTP requests its
+				// origin is validated against trustedOrigins by the global
+				// originCheckMiddleware (api/index.ts) before this handler runs.
+				const url = explicitURL
+					? appendQueryParams(explicitURL, new URLSearchParams({ token }))
+					: `${
+							ctx.context.baseURL
+						}/organization/delete/callback?token=${token}&callbackURL=${encodeURIComponent(
+							ctx.body.callbackURL || "/",
+						)}`;
 				await ctx.context.runInBackgroundOrAwait(
 					options.organizationDeletion.sendDeleteOrganizationVerification(
 						{ organization: org, user: session.user, url, token },
@@ -913,8 +925,16 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const { organizationId, session, org } =
+			const { organizationId, confirmationMode, session, org } =
 				await resolveDeleteOrganizationToken(ctx, options, ctx.query.token);
+			// An explicit-mode link is meant to be confirmed with a POST. Refused
+			// before the token is consumed, so it stays usable for `confirm`.
+			if (confirmationMode !== "instant") {
+				throw APIError.from(
+					"NOT_FOUND",
+					ORGANIZATION_ERROR_CODES.INVALID_TOKEN,
+				);
+			}
 			await consumeDeleteOrganizationToken(ctx, ctx.query.token, {
 				organizationId,
 				userId: session.user.id,

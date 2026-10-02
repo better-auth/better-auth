@@ -137,3 +137,37 @@ it("refreshes the active organization after sign-in sets it in a session hook", 
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11530
+ */
+describe("organization client delete signals", () => {
+	const { atomListeners } = organizationClient();
+	const matchesFor = (signal: string) => {
+		const matchers = (atomListeners ?? [])
+			.filter((listener) => listener.signal === signal)
+			.map((listener) => listener.matcher);
+		expect(matchers.length).toBeGreaterThan(0);
+		return (path: string) => matchers.some((matcher) => matcher(path));
+	};
+
+	it.each([
+		"$listOrg",
+		"$activeOrgSignal",
+		"$sessionSignal",
+	])("refreshes %s after a deletion is applied", (signal) => {
+		const matches = matchesFor(signal);
+		expect(matches("/organization/delete")).toBe(true);
+		expect(matches("/organization/delete/callback")).toBe(true);
+		expect(matches("/organization/delete/confirm")).toBe(true);
+	});
+
+	// `$activeOrgSignal` deliberately follows every organization path, so a
+	// preview is only expected to leave the other two alone.
+	it.each([
+		"$listOrg",
+		"$sessionSignal",
+	])("leaves %s alone after a preview", (signal) => {
+		expect(matchesFor(signal)("/organization/delete/preview")).toBe(false);
+	});
+});
