@@ -1044,6 +1044,19 @@ export type BetterAuthOptions = {
 					 * @default 1 day (60 * 60 * 24) in seconds
 					 */
 					deleteTokenExpiresIn?: number;
+					/**
+					 * How the emailed link resolves the deletion.
+					 *
+					 * - `"instant"`: clicking the link deletes the account immediately (`GET`).
+					 * - `"explicit"`: the link only previews the deletion; the app must call
+					 *   the confirm endpoint (`POST`) to apply it. Use this when the emailed
+					 *   link can be visited by something other than the user, e.g. mail
+					 *   clients and security scanners that open links automatically
+					 *   (Outlook Safe Links, link-preview proxies).
+					 *
+					 * @default "instant"
+					 */
+					confirmationMode?: "instant" | "explicit";
 				};
 		  })
 		| undefined;
