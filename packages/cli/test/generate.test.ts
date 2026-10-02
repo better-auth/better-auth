@@ -49,6 +49,28 @@ const compoundIndexPlugin = (): BetterAuthPlugin => ({
 	},
 });
 
+const memberOrganizationKeyPlugin = (): BetterAuthPlugin => ({
+	id: "member-organization-candidate-key",
+	schema: {
+		member: {
+			fields: {},
+			indexes: [
+				{
+					name: "member_organization_id_id_unique",
+					fields: ["organizationId", "id"],
+					unique: true,
+				},
+			],
+		},
+	},
+});
+
+function getDrizzleTableBlock(code: string, tableName: string) {
+	const start = code.indexOf(`export const ${tableName} = `);
+	const end = code.indexOf("export const ", start + 1);
+	return code.slice(start, end === -1 ? undefined : end);
+}
+
 describe("generate", async () => {
 	describe("command output paths", () => {
 		it("should use adapter-specific filenames when output points to an existing directory", async () => {
@@ -827,6 +849,55 @@ model Directory_user {
 		);
 		expect(schema.code).toMatch(
 			/provisioning_status:\s*mysqlEnum\("provisioning_status", \[\s*"active",\s*"suspended",?\s*\]\)/,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it.each([
+		"pg",
+		"mysql",
+		"sqlite",
+	] as const)("should generate %s Drizzle indexes on the implicit primary key", async (provider) => {
+		const database = drizzleAdapter({}, { provider, schema: {} });
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				plugins: [organization(), memberOrganizationKeyPlugin()],
+			},
+		});
+		const member = getDrizzleTableBlock(schema.code ?? "", "member");
+
+		expect(member.match(/^\s*id:/gm)).toHaveLength(1);
+		expect(member.match(/\.primaryKey\(/g)).toHaveLength(1);
+		expect(member).toMatch(
+			/uniqueIndex\("member_organization_id_id_unique"\)\.on\(\s*table\.organizationId,\s*table\.id,?\s*\)/,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it("should generate Prisma indexes on the implicit primary key", async () => {
+		const database = prismaAdapter({}, { provider: "postgresql" });
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				plugins: [organization(), memberOrganizationKeyPlugin()],
+			},
+		});
+		const code = schema.code ?? "";
+		const memberStart = code.indexOf("model Member {");
+		const member = code.slice(memberStart, code.indexOf("}", memberStart));
+
+		expect(member.match(/^\s*id\s/gm)).toHaveLength(1);
+		expect(member).toContain(
+			'@@unique([organizationId, id], map: "member_organization_id_id_unique")',
 		);
 	});
 

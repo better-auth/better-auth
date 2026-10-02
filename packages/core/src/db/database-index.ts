@@ -33,6 +33,29 @@ function getStableIndexNameHash(value: string) {
 	return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+/**
+ * Every table has a primary-key `id` column that schemas usually do not
+ * declare. It is never nullable, and counting it as a string keeps the index
+ * budget safe for every id strategy.
+ */
+const implicitIdField = {
+	type: "string",
+	required: true,
+} satisfies DBFieldAttribute;
+
+/**
+ * Adds the implicit primary key, or marks a declared `id` as required because
+ * adapters declare it as optional input when the database generates it.
+ */
+function withImplicitIdField(
+	fields: Readonly<Record<string, DBFieldAttribute>>,
+): Readonly<Record<string, DBFieldAttribute>> {
+	return {
+		...fields,
+		id: fields.id ? { ...fields.id, required: true } : implicitIdField,
+	};
+}
+
 /** A table-level index resolved to physical database columns. */
 export interface ResolvedDBTableIndex extends Omit<DBTableIndex, "fields"> {
 	/** Physical database column names, in index order. */
@@ -99,7 +122,7 @@ export function getDatabaseFieldIndexName(
 
 /** Resolves logical index fields to their configured database column names. */
 export function resolveDatabaseTableIndexes({
-	fields,
+	fields: declaredFields,
 	indexes,
 	tableName,
 }: {
@@ -107,6 +130,7 @@ export function resolveDatabaseTableIndexes({
 	indexes: readonly DBTableIndex[] | undefined;
 	tableName: string;
 }): readonly ResolvedDBTableIndex[] {
+	const fields = withImplicitIdField(declaredFields);
 	const resolvedIndexes = (indexes ?? []).map((index) => {
 		if (index.fields.length === 0) {
 			throw new BetterAuthError(
@@ -211,7 +235,7 @@ export function getDatabaseIndexStringLength({
 	indexes: readonly ResolvedDBTableIndex[];
 }): number | undefined {
 	const fieldsByColumn = new Map(
-		Object.entries(fields).map(([fieldName, field]) => [
+		Object.entries(withImplicitIdField(fields)).map(([fieldName, field]) => [
 			field.fieldName || fieldName,
 			field,
 		]),
