@@ -458,6 +458,7 @@ export const createInternalAdapter = (
 				],
 				"user",
 				undefined,
+				true,
 			);
 			if (deletedUser !== null) {
 				await queueCachedUserSessionDeletion(userId, sessionReferences);
@@ -909,6 +910,7 @@ export const createInternalAdapter = (
 				[{ field: "token", value: token }],
 				"session",
 				undefined,
+				true,
 			);
 		},
 		deleteAccounts: async (userId: string) => {
@@ -938,6 +940,7 @@ export const createInternalAdapter = (
 				],
 				"account",
 				undefined,
+				true,
 			);
 		},
 		deleteUserSessions: async (userId: string) => {

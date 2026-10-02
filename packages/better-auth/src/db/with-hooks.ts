@@ -260,7 +260,14 @@ export function getWithHooks(
 					executeMainFn?: boolean;
 			  }
 			| undefined,
+		atomicSingleRow = false,
 	) {
+		if (atomicSingleRow && !customDeleteFn) {
+			return consumeOneWithHooks<T>(model, where, async () =>
+				(await getCurrentAdapter(adapter)).consumeOne<T>({ model, where }),
+			);
+		}
+
 		const context = tryGetCurrentAuthEndpointContext();
 		let entityToDelete: T | null = null;
 
@@ -425,9 +432,15 @@ export function getWithHooks(
 	 *
 	 * `preSnapshot` lets the caller hand in a row it already fetched so
 	 * `delete.before` hooks don't trigger a second read. Without it, the
-	 * helper falls back to a best-effort `findMany` against `hookWhere`.
+	 * helper reads the row with `findMany` against `hookWhere`.
 	 * The snapshot only feeds `delete.before`; the `consumeFn` return value
 	 * is the race gate.
+	 *
+	 * When `delete.before` hooks are registered, the snapshot is required:
+	 * if the read finds no row, the helper resolves to `null` without calling
+	 * `consumeFn`, and if the read fails, its error propagates without
+	 * consuming. A row is never removed without its `delete.before` hooks.
+	 * With no `delete.before` hooks, no read happens.
 	 *
 	 * Returning `false` from a `delete.before` hook aborts the consume and
 	 * the helper resolves to `null` (no `consumeFn` call, no after hooks).
@@ -447,32 +460,29 @@ export function getWithHooks(
 		let snapshot: T | null = preSnapshot ?? null;
 		if (beforeHooks.length) {
 			if (!snapshot) {
-				try {
-					const rows = await (await getCurrentAdapter(adapter)).findMany<T>({
-						model,
-						where: hookWhere,
-						limit: 1,
-					});
-					snapshot = rows[0] || null;
-				} catch {}
+				const rows = await (await getCurrentAdapter(adapter)).findMany<T>({
+					model,
+					where: hookWhere,
+					limit: 1,
+				});
+				snapshot = rows[0] || null;
 			}
+			if (!snapshot) return null;
 
-			if (snapshot) {
-				for (const { source, fn } of beforeHooks) {
-					const result = await withSpan(
-						`db delete.before ${model}`,
-						{
-							[ATTR_HOOK_TYPE]: "delete.before",
-							[ATTR_DB_COLLECTION_NAME]: model,
-							[ATTR_CONTEXT]: source,
-						},
-						() =>
-							// @ts-expect-error context type mismatch
-							fn(snapshot as any, context),
-					);
-					if (result === false) {
-						return null;
-					}
+			for (const { source, fn } of beforeHooks) {
+				const result = await withSpan(
+					`db delete.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "delete.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						fn(snapshot as any, context),
+				);
+				if (result === false) {
+					return null;
 				}
 			}
 		}
