@@ -1311,9 +1311,25 @@ export type BetterAuthOptions = {
 				 * - Database breaches and unauthorized access to raw token data
 				 * - Internal threats from database administrators or compromised credentials
 				 * - Token exposure in database backups and logs
+				 *
+				 * Pass an object with `encrypt` and `decrypt` functions to control how tokens are
+				 * encrypted, for example to use a dedicated key or an external key management service.
+				 * `decrypt` receives every stored token, including any that were stored before the
+				 * custom functions were configured.
 				 * @default false
 				 */
-				encryptOAuthTokens?: boolean;
+				encryptOAuthTokens?:
+					| boolean
+					| {
+							/**
+							 * Encrypt a token before it is stored
+							 */
+							encrypt: (token: string) => Awaitable<string>;
+							/**
+							 * Decrypt a stored token
+							 */
+							decrypt: (token: string) => Awaitable<string>;
+					  };
 				/**
 				 * Skip state cookie check
 				 *
