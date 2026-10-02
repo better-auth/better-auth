@@ -9,13 +9,40 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return prototype === Object.prototype || prototype === null;
 }
 
+/** Returns the timestamp for genuine dates, including dates from another realm. */
+function getDateTime(value: unknown): number | undefined {
+	try {
+		if (Object.prototype.toString.call(value) !== "[object Date]") return;
+		return Date.prototype.getTime.call(value);
+	} catch {
+		return;
+	}
+}
+
 /**
  * Deep structural equality for JSON-serializable values.
- * Handles: primitives, null, arrays, and plain objects.
+ * Handles: primitives, null, arrays, plain objects, and dates.
  * Short-circuits on referential equality at every recursion level.
+ *
+ * Dates are compared by instant because the client parser revives ISO strings
+ * into `Date` instances, so payloads reaching this function routinely hold
+ * dates that are equal but never identical. Two invalid dates compare equal,
+ * so a corrupted value does not report a change on every set.
  */
 export function isJsonEqual(a: unknown, b: unknown): boolean {
 	if (a === b) return true;
+
+	const aDateTime = getDateTime(a);
+	const bDateTime = getDateTime(b);
+	if (aDateTime !== undefined || bDateTime !== undefined) {
+		// `Object.is` so two invalid dates (NaN) still compare equal, which
+		// keeps the gate stable instead of reporting a change on every set.
+		return (
+			aDateTime !== undefined &&
+			bDateTime !== undefined &&
+			Object.is(aDateTime, bDateTime)
+		);
+	}
 
 	if (Array.isArray(a) && Array.isArray(b)) {
 		if (a.length !== b.length) return false;
