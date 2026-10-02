@@ -117,6 +117,40 @@ describe("runWithTransaction", () => {
 		expect(hookRuns).toBe(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 */
+	it("runs only the hooks of the attempt that commits when the adapter retries the callback", async () => {
+		const transactionAdapter = {} as DBTransactionAdapter;
+		let attempts = 0;
+		const adapter = {
+			transaction: async <R>(
+				callback: (trx: DBTransactionAdapter) => Promise<R>,
+			) => {
+				try {
+					return await callback(transactionAdapter);
+				} catch {
+					return callback(transactionAdapter);
+				}
+			},
+		} as DBAdapter;
+		const hookRuns: number[] = [];
+
+		await runWithTransaction(adapter, async () => {
+			attempts += 1;
+			const attempt = attempts;
+			await queueAfterTransactionHook(async () => {
+				hookRuns.push(attempt);
+			});
+			if (attempt === 1) {
+				throw new Error("write conflict");
+			}
+		});
+
+		expect(attempts).toBe(2);
+		expect(hookRuns).toEqual([2]);
+	});
+
 	it("reports a handled after-commit hook failure without rejecting committed work", async () => {
 		const { adapter } = createTransactionHarness();
 		const onError = vi.fn();
