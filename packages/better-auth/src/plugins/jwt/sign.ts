@@ -3,7 +3,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { JWTPayload } from "jose";
 import { importJWK, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
-import { getJwksAdapter } from "./adapter";
+import { getJwksAdapter, parsePublicJwk } from "./adapter";
 import type { JWSAlgorithms, JwtOptions, ResolvedSigningKey } from "./types";
 import { createJwk, toExpJWT } from "./utils";
 
@@ -129,10 +129,11 @@ export async function resolveSigningKey(
 			// (kid, alg) pair where the row matches the configured default
 			// algorithm doesn't spuriously throw.
 			const configAlg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
-			const effectiveAlg = key.alg ?? configAlg;
+			const keyAlg = parsePublicJwk(key).alg;
+			const effectiveAlg = keyAlg ?? configAlg;
 			if (effectiveAlg !== overrides.signingAlgorithm) {
 				throw new BetterAuthError(
-					`signJWT: signingKeyId "${overrides.signingKeyId}" has alg "${key.alg ?? `unset (inherits keyPairConfig.alg "${configAlg}")`}" but signingAlgorithm was set to "${overrides.signingAlgorithm}".`,
+					`signJWT: signingKeyId "${overrides.signingKeyId}" has alg "${keyAlg ?? `unset (inherits keyPairConfig.alg "${configAlg}")`}" but signingAlgorithm was set to "${overrides.signingAlgorithm}".`,
 				);
 			}
 		}
@@ -224,7 +225,8 @@ export async function resolveSigningKey(
 				);
 			})
 		: key.privateKey;
-	const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	const alg =
+		parsePublicJwk(key).alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
 	return { alg, kid: key.id, privateKey };
 }
