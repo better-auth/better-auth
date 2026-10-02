@@ -606,7 +606,28 @@ export const createInternalAdapter = (
 			user: User & Record<string, any>;
 		} | null> => {
 			if (secondaryStorage) {
-				const sessionStringified = await secondaryStorage.get(token);
+				// Best-effort cache read: a secondary-storage outage must not 500
+				// the request when the database fallback below can actually serve
+				// the session - treat a failed read as a cache miss and fall
+				// through. The fallback only runs with storeSessionInDatabase
+				// enabled and preserveSessionInDatabase off (preserve skips it
+				// entirely). In the secondary-storage-authoritative config there
+				// is no fallback, so a read failure must surface as an error,
+				// not a cache miss: returning null would treat a transient
+				// outage as an invalid session and log users out.
+				let sessionStringified: unknown = null;
+				try {
+					sessionStringified = await secondaryStorage.get(token);
+				} catch (error) {
+					const hasDatabaseFallback =
+						options.session?.storeSessionInDatabase === true &&
+						ctx.options.session?.preserveSessionInDatabase !== true;
+					if (!hasDatabaseFallback) throw error;
+					logger.error(
+						"[better-auth] secondary-storage session read failed; falling back to the database",
+						error,
+					);
+				}
 				// When preserveSessionInDatabase is enabled, revoked sessions
 				// remain in the database for audit purposes. Skip the database
 				// fallback to prevent those revoked sessions from being restored.
@@ -662,6 +683,64 @@ export const createInternalAdapter = (
 			if (!user) return null;
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
+			if (secondaryStorage) {
+				// Cache-aside repair: the session was absent from secondary storage
+				// (TTL expiry, eviction, flush) but is still valid in the database.
+				// Repopulate the cache, including the active-sessions index, so that
+				// every subsequent request does not hit the primary database - and so
+				// that a later revoke-all still sweeps this token.
+				// Unreachable under preserveSessionInDatabase thanks to the early
+				// return above, so revoked rows cannot be resurrected here.
+				// Cache repair is best-effort: after the database has returned a
+				// valid session, a transient secondary-storage failure (e.g.
+				// Redis eviction plus a momentarily unreachable backend) must not
+				// turn /get-session into a 500 - the database result is
+				// authoritative (this matches the existing deferred-mirror
+				// handling below, which also has no ordering guard: see the
+				// known-limitation note for the revoke race).
+				try {
+					const now = Date.now();
+					const sessionTTL = getTTLSeconds(parsedSession.expiresAt, now);
+					if (sessionTTL > 0) {
+						const activeSessionsKey = `active-sessions-${parsedUser.id}`;
+						const currentList =
+							await secondaryStorage.get(activeSessionsKey);
+						const list =
+							safeJSONParse<{ token: string; expiresAt: number }[]>(
+								currentList,
+							) || [];
+						const filtered = list.filter(
+							(s) => s.expiresAt > now && s.token !== token,
+						);
+						filtered.push({
+							token,
+							expiresAt: parsedSession.expiresAt.getTime(),
+						});
+						filtered.sort((a, b) => a.expiresAt - b.expiresAt);
+						const furthestSessionTTL = getTTLSeconds(
+							filtered[filtered.length - 1]!.expiresAt,
+							now,
+						);
+						await Promise.all([
+							secondaryStorage.set(
+								token,
+								JSON.stringify({ session: parsedSession, user: parsedUser }),
+								sessionTTL,
+							),
+							secondaryStorage.set(
+								activeSessionsKey,
+								JSON.stringify(filtered),
+								furthestSessionTTL,
+							),
+						]);
+					}
+				} catch (error) {
+					logger.error(
+						"[better-auth] secondary-storage session repair failed; serving the authoritative database session",
+						error,
+					);
+				}
+			}
 			return {
 				session: parsedSession,
 				user: parsedUser,
