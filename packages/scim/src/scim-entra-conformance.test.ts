@@ -180,6 +180,40 @@ describe("SCIM User PATCH against Microsoft Entra ID attribute mappings", () => 
 		expect(patched.addresses).toEqual([{ type: "work", postalCode: "94105" }]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11015
+	 */
+	it("creates a user when optional address subattributes are JSON null", async () => {
+		const { auth } = createEntraFixture();
+		const user = await createUser(auth, {
+			userName: "member@example.com",
+			active: true,
+			addresses: [
+				{
+					type: "work",
+					streetAddress: "44 Montgomery St",
+					locality: "San Francisco",
+					region: "CA",
+					postalCode: "94104",
+					formatted: null,
+					country: null,
+				},
+			],
+		});
+
+		expect(user.addresses).toEqual([
+			{
+				type: "work",
+				streetAddress: "44 Montgomery St",
+				locality: "San Francisco",
+				region: "CA",
+				postalCode: "94104",
+			},
+		]);
+		expect(user.addresses?.[0]).not.toHaveProperty("formatted");
+		expect(user.addresses?.[0]).not.toHaveProperty("country");
+	});
+
 	it("creates filtered roles and entitlements", async () => {
 		const { auth } = createEntraFixture();
 		const user = await createUser(auth, {
