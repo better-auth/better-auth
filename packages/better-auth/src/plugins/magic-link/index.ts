@@ -481,9 +481,19 @@ export const magicLink = (options: MagicLinkOptions) => {
 						user = promotedUser;
 					}
 
-					const session = await ctx.context.internalAdapter.createSession(
-						user.id,
-					);
+					let session: Awaited<
+						ReturnType<typeof ctx.context.internalAdapter.createSession>
+					> | null;
+					try {
+						session = await ctx.context.internalAdapter.createSession(user.id);
+					} catch (e) {
+						// Browser flow: forward a gate rejection's code to the error
+						// URL instead of surfacing a raw API error.
+						if (isAPIError(e) && e.body?.code) {
+							redirectWithError(e.body.code, e.body.message);
+						}
+						throw e;
+					}
 
 					if (!session) {
 						redirectWithError("failed_to_create_session");
