@@ -59,6 +59,27 @@ function createParsedSecondaryStorage(
 	};
 }
 
+/**
+ * A storage whose `delete` rejects while `failDeletes()` returns true.
+ * Reads keep working, so session lookup and the active-session index remain
+ * usable while eviction is failing.
+ */
+function createFlakyDeleteStorage(
+	store: Map<string, string>,
+	failDeletes: () => boolean,
+): SecondaryStorage {
+	const storage = createStringSecondaryStorage(store);
+	return {
+		...storage,
+		delete(key) {
+			if (failDeletes()) {
+				throw new Error("secondary storage is unavailable");
+			}
+			storage.delete(key);
+		},
+	};
+}
+
 describe("secondary storage - get returns JSON string", async () => {
 	const store = new Map<string, string>();
 
@@ -303,7 +324,7 @@ describe("secondary storage - deleteUser", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10687#discussion_r3716703104
 	 */
-	it("keeps cached sessions when user deletion is vetoed", async () => {
+	it("evicts cached sessions even when the user row deletion is vetoed", async () => {
 		const store = new Map<string, string>();
 		const { auth } = await getTestInstance({
 			secondaryStorage: createStringSecondaryStorage(store),
@@ -329,15 +350,18 @@ describe("secondary storage - deleteUser", () => {
 
 		await internalAdapter.deleteUser(user.id);
 
+		// The vetoed row survives, so the user is not lost. Eviction runs before
+		// the database work, so the cache is cleared even though the row deletion
+		// is vetoed.
 		expect(await internalAdapter.findUserById(user.id)).not.toBeNull();
-		expect(store.has(session.token)).toBe(true);
-		expect(store.has(activeSessionsKey)).toBe(true);
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(activeSessionsKey)).toBe(false);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10687#discussion_r3716703104
 	 */
-	it("keeps cached sessions when session deletion is vetoed", async () => {
+	it("evicts cached sessions even when the session row deletion is vetoed", async () => {
 		const store = new Map<string, string>();
 		const { auth, db } = await getTestInstance({
 			secondaryStorage: createStringSecondaryStorage(store),
@@ -364,14 +388,20 @@ describe("secondary storage - deleteUser", () => {
 
 		await internalAdapter.deleteUserSessions(user.id);
 
+		// The vetoed row survives, so the session is not lost.
 		expect(
 			await db.findMany({
 				model: "session",
 				where: [{ field: "userId", value: user.id }],
 			}),
 		).toHaveLength(1);
-		expect(store.has(session.token)).toBe(true);
-		expect(store.has(activeSessionsKey)).toBe(true);
+		// Eviction runs before the database work, so the cache is cleared even
+		// though the row deletion is vetoed. The session rehydrates from the row.
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(activeSessionsKey)).toBe(false);
+		expect(
+			(await internalAdapter.findSession(session.token))?.session.token,
+		).toBe(session.token);
 	});
 
 	it("deletes user sessions from secondary storage and database", async () => {
@@ -414,6 +444,617 @@ describe("secondary storage - deleteUser", () => {
 				where: [{ field: "userId", value: user.id }],
 			}),
 		).toHaveLength(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11326
+ */
+describe("secondary storage - deleteUser is fail-closed", () => {
+	describe("storeSessionInDatabase", () => {
+		it("rejects on eviction failure and leaves the user, account, and session rows intact", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => true),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{
+					name: "Delete Fail-Closed User",
+					email: "delete-fail-closed@test.com",
+				},
+				{ method: "test" },
+			);
+			await internalAdapter.createAccount({
+				providerId: "credential",
+				accountId: user.id,
+				userId: user.id,
+			});
+			const session = await internalAdapter.createSession(user.id);
+			const activeSessionsKey = `active-sessions-${user.id}`;
+
+			await expect(internalAdapter.deleteUser(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+
+			expect(await internalAdapter.findUserById(user.id)).not.toBeNull();
+			expect(
+				await db.findMany({
+					model: "account",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(1);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(1);
+			expect(store.has(session.token)).toBe(true);
+			expect(store.has(activeSessionsKey)).toBe(true);
+		});
+
+		it("completes the deletion on retry once the eviction failure recovers", async () => {
+			const store = new Map<string, string>();
+			let failDeletes = true;
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => failDeletes),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Delete Retry User", email: "delete-retry@test.com" },
+				{ method: "test" },
+			);
+			await internalAdapter.createAccount({
+				providerId: "credential",
+				accountId: user.id,
+				userId: user.id,
+			});
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUser(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+			expect(await internalAdapter.findUserById(user.id)).not.toBeNull();
+			expect(store.has(session.token)).toBe(true);
+
+			failDeletes = false;
+			await internalAdapter.deleteUser(user.id);
+
+			expect(await internalAdapter.findUserById(user.id)).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+			expect(
+				await db.findMany({
+					model: "account",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+
+		it("evicts the cached sessions and deletes the rows when eviction succeeds", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => false),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Delete Evict User", email: "delete-evict@test.com" },
+				{ method: "test" },
+			);
+			await internalAdapter.createAccount({
+				providerId: "credential",
+				accountId: user.id,
+				userId: user.id,
+			});
+			const session = await internalAdapter.createSession(user.id);
+
+			await internalAdapter.deleteUser(user.id);
+
+			expect(await internalAdapter.findUserById(user.id)).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+			expect(
+				await db.findMany({
+					model: "account",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+	});
+
+	describe("secondary-storage-only sessions (no storeSessionInDatabase)", () => {
+		it("rejects on eviction failure and leaves the user and account rows intact", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => true),
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Cache-Only Delete User", email: "cache-only-delete@test.com" },
+				{ method: "test" },
+			);
+			await internalAdapter.createAccount({
+				providerId: "credential",
+				accountId: user.id,
+				userId: user.id,
+			});
+			const session = await internalAdapter.createSession(user.id);
+			const activeSessionsKey = `active-sessions-${user.id}`;
+
+			await expect(internalAdapter.deleteUser(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+
+			expect(await internalAdapter.findUserById(user.id)).not.toBeNull();
+			expect(
+				await db.findMany({
+					model: "account",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(1);
+			expect(store.has(session.token)).toBe(true);
+			expect(store.has(activeSessionsKey)).toBe(true);
+		});
+
+		it("completes the deletion on retry once the eviction failure recovers", async () => {
+			const store = new Map<string, string>();
+			let failDeletes = true;
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => failDeletes),
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Cache-Only Retry User", email: "cache-only-retry@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUser(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+			expect(await internalAdapter.findUserById(user.id)).not.toBeNull();
+			expect(store.has(session.token)).toBe(true);
+
+			failDeletes = false;
+			await internalAdapter.deleteUser(user.id);
+
+			expect(await internalAdapter.findUserById(user.id)).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "account",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+
+		it("evicts the cached sessions and deletes the user when eviction succeeds", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => false),
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Cache-Only Evict User", email: "cache-only-evict@test.com" },
+				{ method: "test" },
+			);
+			await internalAdapter.createAccount({
+				providerId: "credential",
+				accountId: user.id,
+				userId: user.id,
+			});
+			const session = await internalAdapter.createSession(user.id);
+
+			await internalAdapter.deleteUser(user.id);
+
+			expect(await internalAdapter.findUserById(user.id)).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "account",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11326
+ */
+describe("secondary storage - deleteUserSessions is fail-closed", () => {
+	describe("secondary-storage-only sessions (no storeSessionInDatabase)", () => {
+		it("rejects on eviction failure and leaves the cached sessions intact", async () => {
+			const store = new Map<string, string>();
+			const { auth } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => true),
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Fail-Closed User", email: "fail-closed@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+			const activeSessionsKey = `active-sessions-${user.id}`;
+
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+
+			expect(store.has(session.token)).toBe(true);
+			expect(store.has(activeSessionsKey)).toBe(true);
+
+			const found = await internalAdapter.findSession(session.token);
+			expect(found?.session.token).toBe(session.token);
+		});
+
+		it("completes the revocation on retry once the eviction failure recovers", async () => {
+			const store = new Map<string, string>();
+			let failDeletes = true;
+			const { auth } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => failDeletes),
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Retry User", email: "retry@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+			expect(store.has(session.token)).toBe(true);
+
+			failDeletes = false;
+			await internalAdapter.deleteUserSessions(user.id);
+
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+		});
+
+		it("evicts the cached sessions when eviction succeeds", async () => {
+			const store = new Map<string, string>();
+			const { auth } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => false),
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Evict User", email: "evict@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await internalAdapter.deleteUserSessions(user.id);
+
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+		});
+	});
+
+	describe("storeSessionInDatabase", () => {
+		it("rejects on eviction failure and leaves the session rows intact", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => true),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Stored User", email: "stored@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+
+			expect(store.has(session.token)).toBe(true);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(1);
+
+			const found = await internalAdapter.findSession(session.token);
+			expect(found?.session.token).toBe(session.token);
+		});
+
+		it("completes the revocation on retry once the eviction failure recovers", async () => {
+			const store = new Map<string, string>();
+			let failDeletes = true;
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => failDeletes),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Stored Retry User", email: "stored-retry@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+			expect(store.has(session.token)).toBe(true);
+
+			failDeletes = false;
+			await internalAdapter.deleteUserSessions(user.id);
+
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+
+		it("deletes the session rows when eviction succeeds", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => false),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Stored Evict User", email: "stored-evict@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await internalAdapter.deleteUserSessions(user.id);
+
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+
+		it("rejects on a partial eviction failure and completes on retry", async () => {
+			const store = new Map<string, string>();
+			let deleteCalls = 0;
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(
+					store,
+					() => ++deleteCalls === 2,
+				),
+				session: { storeSessionInDatabase: true },
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Partial Evict User", email: "partial-evict@test.com" },
+				{ method: "test" },
+			);
+			const firstSession = await internalAdapter.createSession(user.id);
+			const secondSession = await internalAdapter.createSession(user.id);
+			const activeSessionsKey = `active-sessions-${user.id}`;
+
+			// The second cached-token eviction fails: the first key is already
+			// gone, the second is still cached, and the active-session index still
+			// lists both, but no database row has been touched.
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+			expect(store.has(firstSession.token)).not.toBe(
+				store.has(secondSession.token),
+			);
+			expect(store.has(activeSessionsKey)).toBe(true);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(2);
+
+			await internalAdapter.deleteUserSessions(user.id);
+			expect(store.has(firstSession.token)).toBe(false);
+			expect(store.has(secondSession.token)).toBe(false);
+			expect(store.has(activeSessionsKey)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+
+		it("still rejects when the database deletion fails after a successful eviction", async () => {
+			const store = new Map<string, string>();
+			let failDbDelete = true;
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => false),
+				session: { storeSessionInDatabase: true },
+				databaseHooks: {
+					session: {
+						delete: {
+							before: async () => {
+								if (failDbDelete) {
+									throw new Error("database deletion failed");
+								}
+							},
+						},
+					},
+				},
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Db Failure User", email: "db-failure@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"database deletion failed",
+			);
+
+			expect(store.has(session.token)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(1);
+
+			failDbDelete = false;
+			await internalAdapter.deleteUserSessions(user.id);
+
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).toHaveLength(0);
+		});
+	});
+
+	describe("preserveSessionInDatabase", () => {
+		it("rejects on eviction failure without expiring the preserved rows", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => true),
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Preserved User", email: "preserved@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+
+			expect(store.has(session.token)).toBe(true);
+
+			const preserved = await db.findOne<{ expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+			expect(preserved).not.toBeNull();
+			expect(new Date(preserved!.expiresAt).getTime()).toBeGreaterThan(
+				Date.now(),
+			);
+
+			const found = await internalAdapter.findSession(session.token);
+			expect(found?.session.token).toBe(session.token);
+		});
+
+		it("completes the revocation on retry once the eviction failure recovers", async () => {
+			const store = new Map<string, string>();
+			let failDeletes = true;
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => failDeletes),
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Preserved Retry User", email: "preserved-retry@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await expect(internalAdapter.deleteUserSessions(user.id)).rejects.toThrow(
+				"secondary storage is unavailable",
+			);
+			expect(store.has(session.token)).toBe(true);
+
+			failDeletes = false;
+			await internalAdapter.deleteUserSessions(user.id);
+
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+
+			const preserved = await db.findOne<{ expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+			expect(preserved).not.toBeNull();
+			expect(new Date(preserved!.expiresAt).getTime()).toBeLessThanOrEqual(
+				Date.now(),
+			);
+		});
+
+		it("expires the preserved rows when eviction succeeds", async () => {
+			const store = new Map<string, string>();
+			const { auth, db } = await getTestInstance({
+				secondaryStorage: createFlakyDeleteStorage(store, () => false),
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				rateLimit: { enabled: false },
+			});
+			const { internalAdapter } = await auth.$context;
+			const user = await internalAdapter.createUser(
+				{ name: "Preserved Evict User", email: "preserved-evict@test.com" },
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			await internalAdapter.deleteUserSessions(user.id);
+
+			expect(store.has(session.token)).toBe(false);
+			expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+
+			const preserved = await db.findOne<{ expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+			expect(preserved).not.toBeNull();
+			expect(new Date(preserved!.expiresAt).getTime()).toBeLessThanOrEqual(
+				Date.now(),
+			);
+		});
 	});
 });
 
