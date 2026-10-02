@@ -65,6 +65,21 @@ const memberOrganizationKeyPlugin = (): BetterAuthPlugin => ({
 	},
 });
 
+const wideLookupPlugin = (): BetterAuthPlugin => ({
+	id: "wide-lookup",
+	schema: {
+		wideLookup: {
+			fields: Object.fromEntries(
+				["a", "b", "c", "d"].map((field) => [
+					field,
+					{ type: "string" as const },
+				]),
+			),
+			indexes: [{ fields: ["a", "b", "c", "d", "id"] }],
+		},
+	},
+});
+
 function getDrizzleTableBlock(code: string, tableName: string) {
 	const start = code.indexOf(`export const ${tableName} = `);
 	const end = code.indexOf("export const ", start + 1);
@@ -899,6 +914,38 @@ model Directory_user {
 		expect(member).toContain(
 			'@@unique([organizationId, id], map: "member_organization_id_id_unique")',
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it("should keep full MySQL string lengths beside a serial Drizzle id", async () => {
+		const database = drizzleAdapter({}, { provider: "mysql", schema: {} });
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				advanced: { database: { generateId: "serial" } },
+				plugins: [wideLookupPlugin()],
+			},
+		});
+
+		expect(schema.code).toMatch(/a:\s*varchar\(["']a["'], \{ length: 191 \}\)/);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it("should count Prisma's VARCHAR(191) id in MySQL index lengths", async () => {
+		const database = prismaAdapter({}, { provider: "mysql" });
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: database({} as BetterAuthOptions),
+			options: { database, plugins: [wideLookupPlugin()] },
+		});
+
+		expect(schema.code).toMatch(/\ba\s+String\s+@db\.VarChar\(144\)/);
 	});
 
 	it("should reject duplicate Drizzle field-level and table-level indexes", async () => {

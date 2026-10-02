@@ -450,7 +450,18 @@ describe("database indexes on the implicit primary key", () => {
 		]);
 	});
 
-	it("counts the implicit id against the dialect's index budget", () => {
+	it.each([
+		{ generateId: "serial", idLength: undefined, expected: 191 },
+		{ generateId: undefined, idLength: undefined, expected: 183 },
+		{ generateId: "uuid", idLength: undefined, expected: 183 },
+		{ generateId: false, idLength: undefined, expected: 183 },
+		{ generateId: () => "custom-id", idLength: undefined, expected: 183 },
+		{ generateId: undefined, idLength: 191, expected: 144 },
+	] as const)("counts the implicit id against the MySQL index budget (generateId: $generateId, idLength: $idLength)", ({
+		generateId,
+		idLength,
+		expected,
+	}) => {
 		const fields = Object.fromEntries(
 			["a", "b", "c", "d"].map((field) => [field, { type: "string" as const }]),
 		);
@@ -465,8 +476,10 @@ describe("database indexes on the implicit primary key", () => {
 				columnName: "a",
 				dialect: "mysql",
 				fields,
+				generateId,
+				idLength,
 				indexes,
 			}),
-		).toBe(153);
+		).toBe(expected);
 	});
 });

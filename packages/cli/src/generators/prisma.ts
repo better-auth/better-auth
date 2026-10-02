@@ -25,6 +25,9 @@ import { getAuthTables } from "better-auth/db";
 import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
 
+/** Prisma maps the generated `id String @id` to `VARCHAR(191)` on MySQL. */
+const PRISMA_MYSQL_ID_LENGTH = 191;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
@@ -459,6 +462,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								columnName: fieldName,
 								dialect: "mysql",
 								fields: fields ?? {},
+								generateId: options.advanced?.database?.generateId,
+								idLength: PRISMA_MYSQL_ID_LENGTH,
 								indexes: resolvedTableIndexes,
 							});
 							if (tableIndexStringLength) {
@@ -627,6 +632,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						columnName: fieldName,
 						dialect: "mysql",
 						fields: fields ?? {},
+						generateId: options.advanced?.database?.generateId,
+						idLength: PRISMA_MYSQL_ID_LENGTH,
 						indexes: resolvedTableIndexes,
 					});
 					const nativeType = tableIndexStringLength
