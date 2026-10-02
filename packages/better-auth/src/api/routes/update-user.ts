@@ -11,7 +11,10 @@ import {
 	assertPasswordNotTooShort,
 } from "../../utils/password";
 import { originCheck } from "../middlewares";
-import { createEmailVerificationToken } from "./email-verification";
+import {
+	buildChangeEmailVerificationURL,
+	createEmailVerificationToken,
+} from "./email-verification";
 import {
 	getSessionFromCtx,
 	isStateful,
@@ -748,6 +751,23 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
+		/**
+		 * In explicit mode the emailed link is the app's own URL, so every flow
+		 * that ends in one needs a callbackURL. Checked here, from the session
+		 * and config alone and before the existing-email lookup, so a missing
+		 * callbackURL fails the same way for existing and non-existing emails.
+		 */
+		if (
+			ctx.context.options.user.changeEmail.confirmationMode === "explicit" &&
+			!canUpdateWithoutVerification &&
+			!ctx.body.callbackURL
+		) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.CALLBACK_URL_REQUIRED,
+			);
+		}
+
 		const existingUser =
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
@@ -861,11 +881,11 @@ export const changeEmail = createAuthEndpoint(
 				requestType: "change-email-verification",
 			},
 		);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-			ctx.body.callbackURL || "/",
-		)}`;
+		const url = buildChangeEmailVerificationURL(
+			ctx,
+			token,
+			ctx.body.callbackURL,
+		);
 		await ctx.context.runInBackgroundOrAwait(
 			canSendVerification(
 				{
