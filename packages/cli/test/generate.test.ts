@@ -1002,6 +1002,70 @@ model WideLookup {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it.each([
+		{ model: "Member", map: "member", length: 60 },
+		{ model: "WideLookup", map: "wideLookup", length: 60 },
+		{ model: "Member", map: "member", length: 255 },
+		{ model: "WideLookup", map: "wideLookup", length: 255 },
+	])("should keep an existing Prisma $model id at VarChar($length)", async ({
+		model,
+		map,
+		length,
+	}) => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-keep-id-"));
+		const filePath = path.join(tmpDir, "schema.prisma");
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model ${model} {
+  id String @id @db.VarChar(${length})
+
+  @@map("${map}")
+}
+`,
+		);
+
+		try {
+			const database = prismaAdapter({}, { provider: "mysql" });
+			const schema = await generatePrismaSchema({
+				file: path.relative(process.cwd(), filePath),
+				adapter: database({} as BetterAuthOptions),
+				options: {
+					database,
+					plugins: [
+						organization(),
+						memberOrganizationKeyPlugin(),
+						wideLookupPlugin(),
+					],
+				},
+			});
+			const code = schema.code ?? "";
+			const modelStart = code.indexOf(`model ${model} {`);
+			const modelBlock = code.slice(modelStart, code.indexOf("}", modelStart));
+
+			expect(modelBlock).toMatch(
+				new RegExp(
+					`^\\s*id\\s+String\\s+@id\\s+@db\\.VarChar\\(${length}\\)\\s*$`,
+					"m",
+				),
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
+	});
+
 	it("should reject duplicate Drizzle field-level and table-level indexes", async () => {
 		await expect(
 			generateDrizzleSchema({
