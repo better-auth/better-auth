@@ -145,6 +145,103 @@ describe("passkey client", () => {
 		});
 	});
 
+	it("overrides allowCredentials when caller provides the option", async () => {
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-authenticate-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rpId: "example.com",
+						allowCredentials: [
+							{ id: "server-a", type: "public-key" },
+							{ id: "server-b", type: "public-key" },
+						],
+						userVerification: "preferred",
+					},
+				};
+			}
+			if (path === "/passkey/verify-authentication") {
+				return {
+					data: {
+						session: { id: "session" },
+						user: { id: "user" },
+					},
+				};
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		mocks.startAuthentication.mockResolvedValue({
+			clientExtensionResults: {},
+		});
+
+		await actions.signIn.passkey({
+			allowCredentials: [{ id: "client-x", type: "public-key" }],
+		});
+
+		expect(mocks.startAuthentication).toHaveBeenCalledWith(
+			expect.objectContaining({
+				optionsJSON: expect.objectContaining({
+					allowCredentials: [{ id: "client-x", type: "public-key" }],
+				}),
+			}),
+		);
+	});
+
+	it("preserves the server-issued allowCredentials when caller omits the option", async () => {
+		const serverAllowCredentials = [
+			{ id: "server-a", type: "public-key" },
+			{ id: "server-b", type: "public-key" },
+		];
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-authenticate-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rpId: "example.com",
+						allowCredentials: serverAllowCredentials,
+						userVerification: "preferred",
+					},
+				};
+			}
+			if (path === "/passkey/verify-authentication") {
+				return {
+					data: {
+						session: { id: "session" },
+						user: { id: "user" },
+					},
+				};
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		mocks.startAuthentication.mockResolvedValue({
+			clientExtensionResults: {},
+		});
+
+		await actions.signIn.passkey();
+
+		expect(mocks.startAuthentication).toHaveBeenCalledWith(
+			expect.objectContaining({
+				optionsJSON: expect.objectContaining({
+					allowCredentials: serverAllowCredentials,
+				}),
+			}),
+		);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9373
 	 */
