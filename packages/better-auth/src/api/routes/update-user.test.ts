@@ -1786,7 +1786,7 @@ describe("password length on verify-only fields", async () => {
  *
  * @see https://github.com/better-auth/better-auth/issues/11528
  */
-describe("explicit change-email confirmation is revocation-aware with cookie cache", async () => {
+describe("explicit change-email confirmation is revocation-aware with cookie cache", () => {
 	const preloadCachedSessionPlugin = {
 		id: "preload-cached-session",
 		hooks: {
