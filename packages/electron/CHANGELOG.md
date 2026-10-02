@@ -1,5 +1,7 @@
 # @better-auth/electron
 
+## 1.7.7
+
 ## 1.7.6
 
 ## 1.7.5
