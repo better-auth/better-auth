@@ -350,20 +350,58 @@ describe("telemetry", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10315
 	 */
-	it("defers the init event until the install is reported", async () => {
-		const track = vi.fn(async (_event: TelemetryEvent) => {});
-		const telemetry = await createTelemetry(
-			{ baseURL: "http://localhost", telemetry: { enabled: true } },
-			{ customTrack: track, skipTestCheck: true, deferInitEvent: true },
-		);
-		expect(track).not.toHaveBeenCalled();
+	describe("init event", () => {
+		const stateAfterTick = (promise: Promise<unknown>) =>
+			Promise.race([
+				promise.then(() => "settled"),
+				new Promise<string>((resolve) => setTimeout(resolve, 0, "pending")),
+			]);
 
-		await telemetry.reportInstall();
+		it("defers the init event until the install is reported", async () => {
+			const track = vi.fn(async (_event: TelemetryEvent) => {});
+			const telemetry = await createTelemetry(
+				{ baseURL: "http://localhost", telemetry: { enabled: true } },
+				{ customTrack: track, skipTestCheck: true, deferInitEvent: true },
+			);
+			expect(track).not.toHaveBeenCalled();
 
-		expect(track).toHaveBeenCalledTimes(1);
-		expect(track.mock.calls[0]![0]).toMatchObject({
-			type: "init",
-			anonymousId: "anon-123",
+			await telemetry.reportInstall();
+
+			expect(track).toHaveBeenCalledTimes(1);
+			expect(track.mock.calls[0]![0]).toMatchObject({
+				type: "init",
+				anonymousId: "anon-123",
+			});
+		});
+
+		it("settles the install report once the init event is sent", async () => {
+			const sent = Promise.withResolvers<void>();
+			const track = vi.fn((_event: TelemetryEvent) => sent.promise);
+			const telemetry = await createTelemetry(
+				{ baseURL: "http://localhost", telemetry: { enabled: true } },
+				{ customTrack: track, skipTestCheck: true, deferInitEvent: true },
+			);
+
+			const report = telemetry.reportInstall();
+
+			expect(await stateAfterTick(report)).toBe("pending");
+			expect(track).toHaveBeenCalledTimes(1);
+			sent.resolve();
+			expect(await stateAfterTick(report)).toBe("settled");
+		});
+
+		it("sends the init event without waiting for it when not deferred", async () => {
+			const track = vi.fn(
+				(_event: TelemetryEvent) => new Promise<void>(() => {}),
+			);
+
+			const telemetry = createTelemetry(
+				{ baseURL: "http://localhost", telemetry: { enabled: true } },
+				{ customTrack: track, skipTestCheck: true },
+			);
+
+			expect(await stateAfterTick(telemetry)).toBe("settled");
+			expect(track).toHaveBeenCalledTimes(1);
 		});
 	});
 });
