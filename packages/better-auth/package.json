@@ -146,6 +146,11 @@
       "types": "./dist/client/svelte/index.d.mts",
       "default": "./dist/client/svelte/index.mjs"
     },
+    "./svelte/remote": {
+      "dev-source": "./src/client/svelte/remote.ts",
+      "types": "./dist/client/svelte/remote.d.mts",
+      "default": "./dist/client/svelte/remote.mjs"
+    },
     "./next-js": {
       "dev-source": "./src/integrations/next-js.ts",
       "types": "./dist/integrations/next-js.d.mts",
@@ -331,6 +336,9 @@
       ],
       "svelte": [
         "./dist/client/svelte/index.d.mts"
+      ],
+      "svelte/remote": [
+        "./dist/client/svelte/remote.d.mts"
       ],
       "social-providers": [
         "./dist/social-providers/index.d.mts"

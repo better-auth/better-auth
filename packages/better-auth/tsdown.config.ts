@@ -27,6 +27,7 @@ export default defineConfig({
 		"./src/client/react/index.ts",
 		"./src/client/vue/index.ts",
 		"./src/client/svelte/index.ts",
+		"./src/client/svelte/remote.ts",
 		"./src/client/solid/index.ts",
 		"./src/client/lynx/index.ts",
 		"./src/plugins/index.ts",
