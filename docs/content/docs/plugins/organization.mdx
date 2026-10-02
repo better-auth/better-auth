@@ -900,10 +900,12 @@ unauthenticated or unauthorized visit — an email scanner following the link wi
 for instance — does not burn it, and `disableOrganizationDeletion` is re-checked when a pending
 token is used.
 
-Once the token is consumed it is spent: if `beforeDeleteOrganization` rejects the deletion, or
-the deletion itself fails, the organization is untouched but the same link can't be used again,
-so the member requests a new one. That is what keeps a link redeemable at most once even when it
-is opened twice at the same time.
+Once the token is consumed it is spent, and the same link can't be used again. If
+`beforeDeleteOrganization` rejects the deletion, the organization remains and the member
+requests a new link to try again. If the deletion itself or `afterDeleteOrganization` fails, the
+organization may already be gone, so check whether it was deleted before asking for another
+link. Consuming the token first is what keeps a link redeemable at most once even when it is
+opened twice at the same time.
 
 The confirmation email is sent through the same background-task mechanism as the other emails
 Better Auth sends (`advanced.backgroundTasks`). A failure in `sendDeleteOrganizationVerification`
