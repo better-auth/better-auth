@@ -1,6 +1,7 @@
 import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { createEmailVerificationToken } from "./email-verification";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/8969
@@ -217,6 +218,210 @@ describe("Email Verification", () => {
 			}),
 			undefined,
 		);
+	});
+
+	it("should compose verification URL with encoded token and callbackURL", async () => {
+		let capturedUrl = "";
+		let capturedToken = "";
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendOnSignUp: false,
+				async sendVerificationEmail({ url, token }) {
+					capturedUrl = url;
+					capturedToken = token;
+				},
+			},
+		});
+
+		const callbackURL =
+			"https://example.com/callback?next=/dash&ref=mail#section";
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+				callbackURL,
+			},
+		});
+
+		expect(capturedUrl).toContain("/verify-email?");
+		const parsed = new URL(capturedUrl);
+		expect(parsed.searchParams.get("token")).toBe(capturedToken);
+		expect(parsed.searchParams.get("callbackURL")).toBe(callbackURL);
+	});
+
+	it("should compose follow-up verification URL for change-email-confirmation", async () => {
+		let confirmationToken = "";
+		let followUpUrl = "";
+		let followUpToken = "";
+		const { auth, client, testUser, db, signInWithTestUser } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: false,
+					async sendVerificationEmail({ url, token }) {
+						followUpUrl = url;
+						followUpToken = token;
+					},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+						async sendChangeEmailConfirmation({ token }) {
+							confirmationToken = token;
+						},
+					},
+				},
+			});
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+		});
+		const { runWithUser } = await signInWithTestUser();
+		const callbackURL =
+			"https://example.com/callback?next=/dash&ref=mail#section";
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: {
+					newEmail: "followup-new@example.com",
+				},
+				headers,
+			});
+			expect(confirmationToken).not.toBe("");
+			await client.verifyEmail({
+				query: {
+					token: confirmationToken,
+					callbackURL,
+				},
+				fetchOptions: {
+					headers,
+				},
+			});
+		});
+		expect(followUpUrl).toContain("/verify-email?");
+		const parsed = new URL(followUpUrl);
+		expect(parsed.searchParams.get("token")).toBe(followUpToken);
+		expect(parsed.searchParams.get("callbackURL")).toBe(callbackURL);
+	});
+
+	it("should fall back to / as callbackURL in follow-up verification URL when omitted", async () => {
+		let confirmationToken = "";
+		let followUpUrl = "";
+		let followUpToken = "";
+		const { auth, client, testUser, db, signInWithTestUser } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: false,
+					async sendVerificationEmail({ url, token }) {
+						followUpUrl = url;
+						followUpToken = token;
+					},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+						async sendChangeEmailConfirmation({ token }) {
+							confirmationToken = token;
+						},
+					},
+				},
+			});
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: {
+					newEmail: "followup-no-callback@example.com",
+				},
+				headers,
+			});
+			expect(confirmationToken).not.toBe("");
+			await client.verifyEmail({
+				query: {
+					token: confirmationToken,
+				},
+				fetchOptions: {
+					headers,
+				},
+			});
+		});
+		expect(followUpUrl).toContain("/verify-email?");
+		const parsed = new URL(followUpUrl);
+		expect(parsed.searchParams.get("token")).toBe(followUpToken);
+		expect(parsed.searchParams.get("callbackURL")).toBe("/");
+	});
+
+	it("should compose follow-up verification URL for legacy email-change flow", async () => {
+		let followUpUrl = "";
+		let followUpToken = "";
+		const { auth, client, testUser, signInWithTestUser } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: false,
+					async sendVerificationEmail({ url, token }) {
+						followUpUrl = url;
+						followUpToken = token;
+					},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+					},
+				},
+			});
+		const { secret } = await auth.$context;
+		const legacyToken = await createEmailVerificationToken(
+			secret,
+			testUser.email,
+			"legacy-new@example.com",
+		);
+		const callbackURL =
+			"https://example.com/callback?next=/dash&ref=mail#section";
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
+			await client.verifyEmail({
+				query: {
+					token: legacyToken,
+					callbackURL,
+				},
+				fetchOptions: {
+					headers,
+				},
+			});
+		});
+		expect(followUpUrl).toContain("/verify-email?");
+		const parsed = new URL(followUpUrl);
+		expect(parsed.searchParams.get("token")).toBe(followUpToken);
+		expect(parsed.searchParams.get("callbackURL")).toBe(callbackURL);
 	});
 
 	/**

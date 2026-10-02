@@ -62,10 +62,11 @@ export async function sendVerificationEmailFn(
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const callbackURL = ctx.body.callbackURL
-		? encodeURIComponent(ctx.body.callbackURL)
-		: encodeURIComponent("/");
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+	const callbackURL = ctx.body.callbackURL || "/";
+	const url = appendQueryParams(
+		`${ctx.context.baseURL}/verify-email`,
+		new URLSearchParams({ token, callbackURL }),
+	);
 	// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors (see #8757).
 	// This path only runs once a real unverified user is known, so timing here does not weaken the unauthenticated anti-enumeration behavior above.
 	await ctx.context.options.emailVerification.sendVerificationEmail(
@@ -344,10 +345,14 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.options.emailVerification?.expiresIn,
 						{ requestType: "change-email-verification" },
 					);
-					const updateCallbackURL = ctx.query.callbackURL
-						? encodeURIComponent(ctx.query.callbackURL)
-						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
+					const updateCallbackURL = ctx.query.callbackURL || "/";
+					const url = appendQueryParams(
+						`${ctx.context.baseURL}/verify-email`,
+						new URLSearchParams({
+							token: newToken,
+							callbackURL: updateCallbackURL,
+						}),
+					);
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
@@ -444,15 +449,19 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.secret,
 						parsed.updateTo,
 					);
-					const updateCallbackURL = ctx.query.callbackURL
-						? encodeURIComponent(ctx.query.callbackURL)
-						: encodeURIComponent("/");
+					const updateCallbackURL = ctx.query.callbackURL || "/";
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
 								{
 									user: updatedUser,
-									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
+									url: appendQueryParams(
+										`${ctx.context.baseURL}/verify-email`,
+										new URLSearchParams({
+											token: newToken,
+											callbackURL: updateCallbackURL,
+										}),
+									),
 									token: newToken,
 								},
 								safeCloneRequest(ctx.request),
