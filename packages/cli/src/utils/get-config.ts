@@ -4,7 +4,7 @@ import path from "node:path";
 import babelPresetReact from "@babel/preset-react";
 // @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
 import type { TsConfigResult } from "get-tsconfig";
@@ -358,18 +358,25 @@ function resolvesMissingOutputModule(
 	);
 }
 
-export async function getConfig({
-	cwd,
-	configPath,
-	outputPath,
-	shouldThrowOnError = false,
-}: {
+type ConfigInput = {
 	cwd: string;
 	configPath?: string;
 	/** Schema output used to recover an exact first-run self-import. */
 	outputPath?: string;
 	shouldThrowOnError?: boolean;
-}) {
+};
+
+type LoadedAuth = {
+	options?: BetterAuthOptions;
+	$context?: Promise<AuthContext>;
+};
+
+async function getLoadedConfig({
+	cwd,
+	configPath,
+	outputPath,
+	shouldThrowOnError = false,
+}: ConfigInput): Promise<LoadedAuth | null> {
 	const fail = (message: string, error?: unknown): never => {
 		if (shouldThrowOnError)
 			throw error instanceof Error ? error : new Error(message);
@@ -384,7 +391,7 @@ export async function getConfig({
 		: undefined;
 	const load = async (configFile: string) => {
 		const loadOnce = () =>
-			loadConfig<{ options?: BetterAuthOptions }>({
+			loadConfig<LoadedAuth>({
 				configFile,
 				dotenv: { fileName: [".env", ".env.local"] },
 				jitiOptions: jitiOptions(cwd),
@@ -437,11 +444,11 @@ export async function getConfig({
 					`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 				);
 			}
-			return options;
+			return config;
 		}
 
 		for (const possiblePath of possiblePaths) {
-			let config: { options?: BetterAuthOptions };
+			let config: LoadedAuth;
 			try {
 				({ config } = await load(possiblePath));
 			} catch (e) {
@@ -455,11 +462,24 @@ export async function getConfig({
 					"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
 				);
 			}
-			return config.options;
+			return config;
 		}
 		return null;
 	} catch (e) {
 		if (isServerOnlyError(e)) return fail(SERVER_ONLY_HINT);
 		return fail("Couldn't read your auth config.", e);
 	}
+}
+
+export async function getConfig(input: ConfigInput) {
+	return (await getLoadedConfig(input))?.options ?? null;
+}
+
+export async function getAuth(input: ConfigInput) {
+	const auth = await getLoadedConfig(input);
+	if (!auth) return null;
+	if (!auth.$context) {
+		throw new Error("The auth config must export a Better Auth instance.");
+	}
+	return { options: auth.options, $context: auth.$context };
 }

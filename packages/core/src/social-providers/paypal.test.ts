@@ -45,6 +45,88 @@ async function idToken(subject: string) {
 		.sign(signingKey);
 }
 
+function formBody(body: unknown) {
+	if (body instanceof URLSearchParams) return body;
+	if (typeof body === "string") return new URLSearchParams(body);
+	throw new Error("Expected a URL-encoded form body");
+}
+
+describe("paypal token requests", () => {
+	beforeEach(() => {
+		mockedBetterFetch.mockReset();
+	});
+
+	it("exchanges an authorization code with Basic authentication", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "access-token",
+				expires_in: 3600,
+				refresh_token: "refresh-token",
+				token_type: "Bearer",
+			},
+			error: null,
+		});
+
+		const tokens = await paypal(options).validateAuthorizationCode({
+			code: "authorization-code",
+			codeVerifier: "code-verifier",
+			redirectURI: "https://app.example.com/api/auth/callback/paypal",
+		});
+
+		expect(tokens.accessToken).toBe("access-token");
+		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		expect(url).toBe("https://api-m.paypal.com/v1/oauth2/token");
+		const headers = new Headers(init?.headers as HeadersInit | undefined);
+		expect(headers.get("accept")).toBe("application/json");
+		expect(headers.get("authorization")).toBe(
+			`Basic ${Buffer.from("paypal-client-id:paypal-client-secret").toString(
+				"base64",
+			)}`,
+		);
+		expect(headers.get("content-type")).toBe(
+			"application/x-www-form-urlencoded",
+		);
+		expect(Object.fromEntries(formBody(init?.body))).toEqual({
+			code: "authorization-code",
+			code_verifier: "code-verifier",
+			grant_type: "authorization_code",
+			redirect_uri: "https://app.example.com/api/auth/callback/paypal",
+		});
+	});
+
+	it("refreshes an access token with Basic authentication", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "refreshed-access-token",
+				expires_in: 3600,
+				refresh_token: "rotated-refresh-token",
+				token_type: "Bearer",
+			},
+			error: null,
+		});
+
+		const tokens = await paypal(options).refreshAccessToken("refresh-token");
+
+		expect(tokens.accessToken).toBe("refreshed-access-token");
+		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		expect(url).toBe("https://api-m.paypal.com/v1/oauth2/token");
+		const headers = new Headers(init?.headers as HeadersInit | undefined);
+		expect(headers.get("accept")).toBe("application/json");
+		expect(headers.get("authorization")).toBe(
+			`Basic ${Buffer.from("paypal-client-id:paypal-client-secret").toString(
+				"base64",
+			)}`,
+		);
+		expect(headers.get("content-type")).toBe(
+			"application/x-www-form-urlencoded",
+		);
+		expect(Object.fromEntries(formBody(init?.body))).toEqual({
+			grant_type: "refresh_token",
+			refresh_token: "refresh-token",
+		});
+	});
+});
+
 describe("paypal.getUserInfo", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();

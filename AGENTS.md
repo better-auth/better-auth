@@ -18,6 +18,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - ALWAYS use `pnpm` (never npm, yarn, or bun)
 - NEVER run `pnpm test` (runs all packages). Use `vitest path/to/test -t <pattern>`
 - Type check: `pnpm typecheck`
+- After changing a dependency version in `package.json` or `pnpm-workspace.yaml`, run `pnpm install --lockfile-only` from the affected workspace root to avoid unrelated lockfile updates. Verify with `pnpm install --frozen-lockfile`. Nested `demo/*` workspaces have separate lockfiles.
 - Formatting/linting runs automatically on commit (Lefthook + Biome). No need to run manually.
 
 ## Writing Code
@@ -30,6 +31,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - Use `import type` for type-only imports
 - Use `node:` protocol for Node.js built-ins (e.g. `node:crypto`)
 - JSDoc comments for public APIs
+- The Better Auth CLI package was renamed from `@better-auth/cli` to `auth`. Use `npx auth@latest` in docs and user-facing messages, while preserving historical references in changelogs and explanations of the rename.
 - Plugins should be as independent as possible. When working on a plugin, prefer modifying the plugin over changing core.
 
 ### URL Composition
@@ -67,7 +69,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - NEVER create separate clients with `createAuthClient()` in tests
 - Default test DB is SQLite in-memory; use `testWith` for other databases
 - Adapter tests need Docker: `docker compose up -d`
-- Regression tests: add `@see` comment with issue URL above `it()` or `describe()`:
+- Regression tests: use `@see` for relevant issues or authoritative sources. Do not reference the current pull request or its review comments:
   ```typescript
   /**
    * @see https://github.com/better-auth/better-auth/issues/{issue_number}
@@ -76,6 +78,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
     // ...
   });
   ```
+- Put a shared `@see` above a focused `describe()` when multiple regression tests share the same reference. For a standalone regression test, put it above `it()`.
 
 ## Important Development Notes
 

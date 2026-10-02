@@ -14,7 +14,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { withSpan } from ".";
+import { createWithSpan, withSpan } from ".";
 import { getOpenTelemetryAPI } from "./api";
 import { ATTR_DB_COLLECTION_NAME, ATTR_DB_OPERATION_NAME } from "./attributes";
 
@@ -70,6 +70,42 @@ describe("instrumentation", () => {
 	beforeEach(() => {
 		exporter.reset();
 		vi.resetAllMocks();
+	});
+
+	it("enables instrumentation by default and when explicitly enabled", () => {
+		expect(createWithSpan({})).toBe(withSpan);
+		expect(createWithSpan({ experimental: { instrumentation: {} } })).toBe(
+			withSpan,
+		);
+		expect(
+			createWithSpan({
+				experimental: { instrumentation: { enabled: true } },
+			}),
+		).toBe(withSpan);
+	});
+
+	it("preserves return values and errors without accessing the tracer when disabled", async () => {
+		const run = createWithSpan({
+			experimental: { instrumentation: { enabled: false } },
+		});
+		const getTracer = vi.spyOn(getOpenTelemetryAPI().trace, "getTracer");
+		expect(run("sync", {}, () => 42)).toBe(42);
+		const promise = Promise.resolve(42);
+		expect(run("async", {}, () => promise)).toBe(promise);
+		const error = new Error("failure");
+		expect(() =>
+			run("sync error", {}, () => {
+				throw error;
+			}),
+		).toThrow(error);
+		await expect(
+			run("async error", {}, async () => {
+				throw error;
+			}),
+		).rejects.toBe(error);
+		expect(getTracer).not.toHaveBeenCalled();
+		expect(exporter.getFinishedSpans()).toEqual([]);
+		getTracer.mockRestore();
 	});
 
 	it("creates a span with name and attributes for sync function", async () => {

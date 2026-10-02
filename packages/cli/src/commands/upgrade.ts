@@ -4,6 +4,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
 import * as semver from "semver";
+import type { PackageJson } from "type-fest";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import changesetConfig from "../../../../.changeset/config.json" with {
@@ -13,6 +14,10 @@ import { detectPackageManager } from "../utils/check-package-managers";
 import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
 import { cliVersion } from "../version";
+
+const dependencyMapSchema = z
+	.record(z.string(), z.string().catch(""))
+	.catch({});
 
 const fixedReleaseGroup = changesetConfig.fixed.find((group) =>
 	group.includes("better-auth"),
@@ -51,7 +56,7 @@ export async function upgradeAction(opts: unknown) {
 		process.exit(1);
 	}
 
-	let packageJson: Record<string, any>;
+	let packageJson: PackageJson;
 	try {
 		packageJson = getPackageInfo(cwd);
 	} catch {
@@ -61,8 +66,8 @@ export async function upgradeAction(opts: unknown) {
 		process.exit(1);
 	}
 
-	const deps = packageJson.dependencies ?? {};
-	const devDeps = packageJson.devDependencies ?? {};
+	const deps = dependencyMapSchema.parse(packageJson.dependencies);
+	const devDeps = dependencyMapSchema.parse(packageJson.devDependencies);
 
 	const candidates: {
 		name: string;
@@ -70,7 +75,7 @@ export async function upgradeAction(opts: unknown) {
 		depType: "prod" | "dev";
 	}[] = [];
 
-	for (const [name, version] of Object.entries(deps) as [string, string][]) {
+	for (const [name, version] of Object.entries(deps)) {
 		if (
 			isSynchronizedBetterAuthPackage(name) &&
 			!version.startsWith("workspace:")
@@ -78,7 +83,7 @@ export async function upgradeAction(opts: unknown) {
 			candidates.push({ name, current: version, depType: "prod" });
 		}
 	}
-	for (const [name, version] of Object.entries(devDeps) as [string, string][]) {
+	for (const [name, version] of Object.entries(devDeps)) {
 		if (
 			isSynchronizedBetterAuthPackage(name) &&
 			!version.startsWith("workspace:")
@@ -95,17 +100,37 @@ export async function upgradeAction(opts: unknown) {
 	const spinner = yoctoSpinner({ text: "checking for updates..." }).start();
 
 	const upgrades: UpgradeEntry[] = [];
+	const warnings: string[] = [];
 	for (const { name, current, depType } of candidates) {
-		const currentVersion = semver.minVersion(current);
+		const currentRange = semver.validRange(current);
+		if (!currentRange) {
+			warnings.push(
+				`Skipped ${name} (${current}). Automatic upgrades require a semver range.`,
+			);
+			continue;
+		}
+		const currentVersion = semver.minVersion(currentRange);
 		if (currentVersion && semver.lt(currentVersion, cliVersion)) {
-			upgrades.push({ name, current, target: cliVersion, depType });
+			upgrades.push({
+				name,
+				current,
+				target: cliVersion,
+				depType,
+			});
 		}
 	}
 
 	spinner.stop();
+	for (const warning of warnings) {
+		console.warn(chalk.yellow(warning));
+	}
 
 	if (upgrades.length === 0) {
-		console.log("All better-auth packages are up to date.");
+		console.log(
+			warnings.length > 0
+				? "No supported Better Auth package upgrades were found."
+				: "All better-auth packages are up to date.",
+		);
 		return;
 	}
 
@@ -134,7 +159,6 @@ export async function upgradeAction(opts: unknown) {
 	}
 
 	const { packageManager } = await detectPackageManager(cwd, packageJson);
-
 	const prodUpgrades = upgrades
 		.filter((u) => u.depType === "prod")
 		.map((u) => `${u.name}@${u.target}`);

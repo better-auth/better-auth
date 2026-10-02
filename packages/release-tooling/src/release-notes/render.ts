@@ -5,6 +5,7 @@ import {
 } from "../ai/generated-copy.ts";
 import { FILTERED_DOMAINS } from "../change-classifier.ts";
 import type {
+	GeneratedReleaseRewrites,
 	ReleaseEntry,
 	ReleaseManifest,
 	ReleaseRewrites,
@@ -178,7 +179,12 @@ function readReleaseRewrites(
 		...new Set(manifest.entries.map((entry) => entry.rewriteKey)),
 	].sort();
 	const actualIds = parsed.rewrites.map((rewrite) => rewrite.id).sort();
-	if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds)) {
+	const expectedIdSet = new Set(expectedIds);
+	const actualIdSet = new Set(actualIds);
+	if (
+		actualIdSet.size !== actualIds.length ||
+		actualIds.some((id) => !expectedIdSet.has(id))
+	) {
 		throw new Error(
 			`AI rewrite IDs did not match the manifest: expected ${expectedIds.join(", ")}, received ${actualIds.join(", ")}`,
 		);
@@ -193,29 +199,44 @@ function readReleaseRewrites(
 			.map((entry) => entry.rewriteKey),
 	);
 	const rewrites: ReleaseRewrites = {};
-	for (const key of expectedIds) {
-		const value = generatedByKey.get(key);
-		if (!value) throw new Error(`AI rewrite ${key} is missing`);
-
-		const title = validateGeneratedCopy(value.title, "title", key, 300);
-		const migration =
-			value.migration === null
-				? undefined
-				: validateGeneratedCopy(value.migration, "migration", key, 500);
-
-		if (breakingKeys.has(key) && !migration) {
-			throw new Error(
-				`Breaking AI rewrite ${key} must have a single-line migration`,
+	for (const [key, value] of generatedByKey) {
+		try {
+			rewrites[key] = validateGeneratedReleaseRewrite(
+				value,
+				breakingKeys.has(key),
+			);
+		} catch (error) {
+			console.warn(
+				`Using deterministic copy for ${key}: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
-		if (!breakingKeys.has(key) && migration !== undefined) {
-			throw new Error(`Non-breaking AI rewrite ${key} cannot have a migration`);
-		}
-
-		rewrites[key] = migration ? { title, migration } : { title };
 	}
 
 	return rewrites;
+}
+
+export function validateGeneratedReleaseRewrite(
+	value: GeneratedReleaseRewrites[number],
+	breaking: boolean,
+): ReleaseRewrites[string] {
+	const title = validateGeneratedCopy(value.title, "title", value.id, 300);
+	const migration =
+		value.migration === null
+			? undefined
+			: validateGeneratedCopy(value.migration, "migration", value.id, 500);
+
+	if (breaking && !migration) {
+		throw new Error(
+			`Breaking AI rewrite ${value.id} must have a single-line migration`,
+		);
+	}
+	if (!breaking && migration !== undefined) {
+		throw new Error(
+			`Non-breaking AI rewrite ${value.id} cannot have a migration`,
+		);
+	}
+
+	return migration ? { title, migration } : { title };
 }
 
 function validateGeneratedCopy(

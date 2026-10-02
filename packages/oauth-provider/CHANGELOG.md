@@ -1,5 +1,33 @@
 # @better-auth/oauth-provider
 
+## 1.7.7
+
+### Patch Changes
+
+- [#8686](https://github.com/better-auth/better-auth/pull/8686) [`683ac1d`](https://github.com/better-auth/better-auth/commit/683ac1ddc31f1007171b045230827edb08b99f91) Thanks [@lennondotw](https://github.com/lennondotw)! - Add an optional `validateRedirectUri` callback for trusted deployments with dynamic OAuth redirect URIs. Existing configurations keep their registered URI validation behavior.
+
+- [#11402](https://github.com/better-auth/better-auth/pull/11402) [`b26057e`](https://github.com/better-auth/better-auth/commit/b26057e23a3c4fc8c97c346857751564d57324c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Export `verifyOAuthQueryParams` from the package root, so an application that renders its own consent page can verify the `sig`/`exp` this plugin's `signParams` puts on the authorization query before it renders anything.
+
+## 1.7.6
+
+## 1.7.5
+
+## 1.7.4
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11090](https://github.com/better-auth/better-auth/pull/11090) [`4d09d50`](https://github.com/better-auth/better-auth/commit/4d09d502254f1bfe65dafc8d813d803225429c4a) Thanks [@Salman-Arshad](https://github.com/Salman-Arshad)! - Allow native OAuth clients with `localhost` loopback redirect URIs to use ephemeral callback ports, and ensure loopback port variance changes only the port.
+
+## 1.7.2
+
+### Patch Changes
+
+- [#11010](https://github.com/better-auth/better-auth/pull/11010) [`bb8d7c4`](https://github.com/better-auth/better-auth/commit/bb8d7c4541992baedd53325761e19a919a805fc7) Thanks [@bytaesu](https://github.com/bytaesu)! - Client ID Metadata Document clients that declare a grant the server does not offer (such as Claude's enterprise `jwt-bearer` grant) can now register. Only documents sharing no grant with the server are refused.
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
 ## 1.7.1
 
 ## 1.7.0

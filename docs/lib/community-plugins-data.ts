@@ -130,10 +130,32 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@alexasomba/better-auth-paystack",
+		name: "better-auth-paystack",
 		url: "https://github.com/alexasomba/better-auth-paystack",
 		description:
-			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+			"Production-ready Paystack billing plugin for Better Auth with native and locally managed subscriptions, one-time payments, organization billing, trials, secure webhooks, automated limits, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-flutterwave",
+		url: "https://github.com/alexasomba/better-auth-flutterwave",
+		description:
+			"Flutterwave plugin for Better Auth — integrates Flutterwave payments, subscriptions, organization billing, marketplace split payments, webhooks, refunds, reconciliation, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-solana-payments",
+		url: "https://github.com/alexasomba/better-auth-solana-payments",
+		description:
+			"One-time Solana payment integration for Better Auth with Solana Pay checkout, server-side transfer verification, payment tracking, organization payments, and more.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
@@ -351,6 +373,50 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "lapluviosilla",
 			github: "lapluviosilla",
 			avatar: "https://github.com/lapluviosilla.png",
+		},
+	},
+	{
+		name: "@better-geetest/better-auth-plugin-gt4",
+		url: "https://github.com/typed-sigterm/better-geetest/tree/main/packages/better-auth-plugin-gt4",
+		description:
+			"Integrate GeeTest gt4 bot protection by adding captcha verification for key endpoints.",
+		author: {
+			name: "Typed SIGTERM",
+			github: "typed-sigterm",
+			avatar: "https://github.com/typed-sigterm.png",
+		},
+	},
+	{
+		name: "better-auth-evp",
+		url: "https://github.com/qamarq/better-auth-evp",
+		description:
+			"Email Verification Protocol (Chrome origin trial) plugin - lets a supporting browser verify mailbox ownership in the background and sign the user in, with automatic fallback to any other sign-in method when unsupported.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
+		},
+	},
+	{
+		name: "@eusend_dev/better-auth",
+		url: "https://github.com/eusend-dev/eusend-better-auth",
+		description:
+			"Auth emails (verification, password reset, OTP, magic link, organization invitations) through eusend, an EU-hosted email API, with brandable templates, non-blocking sends, and optional contact sync for verified users.",
+		author: {
+			name: "eusend",
+			github: "eusend-dev",
+			avatar: "https://github.com/eusend-dev.png",
+		},
+	},
+	{
+		name: "@stellartools/betterauth-adapter",
+		url: "https://github.com/payrouteshq/stellartools",
+		description:
+			"Integrate Stellar blockchain payments to your Better Auth setup.",
+		author: {
+			name: "Emmanuel Odii",
+			github: "devodii",
+			avatar: "https://github.com/devodii.png",
 		},
 	},
 ];
