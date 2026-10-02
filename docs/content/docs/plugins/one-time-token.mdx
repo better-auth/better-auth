@@ -93,6 +93,14 @@ oneTimeToken({
 
 * **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as parameters.
 
+* **`disableSetSessionCookie`** (boolean): Optional. If `true`, the session cookie is **not** set when the token is verified — the resolved session is still returned in the response body. Default: `false`.
+
+```ts
+oneTimeToken({
+    disableSetSessionCookie: true
+})
+```
+
 * **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
 
   * **`plain`**: The token is stored in plain text. (Default)
@@ -125,5 +133,13 @@ oneTimeToken({
             return myCustomHasher(token);
         }
     }
+})
+```
+
+* **`setOttHeaderOnNewSession`** (boolean): Optional. If `true`, a one-time token is included in the `set-ott` response header whenever a new session is created (e.g. sign-in, sign-up). The plugin also exposes `set-ott` via `Access-Control-Expose-Headers` so the header is readable from JavaScript once your CORS configuration permits the cross-origin request. Default: `false`.
+
+```ts
+oneTimeToken({
+    setOttHeaderOnNewSession: true
 })
 ```
