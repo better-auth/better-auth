@@ -1349,6 +1349,39 @@ describe("SSO shared redirectURI", async () => {
 		expect(provider.redirectURI).not.toContain("shared-test");
 	});
 
+	it("keeps a relative redirect URI with a query under a trailing auth base slash", async () => {
+		const { auth: trailingBaseAuth, signInWithTestUser: signIn } =
+			await getTestInstance({
+				baseURL: "http://localhost:3000/api/auth/",
+				trustedOrigins: ["http://localhost:8080"],
+				plugins: [
+					sso({ redirectURI: "/sso/callback?source=a%2Fb" }),
+					organization(),
+				],
+			});
+		const { headers } = await signIn();
+		const provider = await trailingBaseAuth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "relative-redirect.com",
+				providerId: "relative-redirect",
+				oidcConfig: {
+					clientId: "relative-redirect",
+					clientSecret: "relative-redirect-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		expect(provider.redirectURI).toBe(
+			"http://localhost:3000/api/auth/sso/callback?source=a%2Fb",
+		);
+	});
+
 	it("should use shared redirect URI in authorization URL", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({

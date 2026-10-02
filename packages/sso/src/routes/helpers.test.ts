@@ -120,6 +120,28 @@ describe("createSP assertion-signing metadata", () => {
 		expect(provider.getMetadata()).toContain('WantAssertionsSigned="true"');
 	});
 
+	it("keeps ACS and SLO URLs under a trailing auth base slash", () => {
+		const provider = createSP(
+			configuration,
+			"https://service.example.com/api/auth/",
+			"team one",
+			{
+				sloOptions: {
+					wantLogoutRequestSigned: false,
+					wantLogoutResponseSigned: false,
+				},
+			},
+		);
+		const metadata = provider.getMetadata();
+
+		expect(metadata).toContain(
+			"https://service.example.com/api/auth/sso/saml2/sp/acs/team%20one",
+		);
+		expect(metadata).toContain(
+			"https://service.example.com/api/auth/sso/saml2/sp/slo/team%20one",
+		);
+	});
+
 	it("accepts custom metadata that requires signed assertions", () => {
 		expect(() =>
 			createSP(
