@@ -21,6 +21,35 @@ describe("One-time token", async () => {
 		vi.useRealTimers();
 	});
 
+	const mintTokenForExpiredSession = async () => {
+		const testInstance = await getTestInstance(
+			{
+				session: {
+					expiresIn: 60,
+					updateAge: 0,
+				},
+				plugins: [oneTimeToken({ expiresIn: 10 })],
+			},
+			{
+				clientOptions: {
+					plugins: [oneTimeTokenClient()],
+				},
+			},
+		);
+
+		const { headers } = await testInstance.signInWithTestUser();
+
+		const response = await testInstance.auth.api.generateOneTimeToken({
+			headers,
+		});
+		expect(response.token).toBeDefined();
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+
+		return { testInstance, token: response.token };
+	};
+
 	it("should work", async () => {
 		const { headers } = await signInWithTestUser();
 		const response = await auth.api.generateOneTimeToken({
@@ -101,41 +130,39 @@ describe("One-time token", async () => {
 	});
 
 	it("should reject token when underlying session has expired", async () => {
-		const testInstance = await getTestInstance(
-			{
-				session: {
-					expiresIn: 60,
-					updateAge: 0,
-				},
-				plugins: [oneTimeToken({ expiresIn: 10 })],
-			},
-			{
-				clientOptions: {
-					plugins: [oneTimeTokenClient()],
-				},
-			},
-		);
-
-		const { headers } = await testInstance.signInWithTestUser();
-
-		const response = await testInstance.auth.api.generateOneTimeToken({
-			headers,
-		});
-		expect(response.token).toBeDefined();
-
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+		const { testInstance, token } = await mintTokenForExpiredSession();
 
 		const shouldFail = await testInstance.auth.api
 			.verifyOneTimeToken({
 				body: {
-					token: response.token,
+					token,
 				},
 			})
 			.catch((e) => e);
 
 		expect(isAPIError(shouldFail)).toBeTruthy();
 		expect(shouldFail.body.message).toBe("Session expired");
+
+		vi.useRealTimers();
+	});
+
+	it("should not set session cookie when underlying session has expired", async () => {
+		const { testInstance, token } = await mintTokenForExpiredSession();
+
+		const errorResponse = await testInstance.auth.api.verifyOneTimeToken({
+			body: {
+				token,
+			},
+			asResponse: true,
+		});
+		expect(errorResponse).toBeInstanceOf(Response);
+		expect(errorResponse.status).toBe(400);
+		const body = await errorResponse.json();
+		expect(body.message).toBe("Session expired");
+		const setCookie = errorResponse.headers.get("set-cookie");
+		expect(
+			setCookie === null || !setCookie.includes("better-auth.session_token"),
+		).toBe(true);
 
 		vi.useRealTimers();
 	});
