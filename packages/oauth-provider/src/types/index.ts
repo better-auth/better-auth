@@ -1064,6 +1064,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** True for a post-login continuation; still validate the selected account. */
+			isContinue: boolean;
 		}) => Awaitable<boolean>;
 	};
 	/**
