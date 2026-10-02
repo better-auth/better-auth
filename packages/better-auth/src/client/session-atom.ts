@@ -156,6 +156,10 @@ export function getSessionAtom(
 				try {
 					const refreshRes = await $fetch<SessionResponse>("/get-session", {
 						method: "POST",
+						// A bodyless POST is sent by some runtimes (Node, Next.js, Nuxt)
+						// as a non-null empty stream with no content-type header, which
+						// the server's media-type check rejects with 415.
+						body: {},
 						signal,
 					});
 					if (signal.aborted) {
