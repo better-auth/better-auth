@@ -58,6 +58,7 @@ import {
 	removeTeamMember,
 	setActiveTeam,
 	updateTeam,
+	updateTeamMemberRole,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
@@ -135,6 +136,7 @@ export type TeamEndpoints<O extends OrganizationOptions> = {
 	listUserTeams: ReturnType<typeof listUserTeams<O>>;
 	listTeamMembers: ReturnType<typeof listTeamMembers<O>>;
 	addTeamMember: ReturnType<typeof addTeamMember<O>>;
+	updateTeamMemberRole: ReturnType<typeof updateTeamMemberRole<O>>;
 	removeTeamMember: ReturnType<typeof removeTeamMember<O>>;
 };
 
@@ -913,6 +915,22 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-team-member)
 		 */
 		addTeamMember: addTeamMember(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update-team-member-role`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateTeamMemberRole`
+		 *
+		 * **client:**
+		 * `authClient.organization.updateTeamMemberRole`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-update-team-member-role)
+		 */
+		updateTeamMemberRole: updateTeamMemberRole(opts),
 		/**
 		 * ### Endpoint
 		 *

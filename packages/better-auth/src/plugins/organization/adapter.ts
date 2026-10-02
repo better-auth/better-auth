@@ -141,6 +141,7 @@ async function createTeamMemberWithKey(
 		teamId: string;
 		userId: string;
 		membershipKey: string;
+		role: string;
 	},
 ) {
 	try {
@@ -152,6 +153,7 @@ async function createTeamMemberWithKey(
 			data: {
 				teamId: data.teamId,
 				userId: data.userId,
+				role: data.role,
 				membershipKey: data.membershipKey,
 				createdAt: new Date(),
 			},
@@ -1059,6 +1061,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		findOrCreateTeamMember: async (data: {
 			teamId: string;
 			userId: string;
+			role: string;
 		}) => {
 			return runWithTransaction(baseAdapter, async () => {
 				const adapter = await getCurrentAdapter(baseAdapter);
@@ -1089,6 +1092,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		addTeamMemberWithLimit: async (data: {
 			teamId: string;
 			userId: string;
+			role: string;
 			maximumMembersPerTeam: number;
 		}): Promise<
 			{ status: "added"; member: TeamMember } | { status: "limitReached" }
@@ -1115,8 +1119,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				let result: Awaited<ReturnType<typeof createTeamMemberWithKey>>;
 				try {
 					result = await createTeamMemberWithKey(adapter, {
-						teamId: data.teamId,
-						userId: data.userId,
+						...data,
 						membershipKey,
 					});
 				} catch (error) {

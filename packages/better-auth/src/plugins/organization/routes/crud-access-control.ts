@@ -9,7 +9,7 @@ import type { User } from "../../../types";
 import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
+import { checkIfMemberHasPermission, hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -69,6 +69,9 @@ const baseCreateOrgRoleSchema = z.object({
 	permission: z.record(z.string(), z.array(z.string())).meta({
 		description: "The permission to assign to the role",
 	}),
+	scope: z.enum(["organization", "team", "both"]).optional().meta({
+		description: "The scope of the role (organization, team, or both)",
+	}),
 });
 
 export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
@@ -92,6 +95,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId?: string | undefined;
 						role: string;
 						permission: Record<string, string[]>;
+						scope?: "organization" | "team" | "both" | undefined;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
 						? { additionalFields?: {} | undefined }
 						: { additionalFields: AdditionalFields }),
@@ -263,6 +267,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					organizationId,
 					permission: JSON.stringify(permission),
 					role: roleName,
+					scope: ctx.body.scope || "organization",
 					...additionalFields,
 				},
 			});
@@ -270,7 +275,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			const data = {
 				...newRoleInDB,
 				permission,
-			} as OrganizationRole & ReturnAdditionalFields;
+			} as unknown as OrganizationRole & ReturnAdditionalFields;
 			return ctx.json({
 				success: true,
 				roleData: data,
@@ -534,6 +539,9 @@ const listOrgRolesQuerySchema = z
 			description:
 				"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
 		}),
+		scope: z.enum(["organization", "team", "both"]).optional().meta({
+			description: "The scope of the roles to list",
+		}),
 	})
 	.optional();
 
@@ -621,18 +629,29 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 
+			const queryWhere = [
+				{
+					field: "organizationId",
+					value: organizationId,
+					operator: "eq" as const,
+					connector: "AND" as const,
+				},
+			];
+
+			if (ctx.query?.scope) {
+				queryWhere.push({
+					field: "scope",
+					value: ctx.query.scope,
+					operator: "eq" as const,
+					connector: "AND" as const,
+				});
+			}
+
 			let roles = await ctx.context.adapter.findMany<
 				OrganizationRole & ReturnAdditionalFields
 			>({
 				model: "organizationRole",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-						operator: "eq",
-						connector: "AND",
-					},
-				],
+				where: queryWhere as any,
 			});
 
 			roles = roles.map((x) => ({
@@ -860,6 +879,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						roleName: z.string().optional().meta({
 							description: "The name of the role to update",
 						}),
+						scope: z.enum(["organization", "team", "both"]).optional().meta({
+							description: "The scope of the role (organization, team, or both)",
+						}),
 						...additionalFieldsSchema.shape,
 					}),
 				})
@@ -871,6 +893,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						data: {
 							permission?: Record<string, string[]> | undefined;
 							roleName?: string | undefined;
+							scope?: "organization" | "team" | "both" | undefined;
 						} & AdditionalFields;
 						roleName?: string | undefined;
 						roleId?: string | undefined;
@@ -1063,6 +1086,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				updateData.role = newRoleName;
 			}
 
+			if (ctx.body.data.scope) {
+				updateData.scope = ctx.body.data.scope;
+			}
+
 			// -----
 			// Apply the updates
 			const update = {
@@ -1127,82 +1154,6 @@ async function checkForInvalidResources({
 			"BAD_REQUEST",
 			ORGANIZATION_ERROR_CODES.INVALID_RESOURCE,
 		);
-	}
-}
-
-async function checkIfMemberHasPermission({
-	ctx,
-	permissionRequired: permission,
-	options,
-	organizationId,
-	member,
-	user,
-	action,
-}: {
-	ctx: GenericEndpointContext;
-	permissionRequired: Record<string, string[]>;
-	options: OrganizationOptions;
-	organizationId: string;
-	member: Member;
-	user: User;
-	action: "create" | "update" | "delete" | "read" | "list" | "get";
-}) {
-	const hasNecessaryPermissions: {
-		resource: { [x: string]: string[] };
-		hasPermission: boolean;
-	}[] = [];
-	const permissionEntries = Object.entries(permission);
-	for await (const [resource, permissions] of permissionEntries) {
-		for await (const perm of permissions) {
-			hasNecessaryPermissions.push({
-				resource: { [resource]: [perm] },
-				hasPermission: await hasPermission(
-					{
-						options,
-						organizationId,
-						permissions: { [resource]: [perm] },
-						useMemoryCache: true,
-						role: member.role,
-					},
-					ctx,
-				),
-			});
-		}
-	}
-	const missingPermissions = hasNecessaryPermissions
-		.filter((x) => x.hasPermission === false)
-		.map((x) => {
-			const key = Object.keys(x.resource)[0]!;
-			return `${key}:${x.resource[key]![0]}` as const;
-		});
-	if (missingPermissions.length > 0) {
-		ctx.context.logger.error(
-			`[Dynamic Access Control] The user is missing permissions necessary to ${action} a role with those set of permissions.\n`,
-			{
-				userId: user.id,
-				organizationId,
-				role: member.role,
-				missingPermissions,
-			},
-		);
-		let error: { code: string; message: string };
-		if (action === "create")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
-		else if (action === "update")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
-		else if (action === "delete")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
-		else if (action === "read")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
-		else if (action === "list")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
-		else error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
-
-		throw APIError.fromStatus("FORBIDDEN", {
-			message: error.message,
-			code: error.code,
-			missingPermissions,
-		});
 	}
 }
 
