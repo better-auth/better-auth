@@ -46,6 +46,7 @@ export const matchesSessionSignal = (path: string) =>
 	path === "/sign-up/email" ||
 	path === "/sign-in/email" ||
 	path === "/delete-user" ||
+	path === "/delete-user/confirm" ||
 	path === "/verify-email" ||
 	path === "/revoke-sessions" ||
 	path === "/revoke-session" ||

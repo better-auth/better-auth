@@ -1,6 +1,9 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
+import { createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
@@ -779,6 +782,348 @@ describe("delete user", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11527
+	 */
+	it("explicit confirmation mode: previews without deleting, only /confirm applies it", async () => {
+		let capturedUrl = "";
+		let capturedToken = "";
+		const { client, auth, signInWithTestUser, testUser } =
+			await getTestInstance({
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ url, token }) {
+							capturedUrl = url;
+							capturedToken = token;
+						},
+					},
+				},
+			});
+		const { headers, runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.deleteUser({
+				password: testUser.password,
+				callbackURL: "https://app.example.com/settings",
+			});
+			expect(res.data).toMatchObject({ success: true });
+		});
+
+		// The emailed link is app-owned in explicit mode, not better-auth's own
+		// GET callback -- visiting it must not be destructive on its own.
+		expect(capturedUrl.startsWith("https://app.example.com/settings")).toBe(
+			true,
+		);
+		expect(capturedUrl).not.toContain("/delete-user/callback");
+		expect(capturedUrl).toContain(`token=${capturedToken}`);
+
+		const preview = await auth.api.deleteUserPreview({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(preview.user).toBeDefined();
+		const stillThere = await client.getSession({ fetchOptions: { headers } });
+		expect(stillThere.data).toBeDefined();
+
+		const confirmed = await auth.api.deleteUserConfirm({
+			body: { token: capturedToken },
+			headers,
+		});
+		expect(confirmed).toMatchObject({
+			success: true,
+			message: "User deleted",
+		});
+		const gone = await client.getSession({ fetchOptions: { headers } });
+		expect(gone.data).toBeNull();
+	});
+
+	it("explicit confirmation mode: /confirm rejects a wrong password without burning the token", async () => {
+		let capturedToken = "";
+		const { client, auth, signInWithTestUser, testUser } =
+			await getTestInstance({
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ token }) {
+							capturedToken = token;
+						},
+					},
+				},
+			});
+		const { headers, runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.deleteUser({
+				password: testUser.password,
+				callbackURL: "https://app.example.com/goodbye",
+			});
+		});
+		expect(capturedToken.length).toBe(32);
+
+		await expect(
+			auth.api.deleteUserConfirm({
+				body: { token: capturedToken, password: "definitely-wrong" },
+				headers,
+			}),
+		).rejects.toThrow();
+
+		// The failed password check must not have consumed the token.
+		const stillThere = await client.getSession({ fetchOptions: { headers } });
+		expect(stillThere.data).toBeDefined();
+
+		const confirmed = await auth.api.deleteUserConfirm({
+			body: { token: capturedToken, password: testUser.password },
+			headers,
+		});
+		expect(confirmed).toMatchObject({ success: true, message: "User deleted" });
+		const gone = await client.getSession({ fetchOptions: { headers } });
+		expect(gone.data).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11527
+	 */
+	describe("explicit confirmation mode", () => {
+		const explicitOptions = (
+			capture: { token: string },
+			hooks: {
+				beforeDelete?: () => Promise<void>;
+				afterDelete?: () => Promise<void>;
+			} = {},
+		) => ({
+			user: {
+				deleteUser: {
+					enabled: true,
+					confirmationMode: "explicit" as const,
+					async sendDeleteAccountVerification({ token }: { token: string }) {
+						capture.token = token;
+					},
+					...hooks,
+				},
+			},
+		});
+
+		it("rejects a callbackURL that can't be a usable emailed link, without creating a token", async () => {
+			const capture = { token: "" };
+			const { client, auth, signInWithTestUser, testUser, db } =
+				await getTestInstance(explicitOptions(capture));
+			const { baseURL } = await auth.$context;
+			const { runWithUser } = await signInWithTestUser();
+
+			const cases: Array<[string | undefined, string]> = [
+				// the emailed link is the app's own URL, so there must be one
+				[undefined, "CALLBACK_URL_REQUIRED"],
+				// a mail client can't resolve a relative link
+				["/goodbye", "INVALID_CALLBACK_URL"],
+				// must not lead back to the instant GET callback, directly or via
+				// a trailing slash, a query string, a fragment or dot segments
+				[`${baseURL}/delete-user/callback`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/delete-user/callback/`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/delete-user/callback?x=1#y`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/foo/../delete-user/callback`, "INVALID_CALLBACK_URL"],
+			];
+			await runWithUser(async () => {
+				for (const [callbackURL, code] of cases) {
+					const res = await client.deleteUser({
+						password: testUser.password,
+						callbackURL,
+					});
+					expect(res.error?.code, String(callbackURL)).toBe(code);
+				}
+			});
+			expect(capture.token).toBe("");
+			const rows = await db.findMany({ model: "verification" });
+			expect(
+				rows.filter((row) =>
+					(row as { identifier: string }).identifier.startsWith(
+						"delete-account-",
+					),
+				),
+			).toHaveLength(0);
+		});
+
+		it("rejects preview and confirm without a session", async () => {
+			const capture = { token: "" };
+			const { client, auth, signInWithTestUser, testUser } =
+				await getTestInstance(explicitOptions(capture));
+			const { headers, runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				await client.deleteUser({
+					password: testUser.password,
+					callbackURL: "https://app.example.com/goodbye",
+				});
+			});
+
+			await expect(
+				auth.api.deleteUserPreview({ query: { token: capture.token } }),
+			).rejects.toThrow();
+			await expect(
+				auth.api.deleteUserConfirm({ body: { token: capture.token } }),
+			).rejects.toThrow();
+
+			// Neither attempt may have consumed the token.
+			const confirmed = await auth.api.deleteUserConfirm({
+				body: { token: capture.token },
+				headers,
+			});
+			expect(confirmed).toMatchObject({ success: true });
+		});
+
+		it("does not let another signed-in user use, or burn, someone else's token", async () => {
+			const capture = { token: "" };
+			const { client, auth, signInWithTestUser, signInWithUser, testUser } =
+				await getTestInstance(explicitOptions(capture));
+			const { headers, runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				await client.deleteUser({
+					password: testUser.password,
+					callbackURL: "https://app.example.com/goodbye",
+				});
+			});
+
+			await client.signUp.email({
+				email: "other-user@test.com",
+				password: "other-password-123",
+				name: "Other User",
+			});
+			const other = await signInWithUser(
+				"other-user@test.com",
+				"other-password-123",
+			);
+
+			await expect(
+				auth.api.deleteUserPreview({
+					query: { token: capture.token },
+					headers: other.headers,
+				}),
+			).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+			await expect(
+				auth.api.deleteUserConfirm({
+					body: { token: capture.token },
+					headers: other.headers,
+				}),
+			).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+
+			// The rejected attempts left the owner's token intact.
+			const confirmed = await auth.api.deleteUserConfirm({
+				body: { token: capture.token },
+				headers,
+			});
+			expect(confirmed).toMatchObject({ success: true });
+			const stillThere = await auth.api.getSession({
+				headers: other.headers,
+			});
+			expect(stillThere?.user.email).toBe("other-user@test.com");
+		});
+
+		it("rejects an unknown token on preview and confirm", async () => {
+			const capture = { token: "" };
+			const { auth, signInWithTestUser } = await getTestInstance(
+				explicitOptions(capture),
+			);
+			const { headers } = await signInWithTestUser();
+			await expect(
+				auth.api.deleteUserPreview({ query: { token: "nope" }, headers }),
+			).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+			await expect(
+				auth.api.deleteUserConfirm({ body: { token: "nope" }, headers }),
+			).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+		});
+
+		it("rejects an expired token without applying the deletion", async () => {
+			const capture = { token: "" };
+			const { client, auth, signInWithTestUser, testUser } =
+				await getTestInstance({
+					user: {
+						deleteUser: {
+							...explicitOptions(capture).user.deleteUser,
+							deleteTokenExpiresIn: 1,
+						},
+					},
+				});
+			const { headers, runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				await client.deleteUser({
+					password: testUser.password,
+					callbackURL: "https://app.example.com/goodbye",
+				});
+			});
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(Date.now() + 5_000);
+				await expect(
+					auth.api.deleteUserConfirm({
+						body: { token: capture.token },
+						headers,
+					}),
+				).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+			} finally {
+				vi.useRealTimers();
+			}
+			const session = await auth.api.getSession({ headers });
+			expect(session).not.toBeNull();
+		});
+
+		it("returns 404 from preview and confirm when deleteUser is disabled", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				user: { deleteUser: { enabled: false, confirmationMode: "explicit" } },
+			});
+			const { headers } = await signInWithTestUser();
+			await expect(
+				auth.api.deleteUserPreview({ query: { token: "x" }, headers }),
+			).rejects.toMatchObject({ status: "NOT_FOUND" });
+			await expect(
+				auth.api.deleteUserConfirm({ body: { token: "x" }, headers }),
+			).rejects.toMatchObject({ status: "NOT_FOUND" });
+		});
+
+		it("rejects a password longer than maxPasswordLength before hashing", async () => {
+			const capture = { token: "" };
+			const { auth, signInWithTestUser } = await getTestInstance(
+				explicitOptions(capture),
+			);
+			const { headers } = await signInWithTestUser();
+			await expect(
+				auth.api.deleteUserConfirm({
+					body: { token: capture.token || "x", password: "x".repeat(129) },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: "PASSWORD_TOO_LONG" },
+			});
+		});
+
+		it("deletes only once when the same token is confirmed concurrently", async () => {
+			const capture = { token: "" };
+			const beforeDelete = vi.fn(async () => {
+				// Widen the race so both requests pass validation before either
+				// one finishes the destructive work.
+				await new Promise((resolve) => setTimeout(resolve, 50));
+			});
+			const afterDelete = vi.fn(async () => {});
+			const { client, signInWithTestUser, testUser } = await getTestInstance(
+				explicitOptions(capture, { beforeDelete, afterDelete }),
+			);
+			const { runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				await client.deleteUser({
+					password: testUser.password,
+					callbackURL: "https://app.example.com/goodbye",
+				});
+				const [first, second] = await Promise.all([
+					client.deleteUser.confirm({ token: capture.token }),
+					client.deleteUser.confirm({ token: capture.token }),
+				]);
+				expect([first, second].filter((res) => res.data).length).toBe(1);
+				expect([first, second].filter((res) => res.error).length).toBe(1);
+				expect(beforeDelete).toHaveBeenCalledTimes(1);
+				expect(afterDelete).toHaveBeenCalledTimes(1);
+			});
+		});
+	});
+
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
 		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
 			await getTestInstance(
@@ -1221,5 +1566,121 @@ describe("password length on verify-only fields", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * An earlier hook can already have loaded the session from the cookie cache
+ * into `ctx.context.session`; `getSessionFromCtx` returns that without
+ * honoring `disableCookieCache`. The explicit-mode preview and confirm
+ * endpoints must still re-read the session store, so a revoked session that
+ * still carries a valid cached cookie can't authorize a deletion.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11527
+ */
+describe("explicit delete-user confirmation is revocation-aware with cookie cache", () => {
+	const preloadCachedSessionPlugin = {
+		id: "preload-cached-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path?.startsWith("/delete-user/") === true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
+	async function setup() {
+		const capture = { token: "" };
+		const instance = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				plugins: [preloadCachedSessionPlugin],
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				user: {
+					deleteUser: {
+						enabled: true,
+						confirmationMode: "explicit",
+						async sendDeleteAccountVerification({ token }) {
+							capture.token = token;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const email = `revoked-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await instance.client.signUp.email({ email, password, name: "Revoked" });
+		const headers = new Headers();
+		await instance.client.signIn.email({
+			email,
+			password,
+			fetchOptions: { onSuccess: instance.sessionSetter(headers) },
+		});
+		// Materialize the cookie cache: the signed `session_data` cookie comes
+		// back on the get-session response and has to be sent along explicitly.
+		const sessionRes = await instance.client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cached = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") ?? "",
+					).get("better-auth.session_data")?.value;
+					if (cached) {
+						headers.set(
+							"cookie",
+							`${headers.get("cookie")}; better-auth.session_data=${cached}`,
+						);
+					}
+				},
+			},
+		});
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+		expect(headers.get("cookie")).toContain("better-auth.session_data=");
+		await instance.client.deleteUser({
+			password,
+			callbackURL: "https://app.example.com/goodbye",
+			fetchOptions: { headers },
+		});
+		expect(capture.token.length).toBe(32);
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await instance.db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+		return { ...instance, capture, headers, email };
+	}
+
+	it("rejects /delete-user/confirm from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, email } = await setup();
+		await expect(
+			auth.api.deleteUserConfirm({
+				body: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		const user = await db.findOne({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user).not.toBeNull();
+	});
+
+	it("rejects /delete-user/preview from a revoked but cached session", async () => {
+		const { auth, capture, headers } = await setup();
+		await expect(
+			auth.api.deleteUserPreview({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
 	});
 });
