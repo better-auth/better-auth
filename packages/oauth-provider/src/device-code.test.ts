@@ -22,6 +22,24 @@ interface TokenErrorBody {
 }
 
 describe("oauth-provider device-code composition", () => {
+	it("advertises the registered device endpoint with a trailing auth base slash", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth/",
+			plugins: [
+				jwt(),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+				oauthDeviceAuthorization(),
+			],
+		});
+		const metadata = (await auth.api.getOAuthServerConfig()) as unknown as {
+			device_authorization_endpoint?: string;
+		};
+
+		expect(metadata?.device_authorization_endpoint).toBe(
+			"http://localhost:3000/api/auth/device/code",
+		);
+	});
+
 	it("registers Device Authorization and its OAuth grant from one plugin", async () => {
 		const baseURL = "http://localhost:3000";
 		const { auth } = await getTestInstance({

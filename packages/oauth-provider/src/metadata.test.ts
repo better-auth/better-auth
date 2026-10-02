@@ -42,9 +42,10 @@ describe("oauth metadata", async () => {
 		>;
 		jwtConfig?: JwtOptions;
 		advanced?: BetterAuthOptions["advanced"];
+		baseURL?: string;
 	}) {
 		const { auth, customFetchImpl } = await getTestInstance({
-			baseURL: authServerBaseUrl,
+			baseURL: opts?.baseURL ?? authServerBaseUrl,
 			...(opts?.advanced ? { advanced: opts.advanced } : {}),
 			plugins: [
 				oauthProvider({
@@ -130,6 +131,28 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	it("keeps discovery endpoint URLs canonical with a trailing base URL slash", async () => {
+		const { auth } = await createTestInstance({
+			baseURL: `${baseURL}/`,
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata?.token_endpoint).toBe(`${baseURL}/oauth2/token`);
+		expect(metadata?.userinfo_endpoint).toBe(`${baseURL}/oauth2/userinfo`);
+	});
+
+	it("advertises the registered custom JWKS path with a trailing base URL slash", async () => {
+		const { auth } = await createTestInstance({
+			baseURL: `${baseURL}/`,
+			jwtConfig: { jwks: { jwksPath: "/.well-known/jwks.json" } },
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		const jwksURI = `${baseURL}/.well-known/jwks.json`;
+
+		expect(metadata?.jwks_uri).toBe(jwksURI);
+		expect((await auth.handler(new Request(jwksURI))).status).toBe(200);
 	});
 
 	/**
