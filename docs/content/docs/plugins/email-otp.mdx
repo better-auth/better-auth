@@ -185,6 +185,8 @@ Once the user provides the OTP, use the `verifyEmail()` method to complete email
   ```
 </APIMethod>
 
+If the address is already verified, the code is still consumed and the request returns the user with `token: null`. The account is not updated, `beforeEmailVerification` and `afterEmailVerification` do not run, and no session is created even when `autoSignInAfterVerification` is enabled, as with the core `/verify-email` endpoint.
+
 ### Reset Password with OTP
 
 To reset the user's password with OTP, use the `emailOtp.requestPasswordReset()` method to send a "forget-password" OTP to the user's email address.
