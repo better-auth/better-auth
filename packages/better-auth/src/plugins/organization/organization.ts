@@ -42,6 +42,9 @@ import {
 	checkOrganizationSlug,
 	createOrganization,
 	deleteOrganization,
+	deleteOrganizationCallback,
+	deleteOrganizationConfirm,
+	deleteOrganizationPreview,
 	getFullOrganization,
 	getOrganization,
 	listOrganizations,
@@ -142,6 +145,9 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	createOrganization: ReturnType<typeof createOrganization<O>>;
 	updateOrganization: ReturnType<typeof updateOrganization<O>>;
 	deleteOrganization: ReturnType<typeof deleteOrganization<O>>;
+	deleteOrganizationCallback: ReturnType<typeof deleteOrganizationCallback<O>>;
+	deleteOrganizationPreview: ReturnType<typeof deleteOrganizationPreview<O>>;
+	deleteOrganizationConfirm: ReturnType<typeof deleteOrganizationConfirm<O>>;
 	setActiveOrganization: ReturnType<typeof setActiveOrganization<O>>;
 	getOrganization: ReturnType<typeof getOrganization<O>>;
 	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
@@ -494,6 +500,42 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
 		 */
 		deleteOrganization: deleteOrganization(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/delete/callback`
+		 *
+		 * ### API Methods
+		 *
+		 * `auth.api.deleteOrganizationCallback`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete-callback)
+		 */
+		deleteOrganizationCallback: deleteOrganizationCallback(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/delete/preview`
+		 *
+		 * ### API Methods
+		 *
+		 * `auth.api.deleteOrganizationPreview`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete-preview)
+		 */
+		deleteOrganizationPreview: deleteOrganizationPreview(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/delete/confirm`
+		 *
+		 * ### API Methods
+		 *
+		 * `auth.api.deleteOrganizationConfirm`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete-confirm)
+		 */
+		deleteOrganizationConfirm: deleteOrganizationConfirm(opts),
 		/**
 		 * ### Endpoint
 		 *

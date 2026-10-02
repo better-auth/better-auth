@@ -358,6 +358,53 @@ export interface OrganizationOptions {
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
 	/**
+	 * Require email confirmation before deleting an organization.
+	 *
+	 * If not set, `organization.delete` deletes the organization immediately
+	 * once the caller passes the `organization:delete` permission check, same
+	 * as today.
+	 */
+	organizationDeletion?:
+		| {
+				/**
+				 * Send a verification email before the organization is deleted.
+				 *
+				 * If this is not set, the organization is deleted immediately.
+				 * @param data the data object
+				 * @param request the request object
+				 */
+				sendDeleteOrganizationVerification?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						user: User & Record<string, any>;
+						url: string;
+						token: string;
+					},
+					request?: Request,
+				) => Promise<void>;
+				/**
+				 * The expiration time for the delete token.
+				 *
+				 * @default 1 day (60 * 60 * 24) in seconds
+				 */
+				deleteTokenExpiresIn?: number;
+				/**
+				 * How the emailed link resolves the deletion.
+				 *
+				 * - `"instant"`: clicking the link deletes the organization
+				 *   immediately (`GET`).
+				 * - `"explicit"`: the link only previews the deletion; the app
+				 *   must call the confirm endpoint (`POST`) to apply it. Use this
+				 *   when the emailed link can be visited by something other than
+				 *   the user, e.g. mail clients and security scanners that open
+				 *   links automatically (Outlook Safe Links, link-preview proxies).
+				 *
+				 * @default "instant"
+				 */
+				confirmationMode?: "instant" | "explicit";
+		  }
+		| undefined;
+	/**
 	 * Hooks for organization
 	 */
 	organizationHooks?:
