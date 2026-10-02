@@ -857,7 +857,7 @@ const auth = betterAuth({
 
 ## Transfer Ownership
 
-To transfer ownership of an organization to another member, use `organization.transferOwnership`. Only a member who currently holds `creatorRole` may call it — the generic `member: ["update"]` permission (which a plain admin also holds) is not enough, since granting it would let an admin nominate a new owner while leaving the real owner untouched. It swaps the `creatorRole` between the current owner and the target member — the organization always has an owner, before and after. The target is promoted first, keeping any other roles it already holds, and only then is the current owner demoted; if the demotion fails or loses a race with a concurrent transfer, the promotion is rolled back.
+To transfer ownership of an organization to another member, use `organization.transferOwnership`. Only a member who currently holds `creatorRole` may call it — the generic `member: ["update"]` permission (which a plain admin also holds) is not enough, since granting it would let an admin nominate a new owner while leaving the real owner untouched. It swaps the `creatorRole` between the current owner and the target member: the target is promoted first, keeping any other roles it already holds, and only then is the current owner demoted. The current owner has to still hold `creatorRole` when the swap starts, so a second transfer that began from a stale view of the organization is refused instead of creating another owner. If the demotion can't be applied, the promotion is rolled back on a best-effort basis: the two changes are separate rows, so on adapters without cross-row transactions a third write to the target in between can prevent the rollback, in which case the error asks for a manual review of the organization's owners.
 
 <APIMethod path="/organization/transfer-ownership" method="POST" requireSession>
   ```ts
@@ -962,7 +962,7 @@ before anything is sent. Your app renders a confirmation page from it, then:
 * `POST /organization/transfer-ownership/confirm` — consumes the token and performs the
   swap, the same way the instant callback does.
 
-Both require the signed-in current owner the token was issued for, checked against the session store rather than a cached cookie.
+Both require the signed-in current owner the token was issued for, checked against the session store rather than a cached cookie. An explicit-mode token is only accepted by these two endpoints: `GET /organization/transfer-ownership/callback` rejects it, so a `callbackURL` can't turn it into a one-click transfer.
 
 ## Invitations
 
