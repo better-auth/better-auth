@@ -100,6 +100,7 @@ function rateLimitResponse(retryAfter: number) {
 			status: 429,
 			statusText: "Too Many Requests",
 			headers: {
+				"Content-Type": "application/json",
 				"X-Retry-After": retryAfter.toString(),
 			},
 		},
