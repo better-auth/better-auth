@@ -89,6 +89,12 @@ describe("OIDC Discovery", () => {
 				"https://idp.example.com/tenant/v1/.well-known/openid-configuration",
 			);
 		});
+
+		it("does not leave a double slash after a trailing issuer path", () => {
+			expect(computeDiscoveryUrl("https://idp.example.com/tenant/v1//")).toBe(
+				"https://idp.example.com/tenant/v1/.well-known/openid-configuration",
+			);
+		});
 	});
 
 	describe("validateDiscoveryUrl", () => {

@@ -4,6 +4,7 @@ import {
 } from "@better-auth/core/context";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { filterOutputFields } from "@better-auth/core/utils/db";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import type { AuthContext } from "better-auth";
 import {
 	APIError,
@@ -534,7 +535,10 @@ function sanitizeProvider(
 					certificate: sanitizeSigningCerts(samlConfig),
 				}
 			: undefined,
-		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
+		spMetadataUrl: appendQueryParams(
+			appendURLPath(baseURL, "/sso/saml2/sp/metadata"),
+			new URLSearchParams({ providerId: provider.providerId }),
+		),
 	};
 }
 
