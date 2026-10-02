@@ -274,16 +274,19 @@ export const auth = betterAuth({
 
 In `"explicit"` mode, `url` is your app's own URL (built from `callbackURL`) with `token`
 attached, instead of better-auth's `/delete-user/callback` endpoint. Because that URL is
-emailed, every deletion request must pass a `callbackURL` that is an **absolute** URL to your
-confirmation page, for example `https://app.example.com/account/delete`. If your app is on a
+emailed, every deletion request that sends a verification email must pass a `callbackURL` that
+is an **absolute** URL to your confirmation page, for example
+`https://app.example.com/account/delete`, and that doesn't already carry a `token` query
+parameter. If your app is on a
 different origin than the auth server, add that origin to [`trustedOrigins`](/docs/reference/options#trustedorigins),
 or HTTP requests are rejected with `INVALID_ORIGIN` (the request's own origin) or
 `INVALID_CALLBACK_URL` (the `callbackURL`) before they reach the handler. That origin check
 only applies to requests that arrive over HTTP: when you call `auth.api.deleteUser`
 directly from server code there is no request to check, so pass a `callbackURL` you control. A
-missing, relative or invalid `callbackURL`, or one that points at `/delete-user/callback`, is
-rejected with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL` before anything is sent. Your
-app renders a confirmation page from it, then:
+missing, relative or invalid `callbackURL`, one that points at `/delete-user/callback` (however
+its path is encoded), or one that already contains `token`, is rejected with
+`CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL` before anything is sent. Your app renders a
+confirmation page from it, then:
 
 * `GET /delete-user/preview` — validates the token and returns the pending user without
   deleting it, so you can render "you're about to delete your account".
