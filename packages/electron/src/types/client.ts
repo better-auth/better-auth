@@ -1,4 +1,4 @@
-import type { Awaitable } from "@better-auth/core";
+import type { Awaitable, CookieSecurity } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { ElectronSharedOptions } from "./options";
 
@@ -112,15 +112,20 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 		  }
 		| undefined;
 	/**
-	 * Prefix(es) for server cookie names to filter (e.g., "better-auth.session_token")
+	 * Namespace(s) for server cookie names to filter (e.g., "better-auth.session_token")
 	 * This is used to identify which cookies belong to better-auth to prevent
 	 * infinite refetching when third-party cookies are set.
 	 *
-	 * Can be a single string or an array of strings to match multiple prefixes.
+	 * Can be a single string or an array of strings to match multiple namespaces.
 	 *
 	 * @default "better-auth"
 	 * @example "better-auth"
 	 * @example ["better-auth", "my-app"]
+	 */
+	cookieNamespace?: string | string[] | undefined;
+	/**
+	 * @deprecated Use `cookieNamespace`.
+	 * This option will be removed in a future minor release.
 	 */
 	cookiePrefix?: string | string[] | undefined;
 	/**
@@ -140,11 +145,20 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 export interface ElectronProxyClientOptions
 	extends ElectronSharedClientOptions {
 	/**
-	 * The prefix to use for cookies set by the plugin.
+	 * The namespace to use for cookies set by the plugin.
 	 *
 	 * @default "better-auth"
 	 */
+	cookieNamespace?: string | undefined;
+	/**
+	 * @deprecated Use `cookieNamespace`.
+	 * This option will be removed in a future minor release.
+	 */
 	cookiePrefix?: string | undefined;
+	/**
+	 * Match the server's explicit `advanced.cookieSecurity` setting.
+	 */
+	cookieSecurity?: CookieSecurity | undefined;
 }
 
 export type * from "../authenticate";

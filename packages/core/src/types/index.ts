@@ -13,6 +13,7 @@ export type {
 	BetterAuthCookie,
 	BetterAuthCookies,
 	CookieCachePayload,
+	CookieSecurity,
 } from "./cookie";
 export type { D1Database } from "./database";
 export type * from "./helper";

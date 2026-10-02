@@ -1,8 +1,22 @@
-import { cookieNameRegex, parseSetCookieHeader } from "better-auth/cookies";
+import type { CookieSecurity } from "@better-auth/core";
+import {
+	cookieNameRegex,
+	HOST_COOKIE_PREFIX,
+	parseSetCookieHeader,
+	SECURE_COOKIE_PREFIX,
+	stripCookieSecurityPrefix,
+} from "better-auth/cookies";
 
 interface StoredCookie {
 	value: string;
 	expires: string | null;
+}
+
+export function getCookieSecurity(cookieName: string): CookieSecurity {
+	const name = cookieName.toLowerCase();
+	if (name.startsWith(HOST_COOKIE_PREFIX.toLowerCase())) return "host";
+	if (name.startsWith(SECURE_COOKIE_PREFIX.toLowerCase())) return "secure";
+	return "none";
 }
 
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
@@ -102,42 +116,41 @@ export function hasSessionCookieChanged(
  *
  * Supports multiple cookie naming patterns:
  * - Default: "better-auth.session_token", "better-auth-passkey", "__Secure-better-auth.session_token"
- * - Custom prefix: "myapp.session_token", "myapp-passkey", "__Secure-myapp.session_token"
+ * - Custom namespace: "myapp.session_token", "myapp-passkey", "__Secure-myapp.session_token"
  * - Custom full names: "my_custom_session_token", "custom_session_data"
- * - No prefix (cookiePrefix=""): matches any cookie with known suffixes
- * - Multiple prefixes: ["better-auth", "my-app"] matches cookies starting with any of the prefixes
+ * - No namespace (cookieNamespace=""): matches any cookie with known suffixes
+ * - Multiple namespaces: ["better-auth", "my-app"] matches cookies starting with any namespace
  *
  * @param setCookieHeader - The Set-Cookie header value
- * @param cookiePrefix - The cookie prefix(es) to check for. Can be a string, array of strings, or empty string.
+ * @param cookieNamespace - The cookie namespace(s) to check for. Can be a string, array of strings, or empty string.
  * @returns true if the header contains better-auth cookies, false otherwise
  */
 export function hasBetterAuthCookies(
 	setCookieHeader: string,
-	cookiePrefix: string | string[],
+	cookieNamespace: string | string[],
 ): boolean {
 	const cookies = parseSetCookieHeader(setCookieHeader);
 	const cookieSuffixes = ["session_token", "session_data"];
-	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
+	const namespaces = Array.isArray(cookieNamespace)
+		? cookieNamespace
+		: [cookieNamespace];
 
 	// Check if any cookie is a better-auth cookie
 	for (const name of cookies.keys()) {
-		// Remove __Secure- prefix if present for comparison
-		const nameWithoutSecure = name.startsWith("__Secure-")
-			? name.slice(9)
-			: name;
+		const logicalName = stripCookieSecurityPrefix(name);
 
-		// Check against all provided prefixes
-		for (const prefix of prefixes) {
-			if (prefix) {
-				// When prefix is provided, check if cookie starts with the prefix
+		// Check against all provided namespaces
+		for (const namespace of namespaces) {
+			if (namespace) {
+				// When a namespace is provided, check if the cookie starts with it.
 				// This matches all better-auth cookies including session cookies, passkey cookies, etc.
-				if (nameWithoutSecure.startsWith(prefix)) {
+				if (logicalName.startsWith(namespace)) {
 					return true;
 				}
 			} else {
-				// When prefix is empty, check for common better-auth cookie patterns
+				// When the namespace is empty, check for common better-auth cookie patterns.
 				for (const suffix of cookieSuffixes) {
-					if (nameWithoutSecure.endsWith(suffix)) {
+					if (logicalName.endsWith(suffix)) {
 						return true;
 					}
 				}

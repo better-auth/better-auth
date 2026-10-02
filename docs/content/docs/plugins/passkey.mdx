@@ -483,9 +483,7 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
 
 ## Expo Integration
 
-When using the passkey plugin with Expo, you need to configure the `cookiePrefix` option in the Expo client to ensure passkey cookies are properly detected and stored.
-
-By default, the passkey plugin uses `"better-auth-passkey"` as the challenge cookie name. Since this starts with `"better-auth"`, it will work with the default Expo client configuration. However, if you customize the `webAuthnChallengeCookie` option, you must also update the `cookiePrefix` in your Expo client configuration.
+Expo stores cookies that match `cookieNamespace`. The default `better-auth-passkey` challenge cookie works without configuration. Set a matching namespace when you customize `webAuthnChallengeCookie`.
 
 ### Example Configuration
 
@@ -506,7 +504,7 @@ export const auth = betterAuth({
 });
 ```
 
-Make sure to configure your Expo client with the matching prefix:
+Configure the matching namespace in the Expo client:
 
 ```ts title="Client: auth-client.ts"
 import { createAuthClient } from "better-auth/react";
@@ -519,24 +517,24 @@ export const authClient = createAuthClient({
     plugins: [
         expoClient({
             storage: SecureStore,
-            cookiePrefix: "my-app" // Must match the prefix of your custom cookie name
+            cookieNamespace: "my-app" // Must match the namespace of your custom cookie name
         }),
         passkeyClient()
     ]
 });
 ```
 
-If you're using multiple authentication systems or custom cookie names, you can provide an array of prefixes:
+If you're using multiple authentication systems or custom cookie names, you can provide an array of namespaces:
 
 ```ts title="Client: auth-client.ts"
 expoClient({
     storage: SecureStore,
-    cookiePrefix: ["better-auth", "my-app", "custom-auth"]
+    cookieNamespace: ["better-auth", "my-app", "custom-auth"]
 })
 ```
 
 <Callout type="warn">
-  If the `cookiePrefix` doesn't match the prefix of your `webAuthnChallengeCookie`, the passkey authentication flow will fail because the challenge cookie won't be stored and sent back to the server during verification.
+  A mismatched namespace prevents Expo from storing the challenge cookie.
 </Callout>
 
 For more information on Expo integration, see the [Expo documentation](/docs/integrations/expo).

@@ -2,13 +2,14 @@ import type {
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 	ClientStore,
+	CookieSecurity,
 } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import {
+	COOKIE_SECURITY_PREFIXES,
 	parseSetCookieHeader,
-	SECURE_COOKIE_PREFIX,
-	stripSecureCookiePrefix,
+	stripCookieSecurityPrefix,
 } from "better-auth/cookies/utils";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
@@ -36,15 +37,25 @@ interface ExpoClientOptions {
 	 */
 	storagePrefix?: string | undefined;
 	/**
-	 * Prefix(es) for server cookie names to filter (e.g., "better-auth.session_token")
+	 * Namespace(s) for server cookie names to filter (e.g., "better-auth.session_token")
 	 * This is used to identify which cookies belong to better-auth to prevent
 	 * infinite refetching when third-party cookies are set.
-	 * Can be a single string or an array of strings to match multiple prefixes.
+	 * Can be a single string or an array of strings to match multiple namespaces.
 	 * @default "better-auth"
 	 * @example "better-auth"
 	 * @example ["better-auth", "my-app"]
 	 */
+	cookieNamespace?: string | string[] | undefined;
+	/**
+	 * @deprecated Use `cookieNamespace`.
+	 * This option will be removed in a future minor release.
+	 */
 	cookiePrefix?: string | string[] | undefined;
+	/**
+	 * Match the server's explicit `advanced.cookieSecurity` setting.
+	 * Host mode reads only `__Host-` OAuth state cookies.
+	 */
+	cookieSecurity?: CookieSecurity | undefined;
 	disableCache?: boolean | undefined;
 	/**
 	 * Options to customize the Expo web browser behavior when opening authentication
@@ -120,21 +131,28 @@ export function getCookie(cookie: string | null) {
 
 function getOAuthStateValue(
 	cookieJson: string | null,
-	cookiePrefix: string | string[],
+	cookieNamespace: string | string[],
+	cookieSecurity?: CookieSecurity,
 ): string | null {
 	if (!cookieJson) return null;
 
 	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookieJson);
 	if (!parsed) return null;
 
-	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
+	const namespaces = Array.isArray(cookieNamespace)
+		? cookieNamespace
+		: [cookieNamespace];
+	const selectedPrefix = cookieSecurity
+		? COOKIE_SECURITY_PREFIXES[cookieSecurity]
+		: undefined;
 
-	for (const prefix of prefixes) {
-		// cookie strategy uses: <prefix>.oauth_state
-		const candidates = [
-			`${SECURE_COOKIE_PREFIX}${prefix}.oauth_state`,
-			`${prefix}.oauth_state`,
-		];
+	for (const namespace of namespaces) {
+		// Cookie strategy uses: <namespace>.oauth_state.
+		const name = `${namespace}.oauth_state`;
+		const candidates =
+			selectedPrefix !== undefined
+				? [`${selectedPrefix}${name}`]
+				: [`${COOKIE_SECURITY_PREFIXES.secure}${name}`, name];
 
 		for (const name of candidates) {
 			const value = parsed?.[name]?.value;
@@ -203,40 +221,42 @@ function hasSessionCookieChanged(
  *
  * Supports multiple cookie naming patterns:
  * - Default: "better-auth.session_token", "better-auth-passkey", "__Secure-better-auth.session_token"
- * - Custom prefix: "myapp.session_token", "myapp-passkey", "__Secure-myapp.session_token"
+ * - Custom namespace: "myapp.session_token", "myapp-passkey", "__Secure-myapp.session_token"
  * - Custom full names: "my_custom_session_token", "custom_session_data"
- * - No prefix (cookiePrefix=""): matches any cookie with known suffixes
- * - Multiple prefixes: ["better-auth", "my-app"] matches cookies starting with any of the prefixes
+ * - No namespace (cookieNamespace=""): matches any cookie with known suffixes
+ * - Multiple namespaces: ["better-auth", "my-app"] matches cookies starting with any namespace
  *
  * @param setCookieHeader - The Set-Cookie header value
- * @param cookiePrefix - The cookie prefix(es) to check for. Can be a string, array of strings, or empty string.
+ * @param cookieNamespace - The cookie namespace(s) to check for. Can be a string, array of strings, or empty string.
  * @returns true if the header contains better-auth cookies, false otherwise
  */
 export function hasBetterAuthCookies(
 	setCookieHeader: string,
-	cookiePrefix: string | string[],
+	cookieNamespace: string | string[],
 ): boolean {
 	const cookies = parseSetCookieHeader(setCookieHeader);
 	const cookieSuffixes = ["session_token", "session_data"];
-	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
+	const namespaces = Array.isArray(cookieNamespace)
+		? cookieNamespace
+		: [cookieNamespace];
 
 	// Check if any cookie is a better-auth cookie
 	for (const name of cookies.keys()) {
-		// Remove __Secure- prefix if present for comparison
-		const nameWithoutSecure = stripSecureCookiePrefix(name);
+		// Compare the logical name without an RFC cookie security prefix.
+		const logicalName = stripCookieSecurityPrefix(name);
 
-		// Check against all provided prefixes
-		for (const prefix of prefixes) {
-			if (prefix) {
-				// When prefix is provided, check if cookie starts with the prefix
+		// Check against all provided namespaces
+		for (const namespace of namespaces) {
+			if (namespace) {
+				// When a namespace is provided, check if the cookie starts with it.
 				// This matches all better-auth cookies including session cookies, passkey cookies, etc.
-				if (nameWithoutSecure.startsWith(prefix)) {
+				if (logicalName.startsWith(namespace)) {
 					return true;
 				}
 			} else {
-				// When prefix is empty, check for common better-auth cookie patterns
+				// When the namespace is empty, check for common better-auth cookie patterns.
 				for (const suffix of cookieSuffixes) {
-					if (nameWithoutSecure.endsWith(suffix)) {
+					if (logicalName.endsWith(suffix)) {
 						return true;
 					}
 				}
@@ -247,13 +267,19 @@ export function hasBetterAuthCookies(
 }
 
 export const expoClient = (opts: ExpoClientOptions) => {
+	if (opts.cookieNamespace !== undefined && opts.cookiePrefix !== undefined) {
+		throw new TypeError(
+			"Use either cookieNamespace or cookiePrefix, not both.",
+		);
+	}
 	let store: ClientStore | null = null;
 	const storagePrefix = opts?.storagePrefix || "better-auth";
 	const cookieName = `${storagePrefix}_cookie`;
 	const localCacheName = `${storagePrefix}_session_data`;
 	const storage = createManagedStorage(opts.storage);
 	const isWeb = Platform.OS === "web";
-	const cookiePrefix = opts?.cookiePrefix || "better-auth";
+	const cookieNamespace =
+		opts.cookieNamespace ?? opts.cookiePrefix ?? "better-auth";
 	let sessionCacheHydration: Promise<void> | undefined;
 	const restoreSessionCache = async () => {
 		if (isWeb || opts?.disableCache) {
@@ -351,7 +377,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						if (setCookie) {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
-							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
+							if (hasBetterAuthCookies(setCookie, cookieNamespace)) {
 								const update = await storage.updateItemAsync(
 									cookieName,
 									(currentValue) =>
@@ -413,7 +439,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const storedCookieJson = await storage.getItemAsync(cookieName);
 							const oauthStateValue = getOAuthStateValue(
 								storedCookieJson,
-								cookiePrefix,
+								cookieNamespace,
+								opts.cookieSecurity,
 							);
 							const params = new URLSearchParams({
 								authorizationURL: signInURL,

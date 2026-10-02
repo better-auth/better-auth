@@ -10,7 +10,10 @@ import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthPlugin } from "better-auth";
 import { safeJSONParse } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
+import type { CookieOptions } from "better-call";
+import { getCookieKey } from "better-call";
 import * as z from "zod";
+import { getCookieSecurity } from "./cookies";
 import { ELECTRON_ERROR_CODES } from "./error-codes";
 import {
 	electronInitOAuthProxy,
@@ -29,12 +32,36 @@ declare module "@better-auth/core" {
 }
 
 export const electron = (options?: ElectronOptions | undefined) => {
+	if (
+		options?.cookieNamespace !== undefined &&
+		options.cookiePrefix !== undefined
+	) {
+		throw new TypeError(
+			"Use either cookieNamespace or cookiePrefix, not both.",
+		);
+	}
 	const opts = {
 		codeExpiresIn: 300, // 5 minutes
 		redirectCookieExpiresIn: 120, // 2 minutes
-		cookiePrefix: "better-auth",
 		clientID: "electron",
 		...(options || {}),
+		cookieNamespace:
+			options?.cookieNamespace ?? options?.cookiePrefix ?? "better-auth",
+	};
+	const createElectronCookie = (
+		ctx: GenericEndpointContext,
+		name: string,
+		attributes?: Partial<CookieOptions>,
+	) => {
+		const cookie = ctx.context.createAuthCookie(name, attributes);
+		const security = getCookieSecurity(cookie.name);
+		const logicalName = `${opts.cookieNamespace}.${name}`;
+		return {
+			...cookie,
+			name:
+				getCookieKey(logicalName, security === "none" ? undefined : security) ??
+				logicalName,
+		};
 	};
 
 	const hookMatcher = (ctx: HookEndpointContext) => {
@@ -72,8 +99,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_PKCE);
 		}
 
-		const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
-
 		const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
 		const codeExpiresInMs = opts.codeExpiresIn * 1000;
 		const expiresAt = new Date(Date.now() + codeExpiresInMs);
@@ -91,11 +116,15 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			new TextEncoder().encode(JSON.stringify({ identifier, state })),
 		);
 
-		ctx.setCookie(redirectCookieName, redirectToken, {
-			...ctx.context.authCookies.sessionToken.attributes,
+		const redirectCookie = createElectronCookie(ctx, opts.clientID, {
 			maxAge: opts.redirectCookieExpiresIn,
 			httpOnly: false,
 		});
+		ctx.setCookie(
+			redirectCookie.name,
+			redirectToken,
+			redirectCookie.attributes,
+		);
 
 		return identifier;
 	};
@@ -108,17 +137,17 @@ export const electron = (options?: ElectronOptions | undefined) => {
 				{
 					matcher: (ctx) => !hookMatcher(ctx),
 					handler: createAuthMiddleware(async (ctx) => {
+						const cookie = createElectronCookie(ctx, "transfer_token", {
+							maxAge: opts.codeExpiresIn,
+						});
 						const transferCookie = await ctx.getSignedCookie(
-							`${opts.cookiePrefix}.transfer_token`,
+							cookie.name,
 							ctx.context.secret,
 						);
 						if (!ctx.context.newSession?.session || !transferCookie) {
 							return;
 						}
 
-						const cookie = ctx.context.createAuthCookie("transfer_token", {
-							maxAge: opts.codeExpiresIn,
-						});
 						// Refresh the transfer cookie to extend its validity
 						// Avoids expiration during multi-step auth flows on active usage
 						// Can still expire when no endpoint is hit within the valid period
@@ -138,7 +167,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							code_challenge: z.string().nonempty(),
 							state: z.string().nonempty(),
 						});
-						const cookie = ctx.context.createAuthCookie("transfer_token", {
+						const cookie = createElectronCookie(ctx, "transfer_token", {
 							maxAge: opts.codeExpiresIn,
 						});
 						if (

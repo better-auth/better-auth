@@ -177,10 +177,6 @@ In Waku middleware, it's recommended to only check for the existence of a sessio
 
 You can use the `getSessionCookie` helper from Better Auth for this purpose:
 
-<Callout type="warn">
-  The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, if you customized the cookie name or prefix, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
-</Callout>
-
 ```ts title="src/middleware/auth.ts"
 import type { MiddlewareHandler } from "hono"
 import { getSession } from "../auth"
@@ -235,13 +231,16 @@ export default authMiddleware;
 </Callout>
 
 <Callout type="info">
-  If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
+  Cookie helpers do not read your auth configuration. Pass matching options when you customize them.
 
   ```ts
-  const sessionCookie = getSessionCookie(request, {
-      cookieName: "my_session_cookie",
-      cookiePrefix: "my_prefix"
-  })
+  const cookieConfig = {
+    cookieNamespace: "my-app",
+    cookieSecurity: "host",
+  } as const
+
+  getSessionCookie(request, cookieConfig)
+  getCookieCache(request, cookieConfig)
   ```
 </Callout>
 
