@@ -107,7 +107,12 @@ export function assertExplicitCallbackURL(
 		if (targetPath === null) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_CALLBACK_URL);
 		}
-		const basePath = trimTrailingSlashes(base.pathname);
+		// The base path gets the same treatment as the target's, so a base URL
+		// with encoded or repeated segments still compares equal.
+		const canonicalBase =
+			canonicalPathname(base.pathname) ??
+			trimTrailingSlashes(base.pathname).toLowerCase();
+		const basePath = canonicalBase === "/" ? "" : canonicalBase;
 		const blocked = blockedPaths.some(
 			(path) => targetPath === `${basePath}${path}`.toLowerCase(),
 		);

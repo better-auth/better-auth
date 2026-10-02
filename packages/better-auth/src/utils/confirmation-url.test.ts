@@ -132,6 +132,25 @@ describe("assertExplicitCallbackURL", () => {
 		expect(assertExplicitCallbackURL(baseURL, url, blocked)).toBe(url);
 	});
 
+	it("canonicalizes the base path the same way as the target", () => {
+		for (const base of [
+			"https://auth.example.com/api/%61uth",
+			"https://auth.example.com//api//auth/",
+			"https://auth.example.com/api/x/../auth",
+		]) {
+			expect(
+				codeOf(() =>
+					assertExplicitCallbackURL(
+						base,
+						"https://auth.example.com/api/auth/delete-user/callback",
+						blocked,
+					),
+				),
+				base,
+			).toBe("INVALID_CALLBACK_URL");
+		}
+	});
+
 	it("honors a base URL without a path", () => {
 		expect(
 			codeOf(() =>
