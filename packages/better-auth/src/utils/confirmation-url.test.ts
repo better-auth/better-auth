@@ -103,6 +103,29 @@ describe("assertExplicitCallbackURL", () => {
 		).toBe("INVALID_CALLBACK_URL");
 	});
 
+	it.each([
+		"https://auth.example.com/account/50%25/confirm",
+		"https://auth.example.com/account/100%25",
+		"https://auth.example.com/api/auth/100%25-done/confirm",
+		"https://auth.example.com/caf%C3%A9/confirm",
+	])("allows a legitimate path that contains an encoded percent sign or non-ASCII text: %s", (callbackURL) => {
+		expect(assertExplicitCallbackURL(baseURL, callbackURL, blocked)).toBe(
+			callbackURL,
+		);
+	});
+
+	it("still rejects a blocked path that an encoded percent sign is mixed into", () => {
+		expect(
+			codeOf(() =>
+				assertExplicitCallbackURL(
+					baseURL,
+					"https://auth.example.com/api/auth/delete%252Duser/callback",
+					blocked,
+				),
+			),
+		).toBe("INVALID_CALLBACK_URL");
+	});
+
 	it("allows unrelated query parameters and harmless encoding", () => {
 		const url =
 			"https://app.example.com/a%20b/confirm?next=%2Fhome&tokenizer=1";

@@ -10,13 +10,31 @@ import { trimTrailingSlashes } from "./url";
 const MAX_DECODE_PASSES = 5;
 
 /**
+ * Resolves `.` and `..` segments and drops empty ones (repeated slashes and a
+ * trailing slash), as a server normalizing the path would.
+ */
+function collapseSegments(path: string): string {
+	const segments: string[] = [];
+	for (const segment of path.split("/")) {
+		if (segment === "..") {
+			segments.pop();
+		} else if (segment !== "." && segment !== "") {
+			segments.push(segment);
+		}
+	}
+	return `/${segments.join("/")}`;
+}
+
+/**
  * Returns the pathname in the form a router that percent-decodes it would
  * match: decoded until stable, dot segments and repeated slashes collapsed,
  * no trailing slash, lowercase. `URL.pathname` alone keeps sequences such as
  * `%2D` as they are, so `/verify%2Demail` would not compare equal to
  * `/verify-email` even though a decoding server serves it as such.
  *
- * Returns `null` for a malformed or never-stabilizing encoding.
+ * A malformed encoding in the URL itself, or one that never stabilizes,
+ * returns `null`. A `%` that only appears after a decode pass, such as the one
+ * `%25` decodes to, is just a literal character: decoding stops there.
  */
 function canonicalPathname(pathname: string): string | null {
 	let current = pathname;
@@ -25,14 +43,15 @@ function canonicalPathname(pathname: string): string | null {
 		try {
 			decoded = decodeURIComponent(current);
 		} catch {
-			return null;
+			return pass === 0 ? null : collapseSegments(current).toLowerCase();
 		}
-		if (decoded === current) {
-			return trimTrailingSlashes(current.replace(/\/{2,}/g, "/")).toLowerCase();
+		// Collapse after every pass so dot segments that decoding just
+		// produced (`%2f..%2f`) are resolved, as they would be on the server.
+		const next = collapseSegments(decoded);
+		if (next === collapseSegments(current)) {
+			return next.toLowerCase();
 		}
-		// Re-parse so dot segments that decoding just produced (`%2f..%2f`)
-		// collapse, as they would on the server.
-		current = new URL(decoded, "http://placeholder.invalid").pathname;
+		current = next;
 	}
 	return null;
 }
