@@ -781,7 +781,9 @@ export const mongodbAdapter = (
 								await session.commitTransaction();
 								return result;
 							} catch (err) {
-								await session.abortTransaction();
+								if (session.inTransaction()) {
+									await session.abortTransaction();
+								}
 								throw err;
 							} finally {
 								await session.endSession();
