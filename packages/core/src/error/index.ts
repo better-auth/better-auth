@@ -35,10 +35,15 @@ export class APIError extends BaseAPIError {
 	static from(
 		status: ConstructorParameters<typeof BaseAPIError>[0],
 		error: { code: string; message: string },
+		options?: { cause?: unknown | undefined },
 	) {
-		return new APIError(status, {
+		const apiError = new APIError(status, {
 			message: error.message,
 			code: error.code,
 		});
+		if (options?.cause !== undefined) {
+			apiError.cause = options.cause;
+		}
+		return apiError;
 	}
 }
