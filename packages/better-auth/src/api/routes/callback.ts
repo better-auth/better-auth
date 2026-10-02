@@ -2,7 +2,11 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { AccountKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { appendQueryParams } from "@better-auth/core/utils/url";
+import {
+	appendQueryParams,
+	appendURLPath,
+	appendURLSegment,
+} from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
@@ -55,7 +59,8 @@ export const callbackOAuth = createAuthEndpoint(
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
 		const defaultErrorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			c.context.options.onAPIError?.errorURL ||
+			appendURLPath(c.context.baseURL, "/error");
 
 		// Handle POST requests by redirecting to GET to ensure cookies are sent
 		if (c.method === "POST") {
@@ -71,7 +76,13 @@ export const callbackOAuth = createAuthEndpoint(
 				}
 			}
 
-			const redirectURL = `${c.context.baseURL}/callback/${c.params.id}?${params.toString()}`;
+			const redirectURL = appendQueryParams(
+				appendURLSegment(
+					appendURLPath(c.context.baseURL, "/callback"),
+					c.params.id,
+				),
+				params,
+			);
 			throw c.redirect(redirectURL);
 		}
 
@@ -116,7 +127,10 @@ export const callbackOAuth = createAuthEndpoint(
 					state: freshState,
 					codeVerifier,
 					idTokenNonce,
-					redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
+					redirectURI: appendURLPath(
+						c.context.baseURL,
+						getOAuthCallbackPath(provider),
+					),
 				});
 				throw c.redirect(authUrl.toString());
 			}
@@ -201,7 +215,10 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
+				redirectURI: appendURLPath(
+					c.context.baseURL,
+					getOAuthCallbackPath(provider),
+				),
 			});
 		} catch (e) {
 			c.context.logger.error("", e);

@@ -1,3 +1,4 @@
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
 export interface KeycloakOptions extends BaseOAuthProviderOptions {
@@ -35,9 +36,10 @@ export function keycloak(
 ): GenericOAuthConfig<"keycloak"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
-	// Ensure issuer ends without trailing slash for proper discovery URL construction
-	const issuer = options.issuer.replace(/\/$/, "");
-	const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
+	const discoveryUrl = appendURLPath(
+		options.issuer,
+		"/.well-known/openid-configuration",
+	);
 
 	return {
 		providerId: "keycloak",

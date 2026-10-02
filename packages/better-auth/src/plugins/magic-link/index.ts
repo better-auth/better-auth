@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { formCsrfMiddleware, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -271,13 +272,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
-					const realBaseURL = new URL(ctx.context.baseURL);
-					const pathname =
-						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
-					const basePath = pathname ? "" : ctx.context.options.basePath || "";
+					const authURL = new URL(ctx.context.baseURL);
+					if (authURL.pathname === "/") {
+						authURL.pathname = ctx.context.options.basePath || "/";
+					}
 					const url = new URL(
-						`${pathname}${basePath}/magic-link/verify`,
-						realBaseURL.origin,
+						appendURLPath(authURL.href, "/magic-link/verify"),
 					);
 					url.searchParams.set("token", verificationToken);
 					url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");
