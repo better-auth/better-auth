@@ -4,6 +4,7 @@ import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { expo } from "../src";
 import { expoClient, normalizeCookieName, storageAdapter } from "../src/client";
 import * as clientStorage from "../src/client-storage";
@@ -129,7 +130,9 @@ describe("expo", async () => {
 		if (!stateId) {
 			throw new Error("State ID not found");
 		}
-		const state = await ctx.internalAdapter.findVerificationValue(stateId);
+		const state = await ctx.internalAdapter.findVerificationValue(
+			getAuthStateVerificationIdentifier(stateId),
+		);
 		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
 		expect(callbackURL).toBe("better-auth:///dashboard");
 		expect(res).toMatchObject({

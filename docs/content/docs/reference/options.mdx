@@ -187,7 +187,7 @@ openssl rand -base64 32
 
 ## `secrets`
 
-Versioned secrets for non-destructive secret rotation. When set, encrypted data uses an envelope format that embeds the key version, allowing you to rotate secrets without invalidating existing data.
+Versioned secrets for non-destructive secret rotation within the same encryption format and purpose. When set, encrypted data uses an envelope format that embeds the key version, allowing you to rotate secrets without invalidating data encrypted for that purpose while its key remains configured.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -209,7 +209,7 @@ You can also set this via the `BETTER_AUTH_SECRETS` environment variable:
 BETTER_AUTH_SECRETS=2:new-secret-base64,1:old-secret-base64
 ```
 
-When `secrets` is set, `secret` (singular) is only used as a fallback for decrypting legacy data that predates the envelope format. Both can coexist during migration.
+When `secrets` is set, `secret` (singular) is only used as a fallback for decrypting legacy data that predates the envelope format within the same encryption purpose. Both can coexist during migration. Retaining it does not preserve pending OAuth or SAML state cookies or OAuth Proxy payloads when upgrading from shared keys to purpose-specific keys. See the [security reference](/docs/reference/security#secret-rotation) for the cutover requirements.
 
 ## `database`
 
@@ -509,6 +509,8 @@ Controls where OAuth state data is stored during the authentication flow.
 
 Defaults to `"database"` when a database or `secondaryStorage` is configured, and to `"cookie"` only when neither is set (a fully stateless setup). With `secondaryStorage`, OAuth state is stored there automatically; you no longer need to set this manually.
 
+The encrypted cookie is an in-flight credential, not a durable storage format. When upgrading from a release that encrypted this cookie directly with `BETTER_AUTH_SECRET` to one that derives a purpose-specific key, upgrade every node that serves the same auth base together. OAuth sign-in, account-linking, and cookie-backed SAML sign-in flows started before the cutover must be restarted. Mixed versions can return [`state_invalid`](/docs/reference/errors/state_invalid), and Better Auth does not fall back to the previous shared key.
+
 ### `storeAccountCookie`
 
 Store provider account data after an OAuth flow in an encrypted cookie. This is useful for database-less flows where OAuth token material, such as access tokens, refresh tokens, ID tokens, scopes, and token expiry, must be available without an account table.
@@ -567,6 +569,12 @@ export const auth = betterAuth({
 * `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
 * `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
 * `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
+
+When using `storeIdentifier.overrides`, Magic Link identifiers start with `magic-link:`, and database-backed OAuth and SAML relay state identifiers start with `auth-state:`. Overrides match these prefixes before the identifier is stored or hashed. These prefixes are used for verification storage; the token sent in a Magic Link and the state sent to an OAuth provider or SAML identity provider remain unchanged.
+
+Custom `storeIdentifier` hashers should hash the complete identifier, including its purpose prefix. Removing the prefix can cause unrelated verification values to share a storage key and interrupt pending sign-ins.
+
+Before upgrading, update overrides that target these flows to match the new prefixes. If your storage integration inspects verification identifiers directly, account for the same change. Upgrade servers sharing verification storage together. Previously issued Magic Links cannot be redeemed, and OAuth or SAML sign-ins using Better Auth-generated state must be restarted if they began before the upgrade, whether their state is database- or cookie-backed. No verification table schema or existing user/account migration is required.
 
 If `secondaryStorage` is configured, verification records are stored there by default. That behavior applies to flows that use Better Auth's shared verification layer, including OTP and magic-link style flows.
 
