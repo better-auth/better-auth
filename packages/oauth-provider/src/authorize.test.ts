@@ -13,6 +13,7 @@ import { oauthProviderClient } from "./client";
 import { verifyOAuthQueryParams } from "./index";
 import { oauthProvider } from "./oauth";
 import {
+	buildSignedOAuthQuery,
 	canonicalizeOAuthQueryParams,
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
@@ -1461,6 +1462,55 @@ describe("oauth authorize - consented resources", async () => {
 		});
 
 		expect(savedConsent?.requestedUserInfoClaims).toEqual(["name"]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11481
+	 */
+	it("should complete consent via auth.api with headers only (no Request)", async () => {
+		const dedicatedClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: false,
+			},
+		});
+		if (!dedicatedClient?.client_id) {
+			throw Error("unable to create dedicated client");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", dedicatedClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "api-consent-no-request");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(consentRedirectUrl).toContain("/consent");
+		const oauthQuery = buildSignedOAuthQuery(
+			new URL(consentRedirectUrl, authServerBaseUrl).search,
+		);
+		expect(oauthQuery).toBeDefined();
+
+		const consentResult = await auth.api.oauth2Consent({
+			headers,
+			body: {
+				accept: true,
+				oauth_query: oauthQuery!,
+			},
+		});
+
+		expect(consentResult.url).toContain(`${redirectUri}?code=`);
 	});
 
 	it("should return consent_required for prompt=none when requested resource is not covered by prior consent", async () => {
