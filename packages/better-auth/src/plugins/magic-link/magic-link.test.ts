@@ -54,6 +54,27 @@ describe("magic link", async () => {
 		expect(verificationEmail.metadata).toBeUndefined();
 	});
 
+	it("keeps the verification URL under a trailing-slash auth base URL", async () => {
+		let sentURL: string | undefined;
+		const { client } = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000/api/auth/",
+				plugins: [
+					magicLink({
+						sendMagicLink({ url }) {
+							sentURL = url;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [magicLinkClient()] } },
+		);
+
+		await client.signIn.magicLink({ email: "trailing-base@example.com" });
+		expect(sentURL).toBeDefined();
+		expect(new URL(sentURL!).pathname).toBe("/api/auth/magic-link/verify");
+	});
+
 	it("should forward metadata to sendMagicLink", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,

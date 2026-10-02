@@ -1,7 +1,24 @@
 import type { AuthContext } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { symmetricEncrypt } from "../crypto";
-import { decryptOAuthToken, setTokenUtil } from "./utils";
+import { decryptOAuthToken, getOAuthCallbackPath, setTokenUtil } from "./utils";
+
+describe("getOAuthCallbackPath", () => {
+	it("encodes a provider ID as one callback segment", () => {
+		expect(getOAuthCallbackPath({ id: "team/member" })).toBe(
+			"/callback/team%2Fmember",
+		);
+	});
+
+	it("keeps a custom callback path as a path", () => {
+		expect(
+			getOAuthCallbackPath({
+				id: "team/member",
+				callbackPath: "/callback/custom/provider",
+			}),
+		).toBe("/callback/custom/provider");
+	});
+});
 
 // Mock minimal AuthContext for testing
 function createMockContext(encryptOAuthTokens: boolean): AuthContext {

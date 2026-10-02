@@ -3,6 +3,33 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
 import type { Account } from "../../types";
 
+it("keeps reset links under a trailing-slash auth base URL", async () => {
+	let resetURL: string | undefined;
+	const { auth, testUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		emailAndPassword: {
+			enabled: true,
+			async sendResetPassword({ url }) {
+				resetURL = url;
+			},
+		},
+	});
+
+	await auth.api.requestPasswordReset({
+		body: {
+			email: testUser.email,
+			redirectTo: "/after reset?tab=a+b",
+		},
+	});
+
+	expect(resetURL).toBeDefined();
+	const parsedURL = new URL(resetURL!);
+	expect(parsedURL.pathname).toMatch(/^\/api\/auth\/reset-password\/[^/]+$/);
+	expect(parsedURL.searchParams.get("callbackURL")).toBe(
+		"/after reset?tab=a+b",
+	);
+});
+
 describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
 	const mockOnPasswordReset = vi.fn();

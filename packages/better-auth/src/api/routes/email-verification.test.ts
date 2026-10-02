@@ -2,6 +2,33 @@ import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
+it("keeps verification links under a trailing-slash auth base URL", async () => {
+	let verificationURL: string | undefined;
+	const { auth, testUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		emailAndPassword: { enabled: true },
+		emailVerification: {
+			async sendVerificationEmail({ url }) {
+				verificationURL = url;
+			},
+		},
+	});
+
+	await auth.api.sendVerificationEmail({
+		body: {
+			email: testUser.email,
+			callbackURL: "/welcome back?tab=profile",
+		},
+	});
+
+	expect(verificationURL).toBeDefined();
+	const parsedURL = new URL(verificationURL!);
+	expect(parsedURL.pathname).toBe("/api/auth/verify-email");
+	expect(parsedURL.searchParams.get("callbackURL")).toBe(
+		"/welcome back?tab=profile",
+	);
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/8969
  */

@@ -138,6 +138,49 @@ describe("oauth-proxy", async () => {
 		);
 		expect(location).toContain("error=invalid_profile");
 	});
+
+	it("uses the configured auth base path for proxy errors", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			basePath: "/custom/auth",
+			plugins: [oAuthProxy()],
+		});
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/custom/auth/callback/google/oauth-proxy?callbackURL=%2Fdashboard",
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location");
+		expect(location).toBeDefined();
+		expect(new URL(location!).pathname).toBe("/custom/auth/error");
+	});
+
+	it("does not append the base path twice to a production URL with a path", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			plugins: [
+				oAuthProxy({
+					currentURL: "https://preview.myapp.com",
+					productionURL: "https://login.myapp.com/custom/auth/",
+				}),
+			],
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+
+		const result = await client.signIn.social(
+			{ provider: "google", callbackURL: "/dashboard" },
+			{ throw: true },
+		);
+		expect(result.url).toBeDefined();
+		expect(new URL(result.url!).searchParams.get("redirect_uri")).toBe(
+			"https://login.myapp.com/custom/auth/callback/google",
+		);
+	});
+
 	it("redirects when a provider cannot derive a stable account identity", async () => {
 		const provider = {
 			id: "invalid-account-identity",

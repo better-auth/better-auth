@@ -5,6 +5,7 @@ import {
 } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { getSessionFromCtx } from "../../api/routes/session";
@@ -525,9 +526,13 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 								undefined,
 								ctx.context.options.emailVerification?.expiresIn,
 							);
-							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-								ctx.body.callbackURL || "/",
-							)}`;
+							const url = appendQueryParams(
+								appendURLPath(ctx.context.baseURL, "/verify-email"),
+								new URLSearchParams({
+									token,
+									callbackURL: ctx.body.callbackURL || "/",
+								}),
+							);
 							await ctx.context.runInBackgroundOrAwait(
 								ctx.context.options.emailVerification.sendVerificationEmail(
 									{
