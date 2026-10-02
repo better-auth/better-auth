@@ -73,6 +73,26 @@ async function resolveOTP(
 	return otp;
 }
 
+/**
+ * A change-email OTP is keyed by both the current and the new email, so the
+ * generic endpoints, which only know one email, cannot create, read or verify it.
+ *
+ * @internal
+ */
+function assertNotChangeEmailType(
+	ctx: GenericEndpointContext,
+	type: (typeof types)[number],
+) {
+	if (type === "change-email") {
+		ctx.context.logger.error(
+			"Use the /email-otp/request-email-change and /email-otp/change-email endpoints for change-email OTPs",
+		);
+		throw APIError.fromStatus("BAD_REQUEST", {
+			message: "Invalid OTP type",
+		});
+	}
+}
+
 const sendVerificationOTPBodySchema = z.object({
 	email: z.string({}).meta({
 		description: "Email address to send the OTP",
@@ -141,15 +161,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
-			// Enforce using the correct endpoint for change email OTP
-			if (ctx.body.type === "change-email") {
-				ctx.context.logger.error(
-					"Use the /email-otp/request-email-change endpoint to send OTP for changing email",
-				);
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "Invalid OTP type",
-				});
-			}
+			assertNotChangeEmailType(ctx, ctx.body.type);
 			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
 
@@ -204,6 +216,7 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			assertNotChangeEmailType(ctx, ctx.body.type);
 			const email = ctx.body.email.toLowerCase();
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
@@ -274,6 +287,7 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			assertNotChangeEmailType(ctx, ctx.query.type);
 			const email = ctx.query.email.toLowerCase();
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
@@ -374,6 +388,7 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
+			assertNotChangeEmailType(ctx, ctx.body.type);
 			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(identifier);
