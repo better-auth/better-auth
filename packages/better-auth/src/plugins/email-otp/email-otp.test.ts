@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { runWithRequestState } from "@better-auth/core/context";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
@@ -6,7 +8,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
-import { splitAtLastColon } from "./utils";
+import { splitAtLastColon, toOTPIdentifier } from "./utils";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
@@ -460,14 +462,18 @@ describe("email-otp", async () => {
 	});
 
 	it("should fail on expired otp", async () => {
+		const email = "expired-otp@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "expired-otp" },
+		});
 		await client.emailOtp.sendVerificationOtp({
-			email: testUser.email,
+			email,
 			type: "email-verification",
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 6);
 		const res = await client.emailOtp.verifyEmail({
-			email: testUser.email,
+			email,
 			otp,
 		});
 		expect(res.error?.status).toBe(400);
@@ -475,14 +481,18 @@ describe("email-otp", async () => {
 	});
 
 	it("should not fail on time elapsed", async () => {
+		const email = "elapsed-otp@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "elapsed-otp" },
+		});
 		await client.emailOtp.sendVerificationOtp({
-			email: testUser.email,
+			email,
 			type: "email-verification",
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 4);
 		const res = await client.emailOtp.verifyEmail({
-			email: testUser.email,
+			email,
 			otp,
 		});
 		const session = await client.getSession({
@@ -2134,8 +2144,9 @@ describe("race condition protection", async () => {
 
 	it("should delete OTP after successful email verification", async () => {
 		const email = "race-verify@domain.com";
-		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-		await client.signIn.emailOtp({ email, otp });
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "race-verify" },
+		});
 
 		await client.emailOtp.sendVerificationOtp({
 			email,
@@ -2208,8 +2219,9 @@ describe("race condition protection", async () => {
 
 	it("should allow exactly one success when the same email-verification OTP is verified concurrently", async () => {
 		const email = "race-concurrent-verify@domain.com";
-		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-		await client.signIn.emailOtp({ email, otp });
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "race-concurrent" },
+		});
 
 		await client.emailOtp.sendVerificationOtp({
 			email,
@@ -2709,5 +2721,424 @@ describe("email-otp send origin/CSRF protection", async () => {
 		const response = await auth.handler(legitimateRequest);
 		expect(response.status).toBe(200);
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11395
+ */
+describe("email-otp send-verification-otp for an already verified address", async () => {
+	let otp = "";
+	const sendVerificationOTP = vi.fn(async ({ otp: _otp }: { otp: string }) => {
+		otp = _otp;
+	});
+	const { auth, client, testUser, signInWithTestUser, signInWithUser } =
+		await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						sendVerificationOTP,
+						changeEmail: { enabled: true, verifyCurrentEmail: true },
+					}),
+				],
+				emailVerification: {
+					autoSignInAfterVerification: true,
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+	const ctx = await auth.$context;
+	const identifier = toOTPIdentifier("email-verification", testUser.email);
+
+	const sendWithoutSession = (email: string, cookie?: string) =>
+		auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						...(cookie ? { cookie, origin: "http://localhost:3000" } : {}),
+					},
+					body: JSON.stringify({ email, type: "email-verification" }),
+				},
+			),
+		);
+
+	beforeAll(async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		const verified = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp,
+		});
+		expect(verified.data?.user.emailVerified).toBe(true);
+		sendVerificationOTP.mockClear();
+	});
+
+	it("should still send to an unverified address for a caller with no session", async () => {
+		const email = "still-unverified@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "unverified" },
+		});
+		sendVerificationOTP.mockClear();
+
+		const res = await sendWithoutSession(email);
+
+		expect(res.status).toBe(200);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+
+	it("should answer a caller with no session like an unknown address", async () => {
+		sendVerificationOTP.mockClear();
+
+		const verifiedRes = await sendWithoutSession(testUser.email);
+		const unknownRes = await sendWithoutSession("nobody@test.com");
+
+		expect(verifiedRes.status).toBe(200);
+		expect(unknownRes.status).toBe(200);
+		expect(await verifiedRes.json()).toEqual(await unknownRes.json());
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(identifier),
+		).toBeFalsy();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(
+				toOTPIdentifier("email-verification", "nobody@test.com"),
+			),
+		).toBeFalsy();
+	});
+
+	it("should return the same headers for verified, unverified and unknown addresses", async () => {
+		const email = "headers-unverified@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "headers" },
+		});
+		const bogusCookie = "better-auth.session_data=bogus";
+
+		const [verified, unverified, unknown] = await Promise.all([
+			sendWithoutSession(testUser.email, bogusCookie),
+			sendWithoutSession(email, bogusCookie),
+			sendWithoutSession("nobody-headers@test.com", bogusCookie),
+		]);
+
+		expect(verified.headers.get("set-cookie")).toBe(
+			unknown.headers.get("set-cookie"),
+		);
+		expect(unverified.headers.get("set-cookie")).toBe(
+			unknown.headers.get("set-cookie"),
+		);
+	});
+
+	it("should not send when the session belongs to a different user", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "someone-else@test.com",
+				password: "password",
+				name: "other",
+			},
+		});
+		const { headers } = await signInWithUser(
+			"someone-else@test.com",
+			"password",
+		);
+		sendVerificationOTP.mockClear();
+
+		const res = await client.emailOtp.sendVerificationOtp(
+			{ email: testUser.email, type: "email-verification" },
+			{ headers },
+		);
+
+		expect(res.data?.success).toBe(true);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(identifier),
+		).toBeFalsy();
+	});
+
+	it("should still send to the owner and accept the code as the change-email step-up", async () => {
+		const { headers } = await signInWithTestUser();
+		sendVerificationOTP.mockClear();
+
+		const res = await client.emailOtp.sendVerificationOtp(
+			{ email: testUser.email, type: "email-verification" },
+			{ headers },
+		);
+		expect(res.data?.success).toBe(true);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+
+		const change = await client.emailOtp.requestEmailChange(
+			{ newEmail: "step-up-new@test.com", otp },
+			{ headers },
+		);
+		expect(change.data?.success).toBe(true);
+	});
+
+	it("should still send for a server-side call with no request or headers", async () => {
+		sendVerificationOTP.mockClear();
+
+		const res = await auth.api.sendVerificationOTP({
+			body: { email: testUser.email, type: "email-verification" },
+		});
+
+		expect(res.success).toBe(true);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+		await ctx.internalAdapter.deleteVerificationByIdentifier(identifier);
+	});
+
+	it("should not send for a call that carries headers but no session", async () => {
+		sendVerificationOTP.mockClear();
+
+		const res = await auth.api.sendVerificationOTP({
+			body: { email: testUser.email, type: "email-verification" },
+			headers: new Headers({ "user-agent": "test" }),
+		});
+
+		expect(res.success).toBe(true);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(identifier),
+		).toBeFalsy();
+	});
+
+	it("should treat a differently cased verified address the same", async () => {
+		const upper = testUser.email.toUpperCase();
+		sendVerificationOTP.mockClear();
+
+		const res = await sendWithoutSession(upper);
+
+		expect(res.status).toBe(200);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(identifier),
+		).toBeFalsy();
+
+		const { headers } = await signInWithTestUser();
+		const owned = await client.emailOtp.sendVerificationOtp(
+			{ email: upper, type: "email-verification" },
+			{ headers },
+		);
+
+		expect(owned.data?.success).toBe(true);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+		expect(sendVerificationOTP).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: testUser.email,
+				type: "email-verification",
+			}),
+			expect.anything(),
+		);
+		expect(
+			await ctx.internalAdapter.findVerificationValue(identifier),
+		).toBeTruthy();
+		await ctx.internalAdapter.deleteVerificationByIdentifier(identifier);
+	});
+
+	it("should leave sign-in and forget-password codes for a verified address unchanged", async () => {
+		sendVerificationOTP.mockClear();
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(2);
+	});
+
+	it("should not send on sign-up when a database hook already verified the email", async () => {
+		const hookedSend = vi.fn(async () => {});
+		const { client: hookedClient } = await getTestInstance(
+			{
+				emailVerification: { sendOnSignUp: true },
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+				},
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: hookedSend,
+						overrideDefaultEmailVerification: true,
+					}),
+				],
+			},
+			{ disableTestUser: true, clientOptions: { plugins: [emailOTPClient()] } },
+		);
+
+		const res = await hookedClient.signUp.email({
+			email: "hook-verified@test.com",
+			password: "password",
+			name: "hook-verified",
+		});
+
+		expect(res.data?.user.emailVerified).toBe(true);
+		expect(hookedSend).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11395
+ */
+describe("email-otp sendVerificationOnSignUp for an existing email", async () => {
+	let otp = "";
+	const sendVerificationOTP = vi.fn(async ({ otp: _otp }: { otp: string }) => {
+		otp = _otp;
+	});
+	const { auth, client, testUser } = await getTestInstance(
+		{
+			emailAndPassword: { enabled: true, requireEmailVerification: true },
+			plugins: [
+				emailOTP({
+					sendVerificationOTP,
+					sendVerificationOnSignUp: true,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+	const ctx = await auth.$context;
+
+	beforeAll(async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		const verified = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp,
+		});
+		expect(verified.data?.user.emailVerified).toBe(true);
+	});
+
+	it("should send the sign-up code to a newly created user", async () => {
+		sendVerificationOTP.mockClear();
+
+		const res = await client.signUp.email({
+			email: "fresh-signup@test.com",
+			password: "password",
+			name: "fresh",
+		});
+
+		expect(res.data?.user.email).toBe("fresh-signup@test.com");
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+
+	it("should still send when sign-up is attempted with an existing unverified email", async () => {
+		const email = "unverified-again@test.com";
+		await client.signUp.email({ email, password: "password", name: "first" });
+		sendVerificationOTP.mockClear();
+
+		const res = await client.signUp.email({
+			email,
+			password: "other-password",
+			name: "second",
+		});
+
+		expect(res.error).toBeNull();
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+		expect(
+			await ctx.internalAdapter.findVerificationValue(
+				toOTPIdentifier("email-verification", email),
+			),
+		).toBeTruthy();
+	});
+
+	it("should not send a code when sign-up is attempted with a verified user's email", async () => {
+		sendVerificationOTP.mockClear();
+
+		const res = await client.signUp.email({
+			email: testUser.email,
+			password: "another-password",
+			name: "impostor",
+		});
+
+		expect(res.error).toBeNull();
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(
+				toOTPIdentifier("email-verification", testUser.email),
+			),
+		).toBeFalsy();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11395
+ */
+describe("email-otp overrideDefaultEmailVerification for a verified address", async () => {
+	let otp = "";
+	const sendVerificationOTP = vi.fn(async ({ otp: _otp }: { otp: string }) => {
+		otp = _otp;
+	});
+	const { auth, client, testUser } = await getTestInstance(
+		{
+			emailAndPassword: { enabled: true },
+			plugins: [
+				emailOTP({
+					sendVerificationOTP,
+					overrideDefaultEmailVerification: true,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+	const ctx = await auth.$context;
+
+	beforeAll(async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		const verified = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp,
+		});
+		expect(verified.data?.user.emailVerified).toBe(true);
+	});
+
+	it("should not send through the override for a verified address without a session", async () => {
+		const found = await ctx.internalAdapter.findUserByEmail(testUser.email);
+		sendVerificationOTP.mockClear();
+
+		const { emailVerification } = ctx.options as BetterAuthOptions;
+		await runWithRequestState(new WeakMap(), () =>
+			emailVerification!.sendVerificationEmail!(
+				{
+					user: found!.user,
+					url: "http://localhost:3000/verify",
+					token: "token",
+				},
+				new Request("http://localhost:3000/api/auth/change-email"),
+			),
+		);
+
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(
+				toOTPIdentifier("email-verification", testUser.email),
+			),
+		).toBeFalsy();
 	});
 });
