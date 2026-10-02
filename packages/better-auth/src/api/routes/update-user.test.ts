@@ -1,8 +1,12 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
+import { createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
+import { createEmailVerificationToken } from "./email-verification";
 
 describe("updateUser", () => {
 	it("should update the user's name", async () => {
@@ -509,6 +513,11 @@ describe("updateUser", () => {
 				[`${baseURL}/verify-email/`, "INVALID_CALLBACK_URL"],
 				[`${baseURL}/verify-email?x=1#y`, "INVALID_CALLBACK_URL"],
 				[`${baseURL}/foo/../verify-email`, "INVALID_CALLBACK_URL"],
+				// the same, percent-encoded, in case the server decodes the path
+				[`${baseURL}/verify%2Demail`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/verify%252Demail`, "INVALID_CALLBACK_URL"],
+				// the real token is appended, so one that's already there is rejected
+				["https://app.example.com/account?token=stale", "INVALID_CALLBACK_URL"],
 			];
 
 			// If this only failed for a new address, the 400-vs-200 difference
@@ -527,6 +536,35 @@ describe("updateUser", () => {
 			expect(sent).toHaveLength(0);
 			const session = await auth.api.getSession({ headers });
 			expect(session?.user.email).toBe(testUser.email);
+		});
+
+		it("rejects a correctly signed token whose updateTo is not an email address", async () => {
+			const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			const { secret } = await auth.$context;
+			const token = await createEmailVerificationToken(
+				secret,
+				testUser.email,
+				"not-an-email",
+				3600,
+				{ requestType: "change-email-verification" },
+			);
+
+			await expect(
+				auth.api.changeEmailPreview({ query: { token }, headers }),
+			).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+			await expect(
+				auth.api.changeEmailConfirm({ body: { token }, headers }),
+			).rejects.toMatchObject({ body: { code: "INVALID_TOKEN" } });
+			const user = await db.findOne({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			expect((user as { email: string } | null)?.email).toBe(testUser.email);
 		});
 
 		it("rejects a change-email-confirmation token on preview and confirm", async () => {
@@ -1736,5 +1774,125 @@ describe("password length on verify-only fields", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * An earlier hook can already have loaded the session from the cookie cache
+ * into `ctx.context.session`; `getSessionFromCtx` returns that without
+ * honoring `disableCookieCache`. The explicit-mode preview and confirm
+ * endpoints must still re-read the session store, so a revoked session that
+ * still carries a valid cached cookie can't authorize an email change.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11528
+ */
+describe("explicit change-email confirmation is revocation-aware with cookie cache", async () => {
+	const preloadCachedSessionPlugin = {
+		id: "preload-cached-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path?.startsWith("/change-email/") === true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
+	async function setup() {
+		const capture = { token: "" };
+		const instance = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				plugins: [preloadCachedSessionPlugin],
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				emailVerification: {
+					async sendVerificationEmail({ token }) {
+						capture.token = token;
+					},
+				},
+				user: {
+					changeEmail: { enabled: true, confirmationMode: "explicit" },
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const email = `revoked-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await instance.client.signUp.email({ email, password, name: "Revoked" });
+		await instance.db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: email }],
+		});
+		const headers = new Headers();
+		await instance.client.signIn.email({
+			email,
+			password,
+			fetchOptions: { onSuccess: instance.sessionSetter(headers) },
+		});
+		// Materialize the cookie cache: the signed `session_data` cookie comes
+		// back on the get-session response and has to be sent along explicitly.
+		const sessionRes = await instance.client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cached = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") ?? "",
+					).get("better-auth.session_data")?.value;
+					if (cached) {
+						headers.set(
+							"cookie",
+							`${headers.get("cookie")}; better-auth.session_data=${cached}`,
+						);
+					}
+				},
+			},
+		});
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+		expect(headers.get("cookie")).toContain("better-auth.session_data=");
+		await instance.client.changeEmail({
+			newEmail: "revoked-target@test.com",
+			callbackURL: "https://app.example.com/account",
+			fetchOptions: { headers },
+		});
+		expect(capture.token.length).toBeGreaterThan(0);
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await instance.db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+		return { ...instance, capture, headers, email };
+	}
+
+	it("rejects /change-email/confirm from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, email } = await setup();
+		await expect(
+			auth.api.changeEmailConfirm({
+				body: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		const user = await db.findOne({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user).not.toBeNull();
+	});
+
+	it("rejects /change-email/preview from a revoked but cached session", async () => {
+		const { auth, capture, headers } = await setup();
+		await expect(
+			auth.api.changeEmailPreview({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
 	});
 });

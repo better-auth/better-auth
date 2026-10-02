@@ -13,7 +13,7 @@ import type { User } from "../../types";
 import { assertExplicitCallbackURL } from "../../utils/confirmation-url";
 import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
-import { getSessionFromCtx, isStateful } from "./session";
+import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "./session";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -297,7 +297,7 @@ async function resolveChangeEmailVerificationToken(
 	}
 	const schema = z.object({
 		email: z.email(),
-		updateTo: z.string().optional(),
+		updateTo: z.email().optional(),
 		requestType: z.string().optional(),
 	});
 	const result = schema.safeParse(jwt.payload);
@@ -313,12 +313,11 @@ async function resolveChangeEmailVerificationToken(
 	if (!user) {
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 	}
-	// Sensitive like the other confirm/preview pairs in this feature set:
-	// bypass the cookie cache on stateful deployments so a revoked-but-cached
-	// session cannot pass this check even when paired with a valid token.
-	const session = await getSessionFromCtx(ctx, {
-		disableCookieCache: isStateful(ctx),
-	});
+	// Sensitive: re-read the session store on stateful deployments, even if an
+	// earlier hook already loaded a session from the cookie cache, so a
+	// revoked-but-cached session cannot pass this check even when paired with
+	// a valid token.
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO);
 	}
