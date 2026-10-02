@@ -403,6 +403,130 @@ export function createSCIMUser(
 				ctx.body.externalId,
 			);
 			await assertUserConnectionDomainStable(adapter, connection);
+			// Okta deprovision/reprovision lifecycle: when Okta reactivates an
+			// account it sends a fresh POST with the same stable externalId the
+			// now-inactive SCIM User was provisioned with. That retained inactive
+			// row must be restored in place (preserving its SCIM id) instead of
+			// rejected as a uniqueness conflict; an ACTIVE row with the same
+			// externalId remains a conflict and falls through to the assertion
+			// below.
+			const existingByExternalId = externalIdKey
+				? await adapter.findOne<SCIMUser>({
+						model: "scimUser",
+						where: [
+							{ field: "connectionId", value: connection.id },
+							{ field: "externalIdKey", value: externalIdKey },
+						],
+					})
+				: null;
+			if (existingByExternalId && existingByExternalId.active === false) {
+				const restoredSCIMUser = await runIdentityMutationTransaction(
+					adapter,
+					async (trx) => {
+						const currentSource = await findSCIMUser(
+							trx,
+							connection,
+							existingByExternalId.id,
+						);
+						if (!currentSource) {
+							throw createSCIMError("NOT_FOUND", {
+								detail: "SCIM User not found",
+							});
+						}
+						if (currentSource.active) {
+							// Raced with another re-provision that already restored the
+							// row; surface the original uniqueness conflict.
+							throw createSCIMError("CONFLICT", {
+								detail: "SCIM User externalId already exists",
+								scimType: "uniqueness",
+							});
+						}
+						await assertSCIMUserKeysAvailable(trx, {
+							connectionId: connection.id,
+							userNameKey,
+							externalIdKey,
+							excludeSCIMUserId: currentSource.id,
+						});
+						const updatedAt = new Date();
+						const subject = await identity.acquireSubject(
+							trx,
+							currentSource.userId,
+							updatedAt,
+						);
+						if (subject.profileSourceId === currentSource.id) {
+							await updateManagedBetterAuthUser(
+								trx,
+								ctx.context.internalAdapter,
+								{
+									userId: currentSource.userId,
+									email: profile.primaryEmail,
+									name: profile.displayName,
+									updatedAt,
+								},
+							);
+						}
+						const restoredSource = await trx.update<SCIMUser>({
+							model: "scimUser",
+							where: [
+								{ field: "id", value: currentSource.id },
+								{ field: "connectionId", value: connection.id },
+							],
+							update: {
+								userName: profile.userName,
+								userNameKey,
+								primaryEmail: profile.primaryEmail,
+								workEmailValueIndex: createSCIMEmailValueIndex(
+									profile.emails,
+									"work",
+								),
+								emailValueIndex: createSCIMEmailValueIndex(profile.emails),
+								displayName: profile.displayName,
+								formattedName: profile.formattedName,
+								givenName: profile.name.givenName ?? null,
+								familyName: profile.name.familyName ?? null,
+								serializedEmails: serializeSCIMEmails(profile.emails),
+								serializedAttributes: serializeSCIMUserAttributes(
+									profile.attributes,
+								),
+								externalId: ctx.body.externalId ?? null,
+								externalIdKey: externalIdKey ?? null,
+								active,
+								updatedAt,
+							},
+						});
+						if (!restoredSource) {
+							throw createSCIMError("NOT_FOUND", {
+								detail: "SCIM User not found",
+							});
+						}
+						await projection.reconcileUser({
+							database: trx,
+							auth: ctx.context,
+							provisioningDomainId: connection.provisioningDomainId,
+							scimUserId: restoredSource.id,
+						});
+						await identity.reconcileUser({
+							database: trx,
+							auth: ctx.context,
+							subject,
+						});
+						await fenceActiveSCIMConnection(trx, connection.id);
+						return restoredSource;
+					},
+				);
+				const completeResource = createUserResource(
+					ctx.context.baseURL,
+					restoredSCIMUser,
+				);
+				const resource = projectSCIMResourceAttributes(
+					completeResource,
+					attributeProjection,
+				);
+				ctx.setStatus(200);
+				ctx.setHeader("location", completeResource.meta.location);
+				ctx.setHeader("content-location", completeResource.meta.location);
+				return ctx.json(resource);
+			}
 			await assertSCIMUserKeysAvailable(adapter, {
 				connectionId: connection.id,
 				userNameKey,
