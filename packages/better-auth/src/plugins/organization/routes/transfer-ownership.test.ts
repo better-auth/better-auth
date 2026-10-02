@@ -1015,6 +1015,7 @@ describe("transferOwnership confirmation is revocation-aware with cookie cache",
 				{
 					matcher(ctx) {
 						return (
+							ctx.path === "/organization/transfer-ownership" ||
 							ctx.path?.startsWith("/organization/transfer-ownership/") === true
 						);
 					},
@@ -1248,5 +1249,87 @@ describe("transferOwnership starting from a stale owner snapshot", () => {
 		]);
 		expect(roleOf(memberX!.id)).toBe("member");
 		expect(members.find((m) => m.userId === ownerUserId)?.role).toBe("member");
+	});
+
+	it("rolls the promotion back when re-reading the owner fails after a lost guard", async () => {
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+		const ownerUserId = (await auth.api.getSession({ headers }))!.user.id;
+		const org = await auth.api.createOrganization({
+			body: { name: "Acme", slug: "acme" },
+			headers,
+		});
+		const userX = await auth.api.signUpEmail({
+			body: { email: "x@test.com", name: "X", password: "password" },
+		});
+		const memberX = await auth.api.addMember({
+			body: { organizationId: org!.id, userId: userX.user.id, role: "member" },
+		});
+		const ownerMember = (await db.findOne({
+			model: "member",
+			where: [
+				{ field: "userId", value: ownerUserId },
+				{ field: "organizationId", value: org!.id },
+			],
+		})) as { id: string };
+
+		// The previous owner's demotion loses its guard, and the read that
+		// follows to look again fails: the promotion that already committed
+		// still has to be undone.
+		const { adapter } = await auth.$context;
+		const realIncrementOne = adapter.incrementOne.bind(adapter);
+		const realFindOne = adapter.findOne.bind(adapter);
+		let demotionLost = false;
+		const incrementOne = vi
+			.spyOn(adapter, "incrementOne")
+			.mockImplementation(async (args) => {
+				const demotesOwner =
+					args.where?.some(
+						(clause) =>
+							clause.field === "id" && clause.value === ownerMember.id,
+					) && args.set?.role === "member";
+				if (demotesOwner) {
+					demotionLost = true;
+					return null;
+				}
+				return realIncrementOne(args);
+			});
+		const findOne = vi
+			.spyOn(adapter, "findOne")
+			.mockImplementation(async (args) => {
+				const rereadsOwner =
+					args.model === "member" &&
+					args.where?.some(
+						(clause) =>
+							clause.field === "id" && clause.value === ownerMember.id,
+					);
+				if (demotionLost && rereadsOwner) {
+					throw new Error("database unavailable");
+				}
+				return realFindOne(args);
+			});
+		try {
+			await expect(
+				auth.api.transferOwnership({
+					body: { organizationId: org!.id, newOwnerMemberId: memberX!.id },
+					headers,
+				}),
+			).rejects.toThrow();
+		} finally {
+			incrementOne.mockRestore();
+			findOne.mockRestore();
+		}
+		expect(demotionLost).toBe(true);
+
+		const members = (await db.findMany({
+			model: "member",
+			where: [{ field: "organizationId", value: org!.id }],
+		})) as Array<{ id: string; role: string }>;
+		expect(members.filter((m) => m.role === "owner").map((m) => m.id)).toEqual([
+			ownerMember.id,
+		]);
+		expect(members.find((m) => m.id === memberX!.id)?.role).toBe("member");
 	});
 });

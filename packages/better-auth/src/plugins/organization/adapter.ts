@@ -668,10 +668,18 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				// read. That can be a concurrent transfer, or just an unrelated
 				// edit (an admin adding a role), so look again instead of assuming
 				// the transfer already happened.
-				const fresh = await adapter.findOne<InferMember<O, false>>({
-					model: "member",
-					where: [{ field: "id", value: currentOwnerMemberId }],
-				});
+				let fresh: InferMember<O, false> | null;
+				try {
+					fresh = await adapter.findOne<InferMember<O, false>>({
+						model: "member",
+						where: [{ field: "id", value: currentOwnerMemberId }],
+					});
+				} catch (readError) {
+					// The promotion has already committed, so a failed read can't
+					// leave it in place any more than a failed write can.
+					await rollbackPromotion(readError);
+					throw readError;
+				}
 				if (!fresh) {
 					const gone = new BetterAuthError("Member not found");
 					await rollbackPromotion(gone);
