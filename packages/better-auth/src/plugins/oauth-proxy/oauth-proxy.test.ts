@@ -18,6 +18,7 @@ import {
 } from "../../api";
 import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { derivePurposeKey } from "../../crypto/purpose";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { oAuthProxy } from ".";
@@ -71,6 +72,72 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm
+	 */
+	it("packages database state after verification identifiers are namespaced", async () => {
+		const proxySecret = "shared-proxy-purpose-test-secret";
+		const { auth, client } = await getTestInstance({
+			baseURL: "http://preview.example.com",
+			plugins: [
+				oAuthProxy({
+					productionURL: "http://localhost:3000",
+					secret: proxySecret,
+				}),
+			],
+		});
+		const signIn = await client.signIn.social(
+			{ provider: "google", callbackURL: "/dashboard" },
+			{ throw: true },
+		);
+		if (!signIn.url) throw new Error("OAuth authorization URL missing");
+		const encryptedPackage = new URL(signIn.url).searchParams.get("state");
+		if (!encryptedPackage) throw new Error("OAuth proxy state missing");
+		const payload = parseJSON<{ state: string; isOAuthProxy: boolean }>(
+			await symmetricDecrypt({
+				key: derivePurposeKey(proxySecret, "oauth-proxy-package"),
+				data: encryptedPackage,
+			}),
+		);
+		expect(payload.isOAuthProxy).toBe(true);
+		expect(
+			await (await auth.$context).internalAdapter.findVerificationValue(
+				`auth-state:${payload.state}`,
+			),
+		).not.toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-r4xp-prcw-77qf
+	 */
+	it.each([
+		["/callback/google/oauth-proxy", "state-cookie"],
+		["/oauth-proxy-callback", "state-cookie"],
+		["/callback/google/oauth-proxy", "pre-upgrade"],
+		["/oauth-proxy-callback", "pre-upgrade"],
+	] as const)("rejects profile input on %s encrypted for %s", async (path, source) => {
+		const { auth, client } = await getTestInstance({
+			plugins: [oAuthProxy()],
+		});
+		const { secretConfig } = await auth.$context;
+		const encryptedState = await symmetricEncrypt({
+			key:
+				source === "state-cookie"
+					? derivePurposeKey(secretConfig, "oauth-state-cookie")
+					: secretConfig,
+			data: JSON.stringify({ callbackURL: "/dashboard" }),
+		});
+		let location: string | null = null;
+		await client.$fetch(
+			`${path}?callbackURL=%2Fdashboard&profile=${encodeURIComponent(encryptedState)}`,
+			{
+				onError(context) {
+					location = context.response.headers.get("location");
+				},
+			},
+		);
+		expect(location).toContain("error=invalid_profile");
+	});
 	it("redirects when a provider cannot derive a stable account identity", async () => {
 		const provider = {
 			id: "invalid-account-identity",
@@ -637,7 +704,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify we can decrypt the state package
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-package"),
 				data: encryptedState!,
 			});
 
@@ -746,7 +813,7 @@ describe("oauth-proxy", async () => {
 
 			// Decrypt and verify profile data
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
@@ -1230,7 +1297,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1281,7 +1348,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1356,7 +1423,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify profile data structure
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
@@ -1404,7 +1471,7 @@ describe("oauth-proxy", async () => {
 			};
 			const expectInvalidPayload = async (payload: unknown) => {
 				const encryptedPayload = await symmetricEncrypt({
-					key: secret,
+					key: derivePurposeKey(secret, "oauth-proxy-profile"),
 					data: JSON.stringify(payload),
 				});
 				await client.$fetch(
@@ -1507,7 +1574,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify: encrypted with dedicated secret, NOT with global secret
 			const decryptedWithDedicated = await symmetricDecrypt({
-				key: dedicatedSecret,
+				key: derivePurposeKey(dedicatedSecret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			expect(decryptedWithDedicated).toContain("user@email.com");
@@ -1597,7 +1664,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encrypted = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1764,7 +1831,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -2245,7 +2312,7 @@ describe("oauth-proxy", async () => {
 		expect(encryptedProfile).toBeTruthy();
 		const { secret } = await auth.$context;
 		const decrypted = await symmetricDecrypt({
-			key: secret,
+			key: derivePurposeKey(secret, "oauth-proxy-profile"),
 			data: encryptedProfile!,
 		});
 		const payload = parseJSON<{
