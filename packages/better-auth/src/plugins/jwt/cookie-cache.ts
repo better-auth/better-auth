@@ -4,7 +4,13 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { decodeProtectedHeader, importJWK, jwtVerify, SignJWT } from "jose";
+import {
+	createRemoteJWKSet,
+	decodeProtectedHeader,
+	importJWK,
+	jwtVerify,
+	SignJWT,
+} from "jose";
 import {
 	getSessionCookieJwtVerifyOptions,
 	parseSessionCookieJwtPayload,
@@ -67,16 +73,47 @@ async function importLocalPublicKey(
 	};
 }
 
+const REMOTE_JWKS_CACHE_MS = 10 * 60 * 1000;
+const remoteJwks = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+function remoteJwkSet(url: string) {
+	const cached = remoteJwks.get(url);
+	if (cached) {
+		return cached;
+	}
+	const set = createRemoteJWKSet(new URL(url), {
+		cacheMaxAge: REMOTE_JWKS_CACHE_MS,
+	});
+	remoteJwks.set(url, set);
+	return set;
+}
+
 async function signCookieCacheJWT(
 	ctx: GenericEndpointContext,
 	payload: CookieCachePayload,
 	expiresIn: number,
 	options?: JwtOptions,
 ): Promise<string> {
+	const now = Math.floor(Date.now() / 1000);
+	if (options?.jwt?.sign) {
+		return options.jwt.sign(
+			{
+				...payload,
+				sid: payload.session.token,
+				iat: now,
+				exp: now + expiresIn,
+				iss: getCookieCacheJwtIssuer(ctx),
+				aud: SESSION_COOKIE_JWT_AUDIENCE,
+				sub: payload.user.id,
+			},
+			{ typ: SESSION_COOKIE_JWT_TYPE },
+		);
+	}
+
 	const resolvedKey = await resolveSigningKey(ctx, options);
 	if (!resolvedKey) {
 		throw new BetterAuthError(
-			"`jwt({ sessionCookieCache: true })` requires locally managed JWT plugin keys and does not support `jwt.sign`.",
+			"`jwt({ sessionCookieCache: true })` requires a `jwt.sign` function or locally managed JWT plugin keys.",
 		);
 	}
 
@@ -112,17 +149,30 @@ async function verifyCookieCacheJWT(
 			return null;
 		}
 
-		const key = await importLocalPublicKey(ctx, token, options);
-		if (!key) {
-			return null;
-		}
-
-		const { payload } = await jwtVerify(token, key.publicKey, {
+		const verifyOptions = {
 			...getSessionCookieJwtVerifyOptions({
 				issuer: getCookieCacheJwtIssuer(ctx),
 			}),
-			algorithms: [key.alg],
-		});
+		};
+		const { payload } = options?.jwks?.remoteUrl
+			? await jwtVerify(
+					token,
+					remoteJwkSet(options.jwks.remoteUrl),
+					verifyOptions,
+				)
+			: await (async () => {
+					const key = await importLocalPublicKey(ctx, token, options);
+					if (!key) {
+						return { payload: null };
+					}
+					return jwtVerify(token, key.publicKey, {
+						...verifyOptions,
+						algorithms: [key.alg],
+					});
+				})();
+		if (!payload) {
+			return null;
+		}
 
 		const parsed = parseSessionCookieJwtPayload(payload);
 		if (!parsed) {
