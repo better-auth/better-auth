@@ -1,3 +1,4 @@
+import type { memoryAdapter } from "better-auth/adapters/memory";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { describe, expect, vi } from "vitest";
@@ -6,6 +7,7 @@ import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
 import type { StripeMock } from "./_fixtures";
 import {
+	asyncList,
 	TEST_LOOKUP_KEYS,
 	TEST_PRICES,
 	TEST_WEBHOOK_SECRET,
@@ -2206,6 +2208,297 @@ describe("stripe checkout", () => {
 				}),
 				undefined,
 			);
+		});
+	});
+
+	/**
+	 * @see https://docs.stripe.com/api/checkout/sessions/expire
+	 */
+	describe("superseded checkout sessions", () => {
+		const setup = async (
+			memory: ReturnType<typeof memoryAdapter>,
+			stripeOptions: StripeOptions,
+			email: string,
+		) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+			const { user } = await client.signUp.email(
+				{ ...testUser, email },
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const findSubscriptions = () =>
+				ctx.adapter.findMany<Subscription>({
+					model: "subscription",
+					where: [{ field: "referenceId", value: user.id }],
+				});
+
+			// The first checkout leaves a pending subscription behind.
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+			const [pending] = await findSubscriptions();
+			if (!pending) throw new Error("expected a pending subscription");
+
+			const restartCheckout = () =>
+				client.subscription.upgrade({
+					plan: "premium",
+					fetchOptions: { headers },
+				});
+
+			return { pending, findSubscriptions, restartCheckout };
+		};
+
+		const previousSession = (
+			overrides: Partial<Stripe.Checkout.Session>,
+		): Partial<Stripe.Checkout.Session> => ({
+			mode: "subscription",
+			status: "open",
+			...overrides,
+		});
+
+		test("expires the open checkout session of a pending subscription before creating a new one", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { pending, findSubscriptions, restartCheckout } = await setup(
+				memory,
+				stripeOptions,
+				"supersede-checkout@email.com",
+			);
+			expect(pending.status).toBe("incomplete");
+
+			stripeMock.checkout.sessions.list.mockReturnValueOnce(
+				asyncList([
+					previousSession({
+						id: "cs_starter",
+						metadata: { subscriptionId: pending.id },
+					}),
+				]),
+			);
+			stripeMock.checkout.sessions.create.mockClear();
+
+			const res = await restartCheckout();
+			expect(res.data?.url).toBeDefined();
+
+			expect(stripeMock.checkout.sessions.list).toHaveBeenCalledWith(
+				expect.objectContaining({ customer: pending.stripeCustomerId }),
+			);
+			expect(stripeMock.checkout.sessions.expire).toHaveBeenCalledTimes(1);
+			expect(stripeMock.checkout.sessions.expire).toHaveBeenCalledWith(
+				"cs_starter",
+			);
+			expect(stripeMock.checkout.sessions.create).toHaveBeenCalledTimes(1);
+			expect(
+				stripeMock.checkout.sessions.expire.mock.invocationCallOrder[0],
+			).toBeLessThan(
+				stripeMock.checkout.sessions.create.mock.invocationCallOrder[0]!,
+			);
+
+			const subscriptions = await findSubscriptions();
+			expect(subscriptions).toHaveLength(1);
+			expect(subscriptions[0]).toMatchObject({
+				id: pending.id,
+				plan: "premium",
+				status: "incomplete",
+			});
+		});
+
+		test("expires every open checkout session of the pending subscription, however many sessions the customer has", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { pending, restartCheckout } = await setup(
+				memory,
+				stripeOptions,
+				"many-sessions@email.com",
+			);
+
+			const unrelated = Array.from({ length: 150 }, (_, index) =>
+				previousSession({
+					id: `cs_unrelated_${index}`,
+					metadata: { subscriptionId: "another-subscription" },
+				}),
+			);
+			stripeMock.checkout.sessions.list.mockReturnValueOnce(
+				asyncList([
+					previousSession({
+						id: "cs_newest",
+						metadata: { subscriptionId: pending.id },
+					}),
+					...unrelated,
+					previousSession({
+						id: "cs_oldest",
+						metadata: { subscriptionId: pending.id },
+					}),
+				]),
+			);
+
+			const res = await restartCheckout();
+			expect(res.data?.url).toBeDefined();
+
+			expect(
+				stripeMock.checkout.sessions.expire.mock.calls.map(([id]) => id),
+			).toEqual(["cs_newest", "cs_oldest"]);
+		});
+
+		test("keeps checkout sessions that do not belong to the pending subscription", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { pending, restartCheckout } = await setup(
+				memory,
+				stripeOptions,
+				"keep-unrelated-checkout@email.com",
+			);
+
+			stripeMock.checkout.sessions.list.mockReturnValueOnce(
+				asyncList([
+					previousSession({
+						id: "cs_one_time_payment",
+						mode: "payment",
+						metadata: { subscriptionId: pending.id },
+					}),
+					previousSession({
+						id: "cs_completed_one_time_payment",
+						mode: "payment",
+						status: "complete",
+						metadata: { subscriptionId: pending.id },
+					}),
+					previousSession({
+						id: "cs_other_subscription",
+						metadata: { subscriptionId: "another-subscription" },
+					}),
+					previousSession({
+						id: "cs_other_completed_subscription",
+						status: "complete",
+						metadata: { subscriptionId: "another-subscription" },
+					}),
+					previousSession({ id: "cs_without_metadata", metadata: null }),
+					previousSession({
+						id: "cs_already_expired",
+						status: "expired",
+						metadata: { subscriptionId: pending.id },
+					}),
+				]),
+			);
+			stripeMock.checkout.sessions.create.mockClear();
+
+			const res = await restartCheckout();
+			expect(res.data?.url).toBeDefined();
+
+			expect(stripeMock.checkout.sessions.list).toHaveBeenCalledTimes(1);
+			expect(stripeMock.checkout.sessions.expire).not.toHaveBeenCalled();
+			expect(stripeMock.checkout.sessions.create).toHaveBeenCalledTimes(1);
+		});
+
+		test("does not look for previous checkout sessions on a first checkout", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			await setup(memory, stripeOptions, "first-checkout@email.com");
+
+			expect(stripeMock.checkout.sessions.list).not.toHaveBeenCalled();
+			expect(stripeMock.checkout.sessions.expire).not.toHaveBeenCalled();
+			expect(stripeMock.checkout.sessions.create).toHaveBeenCalledTimes(1);
+		});
+
+		test("refuses a new checkout when the previous one was completed and its webhook has not arrived", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { pending, findSubscriptions, restartCheckout } = await setup(
+				memory,
+				stripeOptions,
+				"completed-checkout@email.com",
+			);
+
+			stripeMock.checkout.sessions.list.mockReturnValueOnce(
+				asyncList([
+					previousSession({
+						id: "cs_still_open",
+						metadata: { subscriptionId: pending.id },
+					}),
+					previousSession({
+						id: "cs_paid",
+						status: "complete",
+						metadata: { subscriptionId: pending.id },
+					}),
+				]),
+			);
+			stripeMock.checkout.sessions.create.mockClear();
+
+			const res = await restartCheckout();
+
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("CHECKOUT_ALREADY_COMPLETED");
+			expect(stripeMock.checkout.sessions.expire).toHaveBeenCalledWith(
+				"cs_still_open",
+			);
+			expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+			expect(await findSubscriptions()).toMatchObject([
+				{ id: pending.id, plan: "starter", status: "incomplete" },
+			]);
+		});
+
+		test("does not create a new checkout session when the open one cannot be expired", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { pending, findSubscriptions, restartCheckout } = await setup(
+				memory,
+				stripeOptions,
+				"expire-fails@email.com",
+			);
+
+			stripeMock.checkout.sessions.list.mockReturnValueOnce(
+				asyncList([
+					previousSession({
+						id: "cs_just_completed",
+						metadata: { subscriptionId: pending.id },
+					}),
+				]),
+			);
+			stripeMock.checkout.sessions.expire.mockRejectedValueOnce(
+				Object.assign(
+					new Error(
+						"Only Checkout Sessions with a status of open can be expired.",
+					),
+					{ code: "checkout_session_not_open" },
+				),
+			);
+			stripeMock.checkout.sessions.create.mockClear();
+
+			const res = await restartCheckout();
+
+			expect(res.error?.status).toBe(400);
+			expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+			expect(await findSubscriptions()).toMatchObject([
+				{ id: pending.id, plan: "starter", status: "incomplete" },
+			]);
 		});
 	});
 });
