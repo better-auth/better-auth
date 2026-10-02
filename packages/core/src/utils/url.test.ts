@@ -6,57 +6,182 @@ import {
 import {
 	appendQueryParams,
 	appendURLPath,
+	appendURLSegment,
 	isSafeUrlScheme,
 	normalizePathname,
 } from "./url";
 
 describe("appendURLPath", () => {
-	it("keeps the base path and joins segments at one slash boundary", () => {
-		expect(
-			appendURLPath("https://auth.example.com/api/auth/", "oauth2", "token"),
-		).toBe("https://auth.example.com/api/auth/oauth2/token");
-		expect(
-			appendURLPath("https://auth.example.com/", "oauth2", "userinfo"),
-		).toBe("https://auth.example.com/oauth2/userinfo");
-		expect(
-			appendURLPath("https://auth.example.com/api/auth///", "oauth2"),
-		).toBe("https://auth.example.com/api/auth/oauth2");
-		expect(appendURLPath("https://auth.example.com/api//auth/", "oauth2")).toBe(
-			"https://auth.example.com/api//auth/oauth2",
+	it("treats an empty base URL as a root-relative path", () => {
+		expect(appendURLPath("", "/reset-password")).toBe("/reset-password");
+	});
+
+	it("appends to a root-relative base URL", () => {
+		expect(appendURLPath("/api/auth/", "/get-session")).toBe(
+			"/api/auth/get-session",
+		);
+		expect(appendURLPath("/api/auth?lang=ko#step", "/get-session")).toBe(
+			"/api/auth/get-session?lang=ko#step",
 		);
 	});
 
-	it("encodes each segment without changing an encoded base path", () => {
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-4.2
+	 */
+	it("rejects authority-like paths", () => {
+		expect(() => appendURLPath("/", "//evil.example/path")).toThrow(TypeError);
+	});
+
+	/**
+	 * @see https://url.spec.whatwg.org/#url-path-segment
+	 * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-4.2
+	 */
+	it("rejects authority-like results after normalizing the base", () => {
+		for (const base of ["/a/..//evil.example", "/%2e//evil.example"]) {
+			expect(() => appendURLPath(base, "/callback")).toThrow(TypeError);
+		}
+		expect(appendURLPath("/a/..", "/callback")).toBe("/callback");
+	});
+
+	/**
+	 * @see https://url.spec.whatwg.org/#dom-url-pathname
+	 */
+	it("supports an empty path on a hierarchical URL", () => {
+		expect(appendURLPath("foo://host", "/callback")).toBe(
+			"foo://host/callback",
+		);
+	});
+
+	it("preserves path separators and existing escapes", () => {
 		expect(
 			appendURLPath(
-				"https://auth.example.com/tenant%2Fone/",
-				"team/member",
-				"x?y#z",
+				"https://auth.example.com/api/auth/",
+				"/.well-known/jwks.json",
 			),
-		).toBe("https://auth.example.com/tenant%2Fone/team%2Fmember/x%3Fy%23z");
+		).toBe("https://auth.example.com/api/auth/.well-known/jwks.json");
 		expect(
-			appendURLPath("https://auth.example.com", "hello world", "한글"),
-		).toBe("https://auth.example.com/hello%20world/%ED%95%9C%EA%B8%80");
+			appendURLPath("https://auth.example.com/api/auth", "/keys/%2F"),
+		).toBe("https://auth.example.com/api/auth/keys/%2F");
+		expect(
+			appendURLPath("https://auth.example.com/api/auth", "/keys/%FE"),
+		).toBe("https://auth.example.com/api/auth/keys/%FE");
+	});
+
+	it("keeps the base path and joins paths at one slash boundary", () => {
+		expect(
+			appendURLPath("https://auth.example.com/api/auth/", "/oauth2/token"),
+		).toBe("https://auth.example.com/api/auth/oauth2/token");
+		expect(appendURLPath("https://auth.example.com/", "/oauth2/userinfo")).toBe(
+			"https://auth.example.com/oauth2/userinfo",
+		);
+		expect(
+			appendURLPath("https://auth.example.com/api/auth///", "/oauth2"),
+		).toBe("https://auth.example.com/api/auth/oauth2");
+		expect(
+			appendURLPath("https://auth.example.com/api//auth/", "/oauth2"),
+		).toBe("https://auth.example.com/api//auth/oauth2");
+	});
+
+	it("preserves an encoded base path", () => {
+		expect(
+			appendURLPath("https://auth.example.com/tenant%2Fone/", "/team/member"),
+		).toBe("https://auth.example.com/tenant%2Fone/team/member");
+		expect(appendURLPath("https://auth.example.com/%FE/", "/jwks")).toBe(
+			"https://auth.example.com/%FE/jwks",
+		);
+	});
+
+	it("encodes characters in an unescaped path without changing its separators", () => {
+		expect(
+			appendURLPath("https://auth.example.com/api/auth", "/사용자/a b"),
+		).toBe(
+			"https://auth.example.com/api/auth/%EC%82%AC%EC%9A%A9%EC%9E%90/a%20b",
+		);
 	});
 
 	it("preserves existing query and fragment components", () => {
 		expect(
 			appendURLPath(
 				"https://auth.example.com/api/auth?lang=ko#details",
-				"oauth2",
-				"token",
+				"/oauth2/token",
 			),
 		).toBe("https://auth.example.com/api/auth/oauth2/token?lang=ko#details");
 	});
 
-	it("rejects values that could change the endpoint authority or path", () => {
-		expect(() => appendURLPath("/api/auth", "oauth2")).toThrow(TypeError);
-		expect(() => appendURLPath("mailto:user@example.com", "oauth2")).toThrow(
+	it("rejects paths that cannot be appended as given", () => {
+		expect(() => appendURLPath("//evil.example", "/oauth2")).toThrow(TypeError);
+		expect(() => appendURLPath("mailto:user@example.com", "/oauth2")).toThrow(
 			TypeError,
 		);
+		expect(() => appendURLPath("https://auth.example.com", "oauth2")).toThrow(
+			TypeError,
+		);
+		expect(() =>
+			appendURLPath("https://auth.example.com/api/auth", "/.."),
+		).toThrow(TypeError);
+		expect(() =>
+			appendURLPath("https://auth.example.com/api/auth", "/a/%2e%2e/b"),
+		).toThrow(TypeError);
+		expect(() =>
+			appendURLPath("https://auth.example.com/api/auth", "/jwks?x=1"),
+		).toThrow(TypeError);
+	});
+
+	/**
+	 * @see https://url.spec.whatwg.org/#concept-basic-url-parser
+	 */
+	it("rejects tabs and newlines before URL parsing strips them", () => {
+		for (const path of ["/a\tb", "/a\nb", "/a\rb"]) {
+			expect(() => appendURLPath("https://auth.example.com", path)).toThrow(
+				TypeError,
+			);
+		}
+	});
+
+	it("rejects every URL dot-segment spelling", () => {
+		for (const segment of [".", "%2e", "..", ".%2e", "%2e.", "%2e%2e"]) {
+			expect(() =>
+				appendURLPath("https://auth.example.com/api/auth", `/a/${segment}/b`),
+			).toThrow(TypeError);
+		}
+	});
+});
+
+describe("appendURLSegment", () => {
+	it("treats an empty base URL as a root-relative path", () => {
+		expect(appendURLSegment("", "team/member")).toBe("/team%2Fmember");
+	});
+
+	it("encodes a segment under a root-relative base URL", () => {
+		expect(appendURLSegment("/api/auth/callback", "team/member")).toBe(
+			"/api/auth/callback/team%2Fmember",
+		);
+	});
+
+	it("encodes a raw segment without changing path structure", () => {
+		expect(
+			appendURLSegment(
+				"https://auth.example.com/tenant%2Fone/callback",
+				"team/member?x#y",
+			),
+		).toBe(
+			"https://auth.example.com/tenant%2Fone/callback/team%2Fmember%3Fx%23y",
+		);
+		expect(appendURLSegment("https://auth.example.com", "%2F")).toBe(
+			"https://auth.example.com/%252F",
+		);
+		expect(appendURLSegment("https://auth.example.com", "%ZZ")).toBe(
+			"https://auth.example.com/%25ZZ",
+		);
+		expect(appendURLSegment("https://auth.example.com", "한글")).toBe(
+			"https://auth.example.com/%ED%95%9C%EA%B8%80",
+		);
+	});
+
+	it("rejects empty and dot segments", () => {
 		for (const segment of ["", ".", ".."] as const) {
 			expect(() =>
-				appendURLPath("https://auth.example.com/api/auth", segment),
+				appendURLSegment("https://auth.example.com/api/auth", segment),
 			).toThrow(TypeError);
 		}
 	});

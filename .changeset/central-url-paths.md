@@ -2,4 +2,4 @@
 "@better-auth/core": patch
 ---
 
-Add `appendURLPath` for composing endpoint URLs from base paths and path segments.
+Add `appendURLPath` for appending endpoint paths and `appendURLSegment` for encoding dynamic path values.
