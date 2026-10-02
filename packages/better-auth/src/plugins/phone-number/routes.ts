@@ -198,7 +198,9 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			);
 			return ctx.json({
 				token: session.token,
-				user: parseUserOutput(ctx.context.options, user),
+				user: parseUserOutput(ctx.context.options, user, {
+					path: ctx.path,
+				}),
 			});
 		},
 	);
@@ -567,7 +569,9 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.session.token,
-					user: parseUserOutput(ctx.context.options, user),
+					user: parseUserOutput(ctx.context.options, user, {
+						path: ctx.path,
+					}),
 				});
 			}
 
@@ -657,14 +661,18 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.token,
-					user: parseUserOutput(ctx.context.options, user),
+					user: parseUserOutput(ctx.context.options, user, {
+						path: ctx.path,
+					}),
 				});
 			}
 
 			return ctx.json({
 				status: true,
 				token: null,
-				user: parseUserOutput(ctx.context.options, user),
+				user: parseUserOutput(ctx.context.options, user, {
+					path: ctx.path,
+				}),
 			});
 		},
 	);
