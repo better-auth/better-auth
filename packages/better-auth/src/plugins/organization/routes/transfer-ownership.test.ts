@@ -1,4 +1,7 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
+import { createAuthMiddleware, getSessionFromCtx } from "../../../api";
+import { parseSetCookieHeader } from "../../../cookies";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
@@ -803,17 +806,49 @@ describe("transferOwnership confirmation hardening", () => {
 		};
 	}
 
-	it("explicit mode requires a callbackURL and leaves no token behind without one", async () => {
+	it("explicit mode rejects a callbackURL that can't be a usable emailed link, leaving no token behind", async () => {
 		const { auth, db, capture, headers, org, newOwnerMember } = await setup({
 			confirmationMode: "explicit",
 		});
-
-		await expect(
-			auth.api.transferOwnership({
-				body: { organizationId: org.id, newOwnerMemberId: newOwnerMember!.id },
-				headers,
-			}),
-		).rejects.toMatchObject({ body: { code: "CALLBACK_URL_REQUIRED" } });
+		const { baseURL } = await auth.$context;
+		const cases: Array<[string | undefined, string]> = [
+			// the emailed link is the app's own URL, so there must be one
+			[undefined, "CALLBACK_URL_REQUIRED"],
+			// a mail client can't resolve a relative link
+			["/org/settings", "INVALID_CALLBACK_URL"],
+			// must not lead back to the instant GET callback, however it's written
+			[
+				`${baseURL}/organization/transfer-ownership/callback`,
+				"INVALID_CALLBACK_URL",
+			],
+			[
+				`${baseURL}/organization/transfer-ownership/callback/`,
+				"INVALID_CALLBACK_URL",
+			],
+			[
+				`${baseURL}/organization/transfer%2Downership/callback`,
+				"INVALID_CALLBACK_URL",
+			],
+			[
+				`${baseURL}/organization/foo/../transfer-ownership/callback?x=1#y`,
+				"INVALID_CALLBACK_URL",
+			],
+			// the real token is appended, so one that's already there is rejected
+			["https://app.example.com/org?token=stale", "INVALID_CALLBACK_URL"],
+		];
+		for (const [callbackURL, code] of cases) {
+			await expect(
+				auth.api.transferOwnership({
+					body: {
+						organizationId: org.id,
+						newOwnerMemberId: newOwnerMember!.id,
+						callbackURL,
+					},
+					headers,
+				}),
+				String(callbackURL),
+			).rejects.toMatchObject({ body: { code } });
+		}
 
 		expect(capture.token).toBe("");
 		const rows = await db.findMany({ model: "verification" });
@@ -851,7 +886,7 @@ describe("transferOwnership confirmation hardening", () => {
 			body: {
 				organizationId: org.id,
 				newOwnerMemberId: newOwnerMember!.id,
-				callbackURL: "/org/settings",
+				callbackURL: "https://app.example.com/org/settings",
 			},
 			headers,
 		});
@@ -872,7 +907,7 @@ describe("transferOwnership confirmation hardening", () => {
 			body: {
 				organizationId: org.id,
 				newOwnerMemberId: newOwnerMember!.id,
-				callbackURL: "/org/settings",
+				callbackURL: "https://app.example.com/org/settings",
 			},
 			headers,
 		});
@@ -909,7 +944,7 @@ describe("transferOwnership confirmation hardening", () => {
 			body: {
 				organizationId: org.id,
 				newOwnerMemberId: newOwnerMember!.id,
-				callbackURL: "/org/settings",
+				callbackURL: "https://app.example.com/org/settings",
 			},
 			headers,
 		});
@@ -928,5 +963,156 @@ describe("transferOwnership confirmation hardening", () => {
 		}
 		const stillOwner = await auth.api.getActiveMember({ headers });
 		expect(stillOwner!.role).toBe("owner");
+	});
+});
+
+/**
+ * An earlier hook can already have loaded the session from the cookie cache
+ * into `ctx.context.session`; `getSessionFromCtx` returns that without
+ * honoring `disableCookieCache`. The token endpoints must still re-read the
+ * session store, so a revoked session that still carries a valid cached
+ * cookie can't authorize a transfer.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11529
+ */
+describe("transferOwnership confirmation is revocation-aware with cookie cache", () => {
+	const preloadCachedSessionPlugin = {
+		id: "preload-cached-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return (
+							ctx.path?.startsWith("/organization/transfer-ownership/") === true
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
+	async function setup() {
+		const capture = { token: "" };
+		const instance = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				preloadCachedSessionPlugin,
+				organization({
+					ownershipTransfer: {
+						confirmationMode: "explicit",
+						async sendTransferOwnershipVerification({ token }) {
+							capture.token = token;
+						},
+					},
+				}),
+			],
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+		});
+		const { headers } = await instance.signInWithTestUser();
+		// Materialize the cookie cache: the signed `session_data` cookie comes
+		// back on the get-session response and has to be sent along explicitly.
+		const sessionRes = await instance.client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cached = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") ?? "",
+					).get("better-auth.session_data")?.value;
+					if (cached) {
+						headers.set(
+							"cookie",
+							`${headers.get("cookie")}; better-auth.session_data=${cached}`,
+						);
+					}
+				},
+			},
+		});
+		const sessionToken = sessionRes.data?.session.token;
+		const ownerUserId = sessionRes.data?.user.id;
+		if (!sessionToken || !ownerUserId) throw new Error("expected a session");
+		expect(headers.get("cookie")).toContain("better-auth.session_data=");
+
+		const org = await instance.auth.api.createOrganization({
+			body: { name: "Acme", slug: "acme" },
+			headers,
+		});
+		const newUser = await instance.auth.api.signUpEmail({
+			body: {
+				email: "new-owner@test.com",
+				name: "New Owner",
+				password: "password",
+			},
+		});
+		const newOwnerMember = await instance.auth.api.addMember({
+			body: {
+				organizationId: org!.id,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+		await instance.auth.api.transferOwnership({
+			body: {
+				organizationId: org!.id,
+				newOwnerMemberId: newOwnerMember!.id,
+				callbackURL: "https://app.example.com/org/settings",
+			},
+			headers,
+		});
+		expect(capture.token.length).toBe(32);
+		// Revoke the backing session server-side; the signed session_data cookie
+		// is still present in `headers`.
+		await instance.db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+		return { ...instance, capture, headers, org: org!, ownerUserId };
+	}
+
+	async function ownerRoles(
+		db: Awaited<ReturnType<typeof setup>>["db"],
+		organizationId: string,
+	) {
+		const members = await db.findMany({
+			model: "member",
+			where: [{ field: "organizationId", value: organizationId }],
+		});
+		return (members as Array<{ userId: string; role: string }>)
+			.filter((member) => member.role.split(",").includes("owner"))
+			.map((member) => member.userId);
+	}
+
+	it("rejects /organization/transfer-ownership/confirm from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, org, ownerUserId } = await setup();
+		await expect(
+			auth.api.transferOwnershipConfirm({
+				body: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		expect(await ownerRoles(db, org.id)).toEqual([ownerUserId]);
+	});
+
+	it("rejects /organization/transfer-ownership/preview from a revoked but cached session", async () => {
+		const { auth, capture, headers } = await setup();
+		await expect(
+			auth.api.transferOwnershipPreview({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+	});
+
+	it("rejects /organization/transfer-ownership/callback from a revoked but cached session", async () => {
+		const { auth, db, capture, headers, org, ownerUserId } = await setup();
+		await expect(
+			auth.api.transferOwnershipCallback({
+				query: { token: capture.token },
+				headers,
+			}),
+		).rejects.toThrow();
+		expect(await ownerRoles(db, org.id)).toEqual([ownerUserId]);
 	});
 });
