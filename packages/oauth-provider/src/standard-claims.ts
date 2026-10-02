@@ -13,10 +13,11 @@ interface StandardClaimDefinition {
 	resolve: (user: User) => unknown;
 }
 
-function splitDisplayName(name: string): {
+function splitDisplayName(name: string | null | undefined): {
 	given?: string;
 	family?: string;
 } {
+	if (!name) return {};
 	const parts = name.split(" ").filter((part) => part !== "");
 	if (parts.length <= 1) return {};
 	return { given: parts.slice(0, -1).join(" "), family: parts.at(-1) };
