@@ -6,6 +6,7 @@ import { getTestInstance } from "better-auth/test";
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from "jose";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso } from ".";
 import { ssoClient } from "./client";
 
@@ -2551,7 +2552,7 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		// and never into the client-controlled top-level state.
 		const ctx = await sharedRedirectAuth.$context;
 		const verification = await ctx.internalAdapter.findVerificationValue(
-			stateNonce!,
+			getAuthStateVerificationIdentifier(stateNonce!),
 		);
 		const parsedState = JSON.parse(verification!.value);
 		expect(parsedState.serverContext?.ssoProviderReference?.providerId).toBe(
