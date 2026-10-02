@@ -6,6 +6,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
+import { assertExplicitCallbackURL } from "../../utils/confirmation-url";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -753,19 +754,19 @@ export const changeEmail = createAuthEndpoint(
 
 		/**
 		 * In explicit mode the emailed link is the app's own URL, so every flow
-		 * that ends in one needs a callbackURL. Checked here, from the session
-		 * and config alone and before the existing-email lookup, so a missing
-		 * callbackURL fails the same way for existing and non-existing emails.
+		 * that ends in one needs a usable callbackURL: an absolute URL that
+		 * doesn't lead back to the instant `/verify-email` link. Checked here,
+		 * from the session, config and request alone and before the
+		 * existing-email lookup, so a bad callbackURL fails the same way for
+		 * existing and non-existing emails.
 		 */
 		if (
 			ctx.context.options.user.changeEmail.confirmationMode === "explicit" &&
-			!canUpdateWithoutVerification &&
-			!ctx.body.callbackURL
+			!canUpdateWithoutVerification
 		) {
-			throw APIError.from(
-				"BAD_REQUEST",
-				BASE_ERROR_CODES.CALLBACK_URL_REQUIRED,
-			);
+			assertExplicitCallbackURL(ctx.context.baseURL, ctx.body.callbackURL, [
+				"/verify-email",
+			]);
 		}
 
 		const existingUser =

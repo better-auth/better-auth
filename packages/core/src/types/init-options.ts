@@ -1012,6 +1012,14 @@ export type BetterAuthOptions = {
 					 *   clients and security scanners that open links automatically
 					 *   (Outlook Safe Links, link-preview proxies).
 					 *
+					 * In `"explicit"` mode the emailed link is built from the request's
+					 * `callbackURL`, so every change request must include one: an
+					 * absolute URL to the app's confirmation page that doesn't point at
+					 * `/verify-email`. For HTTP requests its origin must be in
+					 * `trustedOrigins`; calls made directly through `auth.api` skip that
+					 * check, so pass a URL you control. Otherwise the request is rejected
+					 * with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL`.
+					 *
 					 * @default "instant"
 					 */
 					confirmationMode?: "instant" | "explicit";

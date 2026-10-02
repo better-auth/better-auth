@@ -255,7 +255,7 @@ describe("updateUser", () => {
 
 			const newEmail = "replay-target@email.com";
 			await auth.api.changeEmail({
-				body: { newEmail, callbackURL: "/account" },
+				body: { newEmail, callbackURL: "https://app.example.com/account" },
 				headers,
 			});
 			expect(capturedToken.length).toBeGreaterThan(0);
@@ -319,7 +319,7 @@ describe("updateUser", () => {
 
 			const newEmail = "concurrent-confirm-target@email.com";
 			await auth.api.changeEmail({
-				body: { newEmail, callbackURL: "/account" },
+				body: { newEmail, callbackURL: "https://app.example.com/account" },
 				headers,
 			});
 			expect(capturedToken.length).toBeGreaterThan(0);
@@ -382,7 +382,7 @@ describe("updateUser", () => {
 			await auth.api.changeEmail({
 				body: {
 					newEmail: "no-session-target@email.com",
-					callbackURL: "/account",
+					callbackURL: "https://app.example.com/account",
 				},
 				headers,
 			});
@@ -443,7 +443,7 @@ describe("updateUser", () => {
 			await auth.api.changeEmail({
 				body: {
 					newEmail: "disabled-after-send@email.com",
-					callbackURL: "/account",
+					callbackURL: "https://app.example.com/account",
 				},
 				headers,
 			});
@@ -472,7 +472,7 @@ describe("updateUser", () => {
 			expect((user as { email: string } | null)?.email).toBe(testUser.email);
 		});
 
-		it("requires a callbackURL, failing the same way for existing and new emails", async () => {
+		it("rejects a callbackURL that can't be a usable emailed link, the same way for existing and new emails", async () => {
 			const sent: string[] = [];
 			const { client, auth, testUser, db, signInWithTestUser } =
 				await getTestInstance({
@@ -497,22 +497,33 @@ describe("updateUser", () => {
 				name: "Taken",
 			});
 
+			const { baseURL } = await auth.$context;
+			const cases: Array<[string | undefined, string]> = [
+				// the emailed link is the app's own URL, so there must be one
+				[undefined, "CALLBACK_URL_REQUIRED"],
+				// a mail client can't resolve a relative link
+				["/account", "INVALID_CALLBACK_URL"],
+				// must not lead back to the instant GET link, directly or via a
+				// trailing slash, a query string, a fragment or dot segments
+				[`${baseURL}/verify-email`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/verify-email/`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/verify-email?x=1#y`, "INVALID_CALLBACK_URL"],
+				[`${baseURL}/foo/../verify-email`, "INVALID_CALLBACK_URL"],
+			];
+
 			// If this only failed for a new address, the 400-vs-200 difference
 			// would reveal which emails are registered.
-			const results: Array<string | undefined> = [];
 			await runWithUser(async () => {
-				for (const newEmail of [
-					"already-taken@email.com",
-					"brand-new-address@email.com",
-				]) {
-					const res = await client.changeEmail({ newEmail });
-					results.push(res.error?.code);
+				for (const [callbackURL, code] of cases) {
+					for (const newEmail of [
+						"already-taken@email.com",
+						"brand-new-address@email.com",
+					]) {
+						const res = await client.changeEmail({ newEmail, callbackURL });
+						expect(res.error?.code, `${callbackURL} -> ${newEmail}`).toBe(code);
+					}
 				}
 			});
-			expect(results).toEqual([
-				"CALLBACK_URL_REQUIRED",
-				"CALLBACK_URL_REQUIRED",
-			]);
 			expect(sent).toHaveLength(0);
 			const session = await auth.api.getSession({ headers });
 			expect(session?.user.email).toBe(testUser.email);
@@ -543,7 +554,7 @@ describe("updateUser", () => {
 			await auth.api.changeEmail({
 				body: {
 					newEmail: "wrong-token-type@email.com",
-					callbackURL: "/account",
+					callbackURL: "https://app.example.com/account",
 				},
 				headers,
 			});
@@ -589,7 +600,7 @@ describe("updateUser", () => {
 			await auth.api.changeEmail({
 				body: {
 					newEmail: "someone-elses-target@email.com",
-					callbackURL: "/account",
+					callbackURL: "https://app.example.com/account",
 				},
 				headers,
 			});

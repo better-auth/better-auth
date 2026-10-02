@@ -10,6 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
+import { assertExplicitCallbackURL } from "../../utils/confirmation-url";
 import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx, isStateful } from "./session";
@@ -227,9 +228,11 @@ export const sendVerificationEmail = createAuthEndpoint(
  * (`requestType: "change-email-verification"`). In `"explicit"` confirmation
  * mode this points at the app's callbackURL with the token attached instead
  * of better-auth's own `/verify-email` endpoint, so visiting the emailed
- * link previews the change instead of applying it directly. `callbackURL` is
- * already validated against `trustedOrigins` by the global
- * `originCheckMiddleware` (api/index.ts) on both call sites before this runs.
+ * link previews the change instead of applying it directly. For HTTP
+ * requests, `callbackURL`'s origin is already validated against
+ * `trustedOrigins` by the global `originCheckMiddleware` (api/index.ts) on
+ * both call sites before this runs; `assertExplicitCallbackURL` adds the
+ * checks that middleware doesn't make.
  */
 export function buildChangeEmailVerificationURL(
 	ctx: GenericEndpointContext,
@@ -239,15 +242,15 @@ export function buildChangeEmailVerificationURL(
 	const confirmationMode =
 		ctx.context.options.user?.changeEmail?.confirmationMode || "instant";
 	if (confirmationMode === "explicit") {
-		// The emailed link is the app's own URL, so there is nothing to send
-		// without one. Thrown before the link is built or sent.
-		if (!callbackURL) {
-			throw APIError.from(
-				"BAD_REQUEST",
-				BASE_ERROR_CODES.CALLBACK_URL_REQUIRED,
-			);
-		}
-		return appendQueryParams(callbackURL, new URLSearchParams({ token }));
+		// The emailed link is the app's own URL, so it must be a usable
+		// absolute URL that doesn't lead back to the instant `/verify-email`
+		// link. Thrown before the link is built or sent.
+		const explicitURL = assertExplicitCallbackURL(
+			ctx.context.baseURL,
+			callbackURL,
+			["/verify-email"],
+		);
+		return appendQueryParams(explicitURL, new URLSearchParams({ token }));
 	}
 	return `${
 		ctx.context.baseURL
