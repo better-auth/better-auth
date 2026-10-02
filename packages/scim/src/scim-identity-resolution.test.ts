@@ -615,6 +615,162 @@ describe("SCIM explicit identity resolution", () => {
 		expect(data.scimIdentityTombstone).toEqual([]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11111
+	 */
+	it("restores an inactive SCIM User when POST reuses its externalId", async () => {
+		const { auth, data } = createIdentityFixture();
+		const first = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "inactive-restore@example.com",
+				externalId: "okta-soft-deactivated-subject",
+				name: { givenName: "Before", familyName: "Restore" },
+				displayName: "Before Restore",
+			},
+			headers: authorization("connection-a-token"),
+		});
+		const original = data.scimUser.find((source) => source.id === first.id);
+		if (!original) throw new Error("Expected the original SCIM source");
+
+		await auth.api.patchSCIMUser({
+			params: { userId: first.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [{ op: "replace", path: "active", value: false }],
+			},
+			headers: authorization("connection-a-token"),
+		});
+		expect(data.scimUser.find((source) => source.id === first.id)?.active).toBe(
+			false,
+		);
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "okta-soft-deactivated-subject",
+			}),
+		).resolves.toBeNull();
+
+		const restored = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "inactive-restored@example.com",
+				externalId: "okta-soft-deactivated-subject",
+				name: { givenName: "After", familyName: "Restore" },
+				displayName: "After Restore",
+			},
+			headers: authorization("connection-a-token"),
+		});
+
+		expect(restored.id).toBe(first.id);
+		expect(restored.active).toBe(true);
+		expect(restored.userName).toBe("inactive-restored@example.com");
+		expect(restored.displayName).toBe("After Restore");
+		expect(data.scimUser).toHaveLength(1);
+		expect(data.user).toHaveLength(1);
+		expect(data.scimUser[0]?.userId).toBe(original.userId);
+		expect(data.user[0]).toMatchObject({
+			email: "inactive-restored@example.com",
+			name: "After Restore",
+		});
+		expect(data.scimIdentityTombstone).toEqual([]);
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "okta-soft-deactivated-subject",
+			}),
+		).resolves.toEqual({
+			scimUserId: first.id,
+			userId: original.userId,
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11111
+	 */
+	it("still rejects POST when the matching externalId belongs to an active SCIM User", async () => {
+		const { auth } = createIdentityFixture();
+		await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "active-collision@example.com",
+				externalId: "active-external-id",
+			},
+			headers: authorization("connection-a-token"),
+		});
+
+		await expect(
+			auth.api.createSCIMUser({
+				body: {
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: "active-collision-other@example.com",
+					externalId: "active-external-id",
+				},
+				headers: authorization("connection-a-token"),
+			}),
+		).rejects.toThrowError(
+			expect.objectContaining({
+				statusCode: 409,
+				body: expect.objectContaining({
+					detail: "SCIM User externalId already exists",
+					scimType: "uniqueness",
+				}),
+			}),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11111
+	 */
+	it("still rejects inactive externalId restore when userName belongs to another user", async () => {
+		const { auth, data } = createIdentityFixture();
+		const inactive = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "username-collision-first@example.com",
+				externalId: "username-collision-subject",
+			},
+			headers: authorization("connection-a-token"),
+		});
+		await auth.api.patchSCIMUser({
+			params: { userId: inactive.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [{ op: "replace", path: "active", value: false }],
+			},
+			headers: authorization("connection-a-token"),
+		});
+		await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "username-collision-second@example.com",
+			},
+			headers: authorization("connection-a-token"),
+		});
+
+		await expect(
+			auth.api.createSCIMUser({
+				body: {
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: "username-collision-second@example.com",
+					externalId: "username-collision-subject",
+				},
+				headers: authorization("connection-a-token"),
+			}),
+		).rejects.toThrowError(
+			expect.objectContaining({
+				statusCode: 409,
+				body: expect.objectContaining({
+					detail: "SCIM User userName already exists",
+					scimType: "uniqueness",
+				}),
+			}),
+		);
+		expect(
+			data.scimUser.find((source) => source.id === inactive.id)?.active,
+		).toBe(false);
+	});
+
 	it("revokes sessions only when the final linked source becomes inactive", async () => {
 		const target = createBackingUser();
 		const session = createSession(target.id);
