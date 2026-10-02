@@ -441,9 +441,8 @@ describe("Social Providers", async (c) => {
 			},
 			headers,
 			method: "GET",
-			onError: (c) => {
-				//TODO: fix this
-				cookieSetter(headers)(c as any);
+			onError(context) {
+				cookieSetter(headers)(context as any);
 			},
 		});
 		const session = await client.getSession({
