@@ -136,7 +136,7 @@ describe("lastLoginMethod cookie attributes", () => {
 	});
 
 	/**
-	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis-22#section-4.1.3
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis-22#section-5.7
 	 */
 	describe("with SameSite=None and secure disabled", () => {
 		test.override("options", {
