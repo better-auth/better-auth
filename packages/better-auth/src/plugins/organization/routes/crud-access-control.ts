@@ -133,6 +133,12 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			roleName = normalizeRoleName(roleName);
+			if (roleName.includes(",")) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME,
+				);
+			}
 
 			await checkIfRoleNameIsTakenByPreDefinedRole({
 				role: roleName,
@@ -1047,6 +1053,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				let newRoleName = ctx.body.data.roleName;
 
 				newRoleName = normalizeRoleName(newRoleName);
+				if (newRoleName.includes(",")) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME,
+					);
+				}
 
 				await checkIfRoleNameIsTakenByPreDefinedRole({
 					role: newRoleName,

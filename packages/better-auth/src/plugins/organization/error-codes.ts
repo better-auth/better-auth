@@ -93,4 +93,5 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	ROLE_IS_ASSIGNED_TO_MEMBERS:
 		"Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
 	INVALID_TEAM_ID: "Team id contains a reserved character",
+	INVALID_ROLE_NAME: "Role name cannot contain commas",
 });
