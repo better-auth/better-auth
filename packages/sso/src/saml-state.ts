@@ -1,3 +1,4 @@
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type { GenericEndpointContext, StateData } from "better-auth";
 import { generateGenericState, parseGenericState } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -58,7 +59,8 @@ export async function generateRelayState(
 export async function parseRelayState(c: GenericEndpointContext) {
 	const state = c.body.RelayState;
 	const errorURL =
-		c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		c.context.options.onAPIError?.errorURL ||
+		appendURLPath(c.context.baseURL, "/error");
 
 	let parsedData: StateData;
 
