@@ -98,36 +98,31 @@ export const customSession = <
 					requireHeaders: true,
 				},
 				async (ctx): Promise<Returns | null> => {
-					const session = await getSession()({
+					const { headers, response } = await getSession<O>()({
 						...ctx,
 						method: "GET",
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
 					});
-					/**
-					 * Forwarded before the null check, so that the inner call's
-					 * cookie cleanup (`deleteSessionCookie`) still reaches the
-					 * response when the session is missing or expired.
-					 */
-					if (session?.headers) {
-						for (const cookieStr of session.headers.getSetCookie()) {
-							const parsed = parseSetCookieHeader(cookieStr);
-							parsed.forEach((attrs, name) => {
-								ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
-							});
-						}
-						session.headers.delete("set-cookie");
 
-						session.headers.forEach((value, key) => {
-							ctx.setHeader(key, value);
-						});
+					for (const cookie of headers.getSetCookie()) {
+						for (const [name, attributes] of parseSetCookieHeader(cookie)) {
+							ctx.setCookie(
+								name,
+								attributes.value,
+								toCookieOptions(attributes),
+							);
+						}
 					}
-					if (!session?.response) {
+					headers.delete("set-cookie");
+					headers.forEach((value, name) => ctx.setHeader(name, value));
+
+					if (!response) {
 						return ctx.json(null);
 					}
-					const fnResult = await fn(session.response as any, ctx);
-					return ctx.json(fnResult);
+					const sessionPayload = await fn(response, ctx);
+					return ctx.json(sessionPayload);
 				},
 			),
 		},
