@@ -1,4 +1,4 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -9,7 +9,6 @@ import {
 	getResource,
 	invalidateResourceCache,
 	resetSeedStateForTests,
-	seedResources,
 	seedResourcesOnce,
 } from "./resources";
 import type { OAuthOptions, OAuthResource, Scope } from "./types";
@@ -115,6 +114,57 @@ describe("seedResources (integration via plugin init)", () => {
 		const { auth } = await bootWithResourcesOption({});
 		const row = await readResource(auth, "https://nope.example.com");
 		expect(row).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11294
+	 */
+	it("defers seeding when the Drizzle schema has not been regenerated", async () => {
+		let schemaReady = false;
+		const resources = new Map<string, OAuthResource>();
+		const findOne = vi.fn(
+			async (input: { where: Array<{ value: unknown }> }) => {
+				if (!schemaReady) {
+					throw new Error(
+						'[# Drizzle Adapter]: The model "oauthResources" was not found in the schema object. Please pass the schema directly to the adapter options.',
+					);
+				}
+				const identifier = input.where[0]?.value;
+				return typeof identifier === "string"
+					? (resources.get(identifier) ?? null)
+					: null;
+			},
+		);
+		const create = vi.fn(
+			async (input: { data: { identifier: string } }) => {
+				const resource = { id: "resource", ...input.data } as OAuthResource;
+				resources.set(resource.identifier, resource);
+				return resource;
+			},
+		);
+		const context = {
+			adapter: { create, findOne },
+		} as unknown as AuthContext;
+		const options: OAuthOptions<Scope[]> = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			resources: ["https://api.example.com"],
+		};
+
+		await expect(seedResourcesOnce(context, options)).resolves.toBeUndefined();
+		expect(findOne).toHaveBeenCalledWith({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: "https://api.example.com" }],
+		});
+
+		schemaReady = true;
+		const resource = await getResource(
+			{ context } as GenericEndpointContext,
+			options,
+			"https://api.example.com",
+		);
+		expect(resource).toMatchObject({ identifier: "https://api.example.com" });
+		expect(create).toHaveBeenCalledTimes(1);
 	});
 
 	it("seeds string-form `resources` entries with plugin defaults", async () => {
