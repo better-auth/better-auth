@@ -1,5 +1,11 @@
 # @better-auth/passkey
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
 ## 1.7.7
 
 ## 1.7.6
