@@ -162,6 +162,18 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
+	checkMemberPermission: ReturnType<typeof createCheckMemberPermission<O>>;
+};
+
+type StatementsOf<O extends OrganizationOptions> =
+	O["ac"] extends AccessControl<infer S> ? S : typeof defaultStatements;
+
+type PermissionTypeOf<O extends OrganizationOptions> = {
+	[key in keyof StatementsOf<O>]?: Array<
+		StatementsOf<O>[key] extends readonly unknown[]
+			? ArrayElement<StatementsOf<O>[key]>
+			: never
+	>;
 };
 
 const createHasPermissionBodySchema = z
@@ -180,18 +192,8 @@ const createHasPermissionBodySchema = z
 	);
 
 const createHasPermission = <O extends OrganizationOptions>(options: O) => {
-	type DefaultStatements = typeof defaultStatements;
-	type Statements =
-		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
-	type PermissionType = {
-		[key in keyof Statements]?: Array<
-			Statements[key] extends readonly unknown[]
-				? ArrayElement<Statements[key]>
-				: never
-		>;
-	};
 	type PermissionExclusive = {
-		permissions: PermissionType;
+		permissions: PermissionTypeOf<O>;
 	};
 
 	return createAuthEndpoint(
@@ -289,6 +291,72 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				error: null,
 				success: result,
 			});
+		},
+	);
+};
+
+const createCheckMemberPermissionBodySchema = z.object({
+	userId: z.string(),
+	organizationId: z.string(),
+	permissions: z.record(z.string(), z.array(z.string())),
+});
+
+/**
+ * A server-only function that reports whether a specific member holds the
+ * given permissions in an organization. It is not exposed over HTTP and has no
+ * client method; it takes no session, so the caller is responsible for
+ * authorizing the subject whose permissions are checked.
+ *
+ * `organizationId` is required here, unlike `hasPermission`: there is no
+ * session to fall back to an active organization.
+ *
+ * Unlike the client-side `checkRolePermission`, roles stored in the database by
+ * dynamic access control are resolved.
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.checkMemberPermission`
+ */
+const createCheckMemberPermission = <O extends OrganizationOptions>(
+	options: O,
+) => {
+	return createAuthEndpoint.serverOnly(
+		{
+			method: "POST",
+			body: createCheckMemberPermissionBodySchema,
+			metadata: {
+				$Infer: {
+					body: {} as {
+						userId: string;
+						organizationId: string;
+						permissions: PermissionTypeOf<O>;
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const member = await adapter.findMemberByOrgId({
+				userId: ctx.body.userId,
+				organizationId: ctx.body.organizationId,
+			});
+			if (!member) {
+				// Diverges from `hasPermission`, which throws UNAUTHORIZED here: there is no session to be unauthorized as.
+				return ctx.json({ error: null, success: false });
+			}
+
+			const result = await hasPermission(
+				{
+					role: member.role,
+					options,
+					permissions: ctx.body.permissions as Record<string, string[]>,
+					organizationId: ctx.body.organizationId,
+				},
+				ctx,
+			);
+
+			return ctx.json({ error: null, success: result });
 		},
 	);
 };
@@ -1250,6 +1318,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
 			hasPermission: createHasPermission(opts),
+			checkMemberPermission: createCheckMemberPermission(opts),
 		},
 		schema: {
 			...(schema as BetterAuthPluginDBSchema),
