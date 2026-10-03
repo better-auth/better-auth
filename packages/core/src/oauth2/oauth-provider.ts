@@ -147,8 +147,8 @@ export interface OAuthProvider<
 	 *
 	 * Custom paths must start with `/`.
 	 *
-	 * Endpoints compose `redirectURI = ctx.context.baseURL + callbackPath` per
-	 * request, so the provider must not hardcode an origin or `baseURL` here.
+	 * Endpoints append this path to the resolved `baseURL` per request, so the
+	 * provider must not hardcode an origin or `baseURL` here.
 	 */
 	callbackPath?: string | undefined;
 	createAuthorizationURL: (data: {

@@ -2,6 +2,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import type { RequestEvent } from "@sveltejs/kit";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import { getBaseURL } from "../utils/url";
 import { PACKAGE_VERSION } from "../version";
 import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
@@ -41,7 +42,7 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 	const baseURLStr =
 		typeof options.baseURL === "string" ? options.baseURL : undefined;
 	const baseURL = new URL(
-		`${baseURLStr || _url.origin}${options.basePath || "/api/auth"}`,
+		getBaseURL(baseURLStr || _url.origin, options.basePath) ?? _url.origin,
 	);
 	if (_url.origin !== baseURL.origin) return false;
 	if (
