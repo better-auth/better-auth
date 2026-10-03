@@ -1725,6 +1725,89 @@ describe("stripe checkout", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9130
 	 */
 	describe("getCheckoutSessionParams subscription_data merge", () => {
+		test("keeps checkout URLs canonical with a trailing auth base slash", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					baseURL: "http://localhost:3000/api/auth/",
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const email = "trailing-checkout@example.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await client.subscription.upgrade({
+				plan: "starter",
+				cancelUrl: "/billing?tab=plans",
+				successUrl: "/billing/complete",
+				fetchOptions: { headers },
+			});
+
+			const checkout =
+				stripeMock.checkout.sessions.create.mock.calls.at(-1)?.[0];
+			expect(checkout?.cancel_url).toBe(
+				"http://localhost:3000/billing?tab=plans",
+			);
+			expect(new URL(checkout!.success_url!).pathname).toBe(
+				"/api/auth/subscription/success",
+			);
+			expect(checkout?.success_url).toContain(
+				"checkoutSessionId={CHECKOUT_SESSION_ID}",
+			);
+		});
+
+		test("rejects protocol-relative checkout redirects", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					advanced: { disableOriginCheck: true, disableCSRFCheck: true },
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const email = "protocol-relative-checkout@example.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const result = await client.subscription.upgrade({
+				plan: "starter",
+				successUrl: "/billing/complete",
+				cancelUrl: "//evil.example/cancel",
+				fetchOptions: { headers },
+			});
+
+			expect(result.error?.status).toBe(400);
+			expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+		});
+
 		const buildTrialOptions = (mock: StripeMock): StripeOptions => ({
 			stripeClient: mock as unknown as Stripe,
 			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
