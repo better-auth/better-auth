@@ -1,3 +1,4 @@
+import { getAuthTables } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
@@ -2467,6 +2468,8 @@ describe("Additional Fields", async () => {
 		}[],
 		teamMember: [] as {
 			id: string;
+			teamMemberOrganizationId?: string | undefined;
+			teamMemberHiddenField?: string | undefined;
 		}[],
 	};
 
@@ -2523,6 +2526,19 @@ describe("Additional Fields", async () => {
 					},
 				},
 			},
+			teamMember: {
+				additionalFields: {
+					teamMemberOrganizationId: {
+						type: "string",
+						required: false,
+					},
+					teamMemberHiddenField: {
+						type: "string",
+						required: false,
+						returned: false,
+					},
+				},
+			},
 			invitation: {
 				additionalFields: {
 					invitationRequiredField: {
@@ -2541,6 +2557,14 @@ describe("Additional Fields", async () => {
 			},
 		},
 		invitationLimit: 3,
+		organizationHooks: {
+			beforeAddTeamMember: async ({ organization }) => ({
+				data: {
+					teamMemberOrganizationId: organization.id,
+					teamMemberHiddenField: "secret",
+				},
+			}),
+		},
 	} satisfies OrganizationOptions;
 
 	const orgClientPlugin = organizationClient({
@@ -3521,6 +3545,131 @@ describe("Additional Fields", async () => {
 		expect(row).toBeDefined();
 		expect(row.teamOptionalField).toBe("hey3");
 		expect(row.teamRequiredField).toBe("hey4");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10707
+	 */
+	it("should declare teamMember additional fields on the table", async () => {
+		const tables = getAuthTables(auth.options);
+		expect(tables.teamMember?.fields.teamMemberOrganizationId).toBeDefined();
+		expect(tables.teamMember?.fields.teamMemberHiddenField).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10707
+	 */
+	it("should apply data returned from beforeAddTeamMember", async () => {
+		const hookTeam = await auth.api.createTeam({
+			body: {
+				name: "hook-team",
+				teamRequiredField: "hey",
+				organizationId: org.id,
+			},
+			headers,
+		});
+
+		const teamMember = await auth.api.addTeamMember({
+			body: {
+				teamId: hookTeam.id,
+				userId: org.members[0]!.userId,
+				organizationId: org.id,
+			},
+			headers,
+		});
+
+		const row = db.teamMember.find((x) => x.id === teamMember.id)!;
+		expect(row).toBeDefined();
+		expect(row.teamMemberOrganizationId).toBe(org.id);
+		expect(row.teamMemberHiddenField).toBe("secret");
+
+		const listed = (await auth.api.listTeamMembers({
+			query: { teamId: hookTeam.id },
+			headers,
+		})) as Record<string, unknown>[];
+		const found = listed.find((x) => x.id === teamMember.id)!;
+		expect(found).toBeDefined();
+		expect(found.teamMemberOrganizationId).toBe(org.id);
+		// declared `returned: false`, so it must not leave the endpoint
+		expect(found.teamMemberHiddenField).toBeUndefined();
+	});
+});
+
+/**
+ * The seat-limited insert path (`addTeamMemberWithLimit`) is a second, separate
+ * call site that the reported scenario never reaches.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10707
+ */
+describe("beforeAddTeamMember data with maximumMembersPerTeam", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: { enabled: true, maximumMembersPerTeam: 5 },
+				schema: {
+					teamMember: {
+						additionalFields: {
+							teamMemberOrganizationId: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+				},
+				organizationHooks: {
+					beforeAddTeamMember: async ({ organization }) => ({
+						data: { teamMemberOrganizationId: organization.id },
+					}),
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("applies the hook data on the seat-limited insert path", async () => {
+		const org = await auth.api.createOrganization({
+			body: { name: "limited", slug: "limited" },
+			headers,
+		});
+		if (!org) throw new Error("Organization is null");
+		const team = await auth.api.createTeam({
+			body: { name: "limited-team", organizationId: org.id },
+			headers,
+		});
+
+		const teamMember = await auth.api.addTeamMember({
+			body: {
+				teamId: team.id,
+				userId: org.members[0]!.userId,
+				organizationId: org.id,
+			},
+			headers,
+		});
+
+		const [listed] = (await auth.api.listTeamMembers({
+			query: { teamId: team.id },
+			headers,
+		})) as Record<string, unknown>[];
+		expect(listed!.id).toBe(teamMember.id);
+		expect(listed!.teamMemberOrganizationId).toBe(org.id);
+	});
+
+	/**
+	 * The client schema has to mirror the server one, otherwise declaring only
+	 * `teamMember` additional fields makes `inferOrgAdditionalFields` produce an
+	 * object with no properties in common with the client option type.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10707
+	 */
+	it("lets the client schema declare teamMember additional fields", () => {
+		const clientSchema = {
+			teamMember: {
+				additionalFields: {
+					teamMemberOrganizationId: { type: "string", required: false },
+				},
+			},
+		} satisfies NonNullable<Parameters<typeof organizationClient>[0]>["schema"];
+		expect(clientSchema.teamMember.additionalFields).toBeDefined();
 	});
 });
 
