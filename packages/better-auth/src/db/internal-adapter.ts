@@ -225,6 +225,32 @@ export const createInternalAdapter = (
 		}
 	}
 
+	/**
+	 * Whether `id` addresses the cached row. A row without an id, cached before
+	 * this method existed, is addressed by no id at all, as is a key that holds
+	 * nothing.
+	 */
+	const addressesRow = (
+		row: Verification | null,
+		id: string,
+	): row is Verification => row?.id !== undefined && row.id === id;
+
+	/**
+	 * The cache keys a verification row can live under: the current one, and
+	 * for a non-plain `storeIdentifier` the plain key a row written before
+	 * that setting still uses.
+	 */
+	const verificationCacheKeys = async (identifier: string) => {
+		const storageOption = getStorageOption(
+			identifier,
+			options.verification?.storeIdentifier,
+		);
+		const storedIdentifier = await processIdentifier(identifier, storageOption);
+		return storageOption && storageOption !== "plain"
+			? [`verification:${storedIdentifier}`, `verification:${identifier}`]
+			: [`verification:${storedIdentifier}`];
+	};
+
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -1249,11 +1275,21 @@ export const createInternalAdapter = (
 				storageOption,
 			);
 
+			// When secondary storage is the only store, the database adapter won't
+			// run, so generate an id ourselves; the by-id methods need one to tell
+			// the addressed row from another.
+			let verificationId: string | undefined;
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				const generatedId = ctx.generateId({ model: "verification" });
+				verificationId = generatedId !== false ? generatedId : generateId();
+			}
+
 			const verification = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
+					...(verificationId ? { id: verificationId } : {}),
 					...data,
 					identifier: storedIdentifier,
 				},
@@ -1363,6 +1399,26 @@ export const createInternalAdapter = (
 			if (!secondaryStorage || options.verification?.storeInDatabase) {
 				await deleteWithHooks(
 					[{ field: "identifier", value: storedIdentifier }],
+					"verification",
+					undefined,
+				);
+			}
+		},
+		deleteVerificationById: async (identifier: string, id: string) => {
+			if (secondaryStorage) {
+				// Every key is visited: a row left cached under a later key would
+				// resurface once the row shadowing it is consumed.
+				for (const key of await verificationCacheKeys(identifier)) {
+					const cached = await secondaryStorage.get(key);
+					if (cached && addressesRow(safeJSONParse<Verification>(cached), id)) {
+						await secondaryStorage.delete(key);
+					}
+				}
+			}
+
+			if (!secondaryStorage || options.verification?.storeInDatabase) {
+				await deleteWithHooks(
+					[{ field: "id", value: id }],
 					"verification",
 					undefined,
 				);
@@ -1647,6 +1703,60 @@ export const createInternalAdapter = (
 				return verification;
 			}
 			return data as Verification;
+		},
+		updateVerificationById: async (
+			identifier: string,
+			id: string,
+			data: Partial<Verification>,
+		) => {
+			const keys = secondaryStorage
+				? await verificationCacheKeys(identifier)
+				: [];
+
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				for (const key of keys) {
+					const cached = await secondaryStorage.get(key);
+					const parsed = cached ? safeJSONParse<Verification>(cached) : null;
+					// Reads resolve to the first key that holds a row, so a row under a
+					// later key is shadowed by it and must not be addressed.
+					if (parsed && !addressesRow(parsed, id)) return null;
+					if (!addressesRow(parsed, id)) continue;
+
+					const updated = { ...parsed, ...data };
+					const expiresAt = updated.expiresAt;
+					const ttl = getTTLSeconds(
+						expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
+					);
+					if (ttl > 0) {
+						await secondaryStorage.set(key, JSON.stringify(updated), ttl);
+					}
+					return updated;
+				}
+				return null;
+			}
+
+			// The database decides whether the row is still there. The cache entry is
+			// evicted rather than rewritten: writing the row back could overwrite a
+			// replacement a concurrent request has just cached, whereas a miss is
+			// served from the database.
+			const updated = await updateWithHooks<Verification>(
+				data,
+				[{ field: "id", value: id }],
+				"verification",
+				undefined,
+			);
+			if (secondaryStorage) {
+				for (const key of keys) {
+					const cached = await secondaryStorage.get(key);
+					if (
+						cached &&
+						(updated || addressesRow(safeJSONParse<Verification>(cached), id))
+					) {
+						await secondaryStorage.delete(key);
+					}
+				}
+			}
+			return updated;
 		},
 		refreshUserSessions,
 	};
