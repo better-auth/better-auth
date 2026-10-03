@@ -19,6 +19,7 @@ describe("toZodSchema", () => {
 
 			expect(schema.shape).toHaveProperty("name");
 			expect(schema.shape).toHaveProperty("secretField");
+			expectTypeOf<typeof schema.shape>().toHaveProperty("secretField");
 		});
 
 		it("should exclude fields with returned: false from output schema (isClientSide: false)", () => {
@@ -32,6 +33,7 @@ describe("toZodSchema", () => {
 
 			expect(schema.shape).toHaveProperty("name");
 			expect(schema.shape).not.toHaveProperty("secretField");
+			expectTypeOf<typeof schema.shape>().not.toHaveProperty("secretField");
 		});
 	});
 
@@ -81,6 +83,15 @@ describe("toZodSchema", () => {
 		expectTypeOf<
 			FieldAttributeToSchema<{ type: "string"; input: false }, true>
 		>().toEqualTypeOf<never>();
+		expectTypeOf<
+			FieldAttributeToSchema<
+				{ type: "string"; input: false; returned: false },
+				false
+			>
+		>().toEqualTypeOf<never>();
+		expectTypeOf<
+			FieldAttributeToSchema<{ type: "string"; returned: false }, boolean>
+		>().toEqualTypeOf<z.ZodString>();
 	});
 
 	describe("required: false field nullability", () => {
