@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type * as z from "zod";
+import type { FieldAttributeToSchema } from "./to-zod";
 import { toZodSchema } from "./to-zod";
 
 describe("toZodSchema", () => {
@@ -49,6 +51,36 @@ describe("toZodSchema", () => {
 			expect(schema.parse(valid)).toEqual(valid);
 			expect(schema.safeParse({ ...valid, age: "1" }).success).toBe(false);
 		});
+	});
+
+	/**
+	 * @see https://zod.dev/api?id=json
+	 */
+	describe("json field type", () => {
+		it("should accept JSON values and reject non-JSON values", () => {
+			const schema = toZodSchema({
+				fields: { metadata: { type: "json", required: true } },
+				isClientSide: true,
+			});
+
+			expect(
+				schema.safeParse({ metadata: { nested: ["value", 1, true, null] } })
+					.success,
+			).toBe(true);
+			expect(schema.safeParse({ metadata: new Date() }).success).toBe(false);
+		});
+	});
+
+	it("should preserve field attribute schema types", () => {
+		expectTypeOf<
+			FieldAttributeToSchema<{ type: "string" }>
+		>().toEqualTypeOf<z.ZodString>();
+		expectTypeOf<FieldAttributeToSchema<Record<string, never>>>().toEqualTypeOf<
+			Record<string, never>
+		>();
+		expectTypeOf<
+			FieldAttributeToSchema<{ type: "string"; input: false }, true>
+		>().toEqualTypeOf<never>();
 	});
 
 	describe("required: false field nullability", () => {

@@ -37,7 +37,7 @@ export function toZodSchema<
 
 		let schema: ZodType;
 		if (field.type === "json") {
-			schema = (z as any).json ? (z as any).json() : z.any();
+			schema = z.json();
 		} else if (field.type === "string[]" || field.type === "number[]") {
 			schema = z.array(field.type === "string[]" ? z.string() : z.number());
 		} else if (Array.isArray(field.type)) {
@@ -70,7 +70,7 @@ export type FieldAttributeToSchema<
 	Field extends DBFieldAttribute | Record<string, never>,
 	// if it's client side, then field attributes of `input` that are false should be removed
 	isClientSide extends boolean = false,
-> = Field extends { type: any }
+> = Field extends DBFieldAttribute
 	? GetInput<isClientSide, Field, GetRequired<Field, GetType<Field>>>
 	: Record<string, never>;
 
