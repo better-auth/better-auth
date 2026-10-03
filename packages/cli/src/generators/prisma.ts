@@ -1,15 +1,24 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
+import type {
+	ExpectedSchema,
+	IntrospectedTable,
+	ResolvedDBTableIndex,
+} from "@better-auth/core/db/internal";
 import {
+	diffSchema,
+	formatSchemaFinding,
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
-import { produceSchema } from "@mrleebo/prisma-ast";
+import {
+	getSchema as parsePrismaSchema,
+	produceSchema,
+} from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
@@ -101,6 +110,40 @@ function prismaIndexMatches(
 	);
 }
 
+/**
+ * The models an existing schema declares, read the way the comparison wants
+ * them: each model by name, each scalar or enum field by name. A relation
+ * field is not a column and is skipped.
+ */
+function introspectPrismaSchema(schemaPrisma: string): IntrospectedTable[] {
+	const models = parsePrismaSchema(schemaPrisma).list.filter(
+		(block) => block.type === "model",
+	);
+	const modelNames = new Set(models.map((model) => model.name));
+	return models.map((model) => ({
+		name: model.name,
+		columns: model.properties.flatMap((property) => {
+			if (property.type !== "field") return [];
+			const relation =
+				(typeof property.fieldType === "string" &&
+					modelNames.has(property.fieldType)) ||
+				property.attributes?.some((attribute) => attribute.name === "relation");
+			if (relation) return [];
+			return [
+				{
+					name: property.name,
+					nullable: property.optional === true,
+					hasDefault:
+						property.attributes?.some(
+							(attribute) =>
+								attribute.name === "default" || attribute.name === "updatedAt",
+						) ?? false,
+				},
+			];
+		}),
+	}));
+}
+
 export const generatePrismaSchema: SchemaGenerator = async ({
 	adapter,
 	options,
@@ -187,6 +230,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 			}
 		});
+	}
+
+	const expectedModels: ExpectedSchema = {};
+	for (const table in tables) {
+		if (isMigrationDisabled(table)) continue;
+		const customModelName = tables[table]?.modelName || table;
+		const modelName = capitalizeFirstLetter(getModelName(customModelName));
+		const entry = (expectedModels[modelName] ??= { fields: {} });
+		for (const [field, attr] of Object.entries(tables[table]?.fields ?? {})) {
+			entry.fields[attr.fieldName || field] = attr;
+		}
 	}
 
 	const manyToManyRelations = new Map();
@@ -714,10 +768,19 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const schemaChanged = schema.trim() !== schemaPrisma.trim();
 
+	// Columns the existing schema requires that Better Auth never writes. The
+	// generated code keeps them, so the user has to relax them by hand.
+	const schemaProblems = schemaPrismaExist
+		? diffSchema(expectedModels, introspectPrismaSchema(schemaPrisma))
+				.filter((finding) => finding.kind === "unexpected-required-column")
+				.map((finding) => formatSchemaFinding(finding, "prisma"))
+		: [];
+
 	return {
 		code: schemaChanged ? schema : "",
 		fileName: filePath,
 		overwrite: schemaPrismaExist && schemaChanged,
+		schemaProblems,
 	};
 };
 

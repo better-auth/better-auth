@@ -56,9 +56,7 @@ export type AuthClient<Option extends BetterAuthClientOptions> =
 	UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			hydrateSession: (
-				session: NonNullable<ClientSession<Option>> | null,
-			) => void;
+			hydrateSession(session: NonNullable<ClientSession<Option>> | null): void;
 			useSession: Atom<{
 				data: ClientSession<Option>;
 				error: BetterFetchError | null;

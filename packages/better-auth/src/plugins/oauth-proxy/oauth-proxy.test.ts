@@ -11,8 +11,14 @@ import {
 	it,
 	vi,
 } from "vitest";
+import {
+	addOAuthServerContext,
+	createAuthMiddleware,
+	getOAuthState,
+} from "../../api";
 import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { derivePurposeKey } from "../../crypto/purpose";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { oAuthProxy } from ".";
@@ -48,6 +54,8 @@ beforeAll(async () => {
 				access_token: "test",
 				refresh_token: "test",
 				id_token: testIdToken,
+				expires_in: 3600,
+				refresh_token_expires_in: 86400,
 			});
 		}),
 	];
@@ -64,6 +72,72 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm
+	 */
+	it("packages database state after verification identifiers are namespaced", async () => {
+		const proxySecret = "shared-proxy-purpose-test-secret";
+		const { auth, client } = await getTestInstance({
+			baseURL: "http://preview.example.com",
+			plugins: [
+				oAuthProxy({
+					productionURL: "http://localhost:3000",
+					secret: proxySecret,
+				}),
+			],
+		});
+		const signIn = await client.signIn.social(
+			{ provider: "google", callbackURL: "/dashboard" },
+			{ throw: true },
+		);
+		if (!signIn.url) throw new Error("OAuth authorization URL missing");
+		const encryptedPackage = new URL(signIn.url).searchParams.get("state");
+		if (!encryptedPackage) throw new Error("OAuth proxy state missing");
+		const payload = parseJSON<{ state: string; isOAuthProxy: boolean }>(
+			await symmetricDecrypt({
+				key: derivePurposeKey(proxySecret, "oauth-proxy-package"),
+				data: encryptedPackage,
+			}),
+		);
+		expect(payload.isOAuthProxy).toBe(true);
+		expect(
+			await (await auth.$context).internalAdapter.findVerificationValue(
+				`auth-state:${payload.state}`,
+			),
+		).not.toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-r4xp-prcw-77qf
+	 */
+	it.each([
+		["/callback/google/oauth-proxy", "state-cookie"],
+		["/oauth-proxy-callback", "state-cookie"],
+		["/callback/google/oauth-proxy", "pre-upgrade"],
+		["/oauth-proxy-callback", "pre-upgrade"],
+	] as const)("rejects profile input on %s encrypted for %s", async (path, source) => {
+		const { auth, client } = await getTestInstance({
+			plugins: [oAuthProxy()],
+		});
+		const { secretConfig } = await auth.$context;
+		const encryptedState = await symmetricEncrypt({
+			key:
+				source === "state-cookie"
+					? derivePurposeKey(secretConfig, "oauth-state-cookie")
+					: secretConfig,
+			data: JSON.stringify({ callbackURL: "/dashboard" }),
+		});
+		let location: string | null = null;
+		await client.$fetch(
+			`${path}?callbackURL=%2Fdashboard&profile=${encodeURIComponent(encryptedState)}`,
+			{
+				onError(context) {
+					location = context.response.headers.get("location");
+				},
+			},
+		);
+		expect(location).toContain("error=invalid_profile");
+	});
 	it("redirects when a provider cannot derive a stable account identity", async () => {
 		const provider = {
 			id: "invalid-account-identity",
@@ -119,6 +193,205 @@ describe("oauth-proxy", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9390
+	 */
+	describe("account linking", () => {
+		const proxySecret = "shared-oauth-proxy-secret";
+		const socialProviders = {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				verifyIdToken: async () => true,
+			},
+		};
+
+		async function createAccountLinkingFlow() {
+			const preview = await getTestInstance({
+				baseURL: "http://preview.example.com",
+				secret: "preview-main-secret",
+				plugins: [
+					oAuthProxy({
+						productionURL: "http://localhost:3000",
+						secret: proxySecret,
+					}),
+				],
+				socialProviders,
+				account: {
+					accountLinking: { allowDifferentEmails: true },
+				},
+			});
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					secret: "production-main-secret",
+					plugins: [oAuthProxy({ secret: proxySecret })],
+					socialProviders,
+				},
+				{ disableTestUser: true },
+			);
+			const { user, headers } = await preview.signInWithTestUser();
+
+			async function completeLink(accessToken: string, scope: string) {
+				let tokenRedirectURI: string | null = null;
+				server.use(
+					http.post(
+						"https://oauth2.googleapis.com/token",
+						async ({ request }) => {
+							const body = await request.formData();
+							const redirectURI = body.get("redirect_uri");
+							tokenRedirectURI =
+								typeof redirectURI === "string" ? redirectURI : null;
+							return HttpResponse.json({
+								access_token: accessToken,
+								refresh_token: "test",
+								id_token: testIdToken,
+								expires_in: 3600,
+								refresh_token_expires_in: 86400,
+								scope,
+							});
+						},
+					),
+				);
+				const link = await preview.client.linkSocial(
+					{
+						provider: "google",
+						callbackURL: "/settings",
+					},
+					{ headers },
+				);
+				const authorizationURL = link.data?.url;
+				if (!authorizationURL) throw new Error("Authorization URL is missing");
+				const authorization = new URL(authorizationURL);
+				const authorizationRedirectURI =
+					authorization.searchParams.get("redirect_uri");
+				const state = authorization.searchParams.get("state");
+				if (!state) throw new Error("OAuth state is missing");
+
+				let proxyCallbackURL: string | null = null;
+				await production.client.$fetch(
+					`/callback/google?code=test&state=${encodeURIComponent(state)}`,
+					{
+						onError(context) {
+							proxyCallbackURL = context.response.headers.get("location");
+						},
+					},
+				);
+				if (!proxyCallbackURL) throw new Error("Proxy callback URL is missing");
+
+				const proxyCallback = new URL(proxyCallbackURL);
+				const callbackPath = `${proxyCallback.pathname.replace(
+					"/api/auth",
+					"",
+				)}${proxyCallback.search}`;
+				let finalRedirect: string | null = null;
+				await preview.client.$fetch(callbackPath, {
+					headers,
+					onError(context) {
+						finalRedirect = context.response.headers.get("location");
+					},
+				});
+
+				return {
+					authorizationRedirectURI,
+					finalRedirect,
+					tokenRedirectURI,
+				};
+			}
+
+			return { completeLink, preview, user };
+		}
+
+		it("creates and updates the provider account for the initiating user", async () => {
+			const { completeLink, preview, user } = await createAccountLinkingFlow();
+			const previewContext = await preview.auth.$context;
+			const sessionsBefore = await previewContext.adapter.findMany<{
+				id: string;
+			}>({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			});
+			const firstLink = await completeLink(
+				"initial-access-token",
+				"openid profile",
+			);
+
+			const accountsAfterFirstLink =
+				await previewContext.internalAdapter.findAccounts(user.id);
+			const firstGoogleAccount = accountsAfterFirstLink.find(
+				(account) => account.providerId === "google",
+			);
+			expect(firstLink.authorizationRedirectURI).toBe(
+				"http://localhost:3000/api/auth/callback/google",
+			);
+			expect(firstLink.tokenRedirectURI).toBe(
+				firstLink.authorizationRedirectURI,
+			);
+			expect(firstLink.finalRedirect).toBe("/settings");
+			expect(firstGoogleAccount?.scope).toBe("openid,profile");
+
+			const secondLink = await completeLink(
+				"updated-access-token",
+				"https://www.googleapis.com/auth/drive.readonly",
+			);
+			const accountsAfterSecondLink =
+				await previewContext.internalAdapter.findAccounts(user.id);
+			const googleAccounts = accountsAfterSecondLink.filter(
+				(account) => account.providerId === "google",
+			);
+			const sessionsAfter = await previewContext.adapter.findMany<{
+				id: string;
+			}>({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			});
+
+			expect(secondLink.finalRedirect).toBe("/settings");
+			expect(googleAccounts).toHaveLength(1);
+			expect(googleAccounts[0]?.accessToken).toBe("updated-access-token");
+			expect(googleAccounts[0]?.scope?.split(",").sort()).toEqual([
+				"https://www.googleapis.com/auth/drive.readonly",
+				"openid",
+				"profile",
+			]);
+			expect(sessionsAfter.map((session) => session.id)).toEqual(
+				sessionsBefore.map((session) => session.id),
+			);
+		});
+
+		it("links an account directly with an ID token", async () => {
+			const { auth, client, signInWithTestUser } = await getTestInstance({
+				baseURL: "http://preview.example.com",
+				plugins: [oAuthProxy({ productionURL: "http://localhost:3000" })],
+				socialProviders,
+				account: {
+					accountLinking: { allowDifferentEmails: true },
+				},
+			});
+			const { headers, user } = await signInWithTestUser();
+
+			const result = await client.linkSocial(
+				{
+					provider: "google",
+					idToken: { token: testIdToken },
+				},
+				{ headers },
+			);
+
+			expect(result.error).toBeNull();
+			expect(result.data).toMatchObject({
+				status: true,
+				redirect: false,
+			});
+
+			const context = await auth.$context;
+			const accounts = await context.internalAdapter.findAccounts(user.id);
+			expect(accounts.some((account) => account.providerId === "google")).toBe(
+				true,
+			);
+		});
+	});
+
 	it("should redirect to proxy url with profile data (passthrough)", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
@@ -153,7 +426,7 @@ describe("oauth-proxy", async () => {
 					throw new Error("Location header not found");
 				}
 				expect(location).toContain(
-					"http://preview-localhost:3000/api/auth/oauth-proxy-callback",
+					"http://preview-localhost:3000/api/auth/callback/google/oauth-proxy",
 				);
 				expect(location).toContain("callbackURL");
 				// Should have profile parameter (passthrough mode)
@@ -192,7 +465,7 @@ describe("oauth-proxy", async () => {
 				if (!location) {
 					throw new Error("Location header not found");
 				}
-				expect(location).not.toContain("/api/auth/oauth-proxy-callback");
+				expect(location).not.toContain("/api/auth/callback/google/oauth-proxy");
 				expect(location).toContain("/dashboard");
 			},
 		});
@@ -230,7 +503,7 @@ describe("oauth-proxy", async () => {
 					throw new Error("Location header not found");
 				}
 				expect(location).toContain(
-					"https://myapp.com/api/auth/oauth-proxy-callback?callbackURL=%2Fdashboard",
+					"https://myapp.com/api/auth/callback/google/oauth-proxy?callbackURL=%2Fdashboard",
 				);
 				// Should have profile parameter (passthrough mode)
 				const profile = new URL(location).searchParams.get("profile");
@@ -309,7 +582,7 @@ describe("oauth-proxy", async () => {
 				if (!location) {
 					throw new Error("Location header not found");
 				}
-				expect(location).not.toContain("/api/auth/oauth-proxy-callback");
+				expect(location).not.toContain("/api/auth/callback/google/oauth-proxy");
 				expect(location).toContain("/dashboard");
 			},
 		});
@@ -389,7 +662,7 @@ describe("oauth-proxy", async () => {
 						expect(location).toBeTruthy();
 
 						// Should redirect to proxy callback with profile data
-						expect(location).toContain("/oauth-proxy-callback");
+						expect(location).toContain("/callback/google/oauth-proxy");
 						expect(location).toContain("callbackURL");
 						expect(location).toContain("profile");
 					},
@@ -431,7 +704,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify we can decrypt the state package
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-package"),
 				data: encryptedState!,
 			});
 
@@ -488,7 +761,7 @@ describe("oauth-proxy", async () => {
 					const location = context.response.headers.get("location");
 
 					// Should NOT redirect to proxy
-					expect(location).not.toContain("/oauth-proxy-callback");
+					expect(location).not.toContain("/callback/google/oauth-proxy");
 					expect(location).toContain("/dashboard");
 				},
 			});
@@ -540,7 +813,7 @@ describe("oauth-proxy", async () => {
 
 			// Decrypt and verify profile data
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
@@ -566,7 +839,6 @@ describe("oauth-proxy", async () => {
 			expect(payload.userInfo.email).toBe("user@email.com");
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
-			expect(payload.account.issuer).toBe("https://accounts.google.com");
 			expect(payload.account.accountId).toBe("1234567890");
 			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
@@ -735,6 +1007,186 @@ describe("oauth-proxy", async () => {
 			expect(previewSessions.length).toBe(1);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10562
+		 */
+		it("runs callback hooks with restored OAuth state", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const onCallback = vi.fn();
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							if (ctx.path !== "/sign-in/social") return;
+							await addOAuthServerContext({ callbackObserver: true });
+						}),
+						after: createAuthMiddleware(async (ctx) => {
+							if (!ctx.path?.startsWith("/callback")) return;
+							const oauthState = await getOAuthState();
+							onCallback({
+								newSession: ctx.context.newSession !== null,
+								path: ctx.path,
+								providerId: ctx.params?.id,
+								serverContext: oauthState?.serverContext,
+							});
+						}),
+					},
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const response = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			const state = new URL(response.url!).searchParams.get("state");
+
+			const proxyCallback: { url: URL | null } = { url: null };
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location?.includes("profile=")) {
+							proxyCallback.url = new URL(location);
+						}
+					},
+				},
+			);
+
+			if (!proxyCallback.url) {
+				throw new Error("OAuth proxy callback URL was not returned");
+			}
+			const proxyCallbackURL = proxyCallback.url;
+			const proxyCallbackPath = `${proxyCallbackURL.pathname.replace(
+				"/api/auth",
+				"",
+			)}${proxyCallbackURL.search}`;
+			await preview.client.$fetch(proxyCallbackPath, {
+				onError(context) {
+					expect(context.response.headers.get("location")).toContain(
+						"/dashboard",
+					);
+				},
+			});
+
+			expect(onCallback).toHaveBeenCalledExactlyOnceWith({
+				newSession: true,
+				path: "/callback/:id/oauth-proxy",
+				providerId: "google",
+				serverContext: { callbackObserver: true },
+			});
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10562
+		 */
+		it("rejects mismatched callback providers", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const response = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			const state = new URL(response.url!).searchParams.get("state");
+
+			const proxyCallback: { url: URL | null } = { url: null };
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location?.includes("profile=")) {
+							proxyCallback.url = new URL(location);
+						}
+					},
+				},
+			);
+
+			if (!proxyCallback.url) {
+				throw new Error("OAuth proxy callback URL was not returned");
+			}
+			const proxyCallbackURL = proxyCallback.url;
+			const mismatchedCallbackPath = `${proxyCallbackURL.pathname
+				.replace("/api/auth", "")
+				.replace("/callback/google/", "/callback/github/")}${
+				proxyCallbackURL.search
+			}`;
+			const errorRedirect: { location: string | null } = { location: null };
+			await preview.client.$fetch(mismatchedCallbackPath, {
+				onError(context) {
+					errorRedirect.location = context.response.headers.get("location");
+				},
+			});
+
+			if (!errorRedirect.location) {
+				throw new Error("OAuth proxy error redirect was not returned");
+			}
+			expect(new URL(errorRedirect.location).searchParams.get("error")).toBe(
+				"provider_mismatch",
+			);
+			const previewContext = await preview.auth.$context;
+			expect(await previewContext.internalAdapter.listUsers()).toHaveLength(0);
+		});
+
 		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {
 			const production = await getTestInstance(
 				{
@@ -836,7 +1288,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},
@@ -846,7 +1297,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -888,7 +1339,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},
@@ -898,7 +1348,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -973,7 +1423,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify profile data structure
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
@@ -1003,9 +1453,7 @@ describe("oauth-proxy", async () => {
 				},
 			});
 			const { secret } = await auth.$context;
-
-			// Test missing timestamp
-			const payloadMissingTimestamp = {
+			const validPayload = {
 				userInfo: {
 					id: "123",
 					email: "user@email.com",
@@ -1014,35 +1462,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
-					accountId: "123",
-					accessToken: "test",
-				},
-				state: "test-state",
-				callbackURL: "/dashboard",
-				// timestamp intentionally missing
-			};
-
-			const encrypted1 = await symmetricEncrypt({
-				key: secret,
-				data: JSON.stringify(payloadMissingTimestamp),
-			});
-
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted1}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("error=invalid_payload");
-					},
-				},
-			);
-
-			// Test missing userInfo
-			const payloadMissingUserInfo = {
-				account: {
-					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},
@@ -1050,55 +1469,31 @@ describe("oauth-proxy", async () => {
 				callbackURL: "/dashboard",
 				timestamp: Date.now(),
 			};
-
-			const encrypted2 = await symmetricEncrypt({
-				key: secret,
-				data: JSON.stringify(payloadMissingUserInfo),
-			});
-
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted2}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("error=invalid_payload");
+			const expectInvalidPayload = async (payload: unknown) => {
+				const encryptedPayload = await symmetricEncrypt({
+					key: derivePurposeKey(secret, "oauth-proxy-profile"),
+					data: JSON.stringify(payload),
+				});
+				await client.$fetch(
+					`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encryptedPayload}`,
+					{
+						onError(context) {
+							const location = context.response.headers.get("location");
+							expect(location).toContain("error=invalid_payload");
+						},
 					},
-				},
-			);
-
-			// Test non-numeric timestamp (should not bypass validation)
-			const payloadStringTimestamp = {
-				userInfo: {
-					id: "123",
-					email: "user@email.com",
-					name: "Test User",
-					emailVerified: true,
-				},
-				account: {
-					providerId: "google",
-					issuer: "https://accounts.google.com",
-					accountId: "123",
-					accessToken: "test",
-				},
-				state: "test-state",
-				callbackURL: "/dashboard",
-				timestamp: "not-a-number",
+				);
 			};
 
-			const encrypted3 = await symmetricEncrypt({
-				key: secret,
-				data: JSON.stringify(payloadStringTimestamp),
+			await expectInvalidPayload(null);
+			await expectInvalidPayload({ ...validPayload, callbackURL: "" });
+			await expectInvalidPayload({ ...validPayload, state: "" });
+			await expectInvalidPayload({ ...validPayload, timestamp: undefined });
+			await expectInvalidPayload({ ...validPayload, userInfo: undefined });
+			await expectInvalidPayload({
+				...validPayload,
+				timestamp: "not-a-number",
 			});
-
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted3}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("error=invalid_payload");
-					},
-				},
-			);
 		});
 
 		it("should use dedicated secret instead of global secret", async () => {
@@ -1179,7 +1574,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify: encrypted with dedicated secret, NOT with global secret
 			const decryptedWithDedicated = await symmetricDecrypt({
-				key: dedicatedSecret,
+				key: derivePurposeKey(dedicatedSecret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			expect(decryptedWithDedicated).toContain("user@email.com");
@@ -1213,7 +1608,6 @@ describe("oauth-proxy", async () => {
 			expect(accounts).toContainEqual(
 				expect.objectContaining({
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "1234567890",
 				}),
 			);
@@ -1261,7 +1655,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "google-user-id",
 					accessToken: "test123",
 				},
@@ -1271,7 +1664,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encrypted = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1429,7 +1822,6 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId: "123",
 					accessToken: "test",
 				},
@@ -1439,7 +1831,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1626,7 +2018,7 @@ describe("oauth-proxy", async () => {
 						const location = context.response.headers.get("location");
 						// Should redirect to preview's oauth-proxy-callback
 						expect(location).toContain("preview.example.com");
-						expect(location).toContain("/oauth-proxy-callback");
+						expect(location).toContain("/callback/google/oauth-proxy");
 
 						if (location && location.includes("profile=")) {
 							const url = new URL(location);
@@ -1740,7 +2132,7 @@ describe("oauth-proxy", async () => {
 				{
 					onError(context) {
 						const location = context.response.headers.get("location");
-						expect(location).toContain("/oauth-proxy-callback");
+						expect(location).toContain("/callback/google/oauth-proxy");
 						if (location) {
 							const url = new URL(location);
 							encryptedProfile = url.searchParams.get("profile");
@@ -1832,7 +2224,7 @@ describe("oauth-proxy", async () => {
 				expect(location).not.toContain("error=no_code");
 				expect(location).not.toContain("error=invalid");
 				// Should redirect to proxy callback with profile data
-				expect(location).toContain("/oauth-proxy-callback");
+				expect(location).toContain("/callback/google/oauth-proxy");
 				expect(location).toContain("profile");
 			},
 		});
@@ -1920,7 +2312,7 @@ describe("oauth-proxy", async () => {
 		expect(encryptedProfile).toBeTruthy();
 		const { secret } = await auth.$context;
 		const decrypted = await symmetricDecrypt({
-			key: secret,
+			key: derivePurposeKey(secret, "oauth-proxy-profile"),
 			data: encryptedProfile!,
 		});
 		const payload = parseJSON<{
@@ -1966,7 +2358,7 @@ describe("oauth-proxy current URL trust", () => {
 		// Falls back to the configured base URL, never the untrusted request origin.
 		expect(location).not.toContain("untrusted.example");
 		expect(location).toContain(
-			"https://myapp.com/api/auth/oauth-proxy-callback",
+			"https://myapp.com/api/auth/callback/google/oauth-proxy",
 		);
 	});
 
@@ -1998,7 +2390,7 @@ describe("oauth-proxy current URL trust", () => {
 		);
 		const location = callbackResponse.headers.get("location");
 		expect(location).toContain(
-			"https://preview.myapp.com/api/auth/oauth-proxy-callback",
+			"https://preview.myapp.com/api/auth/callback/google/oauth-proxy",
 		);
 	});
 
@@ -2035,7 +2427,7 @@ describe("oauth-proxy current URL trust", () => {
 			);
 			const location = callbackResponse.headers.get("location");
 			expect(location).toContain(
-				"https://myapp.com/api/auth/oauth-proxy-callback",
+				"https://myapp.com/api/auth/callback/google/oauth-proxy",
 			);
 		} finally {
 			vi.unstubAllEnvs();

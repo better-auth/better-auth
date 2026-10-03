@@ -1,6 +1,15 @@
-import { is, Param, SQL } from "drizzle-orm";
+import { is, Param, SQL, sql } from "drizzle-orm";
+import {
+	boolean,
+	integer,
+	pgTable,
+	text,
+	timestamp,
+} from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
+import type { DB } from "./drizzle-adapter";
 import { drizzleAdapter } from "./drizzle-adapter";
+import { drizzleAdapter as drizzleRelationsV2Adapter } from "./relations-v2";
 
 describe("drizzle-adapter", () => {
 	it("should create drizzle adapter", () => {
@@ -14,6 +23,94 @@ describe("drizzle-adapter", () => {
 		};
 		const adapter = drizzleAdapter(db, config);
 		expect(adapter).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11258
+	 */
+	describe("lazy database initialization", () => {
+		const adapterFactories = [
+			{
+				relations: "Relations v1",
+				createAdapter: drizzleAdapter,
+				relationMetadata: { schema: {} },
+			},
+			{
+				relations: "Relations v2",
+				createAdapter: drizzleRelationsV2Adapter,
+				relationMetadata: { relations: {} },
+			},
+		] as const;
+
+		it.for(
+			adapterFactories,
+		)("should not initialize a lazy database during $relations adapter construction", ({
+			createAdapter,
+		}) => {
+			const db = new Proxy({} as DB, {
+				get() {
+					throw new Error("DATABASE_URL is not set");
+				},
+			});
+
+			expect(() =>
+				createAdapter(db, { provider: "pg" })({
+					secret: "test-secret-that-is-at-least-32-chars-long!!",
+				}),
+			).not.toThrow();
+		});
+
+		it.for(
+			adapterFactories,
+		)("should support a first $relations joined read inside a transaction", async ({
+			createAdapter,
+			relationMetadata,
+		}) => {
+			const findFirst = vi.fn().mockResolvedValue(null);
+			const transactionDatabase = new Proxy(
+				{
+					query: { user: { findFirst } },
+				} as DB,
+				{
+					get(target, property, receiver) {
+						if (property === "_") {
+							throw new Error("Transaction metadata should not be read");
+						}
+						return Reflect.get(target, property, receiver);
+					},
+				},
+			);
+			const database = {
+				_: relationMetadata,
+				transaction: (callback: (transactionDatabase: DB) => unknown) =>
+					callback(transactionDatabase),
+			} as DB;
+			const user = pgTable("user", { id: text("id") });
+			const adapter = createAdapter(database, {
+				provider: "pg",
+				schema: { user },
+				transaction: true,
+			})({
+				advanced: {
+					database: { joins: true, validateSchema: false },
+				},
+			});
+
+			if (!adapter.transaction) {
+				throw new Error("Transaction support should be enabled");
+			}
+
+			await expect(
+				adapter.transaction((transactionAdapter) =>
+					transactionAdapter.findOne({
+						model: "user",
+						where: [],
+						join: { session: true },
+					}),
+				),
+			).resolves.toBeNull();
+			expect(findFirst).toHaveBeenCalledOnce();
+		});
 	});
 
 	it("should use unique column fallback for MySQL creates without an id", async () => {
@@ -206,17 +303,70 @@ describe("drizzle-adapter", () => {
 		});
 	});
 
+	describe("where field validation", () => {
+		it("rejects a missing field in multiple AND conditions before querying", async () => {
+			const account = pgTable("account", {
+				accountId: text("account_id").notNull(),
+			});
+			const select = vi.fn();
+			const adapter = drizzleAdapter(
+				{ _: { fullSchema: { account } }, select },
+				{ provider: "pg", schema: { account } },
+			)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+
+			await expect(
+				adapter.findOne({
+					model: "account",
+					where: [
+						{ field: "providerId", value: "google" },
+						{ field: "accountId", value: "subject" },
+					],
+				}),
+			).rejects.toThrow(
+				'The field "providerId" does not exist in the schema for the model "account"',
+			);
+			expect(select).not.toHaveBeenCalled();
+		});
+
+		it("rejects inherited field names before querying", async () => {
+			const account = pgTable("account", {
+				accountId: text("account_id").notNull(),
+			});
+			const select = vi.fn();
+			const adapter = drizzleAdapter(
+				{ _: { fullSchema: { account } }, select },
+				{ provider: "pg", schema: { account } },
+			)({
+				secret: "test-secret-that-is-at-least-32-chars-long!!",
+				account: { fields: { providerId: "constructor" } },
+			});
+
+			await expect(
+				adapter.findOne({
+					model: "account",
+					where: [
+						{ field: "providerId", value: "google" },
+						{ field: "accountId", value: "subject" },
+					],
+				}),
+			).rejects.toThrow(
+				'The field "constructor" does not exist in the schema for the model "account"',
+			);
+			expect(select).not.toHaveBeenCalled();
+		});
+	});
+
 	describe("updateMany affected-row count", () => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
-		const userTable = {
-			id: { name: "id" },
-			name: { name: "name" },
-			email: { name: "email" },
-			emailVerified: { name: "emailVerified" },
-			image: { name: "image" },
-			createdAt: { name: "createdAt" },
-			updatedAt: { name: "updatedAt" },
-		};
+		const userTable = pgTable("user", {
+			id: text("id"),
+			name: text("name"),
+			email: text("email"),
+			emailVerified: boolean("emailVerified"),
+			image: text("image"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
 
 		/**
 		 * Builds a mock db whose `update().set().where()` chain resolves to the
@@ -310,14 +460,14 @@ describe("drizzle-adapter", () => {
 
 	describe("consumeOne affected-row count", () => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
-		const verificationTable = {
-			id: { name: "id" },
-			identifier: { name: "identifier" },
-			value: { name: "value" },
-			expiresAt: { name: "expiresAt" },
-			createdAt: { name: "createdAt" },
-			updatedAt: { name: "updatedAt" },
-		};
+		const verificationTable = pgTable("verification", {
+			id: text("id"),
+			identifier: text("identifier"),
+			value: text("value"),
+			expiresAt: timestamp("expiresAt"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
 		const verificationRow = {
 			id: "verification-1",
 			identifier: "reset-password:token",
@@ -379,28 +529,33 @@ describe("drizzle-adapter", () => {
 		});
 	});
 
-	describe("incrementOne", () => {
+	// Both entry points carry their own copy of incrementOne, so every case
+	// below runs against each; a fix landing in one copy but not the other is
+	// caught here, without a database.
+	describe.each([
+		{ relations: "Relations v1", adapterFactory: drizzleAdapter },
+		{ relations: "Relations v2", adapterFactory: drizzleRelationsV2Adapter },
+	])("incrementOne ($relations)", ({ adapterFactory }) => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
-		// `attempts` is a plain numeric column the increment targets; the rest
-		// mirror the default user table so the factory's schema validation passes.
-		const userTable = {
-			id: { name: "id" },
-			name: { name: "name" },
-			email: { name: "email" },
-			emailVerified: { name: "emailVerified" },
-			image: { name: "image" },
-			attempts: { name: "attempts" },
-			createdAt: { name: "createdAt" },
-			updatedAt: { name: "updatedAt" },
-		};
+		const userTable = pgTable("user", {
+			id: text("id"),
+			name: text("name"),
+			email: text("email"),
+			emailVerified: boolean("emailVerified"),
+			image: text("image"),
+			attempts: integer("attempts"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
 
 		/**
 		 * Builds a mock db that mirrors the adapter's single-row update: a
 		 * `select().from().where().limit()` subquery picks one id, then
-		 * `update().set().where().returning()` mutates by that id. Captures the
-		 * `set` payload, the update's `where` args, and the select guard so a test
-		 * can assert the `field = field + delta` expression and that the update is
-		 * pinned to one selected id rather than the raw guard clause.
+		 * `update().set().where().returning()` mutates under the guard AND that
+		 * id. Captures the `set` payload, the update's `where` args, and the
+		 * select guard so a test can assert the `field = field + delta`
+		 * expression and that the update repeats the guard alongside the pinned
+		 * id, rather than trusting the subquery alone.
 		 */
 		function createIncrementDb(returned: unknown[]) {
 			const calls: {
@@ -417,7 +572,7 @@ describe("drizzle-adapter", () => {
 				calls.set = payload;
 				return { where: updateWhere };
 			});
-			const targetIds = { __subquery: true };
+			const targetIds = sql`select id from user`;
 			const selectLimit = vi.fn().mockReturnValue(targetIds);
 			const selectWhere = vi.fn((...args: unknown[]) => {
 				calls.selectGuard = args;
@@ -432,8 +587,15 @@ describe("drizzle-adapter", () => {
 			return { db, calls, targetIds };
 		}
 
+		/** Every chunk of an SQL expression, descending into nested SQL. */
+		function flattenSqlChunks(expr: SQL): unknown[] {
+			return expr.queryChunks.flatMap((chunk) =>
+				is(chunk, SQL) ? [chunk, ...flattenSqlChunks(chunk)] : [chunk],
+			);
+		}
+
 		function createAdapter(db: any) {
-			return drizzleAdapter(db, { provider: "sqlite" })({
+			return adapterFactory(db, { provider: "sqlite" })({
 				secret: defaultSecret,
 				user: {
 					additionalFields: {
@@ -468,8 +630,8 @@ describe("drizzle-adapter", () => {
 			expect(
 				chunks.some((chunk) => is(chunk, Param) && chunk.value === 3),
 			).toBe(true);
-			// The guard runs on the SELECT that picks one id (one predicate here);
-			// the UPDATE is pinned to that single id, not the raw guard clause.
+			// The guard runs on the SELECT that picks one id (one predicate here),
+			// and again on the UPDATE together with that id (one combined predicate).
 			expect(calls.selectGuard).toHaveLength(1);
 			expect(calls.whereArgs).toHaveLength(1);
 		});
@@ -510,18 +672,28 @@ describe("drizzle-adapter", () => {
 			expect(result).toEqual({ id: "user-1", attempts: 5 });
 
 			// The non-unique guard is applied to the SELECT, which is capped to one
-			// row; the UPDATE never receives the raw guard.
+			// row, so the UPDATE can touch at most that row.
 			expect(db.select).toHaveBeenCalledTimes(1);
 			expect(calls.selectGuard).toHaveLength(1);
 
-			// The UPDATE is guarded by a single `id IN (<one-row subquery>)`
-			// predicate, not the original multi-row clause.
+			// The UPDATE carries one combined predicate: the pinned single-id
+			// subquery AND the original guard. Both are required. The subquery keeps
+			// the mutation to one row. Repeating the guard is what makes the call a
+			// compare-and-swap under concurrency: on PostgreSQL, an UPDATE that
+			// waited for a concurrent writer re-checks its own WHERE against the new
+			// row version, but not an uncorrelated subquery's — so a guard that lives
+			// only in the subquery is never re-evaluated, and every waiting increment
+			// succeeds after the first one commits (#10557).
 			expect(calls.whereArgs).toHaveLength(1);
 			const updateGuard = calls.whereArgs?.[0];
 			expect(is(updateGuard, SQL)).toBe(true);
-			// The pinned predicate embeds the single-id subquery, proving the update
-			// targets only the one selected row.
-			expect((updateGuard as SQL).queryChunks).toContain(targetIds);
+			const predicate = flattenSqlChunks(updateGuard as SQL);
+			expect(predicate).toContain(targetIds);
+			expect(predicate).toContain(calls.selectGuard?.[0]);
+			// ...and they are conjoined: `guard OR id IN (...)` would match by id
+			// alone and reopen the race.
+			expect(predicate).toContainEqual({ value: [" and "] });
+			expect(predicate).not.toContainEqual({ value: [" or "] });
 		});
 
 		it("returns null when the guard matches no row", async () => {

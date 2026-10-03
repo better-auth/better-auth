@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
@@ -10,6 +9,10 @@ import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
@@ -102,6 +105,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					);
 				}
 			}
+
+			assertPasswordNotTooLong(ctx, password);
 
 			const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 				model: "user",
@@ -806,14 +811,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
-			const minLength = ctx.context.password.config.minPasswordLength;
-			const maxLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.newPassword.length < minLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			if (ctx.body.newPassword.length > maxLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooShort(ctx, ctx.body.newPassword);
+			assertPasswordNotTooLong(ctx, ctx.body.newPassword);
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
@@ -824,7 +823,6 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.id,
 					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
 					accountId: user.id,
 					password: hashedPassword,
 				});

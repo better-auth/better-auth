@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.7.0",
+  "version": "1.7.7",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -55,7 +55,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
-    "@better-auth/utils": "catalog:",
+    "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:"
   }
 }
