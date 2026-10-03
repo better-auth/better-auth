@@ -1248,6 +1248,119 @@ describe("oauth token - refresh_token", async () => {
 		expect(accessToken.payload.scope).toBe(newScopes.join(" "));
 	});
 
+	it("omits sid on replacement tokens when the issuance session has expired, and keeps the grant valid", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const session = await authorizationServer.api.getSession({ headers });
+		const sessionId = session!.session.id;
+		const originalExpiresAt = session!.session.expiresAt;
+
+		const ctx = await authorizationServer.$context;
+		// Expire the issuance session in place. Deleting it would null the
+		// refresh row's sessionId via the foreign key and hide the bug.
+		await ctx.adapter.update({
+			model: "session",
+			where: [{ field: "id", value: sessionId }],
+			update: { expiresAt: new Date(Date.now() - 60_000) },
+		});
+
+		try {
+			const { body, headers: refreshHeaders } =
+				await refreshAccessTokenRequest({
+					refreshToken: tokens?.refresh_token!,
+					options: {
+						clientId: oauthClient.client_id,
+						clientSecret: oauthClient.client_secret,
+						redirectURI: redirectUri,
+					},
+					resource: validResource,
+				});
+			const newTokens = await client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+				[key: string]: unknown;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+
+			// The grant still succeeds: offline access does not depend on the
+			// login session outliving it.
+			expect(newTokens.data?.access_token).toBeDefined();
+			expect(newTokens.data?.refresh_token).toBeDefined();
+
+			// But the replacement tokens carry no stale sid, so introspection
+			// does not report them inactive.
+			const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
+				audience: validResource,
+				issuer: authServerBaseUrl,
+			});
+			expect(accessToken.payload.sid).toBeUndefined();
+
+			const introspection = await client.oauth2.introspect(
+				{
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret,
+					token: newTokens.data?.access_token!,
+					token_type_hint: "access_token",
+				},
+				{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+			);
+			expect(introspection.data?.active).toBe(true);
+		} finally {
+			await ctx.adapter.update({
+				model: "session",
+				where: [{ field: "id", value: sessionId }],
+				update: { expiresAt: originalExpiresAt },
+			});
+		}
+	});
+
+	it("keeps sid on replacement tokens while the issuance session is live", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		const session = await authorizationServer.api.getSession({ headers });
+
+		const { body, headers: refreshHeaders } = await refreshAccessTokenRequest({
+			refreshToken: tokens?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			resource: validResource,
+		});
+		const newTokens = await client.$fetch<{
+			access_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: refreshHeaders,
+		});
+
+		const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
+			audience: validResource,
+			issuer: authServerBaseUrl,
+		});
+		expect(accessToken.payload.sid).toBe(session!.session.id);
+	});
+
 	it("should refresh token even when removing offline_scope", async ({
 		expect,
 	}) => {
