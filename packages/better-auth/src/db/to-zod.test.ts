@@ -33,6 +33,24 @@ describe("toZodSchema", () => {
 		});
 	});
 
+	describe("scalar field types", () => {
+		it("should map each scalar type to its zod schema", () => {
+			const schema = toZodSchema({
+				fields: {
+					name: { type: "string" },
+					age: { type: "number" },
+					active: { type: "boolean" },
+					createdAt: { type: "date" },
+				},
+				isClientSide: true,
+			});
+
+			const valid = { name: "a", age: 1, active: true, createdAt: new Date() };
+			expect(schema.parse(valid)).toEqual(valid);
+			expect(schema.safeParse({ ...valid, age: "1" }).success).toBe(false);
+		});
+	});
+
 	describe("required: false field nullability", () => {
 		it("should accept null, undefined, and a value for an optional field", () => {
 			const schema = toZodSchema({
