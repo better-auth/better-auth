@@ -368,7 +368,37 @@ export async function checkOAuthClient(
 		});
 	}
 
-	const grantTypes = clientWithDefaults.grant_types ?? [];
+	const requestedGrantTypes = clientWithDefaults.grant_types ?? [];
+	const isDynamicRegistration = settings?.registrationSource === "dynamic";
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	const mutualGrantTypes = requestedGrantTypes.filter((grantType) =>
+		supportedGrantTypes.has(grantType),
+	);
+	if (isClientMetadataDocument || isDynamicRegistration) {
+		// A metadata document serves every authorization server the client talks
+		// to, and DCR clients such as MCP connectors send that same grant union, so
+		// require one mutual grant. Dynamic registration replaces the rest with the
+		// supported subset (RFC 7591 §3.2.1); a metadata document keeps its union
+		// and the token endpoint refuses the unsupported grants.
+		if (mutualGrantTypes.length === 0) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `no mutually supported grant_type among ${requestedGrantTypes.join(", ")}`,
+			});
+		}
+	} else {
+		for (const grantType of requestedGrantTypes) {
+			if (!supportedGrantTypes.has(grantType)) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description: `unsupported grant_type ${grantType}`,
+				});
+			}
+		}
+	}
+	const grantTypes = isDynamicRegistration
+		? mutualGrantTypes
+		: requestedGrantTypes;
 	const responseTypes = clientWithDefaults.response_types;
 	const applicationType = clientWithDefaults.application_type as unknown;
 	if (
@@ -408,27 +438,6 @@ export async function checkOAuthClient(
 	}
 
 	// Validate correlation between grant_types and response_types
-	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
-	if (isClientMetadataDocument) {
-		// One metadata document serves every authorization server the client talks
-		// to, so it declares a grant union; require one mutual grant and let the
-		// token endpoint refuse the rest.
-		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
-			});
-		}
-	} else {
-		for (const grantType of grantTypes) {
-			if (!supportedGrantTypes.has(grantType)) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_client_metadata",
-					error_description: `unsupported grant_type ${grantType}`,
-				});
-			}
-		}
-	}
 	if (
 		grantTypes.includes("authorization_code") &&
 		!responseTypes?.includes("code")
@@ -659,6 +668,8 @@ export async function checkOAuthClient(
 			});
 		}
 	}
+
+	return { grant_types: grantTypes };
 }
 
 interface CreateOAuthClientRegistrationBaseInput {
@@ -773,7 +784,7 @@ async function persistOAuthClientRegistration(
 	);
 
 	// Check if client parameters are valid combination
-	await checkOAuthClient(body, opts, {
+	const { grant_types: grantTypes } = await checkOAuthClient(body, opts, {
 		registrationSource: input.registrationSource,
 		ctx,
 	});
@@ -818,6 +829,7 @@ async function persistOAuthClientRegistration(
 				};
 	const schema = oauthToSchema({
 		...persistableBody,
+		grant_types: grantTypes,
 		redirect_uris: body.redirect_uris ?? [],
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,
