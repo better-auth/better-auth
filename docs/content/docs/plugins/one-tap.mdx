@@ -224,6 +224,36 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
   Workspace domain, configure `socialProviders.google` with `hd`.
 </Callout>
 
+### Replay protection (nonce)
+
+Before showing the prompt or rendering the button, the client requests a
+single-use nonce from `POST /one-tap/nonce` and passes it to Google, so the
+issued ID token carries a matching `nonce` claim. The callback consumes that
+nonce and rejects the token if the claim does not match, if the nonce was
+never issued or has already been used, or if the token was minted with a
+nonce that the request does not present. This binds every ID token to one
+sign-in attempt, so a captured token cannot be replayed.
+
+Nonces expire after five minutes. If you call `/one-tap/callback` yourself
+instead of through `authClient.oneTap()`, obtain a nonce first, pass it to
+`google.accounts.id.initialize({ nonce })`, and send it back in the callback
+body:
+
+```ts
+const { data } = await authClient.$fetch<{ nonce: string }>("/one-tap/nonce", {
+  method: "POST",
+});
+
+// ...pass data.nonce to Google, then:
+await authClient.$fetch("/one-tap/callback", {
+  method: "POST",
+  body: { idToken, nonce: data.nonce },
+});
+```
+
+The client-side `nonce` option is deprecated and ignored: the server now
+issues the nonce.
+
 ### Authorized JavaScript origins
 
 Ensure you have configured the Authorized JavaScript origins (e.g., [http://localhost:3000](http://localhost:3000), [https://example.com](https://example.com)) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.
