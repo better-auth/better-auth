@@ -1493,8 +1493,9 @@ exposed through the browser client. Checking a user who is not a member of the o
 `success: false` instead of throwing.
 
 It performs no authorization of its own and takes no session, so the caller is responsible for
-authorizing the query, not the subject: before calling, verify the caller may read that organization
-(for example, they are a member of it, or hold `organization: ["read"]`). The endpoint answers for any
+authorizing the query, not the subject: before calling, verify that your own policy permits the caller
+to inspect that organization's members' permissions. Plain membership of the organization is sufficient
+only if your policy allows members to inspect other members' permissions. The endpoint answers for any
 `userId` and `organizationId` you hand it. Never forward an untrusted `userId` or `organizationId` from a
 request body straight into it.
 
