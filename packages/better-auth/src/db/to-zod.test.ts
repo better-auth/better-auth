@@ -35,6 +35,27 @@ describe("toZodSchema", () => {
 			expect(schema.shape).not.toHaveProperty("secretField");
 			expectTypeOf<typeof schema.shape>().not.toHaveProperty("secretField");
 		});
+
+		it("should account for either shape when the mode is a boolean", () => {
+			const createSchema = (isClientSide: boolean) =>
+				toZodSchema({
+					fields: {
+						name: { type: "string", required: true },
+						secretField: { type: "string", returned: false },
+					},
+					isClientSide,
+				});
+			const schema = createSchema(false);
+
+			expect(schema.shape).not.toHaveProperty("secretField");
+			expect(createSchema(true).shape).toHaveProperty("secretField");
+			expectTypeOf<typeof schema.shape>().toEqualTypeOf<
+				| { name: z.ZodString; secretField: z.ZodString }
+				| {
+						name: z.ZodString;
+				  }
+			>();
+		});
 	});
 
 	describe("scalar field types", () => {
@@ -89,9 +110,6 @@ describe("toZodSchema", () => {
 				false
 			>
 		>().toEqualTypeOf<never>();
-		expectTypeOf<
-			FieldAttributeToSchema<{ type: "string"; returned: false }, boolean>
-		>().toEqualTypeOf<z.ZodString>();
 	});
 
 	describe("required: false field nullability", () => {
