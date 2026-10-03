@@ -2,6 +2,18 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { ZodType } from "zod";
 import * as z from "zod";
 
+/**
+ * Named one by one rather than looked up as `z[type]`: indexing the namespace
+ * with a runtime key stops bundlers from tree-shaking any of zod, its locales
+ * included.
+ */
+const primitiveSchemas = {
+	string: z.string,
+	number: z.number,
+	boolean: z.boolean,
+	date: z.date,
+};
+
 export function toZodSchema<
 	Fields extends Record<string, DBFieldAttribute | never>,
 	IsClientSide extends boolean,
@@ -32,7 +44,7 @@ export function toZodSchema<
 		} else if (Array.isArray(field.type)) {
 			schema = z.any();
 		} else {
-			schema = z[field.type]();
+			schema = primitiveSchemas[field.type]();
 		}
 
 		if (field?.required === false) {

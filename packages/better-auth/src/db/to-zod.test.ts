@@ -33,6 +33,44 @@ describe("toZodSchema", () => {
 		});
 	});
 
+	describe("primitive field types", () => {
+		it("should build the matching zod schema for each primitive type", () => {
+			const schema = toZodSchema({
+				fields: {
+					name: { type: "string", required: true },
+					age: { type: "number", required: true },
+					active: { type: "boolean", required: true },
+					joinedAt: { type: "date", required: true },
+				},
+				isClientSide: false,
+			});
+			const joinedAt = new Date("2026-01-01T00:00:00.000Z");
+
+			expect(
+				schema.parse({ name: "Ada", age: 36, active: true, joinedAt }),
+			).toEqual({ name: "Ada", age: 36, active: true, joinedAt });
+			expect(
+				schema.safeParse({ name: 1, age: 36, active: true, joinedAt }).success,
+			).toBe(false);
+			expect(
+				schema.safeParse({ name: "Ada", age: "36", active: true, joinedAt })
+					.success,
+			).toBe(false);
+			expect(
+				schema.safeParse({ name: "Ada", age: 36, active: "yes", joinedAt })
+					.success,
+			).toBe(false);
+			expect(
+				schema.safeParse({
+					name: "Ada",
+					age: 36,
+					active: true,
+					joinedAt: "2026-01-01",
+				}).success,
+			).toBe(false);
+		});
+	});
+
 	describe("required: false field nullability", () => {
 		it("should accept null, undefined, and a value for an optional field", () => {
 			const schema = toZodSchema({
