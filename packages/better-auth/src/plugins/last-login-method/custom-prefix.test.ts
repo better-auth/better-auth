@@ -82,6 +82,14 @@ describe("lastLoginMethod cookie name", () => {
 			expect(cookies.get("last_login_method")?.value).toBe("email");
 		});
 	});
+
+	describe("with cookieName explicitly undefined", () => {
+		test.override("pluginOptions", { cookieName: undefined });
+
+		test("falls back to the default name", ({ cookies }) => {
+			expect(cookies.get(DEFAULT_COOKIE_NAME)?.value).toBe("email");
+		});
+	});
 });
 
 describe("lastLoginMethod cookie attributes", () => {
@@ -157,6 +165,16 @@ describe("lastLoginMethod cookie attributes", () => {
 				secure: true,
 			});
 			expect(scopeAttributes(cookie)).toEqual(scopeAttributes(cookies.session));
+		});
+	});
+
+	describe("with maxAge explicitly undefined", () => {
+		test.override("pluginOptions", { maxAge: undefined });
+
+		test("falls back to the default max age", ({ cookies }) => {
+			expect(cookies.get(DEFAULT_COOKIE_NAME)?.["max-age"]).toBe(
+				60 * 60 * 24 * 30,
+			);
 		});
 	});
 });
