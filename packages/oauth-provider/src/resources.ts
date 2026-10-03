@@ -808,11 +808,13 @@ function buildSeedUpdate(
  * caller treats the seed as deferred (will retry on first resource access).
  *
  * Covers SQLite ("no such table"), Postgres ("relation X does not exist"),
- * and MySQL ("Table X does not exist" / contracted form).
+ * MySQL ("Table X does not exist" / contracted form), and Drizzle
+ * ("The model \"oauthResource\" was not found in the schema object"), which
+ * is what `auth generate` hits before the plugin tables exist.
  */
 // cspell:ignore-next-line doesn
 const MISSING_TABLE_PATTERN =
-	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist/i;
+	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist|model .* was not found in the schema object/i;
 
 interface SeedState {
 	completed: boolean;

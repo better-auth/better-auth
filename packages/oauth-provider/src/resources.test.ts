@@ -58,6 +58,26 @@ describe("collectResourceInputs", () => {
 	});
 });
 
+describe("seedResources before the table exists", () => {
+	it("defers when drizzle says the model is missing from the schema", async () => {
+		const ctx = {
+			adapter: {
+				findOne: async () => {
+					throw new Error(
+						'The model "oauthResource" was not found in the schema object',
+					);
+				},
+			},
+		} as unknown as AuthContext;
+
+		await expect(
+			seedResources(ctx, {
+				resources: ["https://api.example.com/mcp"],
+			} as OAuthOptions<Scope[]>),
+		).resolves.toBeUndefined();
+	});
+});
+
 /**
  * Helper that boots a fresh in-memory auth instance with the given
  * `oauthProvider` options. Each test gets a clean DB. `loginPage` /
