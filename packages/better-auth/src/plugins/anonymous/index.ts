@@ -45,9 +45,16 @@ async function resolveAnonymousSession(ctx: GenericEndpointContext): Promise<{
 	session: Session & Record<string, any>;
 	user: UserWithAnonymous & Record<string, any>;
 } | null> {
+	// Look up the previous session with its own response headers. The response
+	// already sets the new session cookie, and clearing a revoked or expired
+	// previous session cookie would remove that new cookie and sign the user out.
+	const context = { ...ctx.context, responseHeaders: undefined };
 	const cookieSession = await getSessionFromCtx<{
 		isAnonymous: boolean | null;
-	}>(ctx, { disableRefresh: true });
+	}>(
+		{ ...ctx, context, responseHeaders: new Headers() },
+		{ disableRefresh: true },
+	);
 	if (cookieSession?.user.isAnonymous) {
 		return {
 			session: cookieSession.session,
