@@ -153,16 +153,16 @@ description: Learn how to configure Better Auth in your project.
       <Tab value="mongodb">
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
-        import { mongodbAdapter } from "@better-auth/mongo-adapter";
+        import { mongodbAdapter } from "better-auth/adapters/mongodb";
         import { client } from "@/db"; // your mongodb client
 
         export const auth = betterAuth({
-            database: mongodbAdapter(client.db()),
+            database: mongodbAdapter(client.db(), { client }),
         });
         ```
 
-        See the [MongoDB adapter guide](/docs/adapters/mongo) for installation
-        and transaction settings.
+        See the [MongoDB adapter guide](/docs/adapters/mongo) for standalone
+        server setup.
       </Tab>
     </Tabs>
 
