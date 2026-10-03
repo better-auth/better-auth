@@ -1,4 +1,5 @@
 import { BetterAuthError } from "@better-auth/core/error";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type {
 	ResourceRequestInput,
 	VerifyAccessTokenRequestOptions,
@@ -66,6 +67,17 @@ export const oauthProviderResourceClient = <
 		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 	};
 	const authServerBasePath = auth?.options.basePath;
+	const authServerEndpointBaseURL =
+		authServerBaseUrl &&
+		authServerBasePath &&
+		new URL(authServerBaseUrl).pathname === "/"
+			? appendURLPath(
+					authServerBaseUrl,
+					authServerBasePath.startsWith("/")
+						? authServerBasePath
+						: `/${authServerBasePath}`,
+				)
+			: authServerBaseUrl;
 	const resolveVerifyAccessTokenOptions = async (
 		opts:
 			| (VerifyAccessTokenAuthOpts & {
@@ -90,13 +102,16 @@ export const oauthProviderResourceClient = <
 		const jwksUrl =
 			opts?.jwksUrl ??
 			jwtPluginOptions?.jwks?.remoteUrl ??
-			(authServerBaseUrl
-				? `${authServerBaseUrl + (authServerBasePath ?? "")}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`
+			(authServerEndpointBaseURL
+				? appendURLPath(
+						authServerEndpointBaseURL,
+						jwtPluginOptions?.jwks?.jwksPath ?? "/jwks",
+					)
 				: undefined);
 		const introspectUrl =
 			opts?.remoteVerify?.introspectUrl ??
-			(authServerBaseUrl
-				? `${authServerBaseUrl}${authServerBasePath ?? ""}/oauth2/introspect`
+			(authServerEndpointBaseURL
+				? appendURLPath(authServerEndpointBaseURL, "/oauth2/introspect")
 				: undefined);
 		return {
 			...opts,

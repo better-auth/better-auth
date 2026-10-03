@@ -1,5 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import { APIError } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
@@ -248,7 +249,10 @@ function buildOAuthDeviceGrant() {
 			[DEVICE_CODE_GRANT_TYPE]: exchangeOAuthDeviceCode,
 		},
 		metadata: (metadataInput) => ({
-			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
+			device_authorization_endpoint: appendURLPath(
+				metadataInput.ctx.context.baseURL,
+				DEVICE_AUTHORIZATION_PATH,
+			),
 		}),
 		authorizeRequest: async ({ ctx, request }) => {
 			const { detected: hasClientAuthentication } =
