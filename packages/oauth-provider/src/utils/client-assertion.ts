@@ -38,6 +38,16 @@ const JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 
+function formatDigestAsUUID(digest: Uint8Array): string {
+	const bytes = digest.slice(0, 16);
+	bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+	bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+	const hex = Array.from(bytes, (byte) =>
+		byte.toString(16).padStart(2, "0"),
+	).join("");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function setJwksCache(
 	jwksCache: JwksCache,
 	cacheKey: string,
@@ -408,12 +418,15 @@ export async function consumeClientAssertion(
 	// primary key, MongoDB `_id`), so concurrent requests across workers cannot
 	// both pass. A duplicate-key failure means the jti was already used (replay);
 	// any other failure is surfaced unchanged.
-	const jtiDigest = await createHash("SHA-256").digest(
-		new TextEncoder().encode(`${namespace}:${payload.jti}`),
+	const jtiDigest = new Uint8Array(
+		await createHash("SHA-256").digest(
+			new TextEncoder().encode(`${namespace}:${payload.jti}`),
+		),
 	);
-	const jtiId = base64Url.encode(new Uint8Array(jtiDigest).slice(0, 24), {
-		padding: false,
-	});
+	const jtiId =
+		ctx.context.options.advanced?.database?.generateId === "uuid"
+			? formatDigestAsUUID(jtiDigest)
+			: base64Url.encode(jtiDigest.slice(0, 24), { padding: false });
 	try {
 		await ctx.context.adapter.create({
 			model: "oauthClientAssertion",
