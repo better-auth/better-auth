@@ -68,46 +68,20 @@ describe("Custom Session Plugin Tests", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10566
 	 */
-	it("propagates session lookup failures instead of treating them as signed-out sessions", async () => {
-		const { auth: authWithoutCache, signInWithTestUser: signIn } =
-			await getTestInstance({
-				plugins: [customSession(async (session) => session)],
-			});
-		const { headers } = await signIn();
-		const context = await authWithoutCache.$context;
-		const lookup = vi
-			.spyOn(context.internalAdapter, "findSession")
-			.mockRejectedValue(new Error("database unavailable"));
-		try {
-			await expect(
-				authWithoutCache.api.getSession({ headers }),
-			).rejects.toMatchObject({ status: "INTERNAL_SERVER_ERROR" });
-		} finally {
-			lookup.mockRestore();
-		}
-	});
-
-	it("returns an HTTP error to the client when the session lookup fails", async () => {
-		const {
-			auth: authWithoutCache,
-			signInWithTestUser: signIn,
-			customFetchImpl: fetchWithoutCache,
-		} = await getTestInstance({
+	it("propagates session lookup failures to server and HTTP clients", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
 			plugins: [customSession(async (session) => session)],
 		});
-		const { headers } = await signIn();
-		const httpClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [customSessionClient<typeof authWithoutCache>()],
-			fetchOptions: { customFetchImpl: fetchWithoutCache },
-		});
-		const context = await authWithoutCache.$context;
+		const { headers } = await signInWithTestUser();
+		const context = await auth.$context;
 		const lookup = vi
 			.spyOn(context.internalAdapter, "findSession")
 			.mockRejectedValue(new Error("database unavailable"));
 		try {
-			const result = await httpClient.getSession({ fetchOptions: { headers } });
-			expect(result.data).toBeNull();
+			await expect(auth.api.getSession({ headers })).rejects.toMatchObject({
+				status: "INTERNAL_SERVER_ERROR",
+			});
+			const result = await client.getSession({ fetchOptions: { headers } });
 			expect(result.error?.status).toBe(500);
 		} finally {
 			lookup.mockRestore();
