@@ -1,5 +1,32 @@
 # better-auth
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11540](https://github.com/better-auth/better-auth/pull/11540) [`678c555`](https://github.com/better-auth/better-auth/commit/678c555beb533c1416c1411a0d77129de2e97d31) Thanks [@bytaesu](https://github.com/bytaesu)! - Align cookie security attributes with RFC 6265bis.
+
+- [#10591](https://github.com/better-auth/better-auth/pull/10591) [`193efff`](https://github.com/better-auth/better-auth/commit/193efff3d290740b1fd7c564b4b9b6f18343d05e) Thanks [@kdelay](https://github.com/kdelay)! - Expired or revoked sessions now clear stale cookies when using `customSession`.
+
+- [#11391](https://github.com/better-auth/better-auth/pull/11391) [`352d04c`](https://github.com/better-auth/better-auth/commit/352d04c8eb40c597a54da8667d68e05a1cb69426) Thanks [@breken-ai](https://github.com/breken-ai)! - Fix `customSession` treating session lookup failures as signed-out users. Server-side `getSession` now throws an API error, and HTTP clients receive an error response.
+
+- [#11549](https://github.com/better-auth/better-auth/pull/11549) [`1bd5c37`](https://github.com/better-auth/better-auth/commit/1bd5c37884f95766c737e35f4be86dfb46d31d36) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `lastLoginMethod` failing sign-in when `cookieName` or `maxAge` is explicitly `undefined`.
+
+- [#11505](https://github.com/better-auth/better-auth/pull/11505) [`c46992f`](https://github.com/better-auth/better-auth/commit/c46992f6ce548fad0f26f5f07dc8525893e8196c) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve the referenced model and field keys when generating Kysely migrations, so custom table names that match another model key produce the intended foreign keys.
+
+- [#10866](https://github.com/better-auth/better-auth/pull/10866) [`3d1f008`](https://github.com/better-auth/better-auth/commit/3d1f008ae381dec01751725b7422985c84c74aae) Thanks [@heliohm](https://github.com/heliohm)! - The organization plugin no longer pulls every zod locale into server bundles.
+
+- Updated dependencies [[`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a), [`8133265`](https://github.com/better-auth/better-auth/commit/813326536c79291d70897a18b63272fa1e7346a7)]:
+  - @better-auth/core@1.7.8
+  - @better-auth/drizzle-adapter@1.7.8
+  - @better-auth/kysely-adapter@1.7.8
+  - @better-auth/memory-adapter@1.7.8
+  - @better-auth/mongo-adapter@1.7.8
+  - @better-auth/prisma-adapter@1.7.8
+  - @better-auth/telemetry@1.7.8
+
 ## 1.7.7
 
 ### Patch Changes
