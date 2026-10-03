@@ -1,8 +1,14 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { SchemaMismatchError } from "@better-auth/core/db/internal";
+import { createLogger } from "@better-auth/core/env";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
+import {
+	EVICTION_TIMEOUT_MS,
+	settleByDeadline,
+} from "@better-auth/core/utils/async";
 import { getEndpoints, router } from "../api";
+import type { InstallReport } from "../context/create-context";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
@@ -12,31 +18,123 @@ import {
 import type { Auth } from "../types";
 import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
 
+const ABANDONED_INIT_MESSAGE = [
+	`Better Auth initialization did not settle within ${EVICTION_TIMEOUT_MS}ms.`,
+	"This has two causes. A runtime that ends I/O with the request that started it, such as Cloudflare Workers, stops settling a promise once that request responds. A dependency that initialization waits on, such as a database, can also stall.",
+	"The failure is transient. The next request starts initialization again.",
+	"On a request-scoped runtime, hand initialization to a background task handler, so the runtime keeps settling it after the request that started it:",
+	"",
+	'  import { withCloudflare } from "better-auth/cloudflare";',
+	"",
+	"  const auth = betterAuth(withCloudflare({ /* ... */ }));",
+	"",
+	"On another runtime, set advanced.backgroundTasks.handler to its equivalent of waitUntil.",
+	"https://www.better-auth.com/docs/guides/optimizing-for-performance#cloudflare-workers",
+].join("\n");
+
+const startSchemaCheck = (ctx: AuthContext) => {
+	const validateSchema = ctx.options.advanced?.database?.validateSchema;
+	if (!ctx.checkSchema && validateSchema !== false) {
+		const level = validateSchema === true ? "warn" : "debug";
+		ctx.logger[level](
+			`Schema validation is not available for adapter "${ctx.adapter.id}". Skipping schema validation. Database operations will proceed normally.`,
+		);
+	}
+	const pendingSchemaCheck = ctx.checkSchema?.(ctx.logger);
+	if (pendingSchemaCheck) {
+		void pendingSchemaCheck.catch((error: unknown) => {
+			ctx.logger.error(
+				error instanceof SchemaMismatchError
+					? error.message
+					: "Could not validate the database schema. Check your database connection.",
+			);
+		});
+	}
+};
+
+type InitializationAttempt = {
+	context: Promise<AuthContext>;
+	deadlineMs: number;
+};
+
+type InitializeAuthContext<Options extends BetterAuthOptions> = (
+	options: Options,
+	install: InstallReport,
+) => Promise<AuthContext>;
+
 export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,
-	initFn: (options: Options) => Promise<AuthContext>,
+	initFn: InitializeAuthContext<Options>,
 ): Auth<Options> => {
-	const authContext = initFn(options).then((ctx) => {
-		const validateSchema = ctx.options.advanced?.database?.validateSchema;
-		if (!ctx.checkSchema && validateSchema !== false) {
-			const level = validateSchema === true ? "warn" : "debug";
-			ctx.logger[level](
-				`Schema validation is not available for adapter "${ctx.adapter.id}". Skipping schema validation. Database operations will proceed normally.`,
+	let settledContext: Promise<AuthContext> | undefined;
+	let attempt: InitializationAttempt | undefined;
+
+	const start = (): InitializationAttempt => {
+		const install: InstallReport = {};
+		const entry: InitializationAttempt = {
+			deadlineMs: Date.now() + EVICTION_TIMEOUT_MS,
+			context: Promise.resolve()
+				.then(() => initFn(options, install))
+				.then(
+					(ctx) => {
+						startSchemaCheck(ctx);
+						// An evicted attempt the background task handler kept alive
+						// still settles, after the attempt that replaced it started.
+						// It must not take that attempt's place.
+						if (attempt === entry) {
+							settledContext = entry.context;
+							// One attempt becomes the context, so telemetry reports one
+							// install for each Auth Instance.
+							const report = install.send?.().catch((error: unknown) => {
+								ctx.logger.error(
+									"Could not report the install to telemetry.",
+									error,
+								);
+							});
+							try {
+								if (report) ctx.runInBackground(report);
+							} catch (error) {
+								ctx.logger.debug(
+									"advanced.backgroundTasks.handler threw, so the install report was not handed to it.",
+									error,
+								);
+							}
+						}
+						return ctx;
+					},
+					(error: unknown) => {
+						if (attempt === entry) attempt = undefined;
+						throw error;
+					},
+				),
+		};
+		try {
+			// The schema check starts once initialization settles, and the
+			// request that started it may respond before the lookup finishes.
+			options.advanced?.backgroundTasks?.handler?.(
+				entry.context
+					.then((ctx) => ctx.checkSchema?.(ctx.logger))
+					.catch(() => {}),
+			);
+		} catch (error) {
+			createLogger(options.logger).debug(
+				"advanced.backgroundTasks.handler threw, so initialization was not handed to it. A runtime that scopes the handler to a request rejects it at module scope.",
+				error,
 			);
 		}
-		const pendingSchemaCheck = ctx.checkSchema?.();
-		if (pendingSchemaCheck) {
-			void pendingSchemaCheck.catch((error: unknown) => {
-				ctx.logger.error(
-					error instanceof SchemaMismatchError
-						? error.message
-						: "Could not validate the database schema. Check your database connection.",
-				);
-			});
-		}
-		return ctx;
-	});
-	const { api } = getEndpoints(authContext, options);
+		return entry;
+	};
+
+	const joinAuthContext = (): Promise<AuthContext> => {
+		if (settledContext !== undefined) return settledContext;
+		if (attempt && Date.now() >= attempt.deadlineMs) attempt = undefined;
+		const entry = (attempt ??= start());
+		return settleByDeadline(entry.context, entry.deadlineMs, () => {
+			throw new BetterAuthError(ABANDONED_INIT_MESSAGE);
+		});
+	};
+
+	const { api } = getEndpoints(joinAuthContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
 			return {
@@ -47,7 +145,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		return acc;
 	}, {});
 	const handler = async (request: Request) => {
-		const ctx = await authContext;
+		const ctx = await joinAuthContext();
 		const basePath = ctx.options.basePath || "/api/auth";
 
 		let handlerCtx: AuthContext;
@@ -112,7 +210,9 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		fetch: handler,
 		api,
 		options: options,
-		$context: authContext,
+		get $context() {
+			return joinAuthContext();
+		},
 		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,

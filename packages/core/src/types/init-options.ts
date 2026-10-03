@@ -505,13 +505,26 @@ export type BetterAuthAdvancedOptions = {
 	 * Background tasks allow non-critical operations (like cleanup, analytics,
 	 * or timing-attack mitigation) to run after the response is sent.
 	 *
-	 * Use `waitUntil` from `@vercel/functions` on Vercel,
-	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 * Better Auth also hands its own initialization, and the schema validation
+	 * that follows it, to this handler. On a runtime that ends I/O with the
+	 * request that started it, such as Cloudflare Workers, initialization
+	 * stops once the request that started it responds. The next request
+	 * starts initialization again. A handler saves the joining request the
+	 * 30 second wait before that retry.
+	 *
+	 * Use `waitUntil` from `@vercel/functions` on Vercel. On Cloudflare
+	 * Workers, prefer `withCloudflare` from `better-auth/cloudflare`, which
+	 * sets this handler for you, or `ctx.waitUntil`.
 	 *
 	 * @example
 	 * // Vercel
 	 * import { waitUntil } from "@vercel/functions";
 	 * advanced: { backgroundTasks: { handler: waitUntil } }
+	 *
+	 * @example
+	 * // Cloudflare Workers
+	 * import { withCloudflare } from "better-auth/cloudflare";
+	 * export const auth = betterAuth(withCloudflare({ ... }));
 	 *
 	 * @example
 	 * // Cloudflare Workers (with AsyncLocalStorage)
@@ -520,6 +533,8 @@ export type BetterAuthAdvancedOptions = {
 	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
 	 *   }
 	 * }
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10315
 	 */
 	backgroundTasks?: {
 		handler: (promise: Promise<unknown>) => void;

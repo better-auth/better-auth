@@ -144,6 +144,45 @@ export const auth = betterAuth({
 
 See the [Context documentation](/docs/concepts/hooks#runinbackground) for more examples.
 
+## Cloudflare Workers
+
+The Workers runtime ends I/O with the request that started it. A promise created during one request stops settling once that request responds. The runtime does not reject it either.
+
+Better Auth initializes on the first request that needs its context. If that request responds while initialization is still pending, the runtime drops it. Better Auth then starts initialization again for the next request, so the isolate recovers on its own.
+
+This recovery assumes your Worker imports Better Auth at the top level of its entry module. Better Auth loads `AsyncLocalStorage` when its module is evaluated, and neither the retry nor `withCloudflare` holds that load. A Worker that first imports Better Auth inside a request is not covered.
+
+Initialization waits for first use on every runtime. To pay the initialization cost before the first request, await `auth.$context` where the runtime permits I/O at startup. Reads of `auth.$context` can return different promises for the same context, so compare or cache the resolved context.
+
+Recovery costs one request. A request that joins dropped initialization waits up to 30 seconds, then fails with a `BetterAuthError` that names the cause. The same bound applies on a runtime that keeps settling promises, such as Node.js. There, a dependency that stalls initialization for more than 30 seconds leads the next request to start a second attempt while the first is still running. Each attempt creates its own adapter and runs each plugin's `init`.
+
+Wrap your options with `withCloudflare` to remove that wait:
+
+```ts title="auth.ts"
+import { env } from "cloudflare:workers";
+import { betterAuth } from "better-auth";
+import { withCloudflare } from "better-auth/cloudflare"; // [!code highlight]
+
+export const auth = betterAuth(
+  withCloudflare({ // [!code highlight]
+    database: env.DB,
+    emailAndPassword: { enabled: true },
+  }), // [!code highlight]
+);
+```
+
+```ts title="index.ts"
+import { auth } from "./auth";
+
+export default {
+  fetch: (request) => auth.handler(request),
+} satisfies ExportedHandler<CloudflareBindings>;
+```
+
+`withCloudflare` sets [`advanced.backgroundTasks.handler`](/docs/reference/options#backgroundtasks) to the runtime's `waitUntil`. Better Auth hands initialization and the schema validation that follows it to that handler from inside the request that starts initialization, so the runtime keeps settling both after that request responds. It keeps a handler you set yourself. Every other background task, such as those passed to [`runInBackground`](/docs/concepts/hooks#runinbackground), goes to the same handler. On another runtime, set that option to its own equivalent of `waitUntil`.
+
+Without that handler, schema validation is bounded the same way. A request waits at most 30 seconds for it, then proceeds without it. See [Schema Validation](/docs/concepts/database#schema-validation).
+
 ## SSR Optimizations
 
 If you're using a framework that supports server-side rendering, it's usually best to pre-fetch the user session on the server and use it as a fallback on the client.
