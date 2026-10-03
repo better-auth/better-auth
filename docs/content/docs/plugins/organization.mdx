@@ -1465,6 +1465,40 @@ const canCreateProjectAndCreateSale =
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
 </Callout>
 
+**Check Member Permission**:
+
+You can use the `checkMemberPermission` action to check the permissions of a specific member of an organization. Unlike `hasPermission`, which always checks the caller's own session, this takes the subject explicitly.
+
+Unlike `checkRolePermission`, this runs on the server and resolves roles defined in the database by
+[dynamic access control](#dynamic-access-control), so you don't need a second role evaluator. `organizationId`
+is required here, unlike on `hasPermission`, which falls back to the caller's active organization. Only the
+plural `permissions` key is accepted; unlike `hasPermission` there is no deprecated singular `permission` alias.
+
+```ts title="check-member-permission.ts"
+import { auth } from "@/lib/auth"
+
+const { success } = await auth.api.checkMemberPermission({
+  body: {
+    userId: "user-id",
+    organizationId: "organization-id",
+    permissions: {
+      organization: ["delete"],
+    },
+  },
+});
+```
+
+This endpoint is server only. It has no HTTP route, is omitted from the OpenAPI schema and is not
+exposed through the browser client. Checking a user who is not a member of the organization returns
+`success: false` instead of throwing.
+
+It performs no authorization of its own and takes no session, so the caller is responsible for
+authorizing the query, not the subject: before calling, verify that your own policy permits the caller
+to inspect that organization's members' permissions. Plain membership of the organization is sufficient
+only if your policy allows members to inspect other members' permissions. The endpoint answers for any
+`userId` and `organizationId` you hand it. Never forward an untrusted `userId` or `organizationId` from a
+request body straight into it.
+
 ***
 
 ## Dynamic Access Control

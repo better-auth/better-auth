@@ -18,6 +18,7 @@ const BASE = "http://localhost:3000/api/auth";
 const SERVER_ONLY_ENDPOINTS = [
 	"setPassword",
 	"addMember",
+	"checkMemberPermission",
 	"viewBackupCodes",
 	"generateTOTP",
 	"createVerificationOTP",
@@ -137,5 +138,37 @@ describe("server-only endpoints", async () => {
 			}),
 		);
 		expect(response.status).toBe(404);
+	});
+
+	/**
+	 * `checkMemberPermission` is server-only. An unauthenticated request to its
+	 * plausible path must 404 (no such route), not reach the handler. The
+	 * `has-permission` control is a real route and must 401, proving the 404
+	 * means the route is absent rather than the request being rejected.
+	 */
+	it("does not route POST /organization/check-member-permission", async () => {
+		const checkMemberPermission = await auth.handler(
+			new Request(`${BASE}/organization/check-member-permission`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					userId: "attacker-user-id",
+					organizationId: "victim-org-id",
+					permissions: {
+						organization: ["delete"],
+					},
+				}),
+			}),
+		);
+		expect(checkMemberPermission.status).toBe(404);
+
+		const hasPermission = await auth.handler(
+			new Request(`${BASE}/organization/has-permission`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ permissions: { organization: ["delete"] } }),
+			}),
+		);
+		expect(hasPermission.status).toBe(401);
 	});
 });
