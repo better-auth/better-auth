@@ -22,6 +22,7 @@ import { getOAuthState } from "./api/state/oauth";
 import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
 import { getMigrations } from "./db/get-migration";
+import { OAUTH_CALLBACK_ERROR_CODES } from "./oauth2/errors";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
@@ -640,7 +641,7 @@ describe("Disable implicit signup", async () => {
 				const location = context.response.headers.get("location");
 				expect(location).toBeDefined();
 				expect(location).toContain(
-					"http://localhost:3000/api/auth/error?error=signup_disabled",
+					`http://localhost:3000/api/auth/error?error=${OAUTH_CALLBACK_ERROR_CODES.SIGNUP_DISABLED}`,
 				);
 			},
 		});
@@ -861,7 +862,7 @@ describe("Disable signup", async () => {
 				const location = context.response.headers.get("location");
 				expect(location).toBeDefined();
 				expect(location).toContain(
-					"http://localhost:3000/api/auth/error?error=signup_disabled",
+					`http://localhost:3000/api/auth/error?error=${OAUTH_CALLBACK_ERROR_CODES.SIGNUP_DISABLED}`,
 				);
 			},
 		});
