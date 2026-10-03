@@ -28,6 +28,7 @@ import {
 	listInvitations,
 	listUserInvitations,
 	rejectInvitation,
+	resendInvitation,
 } from "./routes/crud-invites";
 import {
 	addMember,
@@ -147,6 +148,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
 	listOrganizations: ReturnType<typeof listOrganizations<O>>;
 	createInvitation: ReturnType<typeof createInvitation<O>>;
+	resendInvitation: ReturnType<typeof resendInvitation<O>>;
 	cancelInvitation: ReturnType<typeof cancelInvitation<O>>;
 	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
 	getInvitation: ReturnType<typeof getInvitation<O>>;
@@ -574,6 +576,22 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-invite-member)
 		 */
 		createInvitation: createInvitation(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/resend-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.resendInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.resendInvitation`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#resend-invitation)
+		 */
+		resendInvitation: resendInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
