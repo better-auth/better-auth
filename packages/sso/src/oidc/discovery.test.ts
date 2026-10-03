@@ -277,24 +277,38 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it("should handle trailing slash normalization in issuer comparison", () => {
-			const doc = createMockDiscoveryDocument({
-				issuer: "https://idp.example.com/",
-			});
-			// Should NOT throw - trailing slash difference is normalized
-			expect(() =>
-				validateDiscoveryDocument(doc, "https://idp.example.com"),
-			).not.toThrow();
-		});
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11434
+		 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation
+		 */
+		describe("trailing slash issuer mismatches", () => {
+			it("should reject a trailing slash mismatch in the discovered issuer", () => {
+				const doc = createMockDiscoveryDocument({
+					issuer: "https://idp.example.com/",
+				});
 
-		it("should handle trailing slash in configured issuer", () => {
-			const doc = createMockDiscoveryDocument({
-				issuer: "https://idp.example.com",
+				expect(() =>
+					validateDiscoveryDocument(doc, "https://idp.example.com"),
+				).toThrow(
+					expect.objectContaining({
+						code: "issuer_mismatch",
+					}),
+				);
 			});
-			// Should NOT throw - trailing slash difference is normalized
-			expect(() =>
-				validateDiscoveryDocument(doc, "https://idp.example.com/"),
-			).not.toThrow();
+
+			it("should reject a trailing slash mismatch in the configured issuer", () => {
+				const doc = createMockDiscoveryDocument({
+					issuer: "https://idp.example.com",
+				});
+
+				expect(() =>
+					validateDiscoveryDocument(doc, "https://idp.example.com/"),
+				).toThrow(
+					expect.objectContaining({
+						code: "issuer_mismatch",
+					}),
+				);
+			});
 		});
 	});
 
