@@ -65,6 +65,9 @@ export async function isPasswordCompromised(
 					"Add-Padding": "true",
 					"User-Agent": "BetterAuth Password Checker",
 				},
+				// Bound the outbound HIBP request so a hung upstream cannot stall
+				// the /sign-up/email and /reset-password flows this hook runs in.
+				timeout: 5000,
 			},
 		);
 
