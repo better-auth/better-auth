@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import type { AuthEndpointContext } from "@better-auth/core/context";
 import {
 	getCurrentAdapter,
@@ -9,11 +10,40 @@ import type {
 	DBAdapter,
 	DBTransactionAdapter,
 } from "@better-auth/core/db/adapter";
+import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import { getMigrations } from "better-auth/db/migration";
 import { Hono } from "hono";
 import { auth } from "./auth";
 
 const app = new Hono();
+
+let slowQueryStarted = false;
+const delayedDatabase = {
+	prepare(query: string) {
+		const statement = env.DB.prepare(query);
+		return {
+			bind(...parameters: unknown[]) {
+				const bound = statement.bind(...parameters);
+				return {
+					async all() {
+						if (query.includes("slow_marker")) {
+							slowQueryStarted = true;
+							await new Promise((resolve) => setTimeout(resolve, 500));
+							slowQueryStarted = false;
+						}
+						return bound.all();
+					},
+				};
+			},
+		};
+	},
+	batch: (...statements: D1PreparedStatement[]) => env.DB.batch(statements),
+	exec: (query: string) => env.DB.exec(query),
+} as unknown as D1Database;
+const { kysely: concurrencyDatabase } = await createKyselyAdapter({
+	database: delayedDatabase,
+});
+if (!concurrencyDatabase) throw new Error("D1 test database was not created");
 
 app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
 
@@ -22,6 +52,22 @@ app.get("/_test/session", async (c) => {
 		headers: c.req.raw.headers,
 	});
 	return c.json(session);
+});
+
+app.get("/_test/d1-concurrency/:query", async (c) => {
+	if (c.req.param("query") === "status") {
+		return c.json({ slowQueryStarted });
+	}
+
+	const slow = c.req.param("query") === "slow";
+	const query = concurrencyDatabase.selectFrom("sqlite_master");
+	await (slow
+		? query.select("name as slow_marker")
+		: query.select("name as fast_marker")
+	)
+		.limit(1)
+		.execute();
+	return c.body(null, 204);
 });
 
 app.post("/_test/migrate", async (c) => {

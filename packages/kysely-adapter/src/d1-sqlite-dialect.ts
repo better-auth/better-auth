@@ -9,13 +9,12 @@ import type {
 	DialectAdapter,
 	Driver,
 	Kysely,
-	MigrationLockOptions,
 	QueryCompiler,
 	QueryResult,
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
-import { SqliteAdapter, SqliteQueryCompiler, sql } from "kysely";
+import { SqliteAdapter, SqliteQueryCompiler } from "kysely";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
@@ -82,71 +81,9 @@ export function createD1IndexIntrospector(
 	};
 }
 
-const MIGRATION_LOCK_POLL_INTERVAL_MS = 250;
-const MIGRATION_LOCK_TIMEOUT_MS = 60_000;
-
-function migrationLockTable(options: MigrationLockOptions) {
-	return sql.table(
-		options.lockTableSchema
-			? `${options.lockTableSchema}.${options.lockTable}`
-			: options.lockTable,
-	);
-}
-
 class D1SqliteAdapter extends SqliteAdapter {
-	readonly #migrationLockHolders = new WeakSet<Kysely<unknown>>();
-
-	/**
-	 * D1 keeps no per-connection state and rejects interactive transactions,
-	 * so there is nothing for Kysely's single-connection mutex to protect.
-	 * Holding it would make requests on a shared Workers isolate wait on each
-	 * other's queries.
-	 */
 	get supportsMultipleConnections(): boolean {
 		return true;
-	}
-
-	/**
-	 * `SqliteAdapter` leaves migration locking to the single-connection mutex.
-	 * D1 has no session locks, so claim the row in Kysely's migration lock
-	 * table with one conditional update, which D1 applies atomically. Unlike
-	 * the mutex, this also keeps migrations from separate isolates apart.
-	 */
-	async acquireMigrationLock(
-		db: Kysely<unknown>,
-		options: MigrationLockOptions,
-	): Promise<void> {
-		const deadline = Date.now() + MIGRATION_LOCK_TIMEOUT_MS;
-		while (true) {
-			const result =
-				await sql`update ${migrationLockTable(options)} set is_locked = 1 where id = ${options.lockRowId} and is_locked = 0`.execute(
-					db,
-				);
-			if (result.numAffectedRows === 1n) {
-				this.#migrationLockHolders.add(db);
-				return;
-			}
-			if (Date.now() >= deadline) {
-				throw new Error(
-					`Timed out waiting for the "${options.lockTable}" migration lock. If no other migration is running, a previous run may have stopped while holding it. Release it with: UPDATE "${options.lockTable}" SET is_locked = 0 WHERE id = '${options.lockRowId}'`,
-				);
-			}
-			await new Promise((resolve) =>
-				setTimeout(resolve, MIGRATION_LOCK_POLL_INTERVAL_MS),
-			);
-		}
-	}
-
-	async releaseMigrationLock(
-		db: Kysely<unknown>,
-		options: MigrationLockOptions,
-	): Promise<void> {
-		// Kysely's Migrator releases in a `finally`, even when acquiring failed,
-		// so only clear a lock this run holds.
-		if (!this.#migrationLockHolders.delete(db)) return;
-		await sql`update ${migrationLockTable(options)} set is_locked = 0 where id = ${options.lockRowId}`.execute(
-			db,
-		);
 	}
 }
 
