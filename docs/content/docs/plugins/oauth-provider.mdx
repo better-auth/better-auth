@@ -501,7 +501,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields return `invalid_request`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields return `invalid_request`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge. The client is resolved and authenticated before the grant is looked up, so an unknown `client_id` returns `invalid_client` for every grant type rather than `invalid_grant`.
 
 #### DPoP sender-constrained tokens
 
