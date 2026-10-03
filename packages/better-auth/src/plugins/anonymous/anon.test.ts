@@ -825,6 +825,22 @@ describe("anonymous after-hook on sign-in over a previous session cookie", async
 		expect(session?.session.token).toBe(token);
 	});
 
+	it("keeps the new session cookie when the request carries an expired session cookie", async () => {
+		const stale = await signInEmail(new Headers());
+		const { internalAdapter } = await auth.$context;
+		await internalAdapter.updateSession(stale.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		const { token, sessionCookie } = await signInEmail(
+			new Headers({
+				cookie: `better-auth.session_token=${stale.sessionCookie?.value}`,
+			}),
+		);
+
+		expect(sessionCookie?.value.split(".")[0]).toBe(token);
+	});
+
 	it("sets the session cookie when the request carries no session cookie", async () => {
 		const { token, sessionCookie } = await signInEmail(new Headers());
 
@@ -833,13 +849,16 @@ describe("anonymous after-hook on sign-in over a previous session cookie", async
 
 	it("links a live anonymous session and keeps the new session cookie", async () => {
 		const anonHeaders = new Headers();
-		await client.signIn.anonymous({
+		const anonymousUser = await client.signIn.anonymous({
 			fetchOptions: { onSuccess: sessionSetter(anonHeaders) },
 		});
 
 		const { token, sessionCookie } = await signInEmail(anonHeaders);
 
 		expect(linkAccountFn).toHaveBeenCalledOnce();
+		expect(linkAccountFn.mock.calls[0]?.[0].anonymousUser.user.id).toBe(
+			anonymousUser.data?.user.id,
+		);
 		expect(sessionCookie?.value.split(".")[0]).toBe(token);
 	});
 });
