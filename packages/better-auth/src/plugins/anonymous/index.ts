@@ -55,7 +55,8 @@ async function resolveAnonymousSession(ctx: GenericEndpointContext): Promise<{
 		{ ...ctx, context, responseHeaders: new Headers() },
 		{ disableRefresh: true },
 	);
-	// Cache the result on the real context so later lookups reuse it.
+	// Keep the previous session on the real context, as `getSessionFromCtx`
+	// normally does, for `onLinkAccount` and later hooks.
 	ctx.context.session = context.session;
 	if (cookieSession?.user.isAnonymous) {
 		return {

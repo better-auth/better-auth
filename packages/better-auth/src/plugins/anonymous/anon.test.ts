@@ -852,6 +852,10 @@ describe("anonymous after-hook on sign-in over a previous session cookie", async
 		const anonymousUser = await client.signIn.anonymous({
 			fetchOptions: { onSuccess: sessionSetter(anonHeaders) },
 		});
+		let contextSessionUserId: string | undefined;
+		linkAccountFn.mockImplementationOnce(({ ctx }) => {
+			contextSessionUserId = ctx.context.session?.user.id;
+		});
 
 		const { token, sessionCookie } = await signInEmail(anonHeaders);
 
@@ -859,6 +863,7 @@ describe("anonymous after-hook on sign-in over a previous session cookie", async
 		expect(linkAccountFn.mock.calls[0]?.[0].anonymousUser.user.id).toBe(
 			anonymousUser.data?.user.id,
 		);
+		expect(contextSessionUserId).toBe(anonymousUser.data?.user.id);
 		expect(sessionCookie?.value.split(".")[0]).toBe(token);
 	});
 });
