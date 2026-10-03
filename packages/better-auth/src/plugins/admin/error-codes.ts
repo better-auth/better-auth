@@ -33,4 +33,5 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 		"You are not allowed to update users email",
 	PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER:
 		"Password cannot be updated through update-user. Use the set-user-password endpoint instead",
+	FAILED_TO_LIST_USERS: "Failed to list users",
 });
