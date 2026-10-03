@@ -104,9 +104,9 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	};
 
 	const config = {
-		cookieName: "better-auth.last_used_login_method",
-		maxAge: 60 * 60 * 24 * 30,
 		...userConfig,
+		cookieName: userConfig?.cookieName ?? "better-auth.last_used_login_method",
+		maxAge: userConfig?.maxAge ?? 60 * 60 * 24 * 30,
 	} satisfies LastLoginMethodOptions;
 
 	return {
