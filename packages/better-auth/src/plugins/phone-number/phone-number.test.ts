@@ -825,12 +825,13 @@ describe("reset password flow attempts", async () => {
 			expect(res.error?.message).toBe("Invalid OTP");
 		}
 
+		// The correct code must no longer redeem once the attempts are spent, and
+		// the response must stay indistinguishable from an unknown reset code.
 		const res = await client.phoneNumber.resetPassword({
 			phoneNumber: testPhoneNumber,
-			otp: otp,
+			otp: resetOtp,
 			newPassword: "password",
 		});
-		// Keep attempt exhaustion indistinguishable from an unknown reset code.
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.message).toBe("Invalid OTP");
 	});
