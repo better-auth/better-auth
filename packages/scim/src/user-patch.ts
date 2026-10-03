@@ -167,31 +167,48 @@ function readEmailSet(value: unknown, userName: string): SCIMCanonicalEmail[] {
 	return normalizeSCIMEmails(userName, emails);
 }
 
-function readName(value: unknown): Partial<SCIMName> {
+function readOptionalNamePart(
+	value: unknown,
+	attribute: string,
+): string | null {
+	const scalar = unwrapSinglePatchValue(value);
+	if (scalar === null) return null;
+	return readNonEmptyString(value, attribute);
+}
+
+function readName(
+	value: unknown,
+): Partial<Record<keyof SCIMName, string | null>> {
 	if (!isRecord(value)) return invalidPatchValue("name must be an object");
-	const name: Partial<SCIMName> = {};
+	const name: Partial<Record<keyof SCIMName, string | null>> = {};
 	for (const [attribute, attributeValue] of Object.entries(value)) {
 		switch (attribute.toLowerCase()) {
 			case "formatted":
-				name.formatted = readNonEmptyString(attributeValue, "name.formatted");
+				name.formatted = readOptionalNamePart(attributeValue, "name.formatted");
 				break;
 			case "givenname":
-				name.givenName = readNonEmptyString(attributeValue, "name.givenName");
+				name.givenName = readOptionalNamePart(attributeValue, "name.givenName");
 				break;
 			case "familyname":
-				name.familyName = readNonEmptyString(attributeValue, "name.familyName");
+				name.familyName = readOptionalNamePart(
+					attributeValue,
+					"name.familyName",
+				);
 				break;
 			case "middlename":
-				name.middleName = readNonEmptyString(attributeValue, "name.middleName");
+				name.middleName = readOptionalNamePart(
+					attributeValue,
+					"name.middleName",
+				);
 				break;
 			case "honorificprefix":
-				name.honorificPrefix = readNonEmptyString(
+				name.honorificPrefix = readOptionalNamePart(
 					attributeValue,
 					"name.honorificPrefix",
 				);
 				break;
 			case "honorificsuffix":
-				name.honorificSuffix = readNonEmptyString(
+				name.honorificSuffix = readOptionalNamePart(
 					attributeValue,
 					"name.honorificSuffix",
 				);
@@ -1039,29 +1056,41 @@ export function applySCIMUserPatch(
 				}
 				const name = readName(value);
 				if (name.givenName !== undefined) {
-					setNamePart(state, "givenName", name.givenName);
+					setNamePart(state, "givenName", name.givenName ?? undefined);
 				}
 				if (name.familyName !== undefined) {
-					setNamePart(state, "familyName", name.familyName);
+					setNamePart(state, "familyName", name.familyName ?? undefined);
 				}
 				if (name.middleName !== undefined) {
-					setNamePart(state, "middleName", name.middleName);
+					setNamePart(state, "middleName", name.middleName ?? undefined);
 				}
 				if (name.honorificPrefix !== undefined) {
-					setNamePart(state, "honorificPrefix", name.honorificPrefix);
+					setNamePart(
+						state,
+						"honorificPrefix",
+						name.honorificPrefix ?? undefined,
+					);
 				}
 				if (name.honorificSuffix !== undefined) {
-					setNamePart(state, "honorificSuffix", name.honorificSuffix);
+					setNamePart(
+						state,
+						"honorificSuffix",
+						name.honorificSuffix ?? undefined,
+					);
 				}
 				if (name.formatted !== undefined) {
-					setFormattedName(state, name.formatted);
+					setFormattedName(
+						state,
+						name.formatted ??
+							(composeName(state) || state.displayName || state.primaryEmail),
+					);
 				}
 				return;
 			}
 			case "name.formatted":
 				setFormattedName(
 					state,
-					op === "remove"
+					op === "remove" || unwrapSinglePatchValue(value) === null
 						? composeName(state) || state.displayName || state.primaryEmail
 						: readNonEmptyString(value, "name.formatted"),
 				);
@@ -1070,7 +1099,7 @@ export function applySCIMUserPatch(
 				setNamePart(
 					state,
 					"givenName",
-					op === "remove"
+					op === "remove" || unwrapSinglePatchValue(value) === null
 						? undefined
 						: readNonEmptyString(value, "name.givenName"),
 				);
@@ -1079,7 +1108,7 @@ export function applySCIMUserPatch(
 				setNamePart(
 					state,
 					"familyName",
-					op === "remove"
+					op === "remove" || unwrapSinglePatchValue(value) === null
 						? undefined
 						: readNonEmptyString(value, "name.familyName"),
 				);
@@ -1088,7 +1117,7 @@ export function applySCIMUserPatch(
 				setNamePart(
 					state,
 					"middleName",
-					op === "remove"
+					op === "remove" || unwrapSinglePatchValue(value) === null
 						? undefined
 						: readNonEmptyString(value, "name.middleName"),
 				);
@@ -1097,7 +1126,7 @@ export function applySCIMUserPatch(
 				setNamePart(
 					state,
 					"honorificPrefix",
-					op === "remove"
+					op === "remove" || unwrapSinglePatchValue(value) === null
 						? undefined
 						: readNonEmptyString(value, "name.honorificPrefix"),
 				);
@@ -1106,7 +1135,7 @@ export function applySCIMUserPatch(
 				setNamePart(
 					state,
 					"honorificSuffix",
-					op === "remove"
+					op === "remove" || unwrapSinglePatchValue(value) === null
 						? undefined
 						: readNonEmptyString(value, "name.honorificSuffix"),
 				);
