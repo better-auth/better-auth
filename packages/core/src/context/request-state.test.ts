@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { __getBetterAuthGlobal } from "./global";
 import type { RequestStateWeakMap } from "./request-state";
 import {
 	defineRequestState,
@@ -92,40 +93,48 @@ describe("request-state", () => {
 		});
 	});
 
-	describe("AsyncLocalStorage init race", () => {
-		it("shares one AsyncLocalStorage across concurrent first-callers", async () => {
-			// Force a cold start: reset the module (clears the memoized init) and
-			// clear the global singleton, so the concurrent burst below all races
-			// through ensureAsyncStorage()'s lazy initialization.
+	describe("concurrent first calls", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10832
+		 */
+		it("preserves each request state", async () => {
 			vi.resetModules();
-			const betterAuthGlobalSymbol = Symbol.for("better-auth:global");
-			const betterAuthGlobal = (globalThis as any)[betterAuthGlobalSymbol];
-			if (betterAuthGlobal?.context) {
-				betterAuthGlobal.context.requestStateAsyncStorage = undefined;
-			}
+			const globalContext = __getBetterAuthGlobal().context;
+			const previousStorageDescriptor = Object.getOwnPropertyDescriptor(
+				globalContext,
+				"requestStateAsyncStorage",
+			);
+			onTestFinished(() => {
+				if (previousStorageDescriptor) {
+					Object.defineProperty(
+						globalContext,
+						"requestStateAsyncStorage",
+						previousStorageDescriptor,
+					);
+				} else {
+					Reflect.deleteProperty(globalContext, "requestStateAsyncStorage");
+				}
+			});
+			Reflect.deleteProperty(globalContext, "requestStateAsyncStorage");
 			const mod = await import("./request-state");
 
-			const N = 32;
-			const outcomes = await Promise.all(
-				Array.from({ length: N }, () =>
-					mod
-						.runWithRequestState(new WeakMap(), async () => {
-							// Yield so every caller interleaves through the cold init
-							// window before any of them reads its state back.
-							await Promise.resolve();
-							await new Promise((resolve) => setTimeout(resolve, 0));
-							// Throws "No request state found" if this caller's run()
-							// executed on a different instance than the one resolved here.
-							await mod.getCurrentRequestState();
-						})
-						.then(
-							() => true,
-							() => false,
-						),
+			const stores: RequestStateWeakMap[] = Array.from(
+				{ length: 32 },
+				() => new WeakMap<object, unknown>(),
+			);
+			const currentStores = await Promise.all(
+				stores.map((store) =>
+					mod.runWithRequestState(store, async () => {
+						await Promise.resolve();
+						return mod.getCurrentRequestState();
+					}),
 				),
 			);
 
-			expect(outcomes.every(Boolean)).toBe(true);
+			const matchingStoreCount = currentStores.filter(
+				(currentStore, index) => currentStore === stores[index],
+			).length;
+			expect(matchingStoreCount).toBe(stores.length);
 		});
 	});
 });

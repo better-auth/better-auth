@@ -266,7 +266,7 @@ function withRefListLock<T>(
 		}
 	});
 	refListLocks.set(refKey, tracked);
-	return run;
+	return tracked;
 }
 
 /**

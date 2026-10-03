@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
@@ -114,7 +115,7 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({
@@ -226,7 +227,7 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const dbUser = await db.findOne<User>({
@@ -328,7 +329,7 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({
@@ -434,7 +435,7 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({
@@ -557,16 +558,14 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 	const allowedAttempts = 3;
 	let currentOTP = "";
 
-	// A secondary storage whose reads of the OTP row are deliberately slow and
-	// whose writes are instant. Without an atomic consume gate, every concurrent
-	// verification finishes its slow read of the same counter before any write
-	// lands, so they would all pass the budget check against a stale value. The
-	// fix consumes the row under a per-key lock, so the slow reads serialize and
-	// the budget holds. `getAndDelete` is intentionally absent so the consume
-	// path exercises that lock rather than a single storage primitive.
+	// A secondary storage whose normal reads of the OTP row are deliberately
+	// slow while `getAndDelete` is immediate. Without an atomic consume gate,
+	// every concurrent verification could finish a slow read of the same
+	// counter before any write lands. The fix consumes the row through the
+	// required storage primitive, so each attempt observes a distinct counter.
 	const store = new Map<string, { value: string; expiresAt: number }>();
 	const isOtpRow = (key: string) => key.includes("2fa-otp");
-	const secondaryStorage = {
+	const secondaryStorage: SecondaryStorage = {
 		async get(key: string) {
 			if (isOtpRow(key)) {
 				await new Promise((resolve) => setTimeout(resolve, 25));
@@ -578,6 +577,23 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 				return null;
 			}
 			return entry.value;
+		},
+		async getAndDelete(key: string) {
+			const entry = store.get(key);
+			store.delete(key);
+			if (!entry || entry.expiresAt < Date.now()) {
+				return null;
+			}
+			return entry.value;
+		},
+		async increment(key: string, ttl: number) {
+			const entry = store.get(key);
+			const count = Number(entry?.value ?? 0) + 1;
+			store.set(key, {
+				value: String(count),
+				expiresAt: Date.now() + ttl * 1000,
+			});
+			return count;
 		},
 		async set(key: string, value: string, ttl?: number) {
 			store.set(key, {
@@ -616,7 +632,7 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		body: { password: testUser.password },
 		headers,
 	});
-	if (!enrollment.totpURI) {
+	if (enrollment.method !== "totp") {
 		throw new Error("expected totp enrollment");
 	}
 	const row = await db.findOne<TwoFactorTable>({
@@ -648,7 +664,10 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		return challengeHeaders;
 	}
 
-	function verifyOtp(challengeHeaders: Headers, code: string) {
+	function verifyOtp(
+		challengeHeaders: Headers,
+		code: string,
+	): Promise<Response> {
 		return auth.api.verifyTwoFactorOTP({
 			body: { code },
 			headers: challengeHeaders,

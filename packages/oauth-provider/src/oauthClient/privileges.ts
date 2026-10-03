@@ -17,10 +17,23 @@ export async function assertClientPrivileges(
 	ctx: GenericEndpointContext,
 	session: Awaited<ReturnType<typeof getSessionFromCtx>>,
 	opts: OAuthOptions<Scope[]>,
-	action: "create" | "read" | "update" | "delete" | "list" | "rotate",
+	action:
+		| "create"
+		| "read"
+		| "update"
+		| "delete"
+		| "list"
+		| "rotate"
+		| "configure-client-credentials-scopes",
 ) {
 	if (!session) throw new APIError("UNAUTHORIZED");
 	if (!ctx.headers) throw new APIError("BAD_REQUEST");
+	if (
+		action === "configure-client-credentials-scopes" &&
+		!opts.clientPrivileges
+	) {
+		throw new APIError("UNAUTHORIZED");
+	}
 	if (
 		opts.clientPrivileges &&
 		!(await opts.clientPrivileges({

@@ -104,8 +104,6 @@ export const customSession = <
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
-					}).catch((e) => {
-						return null;
 					});
 					/**
 					 * Forwarded before the null check, so that the inner call's

@@ -8,8 +8,11 @@ interface BlogTOCProps {
 }
 
 export function BlogTOC({ items }: BlogTOCProps) {
+	const topLevelItems = items.filter((item) => item.depth <= 2);
+	if (topLevelItems.length === 0) return null;
+
 	return (
-		<TOCProvider toc={items}>
+		<TOCProvider toc={topLevelItems}>
 			<TOC container={{ className: "blog-toc" }} />
 		</TOCProvider>
 	);

@@ -1,6 +1,12 @@
-import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
+import { defineProject } from "vitest/config";
 
-export default defineConfig({
+export default defineProject({
+	resolve: {
+		alias: {
+			"@": fileURLToPath(new URL(".", import.meta.url)),
+		},
+	},
 	test: {
 		environment: "node",
 	},

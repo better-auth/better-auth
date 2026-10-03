@@ -4,7 +4,11 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { getDate } from "../../utils/date";
-import { validatePassword } from "../../utils/password";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+	validatePassword,
+} from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { sensitiveSessionMiddleware } from "./session";
 
@@ -279,14 +283,8 @@ export const resetPassword = createAuthEndpoint(
 
 		const { newPassword } = ctx.body;
 
-		const minLength = ctx.context.password?.config.minPasswordLength;
-		const maxLength = ctx.context.password?.config.maxPasswordLength;
-		if (newPassword.length < minLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
-		if (newPassword.length > maxLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
+		assertPasswordNotTooShort(ctx, newPassword);
+		assertPasswordNotTooLong(ctx, newPassword);
 
 		const id = `reset-password:${token}`;
 
@@ -299,30 +297,31 @@ export const resetPassword = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
+		const user = await ctx.context.internalAdapter.findUserById(userId);
+		if (!user) {
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+		}
 		const hashedPassword = await ctx.context.password.hash(newPassword);
-		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
-		const account = accounts.find((ac) => ac.providerId === "credential");
+		const account =
+			await ctx.context.internalAdapter.findCredentialAccount(userId);
 		if (!account) {
 			await ctx.context.internalAdapter.createAccount({
 				userId,
 				providerId: "credential",
+				accountId: user.id,
 				password: hashedPassword,
-				accountId: userId,
 			});
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
-			const user = await ctx.context.internalAdapter.findUserById(userId);
-			if (user) {
-				await ctx.context.options.emailAndPassword.onPasswordReset(
-					{
-						user,
-					},
-					ctx.request,
-				);
-			}
+			await ctx.context.options.emailAndPassword.onPasswordReset(
+				{
+					user,
+				},
+				ctx.request,
+			);
 		}
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteUserSessions(userId);

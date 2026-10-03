@@ -20,7 +20,14 @@ export const vercel = (options: VercelOptions) => {
 	return {
 		id: "vercel",
 		name: "Vercel",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		accountSubject: ({ profile }) => profile.sub,
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Vercel");
 			}
@@ -40,6 +47,7 @@ export const vercel = (options: VercelOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -72,7 +80,6 @@ export const vercel = (options: VercelOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.name ?? profile.preferred_username ?? "",
 					email: profile.email,
 					image: profile.picture,

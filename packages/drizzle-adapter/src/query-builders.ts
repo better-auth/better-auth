@@ -20,6 +20,31 @@ export function insensitiveIlike(
 }
 
 /**
+ * LIKE/ILIKE with an explicit backslash escape character so callers can match a
+ * literal `%` or `_`. SQLite has no default LIKE escape, so the ESCAPE clause is
+ * always supplied. The escape character is passed as a bound parameter.
+ *
+ * This does not support MySQL's `NO_BACKSLASH_ESCAPES` sql_mode, under which the
+ * bound backslash is rejected as a two-character ESCAPE argument.
+ *
+ * @see https://www.sqlite.org/lang_expr.html
+ */
+export function escapedLike(
+	column: DrizzleColumn,
+	pattern: string,
+	provider: DrizzleProvider,
+	mode: "sensitive" | "insensitive" = "sensitive",
+): SQL {
+	const escape = "\\";
+	if (mode === "insensitive") {
+		return provider === "pg"
+			? sql`${column} ILIKE ${pattern} ESCAPE ${escape}`
+			: sql`LOWER(${column}) LIKE LOWER(${pattern}) ESCAPE ${escape}`;
+	}
+	return sql`${column} LIKE ${pattern} ESCAPE ${escape}`;
+}
+
+/**
  * Case-insensitive IN for string arrays.
  */
 export function insensitiveInArray(

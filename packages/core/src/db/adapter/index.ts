@@ -359,6 +359,10 @@ export type JoinOption = {
 export type JoinConfig = {
 	[model: string]: {
 		/**
+		 * The canonical Better Auth model key.
+		 */
+		modelKey?: string | undefined;
+		/**
 		 * The joining column names.
 		 */
 		on: {
@@ -466,10 +470,9 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 * race-safe primitive for consuming single-use credentials
 	 * (verification tokens, authorization codes, one-time tokens).
 	 *
-	 * Always defined on the factory-wrapped adapter. When the underlying
-	 * `CustomAdapter` does not implement `consumeOne`, the factory provides
-	 * a fallback that wraps `findMany + deleteMany` in `transaction(...)`
-	 * and returns the row only when the delete reports an affected row.
+	 * Always defined on the factory-wrapped adapter. Without a native method,
+	 * the factory uses a snapshot-guarded delete and requires an exact affected
+	 * row count. The adapter must evaluate the condition and deletion atomically.
 	 */
 	consumeOne: <T>(data: { model: string; where: Where[] }) => Promise<T | null>;
 	/**
@@ -491,10 +494,11 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 * primitive for guarded counter updates (e.g. decrementing a remaining-uses
 	 * counter only while it is still positive).
 	 *
-	 * Always defined on the factory-wrapped adapter. When the underlying
-	 * `CustomAdapter` does not implement `incrementOne`, the factory provides a
-	 * fallback that wraps `findMany + updateMany` in `transaction(...)` and
-	 * re-applies the where clause as a compare-and-swap guard on the update.
+	 * Always defined on the factory-wrapped adapter. Without a native method,
+	 * the factory uses bounded compare-and-swap retries. Contention exhaustion
+	 * throws rather than returning null. Conditional writes must be atomic.
+	 * A no-op may return the read snapshot without writing. A non-null result
+	 * alone does not establish exclusive ownership of the row.
 	 */
 	incrementOne: <T>(data: {
 		model: string;
@@ -526,33 +530,44 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 
 export type CleanedWhere = Required<Where>;
 
+export type ModelTarget = {
+	/**
+	 * The physical model or table name used by the database adapter.
+	 */
+	model: string;
+	/**
+	 * The canonical Better Auth model key.
+	 */
+	modelKey?: string | undefined;
+};
+
 export interface CustomAdapter {
 	create: <T extends Record<string, any>>({
 		data,
 		model,
 		select,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		data: T;
 		select?: string[] | undefined;
 	}) => Promise<T>;
-	update: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-		update: T;
-	}) => Promise<T | null>;
-	updateMany: (data: {
-		model: string;
-		where: CleanedWhere[];
-		update: Record<string, any>;
-	}) => Promise<number>;
+	update: <T>(
+		data: ModelTarget & {
+			where: CleanedWhere[];
+			update: T;
+		},
+	) => Promise<T | null>;
+	updateMany: (
+		data: ModelTarget & {
+			where: CleanedWhere[];
+			update: Record<string, any>;
+		},
+	) => Promise<number>;
 	findOne: <T>({
 		model,
 		where,
 		select,
 		join,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where: CleanedWhere[];
 		select?: string[] | undefined;
 		join?: JoinConfig | undefined;
@@ -565,8 +580,7 @@ export interface CustomAdapter {
 		sortBy,
 		offset,
 		join,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
 		limit: number;
 		select?: string[] | undefined;
@@ -577,54 +591,51 @@ export interface CustomAdapter {
 	delete: ({
 		model,
 		where,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where: CleanedWhere[];
 	}) => Promise<void>;
 	deleteMany: ({
 		model,
 		where,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where: CleanedWhere[];
 	}) => Promise<number>;
 	/**
-	 * Optional native atomic single-row consume. When omitted, the adapter
-	 * factory falls back to `transaction(findMany + deleteMany)`.
+	 * Optional native atomic single-row consume.
+	 *
 	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,
 	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the
 	 * strongest race-safety guarantee. Implementations must delete at most
-	 * one matching row. TODO(consume-one-required): tighten to required in the
-	 * next minor on `next`.
+	 * one matching row.
 	 */
-	consumeOne?: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-	}) => Promise<T | null>;
+	consumeOne?: <T>(
+		data: ModelTarget & {
+			where: CleanedWhere[];
+		},
+	) => Promise<T | null>;
 	/**
-	 * Optional native atomic guarded counter mutation. Applies
-	 * `field = field + delta` for each entry in `increment` (negative deltas
+	 * Optional native atomic guarded counter mutation.
+	 *
+	 * Applies `field = field + delta` for each entry in `increment` (negative deltas
 	 * decrement), with `where` acting as both selector and guard and `set`
 	 * assigning absolute values in the same operation. Returns the updated row,
 	 * or `null` when the guard matched no row.
 	 *
 	 * Implementing this natively (e.g. `UPDATE ... SET n = n + $delta WHERE ...
 	 * RETURNING *`) gives one round trip and the strongest race-safety
-	 * guarantee. When omitted, the adapter factory provides a transaction-based
-	 * fallback over `findMany + updateMany`. TODO(increment-one-required):
-	 * tighten to required in the next minor on `next`.
+	 * guarantee.
 	 */
-	incrementOne?: <T>(data: {
-		model: string;
-		where: CleanedWhere[];
-		increment: Record<string, number>;
-		set?: Record<string, unknown> | undefined;
-	}) => Promise<T | null>;
+	incrementOne?: <T>(
+		data: ModelTarget & {
+			where: CleanedWhere[];
+			increment: Record<string, number>;
+			set?: Record<string, unknown> | undefined;
+		},
+	) => Promise<T | null>;
 	count: ({
 		model,
 		where,
-	}: {
-		model: string;
+	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
 	}) => Promise<number>;
 	createSchema?:

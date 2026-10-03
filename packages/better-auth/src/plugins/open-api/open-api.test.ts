@@ -4,6 +4,7 @@ import * as z from "zod";
 import { createAuthEndpoint } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
+import { phoneNumber } from "../phone-number";
 import { username } from "../username";
 import { openAPI } from ".";
 import type { OpenAPISchema, Path } from "./generator";
@@ -261,6 +262,20 @@ const wrapperSemanticsPlugin = {
 					prefaulted: z.string().prefault("prefaulted-value"),
 					nonOptional: z.string().optional().nonoptional(),
 					unionOptional: z.union([z.string(), z.undefined()]),
+					unknownPayload: z.unknown(),
+					anyPayload: z.any(),
+					undefinedPayload: z.undefined(),
+					voidPayload: z.void(),
+					caughtPayload: z.string().catch("caught-value"),
+					caughtOptional: z.string().optional().catch("caught-value"),
+					preprocessedOptional: z.preprocess(
+						(value) => value,
+						z.string().optional(),
+					),
+					intersectionOptional: z.intersection(
+						z.string().optional(),
+						z.string().optional(),
+					),
 				}),
 			},
 			async () => ({ success: true }),
@@ -291,6 +306,17 @@ describe("open-api", async () => {
 			emailOTP({
 				sendVerificationOTP: async () => {},
 			}),
+		],
+	});
+	const { auth: authWithPhoneNumber } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				sendOTP: async () => {},
+				signUpOnVerification: {
+					getTempEmail: (phone) => `${phone}@phone.example.com`,
+				},
+			}),
+			openAPI(),
 		],
 	});
 	const { auth: authWithNullableIntersection } = await getTestInstance({
@@ -362,6 +388,74 @@ describe("open-api", async () => {
 		});
 		expect(schemas["User"]!.required).toContain("role");
 		expect(schemas["User"]!.required).not.toContain("preferences");
+	});
+
+	it("should map array additionalFields to OpenAPI array schemas", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						tags: {
+							type: "string[]",
+							required: false,
+						},
+						scores: {
+							type: "number[]",
+							required: true,
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+
+		expect(schemas["User"]!.properties.tags).toEqual({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schemas["User"]!.properties.scores).toEqual({
+			type: "array",
+			items: { type: "number" },
+		});
+		expect(schemas["User"]!.required).not.toContain("tags");
+		expect(schemas["User"]!.required).toContain("scores");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10430
+	 */
+	it("should allow every JSON value in additional field request bodies", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						metadata: {
+							type: "json",
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const signUpSchema = getPostRequestBody(paths, "/sign-up/email").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(signUpSchema, "metadata")).toEqual({});
+
+		const updateUserSchema = getPostRequestBody(paths, "/update-user").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(updateUserSchema, "metadata")).toEqual({});
 	});
 
 	it("should include additionalFields on sign-up and update-user request bodies", async () => {
@@ -799,6 +893,47 @@ describe("open-api", async () => {
 		expect(signInEmailOTPSchema.additionalProperties).toEqual({});
 	});
 
+	it.for([
+		"/sign-in/phone-number",
+		"/phone-number/send-otp",
+		"/phone-number/request-password-reset",
+		"/phone-number/reset-password",
+	])("emits a request body for %s", async (path) => {
+		const schema = await authWithPhoneNumber.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		expect(paths[path]?.post?.requestBody).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8122
+	 */
+	it("emits the phone-number verification request body", async () => {
+		const schema = await authWithPhoneNumber.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const requestBody = getPostRequestBody(paths, "/phone-number/verify");
+		const requestBodySchema = requestBody.content["application/json"].schema;
+
+		expect(requestBody).toMatchObject({
+			required: true,
+			content: {
+				"application/json": {
+					schema: {
+						type: "object",
+						properties: {
+							phoneNumber: { type: "string" },
+							code: { type: "string" },
+							disableSession: { type: "boolean" },
+							updatePhoneNumber: { type: "boolean" },
+						},
+						required: ["phoneNumber", "code"],
+					},
+				},
+			},
+		});
+		expect(requestBodySchema.additionalProperties).toEqual({});
+	});
+
 	it("should keep plain email OTP request bodies as object schemas", async () => {
 		const schema = await authWithEmailOTP.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
@@ -953,7 +1088,18 @@ describe("open-api", async () => {
 		expect(requestBody.required).toBe(true);
 
 		const requestBodySchema = requestBody.content["application/json"].schema;
-		expect(requestBodySchema.required).toEqual(["nonOptional"]);
+		expect(new Set(requestBodySchema.required)).toEqual(
+			new Set([
+				"nonOptional",
+				"unionOptional",
+				"unknownPayload",
+				"anyPayload",
+				"undefinedPayload",
+				"voidPayload",
+				"caughtPayload",
+				"intersectionOptional",
+			]),
+		);
 		expect(wrapperDefaultFactoryCallCount).toBe(0);
 
 		expect(
@@ -977,5 +1123,25 @@ describe("open-api", async () => {
 		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
 			"string",
 		);
+		expect(getSchemaProperty(requestBodySchema, "unknownPayload")).toEqual({});
+		expect(getSchemaProperty(requestBodySchema, "anyPayload")).toEqual({});
+		expect(getSchemaProperty(requestBodySchema, "undefinedPayload")).toEqual(
+			{},
+		);
+		expect(getSchemaProperty(requestBodySchema, "voidPayload")).toEqual({});
+		expect(getSchemaProperty(requestBodySchema, "caughtPayload").type).toBe(
+			"string",
+		);
+		expect(getSchemaProperty(requestBodySchema, "caughtOptional").type).toBe(
+			"string",
+		);
+		expect(
+			getSchemaProperty(requestBodySchema, "preprocessedOptional").type,
+		).toBe("string");
+		expect(
+			getSchemaProperty(requestBodySchema, "intersectionOptional").allOf,
+		).toBeDefined();
+		expect(requestBodySchema.required).not.toContain("caughtOptional");
+		expect(requestBodySchema.required).not.toContain("preprocessedOptional");
 	});
 });

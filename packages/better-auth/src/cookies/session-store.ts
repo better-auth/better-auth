@@ -43,6 +43,22 @@ interface Cookie {
 
 type Chunks = Record<string, string>;
 
+function parseCookieChunkIndex(
+	cookieName: string,
+	name: string,
+): number | null {
+	const prefix = `${cookieName}.`;
+	if (!name.startsWith(prefix)) return null;
+
+	const suffix = name.slice(prefix.length);
+	const index = Number(suffix);
+	if (!Number.isSafeInteger(index) || index < 0 || String(index) !== suffix) {
+		return null;
+	}
+
+	return index;
+}
+
 /**
  * Read all existing chunks from cookies
  */
@@ -54,9 +70,9 @@ function readExistingChunks(
 	const cookies = parseCookies(ctx.headers?.get("cookie") || "");
 
 	for (const [name, value] of cookies) {
-		if (name.startsWith(cookieName)) {
-			chunks[name] = value;
-		}
+		if (name !== cookieName && parseCookieChunkIndex(cookieName, name) === null)
+			continue;
+		chunks[name] = value;
 	}
 
 	return chunks;
@@ -90,7 +106,7 @@ function chunkCookie(
 	if (chunkCount > MAX_COOKIE_CHUNKS) {
 		// Skip the cache and fall back to the DB. The caller still expires stale chunks.
 		logger.warn(
-			`${storeName} cookie is too large to store even after chunking, so the cache was skipped. Reduce the cached data or use a database session.`,
+			`${storeName} cookie is too large to store even after chunking, so the cookie cache was skipped. Reduce the cached data size or avoid storing this data in cookies.`,
 		);
 		return [];
 	}
@@ -208,14 +224,9 @@ export function getChunkedCookie(
 	}
 
 	for (const [name, val] of parseCookies(cookieHeader)) {
-		if (name.startsWith(cookieName + ".")) {
-			const parts = name.split(".");
-			const indexStr = parts.at(-1);
-			const index = parseInt(indexStr || "0", 10);
-			if (!isNaN(index)) {
-				chunks.push({ index, value: val });
-			}
-		}
+		const index = parseCookieChunkIndex(cookieName, name);
+		if (index === null) continue;
+		chunks.push({ index, value: val });
 	}
 
 	if (chunks.length > 0) {

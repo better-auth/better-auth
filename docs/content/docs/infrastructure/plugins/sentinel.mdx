@@ -1,4 +1,6 @@
 ---
+icon: infrastructurePluginsSentinel
+sidebarTitle: "Sentinel"
 title: Security Plugin (sentinel)
 description: The `sentinel()` plugin provides comprehensive security and abuse protection for your authentication system. It detects and prevents various attack vectors including credential stuffing, impossible travel, free trial abuse, and more.
 ---
@@ -24,14 +26,16 @@ export const auth = betterAuth({
 
 ### SentinelOptions
 
-| Option       | Type              | Description                                                           |
-| ------------ | ----------------- | --------------------------------------------------------------------- |
-| `apiUrl`     | `string`          | Better Auth Infrastructure API URL                                    |
-| `kvUrl`      | `string`          | KV store URL for rate limiting data                                   |
-| `apiKey`     | `string`          | Your API key for authentication                                       |
-| `apiTimeout` | `number`          | Timeout in ms for Infra API HTTP requests (`apiUrl`). Default: `3000` |
-| `kvTimeout`  | `number`          | Timeout in ms for KV HTTP requests (`kvUrl`). Default: `1000`         |
-| `security`   | `SecurityOptions` | Security feature configuration                                        |
+| Option       | Type              | Description                                                                                                                                                                       |
+| ------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiUrl`     | `string`          | Better Auth infrastructure API URL. Default: `https://dash.better-auth.com`                                                                                                       |
+| `kvUrl`      | `string`          | Better Auth identification infrastructure URL. Default: `https://kv.better-auth.com`                                                                                              |
+| `apiKey`     | `string`          | Your API key for authentication. Falls back to `BETTER_AUTH_API_KEY` in env.                                                                                                      |
+| `apiOptions` | `object`          | Dash API HTTP options. Accepts `timeout?: number` (ms, default `3000`) and `headers?: Record<string, string>`.                                                                    |
+| `kvOptions`  | `object`          | KV HTTP options. Accepts `timeout?: number` (ms, default `1000`), `retry?: { attempts?: number; baseDelay?: number; maxDelay?: number }`, and `headers?: Record<string, string>`. |
+| `apiTimeout` | `number`          | Deprecated alias for `apiOptions.timeout`.                                                                                                                                        |
+| `kvTimeout`  | `number`          | Deprecated alias for `kvOptions.timeout`.                                                                                                                                         |
+| `security`   | `SecurityOptions` | Security feature configuration.                                                                                                                                                   |
 
 ### SecurityOptions
 
@@ -67,6 +71,7 @@ sentinel({
   security: {
     credentialStuffing: {
       enabled: true,
+      action: "challenge", // optional default action; thresholds still drive challenge vs block
       thresholds: {
         challenge: 3,  // Issue PoW challenge after 3 failures
         block: 5,      // Block after 5 failures
@@ -119,6 +124,7 @@ sentinel({
         block: 3,
       },
       maxAccountsPerVisitor: 3,
+      retentionSeconds: 90 * 24 * 60 * 60, // optional; default 90 days
       action: "block",
     },
   },
@@ -130,6 +136,8 @@ sentinel({
 1. Tracks account creations per visitor fingerprint
 2. When threshold is exceeded, blocks new account creation
 3. Useful for preventing free tier abuse
+
+`retentionSeconds` controls how long per-visitor signup ledger keys are kept (sliding window). Default is 90 days; the platform clamps values to between 1 day and 365 days.
 
 ### Compromised Password Detection
 
@@ -266,6 +274,7 @@ sentinel({
       enabled: true,
       strictness: "medium",  // "low", "medium", or "high"
       action: "block",
+      domainAllowlist: ["company.com", "partner.org"], // always allow these domains
     },
   },
 }),
@@ -276,6 +285,8 @@ sentinel({
 * `low` - Block only known disposable domains
 * `medium` - Also check for valid MX records
 * `high` - Additional heuristic checks
+
+`domainAllowlist` skips disposable/heuristic checks for the listed domains (exact domain match).
 
 ### Email normalization
 
@@ -342,10 +353,15 @@ export const authClient = createAuthClient({
 
 ### Configuration
 
-| Option               | Type      | Default | Description                                             |
-| -------------------- | --------- | ------- | ------------------------------------------------------- |
-| `autoSolveChallenge` | `boolean` | `true`  | Automatically solve PoW challenges                      |
-| `kvTimeout`          | `number`  | `1000`  | Timeout in ms for KV identify and related HTTP requests |
+| Option                | Type                            | Default                                                                    | Description                                     |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------- |
+| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL` or `https://kv.better-auth.com`                       | Base URL for the identify endpoint.             |
+| `identifyOptions`     | `object`                        | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP timeout and retry policy.         |
+| `autoSolveChallenge`  | `boolean`                       | `true`                                                                     | Automatically solve PoW challenges.             |
+| `kvTimeout`           | `number`                        | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`. |
+| `onChallengeReceived` | `(reason: string) => void`      | —                                                                          | Called when a PoW challenge is received.        |
+| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                                          | Called after a successful solve.                |
+| `onChallengeFailed`   | `(error: Error) => void`        | —                                                                          | Called if solving fails.                        |
 
 ### Browser Fingerprinting
 
@@ -424,15 +440,16 @@ export const authClient = createAuthClient({
 
 #### `sentinelNativeClient` options
 
-| Option                | Type                            | Default                                                 | Description                                                                 |
-| --------------------- | ------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com` | KV identify endpoint base URL                                               |
-| `kvTimeout`           | `number`                        | `1000`                                                  | Timeout in ms for KV identify and related HTTP requests                     |
-| `autoSolveChallenge`  | `boolean`                       | `true`                                                  | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution` |
-| `onChallengeReceived` | `(reason: string) => void`      | —                                                       | Called when a PoW challenge is received                                     |
-| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                       | Called after a successful solve                                             |
-| `onChallengeFailed`   | `(error: Error) => void`        | —                                                       | Called if solving fails                                                     |
-| `storage`             | `{ getItem, setItem }`          | Async Storage when installed                            | Persistent async storage for a stable per-install visitor ID                |
+| Option                | Type                            | Default                                                                    | Description                                                                  |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com`                    | Identify endpoint base URL.                                                  |
+| `identifyOptions`     | `object`                        | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP timeout and retry policy.                                      |
+| `kvTimeout`           | `number`                        | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`.                              |
+| `autoSolveChallenge`  | `boolean`                       | `true`                                                                     | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution`. |
+| `onChallengeReceived` | `(reason: string) => void`      | —                                                                          | Called when a PoW challenge is received.                                     |
+| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                                          | Called after a successful solve.                                             |
+| `onChallengeFailed`   | `(error: Error) => void`        | —                                                                          | Called if solving fails.                                                     |
+| `storage`             | `{ getItem, setItem }`          | Async Storage when installed                                               | Persistent async storage for a stable per-install visitor ID.                |
 
 ## Security Events
 

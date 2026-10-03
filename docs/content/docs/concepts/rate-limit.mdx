@@ -1,11 +1,12 @@
 ---
+icon: conceptsRateLimit
 title: Rate Limit
 description: Learn how to configure rate limiting in Better Auth, including IP address detection, IPv6 support, custom rate limit windows, storage backends, error handling, and per-endpoint rules.
 ---
 
 Better Auth includes a built-in rate limiter to help manage traffic and prevent abuse. By default, in production mode, the rate limiter is set to:
 
-* Window: 60 seconds
+* Window: 10 seconds
 * Max Requests: 100 requests
 
 <Callout type="warning">
@@ -44,7 +45,7 @@ In addition to the default settings, Better Auth provides custom rules for speci
 
 In addition, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has custom rules:
 
-* `/two-factor/verify`: Is limited to 3 requests within 10 seconds.
+* `/two-factor/*`: Is limited to 3 requests within 10 seconds.
 
 These custom rules ensure that sensitive operations are protected with stricter limits.
 
@@ -264,16 +265,20 @@ export const auth = betterAuth({
     //...other options
     rateLimit: {
         customStorage: {
-            get: async (key) => {
-                // get rate limit data
-            },
-            set: async (key, value) => {
-                // set rate limit data
+            consume: async (key, rule) => {
+                // atomically record one request for `key`
+                // rule.window is in seconds, rule.max is the request limit
+                return {
+                    allowed: true,
+                    retryAfter: null,
+                };
             },
         },
     },
 })
 ```
+
+`customStorage.consume` must check and increment in one operation. Better Auth no longer accepts separate `get` and `set` methods for rate limiting because that shape can allow concurrent requests to pass the same stale counter.
 
 ## Handling Rate Limit Errors
 

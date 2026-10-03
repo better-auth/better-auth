@@ -14,6 +14,10 @@ import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
@@ -662,13 +666,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const newUser = await ctx.context.internalAdapter.createUser({
-					...additionalFields,
-					email,
-					emailVerified: true,
-					name: name || "",
-					image,
-				});
+				const newUser = await ctx.context.internalAdapter.createUser(
+					{
+						...additionalFields,
+						email,
+						emailVerified: true,
+						name: name || "",
+						image,
+					},
+					{ method: "email-otp" },
+				);
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
 				);
@@ -682,23 +689,28 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			if (!user.user.emailVerified) {
-				await revokeUnprovenAccountAccess(ctx, user.user.id);
-				await ctx.context.internalAdapter.updateUser(user.user.id, {
-					emailVerified: true,
-				});
+			let verifiedUser = user.user;
+			if (!verifiedUser.emailVerified) {
+				const promotedUser = await revokeUnprovenAccountAccess(
+					ctx,
+					verifiedUser.id,
+				);
+				if (!promotedUser) {
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				}
+				verifiedUser = promotedUser;
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
+				verifiedUser.id,
 			);
 			await setSessionCookie(ctx, {
 				session,
-				user: user.user,
+				user: verifiedUser,
 			});
 			return ctx.json({
 				token: session.token,
-				user: parseUserOutput(ctx.context.options, user.user),
+				user: parseUserOutput(ctx.context.options, verifiedUser),
 			});
 		},
 	);
@@ -937,14 +949,8 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (ctx.body.password.length < minPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.password.length > maxPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooShort(ctx, ctx.body.password);
+			assertPasswordNotTooLong(ctx, ctx.body.password);
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(
@@ -954,15 +960,13 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				ctx.body.otp,
 			);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			const account = user.accounts?.find(
-				(account) => account.providerId === "credential",
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
+				user.user.id,
 			);
 			if (!account) {
 				await ctx.context.internalAdapter.createAccount({

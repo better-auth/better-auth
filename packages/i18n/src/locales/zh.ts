@@ -1,0 +1,41 @@
+import type { TranslationDictionary } from "../types";
+
+/**
+ * Simplified Chinese translations
+ */
+export const zh: TranslationDictionary = {
+	USER_NOT_FOUND: "用户未找到",
+	FAILED_TO_CREATE_USER: "创建用户失败",
+	FAILED_TO_CREATE_SESSION: "创建会话失败",
+	FAILED_TO_UPDATE_USER: "更新用户失败",
+	FAILED_TO_GET_SESSION: "获取会话失败",
+	INVALID_PASSWORD: "密码无效",
+	INVALID_EMAIL: "邮箱无效",
+	INVALID_EMAIL_OR_PASSWORD: "邮箱或密码无效",
+	INVALID_USER: "用户无效",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "社交账户已绑定",
+	PROVIDER_NOT_FOUND: "提供商未找到",
+	INVALID_TOKEN: "令牌无效",
+	TOKEN_EXPIRED: "令牌已过期",
+	FAILED_TO_GET_USER_INFO: "获取用户信息失败",
+	USER_EMAIL_NOT_FOUND: "用户邮箱未找到",
+	EMAIL_NOT_VERIFIED: "邮箱未验证",
+	PASSWORD_TOO_SHORT: "密码太短",
+	PASSWORD_TOO_LONG: "密码太长",
+	USER_ALREADY_EXISTS: "用户已存在",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "用户已存在，请使用其他邮箱",
+	EMAIL_CAN_NOT_BE_UPDATED: "邮箱无法更新",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "凭证账户未找到",
+	SESSION_EXPIRED: "会话已过期，请重新验证身份以执行此操作",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "无法取消绑定最后一个账户",
+	ACCOUNT_NOT_FOUND: "账户未找到",
+	USER_ALREADY_HAS_PASSWORD: "用户已设置密码，请提供密码以删除账户",
+	VERIFICATION_EMAIL_NOT_ENABLED: "验证邮件未启用",
+	EMAIL_ALREADY_VERIFIED: "邮箱已验证",
+	EMAIL_MISMATCH: "邮箱不匹配",
+	SESSION_NOT_FRESH: "会话已过时",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "已绑定账户已存在",
+	VALIDATION_ERROR: "验证错误",
+	MISSING_FIELD: "此字段为必填项",
+	PASSWORD_ALREADY_SET: "用户已设置密码",
+};

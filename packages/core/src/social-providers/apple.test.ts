@@ -11,11 +11,10 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import { verifyProviderIdToken } from "../oauth2";
 import { apple } from "./apple";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
-const CLIENT_ID = "service.example.app";
-const CLIENT_SECRET = "test-secret";
 
 async function createSignedAppleToken(payloadNonce: string) {
 	const { publicKey, privateKey } = await generateKeyPair("ES256", {
@@ -57,8 +56,8 @@ describe("apple.createAuthorizationURL", () => {
 	it("sends a PKCE code challenge when a code verifier is provided", async () => {
 		const verifier = "apple-code-verifier";
 		const provider = apple({
-			clientId: CLIENT_ID,
-			clientSecret: CLIENT_SECRET,
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
 		});
 
 		const url = await provider.createAuthorizationURL({
@@ -76,8 +75,8 @@ describe("apple.createAuthorizationURL", () => {
 
 	it("omits PKCE parameters when no code verifier is provided", async () => {
 		const provider = apple({
-			clientId: CLIENT_ID,
-			clientSecret: CLIENT_SECRET,
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
 		});
 
 		const url = await provider.createAuthorizationURL({
@@ -91,7 +90,7 @@ describe("apple.createAuthorizationURL", () => {
 	});
 });
 
-describe("apple.verifyIdToken", () => {
+describe("apple id_token verification", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();
 	});
@@ -102,12 +101,14 @@ describe("apple.verifyIdToken", () => {
 		mockAppleJwks(publicJWK);
 
 		const provider = apple({
-			clientId: CLIENT_ID,
-			clientSecret: CLIENT_SECRET,
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
 			appBundleIdentifier: "com.example.app",
 		});
 
-		await expect(provider.verifyIdToken(token, rawNonce)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, rawNonce),
+		).resolves.toBe(true);
 	});
 
 	it("accepts a hashed token nonce when the request provides the raw native iOS nonce", async () => {
@@ -117,12 +118,14 @@ describe("apple.verifyIdToken", () => {
 		mockAppleJwks(publicJWK);
 
 		const provider = apple({
-			clientId: CLIENT_ID,
-			clientSecret: CLIENT_SECRET,
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
 			appBundleIdentifier: "com.example.app",
 		});
 
-		await expect(provider.verifyIdToken(token, rawNonce)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, rawNonce),
+		).resolves.toBe(true);
 	});
 
 	it("rejects a mismatched nonce", async () => {
@@ -132,13 +135,13 @@ describe("apple.verifyIdToken", () => {
 		mockAppleJwks(publicJWK);
 
 		const provider = apple({
-			clientId: CLIENT_ID,
-			clientSecret: CLIENT_SECRET,
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
 			appBundleIdentifier: "com.example.app",
 		});
 
 		await expect(
-			provider.verifyIdToken(token, "different-nonce"),
+			verifyProviderIdToken(provider, token, "different-nonce"),
 		).resolves.toBe(false);
 	});
 
@@ -160,9 +163,9 @@ describe("apple.verifyIdToken", () => {
 			},
 		});
 
-		await expect(provider.verifyIdToken("token", "nonce", ctx)).resolves.toBe(
-			true,
-		);
+		await expect(
+			verifyProviderIdToken(provider, "token", "nonce", ctx),
+		).resolves.toBe(true);
 		expect(seenPlatform).toBe("ios");
 	});
 });

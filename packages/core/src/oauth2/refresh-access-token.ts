@@ -1,79 +1,105 @@
-import { base64 } from "@better-auth/utils/base64";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 import { fetchRefusingRedirects } from "./reject-redirects";
+import type {
+	TokenEndpointAuth,
+	TokenEndpointSecretAuthentication,
+} from "./token-endpoint-auth";
+import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+import { parseScopeField } from "./utils";
+
+interface RefreshAccessTokenRequestInput {
+	refreshToken: string;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
+	authentication?: TokenEndpointSecretAuthentication | undefined;
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
+	tokenEndpoint?: string | undefined;
+	extraParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface RefreshAccessTokenRequestBaseInput {
+	refreshToken: string;
+	options: ProviderOptions;
+	extraParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
+	options: Partial<ProviderOptions>;
+	tokenEndpoint: string;
+}
+
+/**
+ * Body keys owned by the refresh-token flow or unsafe to copy from caller input.
+ */
+const BLOCKED_REFRESH_TOKEN_PARAMS = [
+	"grant_type",
+	"refresh_token",
+	"__proto__",
+	"constructor",
+	"prototype",
+] as const;
+
+const BLOCKED_REFRESH_TOKEN_PARAMS_SET: ReadonlySet<string> = new Set(
+	BLOCKED_REFRESH_TOKEN_PARAMS,
+);
 
 export async function refreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
+	tokenEndpointAuth,
+	tokenEndpoint,
 	extraParams,
 	resource,
-}: {
-	refreshToken: string;
-	options: AwaitableFunction<Partial<ProviderOptions>>;
-	authentication?: ("basic" | "post") | undefined;
-	extraParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: RefreshAccessTokenRequestInput) {
 	options = typeof options === "function" ? await options() : options;
-	return createRefreshAccessTokenRequest({
+	const request = buildRefreshAccessTokenRequest({
 		refreshToken,
 		options,
-		authentication,
 		extraParams,
 		resource,
 	});
+
+	await applyTokenEndpointAuth({
+		body: request.body,
+		headers: request.headers,
+		options,
+		tokenEndpoint: tokenEndpoint ?? "",
+		grantType: "refresh_token",
+		tokenEndpointAuth,
+		authentication,
+	});
+
+	return request;
 }
 
-/**
- * @deprecated use async'd refreshAccessTokenRequest instead
- */
-export function createRefreshAccessTokenRequest({
+function applyRefreshExtraParams(
+	body: URLSearchParams,
+	extraParams: Record<string, string> | undefined,
+) {
+	if (!extraParams) return;
+	for (const [key, value] of Object.entries(extraParams)) {
+		if (BLOCKED_REFRESH_TOKEN_PARAMS_SET.has(key)) continue;
+		body.set(key, value);
+	}
+}
+
+function buildRefreshAccessTokenRequest({
 	refreshToken,
 	options,
-	authentication,
 	extraParams,
 	resource,
-}: {
-	refreshToken: string;
-	options: ProviderOptions;
-	authentication?: ("basic" | "post") | undefined;
-	extraParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: RefreshAccessTokenRequestBaseInput) {
 	const body = new URLSearchParams();
-	const headers: Record<string, any> = {
+	const headers: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
-	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
-	// Fixes compatibility with providers like Notion, Twitter, etc.
-	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		if (primaryClientId) {
-			headers["authorization"] =
-				"Basic " +
-				base64.encode(`${primaryClientId}:${options.clientSecret ?? ""}`);
-		} else {
-			headers["authorization"] =
-				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
-		}
-	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
-			body.set("client_secret", options.clientSecret);
-		}
-	}
-
 	if (resource) {
 		if (typeof resource === "string") {
 			body.append("resource", resource);
@@ -84,9 +110,7 @@ export function createRefreshAccessTokenRequest({
 		}
 	}
 	if (extraParams) {
-		for (const [key, value] of Object.entries(extraParams)) {
-			body.set(key, value);
-		}
+		applyRefreshExtraParams(body, extraParams);
 	}
 
 	return {
@@ -100,19 +124,18 @@ export async function refreshAccessToken({
 	options,
 	tokenEndpoint,
 	authentication,
+	tokenEndpointAuth,
 	extraParams,
-}: {
-	refreshToken: string;
-	options: Partial<ProviderOptions>;
-	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
-	extraParams?: Record<string, string> | undefined;
-}): Promise<OAuth2Tokens> {
-	const { body, headers } = await createRefreshAccessTokenRequest({
+	resource,
+}: RefreshAccessTokenInput): Promise<OAuth2Tokens> {
+	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
+		tokenEndpointAuth,
+		tokenEndpoint,
 		extraParams,
+		resource,
 	});
 
 	const { data, error } = await fetchRefusingRedirects<{
@@ -121,7 +144,7 @@ export async function refreshAccessToken({
 		expires_in?: number | undefined;
 		refresh_token_expires_in?: number | undefined;
 		token_type?: string | undefined;
-		scope?: string | undefined;
+		scope?: unknown;
 		id_token?: string | undefined;
 	}>(tokenEndpoint, {
 		method: "POST",
@@ -135,7 +158,7 @@ export async function refreshAccessToken({
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
 		tokenType: data.token_type,
-		scopes: data.scope?.split(" "),
+		scopes: parseScopeField(data.scope),
 		idToken: data.id_token,
 	};
 

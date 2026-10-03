@@ -1,44 +1,70 @@
-import { base64Url } from "@better-auth/utils/base64";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 import { fetchRefusingRedirects } from "./reject-redirects";
+import type {
+	TokenEndpointAuth,
+	TokenEndpointSecretAuthentication,
+} from "./token-endpoint-auth";
+import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+
+interface ClientCredentialsTokenRequestInput {
+	options: AwaitableFunction<ProviderOptions>;
+	scope?: string | undefined;
+	authentication?: TokenEndpointSecretAuthentication | undefined;
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
+	tokenEndpoint?: string | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface ClientCredentialsTokenRequestBaseInput {
+	options: ProviderOptions;
+	scope?: string | undefined;
+	resource?: (string | string[]) | undefined;
+	extraParams?: Record<string, string> | undefined;
+}
+
+interface ClientCredentialsTokenInput
+	extends ClientCredentialsTokenRequestInput {
+	tokenEndpoint: string;
+	scope: string;
+}
 
 export async function clientCredentialsTokenRequest({
 	options,
 	scope,
 	authentication,
+	tokenEndpointAuth,
+	tokenEndpoint,
 	resource,
-}: {
-	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
-	scope?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: ClientCredentialsTokenRequestInput) {
 	options = typeof options === "function" ? await options() : options;
-	return createClientCredentialsTokenRequest({
+	const request = buildClientCredentialsTokenRequest({
 		options,
 		scope,
-		authentication,
 		resource,
 	});
+
+	await applyTokenEndpointAuth({
+		body: request.body,
+		headers: request.headers,
+		options,
+		tokenEndpoint: tokenEndpoint ?? "",
+		grantType: "client_credentials",
+		tokenEndpointAuth,
+		authentication,
+	});
+
+	return request;
 }
 
-/**
- * @deprecated use async'd clientCredentialsTokenRequest instead
- */
-export function createClientCredentialsTokenRequest({
+function buildClientCredentialsTokenRequest({
 	options,
 	scope,
-	authentication,
 	resource,
-}: {
-	options: ProviderOptions & { clientSecret: string };
-	scope?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+	extraParams,
+}: ClientCredentialsTokenRequestBaseInput) {
 	const body = new URLSearchParams();
-	const headers: Record<string, any> = {
+	const headers: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
@@ -54,20 +80,10 @@ export function createClientCredentialsTokenRequest({
 			}
 		}
 	}
-	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		const encodedCredentials = base64Url.encode(
-			`${primaryClientId}:${options.clientSecret}`,
-		);
-		headers["authorization"] = `Basic ${encodedCredentials}`;
-	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		body.set("client_id", primaryClientId);
-		body.set("client_secret", options.clientSecret);
+	if (extraParams) {
+		for (const [key, value] of Object.entries(extraParams)) {
+			if (!body.has(key)) body.append(key, value);
+		}
 	}
 
 	return {
@@ -81,18 +97,15 @@ export async function clientCredentialsToken({
 	tokenEndpoint,
 	scope,
 	authentication,
+	tokenEndpointAuth,
 	resource,
-}: {
-	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
-	tokenEndpoint: string;
-	scope: string;
-	authentication?: ("basic" | "post") | undefined;
-	resource?: (string | string[]) | undefined;
-}): Promise<OAuth2Tokens> {
+}: ClientCredentialsTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
+		tokenEndpointAuth,
+		tokenEndpoint,
 		resource,
 	});
 
