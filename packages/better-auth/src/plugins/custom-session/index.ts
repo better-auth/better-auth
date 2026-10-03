@@ -106,6 +106,8 @@ export const customSession = <
 						returnHeaders: true,
 					});
 
+					const sessionPayload = response ? await fn(response, ctx) : null;
+
 					for (const cookie of headers.getSetCookie()) {
 						for (const [name, attributes] of parseSetCookieHeader(cookie)) {
 							ctx.setCookie(
@@ -118,10 +120,6 @@ export const customSession = <
 					headers.delete("set-cookie");
 					headers.forEach((value, name) => ctx.setHeader(name, value));
 
-					if (!response) {
-						return ctx.json(null);
-					}
-					const sessionPayload = await fn(response, ctx);
 					return ctx.json(sessionPayload);
 				},
 			),

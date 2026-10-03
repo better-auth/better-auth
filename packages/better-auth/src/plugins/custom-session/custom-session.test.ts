@@ -66,6 +66,23 @@ describe("Custom Session Plugin Tests", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10567
+	 */
+	it("preserves no-store when a custom session callback sets cache headers", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				customSession(async (session, ctx) => {
+					ctx.setHeader("cache-control", "public, max-age=3600");
+					return session;
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.getSession({ headers, asResponse: true });
+		expect(response.headers.get("cache-control")).toBe("no-store");
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10566
 	 */
 	it("propagates session lookup failures to server and HTTP clients", async () => {
