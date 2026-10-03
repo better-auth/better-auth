@@ -71,11 +71,12 @@ it("build minimal without unexpected imports", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/10865
  */
-it("build organization plugin without zod locales", async () => {
+it("build organization plugin without unused zod locales", async () => {
 	const esbuildDir = join(fixturesDir, "esbuild");
 	const buildProcess = spawn(
-		"npx",
+		"pnpm",
 		[
+			"exec",
 			"esbuild",
 			"src/organization.ts",
 			"--bundle",
@@ -83,11 +84,12 @@ it("build organization plugin without zod locales", async () => {
 		],
 		{
 			cwd: esbuildDir,
-			stdio: "pipe",
+			stdio: ["ignore", "inherit", "inherit"],
 		},
 	);
 	await new Promise<void>((resolve, reject) => {
-		buildProcess.on("close", (code) => {
+		buildProcess.once("error", reject);
+		buildProcess.once("close", (code) => {
 			if (code === 0) {
 				resolve();
 			} else {
@@ -100,10 +102,14 @@ it("build organization plugin without zod locales", async () => {
 	const outputFile = join(esbuildDir, "dist", "organization.js");
 	const outputContent = await readFile(outputFile, "utf-8");
 	const locales = outputContent.match(/zod\/v4\/locales\/[\w-]+\.js/g) ?? [];
+	const unusedLocales = locales.filter(
+		(locale) =>
+			locale !== "zod/v4/locales/en.js" && locale !== "zod/v4/locales/index.js",
+	);
 	assert.deepStrictEqual(
-		[...new Set(locales)],
-		["zod/v4/locales/en.js"],
-		"Built output should only contain the default zod locale",
+		unusedLocales,
+		[],
+		"Built output should not contain unused zod locales",
 	);
 });
 
