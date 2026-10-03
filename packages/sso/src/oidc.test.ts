@@ -133,6 +133,33 @@ describe("SSO", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11434
+	 */
+	it("should reject registration when the issuer differs from discovery by a trailing slash", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: `${server.issuer.url}/`,
+					domain: "issuer-mismatch.example.com",
+					providerId: "issuer-mismatch",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: 400,
+			body: {
+				code: "issuer_mismatch",
+			},
+		});
+	});
+
 	it("rejects OIDC profile mappings that attempt to replace the subject", async () => {
 		const { headers } = await signInWithTestUser();
 		const profileMappingWithSubjectOverride = {
