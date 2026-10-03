@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { isProduction } from "@better-auth/core/env";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 
 function sanitize(input: string): string {
@@ -406,20 +407,22 @@ export const error = createAuthEndpoint(
 			? sanitize(unsanitizedDescription)
 			: null;
 
-		const queryParams = new URLSearchParams();
-		queryParams.set("error", safeCode);
+		const params = new URLSearchParams();
+		params.set("error", safeCode);
 		if (unsanitizedDescription) {
-			queryParams.set("error_description", unsanitizedDescription);
+			params.set("error_description", unsanitizedDescription);
 		}
 
 		const options = c.context.options;
 		const errorURL = options.onAPIError?.errorURL;
 
 		if (errorURL) {
+			const redirectURL = appendQueryParams(errorURL, params);
+
 			return new Response(null, {
 				status: 302,
 				headers: {
-					Location: `${errorURL}${errorURL.includes("?") ? "&" : "?"}${queryParams.toString()}`,
+					Location: redirectURL,
 				},
 			});
 		}
@@ -428,7 +431,7 @@ export const error = createAuthEndpoint(
 			return new Response(null, {
 				status: 302,
 				headers: {
-					Location: `/?${queryParams.toString()}`,
+					Location: `/?${params.toString()}`,
 				},
 			});
 		}

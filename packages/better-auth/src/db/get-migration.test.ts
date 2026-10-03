@@ -1,9 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { DatabaseConnection, Dialect, TableMetadata } from "kysely";
+import { PostgresAdapter, PostgresQueryCompiler } from "kysely";
 import { describe, expect, it } from "vitest";
 import { organization } from "../plugins/organization";
 import { getMigrations, UnsafeMigrationError } from "./get-migration";
+import { getSchema } from "./get-schema";
 
 // A 1.6-shape team/teamMember schema: the 1.7 `memberCount` and `membershipKey`
 // columns are missing, so getMigrations must ADD them to a populated table.
@@ -440,19 +443,16 @@ describe("get-migration: compound indexes on SQLite", () => {
 	});
 });
 
-const backfillGuide =
-	"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer";
-
-// A 1.6-shape account table. `issuer` is either absent (the 1.7 column has not
-// been added yet) or present as a nullable column (added by hand without the
-// documented NOT NULL step).
+// An account table whose required `plan` additional field is either absent
+// (the column has not been added yet) or present as a nullable column (added
+// by hand without the NOT NULL step).
 function createAccountDb({
-	issuer,
-	issuerColumn = "issuer",
+	plan,
+	planColumn = "plan",
 	seeded = true,
 }: {
-	issuer?: "nullable" | "notNull";
-	issuerColumn?: string;
+	plan?: "nullable" | "notNull";
+	planColumn?: string;
 	seeded?: boolean;
 }) {
 	const db = new DatabaseSync(":memory:");
@@ -467,16 +467,16 @@ function createAccountDb({
 			"updatedAt" date not null
 		)`,
 	);
-	const issuerDefinition =
-		issuer === "nullable"
-			? `"${issuerColumn}" text,`
-			: issuer === "notNull"
-				? `"${issuerColumn}" text not null,`
+	const planDefinition =
+		plan === "nullable"
+			? `"${planColumn}" text,`
+			: plan === "notNull"
+				? `"${planColumn}" text not null,`
 				: "";
 	db.exec(
 		`CREATE TABLE "account" (
 			"id" text primary key not null,
-			${issuerDefinition}
+			${planDefinition}
 			"accountId" text not null,
 			"providerId" text not null,
 			"userId" text not null references "user" ("id"),
@@ -496,11 +496,11 @@ function createAccountDb({
 		`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
 		 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
 	);
-	const issuerValue = issuer ? `, 'https://accounts.google.com'` : "";
-	const issuerTarget = issuer ? `, "${issuerColumn}"` : "";
+	const planValue = plan ? `, 'free'` : "";
+	const planTarget = plan ? `, "${planColumn}"` : "";
 	db.exec(
-		`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt"${issuerTarget})
-		 VALUES ('a1', '10769150350006150715113082367', 'google', 'u1', '2020-01-01', '2020-01-01'${issuerValue})`,
+		`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt"${planTarget})
+		 VALUES ('a1', '10769150350006150715113082367', 'google', 'u1', '2020-01-01', '2020-01-01'${planValue})`,
 	);
 	return db;
 }
@@ -515,6 +515,10 @@ function addNullableTierColumn(db: DatabaseSync) {
 
 const tierField = {
 	user: { additionalFields: { tier: { type: "string", required: true } } },
+} satisfies BetterAuthOptions;
+
+const accountPlanField = {
+	account: { additionalFields: { plan: { type: "string", required: true } } },
 } satisfies BetterAuthOptions;
 
 function captureFailure(promise: Promise<unknown>) {
@@ -572,48 +576,47 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 		);
 		expect(String(failure)).toContain("MySQL");
 		expect(String(failure)).toContain("empty string");
-		expect(String(failure)).not.toContain(backfillGuide);
 	});
 
-	/**
-	 * @see https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer
-	 */
-	it("refuses to add the account issuer column to a populated account table, pointing at the upgrade guide", async () => {
+	it("refuses to add a required additional field to a populated account table", async () => {
 		const failure = await captureFailure(
-			getMigrations({ database: createAccountDb({}) }),
+			getMigrations({ database: createAccountDb({}), ...accountPlanField }),
 		);
 
 		expect(failure).toBeInstanceOf(BetterAuthError);
 		expect(String(failure)).toContain(
-			'Cannot add required column "issuer" to populated table "account"',
+			'Cannot add required column "plan" to populated table "account"',
 		);
-		expect(String(failure)).toContain(backfillGuide);
 	});
 
-	it("points at the upgrade guide through a renamed issuer column", async () => {
+	it("reports the physical column name of a renamed required field", async () => {
 		const failure = await captureFailure(
 			getMigrations({
-				database: createAccountDb({ issuerColumn: "identity_issuer" }),
-				account: { fields: { issuer: "identity_issuer" } },
+				database: createAccountDb({}),
+				account: {
+					additionalFields: {
+						plan: { type: "string", required: true, fieldName: "account_plan" },
+					},
+				},
 			}),
 		);
 
 		expect(String(failure)).toContain(
-			'Cannot add required column "identity_issuer" to populated table "account"',
+			'Cannot add required column "account_plan" to populated table "account"',
 		);
-		expect(String(failure)).toContain(backfillGuide);
 	});
 
 	it("plans a required column without a default when the table is empty", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
 			database: createAccountDb({ seeded: false }),
+			...accountPlanField,
 		});
 
 		expect(toBeAdded.find((t) => t.table === "account")?.fields).toHaveProperty(
-			"issuer",
+			"plan",
 		);
 		expect((await compileMigrations()).toLowerCase()).toContain(
-			'add column "issuer" text not null',
+			'add column "plan" text not null',
 		);
 	});
 
@@ -665,7 +668,7 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 
 describe("get-migration: nullable columns for required fields", () => {
 	it("warns and proceeds when a required field's live column is nullable", async () => {
-		const db = addNullableTierColumn(createAccountDb({ issuer: "notNull" }));
+		const db = addNullableTierColumn(createAccountDb({}));
 		const warnings: string[] = [];
 
 		const { runMigrations, toBeCreated } = await getMigrations({
@@ -704,26 +707,28 @@ describe("get-migration: nullable columns for required fields", () => {
 
 	it("accepts a required field whose live column is not null", async () => {
 		const { compileMigrations, toBeAdded } = await getMigrations({
-			database: createAccountDb({ issuer: "notNull" }),
+			database: createAccountDb({ plan: "notNull" }),
+			...accountPlanField,
 		});
 
 		expect(toBeAdded.find((t) => t.table === "account")).toBeUndefined();
-		expect(await compileMigrations()).toContain(
-			'create unique index "account_issuer_accountId_uidx"',
+		expect((await compileMigrations()).toLowerCase()).not.toContain(
+			'alter table "account"',
 		);
 	});
 
-	it("warns with the real field and table name for the account issuer column", async () => {
+	it("warns with the real field and table name for a nullable account column", async () => {
 		const warnings: string[] = [];
 
 		await getMigrations({
-			database: createAccountDb({ issuer: "nullable" }),
+			database: createAccountDb({ plan: "nullable" }),
+			...accountPlanField,
 			logger: warnLogger(warnings),
 		});
 
 		expect(
 			warnings.some((warning) =>
-				warning.includes('Column "issuer" on table "account"'),
+				warning.includes('Column "plan" on table "account"'),
 			),
 		).toBe(true);
 	});
@@ -772,16 +777,16 @@ describe("get-migration: nullable columns for required fields", () => {
 describe("get-migration: inspecting a migration that cannot be applied", () => {
 	it("reports the unsafe column change and still compiles the statements", async () => {
 		const { compileMigrations, unsafeChanges } = await getMigrations(
-			{ database: createAccountDb({}) },
+			{ database: createAccountDb({}), ...accountPlanField },
 			{ throwOnUnsafe: false },
 		);
 
 		expect(unsafeChanges).toHaveLength(1);
 		expect(unsafeChanges[0]).toContain(
-			'Cannot add required column "issuer" to populated table "account"',
+			'Cannot add required column "plan" to populated table "account"',
 		);
 		expect((await compileMigrations()).toLowerCase()).toContain(
-			'alter table "account" add column "issuer" text not null',
+			'alter table "account" add column "plan" text not null',
 		);
 	});
 
@@ -820,4 +825,300 @@ describe("get-migration: inspecting a migration that cannot be applied", () => {
 		expect(unsafeChanges[0]).toContain("implicit default for the column type");
 		expect(unsafeChanges[0]).not.toContain("empty string");
 	});
+});
+
+describe("get-migration: schema problems the migration cannot fix", () => {
+	it("reports a required column Better Auth never writes", async () => {
+		const plan = await getMigrations({
+			database: createAccountDb({ plan: "notNull" }),
+		});
+		expect(plan.schemaProblems).toHaveLength(1);
+		expect(plan.schemaProblems[0]).toContain(
+			'Column "plan" on table "account" is required but Better Auth never writes it',
+		);
+		expect(plan.toBeAdded).toEqual([]);
+	});
+
+	it("reports nothing for a nullable or a configured extra column", async () => {
+		const nullable = await getMigrations({
+			database: createAccountDb({ plan: "nullable" }),
+		});
+		expect(nullable.schemaProblems).toEqual([]);
+
+		const configured = await getMigrations({
+			database: createAccountDb({ plan: "notNull" }),
+			...accountPlanField,
+		});
+		expect(configured.schemaProblems).toEqual([]);
+	});
+});
+
+function createPostgresDialect(tables: TableMetadata[] = []) {
+	const executed: string[] = [];
+	const connection: DatabaseConnection = {
+		async executeQuery(compiledQuery) {
+			executed.push(compiledQuery.sql);
+			return { rows: [] };
+		},
+		async *streamQuery() {
+			throw new Error("The migration plan must not stream queries");
+		},
+	};
+	const dialect: Dialect = {
+		createAdapter: () => new PostgresAdapter(),
+		createDriver: () => ({
+			async init() {},
+			async acquireConnection() {
+				return connection;
+			},
+			async beginTransaction() {},
+			async commitTransaction() {},
+			async rollbackTransaction() {},
+			async releaseConnection() {},
+			async destroy() {},
+		}),
+		createIntrospector: () => ({
+			async getSchemas() {
+				return [];
+			},
+			async getTables() {
+				return tables;
+			},
+			async getMetadata() {
+				return { tables };
+			},
+		}),
+		createQueryCompiler: () => new PostgresQueryCompiler(),
+	};
+	return { dialect, executed };
+}
+
+describe("get-migration: configured PostgreSQL schema", () => {
+	it("qualifies every planned statement with the configured schema", async () => {
+		const { dialect } = createPostgresDialect();
+		const config: BetterAuthOptions = {
+			database: { dialect, schemaName: "auth", type: "postgres" },
+		};
+
+		const { compileMigrations } = await getMigrations(config);
+		const migration = await compileMigrations();
+
+		expect(migration).toContain('create schema if not exists "auth"');
+		expect(migration).toContain('create table "auth"."user"');
+		expect(migration).toContain('create table "auth"."session"');
+		expect(migration).toContain('references "auth"."user" ("id")');
+		expect(migration).toContain(
+			'create index "session_userId_idx" on "auth"."session"',
+		);
+		expect(migration).not.toContain('create table "user"');
+	});
+
+	it("creates the schema before the tables that live in it", async () => {
+		const { dialect, executed } = createPostgresDialect();
+		const config: BetterAuthOptions = {
+			database: { dialect, schemaName: "auth", type: "postgres" },
+		};
+
+		const { runMigrations } = await getMigrations(config);
+		await runMigrations();
+
+		const createSchema = executed.findIndex((statement) =>
+			statement.startsWith('create schema if not exists "auth"'),
+		);
+		const createUser = executed.findIndex((statement) =>
+			statement.startsWith('create table "auth"."user"'),
+		);
+		expect(createSchema).toBeGreaterThanOrEqual(0);
+		expect(createSchema).toBeLessThan(createUser);
+	});
+
+	it("leaves the plan unqualified when no schema is configured", async () => {
+		const { dialect } = createPostgresDialect();
+		const config: BetterAuthOptions = {
+			database: { dialect, type: "postgres" },
+		};
+
+		const { compileMigrations } = await getMigrations(config);
+		const migration = await compileMigrations();
+
+		expect(migration).not.toContain("create schema");
+		expect(migration).toContain('create table "user"');
+		expect(migration).toContain('references "user" ("id")');
+	});
+
+	it("ignores tables from other schemas", async () => {
+		const { dialect } = createPostgresDialect([
+			{
+				columns: [],
+				isView: false,
+				name: "user",
+				schema: "public",
+			},
+		]);
+		const config: BetterAuthOptions = {
+			database: { dialect, schemaName: "auth", type: "postgres" },
+		};
+
+		const { toBeCreated } = await getMigrations(config);
+
+		expect(toBeCreated.map(({ table }) => table)).toContain("user");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8111
+ */
+describe("get-migration: foreign key model identity", () => {
+	it("references the user table when its name matches another model key", async () => {
+		const database = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database,
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+		};
+
+		const { runMigrations } = await getMigrations(config);
+		await runMigrations();
+
+		const sessionForeignKeys = database
+			.prepare('PRAGMA foreign_key_list("session")')
+			.all();
+		const identityForeignKeys = database
+			.prepare('PRAGMA foreign_key_list("identity")')
+			.all();
+		expect(sessionForeignKeys).toContainEqual(
+			expect.objectContaining({ table: "account", from: "userId", to: "id" }),
+		);
+		expect(identityForeignKeys).toContainEqual(
+			expect.objectContaining({ table: "account", from: "userId", to: "id" }),
+		);
+	});
+
+	it("references the user table when adding a column", async () => {
+		const database = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database,
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+		};
+		await (await getMigrations(config)).runMigrations();
+
+		const { compileMigrations } = await getMigrations({
+			...config,
+			account: {
+				modelName: "identity",
+				additionalFields: {
+					inviterId: {
+						type: "string",
+						required: false,
+						references: { model: "user", field: "id" },
+					},
+				},
+			},
+		});
+
+		expect(await compileMigrations()).toContain(
+			'alter table "identity" add column "inviterId" text references "account" ("id")',
+		);
+	});
+
+	it("retains the reference key after reading the public schema", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			user: {
+				modelName: "account",
+				fields: { email: "email_address" },
+			},
+			account: { modelName: "identity" },
+			plugins: [
+				{
+					id: "audit",
+					schema: {
+						audit: {
+							fields: {
+								userEmail: {
+									type: "string",
+									references: { model: "user", field: "email" },
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		expect(getSchema(config).audit?.fields.userEmail?.references).toMatchObject(
+			{
+				model: "account",
+				field: "email",
+			},
+		);
+		const { compileMigrations } = await getMigrations(config);
+
+		expect(await compileMigrations()).toContain(
+			'"userEmail" text not null references "account" ("email_address")',
+		);
+	});
+
+	it("keeps the referenced key when two models share a table", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			plugins: [
+				{
+					id: "shared-table",
+					schema: {
+						first: {
+							modelName: "shared",
+							fields: { name: { type: "string" } },
+						},
+						second: {
+							modelName: "shared",
+							fields: {
+								code: { type: "string", fieldName: "shared_code" },
+							},
+						},
+						audit: {
+							fields: {
+								sharedCode: {
+									type: "string",
+									references: { model: "second", field: "code" },
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const { compileMigrations } = await getMigrations(config);
+		expect(await compileMigrations()).toContain(
+			'"sharedCode" text not null references "shared" ("shared_code")',
+		);
+	});
+});
+
+it("preserves external table references in generated migrations", async () => {
+	const config: BetterAuthOptions = {
+		database: new DatabaseSync(":memory:"),
+		plugins: [
+			{
+				id: "audit",
+				schema: {
+					audit: {
+						fields: {
+							externalUserId: {
+								type: "string",
+								references: { model: "external_user", field: "id" },
+							},
+						},
+					},
+				},
+			},
+		],
+	};
+
+	const { compileMigrations } = await getMigrations(config);
+	expect(await compileMigrations()).toContain(
+		'"externalUserId" text not null references "external_user" ("id")',
+	);
 });

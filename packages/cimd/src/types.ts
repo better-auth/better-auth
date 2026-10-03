@@ -30,10 +30,10 @@ export interface CimdClientRefreshedEvent {
 
 export interface CimdMetadataFetchPolicy {
 	/**
-	 * Minimum time between metadata fetch starts for one exact client ID.
-	 * Fresh-cache hits and callers joining an in-flight fetch do not consume
-	 * this interval. Numeric values are seconds. Set to `0` to disable
-	 * per-client pacing.
+	 * Minimum time before retrying a failed metadata fetch for one exact client
+	 * ID. Successful fetches are governed by HTTP freshness and the origin/global
+	 * fetch budgets. Numeric values are seconds. Set to `0` to disable failed-fetch
+	 * pacing.
 	 *
 	 * @default 1
 	 */

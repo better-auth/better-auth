@@ -7,7 +7,6 @@ import {
   integer,
   uuid,
   index,
-  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
@@ -55,7 +54,6 @@ export const custom_account = pgTable(
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
       .primaryKey(),
-    issuer: text("issuer").notNull(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: uuid("user_id")
@@ -73,13 +71,7 @@ export const custom_account = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [
-    uniqueIndex("custom_account_issuer_accountId_uidx").on(
-      table.issuer,
-      table.accountId,
-    ),
-    index("custom_account_userId_idx").on(table.userId),
-  ],
+  (table) => [index("custom_account_userId_idx").on(table.userId)],
 );
 
 export const custom_verification = pgTable(

@@ -1,4 +1,6 @@
 ---
+icon: integrationsExpo
+sidebarTitle: "Expo"
 title: Expo Integration
 description: Integrate Better Auth with Expo.
 ---
@@ -308,6 +310,8 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
 
 For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL. When you pass a relative path like "/dashboard", the Expo plugin automatically converts it to a deep link using `Linking.createURL`.
 
+When upgrading your auth backend to purpose-prefixed verification identifiers or purpose-specific state-cookie keys, restart pending redirect-based social sign-ins. Follow the [verification storage](/docs/reference/options#verification) and [state-cookie](/docs/reference/options#storestatestrategy) cutover guidance. These format changes do not require new Expo client configuration and do not affect native [ID-token sign-in](#idtoken-sign-in), which does not use redirect state.
+
 ```tsx title="app/social-sign-in.tsx"
 import { Button } from "react-native";
 import { router } from "expo-router";
@@ -484,6 +488,7 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 ### Expo Client
 
 **storage**: the SecureStore-compatible storage used to cache session data and cookies.
+Reuse the same storage instance across clients that access the same stored data.
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";

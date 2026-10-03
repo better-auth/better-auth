@@ -15,6 +15,25 @@ const runInfoCommand = (args: string[] = []) => {
 	});
 };
 
+const runInfoTextCommand = (args: string[] = []) => {
+	return execFileAsync(process.execPath, [cliPath, "info", ...args], {
+		cwd: tmpDir,
+	});
+};
+
+const writeInstalledPackage = async (name: string, version: string) => {
+	const packageDirectory = path.join(
+		tmpDir,
+		"node_modules",
+		...name.split("/"),
+	);
+	await fs.mkdir(packageDirectory, { recursive: true });
+	await fs.writeFile(
+		path.join(packageDirectory, "package.json"),
+		JSON.stringify({ name, version }),
+	);
+};
+
 describe("info command", () => {
 	beforeEach(async () => {
 		const tmp = path.join(
@@ -70,6 +89,64 @@ describe("info command", () => {
 		// Better Auth config should have an error since no auth file exists
 		expect(output.betterAuth).toHaveProperty("version");
 		expect(output.betterAuth.config).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10997
+	 */
+	it("reports installed versions for protocol-based dependencies", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "catalog:auth",
+					next: "catalog:frontend",
+					"drizzle-orm": "workspace:*",
+				},
+			}),
+		);
+		await Promise.all([
+			writeInstalledPackage("better-auth", "1.7.2"),
+			writeInstalledPackage("next", "16.1.0"),
+			writeInstalledPackage("drizzle-orm", "0.45.1"),
+		]);
+
+		const { stdout } = await runInfoCommand();
+		const output = JSON.parse(stdout);
+
+		expect(output.betterAuth.version).toBe("1.7.2");
+		expect(output.frameworks).toContainEqual({
+			name: "next",
+			version: "16.1.0",
+		});
+		expect(output.databases).toContainEqual({
+			name: "drizzle",
+			version: "0.45.1",
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11126#discussion_r3920527164
+	 */
+	it("reports the installed version when config loading fails", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				dependencies: { "better-auth": "catalog:" },
+			}),
+		);
+		await writeInstalledPackage("better-auth", "1.7.2");
+
+		const { stdout } = await runInfoTextCommand([
+			"--config",
+			"missing-auth.ts",
+		]);
+
+		expect(stdout).toContain("Version: 1.7.2");
+		expect(stdout).toContain("Error:");
 	});
 
 	it("should load and sanitize auth configuration", async () => {
@@ -197,6 +274,12 @@ describe("info command", () => {
 				},
 			}),
 		);
+		await Promise.all([
+			writeInstalledPackage("next", "14.0.0"),
+			writeInstalledPackage("react", "18.0.0"),
+			writeInstalledPackage("@sveltejs/kit", "2.0.0"),
+			writeInstalledPackage("svelte", "4.0.0"),
+		]);
 
 		const { stdout } = await runInfoCommand();
 
@@ -205,19 +288,19 @@ describe("info command", () => {
 		// Check frameworks are detected
 		expect(output.frameworks).toContainEqual({
 			name: "next",
-			version: "^14.0.0",
+			version: "14.0.0",
 		});
 		expect(output.frameworks).toContainEqual({
 			name: "react",
-			version: "^18.0.0",
+			version: "18.0.0",
 		});
 		expect(output.frameworks).toContainEqual({
 			name: "@sveltejs/kit",
-			version: "^2.0.0",
+			version: "2.0.0",
 		});
 		expect(output.frameworks).toContainEqual({
 			name: "svelte",
-			version: "^4.0.0",
+			version: "4.0.0",
 		});
 	});
 
@@ -239,6 +322,12 @@ describe("info command", () => {
 				},
 			}),
 		);
+		await Promise.all([
+			writeInstalledPackage("@prisma/client", "5.0.0"),
+			writeInstalledPackage("kysely", "0.26.0"),
+			writeInstalledPackage("drizzle-orm", "0.29.0"),
+			writeInstalledPackage("better-sqlite3", "9.0.0"),
+		]);
 
 		const { stdout } = await runInfoCommand();
 
@@ -247,19 +336,19 @@ describe("info command", () => {
 		// Check database clients are detected
 		expect(output.databases).toContainEqual({
 			name: "@prisma/client",
-			version: "^5.0.0",
+			version: "5.0.0",
 		});
 		expect(output.databases).toContainEqual({
 			name: "kysely",
-			version: "^0.26.0",
+			version: "0.26.0",
 		});
 		expect(output.databases).toContainEqual({
 			name: "drizzle",
-			version: "^0.29.0",
+			version: "0.29.0",
 		});
 		expect(output.databases).toContainEqual({
 			name: "better-sqlite3",
-			version: "^9.0.0",
+			version: "9.0.0",
 		});
 	});
 

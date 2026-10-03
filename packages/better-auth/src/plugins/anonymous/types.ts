@@ -17,9 +17,8 @@ export interface UserWithAnonymous extends User {
 
 export interface AnonymousOptions {
 	/**
-	 * Configure the domain name of the temporary email
-	 * address for anonymous users in the database.
-	 * @default "baseURL"
+	 * Configure a custom domain for anonymous user email addresses.
+	 * @default "anonymous.placeholder.invalid"
 	 */
 	emailDomainName?: string | undefined;
 	/**

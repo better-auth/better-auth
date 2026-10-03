@@ -34,8 +34,8 @@ async function runCli(args: string[], cwd: string) {
 
 const projects: string[] = [];
 
-// A pre-1.7 SQLite database: the account table predates the `issuer` column
-// and already holds a row, so the guardrail must refuse to add it.
+// A populated SQLite database whose account table predates the required
+// `plan` additional field, so the guardrail must refuse to add it.
 function createProject() {
 	const cacheDir = path.join(
 		process.cwd(),
@@ -57,6 +57,7 @@ export const auth = betterAuth({
 	secret: "a-secret-long-enough-to-keep-the-cli-quiet",
 	baseURL: "http://localhost:3000",
 	emailAndPassword: { enabled: true },
+	account: { additionalFields: { plan: { type: "string", required: true } } },
 });
 `,
 	);
@@ -109,10 +110,7 @@ describe("auth migrate: refusing a destructive column add", () => {
 
 		expect(exitCode).toBe(1);
 		expect(output).toContain(
-			'Cannot add required column "issuer" to populated table "account"',
-		);
-		expect(output).toContain(
-			"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer",
+			'Cannot add required column "plan" to populated table "account"',
 		);
 		expect(output).not.toContain("triggerUncaughtException");
 		expect(output).not.toContain("node:internal");
@@ -134,7 +132,7 @@ describe("auth generate: emitting the refused migration with a warning", () => {
 		const sql = fs.readFileSync(path.join(cwd, "migration.sql"), "utf-8");
 		expect(sql).toContain("DO NOT RUN THIS SCRIPT AS IT IS.");
 		expect(sql.toLowerCase()).toContain(
-			'alter table "account" add column "issuer" text not null',
+			'alter table "account" add column "plan" text not null',
 		);
 	});
 });
