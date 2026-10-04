@@ -5,6 +5,7 @@ import {
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
+	DBTransactionAdapter,
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
 } from "better-auth";
@@ -654,75 +655,98 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			const provider = await ctx.context.adapter.create<
-				Record<string, any>,
-				SSOProvider<O>
-			>({
-				model: "ssoProvider",
-				data: {
-					issuer: body.issuer,
-					domain: body.domain,
-					domainVerified: false,
-					...additionalFields,
-					oidcConfig: (() => {
-						const config = buildOIDCConfig();
-						if (config) {
-							const parsed = JSON.parse(config) as {
-								tokenEndpointAuthentication?: string;
-								clientSecret?: string;
-							};
-							if (
-								parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
-								!parsed.clientSecret
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"clientSecret is required when using client_secret_basic or client_secret_post authentication",
-								});
+			const createProvider = (
+				database: DBTransactionAdapter = ctx.context.adapter,
+			) =>
+				database.create<Record<string, unknown>, SSOProvider<O>>({
+					model: "ssoProvider",
+					data: {
+						issuer: body.issuer,
+						domain: body.domain,
+						domainVerified: false,
+						...additionalFields,
+						oidcConfig: (() => {
+							const config = buildOIDCConfig();
+							if (config) {
+								const parsed = JSON.parse(config) as {
+									tokenEndpointAuthentication?: string;
+									clientSecret?: string;
+								};
+								if (
+									parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
+									!parsed.clientSecret
+								) {
+									throw new APIError("BAD_REQUEST", {
+										message:
+											"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+									});
+								}
+								if (
+									parsed.tokenEndpointAuthentication === "private_key_jwt" &&
+									!options?.resolvePrivateKey &&
+									!options?.defaultSSO?.some(
+										(p: Record<string, unknown>) =>
+											p.providerId === body.providerId &&
+											"privateKey" in p &&
+											p.privateKey,
+									)
+								) {
+									throw new APIError("BAD_REQUEST", {
+										message:
+											"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+									});
+								}
 							}
-							if (
-								parsed.tokenEndpointAuthentication === "private_key_jwt" &&
-								!options?.resolvePrivateKey &&
-								!options?.defaultSSO?.some(
-									(p: Record<string, unknown>) =>
-										p.providerId === body.providerId &&
-										"privateKey" in p &&
-										p.privateKey,
-								)
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
-								});
-							}
-						}
-						return config;
-					})(),
-					samlConfig: body.samlConfig
-						? JSON.stringify({
-								issuer: body.issuer,
-								entryPoint: body.samlConfig.entryPoint,
-								cert: body.samlConfig.cert,
-								audience: body.samlConfig.audience,
-								callbackUrl: body.samlConfig.callbackUrl,
-								idpInitiatedCallbackUrl:
-									body.samlConfig.idpInitiatedCallbackUrl,
-								idpMetadata: body.samlConfig.idpMetadata,
-								spMetadata: body.samlConfig.spMetadata,
-								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
-								authnRequestsSigned: body.samlConfig.authnRequestsSigned,
-								signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-								digestAlgorithm: body.samlConfig.digestAlgorithm,
-								identifierFormat: body.samlConfig.identifierFormat,
-								privateKey: body.samlConfig.privateKey,
-								mapping: body.samlConfig.mapping,
-							})
-						: null,
+							return config;
+						})(),
+						samlConfig: body.samlConfig
+							? JSON.stringify({
+									issuer: body.issuer,
+									entryPoint: body.samlConfig.entryPoint,
+									cert: body.samlConfig.cert,
+									audience: body.samlConfig.audience,
+									callbackUrl: body.samlConfig.callbackUrl,
+									idpInitiatedCallbackUrl:
+										body.samlConfig.idpInitiatedCallbackUrl,
+									idpMetadata: body.samlConfig.idpMetadata,
+									spMetadata: body.samlConfig.spMetadata,
+									wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
+									authnRequestsSigned: body.samlConfig.authnRequestsSigned,
+									signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+									digestAlgorithm: body.samlConfig.digestAlgorithm,
+									identifierFormat: body.samlConfig.identifierFormat,
+									privateKey: body.samlConfig.privateKey,
+									mapping: body.samlConfig.mapping,
+								})
+							: null,
+						organizationId: body.organizationId,
+						userId: ctx.context.session.user.id,
+						providerId: body.providerId,
+					},
+				});
+
+			if (body.organizationId && options.authorizeProviderRegistration) {
+				await options.authorizeProviderRegistration({
 					organizationId: body.organizationId,
-					userId: ctx.context.session.user.id,
 					providerId: body.providerId,
-				},
-			});
+					issuer: body.issuer,
+				});
+			}
+			const registrationFence = options.withProviderRegistration;
+			const organizationId = body.organizationId;
+			const provider =
+				organizationId && registrationFence
+					? await runWithTransaction(ctx.context.adapter, async () => {
+							const database = await getCurrentAdapter(ctx.context.adapter);
+							return registrationFence({
+								organizationId,
+								providerId: body.providerId,
+								issuer: body.issuer,
+								database,
+								create: () => createProvider(database),
+							});
+						})
+					: await createProvider();
 
 			let domainVerificationToken: string | undefined;
 			let domainVerified: boolean | undefined;
