@@ -1366,6 +1366,28 @@ sso({
   For true early rejection of oversized payloads (before they reach your application), configure size limits at your infrastructure level (nginx `client_max_body_size`, CDN settings, load balancer).
 </Callout>
 
+## SAML Single Logout Signatures
+
+Enable Single Logout and configure incoming and outgoing signature policies independently:
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        enableSingleLogout: true,
+        wantLogoutRequestSigned: true,
+        wantLogoutResponseSigned: true,
+        signLogoutRequests: true,
+        signLogoutResponses: true,
+    },
+});
+```
+
+`wantLogoutRequestSigned` and `wantLogoutResponseSigned` require signatures on messages received from the IdP. `signLogoutRequests` and `signLogoutResponses` sign messages sent by Better Auth to the IdP. All four options default to `false`.
+
+Outgoing signatures use the SP private key configured in `samlConfig.spMetadata.privateKey` (with `privateKeyPass` for an encrypted key), or the fallback `samlConfig.privateKey`. The IdP must trust the corresponding public certificate from your SP metadata. Configure the IdP's SingleLogoutService endpoints and enable Single Logout in the IdP as required by its integration.
+
+POST LogoutResponses contain an XML signature; Redirect LogoutRequests and LogoutResponses carry `SigAlg` and `Signature` query parameters. For SP-initiated logout, `callbackURL` is carried in RelayState so the IdP can return it with the LogoutResponse.
+
 ## Shared Redirect URI
 
 By default, each OIDC provider gets its own callback URL (`/sso/callback/:providerId`). You can configure all providers to share a single redirect URI instead:

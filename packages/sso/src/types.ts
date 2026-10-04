@@ -766,6 +766,16 @@ export interface SSOOptions {
 		 */
 		wantLogoutResponseSigned?: boolean;
 		/**
+		 * Sign outgoing LogoutRequests using the configured SP private key.
+		 * @default false
+		 */
+		signLogoutRequests?: boolean;
+		/**
+		 * Sign outgoing LogoutResponses using the configured SP private key.
+		 * @default false
+		 */
+		signLogoutResponses?: boolean;
+		/**
 		 * Global fallback absolute URL or same-origin relative path for
 		 * IdP-initiated SAML responses when the provider has no safe callback.
 		 */
