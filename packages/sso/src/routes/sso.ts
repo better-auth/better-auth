@@ -35,7 +35,6 @@ import {
 	additionalAuthorizationParamsSchema,
 	handleOAuthUserInfo,
 } from "better-auth/oauth2";
-import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
@@ -59,9 +58,8 @@ import {
 } from "../provider-reference";
 import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
-import { generateRelayState } from "../saml-state";
+import { createSAMLAuthenticationRequest } from "../saml-state";
 import type {
-	AuthnRequestRecord,
 	InferSSOProvider,
 	Member,
 	OIDCConfig,
@@ -1197,53 +1195,12 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const providerReference = await computeSSOProviderReference(provider);
-				const { state: relayState } = await generateRelayState(
+				const loginRequest = await createSAMLAuthenticationRequest(
 					ctx,
-					undefined,
-					providerReference,
-				);
-
-				const sp = createSP(
+					provider,
 					parsedSamlConfig,
-					ctx.context.baseURL,
-					provider.providerId,
-					{ relayState },
+					options,
 				);
-				const idp = createIdP(parsedSamlConfig);
-				const loginRequest = sp.createLoginRequest(
-					idp,
-					"redirect",
-				) as BindingContext & {
-					entityEndpoint: string;
-					type: string;
-					id: string;
-				};
-				if (!loginRequest) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Invalid SAML request",
-					});
-				}
-
-				const shouldSaveRequest =
-					loginRequest.id &&
-					options?.saml?.enableInResponseToValidation !== false;
-				if (shouldSaveRequest) {
-					const ttl =
-						options?.saml?.requestTTL ?? constants.DEFAULT_AUTHN_REQUEST_TTL_MS;
-					const record: AuthnRequestRecord = {
-						id: loginRequest.id,
-						providerId: provider.providerId,
-						providerReference,
-						createdAt: Date.now(),
-						expiresAt: Date.now() + ttl,
-					};
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `${constants.AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
-						value: JSON.stringify(record),
-						expiresAt: new Date(record.expiresAt),
-					});
-				}
 
 				return ctx.json({
 					url: loginRequest.context,

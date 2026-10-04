@@ -6,6 +6,7 @@ import {
 } from "node:crypto";
 import type { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
+import { inflateRawSync } from "node:zlib";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { betterFetch } from "@better-fetch/fetch";
 import type { Account, DBTransactionAdapter, User } from "better-auth";
@@ -7284,6 +7285,216 @@ describe("SAML user resolution HTTP", () => {
 		);
 		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
 		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	/** @see https://github.com/better-auth/better-auth/issues/11570 */
+	describe("SAML authentication freshness", () => {
+		function withStatement(
+			signIn: Awaited<ReturnType<typeof initiateSAMLSignIn>>,
+			statement: string,
+		) {
+			const xml = removeResponseSignature(
+				Buffer.from(
+					signIn.identityProviderResponse.samlResponse,
+					"base64",
+				).toString("utf8"),
+			)
+				.replace(
+					/<saml:AuthnStatement\b[^>]*\/>|<saml:AuthnStatement\b[\s\S]*?<\/saml:AuthnStatement>/g,
+					"",
+				)
+				.replace("</saml:Assertion>", `${statement}</saml:Assertion>`);
+			return withSAMLResponse(signIn, signSAMLContent(xml, false));
+		}
+		const authnInstant = new Date().toISOString();
+		const sessionNotOnOrAfter = new Date(Date.now() + 3600000).toISOString();
+		const statement = `<saml:AuthnStatement AuthnInstant="${authnInstant}" SessionIndex="freshness-session" SessionNotOnOrAfter="${sessionNotOnOrAfter}"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>`;
+
+		it("exposes authentication facts from the verified statement", async () => {
+			const inputs: SSOUserResolutionInput[] = [];
+			const instance = await createSAMLUserResolutionInstance({
+				resolveUser(input) {
+					inputs.push(input);
+					return { action: "continue" };
+				},
+			});
+			const signIn = withStatement(
+				await initiateSAMLSignIn(instance.baseURL),
+				statement,
+			);
+			const response = await submitSAMLResponse(instance.baseURL, signIn);
+			expect(response.headers.get("location")).toBe(
+				`${instance.baseURL}/employee`,
+			);
+			expect(inputs[0]).toMatchObject({
+				protocol: "saml",
+				authenticationStatement: {
+					authnInstant,
+					sessionIndex: "freshness-session",
+					sessionNotOnOrAfter,
+				},
+			});
+		});
+
+		it("reports null when a verified assertion has no authentication statement", async () => {
+			const inputs: SSOUserResolutionInput[] = [];
+			const instance = await createSAMLUserResolutionInstance({
+				resolveUser(input) {
+					inputs.push(input);
+					return { action: "continue" };
+				},
+			});
+			const response = await submitSAMLResponse(
+				instance.baseURL,
+				withStatement(await initiateSAMLSignIn(instance.baseURL), ""),
+			);
+			expect(response.headers.get("location")).toBe(
+				`${instance.baseURL}/employee`,
+			);
+			expect(inputs[0]).toMatchObject({
+				protocol: "saml",
+				authenticationStatement: null,
+			});
+		});
+
+		it("reports null for ambiguous multiple authentication statements", async () => {
+			const inputs: SSOUserResolutionInput[] = [];
+			const instance = await createSAMLUserResolutionInstance({
+				resolveUser(input) {
+					inputs.push(input);
+					return { action: "continue" };
+				},
+			});
+			const withoutExpiry = statement.replace(
+				/ SessionNotOnOrAfter="[^"]*"/,
+				"",
+			);
+			const response = await submitSAMLResponse(
+				instance.baseURL,
+				withStatement(
+					await initiateSAMLSignIn(instance.baseURL),
+					withoutExpiry +
+						withoutExpiry.replace("freshness-session", "another-session"),
+				),
+			);
+			expect(response.headers.get("location")).toBe(
+				`${instance.baseURL}/employee`,
+			);
+			expect(inputs[0]).toMatchObject({
+				protocol: "saml",
+				authenticationStatement: null,
+			});
+		});
+
+		it("does not expose a tampered authentication statement to the resolver", async () => {
+			let called = false;
+			const instance = await createSAMLUserResolutionInstance({
+				resolveUser() {
+					called = true;
+					return { action: "continue" };
+				},
+			});
+			const signIn = withStatement(
+				await initiateSAMLSignIn(instance.baseURL),
+				statement,
+			);
+			const tampered = Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			)
+				.toString("utf8")
+				.replace("freshness-session", "tampered-session");
+			const response = await submitSAMLResponse(
+				instance.baseURL,
+				withSAMLResponse(signIn, Buffer.from(tampered).toString("base64")),
+			);
+			expect(
+				new URL(response.headers.get("location")!).searchParams.get("error"),
+			).toBe("saml_error");
+			expect(called).toBe(false);
+			await expectNoAuthenticationWrites(instance);
+		});
+
+		it("retries a rejected login with ForceAuthn, fresh state and correlation, then completes login", async () => {
+			let calls = 0;
+			const instance = await createSAMLUserResolutionInstance({
+				resolveUser() {
+					return ++calls === 1
+						? {
+								action: "reject",
+								code: "fresh_authentication_required",
+								requestFreshAuthentication: true,
+							}
+						: { action: "continue" };
+				},
+			});
+			const signIn = await initiateSAMLSignIn(instance.baseURL);
+			const response = await submitSAMLResponse(instance.baseURL, signIn);
+			expect(response.status).toBe(302);
+			const location = new URL(response.headers.get("location")!);
+			expect(location.origin).toBe("http://localhost:8081");
+			const requestXML = inflateRawSync(
+				Buffer.from(location.searchParams.get("SAMLRequest")!, "base64"),
+			).toString("utf8");
+			expect(requestXML).toContain('ForceAuthn="true"');
+			const requestId = requestXML.match(/\bID="([^"]+)"/)?.[1];
+			expect(requestId).toBeDefined();
+			const relayState = location.searchParams.get("RelayState")!;
+			expect(relayState).not.toBe(signIn.relayState);
+			const context = await instance.auth.$context;
+			expect(
+				await context.internalAdapter.findVerificationValue(
+					`saml-authn-request:${requestId}`,
+				),
+			).not.toBeNull();
+			await expectNoAuthenticationWrites(instance);
+			const idpResponse = await fetchJSON<MockSAMLResponse>(
+				location.toString(),
+				{},
+			);
+			const fresh = {
+				...signIn,
+				identityProviderResponse: idpResponse.body,
+				relayState,
+			};
+			const completed = await submitSAMLResponse(instance.baseURL, fresh);
+			expect(completed.headers.get("location")).toBe(
+				`${instance.baseURL}/employee`,
+			);
+			expect(calls).toBe(2);
+			expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+		});
+
+		it("does not loop when the resolver also rejects the forced authentication", async () => {
+			const instance = await createSAMLUserResolutionInstance({
+				resolveUser() {
+					return {
+						action: "reject",
+						code: "fresh_authentication_required",
+						requestFreshAuthentication: true,
+					};
+				},
+			});
+			const signIn = await initiateSAMLSignIn(instance.baseURL);
+			const response = await submitSAMLResponse(instance.baseURL, signIn);
+			const location = new URL(response.headers.get("location")!);
+			expect(location.origin).toBe("http://localhost:8081");
+			const idpResponse = await fetchJSON<MockSAMLResponse>(
+				location.toString(),
+				{},
+			);
+			const completed = await submitSAMLResponse(instance.baseURL, {
+				...signIn,
+				identityProviderResponse: idpResponse.body,
+				relayState: location.searchParams.get("RelayState")!,
+			});
+			const rejectedLocation = new URL(completed.headers.get("location")!);
+			expect(rejectedLocation.origin).toBe(instance.baseURL);
+			expect(rejectedLocation.searchParams.get("error")).toBe(
+				"fresh_authentication_required",
+			);
+			await expectNoAuthenticationWrites(instance);
+		});
 	});
 
 	it("links the signed NameID to the exact selected user without email fallback", async () => {
