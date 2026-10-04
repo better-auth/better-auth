@@ -8850,7 +8850,7 @@ describe("SAML manual SLO metadata at the HTTP boundary", () => {
 			singleLogoutService: [{ Binding: postBinding, Location: endpoint }],
 		});
 		const logout = idp.createLogoutRequest(sp, "post", {
-			nameID: "employee@example.com",
+			logoutNameID: "employee@example.com",
 		});
 		const response = await auth.handler(
 			new Request(endpoint, {
