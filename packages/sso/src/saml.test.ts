@@ -8755,3 +8755,121 @@ describe("SAML SSO Hardening", () => {
 		});
 	});
 });
+
+/** @see https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf */
+describe("SAML manual SLO metadata at the HTTP boundary", () => {
+	const providerId = "manual-slo-metadata";
+	const idpEntityID = "https://idp.example.com/metadata";
+	const requestLocation = "https://idp.example.com/logout/request";
+	const responseLocation = "https://idp.example.com/logout/response";
+	const postBinding = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+
+	async function fixture() {
+		const f = await getTestInstance({
+			plugins: [sso({ saml: { enableSingleLogout: true } })],
+		});
+		const { headers } = await f.signInWithTestUser();
+		const requestHeaders = new Headers(headers);
+		requestHeaders.set("content-type", "application/json");
+		const response = await f.auth.handler(
+			new Request("http://localhost:3000/api/auth/sso/register", {
+				method: "POST",
+				headers: requestHeaders,
+				body: JSON.stringify({
+					providerId,
+					issuer: "https://sp.example.com/metadata",
+					domain: "example.com",
+					samlConfig: {
+						cert: certificate,
+						entryPoint: "https://idp.example.com/login",
+						idpMetadata: {
+							entityID: idpEntityID,
+							singleSignOnService: [
+								{
+									Binding: postBinding,
+									Location: "https://idp.example.com/login",
+								},
+							],
+							singleLogoutService: [
+								{
+									Binding: postBinding,
+									Location: requestLocation,
+									ResponseLocation: responseLocation,
+								},
+							],
+						},
+						spMetadata: { signingCert: certificate },
+					},
+				}),
+			}),
+		);
+		expect(response.status, await response.clone().text()).toBe(200);
+		return { ...f, response };
+	}
+
+	it("retains standard response endpoints and the SP signing certificate during registration", async () => {
+		const { response } = await fixture();
+		const result = await response.json();
+		expect(
+			result.samlConfig.idpMetadata.singleLogoutService[0].ResponseLocation,
+		).toBe(responseLocation);
+		expect(result.samlConfig.spMetadata.signingCert).toBe(certificate);
+	});
+
+	it("publishes the SP signing certificate in auto-generated metadata", async () => {
+		const { auth } = await fixture();
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/sso/saml2/sp/metadata?providerId=${providerId}`,
+			),
+		);
+		expect(response.status).toBe(200);
+		const metadata = await response.text();
+		expect(metadata).toContain('use="signing"');
+		expect(metadata).toContain(certificate.replace(/-----[^-]+-----|\s/g, ""));
+	});
+
+	it("sends a POST LogoutResponse to ResponseLocation with a matching XML Destination", async () => {
+		const { auth } = await fixture();
+		const endpoint = `http://localhost:3000/api/auth/sso/saml2/sp/slo/${providerId}`;
+		const idp = saml.IdentityProvider({
+			entityID: idpEntityID,
+			singleSignOnService: [
+				{ Binding: postBinding, Location: "https://idp.example.com/login" },
+			],
+			singleLogoutService: [
+				{ Binding: postBinding, Location: requestLocation },
+			],
+			signingCert: certificate,
+		});
+		const sp = saml.ServiceProvider({
+			entityID: "https://sp.example.com/metadata",
+			assertionConsumerService: [
+				{ Binding: postBinding, Location: "http://localhost:3000/callback" },
+			],
+			singleLogoutService: [{ Binding: postBinding, Location: endpoint }],
+		});
+		const logout = idp.createLogoutRequest(sp, "post", {
+			nameID: "employee@example.com",
+		});
+		const response = await auth.handler(
+			new Request(endpoint, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					SAMLRequest: logout.context,
+					RelayState: "opaque-relay",
+				}),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const html = await response.text();
+		expect(html).toContain(`action="${responseLocation}"`);
+		const encoded = html.match(/name="SAMLResponse" value="([^"]+)"/)?.[1];
+		expect(encoded).toBeDefined();
+		const xml = Buffer.from(encoded!, "base64").toString("utf8");
+		expect(xml).toContain(`Destination="${responseLocation}"`);
+		expect(xml).toContain(`InResponseTo="${logout.id}"`);
+		expect(html).toContain('value="opaque-relay"');
+	});
+});

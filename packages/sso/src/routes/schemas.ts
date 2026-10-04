@@ -214,6 +214,7 @@ const samlIdentityProviderConfigSchema = z.object({
 			z.object({
 				Binding: z.string(),
 				Location: z.string().url(),
+				ResponseLocation: z.string().url().optional(),
 			}),
 		)
 		.optional(),
@@ -264,6 +265,7 @@ const samlConfigSchema = z.object({
 			metadata: z.string().optional(),
 			entityID: z.string().optional(),
 			binding: z.string().optional(),
+			signingCert: z.string().optional(),
 			privateKey: z.string().optional(),
 			privateKeyPass: z.string().optional(),
 			isAssertionEncrypted: z.boolean().optional(),

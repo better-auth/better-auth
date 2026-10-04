@@ -83,6 +83,8 @@ interface SAMLIdentityProviderMetadataBase {
 		| Array<{
 				Binding: string;
 				Location: string;
+				/** Response destination; defaults to Location when omitted. */
+				ResponseLocation?: string;
 		  }>
 		| undefined;
 }
@@ -149,6 +151,8 @@ export interface SAMLConfig {
 		metadata?: string | undefined;
 		entityID?: string | undefined;
 		binding?: string | undefined;
+		/** Public PEM certificate advertised by auto-generated SP signing metadata. */
+		signingCert?: string | undefined;
 		privateKey?: string | undefined;
 		privateKeyPass?: string | undefined;
 		isAssertionEncrypted?: boolean | undefined;
