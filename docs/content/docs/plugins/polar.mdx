@@ -207,7 +207,7 @@ If `authenticatedUsersOnly` is `false` - then it will be possible to trigger che
 This plugin supports the Organization plugin. If you pass the organization ID to the Checkout referenceId, you will be able to keep track of purchases made from organization members.
 
 ```typescript
-const organizationId = (await authClient.organization.list())?.data?.[0]?.id,
+const organizationId = (await authClient.organization.list())?.data?.[0]?.id;
 
 await authClient.checkout({
     // Any Polar Product ID can be passed here
