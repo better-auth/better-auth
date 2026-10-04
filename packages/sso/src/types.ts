@@ -424,6 +424,20 @@ export interface SSOOptions {
 				context: SSOProviderMutationGuardContext,
 		  ) => Awaitable<void>)
 		| undefined;
+	/** Authorizes organization-bound provider registration after native validation. */
+	authorizeProviderRegistration?: (input: {
+		organizationId: string;
+		providerId: string;
+		issuer: string;
+	}) => Awaitable<void>;
+	/** Runs the persistent provider insert in an application policy transaction. */
+	withProviderRegistration?: <T>(input: {
+		organizationId: string;
+		providerId: string;
+		issuer: string;
+		database: DBTransactionAdapter;
+		create: () => Promise<T>;
+	}) => Awaitable<T>;
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
@@ -482,6 +496,12 @@ export interface SSOOptions {
 					 */
 					provider: SSOProvider<SSOOptions>;
 				}) => Promise<"member" | "admin">;
+				/** Runs provider-bound organization assignment in an application policy transaction. */
+				withOrganizationAssignment?: (input: {
+					organizationId: string;
+					database: DBTransactionAdapter;
+					assign: () => Promise<void>;
+				}) => Awaitable<void>;
 		  }
 		| undefined;
 	/**
