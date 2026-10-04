@@ -530,6 +530,7 @@ export function createSCIMUser(
 								auth: ctx.context,
 								provisioningDomainId: connection.provisioningDomainId,
 								scimUserId: createdSCIMUser.id,
+								mutation: { method: "POST" },
 							});
 							await identity.reconcileUser({
 								database: trx,
@@ -813,6 +814,29 @@ export function replaceSCIMUser(
 						);
 					}
 
+					const writableProfile = {
+						userName: profile.userName,
+						userNameKey,
+						primaryEmail: profile.primaryEmail,
+						workEmailValueIndex: createSCIMEmailValueIndex(
+							profile.emails,
+							"work",
+						),
+						emailValueIndex: createSCIMEmailValueIndex(profile.emails),
+						displayName: profile.displayName,
+						formattedName: profile.formattedName,
+						givenName: profile.name.givenName ?? null,
+						familyName: profile.name.familyName ?? null,
+						serializedEmails: serializeSCIMEmails(profile.emails),
+						serializedAttributes: serializeSCIMUserAttributes(
+							profile.attributes,
+						),
+						externalId: ctx.body.externalId ?? null,
+						externalIdKey: externalIdKey ?? null,
+					} satisfies Partial<SCIMUser>;
+					const profileChanged = (
+						Object.keys(writableProfile) as (keyof typeof writableProfile)[]
+					).some((key) => currentSource[key] !== writableProfile[key]);
 					const updatedSource = await trx.update<SCIMUser>({
 						model: "scimUser",
 						where: [
@@ -820,24 +844,7 @@ export function replaceSCIMUser(
 							{ field: "connectionId", value: connection.id },
 						],
 						update: {
-							userName: profile.userName,
-							userNameKey,
-							primaryEmail: profile.primaryEmail,
-							workEmailValueIndex: createSCIMEmailValueIndex(
-								profile.emails,
-								"work",
-							),
-							emailValueIndex: createSCIMEmailValueIndex(profile.emails),
-							displayName: profile.displayName,
-							formattedName: profile.formattedName,
-							givenName: profile.name.givenName ?? null,
-							familyName: profile.name.familyName ?? null,
-							serializedEmails: serializeSCIMEmails(profile.emails),
-							serializedAttributes: serializeSCIMUserAttributes(
-								profile.attributes,
-							),
-							externalId: ctx.body.externalId ?? null,
-							externalIdKey: externalIdKey ?? null,
+							...writableProfile,
 							active,
 							updatedAt,
 						},
@@ -852,6 +859,7 @@ export function replaceSCIMUser(
 						auth: ctx.context,
 						provisioningDomainId: connection.provisioningDomainId,
 						scimUserId: updatedSource.id,
+						mutation: { method: "PUT", profileChanged },
 					});
 					await identity.reconcileUser({
 						database: trx,
@@ -1026,6 +1034,7 @@ export function patchSCIMUser(
 						auth: ctx.context,
 						provisioningDomainId: connection.provisioningDomainId,
 						scimUserId: updatedSCIMUser.id,
+						mutation: { method: "PATCH", patchOperations: ctx.body.Operations },
 					});
 					await identity.reconcileUser({
 						database: trx,
@@ -1197,6 +1206,7 @@ export function deleteSCIMUser(
 					provisioningDomainId: currentSource.provisioningDomainId,
 					scimUserId: currentSource.id,
 					userId: currentSource.userId,
+					mutation: { method: "DELETE" },
 				});
 				await identity.reconcileUser({
 					database: trx,
