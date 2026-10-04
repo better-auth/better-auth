@@ -97,6 +97,14 @@ Prefer the immutable SCIM `id` in `roles.map`. Use `externalId` only when the di
 | `sources`              | Every linked source in the domain, with its connection and active state. |
 | `grants`               | Validated role grants with the Group source that produced each grant.    |
 
+User POST, PUT, PATCH, and DELETE requests also supply optional `state.mutation` context:
+
+* `method` identifies the User request method.
+* `patchOperations` contains the validated PATCH operations.
+* `profileChanged` is supplied for PUT and compares the normalized writable profile fields with the stored source. Changes to `active` alone do not count as profile changes.
+
+Replay, Group changes, and connection decommissioning omit `mutation`. Always use the complete desired state to reconcile access; request context can inform application policy but does not replace that state.
+
 Make the reconciler idempotent and write through the supplied `database` transaction. Replace only access owned by SCIM so manual assignments and roles from other systems remain intact. Throwing from the callback rolls back the SCIM request.
 
 Without `projection`, Groups and memberships remain available through SCIM but grant no application access.
