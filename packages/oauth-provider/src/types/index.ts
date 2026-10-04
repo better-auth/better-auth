@@ -728,6 +728,24 @@ export interface OAuthOptions<
 	 */
 	codeExpiresIn?: number;
 	/**
+	 * Exchange a live OAuth refresh token for a one-time code, then a browser
+	 * session cookie. Meant for a native app opening a web account page after
+	 * the browser session has expired.
+	 *
+	 * Off unless set. Public clients are allowed, and no client secret is
+	 * required. An access token is not accepted: only an unrevoked,
+	 * unexpired refresh token can mint the code.
+	 *
+	 * `expiresIn` is the code lifetime in seconds.
+	 *
+	 * @default disabled
+	 */
+	sessionCode?:
+		| boolean
+		| {
+				expiresIn?: number;
+		  };
+	/**
 	 * Create access token expirations based on scope.
 	 *
 	 * This is useful for higher-privilege scopes that
