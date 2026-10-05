@@ -118,9 +118,9 @@ const joseInfrastructureErrorCodes = new Set([
 ]);
 
 /**
- * Whether a JWT verification error means the token itself is invalid (bad
- * signature, unsupported alg, unknown kid, failed claim checks), as opposed
- * to a key set failure that should still surface as a server error.
+ * Whether a JWT verification error comes from the token itself (malformed,
+ * bad signature, unsupported alg, unknown kid, failed claim checks), as
+ * opposed to a key set failure that should still surface as a server error.
  *
  * @internal
  */

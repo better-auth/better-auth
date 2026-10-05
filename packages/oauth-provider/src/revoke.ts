@@ -90,14 +90,18 @@ async function revokeJwtAccessToken(
 		}
 	} catch (error) {
 		if (error instanceof Error) {
-			if (error.name === "TypeError" || error.name === "JWSInvalid") {
-				// likely an opaque token
+			if (error.name === "JWTExpired") {
+				return null;
+			} else if (error.name === "JWTInvalid") {
+				// issuer or other JWT claim validation failure
+				return null;
+			} else if (error.name === "TypeError" || isInvalidJwtError(error)) {
+				// likely an opaque token, or a JWT this server cannot verify, which
+				// may still be a stored opaque token (`generateOpaqueAccessToken`)
 				throw new APIError("BAD_REQUEST", {
 					error_description: "invalid JWT signature",
 					error: "invalid_request",
 				});
-			} else if (isInvalidJwtError(error)) {
-				return null;
 			}
 			throw error;
 		}
