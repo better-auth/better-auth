@@ -20,6 +20,7 @@ import {
 	extractClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	validateClientCredentials,
 } from "./utils";
 
@@ -95,10 +96,7 @@ async function revokeJwtAccessToken(
 					error_description: "invalid JWT signature",
 					error: "invalid_request",
 				});
-			} else if (error.name === "JWTExpired") {
-				return null;
-			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
+			} else if (isInvalidJwtError(error)) {
 				return null;
 			}
 			throw error;

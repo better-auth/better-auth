@@ -30,6 +30,7 @@ import {
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
@@ -159,12 +160,7 @@ async function validateJwtAccessToken(
 					error_description: "invalid JWT signature",
 					error: "invalid_request",
 				});
-			} else if (error.name === "JWTExpired") {
-				return {
-					active: false,
-				};
-			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
+			} else if (isInvalidJwtError(error)) {
 				return {
 					active: false,
 				};
