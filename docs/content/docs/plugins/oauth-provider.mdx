@@ -617,6 +617,8 @@ The default is `0`, which keeps strict replay detection. During the interval, Be
 
 The cached response is stored encrypted on the consumed refresh-token row and includes the replacement refresh token. `expires_in` is recalculated from the cached `expires_at` each time the response is replayed.
 
+Concurrent duplicates receive the same response too. A request that arrives while another request is still rotating the same refresh token waits, up to 5 seconds, for that request's response. A DPoP-bound duplicate that races the rotation itself is refused, because its proof is single-use.
+
 #### Device code grant
 
 The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
