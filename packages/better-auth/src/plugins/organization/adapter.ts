@@ -1151,6 +1151,20 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			await releaseTeamSeats(adapter, data.teamId, deleted);
 		},
+		removeDeletedUserFromTeam: async (data: {
+			teamId: string;
+			userId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			await adapter.deleteMany({
+				model: "teamMember",
+				where: [
+					{ field: "teamId", value: data.teamId },
+					{ field: "userId", value: data.userId },
+				],
+			});
+			await releaseTeamSeats(adapter, data.teamId, 1);
+		},
 		findInvitationsByTeamId: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O, false>>({

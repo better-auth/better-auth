@@ -2228,3 +2228,224 @@ describe("accept-invitation validates team capacity before adding the member", a
 		expect(invitationAfter?.status).toBe("rejected");
 	});
 });
+
+describe("deleting a user releases their team seats", async () => {
+	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+		user: {
+			deleteUser: {
+				enabled: true,
+			},
+		},
+		databaseHooks: {
+			user: {
+				delete: {
+					async before(user) {
+						return user.email !== "kept-member@email.com";
+					},
+				},
+			},
+		},
+		plugins: [
+			organization({
+				teams: {
+					enabled: true,
+					maximumMembersPerTeam: 1,
+				},
+			}),
+		],
+		logger: { level: "error" },
+	});
+	const ctx = await auth.$context;
+	const owner = await signInWithTestUser();
+
+	it("lets a new member join a full team after its member deletes their account", async () => {
+		const org = await auth.api.createOrganization({
+			headers: owner.headers,
+			body: { name: "Seat Org", slug: "seat-org" },
+		});
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Seat Team", organizationId: org.id },
+		});
+		const leaving = await auth.api.signUpEmail({
+			body: {
+				name: "Leaving Member",
+				email: "leaving-member@email.com",
+				password: "password12345",
+			},
+		});
+		const joining = await auth.api.signUpEmail({
+			body: {
+				name: "Joining Member",
+				email: "joining-member@email.com",
+				password: "password12345",
+			},
+		});
+		await auth.api.addMember({
+			headers: owner.headers,
+			body: {
+				userId: leaving.user.id,
+				role: "member",
+				organizationId: org.id,
+				teamId: team.id,
+			},
+		});
+
+		const { headers } = await signInWithUser(
+			"leaving-member@email.com",
+			"password12345",
+		);
+		await auth.api.deleteUser({ headers, body: {} });
+
+		await auth.api.addMember({
+			headers: owner.headers,
+			body: {
+				userId: joining.user.id,
+				role: "member",
+				organizationId: org.id,
+				teamId: team.id,
+			},
+		});
+
+		const members = await ctx.adapter.findMany<{ userId: string }>({
+			model: "teamMember",
+			where: [{ field: "teamId", value: team.id }],
+		});
+		expect(members.map((m) => m.userId)).toEqual([joining.user.id]);
+		const teamAfter = await ctx.adapter.findOne<{ memberCount: number }>({
+			model: "team",
+			where: [{ field: "id", value: team.id }],
+		});
+		expect(teamAfter?.memberCount).toBe(1);
+	});
+
+	it("keeps the team seats of a user whose deletion is cancelled by a hook", async () => {
+		const org = await auth.api.createOrganization({
+			headers: owner.headers,
+			body: { name: "Cancel Org", slug: "cancel-org" },
+		});
+		const team = await auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: "Cancel Team", organizationId: org.id },
+		});
+		const kept = await auth.api.signUpEmail({
+			body: {
+				name: "Kept Member",
+				email: "kept-member@email.com",
+				password: "password12345",
+			},
+		});
+		await auth.api.addMember({
+			headers: owner.headers,
+			body: {
+				userId: kept.user.id,
+				role: "member",
+				organizationId: org.id,
+				teamId: team.id,
+			},
+		});
+
+		const { headers } = await signInWithUser(
+			"kept-member@email.com",
+			"password12345",
+		);
+		await auth.api.deleteUser({ headers, body: {} });
+
+		const members = await ctx.adapter.findMany<{ userId: string }>({
+			model: "teamMember",
+			where: [{ field: "teamId", value: team.id }],
+		});
+		expect(members.map((m) => m.userId)).toEqual([kept.user.id]);
+		const teamAfter = await ctx.adapter.findOne<{ memberCount: number }>({
+			model: "team",
+			where: [{ field: "id", value: team.id }],
+		});
+		expect(teamAfter?.memberCount).toBe(1);
+	});
+});
+
+describe("deleting members of the same team at once", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: {
+					enabled: true,
+					maximumMembersPerTeam: 2,
+				},
+			}),
+		],
+		logger: { level: "error" },
+	});
+	const ctx = await auth.$context;
+	const owner = await signInWithTestUser();
+
+	async function createTeam(slug: string) {
+		const org = await auth.api.createOrganization({
+			headers: owner.headers,
+			body: { name: slug, slug },
+		});
+		return auth.api.createTeam({
+			headers: owner.headers,
+			body: { name: slug, organizationId: org.id },
+		});
+	}
+
+	async function addNewMember(
+		team: { id: string; organizationId: string },
+		email: string,
+	) {
+		const { user } = await auth.api.signUpEmail({
+			body: { name: email, email, password: "password12345" },
+		});
+		await auth.api.addMember({
+			headers: owner.headers,
+			body: {
+				userId: user.id,
+				role: "member",
+				organizationId: team.organizationId,
+				teamId: team.id,
+			},
+		});
+		return user;
+	}
+
+	it("frees both seats when two members are deleted at once", async () => {
+		const team = await createTeam("two-deletes");
+		const firstUser = await addNewMember(team, "first-deleted@email.com");
+		const secondUser = await addNewMember(team, "second-deleted@email.com");
+
+		await Promise.all([
+			ctx.internalAdapter.deleteUser(firstUser.id),
+			ctx.internalAdapter.deleteUser(secondUser.id),
+		]);
+
+		const teamAfter = await ctx.adapter.findOne<{ memberCount: number }>({
+			model: "team",
+			where: [{ field: "id", value: team.id }],
+		});
+		expect(teamAfter?.memberCount).toBe(0);
+	});
+
+	it("keeps the member limit when the same user is deleted twice at once", async () => {
+		const team = await createTeam("same-user-twice");
+		await addNewMember(team, "staying-member@email.com");
+		const leaving = await addNewMember(team, "leaving-twice@email.com");
+
+		await Promise.all([
+			ctx.internalAdapter.deleteUser(leaving.id),
+			ctx.internalAdapter.deleteUser(leaving.id),
+		]);
+
+		await addNewMember(team, "joining-after@email.com");
+		await expect(
+			addNewMember(team, "one-too-many@email.com"),
+		).rejects.toMatchObject({
+			body: { code: "TEAM_MEMBER_LIMIT_REACHED" },
+		});
+		const members = await ctx.adapter.count({
+			model: "teamMember",
+			where: [{ field: "teamId", value: team.id }],
+		});
+		expect(members).toBe(2);
+	});
+});
