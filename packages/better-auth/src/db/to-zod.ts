@@ -2,6 +2,17 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { ZodType } from "zod";
 import * as z from "zod";
 
+/**
+ * Static lookup keeps `zod` tree-shakeable. `z[field.type]()` forces bundlers
+ * to retain every `zod` export, including all locales.
+ */
+const scalarSchemas = {
+	string: z.string,
+	number: z.number,
+	boolean: z.boolean,
+	date: z.date,
+};
+
 export function toZodSchema<
 	Fields extends Record<string, DBFieldAttribute | never>,
 	IsClientSide extends boolean,
@@ -26,13 +37,13 @@ export function toZodSchema<
 
 		let schema: ZodType;
 		if (field.type === "json") {
-			schema = (z as any).json ? (z as any).json() : z.any();
+			schema = z.json();
 		} else if (field.type === "string[]" || field.type === "number[]") {
 			schema = z.array(field.type === "string[]" ? z.string() : z.number());
 		} else if (Array.isArray(field.type)) {
 			schema = z.any();
 		} else {
-			schema = z[field.type]();
+			schema = scalarSchemas[field.type]();
 		}
 
 		if (field?.required === false) {
@@ -59,7 +70,7 @@ export type FieldAttributeToSchema<
 	Field extends DBFieldAttribute | Record<string, never>,
 	// if it's client side, then field attributes of `input` that are false should be removed
 	isClientSide extends boolean = false,
-> = Field extends { type: any }
+> = Field extends DBFieldAttribute
 	? GetInput<isClientSide, Field, GetRequired<Field, GetType<Field>>>
 	: Record<string, never>;
 

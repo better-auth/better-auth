@@ -1617,6 +1617,8 @@ The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both *
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
 
+When upgrading to purpose-prefixed verification identifiers or purpose-specific state-cookie keys, restart pending SP-initiated SAML sign-ins and upgrade participating servers together. These flows use Better Auth-generated relay state. Unsolicited IdP-initiated flows do not use that state and are not affected by its format change. See the [verification storage upgrade guidance](/docs/reference/options#verification) and [state-cookie upgrade guidance](/docs/reference/options#storestatestrategy).
+
 Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
 
 Your IdP must include an `AudienceRestriction` for this SP. The accepted audience is the SP entity ID, or the explicit `audience` value in `samlConfig` when you need to match an IdP-specific SP identifier. Better Auth also checks bearer `Recipient` and response `Destination` values against this provider's ACS endpoints.
