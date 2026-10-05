@@ -313,9 +313,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						if (onExistingUserSignUp) {
 							const request = safeCloneRequest(ctx.request);
 							await queueAfterTransactionHook(async () => {
-								await ctx.context.runInBackgroundOrAwait(
-									onExistingUserSignUp({ user: dbUser.user }, request),
-								);
+								// Runs after the commit, so a synchronous throw must not fail the
+								// request: the async wrapper turns it into a logged rejection.
+								const notify = async () =>
+									onExistingUserSignUp({ user: dbUser.user }, request);
+								await ctx.context.runInBackgroundOrAwait(notify());
 							});
 						}
 						return buildGenericDuplicateResponse();
@@ -406,9 +408,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						const user = createdUser;
 						const request = safeCloneRequest(ctx.request);
 						await queueAfterTransactionHook(async () => {
-							await ctx.context.runInBackgroundOrAwait(
-								sendVerificationEmail({ user, url, token }, request),
-							);
+							// The user is committed by now, so a synchronous throw is logged
+							// like a rejected send instead of failing the sign-up.
+							const send = async () =>
+								sendVerificationEmail({ user, url, token }, request);
+							await ctx.context.runInBackgroundOrAwait(send());
 						});
 					}
 				}

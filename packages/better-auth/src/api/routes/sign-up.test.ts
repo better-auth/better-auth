@@ -1185,6 +1185,12 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
  * @see https://github.com/better-auth/better-auth/issues/11514
  */
 describe("sign-up verification email and the transaction", () => {
+	class TransientAbortError extends Error {
+		constructor() {
+			super("transient abort");
+		}
+	}
+
 	/**
 	 * A memory adapter that aborts the transaction after the callback on the
 	 * first `abortedAttempts` attempts, the way MongoDB aborts a transaction
@@ -1205,12 +1211,15 @@ describe("sign-up verification email and the transaction", () => {
 							return await adapter.transaction(async (trx) => {
 								const result = await callback(trx);
 								if (attempt <= abortedAttempts) {
-									throw new Error("transient abort");
+									throw new TransientAbortError();
 								}
 								return result;
 							});
 						} catch (error) {
-							if (attempt >= 2) throw error;
+							// Retry only the injected abort, so a real failure is not masked.
+							if (attempt >= 2 || !(error instanceof TransientAbortError)) {
+								throw error;
+							}
 						}
 					}
 				},
@@ -1218,14 +1227,16 @@ describe("sign-up verification email and the transaction", () => {
 		};
 	}
 
-	async function signUpWith(abortedAttempts: number) {
+	async function signUpWith(
+		abortedAttempts: number,
+		sendVerificationEmail = vi.fn(),
+	) {
 		const db: Record<string, Record<string, unknown>[]> = {
 			user: [],
 			session: [],
 			account: [],
 			verification: [],
 		};
-		const sendVerificationEmail = vi.fn();
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
 			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
@@ -1259,5 +1270,20 @@ describe("sign-up verification email and the transaction", () => {
 		await expect(signUp).rejects.toThrow("transient abort");
 		expect(db.user).toHaveLength(0);
 		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("keeps the sign-up when the email callback throws synchronously after the commit", async () => {
+		const { db, sendVerificationEmail, signUp } = await signUpWith(
+			0,
+			vi.fn(() => {
+				throw new Error("mailer down");
+			}),
+		);
+
+		await expect(signUp).resolves.toMatchObject({
+			user: { email: "retried-sign-up@test.com" },
+		});
+		expect(db.user).toHaveLength(1);
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 });
