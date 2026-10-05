@@ -117,6 +117,30 @@ const resolveRegistrationUser = async (
 	return resolvedUser;
 };
 
+// WebAuthn caps the user handle at 64 bytes.
+const MAX_USER_HANDLE_BYTES = 64;
+
+const resolveUserHandle = async (
+	opts: RequiredPassKeyOptions,
+	ctx: GenericEndpointContext,
+	user: PasskeyRegistrationUser,
+) => {
+	const getUserHandle = opts.registration?.getUserHandle;
+	if (!getUserHandle) {
+		return new TextEncoder().encode(generateRandomString(32, "a-z", "0-9"));
+	}
+	const userHandle = new TextEncoder().encode(
+		await getUserHandle({ ctx, user }),
+	);
+	if (
+		userHandle.byteLength === 0 ||
+		userHandle.byteLength > MAX_USER_HANDLE_BYTES
+	) {
+		throw APIError.from("BAD_REQUEST", PASSKEY_ERROR_CODES.INVALID_USER_HANDLE);
+	}
+	return userHandle;
+};
+
 const generatePasskeyQuerySchema = z
 	.object({
 		authenticatorAttachment: z.enum(["platform", "cross-platform"]).optional(),
@@ -294,9 +318,7 @@ export const generatePasskeyRegistrationOptions = (
 				opts.registration?.extensions,
 				ctx,
 			);
-			const userID = new TextEncoder().encode(
-				generateRandomString(32, "a-z", "0-9"),
-			);
+			const userID = await resolveUserHandle(opts, ctx, user);
 			const baseURLString =
 				typeof ctx.context.options.baseURL === "string"
 					? ctx.context.options.baseURL

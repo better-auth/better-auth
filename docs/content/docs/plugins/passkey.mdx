@@ -127,6 +127,24 @@ await authClient.passkey.addPasskey({
 
 When `createSession` is `true`, successful verification sets the session cookie and returns the `session` and `user` with the registered passkey. If you want to avoid creating a user before the WebAuthn ceremony succeeds, create or load the user in `registration.afterVerification` and return its `userId`.
 
+### Stable user handle
+
+By default, every registration uses a new random WebAuthn user handle. Password managers identify an account by its user handle, so when a user removes a passkey and adds a new one, the password manager saves it as a separate entry.
+
+Return a stable handle per user with `registration.getUserHandle`, so a new passkey replaces the old one:
+
+```ts title="auth.ts"
+passkey({
+  registration: {
+    getUserHandle: ({ user }) => user.id,
+  },
+})
+```
+
+The handle is UTF-8 encoded and must be 1 to 64 bytes. It must not contain personal information, such as an email or username, because authenticators store it and may reveal it. Use an opaque value like the user ID.
+
+The handle applies to new passkeys only. Passkeys registered before you set it keep their random handle.
+
 ## Usage
 
 ### Add/Register a passkey
