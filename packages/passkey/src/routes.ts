@@ -129,9 +129,13 @@ const resolveUserHandle = async (
 	if (!getUserHandle) {
 		return new TextEncoder().encode(generateRandomString(32, "a-z", "0-9"));
 	}
-	const userHandle = new TextEncoder().encode(
-		await getUserHandle({ ctx, user }),
-	);
+	const value: unknown = await getUserHandle({ ctx, user });
+	// Callers without type checking can return a non-string, which would
+	// otherwise be stringified into a handle such as "null".
+	if (typeof value !== "string") {
+		throw APIError.from("BAD_REQUEST", PASSKEY_ERROR_CODES.INVALID_USER_HANDLE);
+	}
+	const userHandle = new TextEncoder().encode(value);
 	if (
 		userHandle.byteLength === 0 ||
 		userHandle.byteLength > MAX_USER_HANDLE_BYTES

@@ -143,6 +143,8 @@ passkey({
 
 The handle is UTF-8 encoded and must be 1 to 64 bytes. It must not contain personal information, such as an email or username, because authenticators store it and may reveal it. Use an opaque value like the user ID.
 
+In passkey-first flows, `getUserHandle` receives the user returned by `resolveUser`. If that ID is temporary, for example because you create the account in `afterVerification`, derive the handle from an identifier that stays the same across registrations instead.
+
 The handle applies to new passkeys only. Passkeys registered before you set it keep their random handle.
 
 ## Usage

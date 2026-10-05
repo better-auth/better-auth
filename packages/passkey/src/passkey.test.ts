@@ -1599,6 +1599,8 @@ describe("passkey user handle", async () => {
 		["an empty handle", ""],
 		// 33 two-byte characters are 66 bytes, so the limit counts bytes, not characters.
 		["a handle over 64 bytes", "é".repeat(33)],
+		// Callers without type checking can return a non-string value.
+		["a non-string handle", null as unknown as string],
 	])("rejects %s", async (_, handle) => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [passkey({ registration: { getUserHandle: () => handle } })],
@@ -1607,7 +1609,7 @@ describe("passkey user handle", async () => {
 
 		await expect(
 			auth.api.generatePasskeyRegistrationOptions({ headers }),
-		).rejects.toThrowError(APIError);
+		).rejects.toMatchObject({ body: { code: "INVALID_USER_HANDLE" } });
 	});
 
 	it("accepts a handle of exactly 64 bytes", async () => {
