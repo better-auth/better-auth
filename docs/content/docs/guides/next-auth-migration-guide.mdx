@@ -603,14 +603,9 @@ isForeignKey: true,
 references: { model: "user", field: "id", onDelete: "cascade" },
 },
 {
-name: "issuer",
-type: "string",
-description: "The trusted authority that issued the provider account identifier",
-},
-{
 name: "accountId",
 type: "string",
-description: "The stable account identifier within the issuer namespace",
+description: "The stable account identifier assigned by the provider",
 },
 {
 name: "providerId",
@@ -761,7 +756,7 @@ description: "Timestamp of when the verification request was updated",
     Table: <strong className="underline italic">Account</strong>
 
     * Better Auth uses camelCase naming (e.g. `refreshToken` vs `refresh_token`)
-    * Better Auth uses `id` for the local account record and the unique `issuer` plus `accountId` pair for the external identity
+    * Better Auth uses `id` for the local account record and the `providerId` plus `accountId` pair for the external identity
     * Better Auth uses `providerId` instead of `provider`
     * Better Auth includes `accessTokenExpiresAt` and `refreshTokenExpiresAt` for token management
     * Better Auth includes `password` field to support built-in credential authentication
@@ -772,7 +767,7 @@ description: "Timestamp of when the verification request was updated",
     <Callout type="warn">
       **Critical for Credentials Migration:**
       In Auth.js, passwords are often stored directly on the `User` model. In Better Auth, passwords must be stored in the `Account` table.
-      If you are migrating users with passwords (including for the Phone Number plugin), you **must** create a record in the `account` table for each user with `providerId: "credential"`, `issuer: "local:credential"`, and `accountId` set to the Better Auth user `id`. Without this record, password-based sign-ins will fail.
+      If you are migrating users with passwords (including for the Phone Number plugin), you **must** create a record in the `account` table for each user with `providerId: "credential"` and `accountId` set to the Better Auth user `id`. Without this record, password-based sign-ins will fail.
     </Callout>
 
     Table: <strong className="underline italic">VerificationToken -> Verification</strong>

@@ -5,7 +5,7 @@ import type {
 	User,
 	Verification,
 } from "@better-auth/core/db";
-import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import {
 	createAdapterFactory,
@@ -522,7 +522,6 @@ export const createTestSuite = <
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
-						issuer: createLocalAccountIssuer("test"),
 						accountId: generateId(),
 						providerId: "test",
 						userId: generateId(),

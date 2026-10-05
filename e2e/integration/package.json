@@ -14,7 +14,6 @@
     "@better-auth/scim": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
-    "auth": "workspace:*",
     "better-auth": "workspace:*"
   },
   "devDependencies": {
