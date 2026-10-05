@@ -257,69 +257,69 @@ export const createInternalAdapter = (
 		const validSessions = list.filter((s) => s.expiresAt > now);
 		if (validSessions.length === 0) return;
 
-		const cachedSessions = (
+		if (!options.session?.storeSessionInDatabase) {
+			// The cached copy is the only source. Write each one right after
+			// reading it, so a sign-out can only land between those two steps.
 			await Promise.all(
 				validSessions.map(async ({ token }) => {
 					const cached = await secondaryStorage.get(token);
 					const parsed = cached
 						? safeJSONParse<{ session: Session; user: User }>(cached)
 						: null;
-					return parsed ? { token, session: parsed.session } : null;
+					if (!parsed) return;
+					// Some stores treat a TTL of 0 as no expiry.
+					const sessionTTL = getTTLSeconds(new Date(parsed.session.expiresAt));
+					if (sessionTTL <= 0) return;
+					await secondaryStorage.set(
+						token,
+						JSON.stringify({ session: parsed.session, user }),
+						sessionTTL,
+					);
 				}),
-			)
-		).filter((entry) => entry !== null);
-		if (cachedSessions.length === 0) return;
+			);
+			return;
+		}
 
 		// A stale reader can return a revoked session, and a concurrent refresh
 		// can extend the row. Write back the database row, not the cached copy.
-		// The rows are read after the cache, right before the writes, to keep
-		// the gap where a revocation can land as short as the refresh path's.
-		const rows = options.session?.storeSessionInDatabase
-			? new Map(
-					(
-						await (
-							await getCurrentAdapter(adapter)
-						).findMany<Session>({
-							model: "session",
-							where: [
-								{
-									field: "token",
-									value: cachedSessions.map((entry) => entry.token),
-									operator: "in",
-								},
-							],
-							limit: cachedSessions.length,
-						})
-					).map((row) => [row.token, row]),
-				)
-			: null;
+		const tokens = validSessions.map((entry) => entry.token);
+		const rows = new Map(
+			(
+				await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session>({
+					model: "session",
+					where: [{ field: "token", value: tokens, operator: "in" }],
+					limit: tokens.length,
+				})
+			).map((row) => [row.token, row]),
+		);
 
-		// Database expiry for each swept token. Null marks an ended session.
+		// Database expiry for each written token. Null marks an ended session.
 		const rowExpiries = new Map<string, number | null>();
 		await Promise.all(
-			cachedSessions.map(async ({ token, session: cachedSession }) => {
-				let session = cachedSession;
-				if (rows) {
-					const row = rows.get(token);
-					// A missing row is either revoked or new and not yet on a read
-					// replica. Skip the write and keep the list entry, so user-wide
-					// revocation can still find a new session.
-					if (!row) return;
-					if (hasEnded(row)) {
-						rowExpiries.set(token, null);
-						await secondaryStorage.delete(token);
-						return;
-					}
-					session = row;
-					rowExpiries.set(token, new Date(row.expiresAt).getTime());
+			tokens.map(async (token) => {
+				const row = rows.get(token);
+				// A missing row is either revoked or new and not yet on a read
+				// replica. Skip the write and keep the list entry, so user-wide
+				// revocation can still find a new session.
+				if (!row) return;
+				if (hasEnded(row)) {
+					rowExpiries.set(token, null);
+					await secondaryStorage.delete(token);
+					return;
 				}
-
+				// Sign-out deletes the cached key. Check the key after reading the
+				// row, so a lagging read replica that still returns a revoked row
+				// cannot bring the session back.
+				if (!(await secondaryStorage.get(token))) return;
 				// Some stores treat a TTL of 0 as no expiry.
-				const sessionTTL = getTTLSeconds(new Date(session.expiresAt));
+				const sessionTTL = getTTLSeconds(new Date(row.expiresAt));
 				if (sessionTTL <= 0) return;
+				rowExpiries.set(token, new Date(row.expiresAt).getTime());
 				await secondaryStorage.set(
 					token,
-					JSON.stringify({ session, user }),
+					JSON.stringify({ session: row, user }),
 					sessionTTL,
 				);
 			}),

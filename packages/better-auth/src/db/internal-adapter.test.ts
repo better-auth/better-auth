@@ -1839,29 +1839,30 @@ describe("internal adapter test", async () => {
 			).toBeNull();
 		});
 
-		it("keeps a session created while a user update sweeps the list", async () => {
-			const store = new Map<string, string>();
-			const storage = createStringSecondaryStorage(store);
-			let onRead: ((key: string) => void) | undefined;
-			const { testCtx, user, session } = await createStoredSessionContext({
-				secondaryStorage: {
-					...storage,
-					get(key) {
-						onRead?.(key);
-						return storage.get(key);
-					},
-				},
+		/**
+		 * Runs `during` when the user update sweep reads the session rows.
+		 */
+		function duringSweepRowRead(
+			testCtx: Awaited<ReturnType<typeof init>>,
+			during: () => void,
+		) {
+			const findMany = testCtx.adapter.findMany.bind(testCtx.adapter);
+			vi.spyOn(testCtx.adapter, "findMany").mockImplementation((query) => {
+				if (query.model === "session") during();
+				return findMany(query);
 			});
+		}
+
+		it("keeps a session created while a user update sweeps the list", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
 			const listKey = `active-sessions-${user.id}`;
 			await testCtx.adapter.update({
 				model: "session",
 				where: [{ field: "token", value: session.token }],
 				update: { expiresAt: new Date(Date.now() - 1000) },
 			});
-			// Add a session to the list after the sweep has read it.
-			onRead = (key) => {
-				if (key !== session.token) return;
-				onRead = undefined;
+			duringSweepRowRead(testCtx, () => {
 				const list = JSON.parse(store.get(listKey)!) as unknown[];
 				store.set(
 					listKey,
@@ -1870,7 +1871,7 @@ describe("internal adapter test", async () => {
 						{ token: "concurrent-token", expiresAt: Date.now() + 60_000 },
 					]),
 				);
-			};
+			});
 
 			await testCtx.internalAdapter.updateUser(user.id, {
 				name: "Renamed User",
@@ -1878,6 +1879,20 @@ describe("internal adapter test", async () => {
 
 			expect(store.has(session.token)).toBe(false);
 			expect(listedTokens(store, user.id)).toEqual(["concurrent-token"]);
+		});
+
+		it("does not restore a session signed out while a user update reads rows", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			// Sign-out deletes the cached key first. The row stays readable, like
+			// a read replica that has not received the delete yet.
+			duringSweepRowRead(testCtx, () => store.delete(session.token));
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			expect(store.has(session.token)).toBe(false);
 		});
 
 		it("writes the database expiry to the cache and list when the user is updated", async () => {
