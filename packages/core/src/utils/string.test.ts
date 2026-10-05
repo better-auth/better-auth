@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
 	capitalizeFirstLetter,
@@ -6,6 +7,17 @@ import {
 	toPascalCase,
 	toSnakeCase,
 } from "./string";
+
+describe("Lynx compatibility", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11591
+	 */
+	it("does not use Unicode property escapes in regex literals", () => {
+		const source = readFileSync(new URL("./string.ts", import.meta.url), "utf8");
+
+		expect(source).not.toContain("/[\\p{");
+	});
+});
 
 describe("capitalizeFirstLetter", () => {
 	it("uppercases the first character only", () => {

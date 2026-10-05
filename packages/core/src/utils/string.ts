@@ -2,8 +2,18 @@ export function capitalizeFirstLetter(str: string) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-const WORD_PATTERN =
-	/[\p{Ll}\d]+|\p{Lu}+(?!\p{Ll})|\p{Lu}[\p{Ll}\d]+|\p{Lo}+/gu;
+function createWordPattern() {
+	try {
+		return new RegExp(
+			"[\\p{Ll}\\d]+|\\p{Lu}+(?!\\p{Ll})|\\p{Lu}[\\p{Ll}\\d]+|\\p{Lo}+",
+			"gu",
+		);
+	} catch {
+		return /[a-z\d]+|[A-Z]+(?![a-z])|[A-Z][a-z\d]+/g;
+	}
+}
+
+const WORD_PATTERN = createWordPattern();
 const APOSTROPHE_PATTERN = /['\u2019]/g;
 
 function splitWords(input: string): string[] {
