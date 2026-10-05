@@ -1,4 +1,5 @@
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
@@ -1673,6 +1674,9 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	const validAudience = "https://reuse-api.example.com";
 	const otherAudience = "https://other-reuse-api.example.com";
 	let refreshTokenResponseCalls = 0;
+	let rejectedRefreshTokenResponse:
+		| { call: number; after: Promise<unknown> }
+		| undefined;
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -1691,11 +1695,20 @@ describe("oauth token - refresh_token reuse interval", async () => {
 				resources: [validAudience, otherAudience],
 				enforcePerClientResources: false,
 				refreshTokenReuseInterval: 30,
-				customTokenResponseFields({ grantType }) {
+				async customTokenResponseFields({ grantType }) {
 					if (grantType !== "refresh_token") {
 						return {};
 					}
 					refreshTokenResponseCalls += 1;
+					if (
+						refreshTokenResponseCalls === rejectedRefreshTokenResponse?.call
+					) {
+						await rejectedRefreshTokenResponse.after;
+						throw new APIError("BAD_REQUEST", {
+							error_description: "refresh rejected",
+							error: "invalid_grant",
+						});
+					}
 					return {
 						refresh_call: `${refreshTokenResponseCalls}`,
 					};
@@ -1903,22 +1916,16 @@ describe("oauth token - refresh_token reuse interval", async () => {
 			);
 		}
 
-		it("gives the request that lost the rotation the winner's response", async () => {
-			oauthClient = await createOAuthClient();
-			const tokens = await authorizeForRefreshToken([
-				"openid",
-				"profile",
-				"offline_access",
-			]);
+		/** Holds the first two refresh token reads until both have happened. */
+		async function readBeforeEitherRotates() {
 			const context = await authorizationServer.$context;
 			const originalFindOne = context.adapter.findOne.bind(context.adapter);
-			// Both requests read the token before either rotates it.
 			let lookups = 0;
 			let releaseLookups = () => {};
 			const bothLookedUp = new Promise<void>((resolve) => {
 				releaseLookups = resolve;
 			});
-			const findOne = vi
+			return vi
 				.spyOn(context.adapter, "findOne")
 				.mockImplementation(async (...args) => {
 					const result = await originalFindOne(...args);
@@ -1929,6 +1936,16 @@ describe("oauth token - refresh_token reuse interval", async () => {
 					}
 					return result;
 				});
+		}
+
+		it("gives the request that lost the rotation the winner's response", async () => {
+			oauthClient = await createOAuthClient();
+			const tokens = await authorizeForRefreshToken([
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			const findOne = await readBeforeEitherRotates();
 
 			try {
 				const [first, second] = await Promise.all([
@@ -1942,6 +1959,52 @@ describe("oauth token - refresh_token reuse interval", async () => {
 				expect(second.data?.access_token).toBe(first.data?.access_token);
 			} finally {
 				findOne.mockRestore();
+			}
+		});
+
+		it("refuses a duplicate whose token response was rejected", async () => {
+			oauthClient = await createOAuthClient();
+			const tokens = await authorizeForRefreshToken([
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			const context = await authorizationServer.$context;
+			const originalIncrementOne = context.adapter.incrementOne.bind(
+				context.adapter,
+			);
+			let markRotated = () => {};
+			const rotated = new Promise<void>((resolve) => {
+				markRotated = resolve;
+			});
+			const incrementOne = vi
+				.spyOn(context.adapter, "incrementOne")
+				.mockImplementation(async (...args) => {
+					const result = await originalIncrementOne(...args);
+					markRotated();
+					return result;
+				});
+			// The second request's token response is rejected once the first
+			// request has rotated the token.
+			refreshTokenResponseCalls = 0;
+			rejectedRefreshTokenResponse = { call: 2, after: rotated };
+			const findOne = await readBeforeEitherRotates();
+
+			try {
+				const results = await Promise.all([
+					refresh(tokens.refresh_token!),
+					refresh(tokens.refresh_token!),
+				]);
+				const refused = results.filter((result) => result.error);
+
+				expect(refused).toHaveLength(1);
+				expect(
+					(refused[0]?.error as { error?: string } | undefined)?.error,
+				).toBe("invalid_grant");
+			} finally {
+				rejectedRefreshTokenResponse = undefined;
+				findOne.mockRestore();
+				incrementOne.mockRestore();
 			}
 		});
 
@@ -1999,6 +2062,95 @@ describe("oauth token - refresh_token reuse interval", async () => {
 				expect(second?.error).toBeNull();
 				expect(second?.data?.refresh_token).toBe(first.data?.refresh_token);
 			} finally {
+				findOne.mockRestore();
+				update.mockRestore();
+			}
+		});
+
+		it("checks for the response once more at the end of the wait", async () => {
+			oauthClient = await createOAuthClient();
+			const tokens = await authorizeForRefreshToken([
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			const context = await authorizationServer.$context;
+			const originalFindOne = context.adapter.findOne.bind(context.adapter);
+			const originalUpdate = context.adapter.update.bind(context.adapter);
+			let duplicate: ReturnType<typeof refresh> | undefined;
+			let duplicateStarted = false;
+			let releaseStore = () => {};
+			const storeReleased = new Promise<void>((resolve) => {
+				releaseStore = resolve;
+			});
+			let markStored = () => {};
+			const stored = new Promise<void>((resolve) => {
+				markStored = resolve;
+			});
+			let firstPollAt: number | undefined;
+			// The duplicate polls the rotated row by id. Its response is stored
+			// just after the poll that comes closest to the end of the wait.
+			const findOne = vi
+				.spyOn(context.adapter, "findOne")
+				.mockImplementation(async (...args) => {
+					const [params] = args;
+					const result = await originalFindOne(...args);
+					if (
+						duplicateStarted &&
+						params.model === "oauthRefreshToken" &&
+						params.where?.some((clause) => clause.field === "id")
+					) {
+						firstPollAt ??= Date.now();
+						if (Date.now() - firstPollAt >= 4700) {
+							releaseStore();
+							await stored;
+						}
+					}
+					return result;
+				});
+			const update = vi
+				.spyOn(context.adapter, "update")
+				.mockImplementation(async (...args) => {
+					const [params] = args;
+					if (
+						!duplicateStarted &&
+						params.model === "oauthRefreshToken" &&
+						Object.prototype.hasOwnProperty.call(
+							params.update,
+							"rotationReplayResponse",
+						)
+					) {
+						duplicateStarted = true;
+						duplicate = refresh(tokens.refresh_token!);
+						await storeReleased;
+						const result = await originalUpdate(...args);
+						markStored();
+						return result;
+					}
+					return originalUpdate(...args);
+				});
+
+			vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+			try {
+				let settled = false;
+				const both = (async () => {
+					const first = await refresh(tokens.refresh_token!);
+					const second = await duplicate;
+					return { first, second };
+				})().finally(() => {
+					settled = true;
+				});
+				while (!settled) {
+					await vi.advanceTimersByTimeAsync(25);
+					await new Promise((resolve) => setImmediate(resolve));
+				}
+				const { first, second } = await both;
+
+				expect(first.error).toBeNull();
+				expect(second?.error).toBeNull();
+				expect(second?.data?.refresh_token).toBe(first.data?.refresh_token);
+			} finally {
+				vi.useRealTimers();
 				findOne.mockRestore();
 				update.mockRestore();
 			}

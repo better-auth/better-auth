@@ -590,6 +590,12 @@ async function revokeTokensIssuedForAuthorizationCode(
 	await deleteIssuedTokens("oauthRefreshToken");
 }
 
+/**
+ * Errors `createRefreshToken` throws because a concurrent request rotated the
+ * parent refresh token first, as opposed to any other `invalid_grant`.
+ */
+const lostRotationErrors = new WeakSet<APIError>();
+
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -687,10 +693,12 @@ async function createRefreshToken(
 	});
 
 	if (!won) {
-		throw new APIError("BAD_REQUEST", {
+		const error = new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
 		});
+		lostRotationErrors.add(error);
+		throw error;
 	}
 
 	const refreshToken = await ctx.context.adapter.create<
@@ -1084,10 +1092,13 @@ async function waitForRefreshTokenRotationReplay(
 		if (refreshToken.rotationReplayResponse) {
 			return getRefreshTokenRotationReplay(ctx, refreshToken, request);
 		}
-		if (Date.now() + delay > deadline) {
+		const remaining = deadline - Date.now();
+		if (remaining <= 0) {
 			return undefined;
 		}
-		await new Promise((resolve) => setTimeout(resolve, delay));
+		await new Promise((resolve) =>
+			setTimeout(resolve, Math.min(delay, remaining)),
+		);
 	}
 }
 
@@ -2002,11 +2013,13 @@ async function handleRefreshTokenGrant(
 	} catch (error) {
 		// A concurrent duplicate rotated the token after it was read above, so
 		// this request lost the rotation. Inside the reuse interval the winner's
-		// response is this request's too. A DPoP proof is single-use and was
-		// spent on the attempt, so a DPoP-bound duplicate still fails closed.
+		// response is this request's too. Any other error, such as a token
+		// response callback rejecting this request, stands. A DPoP proof is
+		// single-use and was spent on the attempt, so a DPoP-bound duplicate
+		// still fails closed.
 		if (
 			!(error instanceof APIError) ||
-			error.body?.error !== "invalid_grant" ||
+			!lostRotationErrors.has(error) ||
 			(opts.refreshTokenReuseInterval ?? 0) <= 0 ||
 			getDpopProofJwt(ctx)
 		) {
