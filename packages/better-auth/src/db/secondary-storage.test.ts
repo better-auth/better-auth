@@ -586,10 +586,10 @@ describe("secondary storage stale session refresh", () => {
 			session: { expiresAt: string; updatedAt: string };
 		};
 		const shift = 2 * 24 * 60 * 60 * 1000;
-		const back = (value: string) =>
+		const shiftBack = (value: string) =>
 			new Date(new Date(value).getTime() - shift).toISOString();
-		copy.session.expiresAt = back(copy.session.expiresAt);
-		copy.session.updatedAt = back(copy.session.updatedAt);
+		copy.session.expiresAt = shiftBack(copy.session.expiresAt);
+		copy.session.updatedAt = shiftBack(copy.session.updatedAt);
 		return JSON.stringify(copy);
 	}
 
@@ -614,10 +614,12 @@ describe("secondary storage stale session refresh", () => {
 				name: "Stale Session",
 			},
 		});
+		const token = signUp.token;
+		if (!token) throw new Error("Sign-up returned no session token.");
 		const headers = new Headers({
-			authorization: `Bearer ${signUp.token}`,
+			authorization: `Bearer ${token}`,
 		});
-		return { ...instance, ...stores, headers, token: signUp.token };
+		return { ...instance, ...stores, headers, token };
 	}
 
 	it("refreshes a live session when the cached copy is due", async () => {

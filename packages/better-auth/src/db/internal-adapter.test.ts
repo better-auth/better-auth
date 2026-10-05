@@ -1750,6 +1750,100 @@ describe("internal adapter test", async () => {
 			);
 		});
 
+		it("drops the cached session when an update hook revokes it", async () => {
+			let revoke: (() => Promise<unknown>) | undefined;
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext({
+					databaseHooks: {
+						session: {
+							update: {
+								async after() {
+									await revoke?.();
+								},
+							},
+						},
+					},
+				});
+			// Delete only the row, like a revocation whose cache delete has not
+			// reached this reader yet.
+			revoke = () =>
+				testCtx.adapter.delete({
+					model: "session",
+					where: [{ field: "token", value: session.token }],
+				});
+
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{ expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+			);
+
+			expect(updated).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(listedTokens(store, user.id)).not.toContain(session.token);
+		});
+
+		it("keeps a session created while a user update sweeps the list", async () => {
+			const store = new Map<string, string>();
+			const storage = createStringSecondaryStorage(store);
+			let onRead: ((key: string) => void) | undefined;
+			const { testCtx, user, session } = await createStoredSessionContext({
+				secondaryStorage: {
+					...storage,
+					get(key) {
+						onRead?.(key);
+						return storage.get(key);
+					},
+				},
+			});
+			const listKey = `active-sessions-${user.id}`;
+			await testCtx.adapter.delete({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+			// Add a session to the list after the sweep has read it.
+			onRead = (key) => {
+				if (key !== session.token) return;
+				onRead = undefined;
+				const list = JSON.parse(store.get(listKey)!) as unknown[];
+				store.set(
+					listKey,
+					JSON.stringify([
+						...list,
+						{ token: "concurrent-token", expiresAt: Date.now() + 60_000 },
+					]),
+				);
+			};
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			expect(listedTokens(store, user.id)).toEqual(["concurrent-token"]);
+		});
+
+		it("writes the database expiry when the user is updated", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const extended = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+			await testCtx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+				update: { expiresAt: extended },
+			});
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			const stored = safeJSONParse<{ session: Session; user: User }>(
+				store.get(session.token)!,
+			);
+			expect(new Date(stored!.session.expiresAt).getTime()).toBe(
+				extended.getTime(),
+			);
+			expect(stored!.user.name).toBe("Renamed User");
+		});
+
 		it("does not recreate a revoked session when the user is updated", async () => {
 			const central = new Map<string, string>();
 			const stale = new Map<string, string>();
