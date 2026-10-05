@@ -449,6 +449,77 @@ describe("revoke sessions on password reset", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	it("leaves the password unchanged when session revocation fails", async () => {
+		const { auth, client, testUser, signInWithTestUser } =
+			await getTestInstance(
+				{
+					emailAndPassword: {
+						enabled: true,
+						async sendResetPassword({ url }) {
+							token = url.split("?")[0]!.split("/").pop() || "";
+							await mockSendEmail();
+						},
+						revokeSessionsOnPasswordReset: true,
+					},
+				},
+				{
+					testWith: "sqlite",
+				},
+			);
+
+		const { runWithUser } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const revoke = vi
+			.spyOn(ctx.internalAdapter, "deleteUserSessions")
+			.mockRejectedValue(new Error("session store unavailable"));
+
+		await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+
+		const reset = await client.resetPassword(
+			{
+				newPassword: "new-password",
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+
+		expect(revoke).toHaveBeenCalled();
+		expect(reset.error).toBeTruthy();
+
+		revoke.mockRestore();
+
+		// The reset failed, so the account must still hold the old password and
+		// the sessions that existed before it must not have been left behind a
+		// password the user no longer knows.
+		const withNewPassword = await client.signIn.email({
+			email: testUser.email,
+			password: "new-password",
+		});
+		expect(withNewPassword.error).toBeTruthy();
+
+		const withOldPassword = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(withOldPassword.data).not.toBeNull();
+
+		await runWithUser(async () => {
+			// Sanity check that the helper session is still usable for the
+			// surrounding suite.
+			const sessionAttempt = await client.getSession();
+			expect(sessionAttempt.error).toBeNull();
+		});
+	});
+
 	it("should not revoke other sessions by default", async () => {
 		const { client, testUser, signInWithTestUser } = await getTestInstance(
 			{

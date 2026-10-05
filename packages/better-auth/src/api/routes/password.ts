@@ -301,6 +301,15 @@ export const resetPassword = createAuthEndpoint(
 		if (!user) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 		}
+		// Revoke before the password is written, not after. A reset is how a user
+		// recovers a compromised account, so ending the existing sessions is part
+		// of the guarantee: if the session store is unavailable we fail closed,
+		// leaving the old password in place rather than committing a new one while
+		// sessions opened by an attacker stay valid.
+		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
+			await ctx.context.internalAdapter.deleteUserSessions(userId);
+		}
+
 		const hashedPassword = await ctx.context.password.hash(newPassword);
 		const account =
 			await ctx.context.internalAdapter.findCredentialAccount(userId);
@@ -322,9 +331,6 @@ export const resetPassword = createAuthEndpoint(
 				},
 				ctx.request,
 			);
-		}
-		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-			await ctx.context.internalAdapter.deleteUserSessions(userId);
 		}
 		return ctx.json({
 			status: true,
