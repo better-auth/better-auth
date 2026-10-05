@@ -262,45 +262,55 @@ export const createInternalAdapter = (
 		const validSessions = list.filter((s) => s.expiresAt > now);
 		const storeInDatabase = !!options.session?.storeSessionInDatabase;
 
-		const revokedTokens = (
-			await Promise.all(
-				validSessions.map(async ({ token }) => {
-					const cached = await secondaryStorage.get(token);
-					if (!cached) return null;
-					const parsed = safeJSONParse<{ session: Session; user: User }>(
-						cached,
-					);
-					if (!parsed) return null;
+		// Database expiry for each swept token. Null marks a revoked session.
+		const rowExpiries = new Map<string, number | null>();
+		await Promise.all(
+			validSessions.map(async ({ token }) => {
+				const cached = await secondaryStorage.get(token);
+				if (!cached) return;
+				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
+				if (!parsed) return;
 
-					// A stale reader can return a revoked session, and a concurrent
-					// refresh can extend the row. Write back the database row instead
-					// of the cached copy.
-					let session = parsed.session;
-					if (storeInDatabase) {
-						const row = await findSessionRow(token);
-						if (!row || hasEnded(row)) return token;
-						session = row;
+				// A stale reader can return a revoked session, and a concurrent
+				// refresh can extend the row. Write back the database row instead
+				// of the cached copy.
+				let session = parsed.session;
+				if (storeInDatabase) {
+					const row = await findSessionRow(token);
+					if (!row || hasEnded(row)) {
+						rowExpiries.set(token, null);
+						await secondaryStorage.delete(token);
+						return;
 					}
+					session = row;
+					rowExpiries.set(token, new Date(row.expiresAt).getTime());
+				}
 
-					const sessionTTL = getTTLSeconds(new Date(session.expiresAt), now);
-
-					await secondaryStorage.set(
-						token,
-						JSON.stringify({ session, user }),
-						sessionTTL,
-					);
-					return null;
-				}),
-			)
-		).filter((token): token is string => token !== null);
-
-		if (revokedTokens.length === 0) return;
-		// Rereads the list before writing, so a session created during this
-		// sweep keeps its entry.
-		await deleteCachedUserSessions(
-			user.id,
-			revokedTokens.map((token) => ({ token, expiresAt: 0 })),
+				await secondaryStorage.set(
+					token,
+					JSON.stringify({ session, user }),
+					getTTLSeconds(new Date(session.expiresAt), now),
+				);
+			}),
 		);
+
+		// Keep each list entry at least as long as its cached key, so user-wide
+		// revocation can still find it. Rereads the list, so a session created
+		// during this sweep keeps its entry.
+		const current = await getActiveSessionReferences(user.id);
+		let changed = false;
+		const next = current.flatMap((entry) => {
+			const rowExpiresAt = rowExpiries.get(entry.token);
+			if (rowExpiresAt === undefined) return [entry];
+			if (rowExpiresAt === null) {
+				changed = true;
+				return [];
+			}
+			if (rowExpiresAt <= entry.expiresAt) return [entry];
+			changed = true;
+			return [{ token: entry.token, expiresAt: rowExpiresAt }];
+		});
+		if (changed) await writeActiveSessions(user.id, next);
 	}
 
 	async function getActiveSessionReferences(userId: string) {

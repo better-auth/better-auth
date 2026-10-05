@@ -1821,7 +1821,7 @@ describe("internal adapter test", async () => {
 			expect(listedTokens(store, user.id)).toEqual(["concurrent-token"]);
 		});
 
-		it("writes the database expiry when the user is updated", async () => {
+		it("writes the database expiry to the cache and list when the user is updated", async () => {
 			const { store, testCtx, user, session } =
 				await createStoredSessionContext();
 			const extended = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
@@ -1842,6 +1842,13 @@ describe("internal adapter test", async () => {
 				extended.getTime(),
 			);
 			expect(stored!.user.name).toBe("Renamed User");
+			// User-wide revocation finds sessions through this list, so the
+			// entry must last as long as the cached key.
+			expect(
+				safeJSONParse<{ expiresAt: number }[]>(
+					store.get(`active-sessions-${user.id}`)!,
+				)?.[0]?.expiresAt,
+			).toBe(extended.getTime());
 		});
 
 		it("does not recreate a revoked session when the user is updated", async () => {
