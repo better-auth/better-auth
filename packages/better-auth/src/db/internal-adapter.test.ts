@@ -1602,6 +1602,214 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
 	});
 
+	describe("storeSessionInDatabase session refresh", () => {
+		async function createStoredSessionContext(
+			options?: Partial<BetterAuthOptions>,
+		) {
+			const store = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: { storeSessionInDatabase: true },
+				...options,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{
+					name: "stored-session-user",
+					email: `stored-${Math.random().toString(36).slice(2)}@email.com`,
+				},
+				{ method: "test" },
+			);
+			const session = await testCtx.internalAdapter.createSession(user.id);
+			return { store, testCtx, user, session };
+		}
+
+		function listedTokens(store: Map<string, string>, userId: string) {
+			const raw = store.get(`active-sessions-${userId}`);
+			if (!raw) return [];
+			return (
+				safeJSONParse<{ token: string }[]>(raw)?.map((entry) => entry.token) ??
+				[]
+			);
+		}
+
+		it("writes the refreshed session after the database update", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{
+					ipAddress: "192.0.2.10",
+					expiresAt,
+				},
+			);
+
+			expect(updated).not.toBeNull();
+			const stored = safeJSONParse<{ session: Session }>(
+				store.get(session.token)!,
+			);
+			expect(stored?.session.ipAddress).toBe("192.0.2.10");
+			expect(listedTokens(store, user.id)).toEqual([session.token]);
+			expect(
+				safeJSONParse<{ expiresAt: number }[]>(
+					store.get(`active-sessions-${user.id}`)!,
+				)?.[0]?.expiresAt,
+			).toBe(new Date(updated!.expiresAt).getTime());
+		});
+
+		it("drops the cached session when the database row is gone", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			await testCtx.adapter.delete({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{
+					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+				},
+			);
+
+			expect(updated).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(listedTokens(store, user.id)).not.toContain(session.token);
+		});
+
+		it("keeps the cached session when an update hook rejects the write", async () => {
+			let rejectUpdate = false;
+			const { store, testCtx, session } = await createStoredSessionContext({
+				databaseHooks: {
+					session: {
+						update: {
+							async before() {
+								if (rejectUpdate) return false;
+							},
+						},
+					},
+				},
+			});
+			const before = store.get(session.token);
+			rejectUpdate = true;
+
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{ ipAddress: "198.51.100.8" },
+			);
+
+			expect(updated).toBeNull();
+			expect(store.get(session.token)).toBe(before);
+		});
+
+		it("does not extend an ended preserved session from a stale cache", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext({
+					session: {
+						storeSessionInDatabase: true,
+						preserveSessionInDatabase: true,
+					},
+				});
+			await testCtx.internalAdapter.deleteSession(session.token);
+			const future = Date.now() + 7 * 24 * 60 * 60 * 1000;
+			store.set(
+				session.token,
+				JSON.stringify({
+					session: {
+						...session,
+						expiresAt: new Date(future).toISOString(),
+					},
+					user,
+				}),
+			);
+			store.set(
+				`active-sessions-${user.id}`,
+				JSON.stringify([{ token: session.token, expiresAt: future }]),
+			);
+
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{
+					expiresAt: new Date(future),
+					updatedAt: new Date(),
+				},
+			);
+			const row = await testCtx.adapter.findOne<{ expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+
+			expect(updated).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(listedTokens(store, user.id)).not.toContain(session.token);
+			expect(new Date(row!.expiresAt).getTime()).toBeLessThanOrEqual(
+				Date.now(),
+			);
+		});
+
+		it("does not recreate a revoked session when the user is updated", async () => {
+			const central = new Map<string, string>();
+			const stale = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: {
+					get(key: string) {
+						return stale.get(key) ?? central.get(key) ?? null;
+					},
+					set(key: string, value: string) {
+						central.set(key, value);
+					},
+					delete(key: string) {
+						central.delete(key);
+					},
+					getAndDelete(key: string) {
+						const value = stale.get(key) ?? central.get(key) ?? null;
+						central.delete(key);
+						return value;
+					},
+					increment(key: string) {
+						const count = Number(central.get(key) ?? 0) + 1;
+						central.set(key, String(count));
+						return count;
+					},
+				},
+				session: { storeSessionInDatabase: true },
+			} satisfies BetterAuthOptions;
+			(await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{
+					name: "refresh-user",
+					email: "refresh-revoked@email.com",
+				},
+				{ method: "test" },
+			);
+			const session = await testCtx.internalAdapter.createSession(user.id);
+			const listKey = `active-sessions-${user.id}`;
+			stale.set(session.token, central.get(session.token)!);
+			stale.set(listKey, central.get(listKey)!);
+			await testCtx.adapter.delete({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+			central.delete(session.token);
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			expect(central.has(session.token)).toBe(false);
+			const list = central.get(listKey);
+			const tokens = list
+				? (JSON.parse(list) as { token: string }[]).map((entry) => entry.token)
+				: [];
+			expect(tokens).not.toContain(session.token);
+		});
+	});
+
 	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
