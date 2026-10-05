@@ -750,6 +750,49 @@ describe("device authorization flow", async () => {
 				},
 			});
 		});
+
+		/**
+		 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+		 */
+		it("adds 5 seconds to the polling interval after slow_down", async () => {
+			const pollRequest = (deviceCode: string) =>
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code: deviceCode,
+						client_id: "test-client",
+					},
+				});
+			vi.useFakeTimers();
+			try {
+				const { device_code } = await auth.api.deviceCode({
+					body: { client_id: "test-client" },
+				});
+				await expect(pollRequest(device_code)).rejects.toMatchObject({
+					body: { error: "authorization_pending" },
+				});
+				await expect(pollRequest(device_code)).rejects.toMatchObject({
+					body: { error: "slow_down" },
+				});
+				const stored = await db.findOne<DeviceCode>({
+					model: "deviceCode",
+					where: [{ field: "deviceCode", value: device_code }],
+				});
+				expect(stored?.pollingInterval).toBe(7000);
+
+				// The configured 2s interval is no longer enough.
+				await vi.advanceTimersByTimeAsync(2500);
+				await expect(pollRequest(device_code)).rejects.toMatchObject({
+					body: { error: "slow_down" },
+				});
+				await vi.advanceTimersByTimeAsync(12_000);
+				await expect(pollRequest(device_code)).rejects.toMatchObject({
+					body: { error: "authorization_pending" },
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+		});
 	});
 
 	describe("edge cases", () => {

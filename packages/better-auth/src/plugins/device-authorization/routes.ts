@@ -19,6 +19,7 @@ import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MAX_DEVICE_CODE_GENERATION_ATTEMPTS = 3;
+const SLOW_DOWN_INTERVAL_INCREMENT_MS = 5000;
 const UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS = new Set([
 	"11000",
 	"1062",
@@ -79,9 +80,10 @@ function normalizeUserCode(userCode: string) {
 }
 
 /**
- * Preserve exact custom user codes, and normalize only default-alphabet codes.
+ * Finds a device code by the user code a person entered. Exact custom user
+ * codes are preserved, and only default-alphabet codes are normalized.
  */
-async function findDeviceCodeByUserCode(
+export async function findDeviceCodeByUserCode(
 	ctx: GenericEndpointContext,
 	userCode: string,
 ) {
@@ -105,6 +107,65 @@ async function findDeviceCodeByUserCode(
 	}
 
 	return findByUserCode(normalizedUserCode);
+}
+
+/**
+ * Binds a pending, unclaimed device code to the user reviewing it. Returns
+ * whether the code belongs to `userId` afterwards, including when that user
+ * had already claimed it.
+ */
+export async function claimDeviceCode(
+	ctx: GenericEndpointContext,
+	deviceCode: DeviceCode,
+	userId: string,
+): Promise<boolean> {
+	if (deviceCode.userId || deviceCode.status !== "pending") {
+		return deviceCode.userId === userId;
+	}
+	const claimed = await ctx.context.adapter.incrementOne<DeviceCode>({
+		model: "deviceCode",
+		where: [
+			{ field: "id", value: deviceCode.id },
+			{ field: "status", value: "pending" },
+			{ field: "userId", operator: "eq", value: null },
+		],
+		increment: {},
+		set: { userId },
+	});
+	if (claimed) return true;
+	const current = await ctx.context.adapter.findOne<DeviceCode>({
+		model: "deviceCode",
+		where: [{ field: "id", value: deviceCode.id }],
+	});
+	return current?.userId === userId;
+}
+
+/**
+ * Records the owning user's decision on a pending device code in one guarded
+ * transition. Returns `false` when the code is no longer pending or belongs to
+ * another user, so a concurrent decision cannot be overwritten.
+ */
+export async function recordDeviceCodeDecision(
+	ctx: GenericEndpointContext,
+	input: {
+		deviceCode: DeviceCode;
+		userId: string;
+		status: "approved" | "denied";
+		/** Additional fields to persist with the decision, such as a narrowed `scope`. */
+		fields?: Record<string, unknown> | undefined;
+	},
+): Promise<boolean> {
+	const decided = await ctx.context.adapter.incrementOne<DeviceCode>({
+		model: "deviceCode",
+		where: [
+			{ field: "id", value: input.deviceCode.id },
+			{ field: "status", value: "pending" },
+			{ field: "userId", value: input.userId },
+		],
+		increment: {},
+		set: { ...input.fields, status: input.status },
+	});
+	return decided !== null;
 }
 
 const deviceCodeBodySchema = z.object({
@@ -548,6 +609,14 @@ export async function redeemDeviceCode<
 		const timeSinceLastPoll =
 			Date.now() - new Date(deviceCodeRecord.lastPolledAt).getTime();
 		if (timeSinceLastPoll < deviceCodeRecord.pollingInterval) {
+			// RFC 8628 section 3.5: increase the interval by 5 seconds for this
+			// and all subsequent requests.
+			await input.ctx.context.adapter.incrementOne({
+				model: "deviceCode",
+				where: [{ field: "id", value: deviceCodeRecord.id }],
+				increment: { pollingInterval: SLOW_DOWN_INTERVAL_INCREMENT_MS },
+				set: { lastPolledAt: new Date() },
+			});
 			throw new APIError("BAD_REQUEST", {
 				error: "slow_down",
 				error_description:
@@ -865,30 +934,9 @@ export const deviceVerify = <
 			}
 
 			const session = await getSessionFromCtx(ctx);
-			if (
-				session?.user?.id &&
-				!deviceCodeRecord.userId &&
-				deviceCodeRecord.status === "pending"
-			) {
-				const claimedDeviceCodeRecord =
-					await ctx.context.adapter.incrementOne<DeviceCode>({
-						model: "deviceCode",
-						where: [
-							{ field: "id", value: deviceCodeRecord.id },
-							{ field: "status", value: "pending" },
-							{ field: "userId", operator: "eq", value: null },
-						],
-						increment: {},
-						set: { userId: session.user.id },
-					});
-				if (claimedDeviceCodeRecord) {
-					deviceCodeRecord.userId = session.user.id;
-				}
-			}
-
-			const canReviewRequest =
-				session?.user.id !== undefined &&
-				deviceCodeRecord.userId === session.user.id;
+			const canReviewRequest = session
+				? await claimDeviceCode(ctx, deviceCodeRecord, session.user.id)
+				: false;
 			const grantContext = (
 				canReviewRequest
 					? grant?.getVerificationContext(deviceCodeRecord)
@@ -909,45 +957,51 @@ export const deviceVerify = <
 		},
 	);
 
-export const deviceApprove = createAuthEndpoint(
-	"/device/approve",
-	{
-		method: "POST",
-		body: z.object({
-			userCode: z.string().meta({
-				description: "The user code to approve",
-			}),
-		}),
-		error: z.object({
-			error: z
-				.enum([
-					"invalid_request",
-					"expired_token",
-					"device_code_already_processed",
-					"unauthorized",
-					"access_denied",
-				])
-				.meta({
-					description: "Error code",
+export const deviceApprove = <
+	Grant extends DeviceAuthorizationGrant | undefined,
+>(
+	grant: Grant,
+) =>
+	createAuthEndpoint(
+		"/device/approve",
+		{
+			method: "POST",
+			body: z.object({
+				userCode: z.string().meta({
+					description: "The user code to approve",
 				}),
-			error_description: z.string().meta({
-				description: "Detailed error description",
 			}),
-		}),
-		requireHeaders: true,
-		metadata: {
-			openapi: {
-				description: "Approve device authorization",
-				responses: {
-					200: {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										success: {
-											type: "boolean",
+			error: z.object({
+				error: z
+					.enum([
+						"invalid_request",
+						"expired_token",
+						"device_code_already_processed",
+						"unauthorized",
+						"access_denied",
+					])
+					.meta({
+						description: "Error code",
+					}),
+				error_description: z.string().meta({
+					description: "Detailed error description",
+				}),
+			}),
+			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "Approve device authorization",
+					responses: {
+						200: {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+											},
 										},
 									},
 								},
@@ -957,81 +1011,76 @@ export const deviceApprove = createAuthEndpoint(
 				},
 			},
 		},
-	},
-	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
-		if (!session) {
-			throw new APIError("UNAUTHORIZED", {
-				error: "unauthorized",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
-			});
-		}
+		async (ctx) => {
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				throw new APIError("UNAUTHORIZED", {
+					error: "unauthorized",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+				});
+			}
 
-		const { userCode } = ctx.body;
-		const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, userCode);
+			const { userCode } = ctx.body;
+			const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, userCode);
 
-		if (!deviceCodeRecord) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_request",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
-			});
-		}
+			if (!deviceCodeRecord) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+				});
+			}
 
-		if (deviceCodeRecord.expiresAt < new Date()) {
-			throw new APIError("BAD_REQUEST", {
-				error: "expired_token",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
-			});
-		}
+			if (deviceCodeRecord.expiresAt < new Date()) {
+				throw new APIError("BAD_REQUEST", {
+					error: "expired_token",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
+				});
+			}
 
-		if (deviceCodeRecord.status !== "pending") {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_request",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED
-						.message,
-			});
-		}
+			if (deviceCodeRecord.status !== "pending") {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED
+							.message,
+				});
+			}
 
-		if (!deviceCodeRecord.userId) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_request",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
-			});
-		}
+			if (!deviceCodeRecord.userId) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+				});
+			}
 
-		if (deviceCodeRecord.userId !== session.user.id) {
-			throw new APIError("FORBIDDEN", {
-				error: "access_denied",
-				error_description:
-					"You are not authorized to approve this device authorization",
-			});
-		}
+			if (deviceCodeRecord.userId !== session.user.id) {
+				throw new APIError("FORBIDDEN", {
+					error: "access_denied",
+					error_description:
+						"You are not authorized to approve this device authorization",
+				});
+			}
 
-		// Update device code with approved status and user ID
-		await ctx.context.adapter.update({
-			model: "deviceCode",
-			where: [
-				{
-					field: "id",
-					value: deviceCodeRecord.id,
-				},
-			],
-			update: {
-				status: "approved",
+			await recordDecisionOrThrow(ctx, {
+				deviceCode: deviceCodeRecord,
 				userId: session.user.id,
-			},
-		});
+				status: "approved",
+				fields: await grant?.authorizeApproval?.({
+					ctx,
+					deviceCode: deviceCodeRecord,
+					session,
+				}),
+			});
 
-		return ctx.json({
-			success: true,
-		});
-	},
-);
+			return ctx.json({
+				success: true,
+			});
+		},
+	);
 
 export const deviceDeny = createAuthEndpoint(
 	"/device/deny",
@@ -1135,18 +1184,10 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		await ctx.context.adapter.update({
-			model: "deviceCode",
-			where: [
-				{
-					field: "id",
-					value: deviceCodeRecord.id,
-				},
-			],
-			update: {
-				status: "denied",
-				userId: session.user.id,
-			},
+		await recordDecisionOrThrow(ctx, {
+			deviceCode: deviceCodeRecord,
+			userId: session.user.id,
+			status: "denied",
 		});
 
 		return ctx.json({
@@ -1154,6 +1195,18 @@ export const deviceDeny = createAuthEndpoint(
 		});
 	},
 );
+
+async function recordDecisionOrThrow(
+	ctx: GenericEndpointContext,
+	input: Parameters<typeof recordDeviceCodeDecision>[1],
+) {
+	if (await recordDeviceCodeDecision(ctx, input)) return;
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_request",
+		error_description:
+			DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED.message,
+	});
+}
 
 /**
  * @internal

@@ -7,6 +7,7 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import * as z from "zod";
 import { mergeSchema } from "../../db";
+import type { Session, User } from "../../types";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
@@ -19,6 +20,7 @@ import {
 	deviceToken,
 	deviceVerify,
 } from "./routes";
+import type { DeviceCode } from "./schema";
 import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH, schema } from "./schema";
 
 declare module "@better-auth/core" {
@@ -176,6 +178,19 @@ export interface DeviceAuthorizationGrant<
 		| DeviceAuthorizationGrantAuthorization
 		| undefined
 		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
+	/**
+	 * Authorize the signed-in user's approval of a device code through
+	 * `/device/approve`, and return fields to persist with the approval. Throw
+	 * to reject the approval and leave the code pending.
+	 */
+	authorizeApproval?: (input: {
+		ctx: GenericEndpointContext;
+		deviceCode: DeviceCode & Record<string, unknown>;
+		session: { session: Session; user: User };
+	}) =>
+		| Record<string, unknown>
+		| undefined
+		| Promise<Record<string, unknown> | undefined>;
 	/** Refuse the standalone session-token endpoint for grant-owned codes. */
 	assertSessionRedemption: (input: {
 		ctx: GenericEndpointContext;
@@ -268,7 +283,7 @@ export const deviceAuthorization = <
 			deviceCode: deviceCode(opts, grant),
 			deviceToken: deviceToken(opts, grant),
 			deviceVerify: deviceVerify(grant),
-			deviceApprove,
+			deviceApprove: deviceApprove(grant),
 			deviceDeny,
 		},
 		rateLimit: [
@@ -287,8 +302,11 @@ export const deviceAuthorization = <
 
 export type * from "../../utils/time";
 export {
+	claimDeviceCode,
 	type DeviceCodeRedemptionAuthorization,
 	type DeviceCodeRedemptionResult,
+	findDeviceCodeByUserCode,
+	recordDeviceCodeDecision,
 	redeemDeviceCode,
 } from "./routes";
 export type { DeviceCode } from "./schema";

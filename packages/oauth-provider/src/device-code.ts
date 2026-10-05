@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthEndpoint } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
 	DeviceAuthorizationPluginOptions,
@@ -10,6 +10,13 @@ import {
 	redeemDeviceCode,
 } from "better-auth/plugins/device-authorization";
 import * as z from "zod";
+import type { OAuthDeviceCodeFields } from "./device-verification";
+import {
+	acceptDeviceConsent,
+	isOAuthDeviceCode,
+	parseScopes,
+	verifyDeviceUserCode,
+} from "./device-verification";
 import { extendOAuthProvider } from "./extensions";
 import {
 	extractRepeatedResourceFromForm,
@@ -72,12 +79,6 @@ const oauthDeviceRequestFields = {
 		.optional(),
 };
 
-/** OAuth-owned fields added to the device authorization record. */
-type OAuthDeviceCodeFields = {
-	oauthClientId?: string | null;
-	resources?: string[] | null;
-};
-
 function tokenError(
 	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
 	error: string,
@@ -87,11 +88,6 @@ function tokenError(
 		error,
 		error_description: errorDescription,
 	});
-}
-
-function parseScopes(scope: string | null | undefined): string[] {
-	const normalized = scope?.trim();
-	return normalized ? normalized.split(/\s+/) : [];
 }
 
 /**
@@ -119,6 +115,7 @@ async function exchangeOAuthDeviceCode(
 	> & { scopes: string[] };
 	const {
 		authorizationContext: { client, confirmation, scopes },
+		claimedDeviceCode,
 		redemptionContext: resources,
 		user,
 	} = await redeemDeviceCode<
@@ -187,6 +184,10 @@ async function exchangeOAuthDeviceCode(
 		scopes,
 		user,
 		resources,
+		referenceId: claimedDeviceCode.referenceId ?? undefined,
+		authTime: claimedDeviceCode.authTime
+			? new Date(claimedDeviceCode.authTime)
+			: undefined,
 		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
@@ -241,6 +242,14 @@ function buildOAuthDeviceGrant() {
 			},
 			oauthClientId: {
 				type: "string",
+				required: false,
+			},
+			referenceId: {
+				type: "string",
+				required: false,
+			},
+			authTime: {
+				type: "date",
 				required: false,
 			},
 		},
@@ -313,6 +322,15 @@ function buildOAuthDeviceGrant() {
 				},
 			};
 		},
+		authorizeApproval: async ({ ctx, deviceCode, session }) => {
+			const provider = getOAuthProviderPlugin(ctx.context);
+			if (!provider || !isOAuthDeviceCode(deviceCode)) return;
+			return acceptDeviceConsent(ctx, provider.options, {
+				deviceCode,
+				session,
+				scopes: parseScopes(deviceCode.scope),
+			});
+		},
 		assertSessionRedemption: ({ deviceCode }) => {
 			if (typeof deviceCode.oauthClientId !== "string") return;
 			throw new APIError("BAD_REQUEST", {
@@ -351,6 +369,69 @@ function buildOAuthDeviceGrant() {
 
 type OAuthDeviceGrant = ReturnType<typeof buildOAuthDeviceGrant>;
 
+const DEVICE_VERIFICATION_PATH = "/oauth2/device/verify";
+
+const deviceVerificationEndpoint = createAuthEndpoint(
+	DEVICE_VERIFICATION_PATH,
+	{
+		method: "POST",
+		body: z.object({
+			user_code: z.string().meta({
+				description: "The user code shown on the device",
+			}),
+		}),
+		error: z.object({
+			error: z.enum(["invalid_request", "expired_token"]).meta({
+				description: "Error code",
+			}),
+			error_description: z.string().meta({
+				description: "Detailed error description",
+			}),
+		}),
+		metadata: {
+			allowedMediaTypes: [
+				"application/json",
+				"application/x-www-form-urlencoded",
+			],
+			openapi: {
+				description: `Verify a device user code and continue to sign-in and consent
+
+The response redirects to the provider's login, post-login, or consent page. Follow [rfc8628#section-3.3](https://datatracker.ietf.org/doc/html/rfc8628#section-3.3)`,
+				responses: {
+					200: {
+						description: "Redirect for fetch requests",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										redirect: { type: "boolean" },
+										url: { type: "string", format: "uri" },
+									},
+									required: ["redirect", "url"],
+								},
+							},
+						},
+					},
+					302: {
+						description: "Redirect for navigation requests",
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const provider = getOAuthProviderPlugin(ctx.context);
+		if (!provider) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				error: "server_error",
+				error_description: "OAuth Provider is not configured",
+			});
+		}
+		return verifyDeviceUserCode(ctx, provider.options, ctx.body.user_code);
+	},
+);
+
 /** Options for the OAuth Device Authorization integration. */
 export type OAuthDeviceAuthorizationOptions = Omit<
 	DeviceAuthorizationPluginOptions<OAuthDeviceGrant>,
@@ -384,6 +465,17 @@ export function oauthDeviceAuthorization(
 
 	return {
 		...plugin,
+		endpoints: {
+			...plugin.endpoints,
+			oauth2DeviceVerify: deviceVerificationEndpoint,
+		},
+		// Entering a user code is the brute-force surface (RFC 8628 section
+		// 5.1), so the verification endpoint shares the `/device` limit.
+		rateLimit: plugin.rateLimit.map((rule) => ({
+			...rule,
+			pathMatcher: (path: string) =>
+				rule.pathMatcher(path) || path === DEVICE_VERIFICATION_PATH,
+		})),
 		init(ctx: AuthContext) {
 			const deviceAuthorizationPluginCount =
 				ctx.options.plugins?.filter(

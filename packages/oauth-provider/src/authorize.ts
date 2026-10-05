@@ -5,6 +5,7 @@ import { appendQueryParams } from "@better-auth/core/utils/url";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
+import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import { LEVEL_0_ACR } from "./authentication-context";
 import {
@@ -828,74 +829,28 @@ export async function authorizeEndpoint(
 		return redirectWithPromptCode(ctx, opts, "select_account");
 	}
 
-	if (
-		// Check if account needs selection (only for authorize endpoint)
-		settings?.isAuthorize &&
-		opts.selectAccount
-	) {
-		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
-			headers: request.headers,
-			user: session.user,
-			session: session.session,
-			scopes: requestedScopes,
-		});
-		if (selectedAccountRedirect) {
-			if (promptNone) {
-				return redirectWithPromptNoneError(
-					ctx,
-					opts,
-					query,
-					"account_selection_required",
-					"End-User account selection is required",
-				);
-			}
-			return redirectWithPromptCode(ctx, opts, "select_account");
+	const interaction = await findRequiredInteraction(ctx, opts, {
+		headers: request.headers,
+		session,
+		scopes: requestedScopes,
+		includeAccountSelection: settings?.isAuthorize === true,
+		postLoginCleared: settings?.postLogin === true,
+	});
+	if (interaction) {
+		if (promptNone) {
+			const [error, description] =
+				interaction.type === "select_account"
+					? ([
+							"account_selection_required",
+							"End-User account selection is required",
+						] as const)
+					: ([
+							"interaction_required",
+							"End-User interaction is required",
+						] as const);
+			return redirectWithPromptNoneError(ctx, opts, query, error, description);
 		}
-	}
-
-	// Redirect to complete registration steps
-	if (opts.signup?.shouldRedirect) {
-		const signupRedirect = await opts.signup.shouldRedirect({
-			headers: request.headers,
-			user: session.user,
-			session: session.session,
-			scopes: requestedScopes,
-		});
-		if (signupRedirect) {
-			if (promptNone) {
-				return redirectWithPromptNoneError(
-					ctx,
-					opts,
-					query,
-					"interaction_required",
-					"End-User interaction is required",
-				);
-			}
-			return redirectWithPromptCode(ctx, opts, "create", {
-				page: typeof signupRedirect === "string" ? signupRedirect : undefined,
-			});
-		}
-	}
-
-	if (!settings?.postLogin && opts.postLogin) {
-		const postLoginRedirect = await opts.postLogin.shouldRedirect({
-			headers: request.headers,
-			user: session.user,
-			session: session.session,
-			scopes: requestedScopes,
-		});
-		if (postLoginRedirect) {
-			if (promptNone) {
-				return redirectWithPromptNoneError(
-					ctx,
-					opts,
-					query,
-					"interaction_required",
-					"End-User interaction is required",
-				);
-			}
-			return redirectWithPromptCode(ctx, opts, "post_login");
-		}
+		return redirectToInteraction(ctx, opts, interaction);
 	}
 
 	// Force consent screen
@@ -998,6 +953,75 @@ export async function authorizeEndpoint(
 	});
 }
 
+/** The signed-in user and session an OAuth interaction runs for. */
+export type InteractionSession = {
+	user: User & Record<string, unknown>;
+	session: Session & Record<string, unknown>;
+};
+
+/** A host page the signed-in user must visit before consent. */
+export type OAuthInteraction =
+	| { type: "select_account" }
+	| { type: "create"; page?: string | undefined }
+	| { type: "post_login" };
+
+/**
+ * Finds the first host page the signed-in user must visit before consent:
+ * account selection (only on the first pass of a request), registration
+ * steps, and post-login selection unless it was already cleared for the
+ * current session.
+ */
+export async function findRequiredInteraction(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	input: {
+		headers: Headers;
+		session: InteractionSession;
+		scopes: string[];
+		includeAccountSelection: boolean;
+		postLoginCleared: boolean;
+	},
+): Promise<OAuthInteraction | undefined> {
+	const context = {
+		headers: input.headers,
+		user: input.session.user,
+		session: input.session.session,
+		scopes: input.scopes,
+	};
+	if (
+		input.includeAccountSelection &&
+		opts.selectAccount &&
+		(await opts.selectAccount.shouldRedirect(context))
+	) {
+		return { type: "select_account" };
+	}
+	const signupRedirect = await opts.signup?.shouldRedirect?.(context);
+	if (signupRedirect) {
+		return {
+			type: "create",
+			page: typeof signupRedirect === "string" ? signupRedirect : undefined,
+		};
+	}
+	if (
+		!input.postLoginCleared &&
+		opts.postLogin &&
+		(await opts.postLogin.shouldRedirect(context))
+	) {
+		return { type: "post_login" };
+	}
+	return undefined;
+}
+
+export function redirectToInteraction(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	interaction: OAuthInteraction,
+) {
+	return redirectWithPromptCode(ctx, opts, interaction.type, {
+		page: interaction.type === "create" ? interaction.page : undefined,
+	});
+}
+
 function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 	const params = new URLSearchParams();
 	for (const [key, value] of Object.entries(query)) {
@@ -1064,7 +1088,7 @@ async function redirectWithAuthorizationCode(
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }
 
-async function redirectWithPromptCode(
+export async function redirectWithPromptCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	type: "login" | "create" | "consent" | "select_account" | "post_login",

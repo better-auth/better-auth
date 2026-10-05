@@ -221,7 +221,101 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
   Do not call `authClient.device.token` for this OAuth flow. That client method polls `/device/token` and returns a Better Auth session token. Registered OAuth clients must poll `/oauth2/token`.
 </Callout>
 
-`oauthDeviceAuthorization()` owns the Device Authorization endpoints and registers the `urn:ietf:params:oauth:grant-type:device_code` grant with OAuth Provider. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request. The approval page can show the client, scopes, and resource to the signed-in user.
+`oauthDeviceAuthorization()` owns the Device Authorization endpoints and registers the `urn:ietf:params:oauth:grant-type:device_code` grant with OAuth Provider. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request.
+
+#### Approve the device on the consent page
+
+The user approves a device request on the same pages as an authorization code request: your sign-in page, your post-login page when configured, and your OAuth Provider consent page. Your `verificationUri` page only collects the user code and sends it to `/oauth2/device/verify`:
+
+```tsx title="app/device/page.tsx"
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
+
+export default function DevicePage() {
+  const searchParams = useSearchParams();
+  const [userCode, setUserCode] = useState(searchParams.get("user_code") ?? "");
+  const [error, setError] = useState<string | null>(searchParams.get("error_description"));
+
+  if (searchParams.get("status") === "approved") {
+    return <p>Device approved. Return to your device to continue.</p>;
+  }
+  if (searchParams.get("status") === "denied") {
+    return <p>Request denied. Your device will not get access.</p>;
+  }
+
+  return (
+    <form
+      onSubmit={async (event) => {
+        event.preventDefault();
+        // Redirects to sign-in, post-login selection, or consent.
+        const { error } = await authClient.oauth2.device.verify({ user_code: userCode });
+        if (error) setError(error.error_description ?? "Check the code and try again.");
+      }}
+    >
+      <input value={userCode} onChange={(event) => setUserCode(event.target.value)} />
+      <button type="submit">Continue</button>
+      {error && <p>{error}</p>}
+    </form>
+  );
+}
+```
+
+Add both client plugins so the page can call `oauth2.device.verify` and the sign-in, post-login, and consent pages forward the signed request:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import {
+  oauthDeviceAuthorizationClient,
+  oauthProviderClient,
+} from "@better-auth/oauth-provider/client";
+
+export const authClient = createAuthClient({
+  plugins: [oauthProviderClient(), oauthDeviceAuthorizationClient()],
+});
+```
+
+An unknown, expired, or already processed code returns an error to the verification page. Otherwise the request continues to the [consent page](/docs/plugins/oauth-provider#consent-screen) with the `client_id`, `scope`, and `resource` parameters a consent page already renders, plus `user_code`. When `user_code` is present, show it and ask the user to confirm that it matches the code on their device. Then call `authClient.oauth2.consent({ accept })` as usual. The user can narrow the requested scopes with `scope`.
+
+After the decision, the user returns to `verificationUri` with `status=approved` or `status=denied`. If the request can no longer be completed, for example because the code expired or another account claimed it, the page receives `error` and `error_description` instead.
+
+<Callout type="warn">
+  Device requests always show the consent page, even for clients with `skip_consent` or an existing consent. The person approving is not holding the device that receives the tokens, so an explicit approval is the defense against device-code phishing ([RFC 8628 section 5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)).
+</Callout>
+
+Approval records an `oauthConsent` for the client, user, accepted scopes, and resources, like an authorization code consent. Users can list and revoke it through the [consent endpoints](/docs/plugins/oauth-provider#consent-endpoint).
+
+#### Grant the device access for an organization
+
+To scope a device grant to an organization or another application-defined reference, configure the provider's [post-login screen](/docs/plugins/oauth-provider#post-login-screen). The device flow uses the same options as an authorization code request:
+
+```ts title="auth.ts"
+oauthProvider({
+  loginPage: "/sign-in",
+  consentPage: "/consent",
+  postLogin: {
+    page: "/select-organization",
+    shouldRedirect: ({ session }) => !session.activeOrganizationId,
+    consentReferenceId: ({ session }) => {
+      if (!session.activeOrganizationId) {
+        throw new APIError("BAD_REQUEST", { message: "Select an organization" });
+      }
+      return session.activeOrganizationId;
+    },
+  },
+  customAccessTokenClaims: ({ referenceId }) => ({
+    "https://example.com/organization": referenceId,
+  }),
+}),
+```
+
+After the user selects an organization, the post-login page calls `authClient.oauth2.continue({ postLogin: true })` and the request continues to consent. The consent and the device's tokens carry the `referenceId` that `consentReferenceId` returned. Refresh tokens keep it, so `customAccessTokenClaims` receives the same `referenceId` after every refresh.
+
+#### Approve through `/device/approve`
+
+Approval pages built on `GET /device` and `POST /device/approve` keep working for OAuth device codes. Approval through `/device/approve` also records the consent and stores the `referenceId` from `consentReferenceId`. It cannot redirect to the post-login page, so the reference must already be resolvable from the session; otherwise `consentReferenceId` rejects the approval. Use the consent page flow above to let the user select the reference during approval.
 
 <Callout type="info">
   Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `oauthDeviceAuthorization()` prevents their device codes from being redeemed for a Better Auth session token.
@@ -848,4 +942,4 @@ export const deviceCodeTableFields = [
 
 <DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />
 
-`oauthDeviceAuthorization()` extends this table with optional `oauthClientId` and `resources` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.
+`oauthDeviceAuthorization()` extends this table with optional `oauthClientId`, `resources`, `referenceId`, and `authTime` fields. `referenceId` stores the consent reference and `authTime` stores when the approving user signed in, so the token exchange can issue them later. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.
