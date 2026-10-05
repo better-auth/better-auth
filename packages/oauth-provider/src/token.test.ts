@@ -1889,6 +1889,123 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 
 	/**
+	 * Concurrent duplicates are what the reuse interval is for.
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider
+	 */
+	describe("concurrent duplicate refreshes", () => {
+		function isRefreshTokenLookup(params: {
+			model: string;
+			where?: { field: string }[];
+		}) {
+			return (
+				params.model === "oauthRefreshToken" &&
+				!!params.where?.some((clause) => clause.field === "token")
+			);
+		}
+
+		it("gives the request that lost the rotation the winner's response", async () => {
+			oauthClient = await createOAuthClient();
+			const tokens = await authorizeForRefreshToken([
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			const context = await authorizationServer.$context;
+			const originalFindOne = context.adapter.findOne.bind(context.adapter);
+			// Both requests read the token before either rotates it.
+			let lookups = 0;
+			let releaseLookups = () => {};
+			const bothLookedUp = new Promise<void>((resolve) => {
+				releaseLookups = resolve;
+			});
+			const findOne = vi
+				.spyOn(context.adapter, "findOne")
+				.mockImplementation(async (...args) => {
+					const result = await originalFindOne(...args);
+					if (isRefreshTokenLookup(args[0]) && lookups < 2) {
+						lookups += 1;
+						if (lookups === 2) releaseLookups();
+						await bothLookedUp;
+					}
+					return result;
+				});
+
+			try {
+				const [first, second] = await Promise.all([
+					refresh(tokens.refresh_token!),
+					refresh(tokens.refresh_token!),
+				]);
+
+				expect(first.error).toBeNull();
+				expect(second.error).toBeNull();
+				expect(second.data?.refresh_token).toBe(first.data?.refresh_token);
+				expect(second.data?.access_token).toBe(first.data?.access_token);
+			} finally {
+				findOne.mockRestore();
+			}
+		});
+
+		it("gives a request that arrives before the response is stored that response", async () => {
+			oauthClient = await createOAuthClient();
+			const tokens = await authorizeForRefreshToken([
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			const context = await authorizationServer.$context;
+			const originalFindOne = context.adapter.findOne.bind(context.adapter);
+			const originalUpdate = context.adapter.update.bind(context.adapter);
+			let duplicate: ReturnType<typeof refresh> | undefined;
+			let duplicateStarted = false;
+			let duplicateLookedUp = () => {};
+			const duplicateRead = new Promise<void>((resolve) => {
+				duplicateLookedUp = resolve;
+			});
+			const findOne = vi
+				.spyOn(context.adapter, "findOne")
+				.mockImplementation(async (...args) => {
+					const result = await originalFindOne(...args);
+					if (duplicateStarted && isRefreshTokenLookup(args[0])) {
+						duplicateLookedUp();
+					}
+					return result;
+				});
+			// The token is rotated, but its response is not stored yet, when the
+			// duplicate reads it.
+			const update = vi
+				.spyOn(context.adapter, "update")
+				.mockImplementation(async (...args) => {
+					const [params] = args;
+					if (
+						!duplicateStarted &&
+						params.model === "oauthRefreshToken" &&
+						Object.prototype.hasOwnProperty.call(
+							params.update,
+							"rotationReplayResponse",
+						)
+					) {
+						duplicateStarted = true;
+						duplicate = refresh(tokens.refresh_token!);
+						await duplicateRead;
+					}
+					return originalUpdate(...args);
+				});
+
+			try {
+				const first = await refresh(tokens.refresh_token!);
+				const second = await duplicate;
+
+				expect(first.error).toBeNull();
+				expect(second?.error).toBeNull();
+				expect(second?.data?.refresh_token).toBe(first.data?.refresh_token);
+			} finally {
+				findOne.mockRestore();
+				update.mockRestore();
+			}
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10145
 	 */
 	it("returns the rotated token response when storing the replay cache fails", async () => {
