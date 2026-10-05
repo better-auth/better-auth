@@ -257,8 +257,23 @@ export const createInternalAdapter = (
 		const validSessions = list.filter((s) => s.expiresAt > now);
 		if (validSessions.length === 0) return;
 
+		const cachedSessions = (
+			await Promise.all(
+				validSessions.map(async ({ token }) => {
+					const cached = await secondaryStorage.get(token);
+					const parsed = cached
+						? safeJSONParse<{ session: Session; user: User }>(cached)
+						: null;
+					return parsed ? { token, session: parsed.session } : null;
+				}),
+			)
+		).filter((entry) => entry !== null);
+		if (cachedSessions.length === 0) return;
+
 		// A stale reader can return a revoked session, and a concurrent refresh
 		// can extend the row. Write back the database row, not the cached copy.
+		// The rows are read after the cache, right before the writes, to keep
+		// the gap where a revocation can land as short as the refresh path's.
 		const rows = options.session?.storeSessionInDatabase
 			? new Map(
 					(
@@ -269,11 +284,11 @@ export const createInternalAdapter = (
 							where: [
 								{
 									field: "token",
-									value: validSessions.map((s) => s.token),
+									value: cachedSessions.map((entry) => entry.token),
 									operator: "in",
 								},
 							],
-							limit: validSessions.length,
+							limit: cachedSessions.length,
 						})
 					).map((row) => [row.token, row]),
 				)
@@ -282,13 +297,8 @@ export const createInternalAdapter = (
 		// Database expiry for each swept token. Null marks an ended session.
 		const rowExpiries = new Map<string, number | null>();
 		await Promise.all(
-			validSessions.map(async ({ token }) => {
-				const cached = await secondaryStorage.get(token);
-				if (!cached) return;
-				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
-				if (!parsed) return;
-
-				let session = parsed.session;
+			cachedSessions.map(async ({ token, session: cachedSession }) => {
+				let session = cachedSession;
 				if (rows) {
 					const row = rows.get(token);
 					// A missing row is either revoked or new and not yet on a read
@@ -305,7 +315,7 @@ export const createInternalAdapter = (
 				}
 
 				// Some stores treat a TTL of 0 as no expiry.
-				const sessionTTL = getTTLSeconds(new Date(session.expiresAt), now);
+				const sessionTTL = getTTLSeconds(new Date(session.expiresAt));
 				if (sessionTTL <= 0) return;
 				await secondaryStorage.set(
 					token,
