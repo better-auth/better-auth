@@ -159,12 +159,13 @@ async function validateJwtAccessToken(
 					active: false,
 				};
 			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
+				// malformed JWT (payload is not a JSON claims set, or unencoded)
 				return {
 					active: false,
 				};
 			} else if (error.name === "TypeError" || isInvalidJwtError(error)) {
-				// likely an opaque token, or a JWT this server cannot verify, which
+				// likely an opaque token, or a JWT this server cannot verify (bad
+				// signature, unknown key, failed claim checks such as `iss`), which
 				// may still be a stored opaque token (`generateOpaqueAccessToken`)
 				throw new APIError("BAD_REQUEST", {
 					error_description: "invalid JWT signature",
