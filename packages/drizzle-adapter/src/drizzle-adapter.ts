@@ -241,8 +241,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const table = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
+					// Swap in the new value only for equality matches. A range guard
+					// on an updated field, such as `expiresAt > now`, would otherwise
+					// become `expiresAt > newValue` and miss the updated row.
 					const updatedWhere = where.map((w) => {
-						if (data[w.field] !== undefined) {
+						if (
+							data[w.field] !== undefined &&
+							(!w.operator || w.operator === "eq")
+						) {
 							return { ...w, value: data[w.field] };
 						}
 						return w;
