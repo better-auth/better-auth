@@ -194,22 +194,31 @@ function shouldRefetchCachedJwksWithoutKid(
 async function fetchJwks(
 	jwksFetch: JwksFetchOptions["jwksFetch"],
 ): Promise<JSONWebKeySet> {
-	const jwks =
-		typeof jwksFetch === "string"
-			? await fetchRefusingRedirects<JSONWebKeySet>(jwksFetch, {
-					headers: {
-						Accept: "application/json",
-					},
-				}).then(async (res) => {
-					if (res.error)
-						throw new Error(
-							`Jwks failed: ${res.error.message ?? res.error.statusText}`,
-						);
-					return res.data;
-				})
-			: await jwksFetch();
-	if (!jwks) throw new Error("No jwks found");
-	return jwks;
+	try {
+		const jwks =
+			typeof jwksFetch === "string"
+				? await fetchRefusingRedirects<JSONWebKeySet>(jwksFetch, {
+						headers: {
+							Accept: "application/json",
+						},
+					}).then(async (res) => {
+						if (res.error)
+							throw new Error(
+								`Jwks failed: ${res.error.message ?? res.error.statusText}`,
+							);
+						return res.data;
+					})
+				: await jwksFetch();
+		if (!jwks) throw new Error("No jwks found");
+		return jwks;
+	} catch (error) {
+		if (error instanceof TypeError) {
+			// A TypeError from a JWKS source is an infrastructure failure, not an
+			// opaque token. Do not expose runtime-specific details to callers.
+			throw new Error("JWKS fetch failed");
+		}
+		throw error;
+	}
 }
 
 export interface VerifyAccessTokenRemote {
