@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	capitalizeFirstLetter,
 	toCamelCase,
@@ -16,6 +16,36 @@ describe("Lynx compatibility", () => {
 		const source = readFileSync(new URL("./string.ts", import.meta.url), "utf8");
 
 		expect(source).not.toMatch(/\/(?:\\.|[^/])*\\p\{/);
+	});
+
+	it("preserves word boundaries when Unicode property escapes are unsupported", async () => {
+		const unicodeWordPattern =
+			"[\\p{Ll}\\d]+|\\p{Lu}+(?!\\p{Ll})|\\p{Lu}[\\p{Ll}\\d]+|\\p{Lo}+";
+		const NativeRegExp = RegExp;
+		const UnsupportedUnicodePropertyRegExp = function (
+			pattern?: string | RegExp,
+			flags?: string,
+		) {
+			if (pattern === unicodeWordPattern) {
+				throw new SyntaxError("Unicode property escapes are unsupported");
+			}
+			return new NativeRegExp(pattern ?? "", flags);
+		} as unknown as RegExpConstructor;
+
+		vi.stubGlobal("RegExp", UnsupportedUnicodePropertyRegExp);
+		try {
+			vi.resetModules();
+			const { toSnakeCase: fallbackToSnakeCase } = await import("./string");
+
+			expect(fallbackToSnakeCase("URL2Path")).toBe("url_2_path");
+			expect(fallbackToSnakeCase("café·Bar")).toBe("café_bar");
+			expect(fallbackToSnakeCase("caféÉclair")).toBe("café_éclair");
+			expect(fallbackToSnakeCase("hello—world")).toBe("hello_world");
+			expect(fallbackToSnakeCase("한글Test")).toBe("한글_test");
+		} finally {
+			vi.unstubAllGlobals();
+			vi.resetModules();
+		}
 	});
 });
 
