@@ -158,12 +158,25 @@ async function setup(options: PasskeyOptions) {
 		return next;
 	};
 
+	// Headers sent only on the options request, not on the verify request.
+	const withHeaders = (headers: Headers, extra?: Record<string, string>) => {
+		const next = new Headers(headers);
+		for (const [name, value] of Object.entries(extra ?? {})) {
+			next.set(name, value);
+		}
+		return next;
+	};
+
 	return {
-		async register(args: { origin: string; signedRPID?: string }) {
+		async register(args: {
+			origin: string;
+			signedRPID?: string;
+			optionsHeaders?: Record<string, string>;
+		}) {
 			const headers = new Headers(sessionHeaders);
 			headers.set("origin", args.origin);
 			const options = await auth.api.generatePasskeyRegistrationOptions({
-				headers,
+				headers: withHeaders(headers, args.optionsHeaders),
 				returnHeaders: true,
 			});
 			const credential = await authenticator.register({
@@ -182,10 +195,14 @@ async function setup(options: PasskeyOptions) {
 				);
 			return { optionsRPID: options.response.rp.id, result };
 		},
-		async authenticate(args: { origin: string; signedRPID?: string }) {
+		async authenticate(args: {
+			origin: string;
+			signedRPID?: string;
+			optionsHeaders?: Record<string, string>;
+		}) {
 			const headers = new Headers({ origin: args.origin });
 			const options = await auth.api.generatePasskeyAuthenticationOptions({
-				headers,
+				headers: withHeaders(headers, args.optionsHeaders),
 				returnHeaders: true,
 			});
 			const assertion = await authenticator.authenticate({
@@ -260,6 +277,36 @@ describe("passkey rpID", () => {
 		});
 		expect(extensionAuth.optionsRPID).toBe(EXTENSION_ID);
 		expect(extensionAuth.result.ok).toBe(true);
+	});
+
+	it("verifies against the rpID issued with the challenge, not one resolved again", async () => {
+		// The resolver reads a header that only the options request carries, so
+		// resolving it again on the verify request would pick another RP ID.
+		const flow = await setup({
+			rpID: ({ ctx }) => ctx.headers?.get("x-rp-id") || "localhost",
+		});
+		const optionsHeaders = { "x-rp-id": "example.com" };
+
+		const registered = await flow.register({
+			origin: WEB_ORIGIN,
+			optionsHeaders,
+		});
+		expect(registered.optionsRPID).toBe("example.com");
+		expect(registered.result.ok).toBe(true);
+
+		const authenticated = await flow.authenticate({
+			origin: WEB_ORIGIN,
+			optionsHeaders,
+		});
+		expect(authenticated.optionsRPID).toBe("example.com");
+		expect(authenticated.result.ok).toBe(true);
+
+		const authRejected = await flow.authenticate({
+			origin: WEB_ORIGIN,
+			optionsHeaders,
+			signedRPID: "localhost",
+		});
+		expect(authRejected.result.ok).toBe(false);
 	});
 
 	it("rejects responses bound to an RP ID outside expectedRPID", async () => {

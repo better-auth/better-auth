@@ -23,15 +23,18 @@ export async function resolveRpID(
 
 /**
  * The RP ID(s) accepted when verifying a ceremony response. Defaults to the
- * RP ID sent in the options. An empty value is rejected rather than passed on,
- * because `@simplewebauthn/server` skips the RP ID check when it is falsy.
+ * RP ID sent in the options (`issuedRPID`, stored with the challenge). An
+ * empty value is rejected rather than passed on, because
+ * `@simplewebauthn/server` skips the RP ID check when it is falsy.
  */
 export async function resolveExpectedRPID(
 	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
+	issuedRPID: string | undefined,
 ): Promise<string | string[]> {
 	if (options.expectedRPID === undefined) {
-		return resolveRpID(options, ctx);
+		// Challenges stored before the RP ID was recorded fall back to resolving it.
+		return issuedRPID || resolveRpID(options, ctx);
 	}
 	const expected =
 		typeof options.expectedRPID === "function"

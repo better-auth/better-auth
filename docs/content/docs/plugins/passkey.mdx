@@ -455,10 +455,10 @@ export const passkeyTableFields = [
 **rpID**: A unique identifier for your website based on your auth server origin.
 `'localhost'` is okay for local dev. RP ID can be formed by discarding zero or more labels from the left of its effective domain
 until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.example.com` or `example.com`. But not `com`, because that's an eTLD.
-Defaults to the hostname of `baseURL`. Pass a function to resolve it per request; it runs on both the options and the verify endpoints.
+Defaults to the hostname of `baseURL`, or `localhost` if `baseURL` is unset. Pass a function to resolve it per request; it runs on the options endpoints, and the RP ID it returns is stored with the challenge.
 
-**expectedRPID**: The RP ID, or list of RP IDs, that a registration or authentication response may be bound to. Defaults to the resolved `rpID`.
-Set it when the RP ID the authenticator signs differs from the one sent in the options, or to accept several RP IDs. A string, an array, or a function of the request.
+**expectedRPID**: The RP ID, or list of RP IDs, that a registration or authentication response may be bound to. Defaults to the `rpID` sent in the options for that challenge.
+Set it when the RP ID hash in the authenticator data differs from the RP ID sent in the options, or to accept several RP IDs. A string, an array, or a function of the request.
 
 For example, a Chrome extension page must send its bare extension ID as the RP ID, but Chrome binds the credential to the extension origin:
 
@@ -471,7 +471,7 @@ passkey({
 });
 ```
 
-To serve the extension and a website from one server, resolve `rpID` from the request and list both RP IDs in `expectedRPID`. Chrome extension pages do not send an `Origin` header on `GET` requests, so the options endpoints need another signal, such as a header the client sets.
+To serve the extension and a website from one server, resolve `rpID` from the request and list both RP IDs in `expectedRPID`. Chrome extension pages do not send an `Origin` header on `GET` requests, so the options endpoints need another signal, such as a header set in the extension's `createAuthClient({ fetchOptions: { headers } })`. Per-call `fetchOptions` passed to `signIn.passkey` or `passkey.addPasskey` apply only to the verify request, not to the options request.
 
 **rpName**: Human-readable title for your website.
 
