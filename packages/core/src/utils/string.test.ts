@@ -35,13 +35,20 @@ describe("Lynx compatibility", () => {
 		vi.stubGlobal("RegExp", UnsupportedUnicodePropertyRegExp);
 		try {
 			vi.resetModules();
-			const { toSnakeCase: fallbackToSnakeCase } = await import("./string");
+			const {
+				toCamelCase: fallbackToCamelCase,
+				toKebabCase: fallbackToKebabCase,
+				toSnakeCase: fallbackToSnakeCase,
+			} = await import("./string");
 
 			expect(fallbackToSnakeCase("URL2Path")).toBe("url_2_path");
+			expect(fallbackToCamelCase("user-id")).toBe("userId");
+			expect(fallbackToSnakeCase("my-kebab-case")).toBe("my_kebab_case");
 			expect(fallbackToSnakeCase("café·Bar")).toBe("café_bar");
 			expect(fallbackToSnakeCase("caféÉclair")).toBe("café_éclair");
 			expect(fallbackToSnakeCase("hello—world")).toBe("hello_world");
 			expect(fallbackToSnakeCase("한글Test")).toBe("한글_test");
+			expect(fallbackToKebabCase("foo한글")).toBe("foo-한글");
 		} finally {
 			vi.unstubAllGlobals();
 			vi.resetModules();

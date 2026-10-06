@@ -14,7 +14,7 @@ const WORD_PATTERN = (() => {
 })();
 const APOSTROPHE_PATTERN = /['\u2019]/g;
 const FALLBACK_SEPARATOR_PATTERN =
-	/[\s!"#$%&()*+,./:;<=>?@[\]^_`{|}~\u00A0\u00AB\u00B7\u00BB\u2000-\u206F\u3000-\u303F\uFF00-\uFF65]/;
+	/[\s!"#$%&'()*+,\-./:;<=>?@[\]^_`{|}~\u00A0\u00AB\u00B7\u00BB\u2000-\u206F\u3000-\u303F\uFF00-\uFF65]/;
 
 function splitWords(input: string): string[] {
 	const normalizedInput = input.replace(APOSTROPHE_PATTERN, "");
@@ -42,13 +42,23 @@ function splitCasedWord(word: string): string[] {
 		const isUpperCase =
 			character !== character.toLowerCase() &&
 			character === character.toUpperCase();
+		const isLowerCase =
+			character !== character.toUpperCase() &&
+			character === character.toLowerCase();
 		const isDigit = /\d/.test(character);
+		const isCasedOrDigit = isUpperCase || isLowerCase || isDigit;
 		const previousIsUpperCase =
 			previousCharacter !== undefined &&
 			previousCharacter === previousCharacter.toUpperCase() &&
 			previousCharacter !== previousCharacter.toLowerCase();
 		const previousIsDigit =
 			previousCharacter !== undefined && /\d/.test(previousCharacter);
+		const previousIsCasedOrDigit =
+			previousCharacter !== undefined &&
+			(previousIsUpperCase ||
+				(previousCharacter !== previousCharacter.toUpperCase() &&
+					previousCharacter === previousCharacter.toLowerCase()) ||
+				previousIsDigit);
 		const nextIsLowerCase =
 			nextCharacter !== undefined &&
 			nextCharacter !== nextCharacter.toUpperCase() &&
@@ -59,7 +69,8 @@ function splitCasedWord(word: string): string[] {
 			((isUpperCase &&
 				(!previousIsUpperCase || nextIsLowerCase)) ||
 				(isDigit && previousIsUpperCase) ||
-				(isUpperCase && previousIsDigit))
+				(isUpperCase && previousIsDigit) ||
+				isCasedOrDigit !== previousIsCasedOrDigit)
 		) {
 			words.push(currentWord);
 			currentWord = "";
