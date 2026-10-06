@@ -295,44 +295,63 @@ export const createInternalAdapter = (
 			).map((row) => [row.token, row]),
 		);
 
+		/**
+		 * Writes a live row with the new user to the cache. Returns the written
+		 * expiry, null for an ended row, or undefined when nothing was written.
+		 */
+		const writeRow = async (
+			row: Session | null | undefined,
+			reread: boolean,
+		): Promise<number | null | undefined> => {
+			// A missing row is either revoked or new and not yet on a read
+			// replica. Skip the write and keep the list entry, so user-wide
+			// revocation can still find a new session.
+			if (!row) return;
+			if (hasEnded(row)) {
+				await secondaryStorage.delete(row.token);
+				return null;
+			}
+			// Sign-out deletes the cached key. Check the key after reading the
+			// row, so a lagging read replica that still returns a revoked row
+			// cannot bring the session back.
+			const cached = await secondaryStorage.get(row.token);
+			if (!cached) return;
+			// A refresh extends the row before it writes the cache. A later
+			// cached expiry means the row read may have missed a refresh, so
+			// read the row again and let the database decide.
+			const cachedSession = safeJSONParse<{ session: Session }>(
+				cached,
+			)?.session;
+			if (
+				reread &&
+				cachedSession &&
+				new Date(cachedSession.expiresAt) > new Date(row.expiresAt)
+			) {
+				const fresh = await (await getCurrentAdapter(adapter)).findOne<Session>(
+					{
+						model: "session",
+						where: [{ field: "token", value: row.token }],
+					},
+				);
+				return writeRow(fresh, false);
+			}
+			// Some stores treat a TTL of 0 as no expiry.
+			const sessionTTL = getTTLSeconds(new Date(row.expiresAt));
+			if (sessionTTL <= 0) return;
+			await secondaryStorage.set(
+				row.token,
+				JSON.stringify({ session: row, user }),
+				sessionTTL,
+			);
+			return new Date(row.expiresAt).getTime();
+		};
+
 		// Written expiry for each token. Null marks an ended session.
 		const rowExpiries = new Map<string, number | null>();
 		await Promise.all(
 			tokens.map(async (token) => {
-				const row = rows.get(token);
-				// A missing row is either revoked or new and not yet on a read
-				// replica. Skip the write and keep the list entry, so user-wide
-				// revocation can still find a new session.
-				if (!row) return;
-				if (hasEnded(row)) {
-					rowExpiries.set(token, null);
-					await secondaryStorage.delete(token);
-					return;
-				}
-				// Sign-out deletes the cached key. Check the key after reading the
-				// row, so a lagging read replica that still returns a revoked row
-				// cannot bring the session back.
-				const cached = await secondaryStorage.get(token);
-				if (!cached) return;
-				// A refresh after the row read writes a later expiry. Keep it.
-				const cachedSession = safeJSONParse<{ session: Session }>(
-					cached,
-				)?.session;
-				const session =
-					cachedSession &&
-					new Date(cachedSession.expiresAt) > new Date(row.expiresAt)
-						? cachedSession
-						: row;
-				const expiresAt = new Date(session.expiresAt);
-				// Some stores treat a TTL of 0 as no expiry.
-				const sessionTTL = getTTLSeconds(expiresAt);
-				if (sessionTTL <= 0) return;
-				rowExpiries.set(token, expiresAt.getTime());
-				await secondaryStorage.set(
-					token,
-					JSON.stringify({ session, user }),
-					sessionTTL,
-				);
+				const expiresAt = await writeRow(rows.get(token), true);
+				if (expiresAt !== undefined) rowExpiries.set(token, expiresAt);
 			}),
 		);
 

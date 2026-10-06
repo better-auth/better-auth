@@ -1840,17 +1840,20 @@ describe("internal adapter test", async () => {
 		});
 
 		/**
-		 * Runs `during` when the user update sweep reads the session rows.
+		 * Runs `during` right after the user update sweep reads the session rows.
 		 */
-		function duringSweepRowRead(
+		function afterSweepRowRead(
 			testCtx: Awaited<ReturnType<typeof init>>,
-			during: () => void,
+			during: () => unknown,
 		) {
 			const findMany = testCtx.adapter.findMany.bind(testCtx.adapter);
-			vi.spyOn(testCtx.adapter, "findMany").mockImplementation((query) => {
-				if (query.model === "session") during();
-				return findMany(query);
-			});
+			vi.spyOn(testCtx.adapter, "findMany").mockImplementation(
+				async (query) => {
+					const rows = await findMany(query);
+					if (query.model === "session") await during();
+					return rows;
+				},
+			);
 		}
 
 		it("keeps a session created while a user update sweeps the list", async () => {
@@ -1862,7 +1865,7 @@ describe("internal adapter test", async () => {
 				where: [{ field: "token", value: session.token }],
 				update: { expiresAt: new Date(Date.now() - 1000) },
 			});
-			duringSweepRowRead(testCtx, () => {
+			afterSweepRowRead(testCtx, () => {
 				const list = JSON.parse(store.get(listKey)!) as unknown[];
 				store.set(
 					listKey,
@@ -1886,7 +1889,7 @@ describe("internal adapter test", async () => {
 				await createStoredSessionContext();
 			// Sign-out deletes the cached key first. The row stays readable, like
 			// a read replica that has not received the delete yet.
-			duringSweepRowRead(testCtx, () => store.delete(session.token));
+			afterSweepRowRead(testCtx, () => store.delete(session.token));
 
 			await testCtx.internalAdapter.updateUser(user.id, {
 				name: "Renamed User",
@@ -1899,8 +1902,13 @@ describe("internal adapter test", async () => {
 			const { store, testCtx, user, session } =
 				await createStoredSessionContext();
 			const refreshedExpiresAt = new Date(Date.now() + 30 * 86_400_000);
-			// The refresh writes the cache after the sweep has read the old row.
-			duringSweepRowRead(testCtx, () => {
+			// A refresh updates the row, then the cache, after the sweep read it.
+			afterSweepRowRead(testCtx, async () => {
+				await testCtx.adapter.update({
+					model: "session",
+					where: [{ field: "token", value: session.token }],
+					update: { expiresAt: refreshedExpiresAt },
+				});
 				const cached = JSON.parse(store.get(session.token)!);
 				cached.session.expiresAt = refreshedExpiresAt;
 				store.set(session.token, JSON.stringify(cached));
@@ -1917,6 +1925,25 @@ describe("internal adapter test", async () => {
 			expect(list).toEqual([
 				{ token: session.token, expiresAt: refreshedExpiresAt.getTime() },
 			]);
+		});
+
+		it("does not extend a shortened session from a stale cached copy", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const shortenedExpiresAt = new Date(Date.now() + 3_600_000);
+			// The cache still holds the original, later expiry.
+			await testCtx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+				update: { expiresAt: shortenedExpiresAt },
+			});
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			const cached = JSON.parse(store.get(session.token)!);
+			expect(new Date(cached.session.expiresAt)).toEqual(shortenedExpiresAt);
 		});
 
 		it("writes the database expiry to the cache and list when the user is updated", async () => {
