@@ -9,7 +9,7 @@ function createWordPattern() {
 			"gu",
 		);
 	} catch {
-		return /[a-z\d]+|[A-Z]+(?![a-z])|[A-Z][a-z\d]+/g;
+		return /[a-z\d\u0080-\uFFFF]+|[A-Z]+(?![a-z\d\u0080-\uFFFF])|[A-Z][a-z\d\u0080-\uFFFF]+/g;
 	}
 }
 
