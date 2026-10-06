@@ -111,20 +111,20 @@ export interface PasskeyOptions {
 	 * local dev
 	 *
 	 * Pass a function to resolve it per request, e.g. when one server
-	 * serves several relying parties. It runs on both the options and the
-	 * verify endpoints.
+	 * serves several relying parties. It runs on the options endpoints, and
+	 * the resolved value is stored with the challenge for verification.
 	 *
 	 * @default the hostname of `baseURL`, or "localhost"
 	 */
 	rpID?: PasskeyRPIDResolver | undefined;
 	/**
 	 * The RP ID(s) a registration or authentication response may be bound
-	 * to. Use this when the RP ID hash the authenticator signs differs from
+	 * to. Use this when the RP ID hash in the authenticator data differs from
 	 * the `rpID` sent in the options (Chrome extension pages send the bare
-	 * extension ID but sign `chrome-extension://<id>`), or to accept several
-	 * RP IDs.
+	 * extension ID, but the hash is of `chrome-extension://<id>`), or to
+	 * accept several RP IDs.
 	 *
-	 * @default the resolved `rpID`
+	 * @default the `rpID` sent in the options for the challenge
 	 */
 	expectedRPID?: PasskeyExpectedRPIDResolver | undefined;
 	/**

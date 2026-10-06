@@ -58,6 +58,12 @@ type StoredChallengeValue = WebAuthnChallengeValue & {
 	registrationSource?:
 		| { type: "session"; tokenHash: string }
 		| { type: "resolver" };
+	/**
+	 * The RP ID sent in the options, so verification checks the RP ID the
+	 * authenticator was asked to use even if a per-request `rpID` resolver
+	 * would pick another one for the verify request.
+	 */
+	rpID?: string;
 };
 
 /**
@@ -353,9 +359,10 @@ export const generatePasskeyRegistrationOptions = (
 			const userID = new TextEncoder().encode(
 				generateRandomString(32, "a-z", "0-9"),
 			);
+			const rpID = await resolveRpID(opts, ctx);
 			const options = await generateRegistrationOptions({
 				rpName: opts.rpName || ctx.context.appName,
-				rpID: await resolveRpID(opts, ctx),
+				rpID,
 				userID,
 				userName: ctx.query?.name || user.name || user.id,
 				userDisplayName: user.displayName || user.name || user.id,
@@ -393,6 +400,7 @@ export const generatePasskeyRegistrationOptions = (
 							sessionToken,
 						),
 						expectedChallenge: options.challenge,
+						rpID,
 						userData: {
 							id: user.id,
 							name: user.name,
@@ -542,8 +550,9 @@ export const generatePasskeyAuthenticationOptions = (
 				opts.authentication?.extensions,
 				ctx,
 			);
+			const rpID = await resolveRpID(opts, ctx);
 			const options = await generateAuthenticationOptions({
-				rpID: await resolveRpID(opts, ctx),
+				rpID,
 				userVerification:
 					opts.authenticatorSelection?.userVerification ?? "preferred",
 				extensions: authenticationExtensions,
@@ -561,6 +570,7 @@ export const generatePasskeyAuthenticationOptions = (
 			const data = {
 				type: "authentication",
 				expectedChallenge: options.challenge,
+				rpID,
 				userData: {
 					id: session?.user.id || "",
 				},
@@ -704,6 +714,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				expectedChallenge,
 				userData,
 				context,
+				rpID,
 			} = JSON.parse(data.value) as StoredChallengeValue;
 			if (ceremony !== "registration") {
 				throw APIError.from(
@@ -742,7 +753,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					response: resp,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: await resolveExpectedRPID(options, ctx),
+					expectedRPID: await resolveExpectedRPID(options, ctx, rpID),
 					requireUserVerification:
 						options.authenticatorSelection?.userVerification === "required",
 				}).catch((e) => {
@@ -964,9 +975,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
-			const { type: ceremony, expectedChallenge } = JSON.parse(
-				data.value,
-			) as StoredChallengeValue;
+			const {
+				type: ceremony,
+				expectedChallenge,
+				rpID,
+			} = JSON.parse(data.value) as StoredChallengeValue;
 			if (ceremony !== "authentication") {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -993,7 +1006,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: await resolveExpectedRPID(options, ctx),
+					expectedRPID: await resolveExpectedRPID(options, ctx, rpID),
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),
