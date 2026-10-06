@@ -15,8 +15,13 @@ import {
 } from "./extensions";
 import { requireActiveAccessTokenWithClaims } from "./introspect";
 import { STANDARD_CLAIMS } from "./standard-claims";
-import type { OAuthOptions, Scope } from "./types";
-import { getClient, resolveSubjectIdentifier } from "./utils";
+import type { OAuthOptions, SchemaClient, Scope } from "./types";
+import {
+	applyPairwiseSubject,
+	getClient,
+	resolvedSubjectClaim,
+	resolveSubjectIdentifier,
+} from "./utils";
 
 /**
  * Builds the standard OIDC claims (OIDC Core §5.1) for the UserInfo response.
@@ -99,6 +104,36 @@ function getUserInfoAccessToken(ctx: GenericEndpointContext) {
 		authorization: accessTokenAuthorization,
 		token: accessTokenAuthorization?.token,
 	};
+}
+
+/**
+ * Resolves the subject to present at /userinfo, which OIDC Core §5.3.2
+ * requires to equal the id token `sub`.
+ *
+ * The access token carries the already-resolved subject whenever `getSubject`
+ * is configured — embedded at mint for a JWT, re-derived from the stored
+ * `referenceId` for an opaque token — because the grant's reference is not
+ * recoverable here. Pairwise without a hook is recomputed from the token's
+ * client, which needs nothing but the client.
+ */
+async function resolvePresentationSub(
+	opts: OAuthOptions<Scope[]>,
+	jwt: Record<string, unknown>,
+	user: User,
+	client: SchemaClient<Scope[]> | null | undefined,
+): Promise<string> {
+	if (opts.getSubject) {
+		const carried = jwt[resolvedSubjectClaim];
+		if (typeof carried === "string") return carried;
+		// No carrier means the token predates the hook, so it was issued under
+		// the raw id. Re-running `getSubject` here without the grant's
+		// `referenceId` would answer with a different identity.
+		return client ? applyPairwiseSubject(user.id, client, opts) : user.id;
+	}
+	if (opts.pairwiseSecret && client) {
+		return resolveSubjectIdentifier(user.id, client, opts);
+	}
+	return user.id;
 }
 
 /**
@@ -191,17 +226,22 @@ export async function userInfoEndpoint(
 			? await getClient(ctx, opts, clientId)
 			: undefined;
 
-	// Resolve pairwise sub if server has pairwise enabled and client is configured for it
-	if (opts.pairwiseSecret && client) {
-		baseUserClaims.sub = await resolveSubjectIdentifier(user.id, client, opts);
-	}
+	// Present the resolved subject so it matches the id token / introspection;
+	// the user lookup above already used the raw user.id.
+	baseUserClaims.sub = await resolvePresentationSub(opts, jwt, user, client);
+
+	// Claim contributors see the token without its carrier. It is an internal
+	// transport, already consumed above, and a hook that forwarded token claims
+	// wholesale would otherwise put it in the response body.
+	const { [resolvedSubjectClaim]: _carriedSub, ...contributorJwt } = jwt;
+
 	const extensionUserClaims = scopes?.length
 		? await collectExtensionUserInfoClaims(opts, {
 				ctx,
 				opts,
 				user,
 				scopes,
-				jwt,
+				jwt: contributorJwt,
 				client: client ?? undefined,
 				requestedClaims,
 			})
@@ -211,14 +251,23 @@ export async function userInfoEndpoint(
 			? await opts.customUserInfoClaims({
 					user,
 					scopes,
-					jwt,
+					jwt: contributorJwt,
 					requestedClaims,
 				})
 			: {};
-	return {
-		...baseUserClaims,
+	const contributedClaims = {
 		...pickClaims(extensionUserClaims, baseUserClaims),
 		...pickClaims(additionalInfoUserClaims),
+	};
+	// Belt and braces: a contributor never receives the carrier, but it could
+	// still return this key by name, and the response must not carry it.
+	delete contributedClaims[resolvedSubjectClaim];
+
+	// `sub` is pinned last so contributed claims can't override the resolved
+	// subject and break cross-surface consistency.
+	return {
+		...baseUserClaims,
+		...contributedClaims,
 		sub: baseUserClaims.sub,
 	};
 }

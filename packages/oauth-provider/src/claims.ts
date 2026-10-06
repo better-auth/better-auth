@@ -4,6 +4,7 @@ import type { User } from "better-auth/types";
 import { collectExtensionAccessTokenClaims } from "./extensions";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { GrantType } from "./types/oauth";
+import { resolvedSubjectClaim } from "./utils";
 
 /**
  * Claim names the authorization server owns on a JWT access token, which no
@@ -12,6 +13,10 @@ import type { GrantType } from "./types/oauth";
  * only source of truth for issuer identity, subject, audience, lifetime, scope,
  * authentication context, the token's stable ID, and its sender-constraint
  * (`cnf`).
+ *
+ * `resolvedSubjectClaim` is reserved for the same reason as `sub`: the
+ * presentation layer trusts it as the subject to show at `/userinfo` and
+ * `/introspect`, so a contributor that could set it would choose the subject.
  *
  * @see RFC 9068 §2.2 (registered access-token claims)
  * @see RFC 7800 / RFC 9449 §6 (`cnf` confirmation — the token's bound key)
@@ -29,6 +34,7 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
 	"acr",
 	"amr",
 	"cnf",
+	resolvedSubjectClaim,
 ]);
 
 /**
