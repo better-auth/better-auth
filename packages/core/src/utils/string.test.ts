@@ -49,6 +49,7 @@ describe("Lynx compatibility", () => {
 			expect(fallbackToSnakeCase("hello—world")).toBe("hello_world");
 			expect(fallbackToSnakeCase("한글Test")).toBe("한글_test");
 			expect(fallbackToKebabCase("foo한글")).toBe("foo-한글");
+			expect(fallbackToKebabCase("cafe\u0301Bar")).toBe("café-bar");
 		} finally {
 			vi.unstubAllGlobals();
 			vi.resetModules();

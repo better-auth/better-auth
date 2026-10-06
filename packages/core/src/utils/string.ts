@@ -31,7 +31,7 @@ function splitFallbackWords(input: string): string[] {
 }
 
 function splitCasedWord(word: string): string[] {
-	const characters = [...word];
+	const characters = [...word.normalize("NFC")];
 	const words: string[] = [];
 	let currentWord = "";
 
