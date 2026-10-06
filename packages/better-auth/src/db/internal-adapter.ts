@@ -295,7 +295,7 @@ export const createInternalAdapter = (
 			).map((row) => [row.token, row]),
 		);
 
-		// Database expiry for each written token. Null marks an ended session.
+		// Written expiry for each token. Null marks an ended session.
 		const rowExpiries = new Map<string, number | null>();
 		await Promise.all(
 			tokens.map(async (token) => {
@@ -312,14 +312,25 @@ export const createInternalAdapter = (
 				// Sign-out deletes the cached key. Check the key after reading the
 				// row, so a lagging read replica that still returns a revoked row
 				// cannot bring the session back.
-				if (!(await secondaryStorage.get(token))) return;
+				const cached = await secondaryStorage.get(token);
+				if (!cached) return;
+				// A refresh after the row read writes a later expiry. Keep it.
+				const cachedSession = safeJSONParse<{ session: Session }>(
+					cached,
+				)?.session;
+				const session =
+					cachedSession &&
+					new Date(cachedSession.expiresAt) > new Date(row.expiresAt)
+						? cachedSession
+						: row;
+				const expiresAt = new Date(session.expiresAt);
 				// Some stores treat a TTL of 0 as no expiry.
-				const sessionTTL = getTTLSeconds(new Date(row.expiresAt));
+				const sessionTTL = getTTLSeconds(expiresAt);
 				if (sessionTTL <= 0) return;
-				rowExpiries.set(token, new Date(row.expiresAt).getTime());
+				rowExpiries.set(token, expiresAt.getTime());
 				await secondaryStorage.set(
 					token,
-					JSON.stringify({ session: row, user }),
+					JSON.stringify({ session, user }),
 					sessionTTL,
 				);
 			}),

@@ -1895,6 +1895,30 @@ describe("internal adapter test", async () => {
 			expect(store.has(session.token)).toBe(false);
 		});
 
+		it("keeps a refresh that lands while a user update reads rows", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const refreshedExpiresAt = new Date(Date.now() + 30 * 86_400_000);
+			// The refresh writes the cache after the sweep has read the old row.
+			duringSweepRowRead(testCtx, () => {
+				const cached = JSON.parse(store.get(session.token)!);
+				cached.session.expiresAt = refreshedExpiresAt;
+				store.set(session.token, JSON.stringify(cached));
+			});
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			const cached = JSON.parse(store.get(session.token)!);
+			expect(new Date(cached.session.expiresAt)).toEqual(refreshedExpiresAt);
+			expect(cached.user.name).toBe("Renamed User");
+			const list = JSON.parse(store.get(`active-sessions-${user.id}`)!);
+			expect(list).toEqual([
+				{ token: session.token, expiresAt: refreshedExpiresAt.getTime() },
+			]);
+		});
+
 		it("writes the database expiry to the cache and list when the user is updated", async () => {
 			const { store, testCtx, user, session } =
 				await createStoredSessionContext();
