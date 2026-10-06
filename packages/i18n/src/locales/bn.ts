@@ -9,6 +9,7 @@ export const bn: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "সেশন তৈরি করতে ব্যর্থ",
 	FAILED_TO_UPDATE_USER: "ব্যবহারকারী আপডেট করতে ব্যর্থ",
 	FAILED_TO_GET_SESSION: "সেশন পেতে ব্যর্থ",
+	FAILED_TO_DELETE_SESSION: "সেশন মুছতে ব্যর্থ",
 	INVALID_PASSWORD: "অবৈধ পাসওয়ার্ড",
 	INVALID_EMAIL: "অবৈধ ইমেইল ঠিকানা",
 	INVALID_EMAIL_OR_PASSWORD: "অবৈধ ইমেইল বা পাসওয়ার্ড",
