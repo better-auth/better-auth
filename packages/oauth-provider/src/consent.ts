@@ -109,15 +109,64 @@ export async function consentEndpoint<Result>(
 		session: session?.session!,
 		scopes: requestedScopes ?? originalRequestedScopes,
 	});
+	const foundConsent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>(
+		{
+			model: "oauthConsent",
+			where: [
+				{
+					field: "clientId",
+					value: clientId,
+				},
+				{
+					field: "userId",
+					value: session?.user.id!,
+				},
+				...(referenceId
+					? [
+							{
+								field: "referenceId",
+								value: referenceId,
+							},
+						]
+					: []),
+			],
+		},
+	);
+	const iat = Math.floor(Date.now() / 1000);
 	const resource = query.getAll("resource");
-	const consent = await saveConsent(ctx, {
-		clientId,
+	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
+		clientId: clientId,
 		userId: session?.user.id!,
-		referenceId,
 		scopes: requestedScopes ?? originalRequestedScopes,
 		requestedUserInfoClaims: acceptedUserInfoClaims,
+		createdAt: new Date(iat * 1000),
+		updatedAt: new Date(iat * 1000),
 		resources: resource.length ? resource : undefined,
-	});
+		referenceId,
+	};
+	foundConsent?.id
+		? await ctx.context.adapter.update({
+				model: "oauthConsent",
+				where: [
+					{
+						field: "id",
+						value: foundConsent.id,
+					},
+				],
+				update: {
+					resources: consent.resources,
+					scopes: consent.scopes,
+					requestedUserInfoClaims: consent.requestedUserInfoClaims,
+					updatedAt: new Date(iat * 1000),
+				},
+			})
+		: await ctx.context.adapter.create({
+				model: "oauthConsent",
+				data: {
+					...consent,
+					scopes: consent.scopes,
+				},
+			});
 
 	// Return authorization code
 	if (requestedScopes) {
@@ -147,74 +196,4 @@ export async function consentEndpoint<Result>(
 	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
 	});
-}
-
-/**
- * Records a user's consent for a client and reference. An existing consent for
- * the same client, user, and reference is replaced with the newly accepted
- * scopes, UserInfo claims, and resources.
- */
-export async function saveConsent(
-	ctx: GenericEndpointContext,
-	input: Pick<
-		OAuthConsent<Scope[]>,
-		| "clientId"
-		| "userId"
-		| "referenceId"
-		| "scopes"
-		| "requestedUserInfoClaims"
-		| "resources"
-	>,
-) {
-	const foundConsent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>(
-		{
-			model: "oauthConsent",
-			where: [
-				{
-					field: "clientId",
-					value: input.clientId,
-				},
-				{
-					field: "userId",
-					value: input.userId,
-				},
-				...(input.referenceId
-					? [
-							{
-								field: "referenceId",
-								value: input.referenceId,
-							},
-						]
-					: []),
-			],
-		},
-	);
-	const now = new Date(Math.floor(Date.now() / 1000) * 1000);
-	if (foundConsent?.id) {
-		await ctx.context.adapter.update({
-			model: "oauthConsent",
-			where: [
-				{
-					field: "id",
-					value: foundConsent.id,
-				},
-			],
-			update: {
-				resources: input.resources,
-				scopes: input.scopes,
-				requestedUserInfoClaims: input.requestedUserInfoClaims,
-				updatedAt: now,
-			},
-		});
-	} else {
-		await ctx.context.adapter.create({
-			model: "oauthConsent",
-			data: {
-				...input,
-				createdAt: now,
-				updatedAt: now,
-			},
-		});
-	}
-	return input;
 }

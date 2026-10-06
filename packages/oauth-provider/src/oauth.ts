@@ -20,11 +20,6 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
-import {
-	completeDeviceConsent,
-	isDeviceVerificationQuery,
-	resumeDeviceVerification,
-} from "./device-verification";
 import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import type { BackchannelLogoutPlan } from "./logout";
@@ -490,14 +485,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			const settings = (ctx as OAuth2AuthorizeContext).authorizeSettings ?? {
 				isAuthorize: true,
 			};
-			// Resumed device interactions re-enter here from sign-in and
-			// `/oauth2/continue`; a direct authorization request never does.
-			if (
-				!settings.isAuthorize &&
-				isDeviceVerificationQuery(new URLSearchParams(ctx.query))
-			) {
-				return resumeDeviceVerification(ctx, opts, settings);
-			}
 			return authorizeEndpoint(ctx, opts, settings);
 		},
 	);
@@ -831,15 +818,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					const oauthRequest = await oAuthState.get();
-					const query = new URLSearchParams(oauthRequest?.query);
-					if (isDeviceVerificationQuery(query)) {
-						return completeDeviceConsent(ctx, opts, ctx.body, {
-							query,
-							postLoginClearedForSession:
-								oauthRequest?.postLoginClearedForSession,
-						});
-					}
 					return consentEndpoint(ctx, opts, runOAuth2Authorize);
 				},
 			),

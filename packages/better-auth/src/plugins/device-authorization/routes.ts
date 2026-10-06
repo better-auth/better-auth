@@ -80,10 +80,9 @@ function normalizeUserCode(userCode: string) {
 }
 
 /**
- * Finds a device code by the user code a person entered. Exact custom user
- * codes are preserved, and only default-alphabet codes are normalized.
+ * Preserve exact custom user codes, and normalize only default-alphabet codes.
  */
-export async function findDeviceCodeByUserCode(
+async function findDeviceCodeByUserCode(
 	ctx: GenericEndpointContext,
 	userCode: string,
 ) {
@@ -107,65 +106,6 @@ export async function findDeviceCodeByUserCode(
 	}
 
 	return findByUserCode(normalizedUserCode);
-}
-
-/**
- * Binds a pending, unclaimed device code to the user reviewing it. Returns
- * whether the code belongs to `userId` afterwards, including when that user
- * had already claimed it.
- */
-export async function claimDeviceCode(
-	ctx: GenericEndpointContext,
-	deviceCode: DeviceCode,
-	userId: string,
-): Promise<boolean> {
-	if (deviceCode.userId || deviceCode.status !== "pending") {
-		return deviceCode.userId === userId;
-	}
-	const claimed = await ctx.context.adapter.incrementOne<DeviceCode>({
-		model: "deviceCode",
-		where: [
-			{ field: "id", value: deviceCode.id },
-			{ field: "status", value: "pending" },
-			{ field: "userId", operator: "eq", value: null },
-		],
-		increment: {},
-		set: { userId },
-	});
-	if (claimed) return true;
-	const current = await ctx.context.adapter.findOne<DeviceCode>({
-		model: "deviceCode",
-		where: [{ field: "id", value: deviceCode.id }],
-	});
-	return current?.userId === userId;
-}
-
-/**
- * Records the owning user's decision on a pending device code in one guarded
- * transition. Returns `false` when the code is no longer pending or belongs to
- * another user, so a concurrent decision cannot be overwritten.
- */
-export async function recordDeviceCodeDecision(
-	ctx: GenericEndpointContext,
-	input: {
-		deviceCode: DeviceCode;
-		userId: string;
-		status: "approved" | "denied";
-		/** Additional fields to persist with the decision, such as a narrowed `scope`. */
-		fields?: Record<string, unknown> | undefined;
-	},
-): Promise<boolean> {
-	const decided = await ctx.context.adapter.incrementOne<DeviceCode>({
-		model: "deviceCode",
-		where: [
-			{ field: "id", value: input.deviceCode.id },
-			{ field: "status", value: "pending" },
-			{ field: "userId", value: input.userId },
-		],
-		increment: {},
-		set: { ...input.fields, status: input.status },
-	});
-	return decided !== null;
 }
 
 const deviceCodeBodySchema = z.object({
@@ -934,9 +874,30 @@ export const deviceVerify = <
 			}
 
 			const session = await getSessionFromCtx(ctx);
-			const canReviewRequest = session
-				? await claimDeviceCode(ctx, deviceCodeRecord, session.user.id)
-				: false;
+			if (
+				session?.user?.id &&
+				!deviceCodeRecord.userId &&
+				deviceCodeRecord.status === "pending"
+			) {
+				const claimedDeviceCodeRecord =
+					await ctx.context.adapter.incrementOne<DeviceCode>({
+						model: "deviceCode",
+						where: [
+							{ field: "id", value: deviceCodeRecord.id },
+							{ field: "status", value: "pending" },
+							{ field: "userId", operator: "eq", value: null },
+						],
+						increment: {},
+						set: { userId: session.user.id },
+					});
+				if (claimedDeviceCodeRecord) {
+					deviceCodeRecord.userId = session.user.id;
+				}
+			}
+
+			const canReviewRequest =
+				session?.user.id !== undefined &&
+				deviceCodeRecord.userId === session.user.id;
 			const grantContext = (
 				canReviewRequest
 					? grant?.getVerificationContext(deviceCodeRecord)
@@ -1065,15 +1026,24 @@ export const deviceApprove = <
 				});
 			}
 
-			await recordDecisionOrThrow(ctx, {
-				deviceCode: deviceCodeRecord,
-				userId: session.user.id,
-				status: "approved",
-				fields: await grant?.authorizeApproval?.({
-					ctx,
-					deviceCode: deviceCodeRecord,
-					session,
-				}),
+			// Update device code with approved status and user ID
+			await ctx.context.adapter.update({
+				model: "deviceCode",
+				where: [
+					{
+						field: "id",
+						value: deviceCodeRecord.id,
+					},
+				],
+				update: {
+					...(await grant?.authorizeApproval?.({
+						ctx,
+						deviceCode: deviceCodeRecord,
+						session,
+					})),
+					status: "approved",
+					userId: session.user.id,
+				},
 			});
 
 			return ctx.json({
@@ -1184,10 +1154,18 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		await recordDecisionOrThrow(ctx, {
-			deviceCode: deviceCodeRecord,
-			userId: session.user.id,
-			status: "denied",
+		await ctx.context.adapter.update({
+			model: "deviceCode",
+			where: [
+				{
+					field: "id",
+					value: deviceCodeRecord.id,
+				},
+			],
+			update: {
+				status: "denied",
+				userId: session.user.id,
+			},
 		});
 
 		return ctx.json({
@@ -1195,18 +1173,6 @@ export const deviceDeny = createAuthEndpoint(
 		});
 	},
 );
-
-async function recordDecisionOrThrow(
-	ctx: GenericEndpointContext,
-	input: Parameters<typeof recordDeviceCodeDecision>[1],
-) {
-	if (await recordDeviceCodeDecision(ctx, input)) return;
-	throw new APIError("BAD_REQUEST", {
-		error: "invalid_request",
-		error_description:
-			DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED.message,
-	});
-}
 
 /**
  * @internal

@@ -179,9 +179,8 @@ export interface DeviceAuthorizationGrant<
 		| undefined
 		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
 	/**
-	 * Authorize the signed-in user's approval of a device code through
-	 * `/device/approve`, and return fields to persist with the approval. Throw
-	 * to reject the approval and leave the code pending.
+	 * Return grant-owned fields to persist when the signed-in user approves a
+	 * device code. Throw to reject the approval and leave the code pending.
 	 */
 	authorizeApproval?: (input: {
 		ctx: GenericEndpointContext;
@@ -302,11 +301,8 @@ export const deviceAuthorization = <
 
 export type * from "../../utils/time";
 export {
-	claimDeviceCode,
 	type DeviceCodeRedemptionAuthorization,
 	type DeviceCodeRedemptionResult,
-	findDeviceCodeByUserCode,
-	recordDeviceCodeDecision,
 	redeemDeviceCode,
 } from "./routes";
 export type { DeviceCode } from "./schema";
