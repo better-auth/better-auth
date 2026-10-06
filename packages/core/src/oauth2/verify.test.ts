@@ -40,6 +40,7 @@ describe("verifyBearerToken", () => {
 		// Tests reuse one JWKS URL with new keys; a cached set would put later
 		// tests' kids inside the refetch cooldown.
 		jwksCache.clear();
+		vi.restoreAllMocks();
 	});
 
 	afterAll(() => {
@@ -589,13 +590,16 @@ describe("verifyBearerToken", () => {
 
 	it("should sanitize TypeErrors from a function jwks source", async () => {
 		vi.resetModules();
+		const { logger } = await import("../env");
 		const { verifyJwsAccessToken: verify } = await import("./verify");
 		const { privateKey, kid } = await createTestJWKS();
 		const token = await createSignedToken(privateKey, kid);
+		const providerError = new TypeError(
+			"fetch failed for https://internal.example/private-jwks",
+		);
+		const loggerError = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const jwksFetch = vi.fn(async () => {
-			throw new TypeError(
-				"fetch failed for https://internal.example/private-jwks",
-			);
+			throw providerError;
 		});
 
 		const error = await verify(token, {
@@ -610,6 +614,7 @@ describe("verifyBearerToken", () => {
 		expect(error).toBeInstanceOf(Error);
 		expect(error).toMatchObject({ message: "JWKS fetch failed" });
 		expect(error).not.toHaveProperty("cause");
+		expect(loggerError).toHaveBeenCalledWith("JWKS fetch failed:", providerError);
 		expect(mockedFetch).not.toHaveBeenCalled();
 		vi.resetModules();
 	});
