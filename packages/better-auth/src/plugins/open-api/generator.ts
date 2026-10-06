@@ -312,6 +312,29 @@ function schemaAcceptsUndefined(zodType: z.ZodType<unknown>): boolean {
 	return false;
 }
 
+/**
+ * Resolve input optionality exactly as Zod's JSON Schema emitter does.
+ *
+ * @see https://github.com/colinhacks/zod/blob/v4.5.4/packages/zod/src/v4/core/json-schema-processors.ts#L294-L308
+ */
+function getZodInputOptionality(
+	zodType: z.ZodType<unknown>,
+): "optional" | "defaulted" | undefined {
+	const def = zodType._zod.def;
+	if (def.type === "pipe") {
+		const pipeDef = def as z.core.$ZodPipeDef;
+		if (pipeDef.in._zod.traits.has("$ZodTransform")) {
+			return getZodInputOptionality(pipeDef.out as z.ZodType<unknown>);
+		}
+	}
+	if (def.type === "catch") {
+		const catchDef = def as z.core.$ZodCatchDef;
+		return getZodInputOptionality(catchDef.innerType as z.ZodType<unknown>);
+	}
+	// cspell:disable-next-line
+	return zodType._zod.optin;
+}
+
 function isUndefinedOnlySchema(zodType: z.ZodType<unknown>) {
 	return zodType instanceof z.ZodUndefined || zodType instanceof z.ZodVoid;
 }
@@ -572,7 +595,9 @@ function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 			Object.entries(shape).forEach(([key, value]) => {
 				if (value instanceof z.ZodType) {
 					properties[key] = toOpenApiSchema(value as z.ZodType<unknown>);
-					if (!schemaAcceptsUndefined(value as z.ZodType<unknown>)) {
+					if (
+						getZodInputOptionality(value as z.ZodType<unknown>) === undefined
+					) {
 						required.push(key);
 					}
 				}

@@ -89,6 +89,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		if (path.includes("siwe")) return "siwe";
 		if (path.includes("/passkey/verify-authentication")) return "passkey";
 		if (path.startsWith("/magic-link/verify")) return "magic-link";
+		if (path === "/sign-in/email-otp") return "email-otp";
 		return null;
 	};
 	const getResolveContext = (ctx: GenericEndpointContext) => {
@@ -103,9 +104,9 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	};
 
 	const config = {
-		cookieName: "better-auth.last_used_login_method",
-		maxAge: 60 * 60 * 24 * 30,
 		...userConfig,
+		cookieName: userConfig?.cookieName ?? "better-auth.last_used_login_method",
+		maxAge: userConfig?.maxAge ?? 60 * 60 * 24 * 30,
 	} satisfies LastLoginMethodOptions;
 
 	return {

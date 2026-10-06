@@ -108,7 +108,6 @@ export const facebook = (options: FacebookOptions) => {
 		name: "Facebook",
 		accountSubject: ({ profile }) =>
 			"sub" in profile ? profile.sub : profile.id,
-		accountIssuer: "https://www.facebook.com",
 		async createAuthorizationURL({
 			state,
 			scopes,

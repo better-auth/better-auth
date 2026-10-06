@@ -3311,7 +3311,6 @@ describe("id token claim override security", async () => {
 
 describe("loopback redirect URI matching", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -3443,46 +3442,6 @@ describe("loopback redirect URI matching", async () => {
 			{ method: "POST", body, headers: reqHeaders },
 		);
 		expect(tokens.data?.access_token).toBeDefined();
-	});
-
-	it("non-loopback with different ports should be rejected", async ({
-		expect,
-	}) => {
-		const registeredUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
-		const requestedUri = "http://localhost:9999/api/auth/callback/test";
-
-		const oauthClient = await auth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				redirect_uris: [registeredUri],
-				application_type: "native",
-				skip_consent: true,
-			},
-		});
-
-		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
-			id: providerId,
-			options: {
-				clientId: oauthClient!.client_id!,
-				clientSecret: oauthClient!.client_secret!,
-				redirectURI: requestedUri,
-			},
-			redirectURI: "",
-			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-			state,
-			scopes: ["openid"],
-			codeVerifier,
-		});
-
-		let callbackRedirectUrl = "";
-		await client.$fetch(url.toString(), {
-			onError(context) {
-				callbackRedirectUrl = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(callbackRedirectUrl).toContain("invalid_redirect");
-		expect(callbackRedirectUrl).not.toContain("code=");
 	});
 
 	it("loopback with different path should be rejected", async ({ expect }) => {

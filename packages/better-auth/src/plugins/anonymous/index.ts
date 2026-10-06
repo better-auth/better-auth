@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
@@ -106,7 +107,10 @@ async function getAnonUserEmail(
 		return `temp-${id}@${options.emailDomainName}`;
 	}
 
-	return `temp@${id}.com`;
+	return createPlaceholderEmail({
+		identifier: id,
+		namespace: "anonymous",
+	});
 }
 
 export const anonymous = (options?: AnonymousOptions | undefined) => {

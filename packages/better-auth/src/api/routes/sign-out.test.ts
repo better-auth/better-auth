@@ -86,7 +86,6 @@ describe("sign-out", async () => {
 		await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: baseOAuthConfig.providerId,
-			issuer: "local:oauth:oidc-provider",
 			accountId: "oauth-user",
 			idToken: "id-token",
 		});
@@ -250,7 +249,6 @@ describe("sign-out", async () => {
 		await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: baseOAuthConfig.providerId,
-			issuer: "local:oauth:oidc-provider",
 			accountId: "oauth-user",
 			idToken: "id-token-first",
 			updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -258,7 +256,6 @@ describe("sign-out", async () => {
 		await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: secondProviderConfig.providerId,
-			issuer: "local:oauth:second-provider",
 			accountId: "oauth-user-2",
 			idToken: "id-token-second",
 			updatedAt: new Date("2026-01-02T00:00:00.000Z"),

@@ -1,0 +1,18 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "inputs": [
+        "$TURBO_EXTENDS$",
+        "$TURBO_ROOT$/.github/workflows/auto-changeset.yml",
+        "$TURBO_ROOT$/.github/workflows/ci.yml",
+        "$TURBO_ROOT$/.github/workflows/release-notes-command.yml",
+        "$TURBO_ROOT$/.github/workflows/release-notes-draft.yml",
+        "$TURBO_ROOT$/.github/workflows/promote.yml",
+        "$TURBO_ROOT$/.github/workflows/release.yml",
+        "$TURBO_ROOT$/.github/workflows/verify-changesets.yml"
+      ],
+      "outputs": []
+    }
+  }
+}

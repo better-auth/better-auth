@@ -26,7 +26,7 @@ export const initGetDefaultFieldName = ({
 	 */
 	const getDefaultFieldName = ({
 		field,
-		model: unsafeModel,
+		model: inputModel,
 	}: {
 		model: string;
 		field: string;
@@ -37,11 +37,11 @@ export const initGetDefaultFieldName = ({
 		if (field === "id" || field === "_id") {
 			return "id";
 		}
-		const model = getDefaultModelName(unsafeModel); // Just to make sure the model name is correct.
+		const modelKey = getDefaultModelName(inputModel);
 
-		let f = schema[model]?.fields[field];
+		let f = schema[modelKey]?.fields[field];
 		if (!f) {
-			const result = Object.entries(schema[model]!.fields!).find(
+			const result = Object.entries(schema[modelKey]!.fields!).find(
 				([_, f]) => f.fieldName === field,
 			);
 			if (result) {
@@ -50,7 +50,9 @@ export const initGetDefaultFieldName = ({
 			}
 		}
 		if (!f) {
-			throw new BetterAuthError(`Field ${field} not found in model ${model}`);
+			throw new BetterAuthError(
+				`Field ${field} not found in model ${modelKey}`,
+			);
 		}
 		return field;
 	};

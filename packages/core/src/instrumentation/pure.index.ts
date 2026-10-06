@@ -9,23 +9,15 @@
  *
  * Public surface must stay identical to `./index` (enforced by `pure.test.ts`).
  */
+import type { BetterAuthOptions } from "../types";
+import { noopWithSpan as withSpan } from "./noop";
 
 export * from "./attributes";
+export { withSpan };
 
-export function withSpan<T>(
-	name: string,
-	attributes: Record<string, string | number | boolean>,
-	fn: () => T,
-): T;
-export function withSpan<T>(
-	name: string,
-	attributes: Record<string, string | number | boolean>,
-	fn: () => Promise<T>,
-): Promise<T>;
-export function withSpan<T>(
-	_name: string,
-	_attributes: Record<string, string | number | boolean>,
-	fn: () => T | Promise<T>,
-): T | Promise<T> {
-	return fn();
+/**
+ * Selects the span runner for an auth instance.
+ */
+export function createWithSpan(_options: BetterAuthOptions): typeof withSpan {
+	return withSpan;
 }
