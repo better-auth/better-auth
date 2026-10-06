@@ -27,7 +27,7 @@ describe("oauth userinfo", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
+		baseURL: `${authServerBaseUrl}/api/auth/`,
 		plugins: [
 			jwt({
 				jwt: {
@@ -527,8 +527,8 @@ describe("oauth userinfo", async () => {
 			jti: "userinfo-proof",
 			accessToken: tokens.data?.access_token,
 		});
-		const userinfo = await client.$fetch<Record<string, string>>(
-			"/oauth2/userinfo",
+		const response = await customFetchImpl(
+			"http://auth-service:3000/api/auth/oauth2/userinfo",
 			{
 				headers: {
 					authorization: `DPoP ${tokens.data?.access_token ?? ""}`,
@@ -536,8 +536,10 @@ describe("oauth userinfo", async () => {
 				},
 			},
 		);
+		const userinfo: Record<string, string> = await response.json();
 
-		expect(userinfo.data).toMatchObject({
+		expect(response.status).toBe(200);
+		expect(userinfo).toMatchObject({
 			sub: user.id,
 			name: user.name,
 			email: user.email,
