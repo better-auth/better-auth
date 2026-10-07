@@ -1,5 +1,40 @@
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type Stripe from "stripe";
 import type { StripeOptions, StripePlan, Subscription } from "./types";
+
+export const INVALID_SEAT_COUNT_MESSAGE =
+	"countActiveMembers must return a positive integer";
+
+type CountActiveMembers = NonNullable<
+	NonNullable<StripeOptions["organization"]>["countActiveMembers"]
+>;
+
+export async function resolveOrganizationSeatCount(data: {
+	adapter: Pick<DBAdapter, "count">;
+	organizationId: string;
+	countActiveMembers?: CountActiveMembers | undefined;
+	invalidCountError?: (() => Error) | undefined;
+}) {
+	let defaultCount: Promise<number> | undefined;
+	const getDefaultCount = () => {
+		defaultCount ??= data.adapter.count({
+			model: "member",
+			where: [{ field: "organizationId", value: data.organizationId }],
+		});
+		return defaultCount;
+	};
+
+	const memberCount = data.countActiveMembers
+		? await data.countActiveMembers({
+				organizationId: data.organizationId,
+				getDefaultCount,
+			})
+		: await getDefaultCount();
+	if (!Number.isInteger(memberCount) || memberCount < 1) {
+		throw data.invalidCountError?.() ?? new Error(INVALID_SEAT_COUNT_MESSAGE);
+	}
+	return memberCount;
+}
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],
