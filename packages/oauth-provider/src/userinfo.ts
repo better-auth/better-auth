@@ -30,7 +30,7 @@ import { getClient, resolveSubjectIdentifier } from "./utils";
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
  */
-function userNormalClaims(
+export function userNormalClaims(
 	user: User,
 	scopes: string[],
 	requestedClaims: string[] = [],
