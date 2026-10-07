@@ -221,16 +221,20 @@ export const createOrganization = <O extends OrganizationOptions>(
 				options?.teams?.enabled &&
 				options.teams.defaultTeam?.enabled !== false
 			) {
+				const defaultTeamName =
+					typeof options.teams.defaultTeam?.name === "function"
+						? options.teams.defaultTeam.name(organization)
+						: (options.teams.defaultTeam?.name ?? organization.name);
 				let teamData = {
 					organizationId: organization.id,
-					name: `${organization.name}`,
+					name: `${defaultTeamName}`,
 					createdAt: new Date(),
 				};
 				if (options?.organizationHooks?.beforeCreateTeam) {
 					const response = await options?.organizationHooks.beforeCreateTeam({
 						team: {
 							organizationId: organization.id,
-							name: `${organization.name}`,
+							name: `${defaultTeamName}`,
 						},
 						user,
 						organization,
