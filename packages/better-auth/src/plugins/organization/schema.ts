@@ -384,11 +384,11 @@ type CustomRolesSchema<O> = O extends { roles: { [key: string]: any } }
 	: typeof defaultRolesSchema;
 
 export type InferOrganizationZodRolesFromOption<
-	O extends OrganizationOptions | undefined,
+	O extends Pick<OrganizationOptions, "roles"> | undefined,
 > = CustomRolesSchema<O>;
 
 export type InferOrganizationRolesFromOption<
-	O extends OrganizationOptions | undefined,
+	O extends Pick<OrganizationOptions, "roles"> | undefined,
 > = O extends { roles: any }
 	? keyof O["roles"] extends infer K extends string
 		? K
@@ -401,7 +401,7 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 
 type InferAdditionalFieldsOutput<
 	SchemaName extends string,
-	Options extends OrganizationOptions,
+	Options extends Pick<OrganizationOptions, "schema">,
 	isClientSide extends boolean,
 > = Options["schema"] extends {
 	[key in SchemaName]?: {
@@ -413,57 +413,50 @@ type InferAdditionalFieldsOutput<
 		: FieldAttributeToObject<Field>
 	: {};
 
+type OrganizationInferenceOptions = Pick<
+	OrganizationOptions,
+	"roles" | "schema"
+> & {
+	teams?: { enabled: boolean } | undefined;
+};
+
 export type InferMember<
-	O extends OrganizationOptions,
+	O extends OrganizationInferenceOptions,
 	isClientSide extends boolean = true,
-> = Prettify<
-	(O["teams"] extends {
-		enabled: true;
-	}
-		? {
-				id: string;
-				organizationId: string;
-				role: InferOrganizationRolesFromOption<O>;
-				createdAt: Date;
-				userId: string;
-				teamId?: string | undefined;
-				user: {
-					id: string;
-					email: string;
-					name: string;
-					image?: string | undefined;
-				};
-			}
-		: {
-				id: string;
-				organizationId: string;
-				role: InferOrganizationRolesFromOption<O>;
-				createdAt: Date;
-				userId: string;
-				user: {
-					id: string;
-					email: string;
-					name: string;
-					image?: string | undefined;
-				};
-			}) &
-		InferAdditionalFieldsOutput<"member", O, isClientSide>
+> = Omit<
+	{
+		id: string;
+		organizationId: string;
+		role: InferOrganizationRolesFromOption<O>;
+		createdAt: Date;
+		userId: string;
+		user: {
+			id: string;
+			email: string;
+			name: string;
+			image?: string | undefined;
+		};
+	} & (O["teams"] extends { enabled: true }
+		? { teamId?: string | undefined }
+		: {}) &
+		InferAdditionalFieldsOutput<"member", O, isClientSide>,
+	never
 >;
 
 export type InferOrganization<
-	O extends OrganizationOptions,
+	O extends Pick<OrganizationOptions, "schema">,
 	isClientSide extends boolean = true,
 > = Prettify<
 	Organization & InferAdditionalFieldsOutput<"organization", O, isClientSide>
 >;
 
 export type InferTeam<
-	O extends OrganizationOptions,
+	O extends Pick<OrganizationOptions, "schema">,
 	isClientSide extends boolean = true,
 > = Prettify<Team & InferAdditionalFieldsOutput<"team", O, isClientSide>>;
 
 export type InferInvitation<
-	O extends OrganizationOptions,
+	O extends OrganizationInferenceOptions,
 	isClientSide extends boolean = true,
 > = Prettify<
 	(O["teams"] extends {
