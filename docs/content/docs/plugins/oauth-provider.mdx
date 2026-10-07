@@ -1337,6 +1337,19 @@ oauthProvider({
 })
 ```
 
+To include the scope-based `profile` and `email` claims in the ID token, call `userNormalClaims` from `customIdTokenClaims`. It returns the same standard claims as the UserInfo endpoint for the granted scopes.
+
+```ts title="auth.ts"
+import { oauthProvider, userNormalClaims } from "@better-auth/oauth-provider";
+
+oauthProvider({
+  customIdTokenClaims: ({ user, scopes }) => {
+    // Adds `name`, `picture`, `email`, etc. based on the granted scopes
+    return userNormalClaims(user, scopes);
+  },
+})
+```
+
 #### Custom Token Response Fields
 
 Unlike the claim callbacks above (which add data *inside* JWT payloads), `customTokenResponseFields` adds fields to the **token endpoint JSON response** alongside `access_token`, `token_type`, etc. Standard OAuth fields cannot be overridden.
