@@ -25,6 +25,21 @@ describe("public oauth-provider types", () => {
 		>();
 	});
 
+	it("exports the standard-claims helper from the package entrypoint", () => {
+		expectTypeOf<
+			typeof import("@better-auth/oauth-provider").userNormalClaims
+		>().parameters.toEqualTypeOf<
+			[
+				user: import("better-auth/types").User,
+				scopes: string[],
+				requestedClaims?: string[],
+			]
+		>();
+		expectTypeOf<
+			typeof import("@better-auth/oauth-provider").userNormalClaims
+		>().returns.toEqualTypeOf<Record<string, unknown>>();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9378
 	 */

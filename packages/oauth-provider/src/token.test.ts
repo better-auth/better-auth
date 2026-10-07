@@ -1,3 +1,4 @@
+import { logger } from "@better-auth/core/env";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
@@ -33,6 +34,7 @@ import type {
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
+import { userNormalClaims } from "./userinfo";
 import { storeToken } from "./utils";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
@@ -2594,6 +2596,96 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 
 		expect(idToken.payload.name).toBeUndefined();
 		expect(idToken.payload.sub).toBeDefined();
+	});
+});
+
+describe("oauth token - customIdTokenClaims with userNormalClaims", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl, testUser } =
+		await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					customIdTokenClaims: ({ user, scopes }) =>
+						userNormalClaims(user, scopes),
+				}),
+			],
+		});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+
+	it("emits profile and email claims without reserved-claim warnings", async ({
+		expect,
+	}) => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		try {
+			const oauthClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "client_secret_post",
+					grant_types: ["authorization_code"],
+					redirect_uris: [redirectUri],
+					application_type: "native",
+					skip_consent: true,
+				},
+			});
+			const options = {
+				clientId: oauthClient!.client_id,
+				clientSecret: oauthClient!.client_secret,
+				redirectURI: redirectUri,
+			};
+			const codeVerifier = generateRandomString(32);
+			const url = await createAuthorizationURL({
+				id: providerId,
+				options,
+				redirectURI: "",
+				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+				state: "123",
+				scopes: ["openid", "profile", "email"],
+				codeVerifier,
+			});
+			let location = "";
+			await client.$fetch(url.toString(), {
+				onError(context) {
+					location = context.response.headers.get("Location") || "";
+				},
+			});
+			const code = new URL(location).searchParams.get("code");
+			expect(code).toBeTruthy();
+
+			const { body, headers: reqHeaders } = await authorizationCodeRequest({
+				code: code!,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options,
+			});
+			const tokens = await client.$fetch<{ id_token?: string }>(
+				"/oauth2/token",
+				{ method: "POST", body, headers: reqHeaders },
+			);
+			expect(tokens.data?.id_token).toBeDefined();
+			const claims = decodeJwt(tokens.data!.id_token!);
+
+			expect(claims.name).toBe(testUser.name);
+			expect(claims.email).toBe(testUser.email);
+			expect(claims.email_verified).toBe(false);
+			expect(claims.sub).toBeDefined();
+			expect(warnSpy).not.toHaveBeenCalledWith(
+				expect.stringContaining("stripped reserved id-token claim"),
+			);
+		} finally {
+			warnSpy.mockRestore();
+		}
 	});
 });
 
