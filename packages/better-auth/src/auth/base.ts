@@ -3,6 +3,7 @@ import { runWithAdapter } from "@better-auth/core/context";
 import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
+import { withAsUser } from "../api/as-user";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
@@ -37,6 +38,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		return ctx;
 	});
 	const { api } = getEndpoints(authContext, options);
+	const apiWithActor = withAsUser(api, authContext);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
 			return {
@@ -110,7 +112,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	return {
 		handler,
 		fetch: handler,
-		api,
+		api: apiWithActor,
 		options: options,
 		$context: authContext,
 		$ERROR_CODES: {
