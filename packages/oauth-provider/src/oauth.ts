@@ -14,6 +14,7 @@ import {
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
+import type { OpenAPIParameter } from "better-call";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
@@ -346,6 +347,97 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			};
 		}
 	};
+	const authorizeParameters: (OpenAPIParameter & {
+		schema: OpenAPIParameter["schema"] & { minimum?: number };
+	})[] = [
+		{
+			name: "response_type",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description: "OAuth 2.1 response type (e.g., 'code')",
+		},
+		{
+			name: "client_id",
+			in: "query",
+			required: true,
+			schema: { type: "string" },
+			description: "OAuth 2.1 client ID",
+		},
+		{
+			name: "redirect_uri",
+			in: "query",
+			required: false,
+			schema: { type: "string", format: "uri" },
+			description: "OAuth 2.1 redirect URI",
+		},
+		{
+			name: "scope",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description: "OAuth 2.1 scopes (space-separated)",
+		},
+		{
+			name: "state",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description: "OAuth 2.1 state parameter",
+		},
+		{
+			name: "request_uri",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description:
+				"Pushed Authorization Request URI referencing stored parameters",
+		},
+		{
+			name: "code_challenge",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description: "PKCE code challenge",
+		},
+		{
+			name: "code_challenge_method",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description: "PKCE code challenge method",
+		},
+		{
+			name: "nonce",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description: "OpenID Connect nonce",
+		},
+		{
+			name: "max_age",
+			in: "query",
+			required: false,
+			schema: { type: "integer", minimum: 0 },
+			description:
+				"Maximum authentication age in seconds; forces re-authentication when exceeded",
+		},
+		{
+			name: "resource",
+			in: "query",
+			required: false,
+			schema: { type: "array", items: { type: "string" } },
+			description:
+				"Requested protected resource(s) for the access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
+		},
+		{
+			name: "prompt",
+			in: "query",
+			required: false,
+			schema: { type: "string" },
+			description: "OAuth2 prompt parameter",
+		},
+	];
 	type OAuth2AuthorizeContext = GenericEndpointContext & {
 		authorizeSettings?: AuthorizeEndpointSettings | undefined;
 	};
@@ -362,95 +454,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				openapi: {
 					description:
 						"Authorize an OAuth 2.1 request from query parameters or an application/x-www-form-urlencoded POST body",
-					parameters: [
-						{
-							name: "response_type",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description: "OAuth 2.1 response type (e.g., 'code')",
-						},
-						{
-							name: "client_id",
-							in: "query",
-							required: true,
-							schema: { type: "string" },
-							description: "OAuth 2.1 client ID",
-						},
-						{
-							name: "redirect_uri",
-							in: "query",
-							required: false,
-							schema: { type: "string", format: "uri" },
-							description: "OAuth 2.1 redirect URI",
-						},
-						{
-							name: "scope",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description: "OAuth 2.1 scopes (space-separated)",
-						},
-						{
-							name: "state",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description: "OAuth 2.1 state parameter",
-						},
-						{
-							name: "request_uri",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description:
-								"Pushed Authorization Request URI referencing stored parameters",
-						},
-						{
-							name: "code_challenge",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description: "PKCE code challenge",
-						},
-						{
-							name: "code_challenge_method",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description: "PKCE code challenge method",
-						},
-						{
-							name: "nonce",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description: "OpenID Connect nonce",
-						},
-						{
-							name: "max_age",
-							in: "query",
-							required: false,
-							schema: { type: "integer", minimum: 0 },
-							description:
-								"Maximum authentication age in seconds; forces re-authentication when exceeded",
-						},
-						{
-							name: "resource",
-							in: "query",
-							required: false,
-							schema: { type: "array", items: { type: "string" } },
-							description:
-								"Requested protected resource(s) for the access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
-						},
-						{
-							name: "prompt",
-							in: "query",
-							required: false,
-							schema: { type: "string" },
-							description: "OAuth2 prompt parameter",
-						},
-					],
+					parameters: authorizeParameters,
 					responses: {
 						"302": {
 							description: "Redirect to client with code or error",
