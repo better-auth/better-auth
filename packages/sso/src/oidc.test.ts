@@ -755,6 +755,173 @@ describe("SSO", async () => {
 			}
 		}
 	});
+
+	it("should support explicit mapping of email to an array claim (mapping.email: 'emails')", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "mapped-emails-array-provider",
+				issuer: server.issuer.url!,
+				domain: "mapped-emails-array-test.com",
+				oidcConfig: {
+					clientId: "mapped-emails-array-client",
+					clientSecret: "test-client-secret",
+					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
+					pkce: false,
+					mapping: {
+						email: "emails",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers,
+		});
+
+		const originalUserinfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+
+		const testEmail = "mapped-array-user@example.com";
+
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				emails: [testEmail],
+				name: "Mapped Array User",
+				sub: "mapped-array-sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.emails = [testEmail];
+			token.payload.email_verified = true;
+			token.payload.name = "Mapped Array User";
+			token.payload.sub = "mapped-array-sub";
+		});
+
+		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "mapped-emails-array-provider",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+
+			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
+				res.url,
+				signInHeaders,
+			);
+			expect(callbackURL).toContain("/dashboard");
+
+			const session = await auth.api.getSession({
+				headers: callbackHeaders,
+			});
+			expect(session?.user.email).toBe(testEmail);
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserinfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
+
+	it("should fallback to emails claim when email claim is an empty string or null", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "empty-email-fallback-provider",
+				issuer: server.issuer.url!,
+				domain: "empty-email-fallback-test.com",
+				oidcConfig: {
+					clientId: "empty-email-fallback-client",
+					clientSecret: "test-client-secret",
+					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+
+		const originalUserinfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+
+		const testEmail = "empty-fallback-user@example.com";
+
+		// Provider emits email: "" alongside valid emails: [testEmail]
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "",
+				emails: [testEmail],
+				name: "Empty Fallback User",
+				sub: "empty-fallback-sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.email = "";
+			token.payload.emails = [testEmail];
+			token.payload.email_verified = true;
+			token.payload.name = "Empty Fallback User";
+			token.payload.sub = "empty-fallback-sub";
+		});
+
+		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "empty-email-fallback-provider",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+
+			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
+				res.url,
+				signInHeaders,
+			);
+			expect(callbackURL).toContain("/dashboard");
+
+			const session = await auth.api.getSession({
+				headers: callbackHeaders,
+			});
+			expect(session?.user.email).toBe(testEmail);
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserinfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
 });
 
 describe("SSO disable implicit sign in", async () => {

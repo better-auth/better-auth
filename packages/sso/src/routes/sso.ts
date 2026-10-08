@@ -1528,20 +1528,27 @@ async function handleOIDCCallback(
 		claims: Record<string, unknown>,
 		claim: string,
 	): string | undefined => {
-		let value = claims[claim];
-		if (value === undefined && claim === "email") {
-			value = claims.emails;
-		}
-		if (typeof value === "string" && value.length > 0) {
-			return value;
-		}
-		if (Array.isArray(value)) {
-			const candidate = value.find(
-				(item) => typeof item === "string" && item.length > 0,
-			);
-			if (typeof candidate === "string") {
-				return candidate;
+		const parseCandidate = (val: unknown): string | undefined => {
+			if (typeof val === "string" && val.length > 0) {
+				return val;
 			}
+			if (Array.isArray(val)) {
+				const candidate = val.find(
+					(item) => typeof item === "string" && item.length > 0,
+				);
+				if (typeof candidate === "string") {
+					return candidate;
+				}
+			}
+			return undefined;
+		};
+
+		const direct = parseCandidate(claims[claim]);
+		if (direct) {
+			return direct;
+		}
+		if (claim === "email") {
+			return parseCandidate(claims.emails);
 		}
 		return undefined;
 	};
