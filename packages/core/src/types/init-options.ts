@@ -880,8 +880,8 @@ export type BetterAuthOptions = {
 				/**
 				 * Whether to revoke all of the user's sessions when resetting the
 				 * password. For sessions stored in the database, revocation and
-				 * the password change run in one transaction when the adapter
-				 * supports transactions. Sessions in secondary storage are
+				 * the password change run in one transaction when transactions are
+				 * enabled for the adapter. Sessions in secondary storage are
 				 * removed after commit, on a best-effort basis.
 				 * @default false
 				 */

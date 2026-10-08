@@ -209,7 +209,7 @@ await authClient.changePassword({
 })
 ```
 
-For sessions stored in the database, the password change and the session revocation run in one transaction when your adapter supports transactions, and the sessions are revoked first. If revocation fails, the request returns an error and the current password stays in place. Without transaction support, a failure while saving the new password leaves the current password in place with the database sessions already revoked. With [secondary storage](/docs/concepts/database#secondary-storage), sessions are removed from it after commit. A failure there is logged, the new password is kept, and those sessions can stay valid until they expire.
+For sessions stored in the database, the password change and the session revocation run in one transaction when transactions are enabled for your adapter, and the sessions are revoked first. If revocation fails, the request returns an error and the current password stays in place. Without transactions, a failure while saving the new password leaves the current password in place with the database sessions already revoked. With [secondary storage](/docs/concepts/database#secondary-storage), sessions are removed from it after commit. A failure there is logged, the new password is kept, and those sessions can stay valid until they expire.
 
 ## Session Caching
 
