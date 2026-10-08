@@ -888,7 +888,7 @@ There are two types of hooks you can define:
 #### 2. After Hook
 
 * **Purpose**: This hook is called after the respective entity is created or updated.
-* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated. When the operation is part of a transaction, the hook runs after it commits and is skipped if it rolls back. If transactions aren't enabled for your database adapter, the hook also runs when a later step of the same request fails, because the entity was still written.
 
 **Example Usage**
 

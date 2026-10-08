@@ -97,6 +97,15 @@ export const runWithAdapter = async <
 		});
 };
 
+/**
+ * Runs `fn` in a transaction on `adapter`, joining the current one when
+ * already inside it, then runs the hooks queued with
+ * `queueAfterTransactionHook` once the work commits.
+ *
+ * When the adapter has no real transaction (`transaction: false`), writes are
+ * applied as they happen and cannot roll back, so queued hooks also run when
+ * `fn` throws. The original error is still rethrown.
+ */
 export const runWithTransaction = async <
 	R,
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -138,13 +147,13 @@ export const runWithTransaction = async <
 				hasError = true;
 				error = e;
 			}
-			const runPendingHooks = async (rethrowUnhandled: boolean) => {
+			const runPendingHooks = async (unhandledErrors: "throw" | "ignore") => {
 				for (const hook of pendingHooks) {
 					try {
 						await hook();
 					} catch (hookError) {
 						if (!options?.onAfterCommitHookError) {
-							if (rethrowUnhandled) throw hookError;
+							if (unhandledErrors === "throw") throw hookError;
 							continue;
 						}
 						try {
@@ -160,11 +169,11 @@ export const runWithTransaction = async <
 				// applied directly and nothing rolled back, so the hooks queued for
 				// those writes still have to run. The original error wins over theirs.
 				if (adapter.options?.adapterConfig.transaction === false) {
-					await runPendingHooks(false);
+					await runPendingHooks("ignore");
 				}
 				throw error;
 			}
-			await runPendingHooks(true);
+			await runPendingHooks("throw");
 			return result!;
 		})
 		.catch((err) => {
@@ -178,6 +187,9 @@ export const runWithTransaction = async <
 /**
  * Queue a hook to be executed after the current transaction commits.
  * If not in a transaction, the hook will execute immediately.
+ *
+ * When the adapter has no real transaction (`transaction: false`), the hook
+ * also runs if the surrounding work fails, since its writes were kept.
  */
 export const queueAfterTransactionHook = async (
 	hook: () => Promise<void>,
