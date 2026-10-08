@@ -853,6 +853,16 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it("accepts authority-free private-use post_logout_redirect_uris", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Native Logout Client",
+			redirect_uris: ["com.example.app:/callback"],
+			post_logout_redirect_uris: ["com.example.app:/logout"],
+		});
+		expect(result.valid).toBe(true);
+	});
+
 	it("keeps host-bearing private-use post_logout_redirect_uris origin-bound", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,

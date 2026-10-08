@@ -4,7 +4,10 @@ import {
 	isLoopbackHost,
 	isPublicRoutableHost,
 } from "@better-auth/core/utils/host";
-import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import {
+	isNativePrivateUseRedirectUri,
+	isReverseDomainPrivateUseRedirectUri,
+} from "@better-auth/core/utils/redirect-uri";
 import type { OAuthClientMetadata } from "@better-auth/oauth-provider";
 import { oauthClientMetadataSchema } from "@better-auth/oauth-provider";
 import {
@@ -386,11 +389,14 @@ export function validateCimdMetadata(
 					error: `all values for ${key} must use HTTP(S) or a private-use scheme`,
 				};
 			}
-			// Native private-use URIs have no HTTP origin. Skip origin-binding
-			// only for authorization redirect_uris. post_logout_redirect_uris are
-			// browser destinations and stay origin-bound (host-bearing custom
-			// schemes must not skip that check).
-			if (key === "redirect_uris" && isPrivateUseRedirect) {
+			// Native private-use URIs have no HTTP origin, so they skip
+			// origin-binding. In post_logout_redirect_uris only the
+			// authority-free reverse-domain form skips it; host-bearing custom
+			// schemes there stay origin-bound.
+			if (
+				isPrivateUseRedirect &&
+				(key === "redirect_uris" || isReverseDomainPrivateUseRedirectUri(uri))
+			) {
 				continue;
 			}
 
