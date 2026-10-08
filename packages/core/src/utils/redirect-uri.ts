@@ -53,7 +53,7 @@ export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
  *
  * @see https://github.com/better-auth/better-auth/issues/10946
  */
-export function isHostBearingPrivateUseRedirectUri(uri: URL): boolean {
+function isHostBearingPrivateUseRedirectUri(uri: URL): boolean {
 	if (NON_PRIVATE_USE_SCHEMES.has(uri.protocol)) {
 		return false;
 	}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	isHostBearingPrivateUseRedirectUri,
+	isNativePrivateUseRedirectUri,
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
@@ -126,59 +126,35 @@ describe("isReverseDomainPrivateUseRedirectUri", () => {
 	});
 });
 
-describe("isHostBearingPrivateUseRedirectUri", () => {
+describe("isNativePrivateUseRedirectUri", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10946
 	 */
-	it("accepts host-bearing custom-scheme URIs used by native MCP clients", () => {
-		expect(
-			isHostBearingPrivateUseRedirectUri(
-				new URL("cursor://anysphere.cursor-mcp/oauth/callback"),
-			),
-		).toBe(true);
-		expect(
-			isHostBearingPrivateUseRedirectUri(
-				new URL("com.example.app://host/callback"),
-			),
-		).toBe(true);
-		expect(
-			isHostBearingPrivateUseRedirectUri(
-				new URL("cursor://anysphere.cursor-mcp"),
-			),
-		).toBe(false);
-		expect(
-			isHostBearingPrivateUseRedirectUri(
-				new URL("cursor://anysphere.cursor-mcp?x=1"),
-			),
-		).toBe(false);
-	});
-
-	it("rejects reserved schemes and authority-free URIs", () => {
-		expect(
-			isHostBearingPrivateUseRedirectUri(new URL("https://example.com/cb")),
-		).toBe(false);
-		expect(
-			isHostBearingPrivateUseRedirectUri(new URL("file://host/callback")),
-		).toBe(false);
-		expect(
-			isHostBearingPrivateUseRedirectUri(new URL("ws://host/callback")),
-		).toBe(false);
-		expect(
-			isHostBearingPrivateUseRedirectUri(new URL("wss://host/callback")),
-		).toBe(false);
-		expect(
-			isHostBearingPrivateUseRedirectUri(new URL("com.example.app:/callback")),
-		).toBe(false);
-		expect(isHostBearingPrivateUseRedirectUri(new URL("myapp:/callback"))).toBe(
-			false,
-		);
+	it.each([
+		"cursor://anysphere.cursor-mcp/oauth/callback",
+		"com.example.app://host/callback",
+		"com.example.app:/callback",
+	])("accepts %s", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(true);
 	});
 
 	it.each([
+		"cursor://anysphere.cursor-mcp",
+		"cursor://anysphere.cursor-mcp?x=1",
+		"myapp:/callback",
+	])("rejects %s, which has neither a host and path nor a reverse-domain scheme", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
+	});
+
+	it.each([
+		"https://example.com/cb",
+		"file://host/callback",
+		"ws://host/callback",
+		"wss://host/callback",
 		"blob://host/callback",
 		"about://host/callback",
 		"view-source://host/callback",
-	])("rejects browser-internal scheme %s", (uri) => {
-		expect(isHostBearingPrivateUseRedirectUri(new URL(uri))).toBe(false);
+	])("rejects reserved scheme %s", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
 	});
 });

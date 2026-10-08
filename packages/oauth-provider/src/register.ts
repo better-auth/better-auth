@@ -246,7 +246,7 @@ function validateClientRedirectUri(
 
 	if (!isNativePrivateUseRedirectUri(url)) {
 		invalidRedirectUri(
-			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with an authority: ${redirectUri}`,
+			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`,
 		);
 	}
 }
