@@ -3,6 +3,8 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
+import { canonicalizeSCIMResourceAttributeNames } from "./attribute-names";
+import { stripSCIMResourceNullAttributes } from "./null-attributes";
 import type { SCIMUser } from "./persistence";
 
 const BASE_URL = "http://localhost:3000";
@@ -253,5 +255,63 @@ describe("SCIM attribute names are case-insensitive", () => {
 		expect(resource.members?.map((member) => member.value).sort()).toEqual(
 			[first.id, second.id].sort(),
 		);
+	});
+
+	it("normalizes Microsoft Entra string Booleans sent under a differently cased key", async () => {
+		const { createUser, patch } = createFixture();
+		const user = await createUser({ userName: "entra@example.com" });
+
+		const { status, resource } = await patch(`/Users/${user.id}`, [
+			{
+				op: "Replace",
+				path: "emails",
+				value: [{ value: "entra@example.com", Primary: "True" }],
+			},
+			{ op: "Replace", value: { Active: "False" } },
+		]);
+
+		expect(status, JSON.stringify(resource)).toBe(200);
+		expect(resource.emails).toEqual([
+			{ value: "entra@example.com", primary: true },
+		]);
+		expect(resource.active).toBe(false);
+	});
+
+	it("applies differently cased keys under pathless alias and qualified paths", async () => {
+		const { createUser, patch } = createFixture();
+		const user = await createUser({ userName: "alias@example.com" });
+
+		const { status, resource } = await patch(`/Users/${user.id}`, [
+			{ op: "Replace", value: { enterprise: { Department: "Finance" } } },
+			{ op: "Replace", value: { manager: { Value: "manager-1" } } },
+			{
+				op: "Replace",
+				value: {
+					[`${SCIM_ENTERPRISE_USER_SCHEMA}:costCenter`]: "CC-1",
+					"name.GivenName": "Ada",
+				},
+			},
+		]);
+
+		expect(status, JSON.stringify(resource)).toBe(200);
+		expect(resource[SCIM_ENTERPRISE_USER_SCHEMA]).toEqual({
+			department: "Finance",
+			costCenter: "CC-1",
+			manager: { value: "manager-1" },
+		});
+		expect(resource.name?.givenName).toBe("Ada");
+	});
+
+	it("keeps a __proto__ key as data instead of changing the prototype", () => {
+		const resource = JSON.parse(
+			'{"UserName":"a@example.com","__proto__":{"active":false},"title":null}',
+		);
+		for (const normalized of [
+			canonicalizeSCIMResourceAttributeNames("User", resource),
+			stripSCIMResourceNullAttributes(resource),
+		]) {
+			expect(Object.getPrototypeOf(normalized)).toBe(Object.prototype);
+			expect(Object.hasOwn(normalized as object, "__proto__")).toBe(true);
+		}
 	});
 });

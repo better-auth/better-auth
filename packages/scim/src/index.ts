@@ -3,7 +3,10 @@ import { BetterAuthError } from "better-auth";
 import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { statusCodes } from "better-call";
 import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normalization";
-import { canonicalizeSCIMResourceAttributeNames } from "./attribute-names";
+import {
+	canonicalizeSCIMPatchRequestBody,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type { SCIMOptions } from "./configuration";
 import {
 	areValidSCIMScopes,
@@ -20,6 +23,7 @@ import {
 	getSCIMServiceProviderConfig,
 } from "./discovery";
 import {
+	canonicalizeSCIMGroupPatchValue,
 	createSCIMGroup,
 	deleteSCIMGroup,
 	getSCIMGroup,
@@ -46,6 +50,7 @@ import {
 import { createSCIMError } from "./scim-error";
 import { SCIM_MEDIA_TYPE } from "./scim-metadata";
 import { assertNativeSCIMTransactions } from "./transaction";
+import { canonicalizeSCIMUserPatchValue } from "./user-patch";
 import {
 	createSCIMUser,
 	deleteSCIMUser,
@@ -313,14 +318,22 @@ function createSCIMPlugin(options: SCIMOptions) {
 					(["PUT", "PATCH"].includes(request.method) &&
 						!path.endsWith("/Groups")));
 			let normalizedBody = body;
-			if ((isUserMutation || isGroupMutation) && request.method !== "PATCH") {
+			if (isUserMutation || isGroupMutation) {
 				try {
-					normalizedBody = stripSCIMResourceNullAttributes(
-						canonicalizeSCIMResourceAttributeNames(
-							isUserMutation ? "User" : "Group",
-							body,
-						),
-					);
+					normalizedBody =
+						request.method === "PATCH"
+							? canonicalizeSCIMPatchRequestBody(
+									body,
+									isUserMutation
+										? canonicalizeSCIMUserPatchValue
+										: canonicalizeSCIMGroupPatchValue,
+								)
+							: stripSCIMResourceNullAttributes(
+									canonicalizeSCIMResourceAttributeNames(
+										isUserMutation ? "User" : "Group",
+										body,
+									),
+								);
 				} catch (error) {
 					if (!isAPIError(error)) throw error;
 					return {

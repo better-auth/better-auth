@@ -530,12 +530,33 @@ function resolveSCIMUserPatchValueTarget(path: string): SCIMPatchValueTarget {
 	return { kind: "merge", subPath: (attribute) => `${path}.${attribute}` };
 }
 
-/** Rewrite a PATCH value's attribute keys to the names its target declares. */
-function canonicalizeSCIMUserPatchValue(
+/**
+ * Rewrite a User PATCH value's attribute keys to the names its target
+ * declares. Pathless keys may be aliases or qualified paths, such as
+ * `manager` or `name.givenName`, so each entry resolves through its own path.
+ */
+export function canonicalizeSCIMUserPatchValue(
 	path: string | undefined,
 	value: unknown,
 ): unknown {
-	if (!path) return canonicalizeSCIMResourceAttributeNames("User", value);
+	if (path) return canonicalizeSCIMUserPatchPathValue(path, value);
+	const resource = canonicalizeSCIMResourceAttributeNames("User", value);
+	if (!isRecord(resource)) return resource;
+	const entries = Object.entries(resource).map(
+		([key, entry]): [string, unknown] => [
+			key,
+			canonicalizeSCIMUserPatchPathValue(key, entry),
+		],
+	);
+	return entries.every(([key, entry]) => entry === resource[key])
+		? resource
+		: Object.fromEntries(entries);
+}
+
+function canonicalizeSCIMUserPatchPathValue(
+	path: string,
+	value: unknown,
+): unknown {
 	let resolved: ReturnType<typeof resolveSCIMUserPatchPath>;
 	try {
 		resolved = resolveSCIMUserPatchPath(path);
@@ -1253,15 +1274,8 @@ export function applySCIMUserPatch(
 		}
 	}
 
-	const canonicalOperations = operations.map((operation) => ({
-		...operation,
-		value: canonicalizeSCIMUserPatchValue(
-			operation.path?.trim(),
-			operation.value,
-		),
-	}));
 	for (const operation of expandSCIMPatchNullValues(
-		canonicalOperations,
+		operations,
 		resolveSCIMUserPatchValueTarget,
 	)) {
 		const path = operation.path?.trim();

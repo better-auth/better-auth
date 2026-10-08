@@ -65,7 +65,8 @@ function canonicalizeRecord(
 	names: SCIMResourceAttributeNames,
 ): Record<string, unknown> {
 	let changed = false;
-	const canonical: Record<string, unknown> = {};
+	const seenNames: string[] = [];
+	const entries: [string, unknown][] = [];
 	for (const [key, entry] of Object.entries(record)) {
 		const extension = names.extensions.find(
 			(candidate) => candidate.id.toLowerCase() === key.toLowerCase(),
@@ -74,7 +75,7 @@ function canonicalizeRecord(
 			? undefined
 			: findAttribute(names.attributes, key);
 		const name = extension?.id ?? attribute?.name ?? key;
-		if (Object.hasOwn(canonical, name)) {
+		if (seenNames.includes(name)) {
 			throw createSCIMError("BAD_REQUEST", {
 				detail: `${name} appears more than once with different letter case`,
 				scimType: "invalidSyntax",
@@ -85,9 +86,11 @@ function canonicalizeRecord(
 			? canonicalizeSCIMAttributeNames(entry, subAttributes)
 			: entry;
 		if (name !== key || value !== entry) changed = true;
-		canonical[name] = value;
+		seenNames.push(name);
+		entries.push([name, value]);
 	}
-	return changed ? canonical : record;
+	// fromEntries keeps a `__proto__` key as data instead of setting the prototype.
+	return changed ? Object.fromEntries(entries) : record;
 }
 
 /**
@@ -109,6 +112,32 @@ export function canonicalizeSCIMAttributeNames(
 		return canonical;
 	});
 	return changed ? entries : value;
+}
+
+/**
+ * Rewrite the attribute keys of each PATCH operation value without mutating
+ * the body. `canonicalizeValue` resolves what each operation's path targets.
+ */
+export function canonicalizeSCIMPatchRequestBody(
+	body: unknown,
+	canonicalizeValue: (path: string | undefined, value: unknown) => unknown,
+): unknown {
+	if (!isRecord(body) || !Array.isArray(body.Operations)) return body;
+	let changed = false;
+	const operations = body.Operations.map((operation) => {
+		if (!isRecord(operation)) return operation;
+		if (operation.path !== undefined && typeof operation.path !== "string") {
+			return operation;
+		}
+		const value = canonicalizeValue(
+			operation.path?.trim() || undefined,
+			operation.value,
+		);
+		if (value === operation.value) return operation;
+		changed = true;
+		return { ...operation, value };
+	});
+	return changed ? { ...body, Operations: operations } : body;
 }
 
 /**

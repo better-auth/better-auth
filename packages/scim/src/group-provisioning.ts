@@ -296,8 +296,8 @@ const SCIM_GROUP_MEMBER_ATTRIBUTES =
 		(attribute) => attribute.name === "members",
 	)?.subAttributes ?? [];
 
-/** Rewrite a PATCH value's attribute keys to the names its target declares. */
-function canonicalizeSCIMGroupPatchValue(
+/** Rewrite a Group PATCH value's attribute keys to the names its target declares. */
+export function canonicalizeSCIMGroupPatchValue(
 	path: string | undefined,
 	value: unknown,
 ): unknown {
@@ -1391,13 +1391,7 @@ export function patchSCIMGroup(
 			}
 
 			const operations = expandSCIMPatchNullValues(
-				ctx.body.Operations.map((operation) => ({
-					...operation,
-					value: canonicalizeSCIMGroupPatchValue(
-						operation.path?.trim(),
-						operation.value,
-					),
-				})),
+				ctx.body.Operations,
 				resolveSCIMGroupPatchValueTarget,
 			);
 			const incrementalPatch = parseIncrementalMembershipPatch(operations);

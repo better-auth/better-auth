@@ -2,4 +2,4 @@
 "@better-auth/scim": patch
 ---
 
-SCIM User and Group requests now match attribute names case-insensitively, as RFC 7643 requires. Previously, a key with different letter case, such as `Active` or `Emails`, was ignored: a `PUT` with `Active: false` left the User active. A request that names the same attribute twice with different letter case now returns `400 Bad Request`.
+If your SCIM provider sends attribute names with different letter case than the SCIM schema, such as `Active` or `Emails`, Better Auth now applies them. Previously these keys were ignored while the request still succeeded, so a `PUT` with `Active: false` left the User active. A request that sends the same attribute twice with different letter case now returns `400 Bad Request`. Providers that send the standard attribute names are unaffected.
