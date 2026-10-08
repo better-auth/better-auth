@@ -143,7 +143,7 @@ describe("updateUser", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11597
 	 */
-	describe("when a step of revoking other sessions fails", () => {
+	describe("with revokeOtherSessions, when a step fails", () => {
 		async function setup(options?: Parameters<typeof getTestInstance>[0]) {
 			const instance = await getTestInstance(options);
 			const { headers } = await instance.signInWithTestUser();
