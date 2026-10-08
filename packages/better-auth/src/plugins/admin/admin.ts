@@ -171,6 +171,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			userHasPermission: userHasPermission(opts as O),
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
+		$Infer: {
+			User: {} as UserWithRole,
+		},
 		schema: mergeSchema(schema, opts.schema),
 		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
