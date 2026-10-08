@@ -18,4 +18,5 @@ export const PASSKEY_ERROR_CODES = defineErrorCodes({
 	RESOLVE_USER_REQUIRED:
 		"Passkey registration requires either an authenticated session or a resolveUser callback when requireSession is false",
 	RESOLVED_USER_INVALID: "Resolved user is invalid",
+	FAILED_TO_DELETE_LAST_PASSKEY: "You cannot remove your only sign-in method",
 });

@@ -149,6 +149,12 @@ export interface PasskeyOptions {
 	 * Authentication behavior overrides
 	 */
 	authentication?: PasskeyAuthenticationOptions | undefined;
+	/**
+	 * Allow deleting the only passkey when the user has no other sign-in methods.
+	 *
+	 * @default false
+	 */
+	allowDeletingOnlyPasskey?: boolean;
 }
 
 export type Passkey = {

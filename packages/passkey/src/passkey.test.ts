@@ -15,6 +15,7 @@ import {
 import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
+import { PASSKEY_ERROR_CODES } from "./error-codes";
 
 const serverMocks = vi.hoisted(() => ({
 	verifyRegistrationResponse: vi.fn(),
@@ -667,6 +668,349 @@ describe("passkey", async () => {
 			where: [{ field: "id", value: passkey.id }],
 		});
 		expect(stillExists).not.toBeNull();
+	});
+
+	it("should not allow deleting the only passkey when user has no other sign-in method", async () => {
+		const {
+			auth: testAuth,
+			client: testClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "passkey-only-user",
+							name: "only-passkey@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Passkey Only User",
+									email: "only-passkey@example.com",
+								},
+								{ method: "test" },
+							);
+							return { userId: user.id };
+						},
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const setCookie = cookieSetter(headers);
+
+		await testClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		const registerRes = await testClient.$fetch<{
+			id: string;
+			session: { token: string };
+			user: { id: string };
+		}>("/passkey/verify-registration", {
+			method: "POST",
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				createSession: true,
+			},
+			onResponse: setCookie,
+		});
+
+		const passkeyId = registerRes.data?.id!;
+		expect(passkeyId).toBeDefined();
+
+		await expect(
+			testAuth.api.deletePasskey({
+				headers,
+				body: { id: passkeyId },
+			}),
+		).rejects.toThrowError(
+			PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY.message,
+		);
+
+		const context = await testAuth.$context;
+		const stillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: passkeyId }],
+		});
+		expect(stillExists).not.toBeNull();
+	});
+
+	it("should allow deleting the only passkey when allowDeletingOnlyPasskey is true", async () => {
+		const {
+			auth: testAuth,
+			client: testClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					allowDeletingOnlyPasskey: true,
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "passkey-only-user-override",
+							name: "only-passkey-override@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Passkey Only User",
+									email: "only-passkey@example.com",
+								},
+								{ method: "test" },
+							);
+							return { userId: user.id };
+						},
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const setCookie = cookieSetter(headers);
+
+		await testClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		const registerRes = await testClient.$fetch<{
+			id: string;
+			session: { token: string };
+			user: { id: string };
+		}>("/passkey/verify-registration", {
+			method: "POST",
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				createSession: true,
+			},
+			onResponse: setCookie,
+		});
+
+		const passkeyId = registerRes.data?.id!;
+		expect(passkeyId).toBeDefined();
+
+		const result = await testAuth.api.deletePasskey({
+			headers,
+			body: { id: passkeyId },
+		});
+		expect(result.status).toBe(true);
+
+		const context = await testAuth.$context;
+		const stillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: passkeyId }],
+		});
+		expect(stillExists).toBeNull();
+	});
+
+	it("should allow deleting a passkey when user has multiple passkeys but prevent deleting the last remaining passkey", async () => {
+		let testUserId = "";
+		const {
+			auth: testAuth,
+			client: testClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "passkey-multi-user",
+							name: "multi-passkey@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Multi Passkey User",
+									email: "multi-passkey@example.com",
+								},
+								{ method: "test" },
+							);
+							testUserId = user.id;
+							return { userId: user.id };
+						},
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const setCookie = cookieSetter(headers);
+
+		await testClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		const registerRes1 = await testClient.$fetch<{
+			id: string;
+			session: { token: string };
+			user: { id: string };
+		}>("/passkey/verify-registration", {
+			method: "POST",
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				createSession: true,
+			},
+			onResponse: setCookie,
+		});
+
+		const passkey1Id = registerRes1.data?.id!;
+		expect(passkey1Id).toBeDefined();
+
+		// Create a second passkey for this user directly via adapter
+		const context = await testAuth.$context;
+		const passkey2 = await context.adapter.create<Omit<Passkey, "id">, Passkey>(
+			{
+				model: "passkey",
+				data: {
+					userId: testUserId,
+					publicKey: "mockPublicKey2",
+					name: "second-passkey",
+					counter: 0,
+					deviceType: "singleDevice",
+					credentialID: "mockCredentialID2",
+					createdAt: new Date(),
+					backedUp: false,
+					transports: "mockTransports",
+					aaguid: "mockAAGUID",
+				} satisfies Omit<Passkey, "id">,
+			},
+		);
+
+		// Deleting passkey1 should succeed because passkey2 still exists
+		const result1 = await testAuth.api.deletePasskey({
+			headers,
+			body: { id: passkey1Id },
+		});
+		expect(result1.status).toBe(true);
+
+		const passkey1StillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: passkey1Id }],
+		});
+		expect(passkey1StillExists).toBeNull();
+
+		// Now passkey2 is the only passkey left and user has no accounts -> deletion should fail
+		await expect(
+			testAuth.api.deletePasskey({
+				headers,
+				body: { id: passkey2.id },
+			}),
+		).rejects.toThrowError(
+			PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY.message,
+		);
+
+		const passkey2StillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: passkey2.id }],
+		});
+		expect(passkey2StillExists).not.toBeNull();
+	});
+
+	it("should allow unlinking the last account when user has a passkey, but prevent deleting the only remaining passkey afterwards", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				database: memoryAdapter({
+					user: [],
+					session: [],
+					account: [],
+					verification: [],
+					passkey: [],
+				}),
+				plugins: [passkey()],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		expect(accounts.length).toBe(1);
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "my-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "unlink-last-account-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		// User has 1 account and 1 passkey: unlinking the account should succeed
+		const unlinkRes = await testAuth.api.unlinkAccount({
+			headers,
+			body: {
+				accountId: accounts[0]!.id,
+			},
+		});
+		expect(unlinkRes.status).toBe(true);
+
+		// Now user has 0 accounts and 1 passkey: deleting the passkey must fail
+		await expect(
+			testAuth.api.deletePasskey({
+				headers,
+				body: { id: createdPasskey.id },
+			}),
+		).rejects.toThrowError(
+			PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY.message,
+		);
+
+		const passkeyStillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+		expect(passkeyStillExists).not.toBeNull();
 	});
 
 	/**

@@ -492,10 +492,27 @@ export const unlinkAccount = createAuthEndpoint(
 			accounts.length === 1 &&
 			!ctx.context.options.account?.accountLinking?.allowUnlinkingAll
 		) {
-			throw APIError.from(
-				"BAD_REQUEST",
-				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
-			);
+			let hasOtherAuthMethod = false;
+			if (ctx.context.hasPlugin("passkey") || "passkey" in ctx.context.tables) {
+				const passkey = await ctx.context.adapter.findOne({
+					model: "passkey",
+					where: [
+						{
+							field: "userId",
+							value: ctx.context.session.user.id,
+						},
+					],
+				});
+				if (passkey) {
+					hasOtherAuthMethod = true;
+				}
+			}
+			if (!hasOtherAuthMethod) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+				);
+			}
 		}
 		const accountExist = accounts.find((account) => account.id === accountId);
 		if (!accountExist) {

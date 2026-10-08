@@ -1045,6 +1045,71 @@ describe("account", async () => {
 		});
 	});
 
+	it("should allow unlinking the last account when user has a passkey", async () => {
+		const {
+			client: passkeyTestClient,
+			auth: passkeyTestAuth,
+			signInWithTestUser: passkeySignInWithTestUser,
+		} = await getTestInstance({
+			plugins: [
+				{
+					id: "passkey",
+					schema: {
+						passkey: {
+							fields: {
+								userId: {
+									type: "string",
+									references: { model: "user", field: "id" },
+									required: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		});
+		const { user, headers } = await passkeySignInWithTestUser();
+		const testContext = await passkeyTestAuth.$context;
+		const accounts = await testContext.internalAdapter.findAccounts(user.id);
+		expect(accounts.length).toBe(1);
+
+		// With passkey plugin enabled but user having no passkeys, unlinking last account must fail
+		const failUnlinkRes = await passkeyTestClient.unlinkAccount(
+			{
+				accountId: accounts[0]!.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(failUnlinkRes.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
+		);
+
+		await testContext.adapter.create({
+			model: "passkey",
+			data: {
+				userId: user.id,
+			},
+		});
+
+		const unlinkRes = await passkeyTestClient.unlinkAccount(
+			{
+				accountId: accounts[0]!.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(unlinkRes.error).toBeNull();
+		expect(unlinkRes.data?.status).toBe(true);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(0);
+	});
+
 	it("should unlink only the selected local account row", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {
