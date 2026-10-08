@@ -483,7 +483,7 @@ export const createInternalAdapter = (
 			// Deferring is only safe when the database can serve the session. When
 			// secondary storage is the session store, its write is the session
 			// itself and must fail inside the caller's transaction.
-			const deferSecondaryStorageWrite =
+			const deferMirror =
 				storageOptions?.deferSecondaryStorageWrites === true &&
 				databaseSessionFallbackEnabled;
 			const {
@@ -574,7 +574,7 @@ export const createInternalAdapter = (
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								return deferSecondaryStorageWrite
+								return deferMirror
 									? sessionData
 									: mirrorSessionToSecondaryStorage(sessionData as Session);
 							},
@@ -582,7 +582,7 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			if (secondaryStorage && deferSecondaryStorageWrite && res) {
+			if (secondaryStorage && deferMirror && res) {
 				await queueAfterTransactionHook(
 					async () => {
 						await mirrorSessionToSecondaryStorage(res as Session);
