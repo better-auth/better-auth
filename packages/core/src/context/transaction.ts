@@ -156,10 +156,14 @@ export const runWithTransaction = async <
 					} catch (hookError) {
 						if (!options?.onAfterCommitHookError) {
 							if (unhandledErrors === "throw") throw hookError;
-							logger.error(
-								"Failed to run an after-commit hook for work that could not roll back",
-								hookError,
-							);
+							try {
+								logger.error(
+									"Failed to run an after-commit hook for work that could not roll back",
+									hookError,
+								);
+							} catch {
+								// A failing logger must not skip later hooks or replace the original error.
+							}
 							continue;
 						}
 						try {

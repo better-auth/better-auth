@@ -171,6 +171,29 @@ describe("runWithTransaction", () => {
 			);
 		});
 
+		it("still runs later hooks when logging a hook failure throws", async () => {
+			const adapter = createAsIsAdapter();
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {
+				throw new Error("logger failed");
+			});
+			onTestFinished(() => error.mockRestore());
+			const events: string[] = [];
+
+			await expect(
+				runWithTransaction(adapter, async () => {
+					await queueAfterTransactionHook(async () => {
+						throw new Error("cache unavailable");
+					});
+					await queueAfterTransactionHook(async () => {
+						events.push("later hook");
+					});
+					throw new Error("later step failed");
+				}),
+			).rejects.toThrow("later step failed");
+
+			expect(events).toEqual(["later hook"]);
+		});
+
 		it("keeps the original error when a queued hook also fails", async () => {
 			const adapter = createAsIsAdapter();
 			const onAfterCommitHookError = vi.fn();
