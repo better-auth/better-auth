@@ -401,8 +401,12 @@ export function validateCimdMetadata(
 			}
 
 			// Loopback redirect URIs are allowed for local/native app flows
-			// (RFC 8252); this exception applies only to redirect URI fields.
-			const localhostAllowed = isRedirectField && isLoopbackHost(uri.hostname);
+			// (RFC 8252); this exception applies only to HTTP(S) URIs in redirect
+			// URI fields. A custom scheme with a loopback host stays origin-bound.
+			const localhostAllowed =
+				isRedirectField &&
+				(uri.protocol === "http:" || uri.protocol === "https:") &&
+				isLoopbackHost(uri.hostname);
 			if (uri.origin !== clientIdOrigin && !localhostAllowed) {
 				return {
 					valid: false,

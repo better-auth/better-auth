@@ -863,6 +863,17 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it("does not apply the loopback exception to host-bearing private-use post_logout_redirect_uris", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Native Logout Client",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+			post_logout_redirect_uris: ["cursor://localhost/logout"],
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("same origin");
+	});
+
 	it("keeps host-bearing private-use post_logout_redirect_uris origin-bound", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
