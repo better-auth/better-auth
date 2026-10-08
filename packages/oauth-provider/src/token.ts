@@ -519,17 +519,11 @@ async function createOpaqueAccessToken(
 /**
  * Tear down the entire refresh-token family for a (client, user) pair, plus
  * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
- * Access tokens are deleted first so the parent rows' foreign-key children
- * do not block the refresh-row delete.
  *
- * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
- * with respect to each other. Between them, a concurrent rotation in a
- * different worker can `create` a fresh refresh row (and, immediately after,
- * an access-token row referencing it) for the same (client, user) pair,
- * leaving the family partially rebuilt and the new refresh row orphaned of
- * any deletion. Closing this window requires the same transactional adapter
- * contract tracked under FIXME(strict-family-invalidation) in
- * `createRefreshToken`.
+ * Revoke every refresh row in one update before deleting. A later delete can
+ * fail (or a successor can be inserted around the deletes) and the family is
+ * still unusable: rotation re-reads the parent and drops a successor whose
+ * parent was revoked again or removed.
  *
  * @internal
  */
@@ -538,6 +532,16 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
+	const revokedAt = new Date();
+	await ctx.context.adapter.updateMany({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "userId", value: userId },
+		],
+		update: { revoked: revokedAt },
+	});
+
 	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
 		model: "oauthRefreshToken",
 		where: [
@@ -564,6 +568,23 @@ export async function invalidateRefreshFamily(
 			{ field: "userId", value: userId },
 		],
 	});
+}
+
+/**
+ * A rotation sets `revoked` and `rotatedAt` to the same instant. A later
+ * family invalidation moves `revoked` forward or deletes the parent. Either
+ * means a successor inserted after that must not be kept.
+ *
+ * @internal
+ */
+export function familyWasInvalidatedAfterRotation(
+	parent: { revoked?: Date | null; rotatedAt?: Date | null } | null,
+): boolean {
+	if (!parent?.rotatedAt) return true;
+	if (!parent.revoked) return false;
+	return (
+		new Date(parent.revoked).getTime() > new Date(parent.rotatedAt).getTime()
+	);
 }
 
 async function revokeTokensIssuedForAuthorizationCode(
@@ -697,6 +718,24 @@ async function createRefreshToken(
 		model: "oauthRefreshToken",
 		data: newRow,
 	});
+
+	const parent = await ctx.context.adapter.findOne<{
+		revoked?: Date | null;
+		rotatedAt?: Date | null;
+	}>({
+		model: "oauthRefreshToken",
+		where: [{ field: "id", value: originalRefresh.id }],
+	});
+	if (familyWasInvalidatedAfterRotation(parent)) {
+		await ctx.context.adapter.delete({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 
 	return {
 		id: refreshToken.id,
