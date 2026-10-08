@@ -1524,6 +1524,27 @@ async function handleOIDCCallback(
 		const value = claims[claim];
 		return typeof value === "string" && value.length > 0 ? value : undefined;
 	};
+	const readEmailClaim = (
+		claims: Record<string, unknown>,
+		claim: string,
+	): string | undefined => {
+		let value = claims[claim];
+		if (value === undefined && claim === "email") {
+			value = claims.emails;
+		}
+		if (typeof value === "string" && value.length > 0) {
+			return value;
+		}
+		if (Array.isArray(value)) {
+			const candidate = value.find(
+				(item) => typeof item === "string" && item.length > 0,
+			);
+			if (typeof candidate === "string") {
+				return candidate;
+			}
+		}
+		return undefined;
+	};
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
 	let rawProfile: Record<string, unknown> | undefined;
@@ -1604,7 +1625,7 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: readStringClaim(rawUserInfo, "sub"),
-			email: readStringClaim(rawUserInfo, mapping.email || "email"),
+			email: readEmailClaim(rawUserInfo, mapping.email || "email"),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
@@ -1624,7 +1645,7 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: idToken.sub,
-			email: readStringClaim(idToken, mapping.email || "email"),
+			email: readEmailClaim(idToken, mapping.email || "email"),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						idToken[mapping.emailVerified || "email_verified"],

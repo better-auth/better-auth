@@ -609,6 +609,152 @@ describe("SSO", async () => {
 			}
 		}
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11630
+	 */
+	it("should support email claims returned as an array (Azure AD B2C)", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "emails-array-oidc-provider",
+				issuer: server.issuer.url!,
+				domain: "emails-array-test.com",
+				oidcConfig: {
+					clientId: "emails-array-test-client",
+					clientSecret: "test-client-secret",
+					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+
+		const originalUserinfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+
+		const testEmail = "b2c-user@example.com";
+
+		// Azure AD B2C sends `emails: ["b2c-user@example.com"]` instead of `email`
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				emails: [testEmail],
+				name: "B2C Test User",
+				sub: "b2c-array-sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.emails = [testEmail];
+			token.payload.email_verified = true;
+			token.payload.name = "B2C Test User";
+			token.payload.sub = "b2c-array-sub";
+		});
+
+		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "emails-array-oidc-provider",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+
+			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
+				res.url,
+				signInHeaders,
+			);
+			expect(callbackURL).toContain("/dashboard");
+
+			const session = await auth.api.getSession({
+				headers: callbackHeaders,
+			});
+			expect(session?.user.email).toBe(testEmail);
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserinfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
+
+	it("should support email claims returned as an array in ID token without userInfoEndpoint (Azure AD B2C)", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "emails-array-idtoken-provider",
+				issuer: server.issuer.url!,
+				domain: "emails-array-idtoken-test.com",
+				oidcConfig: {
+					clientId: "emails-array-idtoken-client",
+					clientSecret: "test-client-secret",
+					skipDiscovery: true,
+					authorizationEndpoint: `${server.issuer.url!}/authorize`,
+					tokenEndpoint: `${server.issuer.url!}/token`,
+					jwksEndpoint: `${server.issuer.url!}/jwks`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+		server.service.removeAllListeners("beforeTokenSigning");
+
+		const testEmail = "b2c-idtoken-user@example.com";
+
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.emails = [testEmail];
+			token.payload.email_verified = true;
+			token.payload.name = "B2C IDToken User";
+			token.payload.sub = "b2c-idtoken-sub";
+		});
+
+		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "emails-array-idtoken-provider",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+
+			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
+				res.url,
+				signInHeaders,
+			);
+			expect(callbackURL).toContain("/dashboard");
+
+			const session = await auth.api.getSession({
+				headers: callbackHeaders,
+			});
+			expect(session?.user.email).toBe(testEmail);
+		} finally {
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
 });
 
 describe("SSO disable implicit sign in", async () => {
