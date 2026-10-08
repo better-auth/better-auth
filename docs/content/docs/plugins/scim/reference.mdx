@@ -194,6 +194,19 @@ Requests with a body may use `application/scim+json` or `application/json`. Resp
 
 The Enterprise User URI may be declared without an extension object, as Microsoft Entra does in some requests, and the declaration remains in the response. An Enterprise object without its URI is invalid. PATCH bodies must include `urn:ietf:params:scim:api:messages:2.0:PatchOp`. User and Group create or replace requests with unsupported or duplicate schema URNs return `400 Bad Request` with `scimType: "invalidValue"`.
 
+### Null attribute values
+
+[RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643#section-2.5) treats a JSON `null` as an unassigned attribute. [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups) sends `null` for attributes that are not populated in the directory. User and Group HTTP requests handle `null` by where it appears:
+
+| Where `null` appears                                                                                                                                                             | Effect                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An attribute or subattribute in a `POST` or `PUT` body                                                                                                                           | Treated as omitted. A complex attribute whose subattributes are all `null` is omitted too. Because `PUT` replaces the resource, an omitted attribute is cleared. |
+| The `value` of a PATCH `add` or `replace` operation                                                                                                                              | Removes the target, like a `remove` operation on the same path.                                                                                                  |
+| A key in a PATCH value that merges into the stored value: a pathless value, `name`, the Enterprise extension, `manager`, or a filtered value such as `addresses[type eq "work"]` | Removes that attribute or subattribute after the operation's other keys apply. A `name.formatted` removal therefore uses the updated name parts.                 |
+| A subattribute of a value in a PATCH that adds or replaces whole values, such as `emails` or `addresses`                                                                         | Treated as omitted from that value.                                                                                                                              |
+
+`active: null` returns `400 Bad Request` in every request, because an omitted or removed `active` becomes `true` and would reactivate the User. In PATCH, a `null` on an attribute that cannot be removed, such as User `userName` or `emails` or Group `displayName`, fails the same way a `remove` operation does. In `POST` and `PUT` bodies, a required attribute sent as `null` is reported as missing. A `null` on a read-only subattribute such as `manager.displayName` is ignored. `null` entries inside an array are kept and fail validation.
+
 ### Microsoft Entra Group compatibility
 
 Microsoft's classic Entra provisioning client includes the attribute-less URI `http://schemas.microsoft.com/2006/11/ResourceManagement/ADSCIM/2.0/Group` in some `POST /Groups` schema lists. Enable the exact, input-only exception when that client targets the endpoint:
@@ -369,7 +382,7 @@ Operations run in array order and accept case-insensitive `add`, `replace`, and 
 
 In this table, `enterpriseUrn` is `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`.
 
-User paths may include the core User schema prefix. An `add` or `replace` operation may omit `path` and provide an object of writable attributes, including flat Enterprise URI keys. Unfiltered `replace` adds a missing target. `id`, `schemas`, `meta`, and `manager.displayName` are read-only.
+User paths may include the core User schema prefix. An `add` or `replace` operation may omit `path` and provide an object of writable attributes, including flat Enterprise URI keys. Unfiltered `replace` adds a missing target. `id`, `schemas`, `meta`, and `manager.displayName` are read-only. A `null` value removes its target, as described in [Null attribute values](#null-attribute-values).
 
 When a filtered value path such as `phoneNumbers[type eq "work"].value` matches no stored value, Better Auth creates the value with the filtered `type` or `primary` stamped on it instead of returning the [RFC 7644](https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2.3) `noTarget` error. [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups) sends these operations for attributes that are not populated yet, and because PATCH is atomic, rejecting one of them would also discard every other operation in the same request. A created email is never primary, so a filter miss cannot move the sign-in address. A `remove` on a filtered path that matches nothing stays a no-op, and a `remove` without a path still returns `noTarget`.
 
@@ -384,7 +397,7 @@ When a filtered value path such as `phoneNumbers[type eq "work"].value` matches 
 | `members`                            | `remove`                   | Clears all members when no value is supplied, or removes the supplied references. |
 | `members[value eq "<scim-user-id>"]` | `remove`                   | Removes one User reference.                                                       |
 
-Group paths may include the core Group schema prefix. An `add` or `replace` operation may omit `path` and provide an object with `displayName`, `externalId`, or `members`.
+Group paths may include the core Group schema prefix. An `add` or `replace` operation may omit `path` and provide an object with `displayName`, `externalId`, or `members`. A `null` value removes its target, as described in [Null attribute values](#null-attribute-values).
 
 ## Identity callbacks
 
