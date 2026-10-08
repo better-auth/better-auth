@@ -8,6 +8,7 @@ import {
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { appendURLPath, appendURLSegment } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { setOAuthState } from "../../api/state/oauth";
 import { getAwaitableValue } from "../../context/helpers";
@@ -253,7 +254,10 @@ const oauthPopupStart = createAuthEndpoint(
 				state,
 				codeVerifier,
 				idTokenNonce,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: appendURLSegment(
+					appendURLPath(c.context.baseURL, "/callback"),
+					provider.id,
+				),
 				scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
 			});
 		} catch (error) {

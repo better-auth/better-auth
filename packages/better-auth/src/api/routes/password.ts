@@ -2,6 +2,11 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
+import {
+	appendQueryParams,
+	appendURLPath,
+	appendURLSegment,
+} from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getDate } from "../../utils/date";
 import {
@@ -19,7 +24,7 @@ function redirectError(
 ): string {
 	const url = callbackURL
 		? new URL(callbackURL, ctx.baseURL)
-		: new URL(`${ctx.baseURL}/error`);
+		: new URL(appendURLPath(ctx.baseURL, "/error"));
 	if (query)
 		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
 	return url.href;
@@ -133,8 +138,13 @@ export const requestPasswordReset = createAuthEndpoint(
 			identifier: `reset-password:${verificationToken}`,
 			expiresAt,
 		});
-		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
+		const url = appendQueryParams(
+			appendURLSegment(
+				appendURLPath(ctx.context.baseURL, "/reset-password"),
+				verificationToken,
+			),
+			new URLSearchParams({ callbackURL: redirectTo || "" }),
+		);
 		await ctx.context.runInBackgroundOrAwait(
 			ctx.context.options.emailAndPassword.sendResetPassword(
 				{

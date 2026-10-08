@@ -31,6 +31,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
+import { hubspot } from "./providers/hubspot";
 import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
 import { okta } from "./providers/okta";
@@ -3530,6 +3531,64 @@ describe("oauth2", async () => {
 				fetchSpy.mockRestore();
 			}
 		});
+
+		it("encodes the avatar ID as one URL path segment", async () => {
+			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						id: "yandex-user-id",
+						login: "yandex-user",
+						client_id: "yandex-client-id",
+						psuid: "yandex-psuid",
+						default_email: "user@example.com",
+						default_avatar_id: "avatar/part?variant=1",
+					}),
+					{ headers: { "content-type": "application/json" } },
+				),
+			);
+
+			try {
+				const userInfo = await yandex({
+					clientId: "yandex-client-id",
+					clientSecret: "yandex-client-secret",
+				}).getUserInfo?.({ accessToken: "yandex-access-token" });
+
+				expect(userInfo?.image).toBe(
+					"https://avatars.yandex.net/get-yapic/avatar%2Fpart%3Fvariant%3D1/islands-200",
+				);
+			} finally {
+				fetchSpy.mockRestore();
+			}
+		});
+	});
+
+	describe("HubSpot Provider Helper", () => {
+		it("encodes the access token as one URL path segment", async () => {
+			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						user: "user@example.com",
+						user_id: "hubspot-user-id",
+						hub_domain: "example.com",
+						hub_id: "hub-id",
+					}),
+					{ headers: { "content-type": "application/json" } },
+				),
+			);
+
+			try {
+				await hubspot({
+					clientId: "hubspot-client-id",
+					clientSecret: "hubspot-client-secret",
+				}).getUserInfo?.({ accessToken: "token/part?variant=1" });
+
+				expect(fetchSpy.mock.calls[0]?.[0].toString()).toBe(
+					"https://api.hubapi.com/oauth/v1/access-tokens/token%2Fpart%3Fvariant%3D1",
+				);
+			} finally {
+				fetchSpy.mockRestore();
+			}
+		});
 	});
 
 	describe("Keycloak Provider Helper", () => {
@@ -5481,6 +5540,64 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 		expect(redirectUri).toBe(
 			"http://localhost:3000/api/auth/callback/dynamic-oauth-test",
 		);
+	});
+
+	it("keeps the redirect_uri under a trailing-slash auth base URL", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth/",
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "dynamic-oauth-test",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
+				}),
+			],
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"dynamic-oauth-test",
+		);
+		expect(redirectUri).toBe(
+			"http://localhost:3000/api/auth/callback/dynamic-oauth-test",
+		);
+	});
+
+	it("encodes the provider ID in the redirect_uri", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "team/member",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
+				}),
+			],
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"team/member",
+		);
+		expect.assert(redirectUri);
+		expect(redirectUri).toBe(
+			"http://localhost:3000/api/auth/callback/team%2Fmember",
+		);
+		const callbackResponse = await auth.handler(new Request(redirectUri));
+		expect(callbackResponse.status).not.toBe(404);
 	});
 
 	it("composes an absolute redirect_uri for a generic-oauth provider at a custom basePath", async () => {

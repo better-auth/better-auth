@@ -8,6 +8,7 @@ import {
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
@@ -382,7 +383,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				state,
 				codeVerifier,
 				idTokenNonce,
-				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
+				redirectURI: appendURLPath(
+					c.context.baseURL,
+					getOAuthCallbackPath(provider),
+				),
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
 				additionalParams: c.body.additionalParams,
@@ -584,10 +588,13 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
-					const callbackURL = ctx.body.callbackURL
-						? encodeURIComponent(ctx.body.callbackURL)
-						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+					const url = appendQueryParams(
+						appendURLPath(ctx.context.baseURL, "/verify-email"),
+						new URLSearchParams({
+							token,
+							callbackURL: ctx.body.callbackURL || "/",
+						}),
+					);
 					await ctx.context.runInBackgroundOrAwait(
 						ctx.context.options.emailVerification.sendVerificationEmail(
 							{
