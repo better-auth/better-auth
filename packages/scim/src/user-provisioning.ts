@@ -324,7 +324,7 @@ async function replaceSCIMUserSource(
  * subject, so `identity.resolveUser` does not run. Returns `null` when no
  * inactive source owns the `externalId`.
  */
-async function restoreInactiveSCIMUser(
+async function reprovisionInactiveSCIMUser(
 	adapter: DBAdapter,
 	input: Omit<Parameters<typeof replaceSCIMUserSource>[1], "source"> & {
 		externalIdKey: string;
@@ -353,7 +353,7 @@ async function restoreInactiveSCIMUser(
 						scimType: "uniqueness",
 					});
 				}
-				const restoredSource = await replaceSCIMUserSource(trx, {
+				const reprovisionedSource = await replaceSCIMUserSource(trx, {
 					...input,
 					source,
 					sourceGuard: [
@@ -361,7 +361,7 @@ async function restoreInactiveSCIMUser(
 						{ field: "active", value: false },
 					],
 				});
-				return restoredSource ?? concurrentIdentityMutation();
+				return reprovisionedSource ?? concurrentIdentityMutation();
 			}),
 		() =>
 			assertSCIMUserReplacementAvailable(adapter, {
@@ -604,8 +604,8 @@ export function createSCIMUser(
 			);
 			await assertUserConnectionDomainStable(adapter, connection);
 
-			const restoredSCIMUser = externalIdKey
-				? await restoreInactiveSCIMUser(adapter, {
+			const reprovisionedSCIMUser = externalIdKey
+				? await reprovisionInactiveSCIMUser(adapter, {
 						auth: ctx.context,
 						connection,
 						identity,
@@ -617,10 +617,10 @@ export function createSCIMUser(
 						active,
 					})
 				: null;
-			if (restoredSCIMUser) {
+			if (reprovisionedSCIMUser) {
 				const completeResource = createUserResource(
 					ctx.context.baseURL,
-					restoredSCIMUser,
+					reprovisionedSCIMUser,
 				);
 				ctx.setStatus(201);
 				ctx.setHeader("location", completeResource.meta.location);

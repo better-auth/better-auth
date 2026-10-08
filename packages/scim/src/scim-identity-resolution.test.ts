@@ -618,7 +618,7 @@ describe("SCIM explicit identity resolution", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11111
 	 */
-	it("restores an inactive SCIM User when POST reuses its externalId", async () => {
+	it("reprovisions an inactive SCIM User when POST reuses its externalId", async () => {
 		let resolveUserCalls = 0;
 		const { auth, data } = createIdentityFixture({
 			identity: {
@@ -659,7 +659,7 @@ describe("SCIM explicit identity resolution", () => {
 			}),
 		).resolves.toBeNull();
 
-		const restored = await auth.api.createSCIMUser({
+		const reprovisioned = await auth.api.createSCIMUser({
 			body: {
 				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
 				userName: "inactive-restored@example.com",
@@ -670,11 +670,11 @@ describe("SCIM explicit identity resolution", () => {
 			headers: authorization("connection-a-token"),
 		});
 
-		expect(restored.id).toBe(first.id);
-		expect(restored.active).toBe(true);
+		expect(reprovisioned.id).toBe(first.id);
+		expect(reprovisioned.active).toBe(true);
 		expect(resolveUserCalls).toBe(1);
-		expect(restored.userName).toBe("inactive-restored@example.com");
-		expect(restored.displayName).toBe("After Restore");
+		expect(reprovisioned.userName).toBe("inactive-restored@example.com");
+		expect(reprovisioned.displayName).toBe("After Restore");
 		expect(data.scimUser).toHaveLength(1);
 		expect(data.user).toHaveLength(1);
 		expect(data.scimUser[0]?.userId).toBe(original.userId);
@@ -731,7 +731,7 @@ describe("SCIM explicit identity resolution", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11111
 	 */
-	it("still rejects inactive externalId restore when userName belongs to another user", async () => {
+	it("still rejects inactive User reprovisioning when userName belongs to another user", async () => {
 		const { auth, data } = createIdentityFixture();
 		const inactive = await auth.api.createSCIMUser({
 			body: {
