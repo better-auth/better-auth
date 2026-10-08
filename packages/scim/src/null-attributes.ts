@@ -14,6 +14,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Microsoft Entra may send a single complex value as a one-element array. */
+function readSingleRecord(value: unknown): Record<string, unknown> | undefined {
+	if (isRecord(value)) return value;
+	return Array.isArray(value) && value.length === 1 && isRecord(value[0])
+		? value[0]
+		: undefined;
+}
+
 function stripNulls(value: unknown, depth: number): unknown {
 	if (depth > SCIM_NULL_STRIP_MAX_DEPTH) return value;
 	if (Array.isArray(value)) {
@@ -74,8 +82,8 @@ export type SCIMPatchValueTarget =
 	| { kind: "readOnly" }
 	/** An attribute where null is never a valid value. */
 	| { kind: "notNullable" }
-	/** A simple attribute or subattribute that a value replaces. */
-	| { kind: "simple" };
+	/** A value the target applies as given; a null value removes the target. */
+	| { kind: "value" };
 
 /** The operations a null value at `path` becomes; throws when null is invalid. */
 function nullValueOperations(
@@ -110,12 +118,17 @@ function splitNullAttributes(
 			removals.push(...nullValueOperations(path, target));
 			continue;
 		}
-		if (target.kind === "merge" && isRecord(entry)) {
-			const nested = splitNullAttributes(entry, target.subPath, resolveTarget);
+		const record =
+			target.kind === "merge" ? readSingleRecord(entry) : undefined;
+		if (target.kind === "merge" && record) {
+			const nested = splitNullAttributes(record, target.subPath, resolveTarget);
 			removals.push(...nested.removals);
 			const keepEntry =
-				Object.keys(nested.value).length > 0 || Object.keys(entry).length === 0;
-			if (keepEntry) kept[attribute] = nested.value;
+				Object.keys(nested.value).length > 0 ||
+				Object.keys(record).length === 0;
+			if (keepEntry) {
+				kept[attribute] = Array.isArray(entry) ? [nested.value] : nested.value;
+			}
 			continue;
 		}
 		kept[attribute] = target.kind === "entries" ? stripNulls(entry, 0) : entry;
@@ -136,17 +149,27 @@ function expandOperationNullValues(
 	if (target?.kind === "entries") {
 		return [{ ...operation, value: stripNulls(operation.value, 0) }];
 	}
-	if (!isRecord(operation.value)) return [operation];
 	if (path && target?.kind !== "merge") return [operation];
+	const record =
+		target?.kind === "merge"
+			? readSingleRecord(operation.value)
+			: isRecord(operation.value)
+				? operation.value
+				: undefined;
+	if (!record) return [operation];
 	const { value, removals } = splitNullAttributes(
-		operation.value,
+		record,
 		target?.kind === "merge" ? target.subPath : (attribute) => attribute,
 		resolveTarget,
 	);
 	// Keep an operation whose value was empty to begin with, so it still fails or no-ops as before.
 	const keepOperation =
-		Object.keys(value).length > 0 || Object.keys(operation.value).length === 0;
-	return [...(keepOperation ? [{ ...operation, value }] : []), ...removals];
+		Object.keys(value).length > 0 || Object.keys(record).length === 0;
+	const keptValue = Array.isArray(operation.value) ? [value] : value;
+	return [
+		...(keepOperation ? [{ ...operation, value: keptValue }] : []),
+		...removals,
+	];
 }
 
 /**

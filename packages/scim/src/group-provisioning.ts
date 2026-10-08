@@ -285,9 +285,13 @@ function normalizeGroupPatchPath(path: string): string {
 }
 
 function resolveSCIMGroupPatchValueTarget(path: string): SCIMPatchValueTarget {
-	return normalizeGroupPatchPath(path).toLowerCase() === "members"
-		? { kind: "entries" }
-		: { kind: "simple" };
+	const normalizedPath = normalizeGroupPatchPath(path).toLowerCase();
+	if (normalizedPath === "members") return { kind: "entries" };
+	// A pathless Group PATCH ignores `schemas` and `meta`, so their null values are ignored too.
+	if (normalizedPath === "schemas" || normalizedPath === "meta") {
+		return { kind: "readOnly" };
+	}
+	return { kind: "value" };
 }
 
 interface IncrementalMembershipPatch {

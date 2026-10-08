@@ -495,10 +495,15 @@ function resolveSCIMUserPatchValueTarget(path: string): SCIMPatchValueTarget {
 		resolved = resolveSCIMUserPatchPath(path);
 	} catch {
 		// Unsupported paths keep their original operation, which reports the error.
-		return { kind: "simple" };
+		return { kind: "value" };
 	}
 	if ("enterpriseRoot" in resolved) {
-		return { kind: "merge", subPath: (attribute) => `${path}:${attribute}` };
+		// The URN joins its attributes with ":", and the `enterprise` alias with ".".
+		const separator = path.trim().toLowerCase() === "enterprise" ? "." : ":";
+		return {
+			kind: "merge",
+			subPath: (attribute) => `${path}${separator}${attribute}`,
+		};
 	}
 	if (
 		resolved.attribute.mutability === "readOnly" ||
@@ -506,15 +511,18 @@ function resolveSCIMUserPatchValueTarget(path: string): SCIMPatchValueTarget {
 	) {
 		return { kind: "readOnly" };
 	}
-	if (resolved.subAttribute || resolved.attribute.type !== "complex") {
-		return { kind: "simple" };
-	}
 	const selectsEntries =
 		resolved.selectorType !== undefined ||
 		resolved.selectorPrimary !== undefined;
-	if (resolved.attribute.multiValued && !selectsEntries) {
-		return { kind: "entries" };
+	// Selected entries handle their own null keys, because a merged value can change what the selector matches.
+	if (
+		resolved.subAttribute ||
+		resolved.attribute.type !== "complex" ||
+		selectsEntries
+	) {
+		return { kind: "value" };
 	}
+	if (resolved.attribute.multiValued) return { kind: "entries" };
 	return { kind: "merge", subPath: (attribute) => `${path}.${attribute}` };
 }
 
@@ -637,6 +645,15 @@ function normalizeManagerPatchValue(value: unknown): Record<string, unknown> {
 		: invalidPatchValue("manager must contain value or $ref");
 }
 
+/** A null key in a value merged into a selected entry removes that sub-attribute. */
+function withoutNullAttributes(
+	value: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+	return Object.fromEntries(
+		Object.entries(value).filter(([, item]) => item !== null),
+	);
+}
+
 function normalizeMultiValueAdditions(value: unknown): unknown[] {
 	return (Array.isArray(value) ? value : [value]).map(clonePatchValue);
 }
@@ -725,7 +742,7 @@ function applySCIMMultiValuePatch(
 			const additions = normalizeMultiValueAdditions(value).map((item) =>
 				isRecord(item)
 					? {
-							...item,
+							...withoutNullAttributes(item),
 							...(resolved.selectorType ? { type: resolved.selectorType } : {}),
 							...(resolved.selectorPrimary === undefined
 								? {}
@@ -790,7 +807,7 @@ function applySCIMMultiValuePatch(
 					`${resolved.attributeName} must contain objects`,
 				);
 			}
-			return { ...item, ...replacement };
+			return withoutNullAttributes({ ...item, ...replacement });
 		});
 		const firstReplacedIndex = matches.findIndex(Boolean);
 		container[resolved.attributeName] = enforceSinglePatchedPrimary(

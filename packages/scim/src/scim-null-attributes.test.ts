@@ -435,4 +435,83 @@ describe("SCIM PATCH null values", () => {
 		]);
 		expect(rejected.status).toBe(400);
 	});
+
+	it("clears a filtered entry's null sub-attributes when the update also changes its selector", async () => {
+		const { createUser, patch } = createFixture();
+		const user = await createUser({
+			...fullUser,
+			addresses: [{ type: "work", locality: "London", country: "GB" }],
+		});
+
+		const { status, resource } = await patch(`/Users/${user.id}`, [
+			{
+				op: "Replace",
+				path: 'addresses[type eq "work"]',
+				value: { type: "home", country: null },
+			},
+		]);
+
+		expect(status, JSON.stringify(resource)).toBe(200);
+		expect(resource.addresses).toEqual([{ type: "home", locality: "London" }]);
+	});
+
+	it("clears null sub-attributes of single-element array values", async () => {
+		const { createUser, patch } = createFixture();
+		const user = await createUser({
+			...fullUser,
+			addresses: [{ type: "work", locality: "London", country: "GB" }],
+		});
+
+		const { status, resource } = await patch(`/Users/${user.id}`, [
+			{
+				op: "Replace",
+				path: 'addresses[type eq "work"]',
+				value: [{ locality: "Bristol", country: null }],
+			},
+			{
+				op: "Replace",
+				path: `${SCIM_ENTERPRISE_USER_SCHEMA}:manager`,
+				value: [{ value: "manager-2", displayName: null }],
+			},
+		]);
+
+		expect(status, JSON.stringify(resource)).toBe(200);
+		expect(resource.addresses).toEqual([{ type: "work", locality: "Bristol" }]);
+		expect(resource[SCIM_ENTERPRISE_USER_SCHEMA]?.manager).toEqual({
+			value: "manager-2",
+		});
+	});
+
+	it("clears Enterprise attributes through the enterprise path alias", async () => {
+		const { createUser, patch } = createFixture();
+		const user = await createUser(fullUser);
+
+		const { status, resource } = await patch(`/Users/${user.id}`, [
+			{ op: "Replace", path: "enterprise", value: { department: null } },
+		]);
+
+		expect(status, JSON.stringify(resource)).toBe(200);
+		expect(resource[SCIM_ENTERPRISE_USER_SCHEMA]).toEqual({
+			manager: { value: "manager-1" },
+		});
+	});
+
+	it("ignores null read-only attributes in a pathless Group PATCH", async () => {
+		const { patch, send } = createFixture();
+		const group = await send("POST", "/Groups", {
+			schemas: [SCIM_GROUP_SCHEMA],
+			displayName: "Engineering",
+		});
+		expect(group.status).toBe(201);
+
+		const { status, resource } = await patch(`/Groups/${group.resource.id}`, [
+			{
+				op: "Replace",
+				value: { schemas: null, meta: null, displayName: "Platform" },
+			},
+		]);
+
+		expect(status, JSON.stringify(resource)).toBe(200);
+		expect(resource.displayName).toBe("Platform");
+	});
 });
