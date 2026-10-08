@@ -856,13 +856,10 @@ describe("private_key_jwt authentication", async () => {
 			}
 		});
 
-		it("fails closed when ids are database-generated numbers", async () => {
+		it("keeps accepting assertions when ids are database-generated numbers", async () => {
 			const [result] = await consumeWith("serial", crypto.randomUUID(), 1);
 
-			expect(result?.status).toBe("rejected");
-			expect((result as PromiseRejectedResult).reason.message).toMatch(
-				/serial/,
-			);
+			expect(result?.status).toBe("fulfilled");
 		});
 	});
 

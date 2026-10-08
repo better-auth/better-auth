@@ -2404,7 +2404,7 @@ describe("internal adapter test", async () => {
 				expect(await reserve()).toBe(false);
 			});
 
-			it("fails closed when ids are database-generated numbers", async () => {
+			it("keeps reserving when ids are database-generated numbers", async () => {
 				const adapter = await makeAdapter({
 					advanced: { database: { generateId: "serial" } },
 				});
@@ -2415,7 +2415,7 @@ describe("internal adapter test", async () => {
 						value: "jti-serial",
 						expiresAt: new Date(Date.now() + 60_000),
 					}),
-				).rejects.toThrow(/requires string ids/);
+				).resolves.toBe(true);
 			});
 		});
 	});

@@ -1516,7 +1516,7 @@ export const createInternalAdapter = (
 		 * The `verification.identifier` column is non-unique, so uniqueness comes
 		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`,
 		 * encoded by `encodeDeterministicId` so the configured id strategy keeps
-		 * it). `generateId: "serial"` cannot hold that key, so it fails closed.
+		 * it; see its note on `generateId: "serial"`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
 		 * re-reading the row rather than matching adapter-specific errors.
@@ -1534,11 +1534,6 @@ export const createInternalAdapter = (
 			value: string;
 			expiresAt: Date;
 		}): Promise<boolean> => {
-			if (options.advanced?.database?.generateId === "serial") {
-				throw new BetterAuthError(
-					'reserveVerificationValue requires string ids. With `advanced.database.generateId: "serial"` the verification id is a database-generated number, which cannot hold the deterministic reservation id.',
-				);
-			}
 			const reservationId = encodeDeterministicId(
 				new Uint8Array(
 					await createHash("SHA-256").digest(

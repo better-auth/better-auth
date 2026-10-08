@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema } from "../type";
 import { encodeDeterministicId, initGetIdField } from "./get-id-field";
@@ -244,12 +245,19 @@ describe("encodeDeterministicId", () => {
 		expect(id).toMatch(uuidRegex);
 	});
 
-	it("throws when ids are database-generated numbers", () => {
-		expect(() =>
-			encodeDeterministicId(digest(1), {
-				advanced: { database: { generateId: "serial" } },
-			}),
-		).toThrow(/serial/);
+	it("warns once and keeps the base64url id when ids are database-generated numbers", () => {
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		const options = {
+			advanced: { database: { generateId: "serial" } },
+		} as const;
+
+		const id = encodeDeterministicId(digest(1), options);
+		encodeDeterministicId(digest(2), options);
+
+		expect(id).toBe(encodeDeterministicId(digest(1), {}));
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn.mock.calls[0]?.[0]).toMatch(/serial/);
+		warn.mockRestore();
 	});
 });
 

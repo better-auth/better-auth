@@ -820,16 +820,6 @@ export const auth = betterAuth({
   this is normal. It's also expected that all id values passed to Better-Auth (eg via an endpoint body) is expected to be a string.
 </Callout>
 
-<Callout type="warn">
-  Replay protection needs string ids. Better Auth records a single-use marker under an id derived from the value it protects, so a replay collides with the first insert. A database-generated number cannot hold that derived id, so with `generateId: "serial"`:
-
-  * SAML sign-in through the SSO plugin, DPoP-bound requests that use the database replay store, and `private_key_jwt` client authentication throw an error instead of accepting a request they cannot check for replay.
-  * SIWE ignores the `email` claim and uses the wallet-derived address.
-  * Magic link and email OTP sign-in keep working.
-
-  Use the default ids, `"uuid"`, or a custom `generateId` function if you rely on these flows.
-</Callout>
-
 ### UUIDs
 
 If you prefer UUIDs for the `id` field, you can set the `advanced.database.generateId` option to `"uuid"`.

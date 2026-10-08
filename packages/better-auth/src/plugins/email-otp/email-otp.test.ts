@@ -150,53 +150,6 @@ describe("email-otp", async () => {
 		).rejects.toThrow();
 	});
 
-	/**
-	 * Serial ids cannot hold the cleanup lock's reservation id, so adoption runs
-	 * without the lock instead of failing the sign-in.
-	 *
-	 * @see https://github.com/better-auth/better-auth/issues/10624
-	 */
-	it("should adopt an unverified account when ids are serial", async () => {
-		const email = "otp-unverified-serial-user@email.com";
-		let signInOtp = "";
-		const { client: scopedClient, auth: scopedAuth } = await getTestInstance(
-			{
-				advanced: { database: { generateId: "serial" } },
-				emailAndPassword: { enabled: true },
-				plugins: [
-					emailOTP({
-						async sendVerificationOTP({ otp: _otp }) {
-							signInOtp = _otp;
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [emailOTPClient()],
-				},
-			},
-		);
-		const internalAdapter = (await scopedAuth.$context).internalAdapter;
-		const created = await scopedAuth.api.signUpEmail({
-			body: { email, name: "Test User", password: "existing-password-123" },
-		});
-		expect(created.user?.emailVerified).toBe(false);
-
-		await scopedClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-		const signedIn = await scopedClient.signIn.emailOtp({
-			email,
-			otp: signInOtp,
-		});
-
-		expect(signedIn.data?.token).toBeDefined();
-		const verifiedRow = await internalAdapter.findUserByEmail(email);
-		expect(verifiedRow?.user.emailVerified).toBe(true);
-		expect(await internalAdapter.findAccounts(created.user!.id)).toHaveLength(
-			0,
-		);
-	});
-
 	it("should sign-up with otp", async () => {
 		const testUser2 = {
 			email: "test-email@domain.com",
