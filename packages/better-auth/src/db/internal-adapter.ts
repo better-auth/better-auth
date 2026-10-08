@@ -480,6 +480,12 @@ export const createInternalAdapter = (
 			const databaseSessionFallbackEnabled =
 				storeInDb === true &&
 				options.session?.preserveSessionInDatabase !== true;
+			// Deferring is only safe when the database can serve the session. When
+			// secondary storage is the session store, its write is the session
+			// itself and must fail inside the caller's transaction.
+			const deferSecondaryStorageWrite =
+				storageOptions?.deferSecondaryStorageWrites === true &&
+				databaseSessionFallbackEnabled;
 			const {
 				// always ignore override id - new sessions must have new ids
 				id: _,
@@ -568,7 +574,7 @@ export const createInternalAdapter = (
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								return storageOptions?.deferSecondaryStorageWrites
+								return deferSecondaryStorageWrite
 									? sessionData
 									: mirrorSessionToSecondaryStorage(sessionData as Session);
 							},
@@ -576,25 +582,19 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			if (
-				secondaryStorage &&
-				storageOptions?.deferSecondaryStorageWrites &&
-				res
-			) {
+			if (secondaryStorage && deferSecondaryStorageWrite && res) {
 				await queueAfterTransactionHook(
 					async () => {
 						await mirrorSessionToSecondaryStorage(res as Session);
 					},
-					databaseSessionFallbackEnabled
-						? {
-								onError(error: unknown) {
-									logger.error(
-										"Failed to mirror committed session to secondary storage",
-										error,
-									);
-								},
-							}
-						: undefined,
+					{
+						onError(error: unknown) {
+							logger.error(
+								"Failed to mirror committed session to secondary storage",
+								error,
+							);
+						},
+					},
 				);
 			}
 			return res as Session;
