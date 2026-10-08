@@ -438,13 +438,28 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use a claimed `https` URI, an `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]` with any port, an authority-free private-use URI with a reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)), or a non-reserved custom-scheme URI with an authority such as `cursor://anysphere.cursor-mcp/oauth/callback`. The reverse-domain form remains the recommended private-use shape; host-bearing custom schemes are accepted because RFC 8252 does not forbid them and native MCP clients emit them. Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, and routable-host `http` redirects.
+`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use any of these redirect URI forms:
+
+* A claimed `https` URI on a non-loopback host.
+* An `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]`, with any port.
+* An authority-free private-use URI with a reverse-domain scheme, such as `com.example.app:/callback`. This is the form [RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1) recommends.
+* A custom-scheme URI with a host and a path, such as `cursor://anysphere.cursor-mcp/oauth/callback`. The scheme does not need to contain a period. A URI without a path, such as `cursor://anysphere.cursor-mcp`, is rejected.
+
+Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed URIs, loopback `https`, and routable-host `http` redirects. Native clients cannot use the reserved schemes `ws:`, `wss:`, `file:`, `ftp:`, `mailto:`, `javascript:`, `data:`, `vbscript:`, `blob:`, `about:`, or `view-source:`; any other scheme is accepted.
 
 Application type is independent of client authentication. For example, a native client may use `client_secret_post`, while a web client may use `token_endpoint_auth_method: "none"`. Authentication capability is derived only from `token_endpoint_auth_method`; the removed `type` and `public` metadata fields are not accepted or returned.
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
-Some native MCP clients omit `application_type` in DCR (current Cursor builds do), which the OIDC default classifies as `web` — rejecting their custom-scheme redirect. `clientRegistrationDefaultApplicationType` sets server-owned policy for that absent field: `"web"` (the default, strict OIDC behavior), `"native"`, or `"infer"`, which classifies a registration as `native` only when every `redirect_uris` entry uses a non-http(s) scheme. An `application_type` the client actually sends is never overridden, and web-client redirect policy is unchanged.
+Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, so the `web` default rejects the registration. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
+
+| Value             | Omitted `application_type` becomes                                        |
+| ----------------- | ------------------------------------------------------------------------- |
+| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                  |
+| `"native"`        | `native`                                                                  |
+| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme, otherwise `web` |
+
+Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme becomes `native`, so its `http` URIs must still be loopback. A client that lists only `http` and `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -456,7 +471,7 @@ oauthProvider({
 ```
 
 <Callout type="warn">
-  Accepting private-use schemes without a period (such as `cursor:`) deviates from the [RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1) recommendation that authorization servers reject schemes lacking a domain-based dot. Better Auth mitigates redirect interception by requiring PKCE for all public-client authorization requests, which makes an intercepted authorization code unusable without the code verifier.
+  [RFC 8252 §8.4](https://datatracker.ietf.org/doc/html/rfc8252#section-8.4) says authorization servers SHOULD reject private-use schemes that do not contain a period. Better Auth accepts schemes such as `cursor:` for compatibility with native MCP clients. Any app on a device can register a private-use scheme, so another app may receive the authorization code. PKCE makes an intercepted code unusable without the code verifier. Public clients (`token_endpoint_auth_method: "none"`) always require PKCE. Confidential clients can opt out through `require_pkce: false` or `clientRegistrationRequirePKCE: false`; keep PKCE on for any client that uses a private-use redirect. See [PKCE Configuration](#pkce-configuration).
 </Callout>
 
 Note the following parameters are not yet supported:

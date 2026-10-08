@@ -147,7 +147,7 @@ export const cimdOptionsType = {
 		type: "string[]",
 		default: '["post_logout_redirect_uris", "client_uri"]',
 		description:
-			"Metadata URL fields that must share the client_id origin. Redirect URIs are excluded by default because authorization still requires exact matching.",
+			"Metadata URL fields that must share the client_id origin. Redirect URIs are excluded by default because authorization still requires exact matching. Authority-free private-use URIs such as com.example.app:/logout have no origin and are exempt; host-bearing custom-scheme URIs in post_logout_redirect_uris must still match the client_id origin.",
 	},
 	isMetadataDocumentUrlAllowed: {
 		type: "(clientIdUrl, context) => boolean | Promise<boolean>",

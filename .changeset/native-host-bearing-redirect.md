@@ -4,4 +4,6 @@
 "@better-auth/cimd": patch
 ---
 
-Accept host-bearing custom-scheme redirect URIs for native OAuth clients and CIMD documents (for example Cursor's `cursor://` MCP callback). The RFC 8252 reverse-domain, authority-free form is still recommended; reserved schemes remain rejected. Adds `clientRegistrationDefaultApplicationType` (`"web"` | `"native"` | `"infer"`) so operators can classify dynamic registrations that omit `application_type` — as current Cursor builds do — as native when every redirect URI is a non-http(s) scheme; a sent `application_type` is never overridden and the strict `"web"` default is unchanged.
+Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs that include a host, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
