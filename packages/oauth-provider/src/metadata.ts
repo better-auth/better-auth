@@ -3,6 +3,7 @@ import {
 	DPOP_SIGNING_ALGORITHMS,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { LEVEL_0_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
@@ -43,17 +44,17 @@ export function authServerMetadata(
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
 		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
-		authorization_endpoint: `${baseURL}/oauth2/authorize`,
-		token_endpoint: `${baseURL}/oauth2/token`,
+		authorization_endpoint: appendURLPath(baseURL, "/oauth2/authorize"),
+		token_endpoint: appendURLPath(baseURL, "/oauth2/token"),
 		jwks_uri: overrides?.jwt_disabled
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
-				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
+				appendURLPath(baseURL, opts?.jwks?.jwksPath ?? "/jwks")),
 		registration_endpoint: overrides?.dynamic_client_registration_supported
-			? `${baseURL}/oauth2/register`
+			? appendURLPath(baseURL, "/oauth2/register")
 			: undefined,
-		introspection_endpoint: `${baseURL}/oauth2/introspect`,
-		revocation_endpoint: `${baseURL}/oauth2/revoke`,
+		introspection_endpoint: appendURLPath(baseURL, "/oauth2/introspect"),
+		revocation_endpoint: appendURLPath(baseURL, "/oauth2/revoke"),
 		response_types_supported:
 			overrides?.grant_types_supported &&
 			!overrides.grant_types_supported.includes("authorization_code")
@@ -174,7 +175,7 @@ export function oidcServerMetadata(
 		...authMetadata,
 		claims_supported: getSupportedClaims(opts),
 		claims_parameter_supported: true,
-		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
+		userinfo_endpoint: appendURLPath(baseURL, "/oauth2/userinfo"),
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
@@ -190,7 +191,7 @@ export function oidcServerMetadata(
 				jwtPluginOptions?.jwks?.keyPairConfigs?.map((c) => c.alg) ?? [];
 			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
 		})(),
-		end_session_endpoint: `${baseURL}/oauth2/end-session`,
+		end_session_endpoint: appendURLPath(baseURL, "/oauth2/end-session"),
 		request_parameter_supported: false,
 		request_uri_parameter_supported: false,
 		prompt_values_supported: [

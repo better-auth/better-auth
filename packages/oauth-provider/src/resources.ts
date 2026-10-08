@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import { APIError } from "better-auth/api";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type {
@@ -210,7 +211,8 @@ export interface ResolvedResourcePolicy {
  * implicit `aud` value when `openid` is in scope — not looked up against
  * `oauthResource` rows.
  */
-const userInfoResource = (baseURL: string) => `${baseURL}/oauth2/userinfo`;
+const userInfoResource = (baseURL: string) =>
+	appendURLPath(baseURL, "/oauth2/userinfo");
 
 /**
  * Re-parses a request's raw `application/x-www-form-urlencoded` body to
