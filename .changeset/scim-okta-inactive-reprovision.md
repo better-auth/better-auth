@@ -2,4 +2,4 @@
 "@better-auth/scim": patch
 ---
 
-Restore an inactive SCIM User when `POST /scim/v2/Users` reuses the same connection-scoped `externalId`, so Okta-style deprovision and reassignment no longer fails with a uniqueness conflict.
+Fix `POST /scim/v2/Users` rejecting a reprovisioned user with a uniqueness conflict when an inactive SCIM User already has the same `externalId`, such as when Okta reassigns a deactivated user. The inactive SCIM User is now reprovisioned in place and keeps its ID and linked Better Auth User.

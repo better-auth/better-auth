@@ -1,4 +1,10 @@
-import type { AuthContext, DBAdapter, User, Where } from "better-auth";
+import type {
+	AuthContext,
+	DBAdapter,
+	DBTransactionAdapter,
+	User,
+	Where,
+} from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import type {
@@ -62,6 +68,7 @@ import {
 	patchSCIMUserBodySchema,
 	scimUserPatchChangesState,
 } from "./user-patch";
+import type { CanonicalSCIMUserProfile } from "./user-profile";
 import {
 	createCanonicalSCIMUserProfile,
 	createSCIMEmailValueIndex,
@@ -233,112 +240,126 @@ async function findSCIMUserByExternalIdKey(
 	return scimUser;
 }
 
-async function restoreInactiveSCIMUserByExternalId(input: {
-	adapter: DBAdapter;
-	auth: AuthContext;
-	connection: SCIMConnection;
-	identity: SCIMIdentityCoordinator;
-	projection: SCIMProjectionCoordinator;
-	profile: ReturnType<typeof createCanonicalSCIMUserProfile>;
-	userNameKey: string;
-	externalIdKey: string;
-	externalId: string | undefined;
-	active: boolean;
-}): Promise<SCIMUser | null> {
-	const {
-		adapter,
+/**
+ * Replaces a retained SCIM User's writable state in place and reconciles the
+ * linked Better Auth User. Returns `null` when the guarded source row no longer
+ * matches.
+ */
+async function replaceSCIMUserSource(
+	trx: DBTransactionAdapter,
+	input: {
+		auth: AuthContext;
+		connection: SCIMConnection;
+		identity: SCIMIdentityCoordinator;
+		projection: SCIMProjectionCoordinator;
+		source: SCIMUser;
+		sourceGuard?: Where[];
+		profile: CanonicalSCIMUserProfile;
+		userNameKey: string;
+		externalId: string | undefined;
+		externalIdKey: string | undefined;
+		active: boolean;
+	},
+): Promise<SCIMUser | null> {
+	const { auth, connection, identity, projection, source, profile } = input;
+	const updatedAt = new Date();
+	const subject = await identity.acquireSubject(trx, source.userId, updatedAt);
+	await assertSCIMUserKeysAvailable(trx, {
+		connectionId: connection.id,
+		userNameKey: input.userNameKey,
+		externalIdKey: input.externalIdKey,
+		excludeSCIMUserId: source.id,
+	});
+	if (subject.profileSourceId === source.id) {
+		await updateManagedBetterAuthUser(trx, auth.internalAdapter, {
+			userId: source.userId,
+			email: profile.primaryEmail,
+			name: profile.displayName,
+			updatedAt,
+		});
+	}
+
+	const updatedSource = await trx.update<SCIMUser>({
+		model: "scimUser",
+		where: [
+			{ field: "id", value: source.id },
+			{ field: "connectionId", value: connection.id },
+			...(input.sourceGuard ?? []),
+		],
+		update: {
+			userName: profile.userName,
+			userNameKey: input.userNameKey,
+			primaryEmail: profile.primaryEmail,
+			workEmailValueIndex: createSCIMEmailValueIndex(profile.emails, "work"),
+			emailValueIndex: createSCIMEmailValueIndex(profile.emails),
+			displayName: profile.displayName,
+			formattedName: profile.formattedName,
+			givenName: profile.name.givenName ?? null,
+			familyName: profile.name.familyName ?? null,
+			serializedEmails: serializeSCIMEmails(profile.emails),
+			serializedAttributes: serializeSCIMUserAttributes(profile.attributes),
+			externalId: input.externalId ?? null,
+			externalIdKey: input.externalIdKey ?? null,
+			active: input.active,
+			updatedAt,
+		},
+	});
+	if (!updatedSource) return null;
+
+	await projection.reconcileUser({
+		database: trx,
 		auth,
+		provisioningDomainId: connection.provisioningDomainId,
+		scimUserId: updatedSource.id,
+	});
+	await identity.reconcileUser({ database: trx, auth, subject });
+	await fenceActiveSCIMConnection(trx, connection.id);
+	return updatedSource;
+}
+
+/**
+ * Reprovisions the inactive SCIM User that owns a connection-scoped
+ * `externalId`, keeping its resource ID and Better Auth User link. Like a
+ * deleted-resource tombstone, the exact `externalId` identifies the directory
+ * subject, so `identity.resolveUser` does not run. Returns `null` when no
+ * inactive source owns the `externalId`.
+ */
+async function restoreInactiveSCIMUser(
+	adapter: DBAdapter,
+	input: Omit<Parameters<typeof replaceSCIMUserSource>[1], "source"> & {
+		externalIdKey: string;
+	},
+): Promise<SCIMUser | null> {
+	const { connection, externalIdKey } = input;
+	const retainedSource = await findSCIMUserByExternalIdKey(
+		adapter,
 		connection,
-		identity,
-		projection,
-		profile,
-		userNameKey,
 		externalIdKey,
-		externalId,
-		active,
-	} = input;
+	);
+	if (!retainedSource || retainedSource.active) return null;
 
 	return runIdentityMutationTransaction(adapter, async (trx) => {
-		const currentSource = await findSCIMUserByExternalIdKey(
+		const source = await findSCIMUserByExternalIdKey(
 			trx,
 			connection,
 			externalIdKey,
 		);
-		if (!currentSource) {
-			return null;
-		}
-		if (currentSource.active) {
+		if (!source) return null;
+		if (source.active) {
 			throw createSCIMError("CONFLICT", {
 				detail: "SCIM User externalId already exists",
 				scimType: "uniqueness",
 			});
 		}
-
-		await assertSCIMUserKeysAvailable(trx, {
-			connectionId: connection.id,
-			userNameKey,
-			externalIdKey,
-			excludeSCIMUserId: currentSource.id,
-		});
-
-		const updatedAt = new Date();
-		const subject = await identity.acquireSubject(
-			trx,
-			currentSource.userId,
-			updatedAt,
-		);
-		if (subject.profileSourceId === currentSource.id) {
-			await updateManagedBetterAuthUser(trx, auth.internalAdapter, {
-				userId: currentSource.userId,
-				email: profile.primaryEmail,
-				name: profile.displayName,
-				updatedAt,
-			});
-		}
-
-		const restoredSource = await trx.update<SCIMUser>({
-			model: "scimUser",
-			where: [
-				{ field: "id", value: currentSource.id },
-				{ field: "connectionId", value: connection.id },
+		const restoredSource = await replaceSCIMUserSource(trx, {
+			...input,
+			source,
+			sourceGuard: [
 				{ field: "externalIdKey", value: externalIdKey },
 				{ field: "active", value: false },
 			],
-			update: {
-				userName: profile.userName,
-				userNameKey,
-				primaryEmail: profile.primaryEmail,
-				workEmailValueIndex: createSCIMEmailValueIndex(profile.emails, "work"),
-				emailValueIndex: createSCIMEmailValueIndex(profile.emails),
-				displayName: profile.displayName,
-				formattedName: profile.formattedName,
-				givenName: profile.name.givenName ?? null,
-				familyName: profile.name.familyName ?? null,
-				serializedEmails: serializeSCIMEmails(profile.emails),
-				serializedAttributes: serializeSCIMUserAttributes(profile.attributes),
-				externalId: externalId ?? null,
-				externalIdKey,
-				active,
-				updatedAt,
-			},
 		});
-		if (!restoredSource) {
-			concurrentIdentityMutation();
-		}
-
-		await projection.reconcileUser({
-			database: trx,
-			auth,
-			provisioningDomainId: connection.provisioningDomainId,
-			scimUserId: restoredSource.id,
-		});
-		await identity.reconcileUser({
-			database: trx,
-			auth,
-			subject,
-		});
-		await fenceActiveSCIMConnection(trx, connection.id);
-		return restoredSource;
+		return restoredSource ?? concurrentIdentityMutation();
 	});
 }
 
@@ -512,13 +533,9 @@ export function createSCIMUser(
 				openapi: {
 					summary: "Create SCIM User",
 					responses: {
-						"200": {
-							description:
-								"Restored inactive SCIM User matched by connection-scoped externalId",
-							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
-						},
 						"201": {
-							description: "SCIM User resource",
+							description:
+								"SCIM User resource, created or reprovisioned from an inactive User with the same externalId",
 							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
@@ -545,40 +562,30 @@ export function createSCIMUser(
 			);
 			await assertUserConnectionDomainStable(adapter, connection);
 
-			if (externalIdKey) {
-				const existingByExternalId = await findSCIMUserByExternalIdKey(
-					adapter,
-					connection,
-					externalIdKey,
-				);
-				if (existingByExternalId && existingByExternalId.active === false) {
-					const restoredSCIMUser = await restoreInactiveSCIMUserByExternalId({
-						adapter,
+			const restoredSCIMUser = externalIdKey
+				? await restoreInactiveSCIMUser(adapter, {
 						auth: ctx.context,
 						connection,
 						identity,
 						projection,
 						profile,
 						userNameKey,
-						externalIdKey,
 						externalId: ctx.body.externalId,
+						externalIdKey,
 						active,
-					});
-					if (restoredSCIMUser) {
-						const completeResource = createUserResource(
-							ctx.context.baseURL,
-							restoredSCIMUser,
-						);
-						const resource = projectSCIMResourceAttributes(
-							completeResource,
-							attributeProjection,
-						);
-						ctx.setStatus(200);
-						ctx.setHeader("location", completeResource.meta.location);
-						ctx.setHeader("content-location", completeResource.meta.location);
-						return ctx.json(resource);
-					}
-				}
+					})
+				: null;
+			if (restoredSCIMUser) {
+				const completeResource = createUserResource(
+					ctx.context.baseURL,
+					restoredSCIMUser,
+				);
+				ctx.setStatus(201);
+				ctx.setHeader("location", completeResource.meta.location);
+				ctx.setHeader("content-location", completeResource.meta.location);
+				return ctx.json(
+					projectSCIMResourceAttributes(completeResource, attributeProjection),
+				);
 			}
 
 			await assertSCIMUserKeysAvailable(adapter, {
@@ -966,77 +973,23 @@ export function replaceSCIMUser(
 							detail: "SCIM User not found",
 						});
 					}
-					const updatedAt = new Date();
-					const subject = await identity.acquireSubject(
-						trx,
-						currentSource.userId,
-						updatedAt,
-					);
-					await assertSCIMUserKeysAvailable(trx, {
-						connectionId: connection.id,
+					const updatedSource = await replaceSCIMUserSource(trx, {
+						auth: ctx.context,
+						connection,
+						identity,
+						projection,
+						source: currentSource,
+						profile,
 						userNameKey,
+						externalId: ctx.body.externalId,
 						externalIdKey,
-						excludeSCIMUserId: currentSource.id,
-					});
-					if (subject.profileSourceId === currentSource.id) {
-						await updateManagedBetterAuthUser(
-							trx,
-							ctx.context.internalAdapter,
-							{
-								userId: currentSource.userId,
-								email: profile.primaryEmail,
-								name: profile.displayName,
-								updatedAt,
-							},
-						);
-					}
-
-					const updatedSource = await trx.update<SCIMUser>({
-						model: "scimUser",
-						where: [
-							{ field: "id", value: currentSource.id },
-							{ field: "connectionId", value: connection.id },
-						],
-						update: {
-							userName: profile.userName,
-							userNameKey,
-							primaryEmail: profile.primaryEmail,
-							workEmailValueIndex: createSCIMEmailValueIndex(
-								profile.emails,
-								"work",
-							),
-							emailValueIndex: createSCIMEmailValueIndex(profile.emails),
-							displayName: profile.displayName,
-							formattedName: profile.formattedName,
-							givenName: profile.name.givenName ?? null,
-							familyName: profile.name.familyName ?? null,
-							serializedEmails: serializeSCIMEmails(profile.emails),
-							serializedAttributes: serializeSCIMUserAttributes(
-								profile.attributes,
-							),
-							externalId: ctx.body.externalId ?? null,
-							externalIdKey: externalIdKey ?? null,
-							active,
-							updatedAt,
-						},
+						active,
 					});
 					if (!updatedSource) {
 						throw createSCIMError("NOT_FOUND", {
 							detail: "SCIM User not found",
 						});
 					}
-					await projection.reconcileUser({
-						database: trx,
-						auth: ctx.context,
-						provisioningDomainId: connection.provisioningDomainId,
-						scimUserId: updatedSource.id,
-					});
-					await identity.reconcileUser({
-						database: trx,
-						auth: ctx.context,
-						subject,
-					});
-					await fenceActiveSCIMConnection(trx, connection.id);
 					return updatedSource;
 				},
 			);

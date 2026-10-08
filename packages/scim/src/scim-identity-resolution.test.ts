@@ -619,7 +619,15 @@ describe("SCIM explicit identity resolution", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11111
 	 */
 	it("restores an inactive SCIM User when POST reuses its externalId", async () => {
-		const { auth, data } = createIdentityFixture();
+		let resolveUserCalls = 0;
+		const { auth, data } = createIdentityFixture({
+			identity: {
+				resolveUser() {
+					resolveUserCalls++;
+					return { action: "create" };
+				},
+			},
+		});
 		const first = await auth.api.createSCIMUser({
 			body: {
 				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -664,6 +672,7 @@ describe("SCIM explicit identity resolution", () => {
 
 		expect(restored.id).toBe(first.id);
 		expect(restored.active).toBe(true);
+		expect(resolveUserCalls).toBe(1);
 		expect(restored.userName).toBe("inactive-restored@example.com");
 		expect(restored.displayName).toBe("After Restore");
 		expect(data.scimUser).toHaveLength(1);
