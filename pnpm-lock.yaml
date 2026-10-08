@@ -961,6 +961,12 @@ importers:
         specifier: ^1.3.0
         version: 1.3.0(better-auth@packages+better-auth)
 
+  e2e/smoke/test/fixtures/tsconfig-skip-lib-check-false:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../../../../../packages/better-auth
+
   e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10:
     dependencies:
       '@better-auth/expo':
