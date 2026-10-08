@@ -31,7 +31,7 @@ import {
 	SCIM_RESOURCE_SCHEMA_REGISTRY,
 	stripSCIMCoreAttributePrefix,
 } from "./resource-schema-registry";
-import { runSCIMCreateWithUniquenessCheck } from "./resource-uniqueness";
+import { runSCIMWriteWithUniquenessCheck } from "./resource-uniqueness";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
 	createSCIMOpenAPIContent,
@@ -915,7 +915,7 @@ export function createSCIMGroup(
 			);
 			await assertDisplayNameAvailable(adapter, connection.id, displayNameKey);
 			await assertExternalIdAvailable(adapter, connection.id, externalIdKey);
-			const group = await runSCIMCreateWithUniquenessCheck(
+			const group = await runSCIMWriteWithUniquenessCheck(
 				() =>
 					runGroupMutationTransaction(adapter, async (trx) => {
 						await assertDisplayNameAvailable(

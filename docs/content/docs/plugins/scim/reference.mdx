@@ -215,31 +215,31 @@ The plugin passes Microsoft's [Entra SCIM Validator](https://learn.microsoft.com
 
 ## Users
 
-| Method   | Path                     | Result                                                                                 |
-| -------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `POST`   | `/scim/v2/Users`         | Creates a SCIM User and creates or explicitly links a Better Auth User. Returns `201`. |
-| `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                               |
-| `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                              |
-| `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.         |
-| `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `200` with the updated resource.              |
-| `DELETE` | `/scim/v2/Users/:userId` | Deletes the SCIM resource while preserving the Better Auth User. Returns `204`.        |
+| Method   | Path                     | Result                                                                                                                                              |
+| -------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/scim/v2/Users`         | Creates a SCIM User and creates or explicitly links a Better Auth User, or reprovisions an inactive User with the same `externalId`. Returns `201`. |
+| `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                                                                                            |
+| `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                                                                                           |
+| `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.                                                                      |
+| `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `200` with the updated resource.                                                                           |
+| `DELETE` | `/scim/v2/Users/:userId` | Deletes the SCIM resource while preserving the Better Auth User. Returns `204`.                                                                     |
 
 Deleting a User also removes its direct Group memberships and projected grants, updates the affected Groups, and reconciles lifecycle and access state. When `externalId` is present, the plugin preserves the link needed to attach a later reprovisioned resource to the same Better Auth User.
 
 ### Supported User attributes
 
-| Attribute                                                         | Behavior                                                                                    |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `userName`                                                        | Required and unique case-insensitively within the connection. Supplied casing is preserved. |
-| `externalId`                                                      | Optional and unique exactly as supplied within the connection.                              |
-| `active`                                                          | Optional lifecycle state. Defaults to `true`.                                               |
-| `displayName`                                                     | Optional display name. The plugin derives a value when omitted.                             |
-| `name.formatted`, `name.givenName`, `name.familyName`             | Optional name fields. The plugin derives `formatted` when omitted.                          |
-| `name.middleName`, `name.honorificPrefix`, `name.honorificSuffix` | Optional classic name fields.                                                               |
-| `emails`                                                          | Up to 20 typed email values, each no longer than 254 characters.                            |
-| `title`, `userType`, `preferredLanguage`, `locale`, `timezone`    | Optional classic User strings.                                                              |
-| `phoneNumbers`, `addresses`, `roles`, `entitlements`              | Optional bounded multi-valued attributes. At most 1 value in each attribute may be primary. |
-| `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`      | Optional standard Enterprise User extension described below.                                |
+| Attribute                                                         | Behavior                                                                                                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `userName`                                                        | Required and unique case-insensitively within the connection. Supplied casing is preserved.                                                 |
+| `externalId`                                                      | Optional and unique exactly as supplied within the connection. Creating a User with an inactive User's `externalId` reprovisions that User. |
+| `active`                                                          | Optional lifecycle state. Defaults to `true`.                                                                                               |
+| `displayName`                                                     | Optional display name. The plugin derives a value when omitted.                                                                             |
+| `name.formatted`, `name.givenName`, `name.familyName`             | Optional name fields. The plugin derives `formatted` when omitted.                                                                          |
+| `name.middleName`, `name.honorificPrefix`, `name.honorificSuffix` | Optional classic name fields.                                                                                                               |
+| `emails`                                                          | Up to 20 typed email values, each no longer than 254 characters.                                                                            |
+| `title`, `userType`, `preferredLanguage`, `locale`, `timezone`    | Optional classic User strings.                                                                                                              |
+| `phoneNumbers`, `addresses`, `roles`, `entitlements`              | Optional bounded multi-valued attributes. At most 1 value in each attribute may be primary.                                                 |
+| `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`      | Optional standard Enterprise User extension described below.                                                                                |
 
 RFC 7643 defines `active` as a JSON Boolean, and SCIM examples, discovery, responses, callbacks, and persisted values remain Boolean. As a narrow Microsoft Entra interoperability exception, the HTTP ingress for User `POST`, `PUT`, and `PATCH` also accepts the exact case-insensitive strings `"true"` and `"false"` for `active`, including pathless and core-schema-qualified PATCH operations. Other strings, surrounding whitespace, numbers, `null`, arrays, and objects are not coerced and return `400 Bad Request`. This normalization does not apply to Groups or unrelated attributes.
 
