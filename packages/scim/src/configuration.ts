@@ -340,6 +340,14 @@ export interface SCIMProjectedUserState {
 	active: boolean;
 	sources: readonly SCIMIdentitySource[];
 	grants: readonly SCIMProjectedRoleGrant[];
+	/** Validated User request that triggered this reconciliation, when available. */
+	mutation?: {
+		method: "POST" | "PUT" | "PATCH" | "DELETE";
+		/** Validated operations supplied by a PATCH request. */
+		patchOperations?: readonly unknown[];
+		/** Whether PUT changes a normalized writable profile field, excluding active. */
+		profileChanged?: boolean;
+	};
 }
 
 /** Input passed to an application's SCIM role mapper. */

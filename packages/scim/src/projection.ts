@@ -11,6 +11,7 @@ import type {
 	SCIMIdentitySource,
 	SCIMOptions,
 	SCIMProjectedRoleGrant,
+	SCIMProjectedUserState,
 } from "./configuration";
 import { findDecommissionedSCIMConnectionIds } from "./connection-state";
 import type { SCIMIdentityCoordinator } from "./identity";
@@ -307,6 +308,7 @@ async function reconcileProjectionUserState(
 		provisioningDomainId: string;
 		userId: string;
 		sourcesSCIMUsers: SCIMUser[];
+		mutation?: SCIMProjectedUserState["mutation"];
 		memberships?: readonly SCIMGroupMember[];
 		groupById?: ReadonlyMap<string, SCIMGroup>;
 		existingGrants?: readonly SCIMProjectionGrant[];
@@ -402,6 +404,7 @@ async function reconcileProjectionUserState(
 					active: activeSCIMUsers.length > 0,
 					sources,
 					grants,
+					...(input.mutation ? { mutation: input.mutation } : {}),
 				},
 				{ database },
 			),
@@ -563,6 +566,7 @@ export function createSCIMProjectionCoordinator(options: SCIMOptions) {
 			provisioningDomainId?: string;
 			scimUserId: string;
 			userId?: string;
+			mutation?: SCIMProjectedUserState["mutation"];
 		}) {
 			const subject = input.userId
 				? {
@@ -602,6 +606,7 @@ export function createSCIMProjectionCoordinator(options: SCIMOptions) {
 				provisioningDomainId,
 				userId: subject.userId,
 				sourcesSCIMUsers,
+				mutation: input.mutation,
 			});
 		},
 		async reconcileUsers(input: {
