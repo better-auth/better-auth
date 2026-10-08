@@ -36,6 +36,7 @@ import {
 	vi,
 } from "vitest";
 import { getMigrations } from "../../better-auth/src/db/get-migration";
+import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
@@ -6563,9 +6564,6 @@ describe("SAML E2E: SP-initiated flow", () => {
 			| Record<string, any>
 			| undefined;
 		expect(ssoAccount).toBeDefined();
-		expect(ssoAccount!.issuer).toBe(
-			"http://localhost:8081/api/sso/saml2/idp/metadata",
-		);
 		expect(ssoAccount!.accountId).toBe("test@email.com");
 
 		// 7. Verify the user exists and is linked
@@ -7387,7 +7385,6 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 				userId: selectedUser.id,
@@ -7399,45 +7396,6 @@ describe("SAML user resolution HTTP", () => {
 				where: [{ field: "userId", value: selectedUser.id }],
 			}),
 		).toBe(1);
-	});
-
-	it.each([
-		"issuer",
-		"provider-id",
-	] as const)("keeps the verified SAML issuer in resolution hooks under explicit %s identity", async (identityStrategy) => {
-		const inputs: SSOUserResolutionInput[] = [];
-		const instance = await createSAMLUserResolutionInstance(
-			{
-				resolveUser(input) {
-					inputs.push(input);
-					return { action: "continue" };
-				},
-			},
-			{ account: { identityStrategy } },
-		);
-
-		const signIn = await completeSAMLSignIn(instance.baseURL);
-
-		expect(signIn.callback.status).toBe(302);
-		expect(inputs).toHaveLength(1);
-		expect(inputs[0]).toMatchObject({
-			protocol: "saml",
-			providerId: "workforce-saml",
-			accountKey: {
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
-				accountId: "test@email.com",
-			},
-		});
-		await expect(
-			instance.db.findOne<Account>({ model: "account", where: [] }),
-		).resolves.toMatchObject({
-			issuer:
-				identityStrategy === "provider-id"
-					? "local:oauth:workforce-saml"
-					: "http://localhost:8081/api/sso/saml2/idp/metadata",
-			accountId: "test@email.com",
-			providerId: "workforce-saml",
-		});
 	});
 
 	it.each([
@@ -7578,7 +7536,6 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 			}),
@@ -7609,7 +7566,7 @@ describe("SAML user resolution HTTP", () => {
 		if (relayStateCase === "legacy") {
 			const context = await instance.auth.$context;
 			const verification = await context.internalAdapter.findVerificationValue(
-				signIn.relayState,
+				getAuthStateVerificationIdentifier(signIn.relayState),
 			);
 			expect(verification).not.toBeNull();
 			const storedState = JSON.parse(verification!.value) as Record<

@@ -10,7 +10,7 @@ const execFileAsync = promisify(execFile);
 describe("client declaration emit", () => {
 	const createCompositeProject = (): { dir: string; cleanup: () => void } => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-client-dts-"));
-		const betterAuthDir = path.resolve(__dirname, "../..");
+		const betterAuthDir = path.resolve(import.meta.dirname, "../..");
 		const authPackageDir = path.join(dir, "packages/auth");
 		const webAppDir = path.join(dir, "apps/web");
 
@@ -155,7 +155,7 @@ authClient.useSession();
 
 		try {
 			const tscPath = path.resolve(
-				__dirname,
+				import.meta.dirname,
 				"../../../../node_modules/.bin/tsc",
 			);
 			const { stderr } = await execFileAsync(

@@ -320,6 +320,25 @@ const mobileMenuSections: MobileMenuSection[] = [
 	{ name: "enterprise", href: "/enterprise" },
 ];
 
+function closeOnBlurOutside(close: () => void) {
+	return (event: React.FocusEvent<HTMLElement>) => {
+		if (!event.currentTarget.contains(event.relatedTarget)) close();
+	};
+}
+
+function dismissOnEscape(
+	close: () => void,
+	triggerRef: React.RefObject<HTMLButtonElement | null>,
+) {
+	return (event: React.KeyboardEvent<HTMLElement>) => {
+		if (event.key !== "Escape") return;
+
+		event.preventDefault();
+		triggerRef.current?.focus();
+		close();
+	};
+}
+
 export function StaggeredNavFiles() {
 	const pathname = usePathname() || "/";
 	const mobileNavigationView = useMobileNavigationView();
@@ -327,6 +346,8 @@ export function StaggeredNavFiles() {
 	const [productsOpen, setProductsOpen] = useState(false);
 	const resourcesTimeout = useRef<NodeJS.Timeout>(undefined);
 	const productsTimeout = useRef<NodeJS.Timeout>(undefined);
+	const resourcesTriggerRef = useRef<HTMLButtonElement>(null);
+	const productsTriggerRef = useRef<HTMLButtonElement>(null);
 
 	useEffect(() => {
 		document.body.style.overflow =
@@ -579,9 +600,19 @@ export function StaggeredNavFiles() {
 						className="relative flex-1"
 						onMouseEnter={openProducts}
 						onMouseLeave={closeProducts}
+						onFocus={openProducts}
+						onBlur={closeOnBlurOutside(() => setProductsOpen(false))}
+						onKeyDown={dismissOnEscape(
+							() => setProductsOpen(false),
+							productsTriggerRef,
+						)}
 					>
-						<div
-							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
+						<button
+							ref={productsTriggerRef}
+							type="button"
+							aria-expanded={productsOpen}
+							onClick={() => setProductsOpen((open) => !open)}
+							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
 								isProductsPage
 									? `bg-background border-b-2 ${activeTabBorderClass}`
 									: productsOpen
@@ -606,6 +637,7 @@ export function StaggeredNavFiles() {
 								}`}
 								viewBox="0 0 10 6"
 								fill="none"
+								aria-hidden="true"
 							>
 								<path
 									d="M1 1L5 5L9 1"
@@ -613,7 +645,7 @@ export function StaggeredNavFiles() {
 									strokeWidth="1.2"
 								/>
 							</svg>
-						</div>
+						</button>
 
 						<AnimatePresence>
 							{productsOpen && (
@@ -703,9 +735,19 @@ export function StaggeredNavFiles() {
 						className="relative flex-1"
 						onMouseEnter={openResources}
 						onMouseLeave={closeResources}
+						onFocus={openResources}
+						onBlur={closeOnBlurOutside(() => setResourcesOpen(false))}
+						onKeyDown={dismissOnEscape(
+							() => setResourcesOpen(false),
+							resourcesTriggerRef,
+						)}
 					>
-						<div
-							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer transition-colors duration-150 ${
+						<button
+							ref={resourcesTriggerRef}
+							type="button"
+							aria-expanded={resourcesOpen}
+							onClick={() => setResourcesOpen((open) => !open)}
+							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer transition-colors duration-150 ${
 								isResourcePage
 									? `bg-background border-b-2 ${activeTabBorderClass}`
 									: resourcesOpen
@@ -730,6 +772,7 @@ export function StaggeredNavFiles() {
 								}`}
 								viewBox="0 0 10 6"
 								fill="none"
+								aria-hidden="true"
 							>
 								<path
 									d="M1 1L5 5L9 1"
@@ -737,7 +780,7 @@ export function StaggeredNavFiles() {
 									strokeWidth="1.2"
 								/>
 							</svg>
-						</div>
+						</button>
 
 						<AnimatePresence>
 							{resourcesOpen && (
