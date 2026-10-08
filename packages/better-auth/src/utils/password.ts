@@ -31,7 +31,7 @@ export function assertPasswordNotTooLong(
  * revocation and the password write, so a failure in any of them leaves all
  * three unchanged and the user can retry. Verification values held only in
  * secondary storage are consumed with `getAndDelete`, which can't roll back,
- * so there a later failure still spends the token. Secondary-storage sessions are
+ * so a later failure there still spends the token. Secondary-storage sessions are
  * removed by an after-commit hook, so they can't roll back with the write.
  * Sessions are revoked before the write so that on an adapter without
  * transactions a failure still keeps the old password rather than committing a
