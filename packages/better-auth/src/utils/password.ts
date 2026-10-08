@@ -26,10 +26,12 @@ export function assertPasswordNotTooLong(
  * Sets a user's credential password after a reset, revoking their sessions
  * when `emailAndPassword.revokeSessionsOnPasswordReset` is enabled.
  *
- * Revocation and the password write run in one transaction, so a failure in
- * either leaves both unchanged. Sessions are revoked first so that on an
- * adapter without transactions a failure still keeps the old password rather
- * than committing a new one while existing sessions stay valid.
+ * Database revocation and the password write run in one transaction, so a
+ * failure in either leaves both unchanged. Secondary-storage sessions are
+ * removed by an after-commit hook, so they can't roll back with the write.
+ * Sessions are revoked first so that on an adapter without transactions a
+ * failure still keeps the old password rather than committing a new one while
+ * existing sessions stay valid.
  */
 export async function resetCredentialPassword(
 	ctx: GenericEndpointContext,
