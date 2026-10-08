@@ -164,7 +164,6 @@
     }
   },
   "dependencies": {
-    "@opentelemetry/semantic-conventions": "^1.41.1",
     "@standard-schema/spec": "^1.1.0",
     "zod": "catalog:"
   },
