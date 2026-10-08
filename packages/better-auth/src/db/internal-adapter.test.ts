@@ -2383,6 +2383,41 @@ describe("internal adapter test", async () => {
 				}),
 			).rejects.toThrow(/requires database-backed verification storage/);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10624
+		 */
+		describe("with configured id strategies", () => {
+			it("yields exactly one winner when ids are uuids", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "uuid" } },
+				});
+				const reserve = () =>
+					adapter.reserveVerificationValue({
+						identifier: "reserve:uuid-race",
+						value: "jti-uuid",
+						expiresAt: new Date(Date.now() + 60_000),
+					});
+
+				const results = await Promise.all([reserve(), reserve(), reserve()]);
+				expect(results.filter((r) => r === true)).toHaveLength(1);
+				expect(await reserve()).toBe(false);
+			});
+
+			it("keeps reserving when ids are database-generated numbers", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "serial" } },
+				});
+
+				await expect(
+					adapter.reserveVerificationValue({
+						identifier: "reserve:serial",
+						value: "jti-serial",
+						expiresAt: new Date(Date.now() + 60_000),
+					}),
+				).resolves.toBe(true);
+			});
+		});
 	});
 
 	describe("reserveVerificationValue", () => {
