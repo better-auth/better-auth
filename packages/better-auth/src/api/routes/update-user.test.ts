@@ -210,6 +210,41 @@ describe("updateUser", () => {
 			expect((await signInWith(testUser.password)).data).not.toBeNull();
 		});
 
+		it("keeps the old password when secondary storage cannot store the replacement session", async () => {
+			const store = new Map<string, string>();
+			let failWrites = false;
+			const { testUser, changePassword, signInWith } = await setup({
+				secondaryStorage: {
+					set(key, value) {
+						if (failWrites) throw new Error("storage unavailable");
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			failWrites = true;
+
+			expect((await changePassword()).error?.status).toBe(500);
+			failWrites = false;
+			expect((await signInWith("newPassword")).error?.status).toBe(401);
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
+		});
+
 		it("does not cache the replacement session when the transaction fails", async () => {
 			const store = new Map<string, string>();
 			const { ctx, changePassword } = await setup({

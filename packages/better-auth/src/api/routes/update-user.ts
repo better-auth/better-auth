@@ -289,14 +289,21 @@ export const changePassword = createAuthEndpoint(
 					password: passwordHash,
 				});
 				if (!revokeOtherSessions) return null;
-				// Mirror to secondary storage only after commit, so a rollback
-				// can't leave the replacement session cached.
+				// When the database holds the session, mirror it to secondary storage
+				// only after commit so a rollback can't leave it cached. When
+				// secondary storage is the session store, its write must stay inside
+				// the transaction so a failure rolls back the password change.
+				const sessionOptions = ctx.context.options.session;
 				const created = await ctx.context.internalAdapter.createSession(
 					session.user.id,
 					undefined,
 					undefined,
 					undefined,
-					{ deferSecondaryStorageWrites: true },
+					{
+						deferSecondaryStorageWrites:
+							sessionOptions?.storeSessionInDatabase === true &&
+							sessionOptions.preserveSessionInDatabase !== true,
+					},
 				);
 				if (!created) {
 					throw APIError.from(
