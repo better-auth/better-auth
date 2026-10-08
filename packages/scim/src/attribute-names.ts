@@ -65,7 +65,7 @@ function canonicalizeRecord(
 	names: SCIMResourceAttributeNames,
 ): Record<string, unknown> {
 	let changed = false;
-	const seenNames: string[] = [];
+	const seenNames = new Set<string>();
 	const entries: [string, unknown][] = [];
 	for (const [key, entry] of Object.entries(record)) {
 		const extension = names.extensions.find(
@@ -75,7 +75,7 @@ function canonicalizeRecord(
 			? undefined
 			: findAttribute(names.attributes, key);
 		const name = extension?.id ?? attribute?.name ?? key;
-		if (seenNames.includes(name)) {
+		if (seenNames.has(name)) {
 			throw createSCIMError("BAD_REQUEST", {
 				detail: `${name} appears more than once with different letter case`,
 				scimType: "invalidSyntax",
@@ -86,7 +86,7 @@ function canonicalizeRecord(
 			? canonicalizeSCIMAttributeNames(entry, subAttributes)
 			: entry;
 		if (name !== key || value !== entry) changed = true;
-		seenNames.push(name);
+		seenNames.add(name);
 		entries.push([name, value]);
 	}
 	// fromEntries keeps a `__proto__` key as data instead of setting the prototype.
