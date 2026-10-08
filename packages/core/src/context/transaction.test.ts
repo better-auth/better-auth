@@ -117,6 +117,62 @@ describe("runWithTransaction", () => {
 		expect(hookRuns).toBe(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11639
+	 */
+	describe("when the adapter's transaction cannot roll back", () => {
+		function createAsIsAdapter() {
+			const { adapter } = createTransactionHarness();
+			return {
+				...adapter,
+				options: { adapterConfig: { transaction: false } },
+			} as unknown as DBAdapter;
+		}
+
+		it("runs queued hooks before rethrowing", async () => {
+			const adapter = createAsIsAdapter();
+			let hookRuns = 0;
+
+			await expect(
+				runWithTransaction(adapter, async () => {
+					await queueAfterTransactionHook(async () => {
+						hookRuns += 1;
+					});
+					throw new Error("later step failed");
+				}),
+			).rejects.toThrow("later step failed");
+
+			expect(hookRuns).toBe(1);
+		});
+
+		it("keeps the original error when a queued hook also fails", async () => {
+			const adapter = createAsIsAdapter();
+			const onAfterCommitHookError = vi.fn();
+			const events: string[] = [];
+
+			await expect(
+				runWithTransaction(
+					adapter,
+					async () => {
+						await queueAfterTransactionHook(async () => {
+							throw new Error("cache unavailable");
+						});
+						await queueAfterTransactionHook(async () => {
+							events.push("later hook");
+						});
+						throw new Error("later step failed");
+					},
+					{ onAfterCommitHookError },
+				),
+			).rejects.toThrow("later step failed");
+
+			expect(onAfterCommitHookError).toHaveBeenCalledWith(
+				expect.objectContaining({ message: "cache unavailable" }),
+			);
+			expect(events).toEqual(["later hook"]);
+		});
+	});
+
 	it("reports a handled after-commit hook failure without rejecting committed work", async () => {
 		const { adapter } = createTransactionHarness();
 		const onError = vi.fn();

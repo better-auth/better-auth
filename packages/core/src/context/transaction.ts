@@ -138,21 +138,33 @@ export const runWithTransaction = async <
 				hasError = true;
 				error = e;
 			}
-			if (hasError) {
-				throw error;
-			}
-			for (const hook of pendingHooks) {
-				try {
-					await hook();
-				} catch (error) {
-					if (!options?.onAfterCommitHookError) throw error;
+			const runPendingHooks = async (rethrowUnhandled: boolean) => {
+				for (const hook of pendingHooks) {
 					try {
-						await options.onAfterCommitHookError(error);
-					} catch {
-						// Reporting cannot roll back committed work or suppress later hooks.
+						await hook();
+					} catch (hookError) {
+						if (!options?.onAfterCommitHookError) {
+							if (rethrowUnhandled) throw hookError;
+							continue;
+						}
+						try {
+							await options.onAfterCommitHookError(hookError);
+						} catch {
+							// Reporting cannot roll back committed work or suppress later hooks.
+						}
 					}
 				}
+			};
+			if (hasError) {
+				// Without a real transaction (`transaction: false`), each write was
+				// applied directly and nothing rolled back, so the hooks queued for
+				// those writes still have to run. The original error wins over theirs.
+				if (adapter.options?.adapterConfig.transaction === false) {
+					await runPendingHooks(false);
+				}
+				throw error;
 			}
+			await runPendingHooks(true);
 			return result!;
 		})
 		.catch((err) => {
