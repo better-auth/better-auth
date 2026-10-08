@@ -16,6 +16,9 @@ const NON_PRIVATE_USE_SCHEMES = new Set([
 	"javascript:",
 	"data:",
 	"vbscript:",
+	"blob:",
+	"about:",
+	"view-source:",
 ]);
 
 /**
@@ -40,11 +43,13 @@ export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
  * an authority component and a path (for example
  * `cursor://anysphere.cursor-mcp/oauth/callback`).
  *
- * RFC 8252 §7.1 *recommends* the authority-free reverse-domain form; it does
- * not forbid host-bearing private-use URIs. Native MCP clients such as Cursor
- * register the latter. Bare-authority forms (`cursor://host`,
- * `cursor://host?x=1`) are rejected because non-special schemes parse an empty
- * pathname. Dangerous and network schemes stay rejected.
+ * RFC 8252 §7.1 recommends the authority-free reverse-domain form, and §8.4
+ * says authorization servers SHOULD reject schemes without a period. Better
+ * Auth deliberately does not enforce either, because native MCP clients such
+ * as Cursor register host-bearing, period-free URIs. Bare-authority forms
+ * (`cursor://host`, `cursor://host?x=1`) are rejected because non-special
+ * schemes parse an empty pathname. Web, script, and browser-internal schemes
+ * in `NON_PRIVATE_USE_SCHEMES` are rejected; any other scheme is accepted.
  *
  * @see https://github.com/better-auth/better-auth/issues/10946
  */

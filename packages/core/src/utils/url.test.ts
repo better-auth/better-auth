@@ -173,4 +173,12 @@ describe("isHostBearingPrivateUseRedirectUri", () => {
 			false,
 		);
 	});
+
+	it.each([
+		"blob://host/callback",
+		"about://host/callback",
+		"view-source://host/callback",
+	])("rejects browser-internal scheme %s", (uri) => {
+		expect(isHostBearingPrivateUseRedirectUri(new URL(uri))).toBe(false);
+	});
 });
