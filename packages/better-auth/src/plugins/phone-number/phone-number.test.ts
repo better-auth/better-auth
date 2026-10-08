@@ -983,9 +983,9 @@ describe("reset password session revocation", async () => {
 		await client.phoneNumber.sendOtp({ phoneNumber });
 		await client.phoneNumber.verify({ phoneNumber, code: otp });
 		const ctx = await auth.$context;
-		vi.spyOn(ctx.password, "hash").mockRejectedValueOnce(
-			new Error("password rejected"),
-		);
+		const hash = vi
+			.spyOn(ctx.password, "hash")
+			.mockRejectedValueOnce(new Error("password rejected"));
 		await client.phoneNumber.requestPasswordReset({ phoneNumber });
 		const resetWith = (newPassword: string) =>
 			client.phoneNumber.resetPassword({
@@ -995,6 +995,7 @@ describe("reset password session revocation", async () => {
 			});
 
 		expect((await resetWith("pwned-password")).error).not.toBeNull();
+		hash.mockRestore();
 		expect((await resetWith("safe-password")).data?.status).toBe(true);
 		const signInRes = await client.signIn.phoneNumber({
 			phoneNumber,

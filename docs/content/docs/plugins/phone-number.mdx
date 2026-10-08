@@ -295,7 +295,7 @@ Then, you can reset the password by calling `resetPassword` on the client with t
   ```
 </APIMethod>
 
-If the new password is rejected, for example by the [Have I Been Pwned](/docs/plugins/have-i-been-pwned) plugin, the OTP isn't consumed and can be used again. When transactions are enabled for your database adapter, the same applies if a later step of the reset fails, such as revoking sessions or saving the password. A wrong OTP still counts toward `allowedAttempts`.
+If the new password is rejected, for example by the [Have I Been Pwned](/docs/plugins/have-i-been-pwned) plugin, the OTP isn't consumed and can be used again. If a later step of the reset fails, such as revoking sessions or saving the password, the OTP stays usable only when transactions are enabled for your database adapter and verification values are stored in the database. That is the default without secondary storage; with [secondary storage](/docs/concepts/database#secondary-storage), set [`verification.storeInDatabase: true`](/docs/reference/options#verification). A wrong OTP still counts toward `allowedAttempts`.
 
 ## Options
 

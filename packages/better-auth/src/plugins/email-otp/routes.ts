@@ -1282,17 +1282,6 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
 	generateRandomString(options.otpLength ?? 6, "0-9");
 
 /**
- * Verifies a single-use OTP with race-condition protection.
- *
- * The atomic consume is the single gate: only the first concurrent caller
- * receives the record, every later racer receives `null` and is rejected, so
- * a correct OTP can only ever be accepted once. When the submitted code is
- * wrong the record is recreated with the same value and expiry and an
- * incremented attempt count so the next try can still find it; the budget is
- * enforced before verification, and a record whose attempts are exhausted is
- * left consumed (no recreate), locking the identifier out.
- */
-/**
  * Reports whether the provided OTP matches a stored, unexpired record with
  * attempts left, without consuming it or counting an attempt.
  */
@@ -1310,6 +1299,17 @@ async function matchesUsableStoredOTP(
 	return verifyStoredOTP(ctx, opts, otpValue, providedOTP);
 }
 
+/**
+ * Verifies a single-use OTP with race-condition protection.
+ *
+ * The atomic consume is the single gate: only the first concurrent caller
+ * receives the record, every later racer receives `null` and is rejected, so
+ * a correct OTP can only ever be accepted once. When the submitted code is
+ * wrong the record is recreated with the same value and expiry and an
+ * incremented attempt count so the next try can still find it; the budget is
+ * enforced before verification, and a record whose attempts are exhausted is
+ * left consumed (no recreate), locking the identifier out.
+ */
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,
