@@ -912,7 +912,7 @@ export const POST = async (req: Request) => {
   DPoP verification compares the proof's `htu` against the request URL, and rejects replayed proofs through a `jti` store. Two deployment details matter:
 
   * **Behind a proxy:** the proof is checked against `request.url`, so a TLS-terminating or path-rewriting proxy must forward the externally visible scheme, host, and path, or legitimate proofs are rejected.
-  * **Replay protection:** `verifyAccessTokenRequest` defaults to an in-memory `jti` store that is safe only for a single instance. For multi-instance or serverless resource servers, pass a shared `dpop.replayStore` such as `createDpopReplayStore(ctx.context.internalAdapter)`, which records proofs in the database-backed verification store (the provider's own endpoints and `requireMcpAuth` use it by default). It requires database-backed verification storage and string ids; a secondary-storage-only deployment, or one with `advanced.database.generateId: "serial"`, rejects DPoP requests rather than skipping replay protection.
+  * **Replay protection:** `verifyAccessTokenRequest` defaults to an in-memory `jti` store that is safe only for a single instance. For multi-instance or serverless resource servers, pass a shared `dpop.replayStore` such as `createDpopReplayStore(ctx.context.internalAdapter)`, which records proofs in the database-backed verification store (the provider's own endpoints and `requireMcpAuth` use it by default). That store requires database-backed verification storage and string ids: with secondary-storage-only verification or `advanced.database.generateId: "serial"`, requests checked against it are rejected rather than skipping replay protection.
 </Callout>
 
 #### JWT Verification
