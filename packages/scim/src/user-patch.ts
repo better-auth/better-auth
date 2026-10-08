@@ -1,5 +1,7 @@
 import * as z from "zod";
 import type { SCIMCanonicalEmail, SCIMEmail, SCIMName } from "./configuration";
+import type { SCIMPatchValueTarget } from "./null-attributes";
+import { expandSCIMPatchNullValues } from "./null-attributes";
 import type { SCIMUser } from "./persistence";
 import {
 	resolveSCIMCanonicalAttributePath,
@@ -390,7 +392,7 @@ function findPatchAttribute(
 	);
 }
 
-function resolveMutableSCIMUserPatchPath(
+function resolveSCIMUserPatchPath(
 	path: string,
 ): ResolvedSCIMPatchPath | { enterpriseRoot: true } {
 	const canonicalPath = resolveSCIMCanonicalAttributePath("User", path.trim());
@@ -436,7 +438,6 @@ function resolveMutableSCIMUserPatchPath(
 			scimType: "invalidPath",
 		});
 	}
-	if (attribute.mutability === "readOnly") rejectReadOnlyAttribute(path);
 
 	const subAttribute = subAttributePath
 		? findPatchAttribute(attribute.subAttributes ?? [], subAttributePath)
@@ -447,7 +448,6 @@ function resolveMutableSCIMUserPatchPath(
 			scimType: "invalidPath",
 		});
 	}
-	if (subAttribute?.mutability === "readOnly") rejectReadOnlyAttribute(path);
 	if (filterMatch && !attribute.multiValued) {
 		throw createSCIMError("BAD_REQUEST", {
 			detail: `User PATCH path ${path} is not a multi-valued attribute`,
@@ -472,6 +472,50 @@ function resolveMutableSCIMUserPatchPath(
 				}
 			: {}),
 	};
+}
+
+function resolveMutableSCIMUserPatchPath(
+	path: string,
+): ResolvedSCIMPatchPath | { enterpriseRoot: true } {
+	const resolved = resolveSCIMUserPatchPath(path);
+	if (
+		!("enterpriseRoot" in resolved) &&
+		(resolved.attribute.mutability === "readOnly" ||
+			resolved.subAttribute?.mutability === "readOnly")
+	) {
+		rejectReadOnlyAttribute(path);
+	}
+	return resolved;
+}
+
+function resolveSCIMUserPatchValueTarget(path: string): SCIMPatchValueTarget {
+	if (normalizePatchPath(path) === "active") return { kind: "notNullable" };
+	let resolved: ReturnType<typeof resolveSCIMUserPatchPath>;
+	try {
+		resolved = resolveSCIMUserPatchPath(path);
+	} catch {
+		// Unsupported paths keep their original operation, which reports the error.
+		return { kind: "simple" };
+	}
+	if ("enterpriseRoot" in resolved) {
+		return { kind: "merge", subPath: (attribute) => `${path}:${attribute}` };
+	}
+	if (
+		resolved.attribute.mutability === "readOnly" ||
+		resolved.subAttribute?.mutability === "readOnly"
+	) {
+		return { kind: "readOnly" };
+	}
+	if (resolved.subAttribute || resolved.attribute.type !== "complex") {
+		return { kind: "simple" };
+	}
+	const selectsEntries =
+		resolved.selectorType !== undefined ||
+		resolved.selectorPrimary !== undefined;
+	if (resolved.attribute.multiValued && !selectsEntries) {
+		return { kind: "entries" };
+	}
+	return { kind: "merge", subPath: (attribute) => `${path}.${attribute}` };
 }
 
 function getSCIMPatchContainer(
@@ -1155,7 +1199,10 @@ export function applySCIMUserPatch(
 		}
 	}
 
-	for (const operation of operations) {
+	for (const operation of expandSCIMPatchNullValues(
+		operations,
+		resolveSCIMUserPatchValueTarget,
+	)) {
 		const path = operation.path?.trim();
 		if (path) {
 			applyAttribute(operation.op, path, operation.value);

@@ -37,6 +37,7 @@ import {
 	resolveManagedConnectionOptions,
 	SCIM_MANAGED_CONNECTION_ID_PREFIX,
 } from "./managed-connections";
+import { stripSCIMResourceNullAttributes } from "./null-attributes";
 import {
 	createReconcileSCIMProjectionEndpoint,
 	createSCIMProjectionCoordinator,
@@ -310,7 +311,10 @@ function createSCIMPlugin(options: SCIMOptions) {
 				(isGroupCreate ||
 					(["PUT", "PATCH"].includes(request.method) &&
 						!path.endsWith("/Groups")));
-			let normalizedBody = body;
+			let normalizedBody =
+				(isUserMutation || isGroupMutation) && request.method !== "PATCH"
+					? stripSCIMResourceNullAttributes(body)
+					: body;
 			if (isGroupMutation) {
 				const groupNormalization = normalizeMicrosoftEntraGroupSchema(
 					normalizedBody,

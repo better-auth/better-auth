@@ -23,6 +23,8 @@ import {
 	findSCIMGroup,
 	runGroupMutationTransaction,
 } from "./group-state";
+import type { SCIMPatchValueTarget } from "./null-attributes";
+import { expandSCIMPatchNullValues } from "./null-attributes";
 import type { SCIMGroup, SCIMGroupMember, SCIMUser } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
@@ -280,6 +282,12 @@ function readMemberIdFromValuePath(path: string): string | undefined {
 
 function normalizeGroupPatchPath(path: string): string {
 	return stripSCIMCoreAttributePrefix("Group", path.trim());
+}
+
+function resolveSCIMGroupPatchValueTarget(path: string): SCIMPatchValueTarget {
+	return normalizeGroupPatchPath(path).toLowerCase() === "members"
+		? { kind: "entries" }
+		: { kind: "simple" };
 }
 
 interface IncrementalMembershipPatch {
@@ -1355,9 +1363,11 @@ export function patchSCIMGroup(
 				});
 			}
 
-			const incrementalPatch = parseIncrementalMembershipPatch(
+			const operations = expandSCIMPatchNullValues(
 				ctx.body.Operations,
+				resolveSCIMGroupPatchValueTarget,
 			);
+			const incrementalPatch = parseIncrementalMembershipPatch(operations);
 			const updatedGroup = await runGroupMutationTransaction(
 				adapter,
 				async (trx) => {
@@ -1417,7 +1427,7 @@ export function patchSCIMGroup(
 						const patch = applyGroupPatch(
 							currentGroup,
 							currentMemberships.map((membership) => membership.scimUserId),
-							ctx.body.Operations,
+							operations,
 						);
 						await projection.acquireUserLocks({
 							database: trx,
