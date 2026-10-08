@@ -1,5 +1,6 @@
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
+import { logger } from "../env";
 import { __getBetterAuthGlobal } from "./global";
 import {
 	getCurrentAdapter,
@@ -143,6 +144,31 @@ describe("runWithTransaction", () => {
 			).rejects.toThrow("later step failed");
 
 			expect(hookRuns).toBe(1);
+		});
+
+		it("logs a failing hook without a handler and still runs later hooks", async () => {
+			const adapter = createAsIsAdapter();
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+			onTestFinished(() => error.mockRestore());
+			const events: string[] = [];
+
+			await expect(
+				runWithTransaction(adapter, async () => {
+					await queueAfterTransactionHook(async () => {
+						throw new Error("cache unavailable");
+					});
+					await queueAfterTransactionHook(async () => {
+						events.push("later hook");
+					});
+					throw new Error("later step failed");
+				}),
+			).rejects.toThrow("later step failed");
+
+			expect(events).toEqual(["later hook"]);
+			expect(error).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({ message: "cache unavailable" }),
+			);
 		});
 
 		it("keeps the original error when a queued hook also fails", async () => {
