@@ -12,6 +12,7 @@ import {
 	classifyHost,
 	isPublicRoutableHost,
 } from "@better-auth/core/utils/host";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type { BetterFetchOption } from "@better-fetch/fetch";
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
@@ -121,8 +122,7 @@ export async function discoverOIDCConfig(
  * Handles trailing slashes correctly.
  */
 export function computeDiscoveryUrl(issuer: string): string {
-	const baseUrl = issuer.endsWith("/") ? issuer.slice(0, -1) : issuer;
-	return `${baseUrl}/.well-known/openid-configuration`;
+	return appendURLPath(issuer, "/.well-known/openid-configuration");
 }
 
 /**
