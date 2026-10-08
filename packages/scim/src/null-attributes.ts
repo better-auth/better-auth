@@ -74,9 +74,11 @@ export type SCIMPatchValueTarget =
 	| { kind: "readOnly" }
 	/** An attribute where null is never a valid value. */
 	| { kind: "notNullable" }
+	/** A simple attribute or subattribute that a value replaces. */
 	| { kind: "simple" };
 
-function removalFor(
+/** The operations a null value at `path` becomes; throws when null is invalid. */
+function nullValueOperations(
 	path: string,
 	target: SCIMPatchValueTarget,
 ): SCIMPatchOperation[] {
@@ -105,7 +107,7 @@ function splitNullAttributes(
 		const path = subPath(attribute);
 		const target = resolveTarget(path);
 		if (entry === null) {
-			removals.push(...removalFor(path, target));
+			removals.push(...nullValueOperations(path, target));
 			continue;
 		}
 		if (target.kind === "merge" && isRecord(entry)) {
@@ -121,7 +123,7 @@ function splitNullAttributes(
 	return { value: kept, removals };
 }
 
-function expandNullOperation(
+function expandOperationNullValues(
 	operation: SCIMPatchOperation,
 	resolveTarget: (path: string) => SCIMPatchValueTarget,
 ): SCIMPatchOperation[] {
@@ -129,7 +131,7 @@ function expandNullOperation(
 	const path = operation.path?.trim();
 	const target = path ? resolveTarget(path) : undefined;
 	if (path && target && operation.value === null) {
-		return removalFor(path, target);
+		return nullValueOperations(path, target);
 	}
 	if (target?.kind === "entries") {
 		return [{ ...operation, value: stripNulls(operation.value, 0) }];
@@ -157,6 +159,6 @@ export function expandSCIMPatchNullValues(
 	resolveTarget: (path: string) => SCIMPatchValueTarget,
 ): SCIMPatchOperation[] {
 	return operations.flatMap((operation) =>
-		expandNullOperation(operation, resolveTarget),
+		expandOperationNullValues(operation, resolveTarget),
 	);
 }
