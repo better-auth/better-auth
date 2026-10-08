@@ -174,6 +174,7 @@
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.41.1",
     "better-call": "catalog:",
     "jose": "^6.2.3",
     "kysely": "catalog:",
