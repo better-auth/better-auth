@@ -64,6 +64,12 @@ export const createInternalAdapter = (
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	// With secondary storage, the database is the authoritative session store
+	// only when sessions are written to it and revoked rows are deleted.
+	const databaseSessionFallbackEnabled =
+		!!secondaryStorage &&
+		options.session?.storeSessionInDatabase === true &&
+		options.session?.preserveSessionInDatabase !== true;
 	const {
 		createWithHooks,
 		updateWithHooks,
@@ -330,6 +336,23 @@ export const createInternalAdapter = (
 			userId: string,
 			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
 		) => {
+			if (databaseSessionFallbackEnabled) {
+				// The database holds every session, including ones whose cached copy
+				// failed to write, so list from it. Expired rows are skipped, as the
+				// cached list does.
+				const sessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session>({
+					model: "session",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "expiresAt", value: new Date(), operator: "gt" },
+					],
+				});
+				return sessions.map((session) =>
+					parseSessionOutput(ctx.options, session),
+				);
+			}
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -477,9 +500,6 @@ export const createInternalAdapter = (
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
-			const databaseSessionFallbackEnabled =
-				storeInDb === true &&
-				options.session?.preserveSessionInDatabase !== true;
 			// Deferring is only safe when the database can serve the session. When
 			// secondary storage is the session store, its write is the session
 			// itself and must fail inside the caller's transaction.
@@ -574,29 +594,35 @@ export const createInternalAdapter = (
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								return deferMirror
-									? sessionData
-									: mirrorSessionToSecondaryStorage(sessionData as Session);
+								if (!deferMirror) {
+									return mirrorSessionToSecondaryStorage(
+										sessionData as Session,
+									);
+								}
+								// Queued here, before createWithHooks queues the session's
+								// after hooks, so a hook that revokes the session runs after
+								// the cached copy exists and removes it.
+								await queueAfterTransactionHook(
+									async () => {
+										await mirrorSessionToSecondaryStorage(
+											sessionData as Session,
+										);
+									},
+									{
+										onError(error: unknown) {
+											logger.error(
+												"Failed to mirror committed session to secondary storage",
+												error,
+											);
+										},
+									},
+								);
+								return sessionData;
 							},
 							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
-			if (secondaryStorage && deferMirror && res) {
-				await queueAfterTransactionHook(
-					async () => {
-						await mirrorSessionToSecondaryStorage(res as Session);
-					},
-					{
-						onError(error: unknown) {
-							logger.error(
-								"Failed to mirror committed session to secondary storage",
-								error,
-							);
-						},
-					},
-				);
-			}
 			return res as Session;
 		},
 		findSession: async (
