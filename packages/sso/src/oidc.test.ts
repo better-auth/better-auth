@@ -792,7 +792,7 @@ describe("SSO", async () => {
 
 		server.service.on("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
-				emails: [testEmail],
+				emails: ["", testEmail],
 				name: "Mapped Array User",
 				sub: "mapped-array-sub",
 				picture: "https://test.com/picture.png",
@@ -802,7 +802,7 @@ describe("SSO", async () => {
 		});
 
 		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.emails = [testEmail];
+			token.payload.emails = ["", testEmail];
 			token.payload.email_verified = true;
 			token.payload.name = "Mapped Array User";
 			token.payload.sub = "mapped-array-sub";
