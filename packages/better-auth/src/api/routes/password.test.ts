@@ -1,7 +1,7 @@
 import { APIError } from "better-call";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
-import type { Account } from "../../types";
+import type { Account, BetterAuthOptions } from "../../types";
 
 describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
@@ -493,9 +493,13 @@ describe("revoke sessions on password reset", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11597
 	 */
 	describe("when a step of the reset fails", () => {
-		async function setup(onPasswordReset?: () => Promise<void>) {
+		async function setup(
+			onPasswordReset?: () => Promise<void>,
+			options?: Pick<BetterAuthOptions, "secondaryStorage" | "session">,
+		) {
 			let resetToken = "";
 			const instance = await getTestInstance({
+				...options,
 				emailAndPassword: {
 					enabled: true,
 					async sendResetPassword({ url }) {
@@ -574,6 +578,54 @@ describe("revoke sessions on password reset", async () => {
 			expect(reset.error?.status).toBe(500);
 			expect(await getExistingSession()).toBeNull();
 			expect((await signInWith("new-password")).data).not.toBeNull();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11639
+		 */
+		it("removes cached sessions when the password write fails without a transaction", async () => {
+			const store = new Map<string, string>();
+			const { auth, testUser, resetPassword, signInWith, getExistingSession } =
+				await setup(undefined, {
+					secondaryStorage: {
+						set(key, value) {
+							store.set(key, value);
+						},
+						get(key) {
+							return store.get(key) || null;
+						},
+						getAndDelete(key) {
+							const value = store.get(key) || null;
+							store.delete(key);
+							return value;
+						},
+						increment(key) {
+							const count = Number(store.get(key) ?? 0) + 1;
+							store.set(key, String(count));
+							return count;
+						},
+						delete(key) {
+							store.delete(key);
+						},
+					},
+					session: { storeSessionInDatabase: true },
+				});
+			const ctx = await auth.$context;
+			// Behave like an adapter configured with `transaction: false`.
+			ctx.adapter.transaction = (cb) => cb(ctx.adapter);
+			const adapterConfig = ctx.adapter.options!.adapterConfig as {
+				transaction: unknown;
+			};
+			adapterConfig.transaction = false;
+			vi.spyOn(ctx.internalAdapter, "updatePassword").mockRejectedValue(
+				new Error("database unavailable"),
+			);
+
+			const reset = await resetPassword("new-password");
+
+			expect(reset.error?.status).toBe(500);
+			expect(await getExistingSession()).toBeNull();
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
 		});
 	});
 });
