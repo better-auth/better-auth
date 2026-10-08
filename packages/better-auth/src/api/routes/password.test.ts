@@ -515,11 +515,13 @@ describe("revoke sessions on password reset", async () => {
 					email: instance.testUser.email,
 					redirectTo: "http://localhost:3000",
 				});
-				return instance.client.resetPassword(
+				return retryReset(newPassword);
+			};
+			const retryReset = (newPassword: string) =>
+				instance.client.resetPassword(
 					{ newPassword },
 					{ query: { token: resetToken } },
 				);
-			};
 			const signInWith = (password: string) =>
 				instance.client.signIn.email({
 					email: instance.testUser.email,
@@ -530,6 +532,7 @@ describe("revoke sessions on password reset", async () => {
 			return {
 				...instance,
 				resetPassword,
+				retryReset,
 				signInWith,
 				getExistingSession,
 			};
@@ -549,6 +552,36 @@ describe("revoke sessions on password reset", async () => {
 			expect((await signInWith("new-password")).error?.status).toBe(401);
 			expect((await signInWith(testUser.password)).data).not.toBeNull();
 			expect(await getExistingSession()).not.toBeNull();
+		});
+
+		it("leaves the reset token usable when session revocation fails", async () => {
+			const { auth, resetPassword, retryReset, signInWith } = await setup();
+			const ctx = await auth.$context;
+			vi.spyOn(ctx.internalAdapter, "deleteUserSessions").mockRejectedValueOnce(
+				new Error("session store unavailable"),
+			);
+
+			expect((await resetPassword("new-password")).error?.status).toBe(500);
+			expect((await retryReset("new-password")).data?.status).toBe(true);
+			expect((await signInWith("new-password")).data).not.toBeNull();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10632
+		 */
+		it("leaves the reset token usable when the new password is rejected", async () => {
+			const { auth, resetPassword, retryReset, signInWith } = await setup();
+			const ctx = await auth.$context;
+			vi.spyOn(ctx.password, "hash").mockRejectedValueOnce(
+				new APIError("BAD_REQUEST", {
+					message: "Password is compromised",
+					code: "PASSWORD_COMPROMISED",
+				}),
+			);
+
+			expect((await resetPassword("pwned-password")).error?.status).toBe(400);
+			expect((await retryReset("safe-password")).data?.status).toBe(true);
+			expect((await signInWith("safe-password")).data).not.toBeNull();
 		});
 
 		it("keeps existing sessions when the password write fails", async () => {

@@ -953,20 +953,30 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			assertPasswordNotTooShort(ctx, ctx.body.password);
 			assertPasswordNotTooLong(ctx, ctx.body.password);
 
-			// Use atomic verification to prevent race conditions
-			await atomicVerifyOTP(
-				ctx,
-				opts,
-				toOTPIdentifier("forget-password", email),
-				ctx.body.otp,
-			);
+			// Check the code without spending it, so a rejected password leaves it
+			// usable. A wrong or unusable code goes through atomicVerifyOTP, which
+			// counts the attempt and throws; a correct one is consumed inside the
+			// reset transaction.
+			const identifier = toOTPIdentifier("forget-password", email);
+			let otpConsumed = false;
+			if (!(await matchesStoredOTP(ctx, opts, identifier, ctx.body.otp))) {
+				await atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp);
+				otpConsumed = true;
+			}
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			await resetCredentialPassword(ctx, user.user.id, passwordHash);
+			await resetCredentialPassword(
+				ctx,
+				user.user.id,
+				passwordHash,
+				otpConsumed
+					? undefined
+					: () => atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp),
+			);
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 				await ctx.context.options.emailAndPassword.onPasswordReset(
@@ -1280,6 +1290,24 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
  * enforced before verification, and a record whose attempts are exhausted is
  * left consumed (no recreate), locking the identifier out.
  */
+/**
+ * Reports whether the provided OTP matches a stored, unexpired record with
+ * attempts left, without consuming it or counting an attempt.
+ */
+async function matchesStoredOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	identifier: string,
+	providedOTP: string,
+): Promise<boolean> {
+	const existing =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!existing || existing.expiresAt < new Date()) return false;
+	const [otpValue, attempts] = splitAtLastColon(existing.value);
+	if (parseInt(attempts || "0") >= (opts?.allowedAttempts || 3)) return false;
+	return verifyStoredOTP(ctx, opts, otpValue, providedOTP);
+}
+
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,
