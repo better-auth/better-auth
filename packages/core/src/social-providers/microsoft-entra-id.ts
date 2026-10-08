@@ -15,6 +15,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { appendURLPath, appendURLSegment } from "../utils/url";
 
 /**
  * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
@@ -170,8 +171,12 @@ export const microsoft = (options: MicrosoftOptions) => {
 	while (authority.endsWith("/")) {
 		authority = authority.slice(0, -1);
 	}
-	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
-	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
+	const tenantURL = appendURLSegment(authority, tenant);
+	const authorizationEndpoint = appendURLPath(
+		tenantURL,
+		"/oauth2/v2.0/authorize",
+	);
+	const tokenEndpoint = appendURLPath(tenantURL, "/oauth2/v2.0/token");
 	if (options.clientSecret && options.clientAssertion) {
 		throw new BetterAuthError(
 			"Microsoft Entra ID clientAssertion cannot be combined with clientSecret",
@@ -239,7 +244,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				tenant !== "common" &&
 				tenant !== "organizations" &&
 				tenant !== "consumers"
-					? `${authority}/${tenant}/v2.0`
+					? appendURLPath(tenantURL, "/v2.0")
 					: undefined,
 			/**
 			 * The multi-tenant endpoints (common/organizations/consumers) skip the
@@ -254,7 +259,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 				const tid = claims.tid;
 				if (
 					typeof tid !== "string" ||
-					claims.iss !== `${authority}/${tid}/v2.0`
+					claims.iss !==
+						appendURLPath(appendURLSegment(authority, tid), "/v2.0")
 				) {
 					return false;
 				}
@@ -378,7 +384,9 @@ export const getMicrosoftPublicKey = async (
 			x5c?: string[];
 			x5t?: string;
 		}>;
-	}>(`${authority}/${tenant}/discovery/v2.0/keys`);
+	}>(
+		appendURLPath(appendURLSegment(authority, tenant), "/discovery/v2.0/keys"),
+	);
 
 	if (!data?.keys) {
 		throw new APIError("BAD_REQUEST", {
