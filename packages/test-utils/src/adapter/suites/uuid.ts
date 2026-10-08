@@ -1,5 +1,5 @@
 import type { User, Verification } from "@better-auth/core/db";
-import { encodeDeterministicId } from "@better-auth/core/db/adapter";
+import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
 import { getNormalTestSuiteTests } from "./basic";

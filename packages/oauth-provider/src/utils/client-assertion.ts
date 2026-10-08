@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { encodeDeterministicId } from "@better-auth/core/db/adapter";
+import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import {
 	CLIENT_ASSERTION_TYPE,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,

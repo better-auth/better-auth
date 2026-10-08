@@ -14,7 +14,7 @@ import {
 	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
-import { encodeDeterministicId } from "@better-auth/core/db/adapter";
+import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";

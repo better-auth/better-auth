@@ -18,8 +18,11 @@ let warnedSerialDeterministicId = false;
  * replaces a forced id that does not fit the strategy with a fresh one, which
  * would let every insert win. Under `"uuid"` the first 16 bytes are formatted
  * with version 5 and RFC 9562 variant bits, the shape the id field accepts.
- * Every other strategy gets the base64url digest.
+ * Other string strategies get the base64url digest. Under `"serial"` the
+ * base64url digest is still replaced by a database number, so the record is
+ * not single use; this logs a warning once per process.
  *
+ * @internal Shared by Better Auth packages; not a supported public API.
  * @param digest - A hash of the guarded value, at least 16 bytes long.
  */
 export function encodeDeterministicId(

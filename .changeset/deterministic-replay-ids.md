@@ -10,5 +10,3 @@ Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`
 - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
 
 With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
-
-Plugins that store their own single-use records can use `encodeDeterministicId` from `@better-auth/core/db/adapter` to get an id that string id settings (the default, `"uuid"`, or a custom `generateId` function) keep.
