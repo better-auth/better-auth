@@ -108,9 +108,11 @@ function isNonHttpRedirectUri(redirectUri: string): boolean {
 
 /**
  * Server-owned default for dynamic registrations that omit `application_type`.
- * `"infer"` classifies as native only when every redirect URI is a
- * non-http(s) scheme; a sent `application_type` is never overridden because
- * `applyOAuthClientRegistrationDefaults` only fills the absent field.
+ * `"infer"` classifies as native when any redirect URI uses a non-http(s)
+ * scheme, because a web client can never register one. Every URI is then
+ * validated against the native rules. A sent `application_type` is never
+ * overridden because `applyOAuthClientRegistrationDefaults` only fills the
+ * absent field.
  */
 function resolveDynamicRegistrationDefaultApplicationType(
 	opts: OAuthOptions<Scope[]>,
@@ -118,22 +120,10 @@ function resolveDynamicRegistrationDefaultApplicationType(
 ): "web" | "native" {
 	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
 	if (configured !== "infer") return configured;
-	const redirectUris = client.redirect_uris ?? [];
-	return redirectUris.length > 0 && redirectUris.every(isNonHttpRedirectUri)
+	return (client.redirect_uris ?? []).some(isNonHttpRedirectUri)
 		? "native"
 		: "web";
 }
-
-const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
-	"file:",
-	"ftp:",
-	"mailto:",
-	"javascript:",
-	"data:",
-	"vbscript:",
-	"ws:",
-	"wss:",
-]);
 
 function invalidRedirectUri(description: string): never {
 	throw new APIError("BAD_REQUEST", {
@@ -254,10 +244,7 @@ function validateClientRedirectUri(
 		return;
 	}
 
-	if (
-		FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) ||
-		!isNativePrivateUseRedirectUri(url)
-	) {
+	if (!isNativePrivateUseRedirectUri(url)) {
 		invalidRedirectUri(
 			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with an authority: ${redirectUri}`,
 		);

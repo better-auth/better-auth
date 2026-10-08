@@ -1853,7 +1853,7 @@ describe("oauth register - clientRegistrationDefaultApplicationType", async () =
 		return makeRegister(customFetchImpl as typeof fetch);
 	};
 
-	it("infers native when every redirect URI is a custom scheme", async () => {
+	it("infers native when a redirect URI uses a custom scheme", async () => {
 		const register = await instanceWithDefault("infer");
 		const response = await register({
 			token_endpoint_auth_method: "none",
@@ -1868,7 +1868,7 @@ describe("oauth register - clientRegistrationDefaultApplicationType", async () =
 		]);
 	});
 
-	it("keeps the web classification under infer when any redirect URI is http(s)", async () => {
+	it("keeps the web classification under infer when every redirect URI is http(s)", async () => {
 		const register = await instanceWithDefault("infer");
 		const https = await register({
 			redirect_uris: ["https://rp.example.com/callback"],
@@ -1876,17 +1876,38 @@ describe("oauth register - clientRegistrationDefaultApplicationType", async () =
 		expect(https.status).toBe(201);
 		const httpsBody = (await https.json()) as OAuthClient;
 		expect(httpsBody.application_type).toBe("web");
+	});
 
-		const mixed = await register({
+	it("infers native for Cursor's mixed redirect URI registration", async () => {
+		const register = await instanceWithDefault("infer");
+		const response = await register({
+			client_name: "Cursor",
+			redirect_uris: [
+				"cursor://anysphere.cursor-mcp/oauth/callback",
+				"https://www.cursor.com/agents/mcp/oauth/callback",
+				"http://localhost:8787/callback",
+			],
+			grant_types: ["authorization_code", "refresh_token"],
+			response_types: ["code"],
+			token_endpoint_auth_method: "none",
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("native");
+	});
+
+	it("applies native redirect rules to every URI of an inferred native client", async () => {
+		const register = await instanceWithDefault("infer");
+		const response = await register({
 			token_endpoint_auth_method: "none",
 			redirect_uris: [
 				"cursor://anysphere.cursor-mcp/oauth/callback",
-				"https://rp.example.com/callback",
+				"http://rp.example.com/callback",
 			],
 		});
-		expect(mixed.status).toBe(400);
-		const mixedBody = (await mixed.json()) as { error?: string };
-		expect(mixedBody.error).toBe("invalid_redirect_uri");
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
 	});
 
 	it("never overrides an application_type the client actually sent", async () => {
@@ -1910,6 +1931,95 @@ describe("oauth register - clientRegistrationDefaultApplicationType", async () =
 		expect(response.status).toBe(201);
 		const body = (await response.json()) as OAuthClient;
 		expect(body.application_type).toBe("native");
+	});
+
+	it("completes authorization and token exchange for an inferred Cursor client", async () => {
+		const cursorRedirect = "cursor://anysphere.cursor-mcp/oauth/callback";
+		const { client, customFetchImpl, signInWithTestUser } =
+			await getTestInstance(
+				{
+					baseURL: authServerBaseUrl,
+					plugins: [
+						jwt(),
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							allowDynamicClientRegistration: true,
+							allowUnauthenticatedClientRegistration: true,
+							clientRegistrationDefaultApplicationType: "infer",
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [oauthProviderClient()] } },
+			);
+		const register = makeRegister(customFetchImpl as typeof fetch);
+		const registration = await register({
+			client_name: "Cursor",
+			redirect_uris: [
+				cursorRedirect,
+				"https://www.cursor.com/agents/mcp/oauth/callback",
+				"http://localhost:8787/callback",
+			],
+			grant_types: ["authorization_code", "refresh_token"],
+			response_types: ["code"],
+			token_endpoint_auth_method: "none",
+		});
+		expect(registration.status).toBe(201);
+		const { client_id: clientId } = (await registration.json()) as OAuthClient;
+
+		const { headers } = await signInWithTestUser();
+		const codeVerifier = generateRandomString(64);
+		const authUrl = await createAuthorizationURL({
+			id: "cursor",
+			options: { clientId, redirectURI: cursorRedirect },
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "cursor-state",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(ctx) {
+				consentRedirectUrl = ctx.response.headers.get("Location") || "";
+			},
+		});
+		expect(consentRedirectUrl).toContain("/consent");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+		const consentRes = await client.oauth2.consent(
+			{ accept: true },
+			{ headers, throw: true },
+		);
+		const callback = new URL(consentRes.url);
+		expect(`${callback.protocol}//${callback.host}${callback.pathname}`).toBe(
+			cursorRedirect,
+		);
+		const code = callback.searchParams.get("code");
+		expect(code).toEqual(expect.any(String));
+
+		const { body: tokenBody, headers: tokenHeaders } =
+			await authorizationCodeRequest({
+				code: code!,
+				codeVerifier,
+				redirectURI: cursorRedirect,
+				options: { clientId, redirectURI: cursorRedirect },
+			});
+		const tokenRes = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{ method: "POST", body: tokenBody.toString(), headers: tokenHeaders },
+		);
+		expect(tokenRes.status).toBe(200);
+		const tokens = (await tokenRes.json()) as { access_token?: string };
+		expect(tokens.access_token).toEqual(expect.any(String));
 	});
 
 	it("keeps the strict web default when the option is unset", async () => {
