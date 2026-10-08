@@ -1013,6 +1013,126 @@ describe("passkey", async () => {
 		expect(passkeyStillExists).not.toBeNull();
 	});
 
+	it("should allow deleting the only passkey when user has verified email and passwordless magic-link enabled", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				database: memoryAdapter({
+					user: [],
+					session: [],
+					account: [],
+					verification: [],
+					passkey: [],
+				}),
+				plugins: [
+					passkey(),
+					{
+						id: "magic-link",
+					},
+				],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		// Delete all accounts so user has 0 accounts, but verified email
+		await context.adapter.deleteMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		await context.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+			update: { emailVerified: true },
+		});
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "magic-link-user-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "magic-link-passkey-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		const deleteRes = await testAuth.api.deletePasskey({
+			headers,
+			body: { id: createdPasskey.id },
+		});
+		expect(deleteRes.status).toBe(true);
+
+		const passkeyStillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+		expect(passkeyStillExists).toBeNull();
+	});
+
+	it("should not allow deleting the only passkey when user's only account is for a disabled provider", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true as boolean,
+				},
+				database: memoryAdapter({
+					user: [],
+					session: [],
+					account: [],
+					verification: [],
+					passkey: [],
+				}),
+				plugins: [passkey()],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "disabled-provider-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "disabled-provider-passkey-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		context.options.emailAndPassword = { enabled: false };
+
+		await expect(
+			testAuth.api.deletePasskey({
+				headers,
+				body: { id: createdPasskey.id },
+			}),
+		).rejects.toThrowError(
+			PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY.message,
+		);
+
+		const passkeyStillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+		expect(passkeyStillExists).not.toBeNull();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-4vcf-q4xf-f48m
 	 */

@@ -1102,27 +1102,72 @@ export const deletePasskey = (options?: PasskeyOptions) =>
 			},
 		},
 		async (ctx) => {
-			if (!options?.allowDeletingOnlyPasskey) {
-				const passkeys = await ctx.context.adapter.findMany<Passkey>({
+			await runWithTransaction(ctx.context.adapter, async () => {
+				const adapter = await getCurrentAdapter(ctx.context.adapter);
+				const passkeys = await adapter.findMany<Passkey>({
 					model: "passkey",
 					where: [{ field: "userId", value: ctx.context.session.user.id }],
 				});
-				if (passkeys.length <= 1) {
-					const accounts = await ctx.context.internalAdapter.findAccounts(
-						ctx.context.session.user.id,
+
+				const targetPasskey = passkeys.find((p) => p.id === ctx.body.id);
+				if (!targetPasskey) {
+					throw APIError.from(
+						"NOT_FOUND",
+						PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
 					);
-					if (accounts.length === 0) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY,
+				}
+
+				if (!options?.allowDeletingOnlyPasskey) {
+					const remainingPasskeys = passkeys.filter(
+						(p) => p.id !== ctx.body.id,
+					);
+					if (remainingPasskeys.length === 0) {
+						const accounts = await ctx.context.internalAdapter.findAccounts(
+							ctx.context.session.user.id,
 						);
+						const hasEnabledAccount = accounts.some((acc) => {
+							if (acc.providerId === "credential") {
+								return ctx.context.options.emailAndPassword?.enabled !== false;
+							}
+							if (
+								ctx.context.socialProviders?.some(
+									(p) => p.id === acc.providerId,
+								)
+							) {
+								return true;
+							}
+							if (ctx.context.hasPlugin(acc.providerId)) {
+								return true;
+							}
+							return false;
+						});
+						const hasPasswordlessEmailAuth =
+							Boolean(ctx.context.session.user.emailVerified) &&
+							(ctx.context.hasPlugin("magic-link") ||
+								ctx.context.hasPlugin("email-otp"));
+						const hasPasswordlessPhoneAuth =
+							Boolean(
+								(ctx.context.session.user as { phoneNumberVerified?: boolean })
+									.phoneNumberVerified,
+							) && ctx.context.hasPlugin("phone-number");
+
+						if (
+							!hasEnabledAccount &&
+							!hasPasswordlessEmailAuth &&
+							!hasPasswordlessPhoneAuth
+						) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY,
+							);
+						}
 					}
 				}
-			}
 
-			await ctx.context.adapter.delete({
-				model: "passkey",
-				where: [{ field: "id", value: ctx.body.id }],
+				await adapter.delete({
+					model: "passkey",
+					where: [{ field: "id", value: ctx.body.id }],
+				});
 			});
 			return ctx.json({
 				status: true,

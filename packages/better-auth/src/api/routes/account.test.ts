@@ -1110,6 +1110,92 @@ describe("account", async () => {
 		expect(remainingAccounts.length).toBe(0);
 	});
 
+	it("should allow unlinking the last account when user has verified email and magic-link is enabled", async () => {
+		const {
+			client: magicLinkClient,
+			auth: magicLinkAuth,
+			signInWithTestUser: magicLinkSignIn,
+		} = await getTestInstance({
+			plugins: [
+				{
+					id: "magic-link",
+				},
+			],
+		});
+		const { user, headers } = await magicLinkSignIn();
+		const testContext = await magicLinkAuth.$context;
+
+		await testContext.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+			update: { emailVerified: true },
+		});
+
+		const accounts = await testContext.internalAdapter.findAccounts(user.id);
+		expect(accounts.length).toBe(1);
+
+		const unlinkRes = await magicLinkClient.unlinkAccount(
+			{
+				accountId: accounts[0]!.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(unlinkRes.error).toBeNull();
+		expect(unlinkRes.data?.status).toBe(true);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(0);
+	});
+
+	it("should prevent unlinking an account when remaining accounts belong to disabled sign-in methods", async () => {
+		const {
+			client: testClient,
+			auth: testAuth,
+			signInWithTestUser: testSignIn,
+		} = await getTestInstance({
+			emailAndPassword: {
+				enabled: true as boolean,
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const { user, headers } = await testSignIn();
+		const testContext = await testAuth.$context;
+
+		const secondAccount = await testContext.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "google-test-account-id",
+		});
+
+		testContext.options.emailAndPassword = { enabled: false };
+
+		const unlinkRes = await testClient.unlinkAccount(
+			{
+				accountId: secondAccount.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(unlinkRes.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
+		);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(2);
+	});
+
 	it("should unlink only the selected local account row", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {

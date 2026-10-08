@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { Account } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
@@ -485,40 +489,80 @@ export const unlinkAccount = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const { accountId } = ctx.body;
-		const accounts = await ctx.context.internalAdapter.findAccounts(
-			ctx.context.session.user.id,
-		);
-		if (
-			accounts.length === 1 &&
-			!ctx.context.options.account?.accountLinking?.allowUnlinkingAll
-		) {
-			let hasOtherAuthMethod = false;
-			if (ctx.context.hasPlugin("passkey") || "passkey" in ctx.context.tables) {
-				const passkey = await ctx.context.adapter.findOne({
-					model: "passkey",
-					where: [
-						{
-							field: "userId",
-							value: ctx.context.session.user.id,
-						},
-					],
+		await runWithTransaction(ctx.context.adapter, async () => {
+			const accounts = await ctx.context.internalAdapter.findAccounts(
+				ctx.context.session.user.id,
+			);
+			const accountExist = accounts.find((account) => account.id === accountId);
+			if (!accountExist) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+			}
+
+			if (!ctx.context.options.account?.accountLinking?.allowUnlinkingAll) {
+				const remainingAccounts = accounts.filter(
+					(account) => account.id !== accountExist.id,
+				);
+				const hasRemainingWorkingAccount = remainingAccounts.some((acc) => {
+					if (acc.providerId === "credential") {
+						return ctx.context.options.emailAndPassword?.enabled !== false;
+					}
+					if (
+						ctx.context.socialProviders?.some((p) => p.id === acc.providerId)
+					) {
+						return true;
+					}
+					if (ctx.context.hasPlugin(acc.providerId)) {
+						return true;
+					}
+					return false;
 				});
-				if (passkey) {
-					hasOtherAuthMethod = true;
+
+				if (!hasRemainingWorkingAccount) {
+					let hasOtherAuthMethod = false;
+					if (
+						ctx.context.hasPlugin("passkey") ||
+						"passkey" in ctx.context.tables
+					) {
+						const adapter = await getCurrentAdapter(ctx.context.adapter);
+						const passkey = await adapter.findOne({
+							model: "passkey",
+							where: [
+								{
+									field: "userId",
+									value: ctx.context.session.user.id,
+								},
+							],
+						});
+						if (passkey) {
+							hasOtherAuthMethod = true;
+						}
+					}
+					if (!hasOtherAuthMethod) {
+						const hasPasswordlessEmailAuth =
+							Boolean(ctx.context.session.user.emailVerified) &&
+							(ctx.context.hasPlugin("magic-link") ||
+								ctx.context.hasPlugin("email-otp"));
+						const hasPasswordlessPhoneAuth =
+							Boolean(
+								(ctx.context.session.user as { phoneNumberVerified?: boolean })
+									.phoneNumberVerified,
+							) && ctx.context.hasPlugin("phone-number");
+
+						if (hasPasswordlessEmailAuth || hasPasswordlessPhoneAuth) {
+							hasOtherAuthMethod = true;
+						}
+					}
+					if (!hasOtherAuthMethod) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+						);
+					}
 				}
 			}
-			if (!hasOtherAuthMethod) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
-				);
-			}
-		}
-		const accountExist = accounts.find((account) => account.id === accountId);
-		if (!accountExist) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
-		}
-		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
+
+			await ctx.context.internalAdapter.deleteAccount(accountExist.id);
+		});
 		return ctx.json({
 			status: true,
 		});
