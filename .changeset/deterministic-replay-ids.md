@@ -4,6 +4,17 @@
 "@better-auth/oauth-provider": patch
 ---
 
-Replay protection now works with `advanced.database.generateId: "uuid"`. The single-use marker for a SAML assertion, DPoP proof, or `private_key_jwt` client assertion lost the id derived from the replayed value. On Postgres, replays were accepted; on SQLite and MySQL, these flows failed with a `NOT NULL` error. The derived id is now formatted as a UUID under that setting. Ids under other string settings are unchanged, so no migration is needed.
+Fixed replay protection for apps that set `advanced.database.generateId` to `"uuid"` or `"serial"`. Default id generation is unaffected.
 
-With `generateId: "serial"`, a numeric id cannot hold the derived id, so these checks now fail with an error instead of accepting every replay. SAML sign-in, DPoP-bound requests that use the database replay store, and `private_key_jwt` client authentication throw. SIWE uses the wallet-derived address instead of the `email` claim. Magic link and email OTP adoption run without the cleanup lock.
+With `"uuid"`, replayed SAML assertions, DPoP proofs, and `private_key_jwt` client assertions are now rejected. Previously, depending on the database, a replay was accepted (for example on Postgres) or these flows failed with a `NOT NULL` error on the `id` column (for example on SQLite and MySQL). No migration is needed.
+
+With `"serial"`, these checks cannot work with numeric ids, so they now fail with an error instead of silently accepting replays:
+
+- SSO SAML sign-in fails.
+- DPoP-bound requests checked against the database replay store fail. This covers the OAuth provider's endpoints, `requireMcpAuth`, and `createDpopReplayStore`.
+- `private_key_jwt` client authentication fails.
+- SIWE sign-in ignores the `email` field and uses the wallet-derived address.
+
+These features require string ids: the default, `"uuid"`, or a custom `generateId` function. Magic link and email OTP sign-in keep working with `"serial"`.
+
+Plugins that store their own single-use records can derive an id that every string id setting keeps with `encodeDeterministicId` from `@better-auth/core/db/adapter`.

@@ -825,7 +825,7 @@ export const auth = betterAuth({
 
   * SAML sign-in through the SSO plugin, DPoP-bound requests that use the database replay store, and `private_key_jwt` client authentication throw an error instead of accepting a request they cannot check for replay.
   * SIWE ignores the `email` claim and uses the wallet-derived address.
-  * Magic link and email OTP sign-ins that adopt an unverified account run their cleanup without the concurrency lock.
+  * Magic link and email OTP sign-in keep working.
 
   Use the default ids, `"uuid"`, or a custom `generateId` function if you rely on these flows.
 </Callout>
