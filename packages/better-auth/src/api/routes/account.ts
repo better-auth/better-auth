@@ -2,7 +2,10 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
 	getCurrentAdapter,
+	hasPasswordlessAuthMethod,
+	isWorkingAccount,
 	runWithTransaction,
+	withUserAuthLock,
 } from "@better-auth/core/context";
 import type { Account } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -455,55 +458,6 @@ export const linkSocialAccount = createAuthEndpoint(
 	},
 );
 
-async function isWorkingAccount(
-	acc: { providerId: string; password?: string | null },
-	ctx: GenericEndpointContext,
-	adapter: Awaited<ReturnType<typeof getCurrentAdapter>>,
-): Promise<boolean> {
-	if (acc.providerId === "credential") {
-		return (
-			ctx.context.options.emailAndPassword?.enabled !== false &&
-			Boolean(acc.password)
-		);
-	}
-	if (ctx.context.socialProviders?.some((p) => p.id === acc.providerId)) {
-		return true;
-	}
-	if (ctx.context.hasPlugin("sso") || "ssoProvider" in ctx.context.tables) {
-		const ssoPlugin = ctx.context.getPlugin("sso") as {
-			options?: {
-				modelName?: string;
-				schema?: { ssoProvider?: { modelName?: string } };
-				defaultSSO?: Array<{ providerId: string }>;
-			};
-		} | null;
-		if (
-			ssoPlugin?.options?.defaultSSO?.some(
-				(p) => p.providerId === acc.providerId,
-			)
-		) {
-			return true;
-		}
-		const ssoModel =
-			ssoPlugin?.options?.modelName ??
-			ssoPlugin?.options?.schema?.ssoProvider?.modelName ??
-			"ssoProvider";
-		if (ssoModel in ctx.context.tables) {
-			const ssoProvider = await adapter.findOne({
-				model: ssoModel,
-				where: [{ field: "providerId", value: acc.providerId }],
-			});
-			if (ssoProvider) {
-				return true;
-			}
-		}
-	}
-	if (ctx.context.hasPlugin("siwe") && acc.providerId === "siwe") {
-		return true;
-	}
-	return false;
-}
-
 export const unlinkAccount = createAuthEndpoint(
 	"/unlink-account",
 	{
@@ -539,89 +493,73 @@ export const unlinkAccount = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const { accountId } = ctx.body;
-		await runWithTransaction(ctx.context.adapter, async () => {
-			const adapter = await getCurrentAdapter(ctx.context.adapter);
-			const accounts = await ctx.context.internalAdapter.findAccounts(
-				ctx.context.session.user.id,
-			);
-			const accountExist = accounts.find((account) => account.id === accountId);
-			if (!accountExist) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
-			}
-
-			if (!ctx.context.options.account?.accountLinking?.allowUnlinkingAll) {
-				const remainingAccounts = accounts.filter(
-					(account) => account.id !== accountExist.id,
+		return await withUserAuthLock(ctx.context.session.user.id, async () => {
+			return await runWithTransaction(ctx.context.adapter, async () => {
+				const adapter = await getCurrentAdapter(ctx.context.adapter);
+				const accounts = await ctx.context.internalAdapter.findAccounts(
+					ctx.context.session.user.id,
 				);
-				let hasRemainingWorkingAccount = false;
-				for (const acc of remainingAccounts) {
-					if (await isWorkingAccount(acc, ctx, adapter)) {
-						hasRemainingWorkingAccount = true;
-						break;
+				const accountExist = accounts.find(
+					(account) => account.id === accountId,
+				);
+				if (!accountExist) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
+					);
+				}
+
+				if (!ctx.context.options.account?.accountLinking?.allowUnlinkingAll) {
+					const remainingAccounts = accounts.filter(
+						(account) => account.id !== accountExist.id,
+					);
+					let hasRemainingWorkingAccount = false;
+					for (const acc of remainingAccounts) {
+						if (await isWorkingAccount(acc, ctx, adapter)) {
+							hasRemainingWorkingAccount = true;
+							break;
+						}
+					}
+
+					if (!hasRemainingWorkingAccount) {
+						let hasOtherAuthMethod = false;
+						if (
+							ctx.context.hasPlugin("passkey") ||
+							"passkey" in ctx.context.tables
+						) {
+							const passkey = await adapter.findOne({
+								model: "passkey",
+								where: [
+									{
+										field: "userId",
+										value: ctx.context.session.user.id,
+									},
+								],
+							});
+							if (passkey) {
+								hasOtherAuthMethod = true;
+							}
+						}
+						if (!hasOtherAuthMethod) {
+							hasOtherAuthMethod = await hasPasswordlessAuthMethod(
+								ctx,
+								adapter,
+							);
+						}
+						if (!hasOtherAuthMethod) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+							);
+						}
 					}
 				}
 
-				if (!hasRemainingWorkingAccount) {
-					let hasOtherAuthMethod = false;
-					if (
-						ctx.context.hasPlugin("passkey") ||
-						"passkey" in ctx.context.tables
-					) {
-						const passkey = await adapter.findOne({
-							model: "passkey",
-							where: [
-								{
-									field: "userId",
-									value: ctx.context.session.user.id,
-								},
-							],
-						});
-						if (passkey) {
-							hasOtherAuthMethod = true;
-						}
-					}
-					if (!hasOtherAuthMethod) {
-						const user = await adapter.findOne<{
-							id: string;
-							emailVerified?: boolean;
-							phoneNumberVerified?: boolean;
-						}>({
-							model: "user",
-							where: [{ field: "id", value: ctx.context.session.user.id }],
-						});
-						const isEmailVerified = Boolean(
-							user?.emailVerified ?? ctx.context.session.user.emailVerified,
-						);
-						const isPhoneVerified = Boolean(
-							user?.phoneNumberVerified ??
-								(ctx.context.session.user as { phoneNumberVerified?: boolean })
-									?.phoneNumberVerified,
-						);
-
-						const hasPasswordlessEmailAuth =
-							isEmailVerified &&
-							(ctx.context.hasPlugin("magic-link") ||
-								ctx.context.hasPlugin("email-otp"));
-						const hasPasswordlessPhoneAuth =
-							isPhoneVerified && ctx.context.hasPlugin("phone-number");
-
-						if (hasPasswordlessEmailAuth || hasPasswordlessPhoneAuth) {
-							hasOtherAuthMethod = true;
-						}
-					}
-					if (!hasOtherAuthMethod) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
-						);
-					}
-				}
-			}
-
-			await ctx.context.internalAdapter.deleteAccount(accountExist.id);
-		});
-		return ctx.json({
-			status: true,
+				await ctx.context.internalAdapter.deleteAccount(accountExist.id);
+				return ctx.json({
+					status: true,
+				});
+			});
 		});
 	},
 );

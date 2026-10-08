@@ -1347,6 +1347,106 @@ describe("account", async () => {
 		expect(remainingAccounts.length).toBe(0);
 	});
 
+	it("should prevent unlinking an account when remaining credential account has disabled emailAndPassword", async () => {
+		const {
+			client: testClient,
+			auth: testAuth,
+			signInWithTestUser: testSignIn,
+		} = await getTestInstance({
+			emailAndPassword: {
+				enabled: true as boolean,
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const { user, headers } = await testSignIn();
+		const testContext = await testAuth.$context;
+
+		const googleAccount = await testContext.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "google-test-id-disabled",
+		});
+
+		// Disable email and password
+		testContext.options.emailAndPassword = { enabled: false };
+
+		const unlinkRes = await testClient.unlinkAccount(
+			{
+				accountId: googleAccount.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(unlinkRes.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
+		);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(2);
+	});
+
+	it("prevents race condition when unlinking accounts concurrently", async () => {
+		const {
+			client: testClient,
+			auth: testAuth,
+			signInWithTestUser: testSignIn,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const { user, headers } = await testSignIn();
+		const testContext = await testAuth.$context;
+
+		const googleAccount = await testContext.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "google-test-id",
+		});
+
+		const accounts = await testContext.internalAdapter.findAccounts(user.id);
+		const credentialAccount = accounts.find(
+			(a) => a.providerId === "credential",
+		)!;
+
+		// Concurrently attempt to unlink both the credential account and the google account
+		const [res1, res2] = await Promise.allSettled([
+			testClient.unlinkAccount(
+				{ accountId: credentialAccount.id },
+				{ headers },
+			),
+			testClient.unlinkAccount({ accountId: googleAccount.id }, { headers }),
+		]);
+
+		const results = [res1, res2].map((r) =>
+			r.status === "fulfilled" ? r.value : null,
+		);
+		const successful = results.filter((r) => r && !r.error);
+		const failed = results.filter((r) => r?.error);
+
+		expect(successful.length).toBe(1);
+		expect(failed.length).toBe(1);
+		expect(failed[0]?.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
+		);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(1);
+	});
+
 	it("should unlink only the selected local account row", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {

@@ -1259,6 +1259,119 @@ describe("passkey", async () => {
 		expect(passkeyStillExists).toBeNull();
 	});
 
+	it("should not allow deleting the only passkey when emailAndPassword is not configured (disabled by default)", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				plugins: [passkey()],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "unset-emailpassword-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "unset-emailpassword-passkey-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		// Remove emailAndPassword from options to simulate unset enabled
+		(context.options as { emailAndPassword?: unknown }).emailAndPassword =
+			undefined;
+
+		await expect(
+			testAuth.api.deletePasskey({
+				headers,
+				body: { id: createdPasskey.id },
+			}),
+		).rejects.toThrowError(
+			PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY.message,
+		);
+
+		const passkeyStillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+		expect(passkeyStillExists).not.toBeNull();
+	});
+
+	it("prevents race condition when unlinking account and deleting passkey concurrently", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				plugins: [passkey()],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		expect(accounts.length).toBe(1);
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "my-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "race-condition-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		// Execute both unlinkAccount and deletePasskey concurrently
+		const [unlinkResult, deleteResult] = await Promise.allSettled([
+			testAuth.api.unlinkAccount({
+				headers,
+				body: { accountId: accounts[0]!.id },
+			}),
+			testAuth.api.deletePasskey({
+				headers,
+				body: { id: createdPasskey.id },
+			}),
+		]);
+
+		const succeeded = [unlinkResult, deleteResult].filter(
+			(r) => r.status === "fulfilled",
+		);
+		const failed = [unlinkResult, deleteResult].filter(
+			(r) => r.status === "rejected",
+		);
+
+		expect(succeeded.length).toBe(1);
+		expect(failed.length).toBe(1);
+
+		// Verify user still has at least one sign-in method in DB
+		const remainingAccounts = await context.internalAdapter.findAccounts(
+			user.id,
+		);
+		const remainingPasskey = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+
+		expect(remainingAccounts.length + (remainingPasskey ? 1 : 0)).toBe(1);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-4vcf-q4xf-f48m
 	 */

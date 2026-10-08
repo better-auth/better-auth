@@ -1,4 +1,9 @@
 export {
+	hasPasswordlessAuthMethod,
+	isWorkingAccount,
+	withUserAuthLock,
+} from "./auth-methods";
+export {
 	type AuthEndpointContext,
 	getCurrentAuthContext,
 	getCurrentAuthContextAsyncLocalStorage,
