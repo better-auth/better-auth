@@ -454,6 +454,56 @@ export const linkSocialAccount = createAuthEndpoint(
 		});
 	},
 );
+
+async function isWorkingAccount(
+	acc: { providerId: string; password?: string | null },
+	ctx: GenericEndpointContext,
+	adapter: Awaited<ReturnType<typeof getCurrentAdapter>>,
+): Promise<boolean> {
+	if (acc.providerId === "credential") {
+		return (
+			ctx.context.options.emailAndPassword?.enabled !== false &&
+			Boolean(acc.password)
+		);
+	}
+	if (ctx.context.socialProviders?.some((p) => p.id === acc.providerId)) {
+		return true;
+	}
+	if (ctx.context.hasPlugin("sso") || "ssoProvider" in ctx.context.tables) {
+		const ssoPlugin = ctx.context.getPlugin("sso") as {
+			options?: {
+				modelName?: string;
+				schema?: { ssoProvider?: { modelName?: string } };
+				defaultSSO?: Array<{ providerId: string }>;
+			};
+		} | null;
+		if (
+			ssoPlugin?.options?.defaultSSO?.some(
+				(p) => p.providerId === acc.providerId,
+			)
+		) {
+			return true;
+		}
+		const ssoModel =
+			ssoPlugin?.options?.modelName ??
+			ssoPlugin?.options?.schema?.ssoProvider?.modelName ??
+			"ssoProvider";
+		if (ssoModel in ctx.context.tables) {
+			const ssoProvider = await adapter.findOne({
+				model: ssoModel,
+				where: [{ field: "providerId", value: acc.providerId }],
+			});
+			if (ssoProvider) {
+				return true;
+			}
+		}
+	}
+	if (ctx.context.hasPlugin("siwe") && acc.providerId === "siwe") {
+		return true;
+	}
+	return false;
+}
+
 export const unlinkAccount = createAuthEndpoint(
 	"/unlink-account",
 	{
@@ -490,6 +540,7 @@ export const unlinkAccount = createAuthEndpoint(
 	async (ctx) => {
 		const { accountId } = ctx.body;
 		await runWithTransaction(ctx.context.adapter, async () => {
+			const adapter = await getCurrentAdapter(ctx.context.adapter);
 			const accounts = await ctx.context.internalAdapter.findAccounts(
 				ctx.context.session.user.id,
 			);
@@ -502,20 +553,13 @@ export const unlinkAccount = createAuthEndpoint(
 				const remainingAccounts = accounts.filter(
 					(account) => account.id !== accountExist.id,
 				);
-				const hasRemainingWorkingAccount = remainingAccounts.some((acc) => {
-					if (acc.providerId === "credential") {
-						return ctx.context.options.emailAndPassword?.enabled !== false;
+				let hasRemainingWorkingAccount = false;
+				for (const acc of remainingAccounts) {
+					if (await isWorkingAccount(acc, ctx, adapter)) {
+						hasRemainingWorkingAccount = true;
+						break;
 					}
-					if (
-						ctx.context.socialProviders?.some((p) => p.id === acc.providerId)
-					) {
-						return true;
-					}
-					if (ctx.context.hasPlugin(acc.providerId)) {
-						return true;
-					}
-					return false;
-				});
+				}
 
 				if (!hasRemainingWorkingAccount) {
 					let hasOtherAuthMethod = false;
@@ -523,7 +567,6 @@ export const unlinkAccount = createAuthEndpoint(
 						ctx.context.hasPlugin("passkey") ||
 						"passkey" in ctx.context.tables
 					) {
-						const adapter = await getCurrentAdapter(ctx.context.adapter);
 						const passkey = await adapter.findOne({
 							model: "passkey",
 							where: [
@@ -538,15 +581,29 @@ export const unlinkAccount = createAuthEndpoint(
 						}
 					}
 					if (!hasOtherAuthMethod) {
+						const user = await adapter.findOne<{
+							id: string;
+							emailVerified?: boolean;
+							phoneNumberVerified?: boolean;
+						}>({
+							model: "user",
+							where: [{ field: "id", value: ctx.context.session.user.id }],
+						});
+						const isEmailVerified = Boolean(
+							user?.emailVerified ?? ctx.context.session.user.emailVerified,
+						);
+						const isPhoneVerified = Boolean(
+							user?.phoneNumberVerified ??
+								(ctx.context.session.user as { phoneNumberVerified?: boolean })
+									?.phoneNumberVerified,
+						);
+
 						const hasPasswordlessEmailAuth =
-							Boolean(ctx.context.session.user.emailVerified) &&
+							isEmailVerified &&
 							(ctx.context.hasPlugin("magic-link") ||
 								ctx.context.hasPlugin("email-otp"));
 						const hasPasswordlessPhoneAuth =
-							Boolean(
-								(ctx.context.session.user as { phoneNumberVerified?: boolean })
-									.phoneNumberVerified,
-							) && ctx.context.hasPlugin("phone-number");
+							isPhoneVerified && ctx.context.hasPlugin("phone-number");
 
 						if (hasPasswordlessEmailAuth || hasPasswordlessPhoneAuth) {
 							hasOtherAuthMethod = true;

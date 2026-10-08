@@ -1196,6 +1196,157 @@ describe("account", async () => {
 		expect(remainingAccounts.length).toBe(2);
 	});
 
+	it("should allow unlinking an account when remaining account belongs to a configured SSO provider", async () => {
+		const {
+			client: testClient,
+			auth: testAuth,
+			signInWithTestUser: testSignIn,
+		} = await getTestInstance({
+			plugins: [
+				{
+					id: "sso",
+					options: {
+						defaultSSO: [
+							{
+								providerId: "workforce",
+								domain: "example.com",
+							},
+						],
+					},
+				},
+			],
+		});
+		const { user, headers } = await testSignIn();
+		const testContext = await testAuth.$context;
+
+		const ssoAccount = await testContext.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "workforce",
+			accountId: "workforce-sso-account-id",
+		});
+
+		const accounts = await testContext.internalAdapter.findAccounts(user.id);
+		const credentialAccount = accounts.find(
+			(a) => a.providerId === "credential",
+		)!;
+
+		const unlinkRes = await testClient.unlinkAccount(
+			{
+				accountId: credentialAccount.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(unlinkRes.error).toBeNull();
+		expect(unlinkRes.data?.status).toBe(true);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(1);
+		expect(remainingAccounts[0]?.id).toBe(ssoAccount.id);
+	});
+
+	it("should prevent unlinking an account when remaining credential account has no password", async () => {
+		const {
+			client: testClient,
+			auth: testAuth,
+			signInWithTestUser: testSignIn,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const { user, headers } = await testSignIn();
+		const testContext = await testAuth.$context;
+
+		const accounts = await testContext.internalAdapter.findAccounts(user.id);
+		const credentialAccount = accounts.find(
+			(a) => a.providerId === "credential",
+		)!;
+
+		// Clear password on credential account
+		await testContext.adapter.update({
+			model: "account",
+			where: [{ field: "id", value: credentialAccount.id }],
+			update: { password: null },
+		});
+
+		const googleAccount = await testContext.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "google-test-id",
+		});
+
+		const unlinkRes = await testClient.unlinkAccount(
+			{
+				accountId: googleAccount.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(unlinkRes.error?.message).toBe(
+			BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
+		);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(2);
+	});
+
+	it("should allow unlinking when user email was verified in database even if session user was unverified", async () => {
+		const {
+			client: testClient,
+			auth: testAuth,
+			signInWithTestUser: testSignIn,
+		} = await getTestInstance({
+			plugins: [
+				{
+					id: "magic-link",
+				},
+			],
+		});
+		// User signs in with unverified email
+		const { user, headers } = await testSignIn();
+		const testContext = await testAuth.$context;
+
+		// Ensure user started unverified in session
+		expect(user.emailVerified).toBe(false);
+
+		// Now email gets verified in DB
+		await testContext.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+			update: { emailVerified: true },
+		});
+
+		const accounts = await testContext.internalAdapter.findAccounts(user.id);
+		expect(accounts.length).toBe(1);
+
+		// Unlinking should read committed emailVerified from DB and succeed
+		const unlinkRes = await testClient.unlinkAccount(
+			{
+				accountId: accounts[0]!.id,
+			},
+			{
+				headers,
+			},
+		);
+		expect(unlinkRes.error).toBeNull();
+		expect(unlinkRes.data?.status).toBe(true);
+
+		const remainingAccounts = await testContext.internalAdapter.findAccounts(
+			user.id,
+		);
+		expect(remainingAccounts.length).toBe(0);
+	});
+
 	it("should unlink only the selected local account row", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {

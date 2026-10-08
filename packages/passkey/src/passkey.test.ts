@@ -1,6 +1,5 @@
 import { APIError } from "@better-auth/core/error";
 import type { Verification } from "better-auth";
-import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
 import {
@@ -160,13 +159,6 @@ describe("passkey", async () => {
 			client: preAuthClient,
 			cookieSetter,
 		} = await getTestInstance({
-			database: memoryAdapter({
-				user: [],
-				session: [],
-				account: [],
-				verification: [],
-				passkey: [],
-			}),
 			plugins: [
 				passkey({
 					registration: {
@@ -230,13 +222,6 @@ describe("passkey", async () => {
 			client: preAuthClient,
 			cookieSetter,
 		} = await getTestInstance({
-			database: memoryAdapter({
-				user: [],
-				session: [],
-				account: [],
-				verification: [],
-				passkey: [],
-			}),
 			plugins: [
 				passkey({
 					registration: {
@@ -676,13 +661,6 @@ describe("passkey", async () => {
 			client: testClient,
 			cookieSetter,
 		} = await getTestInstance({
-			database: memoryAdapter({
-				user: [],
-				session: [],
-				account: [],
-				verification: [],
-				passkey: [],
-			}),
 			plugins: [
 				passkey({
 					registration: {
@@ -758,13 +736,6 @@ describe("passkey", async () => {
 			client: testClient,
 			cookieSetter,
 		} = await getTestInstance({
-			database: memoryAdapter({
-				user: [],
-				session: [],
-				account: [],
-				verification: [],
-				passkey: [],
-			}),
 			plugins: [
 				passkey({
 					allowDeletingOnlyPasskey: true,
@@ -839,13 +810,6 @@ describe("passkey", async () => {
 			client: testClient,
 			cookieSetter,
 		} = await getTestInstance({
-			database: memoryAdapter({
-				user: [],
-				session: [],
-				account: [],
-				verification: [],
-				passkey: [],
-			}),
 			plugins: [
 				passkey({
 					registration: {
@@ -952,13 +916,6 @@ describe("passkey", async () => {
 	it("should allow unlinking the last account when user has a passkey, but prevent deleting the only remaining passkey afterwards", async () => {
 		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
 			await getTestInstance({
-				database: memoryAdapter({
-					user: [],
-					session: [],
-					account: [],
-					verification: [],
-					passkey: [],
-				}),
 				plugins: [passkey()],
 			});
 
@@ -1016,13 +973,6 @@ describe("passkey", async () => {
 	it("should allow deleting the only passkey when user has verified email and passwordless magic-link enabled", async () => {
 		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
 			await getTestInstance({
-				database: memoryAdapter({
-					user: [],
-					session: [],
-					account: [],
-					verification: [],
-					passkey: [],
-				}),
 				plugins: [
 					passkey(),
 					{
@@ -1083,13 +1033,6 @@ describe("passkey", async () => {
 				emailAndPassword: {
 					enabled: true as boolean,
 				},
-				database: memoryAdapter({
-					user: [],
-					session: [],
-					account: [],
-					verification: [],
-					passkey: [],
-				}),
 				plugins: [passkey()],
 			});
 
@@ -1131,6 +1074,189 @@ describe("passkey", async () => {
 			where: [{ field: "id", value: createdPasskey.id }],
 		});
 		expect(passkeyStillExists).not.toBeNull();
+	});
+
+	it("should allow deleting the only passkey when user has a configured SSO provider account", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				plugins: [
+					passkey(),
+					{
+						id: "sso",
+						options: {
+							defaultSSO: [
+								{
+									providerId: "workforce",
+									domain: "example.com",
+								},
+							],
+						},
+					},
+				],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		// Delete credential account and create an SSO account
+		await context.adapter.deleteMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		await context.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "workforce",
+			accountId: "workforce-sso-account-id",
+		});
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "sso-user-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "sso-user-passkey-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		const deleteRes = await testAuth.api.deletePasskey({
+			headers,
+			body: { id: createdPasskey.id },
+		});
+		expect(deleteRes.status).toBe(true);
+
+		const passkeyStillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+		expect(passkeyStillExists).toBeNull();
+	});
+
+	it("should not allow deleting the only passkey when credential account has no password", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				plugins: [passkey()],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		const credentialAccount = accounts.find(
+			(a) => a.providerId === "credential",
+		)!;
+
+		// Clear password on credential account
+		await context.adapter.update({
+			model: "account",
+			where: [{ field: "id", value: credentialAccount.id }],
+			update: { password: null },
+		});
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "no-password-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "no-password-passkey-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		await expect(
+			testAuth.api.deletePasskey({
+				headers,
+				body: { id: createdPasskey.id },
+			}),
+		).rejects.toThrowError(
+			PASSKEY_ERROR_CODES.FAILED_TO_DELETE_LAST_PASSKEY.message,
+		);
+
+		const passkeyStillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+		expect(passkeyStillExists).not.toBeNull();
+	});
+
+	it("should allow deleting the only passkey when email was verified in database even if session user was unverified", async () => {
+		const { auth: testAuth, signInWithTestUser: testSignInWithTestUser } =
+			await getTestInstance({
+				plugins: [
+					passkey(),
+					{
+						id: "magic-link",
+					},
+				],
+			});
+
+		const { user, headers } = await testSignInWithTestUser();
+		const context = await testAuth.$context;
+
+		// Ensure user started unverified in session
+		expect(user.emailVerified).toBe(false);
+
+		// Delete all accounts so user has 0 accounts
+		await context.adapter.deleteMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+
+		// Now mark emailVerified in DB directly
+		await context.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+			update: { emailVerified: true },
+		});
+
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "committed-email-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "committed-email-passkey-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		const deleteRes = await testAuth.api.deletePasskey({
+			headers,
+			body: { id: createdPasskey.id },
+		});
+		expect(deleteRes.status).toBe(true);
+
+		const passkeyStillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: createdPasskey.id }],
+		});
+		expect(passkeyStillExists).toBeNull();
 	});
 
 	/**
