@@ -1,4 +1,8 @@
 import * as z from "zod";
+import {
+	canonicalizeSCIMAttributeNames,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type { SCIMCanonicalEmail, SCIMEmail, SCIMName } from "./configuration";
 import type { SCIMPatchValueTarget } from "./null-attributes";
 import { expandSCIMPatchNullValues } from "./null-attributes";
@@ -524,6 +528,32 @@ function resolveSCIMUserPatchValueTarget(path: string): SCIMPatchValueTarget {
 	}
 	if (resolved.attribute.multiValued) return { kind: "entries" };
 	return { kind: "merge", subPath: (attribute) => `${path}.${attribute}` };
+}
+
+/** Rewrite a PATCH value's attribute keys to the names its target declares. */
+function canonicalizeSCIMUserPatchValue(
+	path: string | undefined,
+	value: unknown,
+): unknown {
+	if (!path) return canonicalizeSCIMResourceAttributeNames("User", value);
+	let resolved: ReturnType<typeof resolveSCIMUserPatchPath>;
+	try {
+		resolved = resolveSCIMUserPatchPath(path);
+	} catch {
+		return value;
+	}
+	if ("enterpriseRoot" in resolved) {
+		return canonicalizeSCIMAttributeNames(
+			value,
+			SCIMEnterpriseUserResourceSchema.attributes,
+		);
+	}
+	const subAttributes = resolved.subAttribute
+		? resolved.subAttribute.subAttributes
+		: resolved.attribute.subAttributes;
+	return subAttributes
+		? canonicalizeSCIMAttributeNames(value, subAttributes)
+		: value;
 }
 
 function getSCIMPatchContainer(
@@ -1223,8 +1253,15 @@ export function applySCIMUserPatch(
 		}
 	}
 
+	const canonicalOperations = operations.map((operation) => ({
+		...operation,
+		value: canonicalizeSCIMUserPatchValue(
+			operation.path?.trim(),
+			operation.value,
+		),
+	}));
 	for (const operation of expandSCIMPatchNullValues(
-		operations,
+		canonicalOperations,
 		resolveSCIMUserPatchValueTarget,
 	)) {
 		const path = operation.path?.trim();

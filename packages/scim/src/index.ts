@@ -1,8 +1,9 @@
 import type { BetterAuthPlugin, Status } from "better-auth";
 import { BetterAuthError } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { statusCodes } from "better-call";
 import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normalization";
+import { canonicalizeSCIMResourceAttributeNames } from "./attribute-names";
 import type { SCIMOptions } from "./configuration";
 import {
 	areValidSCIMScopes,
@@ -311,10 +312,26 @@ function createSCIMPlugin(options: SCIMOptions) {
 				(isGroupCreate ||
 					(["PUT", "PATCH"].includes(request.method) &&
 						!path.endsWith("/Groups")));
-			let normalizedBody =
-				(isUserMutation || isGroupMutation) && request.method !== "PATCH"
-					? stripSCIMResourceNullAttributes(body)
-					: body;
+			let normalizedBody = body;
+			if ((isUserMutation || isGroupMutation) && request.method !== "PATCH") {
+				try {
+					normalizedBody = stripSCIMResourceNullAttributes(
+						canonicalizeSCIMResourceAttributeNames(
+							isUserMutation ? "User" : "Group",
+							body,
+						),
+					);
+				} catch (error) {
+					if (!isAPIError(error)) throw error;
+					return {
+						response: createSCIMErrorResponse(
+							"BAD_REQUEST",
+							error.message,
+							"invalidSyntax",
+						),
+					};
+				}
+			}
 			if (isGroupMutation) {
 				const groupNormalization = normalizeMicrosoftEntraGroupSchema(
 					normalizedBody,

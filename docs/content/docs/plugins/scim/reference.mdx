@@ -194,6 +194,8 @@ Requests with a body may use `application/scim+json` or `application/json`. Resp
 
 The Enterprise User URI may be declared without an extension object, as Microsoft Entra does in some requests, and the declaration remains in the response. An Enterprise object without its URI is invalid. PATCH bodies must include `urn:ietf:params:scim:api:messages:2.0:PatchOp`. User and Group create or replace requests with unsupported or duplicate schema URNs return `400 Bad Request` with `scimType: "invalidValue"`.
 
+Attribute names are case-insensitive, as [RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643#section-2.1) requires. In User and Group HTTP requests, keys in `POST` and `PUT` bodies and in PATCH values match the declared attribute and subattribute names regardless of letter case, including the Enterprise User URI key. Responses use the declared names. A body or PATCH value that names the same attribute twice with different letter case, such as `active` and `Active`, returns `400 Bad Request` with `scimType: "invalidSyntax"`.
+
 ### Null attribute values
 
 [RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643#section-2.5) treats a JSON `null` as an unassigned attribute. [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups) sends `null` for attributes that are not populated in the directory. User and Group HTTP requests handle `null` by where it appears:
