@@ -246,6 +246,8 @@ Then, use the `resetPassword()` method to reset the user's password.
   ```
 </APIMethod>
 
+If the new password is rejected, for example by the [Have I Been Pwned](/docs/plugins/have-i-been-pwned) plugin, the OTP isn't consumed and can be used again. When transactions are enabled for your database adapter, the same applies if a later step of the reset fails, such as revoking sessions or saving the password. A wrong OTP still counts toward [`allowedAttempts`](#options).
+
 ### Change Email with OTP
 
 To allow users to change their email with OTP, first enable the `changeEmail` feature, which is disabled by default. Set `changeEmail.enabled` to `true`:

@@ -802,7 +802,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			// the reset transaction.
 			let otpConsumed = false;
 			if (
-				!(await matchesStoredPhoneNumberOTP(
+				!(await matchesUsableStoredPhoneNumberOTP(
 					ctx,
 					opts,
 					phoneResetIdentifier,
@@ -935,7 +935,7 @@ async function verifyPhoneNumberOTP(
  * Reports whether the provided code matches a stored, unexpired record with
  * attempts left, without consuming it or counting an attempt.
  */
-async function matchesStoredPhoneNumberOTP(
+async function matchesUsableStoredPhoneNumberOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredPhoneNumberOptions,
 	identifier: string,

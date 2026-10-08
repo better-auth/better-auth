@@ -959,7 +959,9 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			// reset transaction.
 			const identifier = toOTPIdentifier("forget-password", email);
 			let otpConsumed = false;
-			if (!(await matchesStoredOTP(ctx, opts, identifier, ctx.body.otp))) {
+			if (
+				!(await matchesUsableStoredOTP(ctx, opts, identifier, ctx.body.otp))
+			) {
 				await atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp);
 				otpConsumed = true;
 			}
@@ -1294,7 +1296,7 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
  * Reports whether the provided OTP matches a stored, unexpired record with
  * attempts left, without consuming it or counting an attempt.
  */
-async function matchesStoredOTP(
+async function matchesUsableStoredOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredEmailOTPOptions,
 	identifier: string,
