@@ -4,10 +4,11 @@
 "@better-auth/oauth-provider": patch
 ---
 
-Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`: SAML sign-in, DPoP-bound requests, `private_key_jwt` client authentication, SIWE email claims, and magic link or email OTP sign-ins that adopt an unverified account. Default id generation is unaffected.
+Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
 
-Depending on the database, these flows failed with a `NOT NULL` error on the `id` column (for example on SQLite and MySQL), or accepted a reused SAML assertion, DPoP proof, or client assertion (for example on Postgres). Each one is now accepted only once. No migration is needed.
+- On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+- On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
 
-Apps that set `generateId: "serial"` now log a warning the first time one of these flows runs, because their single-use checks need string ids.
+With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
 
 Plugins that store their own single-use records can use `encodeDeterministicId` from `@better-auth/core/db/adapter` to get an id that string id settings (the default, `"uuid"`, or a custom `generateId` function) keep.
