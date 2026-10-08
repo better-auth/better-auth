@@ -209,6 +209,8 @@ await authClient.changePassword({
 })
 ```
 
+The password change and the session revocation run in one database transaction, and the sessions are revoked first. If revocation fails, the request returns an error and the current password stays in place. If your adapter doesn't support transactions, a failure while saving the new password after revocation leaves the user signed out with the current password.
+
 ## Session Caching
 
 ### Cookie Cache

@@ -488,6 +488,94 @@ describe("revoke sessions on password reset", async () => {
 			expect(sessionAttempt.data?.user).toBeDefined();
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	describe("when a step of the reset fails", () => {
+		async function setup(onPasswordReset?: () => Promise<void>) {
+			let resetToken = "";
+			const instance = await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+					async sendResetPassword({ url }) {
+						resetToken = url.split("?")[0]!.split("/").pop() || "";
+					},
+					revokeSessionsOnPasswordReset: true,
+					onPasswordReset,
+				},
+			});
+			const { headers } = await instance.signInWithTestUser();
+			const resetPassword = async (newPassword: string) => {
+				await instance.client.requestPasswordReset({
+					email: instance.testUser.email,
+					redirectTo: "http://localhost:3000",
+				});
+				return instance.client.resetPassword(
+					{ newPassword },
+					{ query: { token: resetToken } },
+				);
+			};
+			const signInWith = (password: string) =>
+				instance.client.signIn.email({
+					email: instance.testUser.email,
+					password,
+				});
+			const getExistingSession = () =>
+				instance.auth.api.getSession({ headers });
+			return {
+				...instance,
+				resetPassword,
+				signInWith,
+				getExistingSession,
+			};
+		}
+
+		it("keeps the old password and sessions when session revocation fails", async () => {
+			const { auth, testUser, resetPassword, signInWith, getExistingSession } =
+				await setup();
+			const ctx = await auth.$context;
+			vi.spyOn(ctx.internalAdapter, "deleteUserSessions").mockRejectedValue(
+				new Error("session store unavailable"),
+			);
+
+			const reset = await resetPassword("new-password");
+
+			expect(reset.error?.status).toBe(500);
+			expect((await signInWith("new-password")).error?.status).toBe(401);
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
+			expect(await getExistingSession()).not.toBeNull();
+		});
+
+		it("keeps existing sessions when the password write fails", async () => {
+			const { auth, testUser, resetPassword, signInWith, getExistingSession } =
+				await setup();
+			const ctx = await auth.$context;
+			vi.spyOn(ctx.internalAdapter, "updatePassword").mockRejectedValue(
+				new Error("database unavailable"),
+			);
+
+			const reset = await resetPassword("new-password");
+
+			expect(reset.error?.status).toBe(500);
+			expect(await getExistingSession()).not.toBeNull();
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
+		});
+
+		it("still revokes sessions when onPasswordReset throws", async () => {
+			const { resetPassword, signInWith, getExistingSession } = await setup(
+				async () => {
+					throw new Error("hook failed");
+				},
+			);
+
+			const reset = await resetPassword("new-password");
+
+			expect(reset.error?.status).toBe(500);
+			expect(await getExistingSession()).toBeNull();
+			expect((await signInWith("new-password")).data).not.toBeNull();
+		});
+	});
 });
 
 describe("verify password", async () => {

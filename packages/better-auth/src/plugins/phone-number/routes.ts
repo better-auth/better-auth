@@ -12,6 +12,7 @@ import { getDate } from "../../utils/date";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
+	resetCredentialPassword,
 } from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
@@ -816,32 +817,13 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			const account = await ctx.context.internalAdapter.findCredentialAccount(
-				user.id,
-			);
-			if (!account) {
-				await ctx.context.internalAdapter.createAccount({
-					userId: user.id,
-					providerId: "credential",
-					accountId: user.id,
-					password: hashedPassword,
-				});
-			} else {
-				await ctx.context.internalAdapter.updatePassword(
-					user.id,
-					hashedPassword,
-				);
-			}
+			await resetCredentialPassword(ctx, user.id, hashedPassword);
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 				await ctx.context.options.emailAndPassword.onPasswordReset(
 					{ user },
 					ctx.request,
 				);
-			}
-
-			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-				await ctx.context.internalAdapter.deleteUserSessions(user.id);
 			}
 
 			return ctx.json({

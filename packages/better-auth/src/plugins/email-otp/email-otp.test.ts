@@ -354,6 +354,56 @@ describe("email-otp", async () => {
 		expect(data?.user).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	it("keeps the old password and sessions when session revocation fails", async () => {
+		const { auth, client, testUser, signInWithTestUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP({ otp: _otp }) {
+								otp = _otp;
+							},
+						}),
+					],
+					emailAndPassword: {
+						enabled: true,
+						revokeSessionsOnPasswordReset: true,
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+		const { headers } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		vi.spyOn(ctx.internalAdapter, "deleteUserSessions").mockRejectedValue(
+			new Error("session store unavailable"),
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+		const reset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "new-password",
+		});
+
+		expect(reset.error?.status).toBe(500);
+		const withNewPassword = await client.signIn.email({
+			email: testUser.email,
+			password: "new-password",
+		});
+		expect(withNewPassword.error?.status).toBe(401);
+		expect(await auth.api.getSession({ headers })).not.toBeNull();
+	});
+
 	it("should call onPasswordReset callback when resetting password", async () => {
 		const onPasswordResetMock = vi.fn();
 		const { client, testUser } = await getTestInstance(

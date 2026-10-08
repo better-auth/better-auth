@@ -140,6 +140,34 @@ describe("updateUser", () => {
 		expect(signInCurrentPassword.data).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	it("keeps the old password when revoking other sessions fails", async () => {
+		const { auth, client, testUser, signInWithTestUser } =
+			await getTestInstance();
+		const { headers } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		vi.spyOn(ctx.internalAdapter, "deleteUserSessions").mockRejectedValue(
+			new Error("session store unavailable"),
+		);
+
+		const updated = await client.changePassword({
+			newPassword: "newPassword",
+			currentPassword: testUser.password,
+			revokeOtherSessions: true,
+			fetchOptions: { headers },
+		});
+
+		expect(updated.error?.status).toBe(500);
+		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: "newPassword",
+		});
+		expect(signInRes.error?.status).toBe(401);
+		expect(await auth.api.getSession({ headers })).not.toBeNull();
+	});
+
 	it("should update account's updatedAt when changing password", async () => {
 		const { client, sessionSetter, db } = await getTestInstance();
 		const newHeaders = new Headers();

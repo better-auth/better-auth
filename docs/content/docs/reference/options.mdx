@@ -310,8 +310,8 @@ export const auth = betterAuth({
 * `maxPasswordLength`: Maximum password length (default: `128`)
 * `autoSignIn`: Automatically sign in the user after sign up
 * `sendResetPassword`: Function to send reset password email
-* `onPasswordReset`: Callback triggered when a user's password is changed successfully
-* `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
+* `onPasswordReset`: Callback triggered after a user's password is reset. It runs after the new password is saved and any sessions are revoked
+* `revokeSessionsOnPasswordReset`: Revoke all of the user's sessions when resetting the password. Revocation and the password change run in one transaction when the database adapter supports transactions (default: `false`)
 * `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
 * `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
 * `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).

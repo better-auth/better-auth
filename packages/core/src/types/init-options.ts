@@ -846,8 +846,10 @@ export type BetterAuthOptions = {
 				 */
 				resetPasswordTokenExpiresIn?: number;
 				/**
-				 * A callback function that is triggered
-				 * when a user's password is changed successfully.
+				 * A callback function that is triggered after a user's password
+				 * is reset. It runs after the new password is saved and, when
+				 * `revokeSessionsOnPasswordReset` is enabled, after the user's
+				 * sessions are revoked.
 				 */
 				onPasswordReset?: (
 					data: { user: User },
@@ -875,7 +877,9 @@ export type BetterAuthOptions = {
 				 */
 				autoSignIn?: boolean;
 				/**
-				 * Whether to revoke all other sessions when resetting password
+				 * Whether to revoke all of the user's sessions when resetting the
+				 * password. Revocation and the password change run in one
+				 * transaction when the database adapter supports transactions.
 				 * @default false
 				 */
 				revokeSessionsOnPasswordReset?: boolean;
