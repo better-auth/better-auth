@@ -50,7 +50,7 @@ import {
 	SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR,
 	SCIM_RESOURCE_SCHEMA_REGISTRY,
 } from "./resource-schema-registry";
-import { runSCIMCreateWithUniquenessCheck } from "./resource-uniqueness";
+import { runSCIMWriteWithUniquenessCheck } from "./resource-uniqueness";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
 	createSCIMOpenAPIContent,
@@ -338,7 +338,7 @@ async function restoreInactiveSCIMUser(
 	);
 	if (!retainedSource || retainedSource.active) return null;
 
-	return runSCIMCreateWithUniquenessCheck(
+	return runSCIMWriteWithUniquenessCheck(
 		() =>
 			runIdentityMutationTransaction(adapter, async (trx) => {
 				const source = await findSCIMUserByExternalIdKey(
@@ -652,7 +652,7 @@ export function createSCIMUser(
 			);
 			const { resolution } = resolvedIdentity;
 
-			const scimUser = await runSCIMCreateWithUniquenessCheck(
+			const scimUser = await runSCIMWriteWithUniquenessCheck(
 				() =>
 					runIdentityMutationTransaction(
 						adapter,
@@ -1002,7 +1002,7 @@ export function replaceSCIMUser(
 			});
 
 			const active = ctx.body.active !== false;
-			const updatedSCIMUser = await runSCIMCreateWithUniquenessCheck(
+			const updatedSCIMUser = await runSCIMWriteWithUniquenessCheck(
 				() =>
 					runIdentityMutationTransaction(adapter, async (trx) => {
 						const currentSource = await findSCIMUser(

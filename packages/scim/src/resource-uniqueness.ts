@@ -14,22 +14,22 @@ function isSCIMUniquenessError(error: unknown): boolean {
 }
 
 /**
- * Converts a failed resource create or replacement to SCIM uniqueness only when
+ * Converts a failed resource create or update to SCIM uniqueness only when
  * a post-rollback read observes the competing committed resource.
  */
-export async function runSCIMCreateWithUniquenessCheck<Result>(
-	createResource: () => Promise<Result>,
+export async function runSCIMWriteWithUniquenessCheck<Result>(
+	writeResource: () => Promise<Result>,
 	assertResourceAvailable: () => Promise<void>,
 ): Promise<Result> {
 	try {
-		return await createResource();
-	} catch (createError) {
-		if (isAPIError(createError)) throw createError;
+		return await writeResource();
+	} catch (writeError) {
+		if (isAPIError(writeError)) throw writeError;
 		try {
 			await assertResourceAvailable();
 		} catch (availabilityError) {
 			if (isSCIMUniquenessError(availabilityError)) throw availabilityError;
 		}
-		throw createError;
+		throw writeError;
 	}
 }
