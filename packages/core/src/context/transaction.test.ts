@@ -191,6 +191,7 @@ describe("runWithTransaction", () => {
 				}),
 			).rejects.toThrow("later step failed");
 
+			expect(error).toHaveBeenCalledOnce();
 			expect(events).toEqual(["later hook"]);
 		});
 
