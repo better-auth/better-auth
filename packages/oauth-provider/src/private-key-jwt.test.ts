@@ -17,6 +17,7 @@ import type {
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import {
+	consumeClientAssertion,
 	isPrivateHostname,
 	verifyClientAssertion,
 } from "./utils/client-assertion";
@@ -802,6 +803,67 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(successCount).toBe(1);
 		expect(failureCount).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10862
+	 */
+	describe("with configured id strategies", () => {
+		const idStrategyOptions = {
+			loginPage: "/login",
+			consentPage: "/consent",
+		} satisfies OAuthOptions<Scope[]>;
+		const consumeWith = async (
+			generateId: "uuid" | "serial",
+			jti: string,
+			attempts: number,
+		) => {
+			const instance = await getTestInstance({
+				baseURL: authServerBaseUrl,
+				advanced: { database: { generateId } },
+				plugins: [jwt(), oauthProvider(idStrategyOptions)],
+			});
+			const ctx = {
+				context: await instance.auth.$context,
+			} as GenericEndpointContext;
+			const assertion = {
+				namespace: "private_key_jwt:id-strategy-client",
+				payload: {
+					aud: tokenEndpoint,
+					exp: Math.floor(Date.now() / 1000) + 120,
+					jti,
+				},
+				expectedAudience: tokenEndpoint,
+			};
+			return Promise.allSettled(
+				Array.from({ length: attempts }, () =>
+					consumeClientAssertion(ctx, idStrategyOptions, assertion),
+				),
+			);
+		};
+
+		it("accepts a jti exactly once when ids are uuids", async () => {
+			const results = await consumeWith("uuid", crypto.randomUUID(), 3);
+
+			expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+			for (const result of results.filter((r) => r.status === "rejected")) {
+				expect(result.reason).toMatchObject({
+					body: {
+						error: "invalid_client",
+						error_description: "client assertion jti has already been used",
+					},
+				});
+			}
+		});
+
+		it("fails closed when ids are database-generated numbers", async () => {
+			const [result] = await consumeWith("serial", crypto.randomUUID(), 1);
+
+			expect(result?.status).toBe("rejected");
+			expect((result as PromiseRejectedResult).reason.message).toMatch(
+				/serial/,
+			);
+		});
 	});
 
 	it("should reject wrong audience", async () => {

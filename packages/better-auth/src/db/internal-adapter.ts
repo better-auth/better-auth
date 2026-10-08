@@ -14,12 +14,12 @@ import {
 	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import { encodeDeterministicId } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
@@ -1514,7 +1514,9 @@ export const createInternalAdapter = (
 		 * already taken.
 		 *
 		 * The `verification.identifier` column is non-unique, so uniqueness comes
-		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
+		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`,
+		 * encoded by `encodeDeterministicId` so the configured id strategy keeps
+		 * it). `generateId: "serial"` cannot hold that key, so it fails closed.
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
 		 * re-reading the row rather than matching adapter-specific errors.
@@ -1532,13 +1534,18 @@ export const createInternalAdapter = (
 			value: string;
 			expiresAt: Date;
 		}): Promise<boolean> => {
-			const reservationId = base64Url.encode(
+			if (options.advanced?.database?.generateId === "serial") {
+				throw new BetterAuthError(
+					'reserveVerificationValue requires string ids. With `advanced.database.generateId: "serial"` the verification id is a database-generated number, which cannot hold the deterministic reservation id.',
+				);
+			}
+			const reservationId = encodeDeterministicId(
 				new Uint8Array(
 					await createHash("SHA-256").digest(
 						new TextEncoder().encode("reserve:" + data.identifier),
 					),
 				),
-				{ padding: false },
+				options,
 			);
 			const storageOption = getStorageOption(
 				data.identifier,

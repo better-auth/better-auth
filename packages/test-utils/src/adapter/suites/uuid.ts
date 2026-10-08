@@ -1,4 +1,5 @@
-import type { User } from "@better-auth/core/db";
+import type { User, Verification } from "@better-auth/core/db";
+import { encodeDeterministicId } from "@better-auth/core/db/adapter";
 import { expect } from "vitest";
 import { createTestSuite } from "../create-test-suite";
 import { getNormalTestSuiteTests } from "./basic";
@@ -61,6 +62,35 @@ export const uuidTestSuite = createTestSuite(
 					/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 				expect(result?.id).toMatch(uuidRegex);
 				expect(result).toEqual(res);
+			},
+			/**
+			 * @see https://github.com/better-auth/better-auth/issues/10624
+			 */
+			"create - should keep a deterministic id": async () => {
+				const id = encodeDeterministicId(
+					crypto.getRandomValues(new Uint8Array(32)),
+					helpers.getBetterAuthOptions(),
+				);
+				const marker: Verification = {
+					id,
+					identifier: `deterministic-id:${id}`,
+					value: "marker",
+					expiresAt: new Date(Date.now() + 60_000),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				};
+				const created = await helpers.adapter.create<Verification>({
+					model: "verification",
+					data: marker,
+					forceAllowId: true,
+				});
+
+				expect(created.id).toBe(id);
+				const found = await helpers.adapter.findOne<Verification>({
+					model: "verification",
+					where: [{ field: "id", value: id }],
+				});
+				expect(found?.id).toBe(id);
 			},
 			...normalTests,
 		};

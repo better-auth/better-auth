@@ -663,5 +663,6 @@ export interface DBAdapterInstance<
 }
 
 export * from "./factory";
+export { encodeDeterministicId } from "./get-id-field";
 export * from "./types";
 export * from "./utils";

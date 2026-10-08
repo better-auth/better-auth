@@ -54,9 +54,11 @@ export async function revokeUnprovenAccountAccess(
 			expiresAt: new Date(Date.now() + cleanupLockExpiresInMs),
 		})
 		.catch((error) => {
+			// Deployments that cannot reserve at all (secondary-storage-only
+			// verification, serial ids) run the cleanup without the lock.
 			if (
 				error instanceof BetterAuthError &&
-				error.message.includes("requires database-backed verification storage")
+				error.message.startsWith("reserveVerificationValue requires ")
 			) {
 				return true;
 			}

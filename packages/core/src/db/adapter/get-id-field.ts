@@ -1,8 +1,47 @@
+import { base64Url } from "@better-auth/utils/base64";
+import { hex } from "@better-auth/utils/hex";
 import { logger } from "../../env";
+import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { generateId as defaultGenerateId } from "../../utils/id";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
+
+/**
+ * Encodes a digest as a primary key that the configured
+ * `advanced.database.generateId` strategy keeps when the record is created
+ * with `forceAllowId`.
+ *
+ * Replay markers and single-use locks key their row by an id derived from the
+ * value they protect, so a duplicate insert is the first-writer-wins gate. The
+ * id field replaces a forced id that does not fit the strategy with a fresh
+ * one, which would let every insert win. Under `"uuid"` the first 16 bytes are
+ * formatted with version 5 and RFC 9562 variant bits, the shape the id field
+ * accepts. Every other string strategy keeps the base64url digest.
+ *
+ * @param digest - A hash of the protected value, at least 16 bytes long.
+ * @throws {BetterAuthError} Under `"serial"`, where the id column holds
+ * database-generated numbers and cannot store a derived id.
+ */
+export function encodeDeterministicId(
+	digest: Uint8Array,
+	options: Pick<BetterAuthOptions, "advanced">,
+): string {
+	const generateId = options.advanced?.database?.generateId;
+	if (generateId === "serial") {
+		throw new BetterAuthError(
+			'Deterministic ids are not supported with `advanced.database.generateId: "serial"`. Replay protection keys its rows by an id derived from the protected value, which a database-generated number cannot hold. Use string ids (the default, "uuid", or a custom generateId function).',
+		);
+	}
+	if (generateId !== "uuid") {
+		return base64Url.encode(digest, { padding: false });
+	}
+	const bytes = digest.slice(0, 16);
+	bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+	bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+	const value = hex.encode(bytes);
+	return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
 
 export const initGetIdField = ({
 	usePlural,
