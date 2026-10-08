@@ -14,8 +14,8 @@ function isSCIMUniquenessError(error: unknown): boolean {
 }
 
 /**
- * Converts a failed resource create to SCIM uniqueness only when a post-rollback
- * read observes the competing committed resource.
+ * Converts a failed resource create or replacement to SCIM uniqueness only when
+ * a post-rollback read observes the competing committed resource.
  */
 export async function runSCIMCreateWithUniquenessCheck<Result>(
 	createResource: () => Promise<Result>,
