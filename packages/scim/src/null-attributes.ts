@@ -35,7 +35,7 @@ function stripNulls(value: unknown, depth: number): unknown {
 	}
 	if (!isRecord(value)) return value;
 	let changed = false;
-	const record: Record<string, unknown> = {};
+	const entries: [string, unknown][] = [];
 	for (const [key, entry] of Object.entries(value)) {
 		if (entry === null) {
 			changed = true;
@@ -43,15 +43,16 @@ function stripNulls(value: unknown, depth: number): unknown {
 		}
 		const stripped = stripNulls(entry, depth + 1);
 		if (stripped === entry) {
-			record[key] = entry;
+			entries.push([key, entry]);
 			continue;
 		}
 		changed = true;
 		// A complex attribute whose sub-attributes were all null is unassigned too.
 		if (isRecord(stripped) && Object.keys(stripped).length === 0) continue;
-		record[key] = stripped;
+		entries.push([key, stripped]);
 	}
-	return changed ? record : value;
+	// fromEntries keeps a `__proto__` key as data instead of setting the prototype.
+	return changed ? Object.fromEntries(entries) : value;
 }
 
 /**
@@ -105,11 +106,11 @@ function splitNullAttributes(
 	subPath: (attribute: string) => string,
 	resolveTarget: (path: string) => SCIMPatchValueTarget,
 ): { value: Record<string, unknown>; removals: SCIMPatchOperation[] } {
-	const kept: Record<string, unknown> = {};
+	const kept: [string, unknown][] = [];
 	const removals: SCIMPatchOperation[] = [];
 	for (const [attribute, entry] of Object.entries(value)) {
 		if (entry !== null && !isRecord(entry) && !Array.isArray(entry)) {
-			kept[attribute] = entry;
+			kept.push([attribute, entry]);
 			continue;
 		}
 		const path = subPath(attribute);
@@ -127,13 +128,19 @@ function splitNullAttributes(
 				Object.keys(nested.value).length > 0 ||
 				Object.keys(record).length === 0;
 			if (keepEntry) {
-				kept[attribute] = Array.isArray(entry) ? [nested.value] : nested.value;
+				kept.push([
+					attribute,
+					Array.isArray(entry) ? [nested.value] : nested.value,
+				]);
 			}
 			continue;
 		}
-		kept[attribute] = target.kind === "entries" ? stripNulls(entry, 0) : entry;
+		kept.push([
+			attribute,
+			target.kind === "entries" ? stripNulls(entry, 0) : entry,
+		]);
 	}
-	return { value: kept, removals };
+	return { value: Object.fromEntries(kept), removals };
 }
 
 function expandOperationNullValues(

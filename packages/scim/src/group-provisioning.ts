@@ -2,6 +2,10 @@ import type { DBAdapter, Where } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
+import {
+	canonicalizeSCIMAttributeNames,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type {
 	SCIMAttributeProjection,
 	SCIMCollectionQueryInput,
@@ -17,7 +21,10 @@ import {
 import type { SCIMConnection } from "./configuration";
 import type { SCIMConnectionMiddleware } from "./connection-authentication";
 import { fenceActiveSCIMConnection } from "./connection-state";
-import { SCIM_MAX_GROUP_MEMBERS } from "./group-schemas";
+import {
+	SCIM_MAX_GROUP_MEMBERS,
+	SCIMGroupResourceSchema,
+} from "./group-schemas";
 import {
 	acquireSCIMGroupMutationLock,
 	findSCIMGroup,
@@ -282,6 +289,22 @@ function readMemberIdFromValuePath(path: string): string | undefined {
 
 function normalizeGroupPatchPath(path: string): string {
 	return stripSCIMCoreAttributePrefix("Group", path.trim());
+}
+
+const SCIM_GROUP_MEMBER_ATTRIBUTES =
+	SCIMGroupResourceSchema.attributes.find(
+		(attribute) => attribute.name === "members",
+	)?.subAttributes ?? [];
+
+/** Rewrite a Group PATCH value's attribute keys to the names its target declares. */
+export function canonicalizeSCIMGroupPatchValue(
+	path: string | undefined,
+	value: unknown,
+): unknown {
+	if (!path) return canonicalizeSCIMResourceAttributeNames("Group", value);
+	return normalizeGroupPatchPath(path).toLowerCase() === "members"
+		? canonicalizeSCIMAttributeNames(value, SCIM_GROUP_MEMBER_ATTRIBUTES)
+		: value;
 }
 
 function resolveSCIMGroupPatchValueTarget(path: string): SCIMPatchValueTarget {

@@ -1,8 +1,12 @@
 import type { BetterAuthPlugin, Status } from "better-auth";
 import { BetterAuthError } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { statusCodes } from "better-call";
 import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normalization";
+import {
+	canonicalizeSCIMPatchRequestBody,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type { SCIMOptions } from "./configuration";
 import {
 	areValidSCIMScopes,
@@ -19,6 +23,7 @@ import {
 	getSCIMServiceProviderConfig,
 } from "./discovery";
 import {
+	canonicalizeSCIMGroupPatchValue,
 	createSCIMGroup,
 	deleteSCIMGroup,
 	getSCIMGroup,
@@ -45,6 +50,7 @@ import {
 import { createSCIMError } from "./scim-error";
 import { SCIM_MEDIA_TYPE } from "./scim-metadata";
 import { assertNativeSCIMTransactions } from "./transaction";
+import { canonicalizeSCIMUserPatchValue } from "./user-patch";
 import {
 	createSCIMUser,
 	deleteSCIMUser,
@@ -311,10 +317,34 @@ function createSCIMPlugin(options: SCIMOptions) {
 				(isGroupCreate ||
 					(["PUT", "PATCH"].includes(request.method) &&
 						!path.endsWith("/Groups")));
-			let normalizedBody =
-				(isUserMutation || isGroupMutation) && request.method !== "PATCH"
-					? stripSCIMResourceNullAttributes(body)
-					: body;
+			let normalizedBody = body;
+			if (isUserMutation || isGroupMutation) {
+				try {
+					normalizedBody =
+						request.method === "PATCH"
+							? canonicalizeSCIMPatchRequestBody(
+									body,
+									isUserMutation
+										? canonicalizeSCIMUserPatchValue
+										: canonicalizeSCIMGroupPatchValue,
+								)
+							: stripSCIMResourceNullAttributes(
+									canonicalizeSCIMResourceAttributeNames(
+										isUserMutation ? "User" : "Group",
+										body,
+									),
+								);
+				} catch (error) {
+					if (!isAPIError(error)) throw error;
+					return {
+						response: createSCIMErrorResponse(
+							"BAD_REQUEST",
+							error.message,
+							"invalidSyntax",
+						),
+					};
+				}
+			}
 			if (isGroupMutation) {
 				const groupNormalization = normalizeMicrosoftEntraGroupSchema(
 					normalizedBody,

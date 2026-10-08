@@ -1,4 +1,8 @@
 import * as z from "zod";
+import {
+	canonicalizeSCIMAttributeNames,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type { SCIMCanonicalEmail, SCIMEmail, SCIMName } from "./configuration";
 import type { SCIMPatchValueTarget } from "./null-attributes";
 import { expandSCIMPatchNullValues } from "./null-attributes";
@@ -524,6 +528,53 @@ function resolveSCIMUserPatchValueTarget(path: string): SCIMPatchValueTarget {
 	}
 	if (resolved.attribute.multiValued) return { kind: "entries" };
 	return { kind: "merge", subPath: (attribute) => `${path}.${attribute}` };
+}
+
+/**
+ * Rewrite a User PATCH value's attribute keys to the names its target
+ * declares. Pathless keys may be aliases or qualified paths, such as
+ * `manager` or `name.givenName`, so each entry resolves through its own path.
+ */
+export function canonicalizeSCIMUserPatchValue(
+	path: string | undefined,
+	value: unknown,
+): unknown {
+	if (path) return canonicalizeSCIMUserPatchPathValue(path, value);
+	const resource = canonicalizeSCIMResourceAttributeNames("User", value);
+	if (!isRecord(resource)) return resource;
+	const entries = Object.entries(resource).map(
+		([key, entry]): [string, unknown] => [
+			key,
+			canonicalizeSCIMUserPatchPathValue(key, entry),
+		],
+	);
+	return entries.every(([key, entry]) => entry === resource[key])
+		? resource
+		: Object.fromEntries(entries);
+}
+
+function canonicalizeSCIMUserPatchPathValue(
+	path: string,
+	value: unknown,
+): unknown {
+	let resolved: ReturnType<typeof resolveSCIMUserPatchPath>;
+	try {
+		resolved = resolveSCIMUserPatchPath(path);
+	} catch {
+		return value;
+	}
+	if ("enterpriseRoot" in resolved) {
+		return canonicalizeSCIMAttributeNames(
+			value,
+			SCIMEnterpriseUserResourceSchema.attributes,
+		);
+	}
+	const subAttributes = resolved.subAttribute
+		? resolved.subAttribute.subAttributes
+		: resolved.attribute.subAttributes;
+	return subAttributes
+		? canonicalizeSCIMAttributeNames(value, subAttributes)
+		: value;
 }
 
 function getSCIMPatchContainer(
