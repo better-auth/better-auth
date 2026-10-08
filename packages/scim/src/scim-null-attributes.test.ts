@@ -455,6 +455,27 @@ describe("SCIM PATCH null values", () => {
 		expect(resource.addresses).toEqual([{ type: "home", locality: "London" }]);
 	});
 
+	it("treats clearing a field on an unmatched filtered entry as a no-op", async () => {
+		const { createUser, patch } = createFixture();
+		const user = await createUser({
+			...fullUser,
+			addresses: [{ type: "home", locality: "Bath" }],
+		});
+
+		const { status, resource } = await patch(`/Users/${user.id}`, [
+			{
+				op: "Replace",
+				path: 'addresses[type eq "work"]',
+				value: { country: null },
+			},
+			{ op: "Replace", path: "title", value: "Countess" },
+		]);
+
+		expect(status, JSON.stringify(resource)).toBe(200);
+		expect(resource.addresses).toEqual([{ type: "home", locality: "Bath" }]);
+		expect(resource.title).toBe("Countess");
+	});
+
 	it("clears null sub-attributes of single-element array values", async () => {
 		const { createUser, patch } = createFixture();
 		const user = await createUser({

@@ -739,17 +739,24 @@ function applySCIMMultiValuePatch(
 	if (!hasTarget) {
 		if (op === "remove") return;
 		if (!resolved.subAttributeName) {
-			const additions = normalizeMultiValueAdditions(value).map((item) =>
-				isRecord(item)
-					? {
-							...withoutNullAttributes(item),
-							...(resolved.selectorType ? { type: resolved.selectorType } : {}),
-							...(resolved.selectorPrimary === undefined
-								? {}
-								: { primary: resolved.selectorPrimary }),
-						}
-					: item,
-			);
+			const additions = normalizeMultiValueAdditions(value).flatMap((item) => {
+				if (!isRecord(item)) return [item];
+				const assigned = withoutNullAttributes(item);
+				// Clearing fields of an entry that does not exist is a no-op, like a remove.
+				const clearsOnly =
+					Object.keys(assigned).length === 0 && Object.keys(item).length > 0;
+				if (clearsOnly) return [];
+				return [
+					{
+						...assigned,
+						...(resolved.selectorType ? { type: resolved.selectorType } : {}),
+						...(resolved.selectorPrimary === undefined
+							? {}
+							: { primary: resolved.selectorPrimary }),
+					},
+				];
+			});
+			if (additions.length === 0) return;
 			const nextValues = [...currentValues, ...additions];
 			const firstAddedPrimary = additions.findIndex(
 				(item) => isRecord(item) && item.primary === true,
