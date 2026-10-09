@@ -93,13 +93,27 @@ oneTimeToken({
 
 * **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as parameters.
 
-* **`disableSetSessionCookie`** (boolean): Optional. If `true`, the session cookie is **not** set when the token is verified — the resolved session is still returned in the response body. Default: `false`.
+* **`disableSetSessionCookie`** (boolean): Optional. If `true`, the session cookie is **not** set when the token is verified. Default: `false`.
+
+  The token is still consumed and the resolved session is still returned in the response body — only the `Set-Cookie` header is skipped. Use it when the verifying request does not come from the browser that will use the session, such as a cross-domain flow where the destination domain cannot read the cookie. Establish that session from a server route on the destination instead: `session.token` in the body is the raw token, not a cookie value, and Better Auth normally writes a signed cookie.
 
 ```ts
 oneTimeToken({
     disableSetSessionCookie: true
 })
 ```
+
+* **`setOttHeaderOnNewSession`** (boolean): Optional. If `true`, new sessions return a token in the `set-ott` header. Default: `false`.
+
+```ts
+oneTimeToken({
+    setOttHeaderOnNewSession: true
+})
+```
+
+This is an after-hook that matches every request, so it fires on any call to `setSessionCookie` — sign-in, sign-up, session refresh, `update-session`, `update-user`, email verification, and OAuth callbacks. The token comes from the same path as the `generate` endpoint, so `generateToken`, `expiresIn`, and `storeToken` all apply.
+
+`set-ott` is **appended** to `Access-Control-Expose-Headers`, not overwritten. That only un-hides the header from JavaScript once your own CORS setup permits the request — the plugin never sends `Access-Control-Allow-Origin` itself.
 
 * **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
 
@@ -136,10 +150,36 @@ oneTimeToken({
 })
 ```
 
-* **`setOttHeaderOnNewSession`** (boolean): Optional. If `true`, a one-time token is included in the `set-ott` response header whenever a new session is created (e.g. sign-in, sign-up). The plugin also exposes `set-ott` via `Access-Control-Expose-Headers` so the header is readable from JavaScript once your CORS configuration permits the cross-origin request. Default: `false`.
+### Reading the header on another domain
 
-```ts
-oneTimeToken({
-    setOttHeaderOnNewSession: true
-})
+Read `set-ott` off the sign-in response, then exchange it for a session on the destination domain:
+
+```ts title="client.ts"
+const res = await fetch("/api/auth/sign-in/email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+});
+
+const token = res.headers.get("set-ott");
+
+// `credentials: "include"` is required — fetch defaults to "same-origin", so
+// without it the browser neither sends cookies on the request nor stores the
+// session cookie set on the destination's verify response.
+await fetch("https://app.example.com/api/auth/one-time-token/verify", {
+    method: "POST",
+    credentials: "include", // [!code highlight]
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+});
 ```
+
+The verify endpoint is served under `basePath`, so the URL above uses the default `/api/auth` prefix.
+
+<Callout type="warn">
+  Verification reads the token from the verification value store and then loads the session it points to. If the destination app runs its own auth instance against its own database, verification fails with `Invalid token` unless that instance shares the verification and session storage with the generating one — or unless the request is forwarded to the instance that generated the token.
+
+  Because this request is cross-origin and credentialed, the destination has to opt in explicitly: `Access-Control-Allow-Credentials: true`, plus an `Access-Control-Allow-Origin` naming the calling origin (`*` is rejected once credentials are included). Sending `content-type: application/json` triggers a preflight, so the destination's `OPTIONS` handling has to allow the `content-type` header. See [Cross-Domain Setups](/docs/concepts/cookies#safari-itp-and-cross-domain-setups) if the two apps do not share a parent domain.
+
+  CORS headers do not satisfy origin validation. Once the browser sends a cookie for the destination, Better Auth checks the request's `Origin` against the destination's [`trustedOrigins`](/docs/reference/options#trustedorigins), so the destination must list the calling origin there too — otherwise verification is rejected with `INVALID_ORIGIN` (`403`) and no session cookie is set.
+</Callout>
