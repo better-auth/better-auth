@@ -865,25 +865,41 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			// staged as cookies. The team session is staged first so the header
 			// order matches the previous in-transaction order; the organization
 			// session written last already carries the active team.
+			//
+			// Post-commit cookie writes are best-effort: if cookie-cache signing
+			// or a configured cache-version callback fails, the error must not
+			// bubble up and fail the request. The membership and the invitation
+			// status are already committed at this point; failing here would strand
+			// the invitation as `accepted` behind a 500 while preventing retries.
 			if (updatedTeamSession) {
-				await setSessionCookie(ctx, {
-					session: updatedTeamSession,
-					user: session.user,
-				});
+				try {
+					await setSessionCookie(ctx, {
+						session: updatedTeamSession,
+						user: session.user,
+					});
+				} catch (error) {
+					ctx.context.logger?.error(
+						"Failed to set team session cookie after accepting invitation",
+						error,
+					);
+				}
 			}
 
 			// `setActiveOrganization` returns null when the session row was not
 			// updated — either it no longer exists or a `session.update.before`
-			// database hook vetoed the write. The membership and the invitation
-			// status are already committed at this point, so the cookie write
-			// must not throw: that would strand the invitation as `accepted`
-			// behind a 500 while the client keeps a `session_data` cache that
-			// matches the unchanged database row.
+			// database hook vetoed the write.
 			if (updatedSession) {
-				await setSessionCookie(ctx, {
-					session: updatedSession,
-					user: session.user,
-				});
+				try {
+					await setSessionCookie(ctx, {
+						session: updatedSession,
+						user: session.user,
+					});
+				} catch (error) {
+					ctx.context.logger?.error(
+						"Failed to set organization session cookie after accepting invitation",
+						error,
+					);
+				}
 			}
 
 			if (options?.organizationHooks?.afterAcceptInvitation) {

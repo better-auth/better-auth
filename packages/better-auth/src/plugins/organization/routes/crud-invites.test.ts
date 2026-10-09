@@ -906,3 +906,170 @@ describe("invitation teamId must belong to the invitation's organization", async
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
 	});
 });
+
+describe("acceptInvitation post-commit session cookie error resilience", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11275
+	 */
+	it("does not strand the invitation as failed when post-commit session cookie write throws", async () => {
+		let failCookie = false;
+		const helpers = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+					}),
+				],
+				session: {
+					cookieCache: {
+						enabled: true,
+						version: (session) => {
+							if (failCookie && session?.activeOrganizationId) {
+								throw new Error(
+									"simulated cookie cache version callback failure",
+								);
+							}
+							return "1";
+						},
+					},
+				},
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { client, signInWithTestUser, cookieSetter, auth } = helpers;
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Resilience Org",
+			slug: "resilience-org",
+			fetchOptions: {
+				headers: adminHeaders,
+				onSuccess: cookieSetter(adminHeaders),
+			},
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: "invitee-resilience@example.com",
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		const inviteeHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "Invitee",
+				email: "invitee-resilience@example.com",
+				password: "password123",
+			},
+			{ onSuccess: cookieSetter(inviteeHeaders) },
+		);
+
+		failCookie = true;
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId: invite.data!.id,
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		failCookie = false;
+
+		expect(accept.error).toBeNull();
+		expect(accept.data?.invitation?.status).toBe("accepted");
+		expect(accept.data?.member).toBeDefined();
+
+		const orgAfter = await auth.api.getFullOrganization({
+			headers: adminHeaders,
+			query: { organizationId: org.data!.id },
+		});
+		const memberEmails = (orgAfter?.members ?? []).map((m) => m.user.email);
+		expect(memberEmails).toContain("invitee-resilience@example.com");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11275
+	 */
+	it("does not strand a team invitation when post-commit session cookie writes throw", async () => {
+		let failCookie = false;
+		const helpers = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: { enabled: true },
+					}),
+				],
+				session: {
+					cookieCache: {
+						enabled: true,
+						version: (session) => {
+							if (
+								failCookie &&
+								(session?.activeOrganizationId || session?.activeTeamId)
+							) {
+								throw new Error("simulated cookie cache version failure");
+							}
+							return "1";
+						},
+					},
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient({ teams: { enabled: true } })],
+				},
+			},
+		);
+		const { client, signInWithTestUser, cookieSetter, auth } = helpers;
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Teams Resilience Org",
+			slug: "teams-resilience-org",
+			fetchOptions: {
+				headers: adminHeaders,
+				onSuccess: cookieSetter(adminHeaders),
+			},
+		});
+
+		const team = await client.organization.createTeam({
+			name: "Dev Team",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: "team-invitee@example.com",
+			role: "member",
+			teamId: team.data!.id,
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		const inviteeHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "Team Invitee",
+				email: "team-invitee@example.com",
+				password: "password123",
+			},
+			{ onSuccess: cookieSetter(inviteeHeaders) },
+		);
+
+		failCookie = true;
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId: invite.data!.id,
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		failCookie = false;
+
+		expect(accept.error).toBeNull();
+		expect(accept.data?.invitation?.status).toBe("accepted");
+		expect(accept.data?.member).toBeDefined();
+
+		const orgAfter = await auth.api.getFullOrganization({
+			headers: adminHeaders,
+			query: { organizationId: org.data!.id },
+		});
+		const memberEmails = (orgAfter?.members ?? []).map((m) => m.user.email);
+		expect(memberEmails).toContain("team-invitee@example.com");
+	});
+});
