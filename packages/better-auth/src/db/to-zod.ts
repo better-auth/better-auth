@@ -2,6 +2,17 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { ZodType } from "zod";
 import * as z from "zod";
 
+/**
+ * Static lookup keeps `zod` tree-shakeable. `z[field.type]()` forces bundlers
+ * to retain every `zod` export, including all locales.
+ */
+const scalarSchemas = {
+	string: z.string,
+	number: z.number,
+	boolean: z.boolean,
+	date: z.date,
+};
+
 export function toZodSchema<
 	Fields extends Record<string, DBFieldAttribute | never>,
 	IsClientSide extends boolean,
@@ -26,13 +37,13 @@ export function toZodSchema<
 
 		let schema: ZodType;
 		if (field.type === "json") {
-			schema = (z as any).json ? (z as any).json() : z.any();
+			schema = z.json();
 		} else if (field.type === "string[]" || field.type === "number[]") {
 			schema = z.array(field.type === "string[]" ? z.string() : z.number());
 		} else if (Array.isArray(field.type)) {
 			schema = z.any();
 		} else {
-			schema = z[field.type]();
+			schema = scalarSchemas[field.type]();
 		}
 
 		if (field?.required === false) {
@@ -47,20 +58,29 @@ export function toZodSchema<
 		};
 	}, {});
 	const schema = z.object(zodFields);
-	return schema as z.ZodObject<
-		RemoveNeverProps<{
-			[key in keyof Fields]: FieldAttributeToSchema<Fields[key], IsClientSide>;
-		}>,
-		z.core.$strip
-	>;
+	return schema as ZodSchemaForSide<Fields, IsClientSide>;
 }
+
+type ZodSchemaForSide<
+	Fields extends Record<string, DBFieldAttribute | never>,
+	IsClientSide extends boolean,
+> = IsClientSide extends true
+	? z.ZodObject<SchemaShape<Fields, true>, z.core.$strip>
+	: z.ZodObject<SchemaShape<Fields, false>, z.core.$strip>;
+
+type SchemaShape<
+	Fields extends Record<string, DBFieldAttribute | never>,
+	IsClientSide extends boolean,
+> = RemoveNeverProps<{
+	[key in keyof Fields]: FieldAttributeToSchema<Fields[key], IsClientSide>;
+}>;
 
 export type FieldAttributeToSchema<
 	Field extends DBFieldAttribute | Record<string, never>,
 	// if it's client side, then field attributes of `input` that are false should be removed
 	isClientSide extends boolean = false,
-> = Field extends { type: any }
-	? GetInput<isClientSide, Field, GetRequired<Field, GetType<Field>>>
+> = Field extends DBFieldAttribute
+	? GetSchemaForSide<isClientSide, Field, GetRequired<Field, GetType<Field>>>
 	: Record<string, never>;
 
 type GetType<F extends DBFieldAttribute> = F extends {
@@ -82,17 +102,17 @@ type GetRequired<
 	? z.ZodOptional<z.ZodNullable<Schema>>
 	: Schema;
 
-type GetInput<
+type GetSchemaForSide<
 	isClientSide extends boolean,
 	Field extends DBFieldAttribute,
 	Schema extends z.core.SomeType,
-> = Field extends {
-	input: false;
-}
-	? isClientSide extends true
+> = isClientSide extends true
+	? Field extends { input: false }
 		? never
 		: Schema
-	: Schema;
+	: Field extends { returned: false }
+		? never
+		: Schema;
 
 type RemoveNeverProps<T> = {
 	[K in keyof T as [T[K]] extends [never] ? never : K]: T[K];
