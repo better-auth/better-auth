@@ -9,6 +9,7 @@ import type {
 	OAuthResourceInput,
 	Scope,
 } from "./types";
+import { ResourceUriSchema } from "./types/zod";
 
 /**
  * Source-of-truth list of asymmetric JWS algorithms supported by the JWT
@@ -93,20 +94,11 @@ async function checkIdentifier(
 		}
 		return { ok: true };
 	}
-	// Strict default: must parse as absolute URI, must not have a fragment.
-	let url: URL;
-	try {
-		url = new URL(identifier);
-	} catch {
+	const parsed = ResourceUriSchema.safeParse(identifier);
+	if (!parsed.success) {
 		return {
 			ok: false,
-			reason: `resource identifier ${identifier} must be an absolute URI (RFC 8707 §2)`,
-		};
-	}
-	if (url.hash) {
-		return {
-			ok: false,
-			reason: `resource identifier ${identifier} must not contain a URI fragment (RFC 8707 §2)`,
+			reason: `resource identifier ${identifier}: ${parsed.error.issues[0]?.message ?? "invalid URI"}`,
 		};
 	}
 	return { ok: true };
