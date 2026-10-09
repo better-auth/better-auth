@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import {
 	assertResponseNotRedirect,
 	CLIENT_ASSERTION_TYPE,
@@ -6,7 +7,6 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
-import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
@@ -407,16 +407,17 @@ export async function consumeClientAssertion(
 	}
 
 	// Consume the jti with a single insert keyed by a digest of the namespaced
-	// identifier. The primary key is the atomic gate on every adapter (SQL
+	// identifier, encoded so the configured id strategy keeps it. The primary key is the atomic gate on every adapter (SQL
 	// primary key, MongoDB `_id`), so concurrent requests across workers cannot
 	// both pass. A duplicate-key failure means the jti was already used (replay);
 	// any other failure is surfaced unchanged.
 	const jtiDigest = await createHash("SHA-256").digest(
 		new TextEncoder().encode(`${namespace}:${payload.jti}`),
 	);
-	const jtiId = base64Url.encode(new Uint8Array(jtiDigest).slice(0, 24), {
-		padding: false,
-	});
+	const jtiId = encodeDeterministicId(
+		new Uint8Array(jtiDigest).slice(0, 24),
+		ctx.context.options,
+	);
 	try {
 		await ctx.context.adapter.create({
 			model: "oauthClientAssertion",
