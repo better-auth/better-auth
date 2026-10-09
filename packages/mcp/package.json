@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.2.0",
     "@modelcontextprotocol/server": "2.0.0",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
