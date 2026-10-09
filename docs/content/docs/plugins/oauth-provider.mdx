@@ -1409,7 +1409,7 @@ oauthProvider({
 })
 ```
 
-`signedQueryExpiresIn` has no upper bound: it only needs to outlive the slowest login, create, consent, or account-selection screen a user works through. The same signed query is also replayable at the prelogin endpoint until it expires, so a large value widens the `allowPublicClientPrelogin` window as well. A very large value keeps a valid, replayable signed query in a browser URL for that long, so raise it only as far as the slowest interactive screen requires.
+`signedQueryExpiresIn` has no upper bound: it only needs to outlive the slowest login, create, consent, account-selection, or post-login screen a user works through. The same signed query is also replayable at the prelogin endpoint until it expires, so a large value widens the `allowPublicClientPrelogin` window as well. A very large value keeps a valid, replayable signed query in a browser URL for that long, so raise it only as far as the slowest interactive screen requires.
 
 ### Registration
 

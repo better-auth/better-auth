@@ -1601,6 +1601,8 @@ describe("signedQueryExpiresIn and codeExpiresIn decoupling (#11204)", () => {
 		});
 		const signedParams = new URL(loginRedirectUrl, authServerBaseUrl)
 			.searchParams;
+		expect(signedParams.has("exp")).toBe(true);
+		expect(signedParams.has(signedQueryIssuedAtParam)).toBe(true);
 		const signedQueryTtl =
 			Number(signedParams.get("exp")) -
 			Math.floor(Number(signedParams.get(signedQueryIssuedAtParam)) / 1000);
