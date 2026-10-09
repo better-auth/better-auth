@@ -7,6 +7,7 @@ import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import type { Session } from "../../../types";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
@@ -752,101 +753,98 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const member = await runWithTransaction(ctx.context.adapter, async () => {
-				if (
-					ctx.context.orgOptions.teams &&
-					ctx.context.orgOptions.teams.enabled &&
-					"teamId" in acceptedI &&
-					acceptedI.teamId
-				) {
-					const teamIds = (acceptedI.teamId as string).split(",");
-					const onlyOne = teamIds.length === 1;
+			const membershipResult = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					// The refreshed sessions are returned instead of being written to the
+					// cookie in here: `setSessionCookie` stages the cookie on the response
+					// context, so it must not describe work that has not committed yet.
+					let updatedTeamSession: Session | null = null;
+					if (
+						ctx.context.orgOptions.teams &&
+						ctx.context.orgOptions.teams.enabled &&
+						"teamId" in acceptedI &&
+						acceptedI.teamId
+					) {
+						const teamIds = (acceptedI.teamId as string).split(",");
+						const onlyOne = teamIds.length === 1;
 
-					for (const teamId of teamIds) {
-						// Confirm the team still belongs to the accepted invitation's
-						// organization before adding the member. This keeps team
-						// membership consistent with the invitation's organization,
-						// including for older invitations and for teams that were
-						// moved or removed between invite and accept.
-						const team = await adapter.findTeamById({
-							teamId,
-							organizationId: acceptedI.organizationId,
-						});
-						if (!team) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
-							);
-						}
-
-						if (
-							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
-							"undefined"
-						) {
-							const maximumMembersPerTeam =
-								typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-								"function"
-									? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-											teamId,
-											session: session,
-											organizationId: acceptedI.organizationId,
-										})
-									: ctx.context.orgOptions.teams.maximumMembersPerTeam;
-
-							const result = await adapter.addTeamMemberWithLimit({
+						for (const teamId of teamIds) {
+							// Confirm the team still belongs to the accepted invitation's
+							// organization before adding the member. This keeps team
+							// membership consistent with the invitation's organization,
+							// including for older invitations and for teams that were
+							// moved or removed between invite and accept.
+							const team = await adapter.findTeamById({
 								teamId,
-								userId: session.user.id,
-								maximumMembersPerTeam,
+								organizationId: acceptedI.organizationId,
 							});
-							if (result.status === "limitReached") {
+							if (!team) {
 								throw APIError.from(
-									"FORBIDDEN",
-									ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+									"BAD_REQUEST",
+									ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
 								);
 							}
-						} else {
-							await adapter.findOrCreateTeamMember({
-								teamId: teamId,
-								userId: session.user.id,
-							});
+
+							if (
+								typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+								"undefined"
+							) {
+								const maximumMembersPerTeam =
+									typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+									"function"
+										? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+												teamId,
+												session: session,
+												organizationId: acceptedI.organizationId,
+											})
+										: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+
+								const result = await adapter.addTeamMemberWithLimit({
+									teamId,
+									userId: session.user.id,
+									maximumMembersPerTeam,
+								});
+								if (result.status === "limitReached") {
+									throw APIError.from(
+										"FORBIDDEN",
+										ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+									);
+								}
+							} else {
+								await adapter.findOrCreateTeamMember({
+									teamId: teamId,
+									userId: session.user.id,
+								});
+							}
+						}
+
+						if (onlyOne) {
+							const teamId = teamIds[0]!;
+							updatedTeamSession = await adapter.setActiveTeam(
+								session.session.token,
+								teamId,
+								ctx,
+							);
 						}
 					}
 
-					if (onlyOne) {
-						const teamId = teamIds[0]!;
-						const updatedSession = await adapter.setActiveTeam(
-							session.session.token,
-							teamId,
-							ctx,
-						);
+					const createdMember = await adapter.createMember({
+						organizationId: acceptedI.organizationId,
+						userId: session.user.id,
+						role: acceptedI.role,
+						createdAt: new Date(),
+					});
 
-						await setSessionCookie(ctx, {
-							session: updatedSession,
-							user: session.user,
-						});
-					}
-				}
+					const updatedSession = await adapter.setActiveOrganization(
+						session.session.token,
+						acceptedI.organizationId,
+						ctx,
+					);
 
-				const createdMember = await adapter.createMember({
-					organizationId: acceptedI.organizationId,
-					userId: session.user.id,
-					role: acceptedI.role,
-					createdAt: new Date(),
-				});
-
-				const updatedSession = await adapter.setActiveOrganization(
-					session.session.token,
-					acceptedI.organizationId,
-					ctx,
-				);
-
-				await setSessionCookie(ctx, {
-					session: updatedSession,
-					user: session.user,
-				});
-
-				return createdMember;
-			}).catch(async (error) => {
+					return { createdMember, updatedSession, updatedTeamSession };
+				},
+			).catch(async (error) => {
 				// The membership work failed; release the claim so the invitation is
 				// pending again and the invitee can retry.
 				await adapter.updateInvitation({
@@ -855,6 +853,28 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					fromStatus: "accepted",
 				});
 				throw error;
+			});
+
+			const {
+				createdMember: member,
+				updatedSession,
+				updatedTeamSession,
+			} = membershipResult;
+
+			// The transaction has committed, so the refreshed sessions can now be
+			// staged as cookies. The team session is staged first so the header
+			// order matches the previous in-transaction order; the organization
+			// session written last already carries the active team.
+			if (updatedTeamSession) {
+				await setSessionCookie(ctx, {
+					session: updatedTeamSession,
+					user: session.user,
+				});
+			}
+
+			await setSessionCookie(ctx, {
+				session: updatedSession,
+				user: session.user,
 			});
 
 			if (options?.organizationHooks?.afterAcceptInvitation) {
