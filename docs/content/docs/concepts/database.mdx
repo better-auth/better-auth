@@ -325,6 +325,30 @@ export const auth = betterAuth({
 When implementing secondary storage directly, prefix its keys to avoid
 collisions with other applications sharing the same Redis database.
 
+### Verification Records
+
+When `secondaryStorage` is configured, verification records are stored only in secondary storage by default. This includes two-factor sign-in challenges, OTPs, and magic links.
+
+If your store is eventually consistent, such as Cloudflare KV, a request can read a verification record before the write has reached it. The record looks missing and the flow fails. For example, two-factor sign-in returns `INVALID_TWO_FACTOR_COOKIE`.
+
+Set `verification.storeInDatabase` to `true` to also write verification records to your database. Reads fall back to the database when secondary storage misses.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	// ... other options
+	secondaryStorage: {
+		// Your KV implementation
+	},
+	verification: {
+		storeInDatabase: true,
+	},
+});
+```
+
+This option adds the `verification` table back to your schema, so run your migrations after enabling it.
+
 ## Core Schema
 
 Better Auth requires the following tables to be present in the database. The types are in `typescript` format. You can use corresponding types in your database.
