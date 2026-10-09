@@ -196,14 +196,14 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 							message: "Session not found",
 						});
 					}
-					if (!opts?.disableSetSessionCookie) {
-						await setSessionCookie(c, session);
-					}
-
 					if (session.session.expiresAt < new Date()) {
 						throw c.error("BAD_REQUEST", {
 							message: "Session expired",
 						});
+					}
+
+					if (!opts?.disableSetSessionCookie) {
+						await setSessionCookie(c, session);
 					}
 
 					return c.json(session);
