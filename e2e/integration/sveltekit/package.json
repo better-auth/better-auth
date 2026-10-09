@@ -1,0 +1,25 @@
+{
+  "name": "@better-auth-test/fixtures-sveltekit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "typecheck:consumer": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*"
+  },
+  "devDependencies": {
+    "@better-auth-test/test-utils": "workspace:*",
+    "@playwright/test": "~1.58.2",
+    "@sveltejs/kit": "3.0.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "svelte": "5.57.2",
+    "svelte-check": "4.7.6",
+    "typescript": "catalog:",
+    "vite": "8.2.0"
+  }
+}
