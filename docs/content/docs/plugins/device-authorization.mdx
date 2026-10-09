@@ -206,7 +206,7 @@ console.log(`Open ${data.verification_uri}`);
 console.log(`Enter code ${data.user_code}`);
 ```
 
-While the user signs in and approves the request, repeat the following request at the interval returned by the device-code response:
+While the user signs in and approves the request, repeat the following request every `data.interval` seconds. Add 5 seconds to the interval each time the response is `slow_down`; the server enforces the longer interval, so a client that keeps polling at its original interval receives `slow_down` until the code expires.
 
 ```ts title="cli.ts"
 const response = await fetch(`${authBaseURL}/oauth2/token`, {
@@ -232,21 +232,33 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
 
 `oauthDeviceAuthorization()` owns the Device Authorization endpoints and registers the `urn:ietf:params:oauth:grant-type:device_code` grant with OAuth Provider. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request. The approval page can show the client, scopes, and resource to the signed-in user.
 
+<Callout type="info">
+  Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `oauthDeviceAuthorization()` prevents their device codes from being redeemed for a Better Auth session token.
+</Callout>
+
 #### Grant device access for an organization
 
-When the provider configures [`postLogin.consentReferenceId`](/docs/plugins/oauth-provider#post-login-screen), approving a device calls it with the approving user's session and stores the returned `referenceId` on the device code. The device's access tokens and refresh tokens carry that `referenceId`, so `customAccessTokenClaims` receives it on every issuance:
+When the provider configures [`postLogin.consentReferenceId`](/docs/plugins/oauth-provider#post-login-screen), approving a device calls it with the approving user's session. The device's access tokens and refresh tokens carry the returned `referenceId`, so `customAccessTokenClaims` receives it on every issuance, including refreshes:
 
 ```ts title="auth.ts"
+import { APIError } from "better-auth/api";
+
 oauthProvider({
   // ...
   postLogin: {
     page: "/select-organization",
-    shouldRedirect: ({ session }) => !session.activeOrganizationId,
-    consentReferenceId: ({ session }) => {
-      if (!session.activeOrganizationId) {
-        throw new APIError("BAD_REQUEST", { message: "Select an organization" });
+    shouldRedirect: ({ session, scopes }) =>
+      scopes.includes("api:read") && !session.activeOrganizationId,
+    consentReferenceId: ({ session, scopes }) => {
+      if (!scopes.includes("api:read")) return undefined;
+      const organizationId = session.activeOrganizationId as string | undefined;
+      if (!organizationId) {
+        throw new APIError("BAD_REQUEST", {
+          error: "set_organization",
+          error_description: "Select an organization",
+        });
       }
-      return session.activeOrganizationId;
+      return organizationId;
     },
   },
   customAccessTokenClaims: ({ referenceId }) => ({
@@ -255,11 +267,19 @@ oauthProvider({
 }),
 ```
 
-Let the user choose the organization on your approval page, for example with `authClient.organization.setActive`, before calling `device.approve`. If `consentReferenceId` throws, the approval fails and the code stays pending.
+Device approval does not redirect to `postLogin.page` or call `shouldRedirect`; those apply only to `/oauth2/authorize`. Let the user choose the organization on your approval page and make it active before approving:
 
-<Callout type="info">
-  Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `oauthDeviceAuthorization()` prevents their device codes from being redeemed for a Better Auth session token.
-</Callout>
+```ts title="app/device/approve/page.tsx"
+await authClient.organization.setActive({ organizationId });
+
+const { error } = await authClient.device.approve({ userCode });
+if (error) {
+  // For example, "Select an organization" from consentReferenceId
+  setError(error.error_description);
+}
+```
+
+If `consentReferenceId` throws, the approval fails with that error and the code stays pending, so the user can choose an organization and approve again.
 
 ## First-party session flow
 
@@ -353,7 +373,7 @@ After displaying the user code, poll for the Better Auth session token. The resp
 Example polling implementation:
 
 ```ts
-let pollingInterval = 5; // Start with 5 seconds
+let pollingInterval = interval; // Seconds, from the device code response
 const pollForToken = async () => {
   const { data, error } = await authClient.device.token({
     grant_type: "urn:ietf:params:oauth:grant-type:device_code",
@@ -461,7 +481,16 @@ export default function DeviceAuthorizationPage() {
 
 ### Approving or Denying Device
 
-Users must be authenticated to approve or deny device authorization requests:
+Users must be authenticated to approve or deny device authorization requests. Only the session that claimed the code with `GET /device` can decide it, and each code accepts one decision. Approve and deny return one of these errors instead of `success: true`:
+
+| Error Code        | When                                                                                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unauthorized`    | No user is signed in                                                                                                                                                                       |
+| `invalid_request` | The user code is unknown, was not claimed with `GET /device`, or already has a decision ("Device code already processed"), including from a concurrent approve or deny that finished first |
+| `expired_token`   | The code has expired                                                                                                                                                                       |
+| `access_denied`   | Another user claimed the code                                                                                                                                                              |
+
+With the OAuth Provider integration, approval also fails with the error that `postLogin.consentReferenceId` throws. See [Grant device access for an organization](#grant-device-access-for-an-organization).
 
 #### Approve Device
 
@@ -512,31 +541,26 @@ export default function DeviceApprovalPage() {
   
   const handleApprove = async () => {
     setIsProcessing(true);
-    try {
-      await authClient.device.approve({
-        userCode: userCode,
-      });
-      // Show success message
-      alert("Device approved successfully!");
-      window.location.href = "/";
-    } catch (error) {
-      alert("Failed to approve device");
-    }
+    const { error } = await authClient.device.approve({ userCode });
     setIsProcessing(false);
+    if (error) {
+      alert(`Failed to approve device: ${error.error_description}`);
+      return;
+    }
+    alert("Device approved successfully!");
+    window.location.href = "/";
   };
   
   const handleDeny = async () => {
     setIsProcessing(true);
-    try {
-      await authClient.device.deny({
-        userCode: userCode,
-      });
-      alert("Device denied");
-      window.location.href = "/";
-    } catch (error) {
-      alert("Failed to deny device");
-    }
+    const { error } = await authClient.device.deny({ userCode });
     setIsProcessing(false);
+    if (error) {
+      alert(`Failed to deny device: ${error.error_description}`);
+      return;
+    }
+    alert("Device denied");
+    window.location.href = "/";
   };
 
   if (!user) {
@@ -625,13 +649,13 @@ Device-code issuance makes up to 3 attempts to overcome unique-key collisions. I
 
 The device flow defines specific error codes:
 
-| Error Code              | Description                                 |
-| ----------------------- | ------------------------------------------- |
-| `authorization_pending` | User hasn't approved yet (continue polling) |
-| `slow_down`             | Polling too frequently (increase interval)  |
-| `expired_token`         | Device code has expired                     |
-| `access_denied`         | User denied the authorization               |
-| `invalid_grant`         | Invalid device code or client ID            |
+| Error Code              | Description                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `authorization_pending` | User hasn't approved yet (continue polling)                                   |
+| `slow_down`             | Polled too soon (add 5 seconds to the interval for this and every later poll) |
+| `expired_token`         | Device code has expired                                                       |
+| `access_denied`         | User denied the authorization                                                 |
+| `invalid_grant`         | Invalid device code or client ID                                              |
 
 ## Example: CLI Application
 
@@ -767,7 +791,7 @@ authenticateCLI().catch((err) => {
 
 ## Security Considerations
 
-1. **Verification and polling limits**: `/device` is limited to 5 requests over a window equal to the configured device-code lifetime. `/device/token` keeps its own polling interval and `slow_down` behavior
+1. **Verification and polling limits**: `/device` is limited to 5 requests over a window equal to the configured device-code lifetime. Token polling enforces each code's interval instead: a poll that arrives too soon returns `slow_down` and adds 5 seconds to that code's interval
 2. **Code Expiration**: Device and user codes expire after the configured time (default: 30 minutes)
 3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
 4. **HTTPS and approval UI**: Follow the [RFC 8628 TLS and user-interaction requirements](https://datatracker.ietf.org/doc/html/rfc8628#section-3.3) in production, including explicit approval or denial and [device-possession and remote-phishing guidance](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)
@@ -783,7 +807,7 @@ authenticateCLI().catch((err) => {
 
 **expiresIn**: The expiration time for device codes. Default: `"30m"` (30 minutes).
 
-**interval**: The minimum polling interval. Default: `"5s"` (5 seconds).
+**interval**: The minimum polling interval, returned to the device as `interval` in seconds. Each `slow_down` response adds 5 seconds to it for that code. Default: `"5s"` (5 seconds).
 
 **userCodeLength**: The length of the user code. Maximum: `191`. Default: `8`.
 
@@ -875,7 +899,8 @@ export const deviceCodeTableFields = [
 	{
 		name: "pollingInterval",
 		type: "number",
-		description: "Minimum seconds between polls",
+		description:
+			"Minimum milliseconds between polls; grows by 5000 after each slow_down",
 		isOptional: true,
 	},
 ];
