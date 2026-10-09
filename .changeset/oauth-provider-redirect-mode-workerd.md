@@ -3,4 +3,4 @@
 "@better-auth/core": patch
 ---
 
-Reject endpoint redirects portably using manual redirect handling to ensure compatibility with Cloudflare Workers workerd runtime.
+Fix back-channel logout and `jwks_uri` client authentication failing on Cloudflare Workers.
