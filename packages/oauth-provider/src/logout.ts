@@ -1,6 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAdapter } from "@better-auth/core/context";
+import {
+	defineRequestState,
+	getCurrentAdapter,
+	hasRequestState,
+} from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { createHash } from "@better-auth/utils/hash";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
@@ -32,6 +37,11 @@ const LOGOUT_TOKEN_LIFETIME_SECONDS = 120;
 // window is enough.
 const BACKCHANNEL_DISPATCH_TIMEOUT_MS = 5_000;
 
+// OIDC Front-Channel Logout 1.0 gives no normative timeout for the iframe
+// fan-out; 3 seconds keeps a hung RP iframe from stalling the user-facing
+// redirect while still letting typical logout endpoints complete.
+const FRONTCHANNEL_LOGOUT_TIMEOUT_MS = 3_000;
+
 interface TokenRow {
 	id: string;
 	clientId: string;
@@ -50,16 +60,23 @@ interface BackchannelLogoutTarget {
 }
 
 /**
- * Plan produced by the synchronous revocation phase. The delivery phase
- * consumes this plan and POSTs one Logout Token per target. `sessionId` is
+ * Work captured before a session is deleted, for every client that holds
+ * tokens on it. After the deletion commits, the token ids are revoked, one
+ * Logout Token is POSTed per back-channel target, and the front-channel URIs
+ * are handed to the logout page rendered for this request. `sessionId` is
  * always present because every session-end path that reaches here carries the
  * id of the session being terminated.
  */
-export interface BackchannelLogoutPlan {
+export interface SessionLogoutPlan {
 	accessTokenIds: string[];
 	refreshTokenIds: string[];
 	sessionId: string;
-	targets: BackchannelLogoutTarget[];
+	backchannelTargets: BackchannelLogoutTarget[];
+	/**
+	 * Each client's `frontchannel_logout_uri` with `iss` and `sid` appended,
+	 * ready to load in an iframe.
+	 */
+	frontchannelLogoutUris: string[];
 }
 
 /**
@@ -119,15 +136,16 @@ async function signLogoutToken(
  * Token revocation runs regardless of the JWT plugin (refresh-token revocation
  * has no dependency on signing). Only Logout Token delivery needs the JWT
  * plugin, so a plan may contain token identifiers with no delivery targets.
+ * Front-channel URIs sign nothing and are planned in either mode.
  *
  * Returns `null` when there is nothing to do, so the caller can skip the
  * background handoff entirely.
  */
-async function prepareBackchannelLogoutPlan(
+async function prepareSessionLogoutPlan(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	input: { sessionId: string; userId: string },
-): Promise<BackchannelLogoutPlan | null> {
+): Promise<SessionLogoutPlan | null> {
 	const { sessionId, userId } = input;
 	if (!userId) return null;
 
@@ -180,7 +198,7 @@ async function prepareBackchannelLogoutPlan(
 			? []
 			: clients.filter((c) => Boolean(c.backchannelLogoutUri) && !c.disabled);
 
-		const targets = (
+		const backchannelTargets = (
 			await Promise.all(
 				eligibleClients.map(async (client) => {
 					try {
@@ -199,14 +217,40 @@ async function prepareBackchannelLogoutPlan(
 			)
 		).filter((target): target is BackchannelLogoutTarget => target !== null);
 
+		// Front-Channel Logout 1.0 §2: `iss` and `sid` are optional unless the
+		// client registered `frontchannel_logout_session_required`, but if either
+		// is sent both must be. Sending them to every client lets each RP match
+		// the request to its session, the same way every Logout Token carries
+		// `sid`. They overwrite any registered `iss` or `sid` so the RP never
+		// reads a stale value first.
+		const issuer = getIssuer(ctx, opts);
+		const frontchannelLogoutUris = clients.flatMap((client) => {
+			if (!client.frontchannelLogoutUri || client.disabled) return [];
+			// A stored URI that bypassed registration validation must not cost
+			// every other client its revocation and back-channel delivery.
+			try {
+				const uri = new URL(client.frontchannelLogoutUri);
+				uri.searchParams.set("iss", issuer);
+				uri.searchParams.set("sid", sessionId);
+				return [uri.toString()];
+			} catch (error) {
+				logger.warn(
+					`front-channel logout: invalid frontchannel_logout_uri for client ${client.clientId}`,
+					error,
+				);
+				return [];
+			}
+		});
+
 		return {
 			accessTokenIds: accessToRevokeIds,
 			refreshTokenIds: refreshToRevokeIds,
 			sessionId,
-			targets,
+			backchannelTargets,
+			frontchannelLogoutUris,
 		};
 	} catch (error) {
-		logger.error("back-channel logout planning failed", error);
+		logger.error("logout planning failed", error);
 		return null;
 	}
 }
@@ -216,9 +260,9 @@ async function prepareBackchannelLogoutPlan(
  * `session.delete.after` after the row is consumed and, for transactional
  * callers, only after the transaction commits.
  */
-async function applyBackchannelLogoutPlan(
+async function applySessionLogoutPlan(
 	ctx: GenericEndpointContext,
-	plan: BackchannelLogoutPlan,
+	plan: SessionLogoutPlan,
 ): Promise<void> {
 	const revokedAt = new Date();
 	const adapter = await getCurrentAdapter(ctx.context.adapter);
@@ -249,7 +293,7 @@ async function applyBackchannelLogoutPlan(
 		}
 	}
 
-	if (plan.targets.length > 0) {
+	if (plan.backchannelTargets.length > 0) {
 		await deliverBackchannelLogoutTokens(ctx, plan);
 	}
 }
@@ -268,7 +312,7 @@ async function applyBackchannelLogoutPlan(
  */
 async function deliverBackchannelLogoutTokens(
 	ctx: GenericEndpointContext,
-	plan: BackchannelLogoutPlan,
+	plan: SessionLogoutPlan,
 ): Promise<void> {
 	const logger = ctx.context.logger;
 	const jwtPluginOptions = getJwtPlugin(ctx.context)?.options;
@@ -282,7 +326,7 @@ async function deliverBackchannelLogoutTokens(
 		: await resolveSigningKey(ctx, jwtPluginOptions);
 
 	await Promise.allSettled(
-		plan.targets.map(async ({ client, sub }) => {
+		plan.backchannelTargets.map(async ({ client, sub }) => {
 			try {
 				const jti = generateRandomString(32, "a-z", "A-Z", "0-9");
 				const token = await signLogoutToken(
@@ -326,7 +370,36 @@ async function deliverBackchannelLogoutTokens(
 	);
 }
 
-export { applyBackchannelLogoutPlan, prepareBackchannelLogoutPlan };
+export { applySessionLogoutPlan, prepareSessionLogoutPlan };
+
+/**
+ * Front-channel logout URIs collected from sessions deleted during the current
+ * request. `session.delete.after` records them only once the deletion has
+ * committed, so a vetoed or rolled-back delete never reaches the logout page.
+ */
+const frontchannelLogoutUrisState = defineRequestState<string[]>(() => []);
+
+/**
+ * Records a committed plan's front-channel URIs for the logout page of the
+ * current request. Deletions outside a request (no browser to render iframes)
+ * have nowhere to deliver them, so they are dropped.
+ */
+export async function recordFrontchannelLogoutUris(
+	uris: string[],
+): Promise<void> {
+	if (uris.length === 0 || !(await hasRequestState())) return;
+	const recorded = await frontchannelLogoutUrisState.get();
+	await frontchannelLogoutUrisState.set([...recorded, ...uris]);
+}
+
+/**
+ * Returns and clears the front-channel URIs recorded during this request.
+ */
+async function takeFrontchannelLogoutUris(): Promise<string[]> {
+	const recorded = await frontchannelLogoutUrisState.get();
+	await frontchannelLogoutUrisState.set([]);
+	return recorded;
+}
 
 const LOGOUT_CONFIRMATION_TTL_SECONDS = 5 * 60;
 const LOGOUT_CONFIRMATION_COOKIE_SUFFIX = ".oauth_logout_confirmation";
@@ -386,17 +459,28 @@ function isBrowserNavigation(ctx: GenericEndpointContext): boolean {
 	);
 }
 
-function logoutPage(title: string, body: string, status = 200): Response {
+const LOGOUT_PAGE_CSP =
+	"default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+
+function logoutPage(
+	title: string,
+	body: string,
+	status = 200,
+	page: { head?: string; contentSecurityPolicy?: string } = {},
+): Response {
 	return new Response(
-		`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body>${body}</body></html>`,
+		`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${page.head ?? ""}</head><body>${body}</body></html>`,
 		{
 			status,
 			headers: {
 				"cache-control": "no-store",
 				"content-security-policy":
-					"default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+					page.contentSecurityPolicy ?? LOGOUT_PAGE_CSP,
 				"content-type": "text/html; charset=utf-8",
 				pragma: "no-cache",
+				// The end-session URL can carry an id_token_hint; never pass it to
+				// relying parties or other origins through Referer.
+				"referrer-policy": "no-referrer",
 				"x-content-type-options": "nosniff",
 			},
 		},
@@ -429,6 +513,79 @@ function logoutSuccessPage(note?: string): Response {
 	return logoutPage(
 		"Logged out",
 		`<main><p data-oidc-logout-state="logged-out">${message}</p></main>`,
+	);
+}
+
+// Static so the page can allow it by hash; per-request values travel in data
+// attributes. Redirects once every iframe has loaded, or after the timeout so a
+// hung RP cannot stall the user.
+const FRONTCHANNEL_LOGOUT_SCRIPT = `(function () {
+	var status = document.querySelector("[data-oidc-logout-state]");
+	var redirectUri = status.getAttribute("data-post-logout-redirect-uri");
+	var frames = document.querySelectorAll("iframe");
+	var pending = frames.length;
+	var finished = false;
+	function finish() {
+		if (finished) return;
+		finished = true;
+		if (redirectUri) {
+			window.location.replace(redirectUri);
+			return;
+		}
+		status.setAttribute("data-oidc-logout-state", "logged-out");
+		status.textContent = status.getAttribute("data-logged-out-message");
+	}
+	function settle() {
+		pending -= 1;
+		if (pending <= 0) finish();
+	}
+	for (var i = 0; i < frames.length; i++) {
+		frames[i].addEventListener("load", settle);
+		frames[i].addEventListener("error", settle);
+	}
+	setTimeout(finish, ${FRONTCHANNEL_LOGOUT_TIMEOUT_MS});
+})();`;
+
+let frontchannelLogoutScriptHash: Promise<string> | undefined;
+
+/**
+ * OIDC Front-Channel Logout 1.0 §3 logout page: one hidden iframe per relying
+ * party, then a redirect to the verified `post_logout_redirect_uri` or a
+ * logged-out message. The OP session has already ended when this renders.
+ * Without JavaScript the iframes still load, and a meta refresh performs the
+ * redirect.
+ */
+async function frontchannelLogoutPage(
+	uris: string[],
+	redirect: { uri?: string; note?: string },
+): Promise<Response> {
+	frontchannelLogoutScriptHash ??= createHash("SHA-256", "base64").digest(
+		FRONTCHANNEL_LOGOUT_SCRIPT,
+	);
+	const scriptHash = await frontchannelLogoutScriptHash;
+	const frameOrigins = [...new Set(uris.map((uri) => new URL(uri).origin))];
+	const loggedOutMessage = redirect.note
+		? `Logged out. ${redirect.note}`
+		: "Logged out.";
+	const iframes = uris
+		.map((uri) => `<iframe hidden src="${escapeHtml(uri)}"></iframe>`)
+		.join("");
+	const redirectAttribute = redirect.uri
+		? ` data-post-logout-redirect-uri="${escapeHtml(redirect.uri)}"`
+		: "";
+	const noscript = redirect.uri
+		? `<noscript><a href="${escapeHtml(redirect.uri)}">Continue</a></noscript>`
+		: `<noscript><p>${escapeHtml(loggedOutMessage)}</p></noscript>`;
+	return logoutPage(
+		"Signing out",
+		`<main><p data-oidc-logout-state="pending" data-logged-out-message="${escapeHtml(loggedOutMessage)}"${redirectAttribute}>Signing out of connected applications&hellip;</p>${noscript}</main>${iframes}<script>${FRONTCHANNEL_LOGOUT_SCRIPT}</script>`,
+		200,
+		{
+			head: redirect.uri
+				? `<noscript><meta http-equiv="refresh" content="${Math.ceil(FRONTCHANNEL_LOGOUT_TIMEOUT_MS / 1000)};url=${escapeHtml(redirect.uri)}"></noscript>`
+				: undefined,
+			contentSecurityPolicy: `${LOGOUT_PAGE_CSP}; frame-src ${frameOrigins.join(" ")}; script-src 'sha256-${scriptHash}'`,
+		},
 	);
 }
 
@@ -818,6 +975,30 @@ async function confirmationRequired(
 	return logoutConfirmationPage(ctx);
 }
 
+const UNREGISTERED_REDIRECT_NOTE =
+	"The requested post-logout redirect was not registered.";
+
+/**
+ * Response once the session has ended. A browser navigation renders the
+ * front-channel logout page when relying parties must be notified; otherwise
+ * the caller gets the verified redirect, the success page, or an empty result.
+ */
+async function loggedOutResponse(
+	ctx: GenericEndpointContext,
+	redirect: { uri?: string; invalid: boolean },
+): Promise<OAuthRedirectResult | Response | null> {
+	const note = redirect.invalid ? UNREGISTERED_REDIRECT_NOTE : undefined;
+	const frontchannelLogoutUris = await takeFrontchannelLogoutUris();
+	if (frontchannelLogoutUris.length > 0 && isBrowserNavigation(ctx)) {
+		return frontchannelLogoutPage(frontchannelLogoutUris, {
+			uri: redirect.uri,
+			note,
+		});
+	}
+	if (redirect.uri) return handleRedirect(ctx, redirect.uri);
+	return isBrowserNavigation(ctx) ? logoutSuccessPage(note) : null;
+}
+
 async function completeConfirmedLogout(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -838,9 +1019,7 @@ async function completeConfirmedLogout(
 		if (redirect.uri) return handleRedirect(ctx, redirect.uri);
 		return isBrowserNavigation(ctx)
 			? logoutSuccessPage(
-					redirect.invalid
-						? "The requested post-logout redirect was not registered."
-						: undefined,
+					redirect.invalid ? UNREGISTERED_REDIRECT_NOTE : undefined,
 				)
 			: logoutProtocolError(
 					ctx,
@@ -861,14 +1040,7 @@ async function completeConfirmedLogout(
 	await deleteLogoutSession(ctx, currentSession.session);
 	deleteSessionCookie(ctx);
 	clearLogoutConfirmationState(ctx);
-	if (redirect.uri) return handleRedirect(ctx, redirect.uri);
-	return isBrowserNavigation(ctx)
-		? logoutSuccessPage(
-				redirect.invalid
-					? "The requested post-logout redirect was not registered."
-					: undefined,
-			)
-		: null;
+	return loggedOutResponse(ctx, redirect);
 }
 
 /**
@@ -880,7 +1052,9 @@ async function completeConfirmedLogout(
  *
  * Session termination goes through `internalAdapter.deleteSession`, which fires
  * `session.delete.after` so the hook drives revocation and back-channel
- * notifications to every RP with tokens on the session.
+ * notifications to every RP with tokens on the session. For browser
+ * navigations, RPs with a `frontchannel_logout_uri` are then notified through
+ * hidden iframes before the redirect.
  *
  * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
  */
@@ -1004,20 +1178,13 @@ export async function rpInitiatedLogoutEndpoint(
 		hintedSession ?? (matchesCurrentSession ? currentSession?.session : null);
 	if (sessionToDelete) {
 		// internalAdapter.deleteSession triggers the normal before/after session
-		// hooks, including revocation and back-channel dispatch for every RP.
+		// hooks: revocation, back-channel dispatch, and the front-channel URIs
+		// the logout page renders.
 		await deleteLogoutSession(ctx, sessionToDelete);
 	}
 	if (matchesCurrentSession) deleteSessionCookie(ctx);
 	clearLogoutConfirmationState(ctx);
-
-	if (redirect.uri) return handleRedirect(ctx, redirect.uri);
-	return isBrowserNavigation(ctx)
-		? logoutSuccessPage(
-				redirect.invalid
-					? "The requested post-logout redirect was not registered."
-					: undefined,
-			)
-		: null;
+	return loggedOutResponse(ctx, redirect);
 }
 
 /**

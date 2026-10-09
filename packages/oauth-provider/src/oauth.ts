@@ -22,10 +22,11 @@ import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
-import type { BackchannelLogoutPlan } from "./logout";
+import type { SessionLogoutPlan } from "./logout";
 import {
-	applyBackchannelLogoutPlan,
-	prepareBackchannelLogoutPlan,
+	applySessionLogoutPlan,
+	prepareSessionLogoutPlan,
+	recordFrontchannelLogoutUris,
 	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
@@ -112,9 +113,9 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
-const backchannelLogoutPlansByContext = new WeakMap<
+const sessionLogoutPlansByContext = new WeakMap<
 	GenericEndpointContext,
-	Map<string, BackchannelLogoutPlan>
+	Map<string, SessionLogoutPlan>
 >();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
 
@@ -559,20 +560,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							delete: {
 								async before(session, hookCtx) {
 									if (!hookCtx) return;
-									const plan = await prepareBackchannelLogoutPlan(
-										hookCtx,
-										opts,
-										{
-											sessionId: session.id,
-											userId: session.userId,
-										},
-									);
+									const plan = await prepareSessionLogoutPlan(hookCtx, opts, {
+										sessionId: session.id,
+										userId: session.userId,
+									});
 									if (!plan) return;
 									const logoutPlanBySessionId =
-										backchannelLogoutPlansByContext.get(hookCtx) ??
-										new Map<string, BackchannelLogoutPlan>();
+										sessionLogoutPlansByContext.get(hookCtx) ??
+										new Map<string, SessionLogoutPlan>();
 									logoutPlanBySessionId.set(session.id, plan);
-									backchannelLogoutPlansByContext.set(
+									sessionLogoutPlansByContext.set(
 										hookCtx,
 										logoutPlanBySessionId,
 									);
@@ -580,20 +577,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								async after(session, hookCtx) {
 									if (!hookCtx) return;
 									const logoutPlanBySessionId =
-										backchannelLogoutPlansByContext.get(hookCtx);
+										sessionLogoutPlansByContext.get(hookCtx);
 									if (!logoutPlanBySessionId) return;
 									const plan = logoutPlanBySessionId.get(session.id);
 									logoutPlanBySessionId.delete(session.id);
 									if (logoutPlanBySessionId.size === 0) {
-										backchannelLogoutPlansByContext.delete(hookCtx);
+										sessionLogoutPlansByContext.delete(hookCtx);
 									}
 									if (!plan) return;
-									const logoutTask = applyBackchannelLogoutPlan(
+									// Recorded synchronously so the logout page of this request
+									// can render the iframes; delivery below may run after the
+									// response.
+									await recordFrontchannelLogoutUris(
+										plan.frontchannelLogoutUris,
+									);
+									const logoutTask = applySessionLogoutPlan(
 										hookCtx,
 										plan,
 									).catch((error) => {
 										hookCtx.context.logger.error(
-											"Back-channel logout failed after session deletion",
+											"Logout notification failed after session deletion",
 											error,
 										);
 									});
@@ -1452,7 +1455,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							responses: {
 								"200": {
 									description:
-										"Logout completed, or an HTML confirmation page was returned for browser navigation. A redirect is used only for an exact registered post_logout_redirect_uri.",
+										"Logout completed, or an HTML page was returned for browser navigation — a confirmation page, or the OIDC front-channel logout page when clients with a registered frontchannel_logout_uri hold tokens on the session. A redirect is used only for an exact registered post_logout_redirect_uri.",
 									content: {
 										"application/json": {
 											schema: {
@@ -1472,7 +1475,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											},
 										},
 										"text/html": {
-											schema: { type: "string" },
+											schema: {
+												type: "string",
+												description:
+													"Logout confirmation page, or the OIDC Front-Channel Logout page with one hidden iframe per registered RP",
+											},
 										},
 									},
 								},
@@ -1624,6 +1631,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "boolean",
 														description:
 															"Whether the RP requires a `sid` claim in every Logout Token",
+													},
+													frontchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL rendered in a hidden iframe on the OP's logout page when the end-user's OP session terminates",
+													},
+													frontchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the RP requires `iss` and `sid` query parameters on its front-channel logout URI. The OP always sends both.",
 													},
 													token_endpoint_auth_method: {
 														type: "string",
