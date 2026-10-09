@@ -95,7 +95,7 @@ oneTimeToken({
 
 * **`disableSetSessionCookie`** (boolean): Optional. If `true`, the session cookie is **not** set when the token is verified. Default: `false`.
 
-  The token is still consumed and the resolved session is still returned in the response body — only the `Set-Cookie` header is skipped. Use it when the verifying request does not come from the browser that will use the session, such as a cross-domain flow where the destination domain cannot read the cookie. Establish that session from a server route on the destination instead: `session.token` in the body is the raw token, not a cookie value, and Better Auth normally writes a signed cookie.
+  The token is still consumed and the resolved session is still returned in the response body — only the `Set-Cookie` header is skipped. Use it when the verifying request does not come from the browser that will use the session, such as a cross-domain flow where the destination domain cannot read the cookie. Establish that session from a server route on the destination instead: `body.session.token` is the raw token, not a cookie value, and Better Auth normally writes a signed cookie.
 
 ```ts
 oneTimeToken({
@@ -150,7 +150,7 @@ oneTimeToken({
 })
 ```
 
-### Reading the header on another domain
+## Cross-Domain Usage
 
 Read `set-ott` off the sign-in response, then exchange it for a session on the destination domain:
 
@@ -174,7 +174,7 @@ await fetch("https://app.example.com/api/auth/one-time-token/verify", {
 });
 ```
 
-The verify endpoint is served under `basePath`, so the URL above uses the default `/api/auth` prefix.
+The verify endpoint is served under `basePath`, so the URL above uses the default `/api/auth` prefix. This direct `fetch` assumes the sign-in page and `app.example.com` are same-site; otherwise use a shared parent domain or reverse proxy.
 
 <Callout type="warn">
   Verification reads the token from the verification value store and then loads the session it points to. If the destination app runs its own auth instance against its own database, verification fails with `Invalid token` unless that instance shares the verification and session storage with the generating one — or unless the request is forwarded to the instance that generated the token.
