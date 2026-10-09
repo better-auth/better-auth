@@ -486,6 +486,83 @@ describe("pairwise DCR validation", async () => {
 	});
 });
 
+/**
+ * A custom URI scheme is not bound to the host in its authority, so that host
+ * cannot identify a pairwise sector.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ */
+describe("pairwise with custom-scheme redirect URIs", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const customSchemeRedirect = "app://rp.example.com/callback";
+
+	const errorCode = (error: unknown) =>
+		error instanceof APIError
+			? (error.body as { error?: string } | undefined)?.error
+			: undefined;
+
+	it("rejects a pairwise client with a custom-scheme redirect URI that includes a host", async () => {
+		const error = await auth.api
+			.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [customSchemeRedirect],
+					application_type: "native",
+					token_endpoint_auth_method: "none",
+					subject_type: "pairwise",
+				},
+			})
+			.catch((e: unknown) => e);
+		expect(errorCode(error)).toBe("invalid_client_metadata");
+	});
+
+	it("accepts the same client without pairwise", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [customSchemeRedirect],
+				application_type: "native",
+				token_endpoint_auth_method: "none",
+			},
+		});
+		expect(client.client_id).toEqual(expect.any(String));
+	});
+
+	it("rejects moving a pairwise client to a custom-scheme redirect URI with a host", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["https://rp.example.com/callback"],
+				subject_type: "pairwise",
+			},
+		});
+		const error = await auth.api
+			.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: client.client_id,
+					update: {
+						application_type: "native",
+						redirect_uris: [customSchemeRedirect],
+					},
+				},
+			})
+			.catch((e: unknown) => e);
+		expect(errorCode(error)).toBe("invalid_client_metadata");
+	});
+});
+
 describe("pairwise configuration validation", () => {
 	it("should reject pairwiseSecret shorter than 32 characters", () => {
 		expect(() =>

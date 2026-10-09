@@ -1125,7 +1125,7 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 				);
 			}
 			if (!ctx.query?.userId) {
-				return ctx.json({
+				return ctx.json<{ role: InferOrganizationRolesFromOption<O> }>({
 					role: isMember.role,
 				});
 			}
@@ -1141,8 +1141,8 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 				);
 			}
 
-			return ctx.json({
-				role: member?.role,
+			return ctx.json<{ role: InferOrganizationRolesFromOption<O> }>({
+				role: member.role,
 			});
 		},
 	);

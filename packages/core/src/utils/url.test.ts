@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	isNativePrivateUseRedirectUri,
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
@@ -189,5 +190,43 @@ describe("isReverseDomainPrivateUseRedirectUri", () => {
 				new URL("com.example.app:///callback"),
 			),
 		).toBe(false);
+		expect(
+			isReverseDomainPrivateUseRedirectUri(
+				new URL("cursor://anysphere.cursor-mcp/oauth/callback"),
+			),
+		).toBe(false);
+	});
+});
+
+describe("isNativePrivateUseRedirectUri", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10946
+	 */
+	it.each([
+		"cursor://anysphere.cursor-mcp/oauth/callback",
+		"com.example.app://host/callback",
+		"com.example.app:/callback",
+	])("accepts %s", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(true);
+	});
+
+	it.each([
+		"cursor://anysphere.cursor-mcp",
+		"cursor://anysphere.cursor-mcp?x=1",
+		"myapp:/callback",
+	])("rejects %s, which has neither a host and path nor a reverse-domain scheme", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
+	});
+
+	it.each([
+		"https://example.com/cb",
+		"file://host/callback",
+		"ws://host/callback",
+		"wss://host/callback",
+		"blob://host/callback",
+		"about://host/callback",
+		"view-source://host/callback",
+	])("rejects reserved scheme %s", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
 	});
 });

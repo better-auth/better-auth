@@ -863,7 +863,7 @@ describe("reset password session revocation", async () => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client, sessionSetter } = await getTestInstance(
+	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			emailAndPassword: {
 				enabled: true,
@@ -939,6 +939,69 @@ describe("reset password session revocation", async () => {
 			},
 		});
 		expect(sessionAfter.data).toBe(null);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	it("keeps the old password and sessions when session revocation fails", async () => {
+		const phoneNumber = "+251911000001";
+		const headers = new Headers();
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify(
+			{ phoneNumber, code: otp },
+			{ onSuccess: sessionSetter(headers) },
+		);
+		const ctx = await auth.$context;
+		const revoke = vi
+			.spyOn(ctx.internalAdapter, "deleteUserSessions")
+			.mockRejectedValue(new Error("session store unavailable"));
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const resetRes = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: resetOtp,
+			newPassword: "new-secure-password",
+		});
+		revoke.mockRestore();
+
+		expect(resetRes.error?.status).toBe(500);
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "new-secure-password",
+		});
+		expect(signInRes.error).not.toBeNull();
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user).toBeTruthy();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10632
+	 */
+	it("leaves the OTP usable when the new password is rejected", async () => {
+		const phoneNumber = "+251911000002";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+		const ctx = await auth.$context;
+		const hash = vi
+			.spyOn(ctx.password, "hash")
+			.mockRejectedValueOnce(new Error("password rejected"));
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const resetWith = (newPassword: string) =>
+			client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: resetOtp,
+				newPassword,
+			});
+
+		expect((await resetWith("pwned-password")).error).not.toBeNull();
+		hash.mockRestore();
+		expect((await resetWith("safe-password")).data?.status).toBe(true);
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "safe-password",
+		});
+		expect(signInRes.data).not.toBeNull();
 	});
 });
 
