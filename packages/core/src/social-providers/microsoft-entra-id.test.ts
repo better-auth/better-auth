@@ -320,4 +320,42 @@ describe("microsoft id_token alg omission", () => {
 		);
 		expect(key).toBeDefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11652
+	 */
+	it("rejects non-RS256 tokens even when matching JWK omits alg", async () => {
+		const ecKeyPair = await generateKeyPair("ES256", { extractable: true });
+		const ecJWK = await exportJWK(ecKeyPair.publicKey);
+		const ecKid = "ms-test-es256-key";
+		ecJWK.kid = ecKid;
+		ecJWK.use = "sig";
+
+		expect(ecJWK.alg).toBeUndefined();
+
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { keys: [ecJWK] },
+			error: null,
+		} as Awaited<ReturnType<typeof betterFetch>>);
+
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const token = await new SignJWT({
+			sub: "user-123",
+			email: "user@example.com",
+			tid: WORK_TENANT_ID,
+		})
+			.setProtectedHeader({ alg: "ES256", kid: ecKid })
+			.setIssuer(`${AUTHORITY}/${WORK_TENANT_ID}/v2.0`)
+			.setAudience(CLIENT_ID)
+			.setExpirationTime("1h")
+			.setIssuedAt()
+			.sign(ecKeyPair.privateKey);
+
+		const isValid = await verifyProviderIdToken(provider, token);
+		expect(isValid).toBe(false);
+	});
 });
