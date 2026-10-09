@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
@@ -26,31 +27,47 @@ function extractIframeSources(html: string): string[] {
 	);
 }
 
+function extractInlineScript(html: string): string {
+	const match = html.match(/<script>([\s\S]*?)<\/script>/);
+	if (!match) throw new Error("logout page has no inline script");
+	return match[1]!;
+}
+
 describe("oauth front-channel logout", async () => {
 	const port = 3011;
 	const baseUrl = `http://localhost:${port}`;
 	const issuer = `${baseUrl}/api/auth`;
 	const rpBaseUrl = "http://localhost:5001";
-	const fcBaseUrl = "https://rp.example.com";
 	const state = "123";
 	const scopes = ["openid", "email", "profile"];
+	let vetoSessionDelete = false;
 
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: baseUrl,
-		plugins: [
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			baseURL: baseUrl,
+			databaseHooks: {
+				session: {
+					delete: {
+						async before() {
+							if (vetoSessionDelete) return false;
+						},
+					},
 				},
-				scopes,
-			}),
-			jwt(),
-		],
-	});
+			},
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					scopes,
+				}),
+				jwt(),
+			],
+		});
 	let { headers } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [oauthProviderClient()],
@@ -66,6 +83,7 @@ describe("oauth front-channel logout", async () => {
 		if (server) await server.close();
 	});
 	beforeEach(async () => {
+		vetoSessionDelete = false;
 		const signed = await signInWithTestUser();
 		headers = signed.headers;
 	});
@@ -88,7 +106,7 @@ describe("oauth front-channel logout", async () => {
 				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				enable_end_session: true,
-				frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel`,
+				frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
 				...overrides,
 			},
 		});
@@ -174,7 +192,7 @@ describe("oauth front-channel logout", async () => {
 		);
 	}
 
-	it("renders one hidden iframe per front-channel client and ends the session", async () => {
+	it("renders one hidden iframe per front-channel client after ending the session", async () => {
 		const fcClient = await registerClient();
 		const plainClient = await registerClient({
 			frontchannel_logout_uri: undefined,
@@ -187,52 +205,75 @@ describe("oauth front-channel logout", async () => {
 		});
 		expect(response.status).toBe(200);
 		expect(response.headers.get("content-type")).toContain("text/html");
-		// The page is per-session state and must never be cached
-		expect(response.headers.get("cache-control")).toContain("no-store");
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("referrer-policy")).toBe("no-referrer");
 
 		const html = await response.text();
-		const sources = extractIframeSources(html);
-		expect(sources).toEqual([`${fcBaseUrl}/logout/frontchannel`]);
+		const sources = extractIframeSources(html).map((src) => new URL(src));
+		expect(sources).toHaveLength(1);
+		expect(sources[0]!.origin + sources[0]!.pathname).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
 
 		// Spec §3: the OP terminates the session before rendering the iframes
 		const session = await client.getSession({ fetchOptions: { headers } });
 		expect(session.data).toBeNull();
 	});
 
-	it("appends iss and sid only for clients with frontchannel_logout_session_required", async () => {
-		const requiredClient = await registerClient({
-			frontchannel_logout_uri: `${fcBaseUrl}/logout/fc-required`,
-			frontchannel_logout_session_required: true,
-		});
-		const optionalClient = await registerClient({
-			frontchannel_logout_uri: `${fcBaseUrl}/logout/fc-optional`,
-		});
-		const tokens = await issueTokens({ client: requiredClient });
-		await issueTokens({ client: optionalClient });
-
-		const sid = decodeJwt(tokens.id_token).sid;
-		expect(sid).toBeDefined();
+	it("keeps the logout page CSP and allows only the RP frames and the page script", async () => {
+		const fcClient = await registerClient();
+		const tokens = await issueTokens({ client: fcClient });
 
 		const response = await endSessionNavigation({
 			id_token_hint: tokens.id_token,
 		});
+		const html = await response.text();
+		const scriptHash = createHash("sha256")
+			.update(extractInlineScript(html))
+			.digest("base64");
+		expect(response.headers.get("content-security-policy")).toBe(
+			`default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; frame-src ${rpBaseUrl}; script-src 'sha256-${scriptHash}'`,
+		);
+		expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+	 */
+	it("sends iss and sid to every front-channel client, matching each ID token sid", async () => {
+		const initiator = await registerClient({
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/fc-required`,
+			frontchannel_logout_session_required: true,
+		});
+		// Registers only front-channel logout: no end-session, no back-channel.
+		const participant = await registerClient({
+			enable_end_session: false,
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/fc-optional`,
+		});
+		const initiatorTokens = await issueTokens({ client: initiator });
+		const participantTokens = await issueTokens({ client: participant });
+
+		const sid = decodeJwt(initiatorTokens.id_token).sid;
+		expect(sid).toBeDefined();
+		expect(decodeJwt(participantTokens.id_token).sid).toBe(sid);
+
+		const response = await endSessionNavigation({
+			id_token_hint: initiatorTokens.id_token,
+		});
 		const sources = extractIframeSources(await response.text()).map(
 			(src) => new URL(src),
 		);
-		expect(sources).toHaveLength(2);
-
-		// Spec §2: when the RP requires session matching, the OP includes both
-		// `iss` and `sid` (if either is included, both MUST be)
-		const required = sources.find((u) => u.pathname === "/logout/fc-required")!;
-		expect(required.searchParams.get("iss")).toBe(issuer);
-		expect(required.searchParams.get("sid")).toBe(sid);
-
-		const optional = sources.find((u) => u.pathname === "/logout/fc-optional")!;
-		expect(optional.searchParams.get("iss")).toBeNull();
-		expect(optional.searchParams.get("sid")).toBeNull();
+		expect(sources.map((u) => u.pathname).sort()).toEqual([
+			"/logout/fc-optional",
+			"/logout/fc-required",
+		]);
+		for (const source of sources) {
+			expect(source.searchParams.get("iss")).toBe(issuer);
+			expect(source.searchParams.get("sid")).toBe(sid);
+		}
 	});
 
-	it("carries the validated post_logout_redirect_uri into the page redirect", async () => {
+	it("redirects to the verified post_logout_redirect_uri after the iframes", async () => {
 		const fcClient = await registerClient({
 			post_logout_redirect_uris: [`${rpBaseUrl}/logout/callback`],
 		});
@@ -245,10 +286,15 @@ describe("oauth front-channel logout", async () => {
 		});
 		expect(response.status).toBe(200);
 		const html = await response.text();
-		expect(html).toContain(`${rpBaseUrl}/logout/callback?state=${state}`);
+		const redirect = `${rpBaseUrl}/logout/callback?state=${state}`;
+		expect(html).toContain(`data-post-logout-redirect-uri="${redirect}"`);
+		// Without JavaScript, a meta refresh performs the same redirect.
+		expect(html).toContain(
+			`<meta http-equiv="refresh" content="3;url=${redirect}">`,
+		);
 	});
 
-	it("drops an unregistered post_logout_redirect_uri from the page", async () => {
+	it("shows the logged-out state, not a redirect, for an unregistered post_logout_redirect_uri", async () => {
 		const fcClient = await registerClient();
 		const tokens = await issueTokens({ client: fcClient });
 
@@ -257,7 +303,12 @@ describe("oauth front-channel logout", async () => {
 			post_logout_redirect_uri: `${rpBaseUrl}/evil`,
 		});
 		expect(response.status).toBe(200);
-		expect(await response.text()).not.toContain(`${rpBaseUrl}/evil`);
+		const html = await response.text();
+		expect(html).not.toContain(`${rpBaseUrl}/evil`);
+		expect(html).not.toContain("data-post-logout-redirect-uri=");
+		expect(html).toContain(
+			'data-logged-out-message="Logged out. The requested post-logout redirect was not registered."',
+		);
 	});
 
 	it("keeps the immediate redirect when no front-channel client holds tokens on the session", async () => {
@@ -278,9 +329,9 @@ describe("oauth front-channel logout", async () => {
 		expect(location).toContain(`state=${state}`);
 	});
 
-	it("escapes HTML metacharacters in iframe sources", async () => {
+	it("keeps the registered query and escapes it in the iframe source", async () => {
 		const fcClient = await registerClient({
-			frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel?a=1&b=2`,
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel?a=1&b=2`,
 		});
 		const tokens = await issueTokens({ client: fcClient });
 
@@ -289,10 +340,58 @@ describe("oauth front-channel logout", async () => {
 		});
 		const html = await response.text();
 		// Raw `&` must be entity-encoded inside the attribute value
-		expect(html).toContain("a=1&amp;b=2");
-		expect(extractIframeSources(html)).toEqual([
-			`${fcBaseUrl}/logout/frontchannel?a=1&b=2`,
-		]);
+		expect(html).toContain("a=1&amp;b=2&amp;iss=");
+		const [source] = extractIframeSources(html).map((src) => new URL(src));
+		expect(source!.searchParams.get("a")).toBe("1");
+		expect(source!.searchParams.get("b")).toBe("2");
+		expect(source!.searchParams.get("sid")).toBe(
+			decodeJwt(tokens.id_token).sid,
+		);
+	});
+
+	it("does not notify relying parties when a hook vetoes the session deletion", async () => {
+		const fcClient = await registerClient();
+		const tokens = await issueTokens({ client: fcClient });
+		vetoSessionDelete = true;
+
+		const response = await endSessionNavigation({
+			id_token_hint: tokens.id_token,
+		});
+		const html = await response.text();
+		expect(html).not.toContain("<iframe");
+		const session = await auth.api.getSession({ headers });
+		expect(session).not.toBeNull();
+	});
+
+	it("renders the front-channel page after the user confirms logout", async () => {
+		const fcClient = await registerClient();
+		await issueTokens({ client: fcClient });
+
+		// No id_token_hint, so the OP asks the user to confirm first.
+		const confirmation = await endSessionNavigation({});
+		expect(await confirmation.text()).toContain(
+			"data-oidc-logout-confirmation",
+		);
+		cookieSetter(headers)({ response: confirmation } as never);
+
+		const completed = await auth.handler(
+			new Request(`${baseUrl}/api/auth/oauth2/end-session/confirm`, {
+				method: "POST",
+				headers: {
+					accept: "text/html",
+					"content-type": "application/x-www-form-urlencoded",
+					cookie: headers.get("cookie") ?? "",
+					origin: baseUrl,
+					"sec-fetch-mode": "navigate",
+				},
+				body: new URLSearchParams({ action: "confirm" }),
+			}),
+		);
+		expect(completed.status).toBe(200);
+		const sources = extractIframeSources(await completed.text()).map(
+			(src) => new URL(src).pathname,
+		);
+		expect(sources).toEqual(["/logout/frontchannel"]);
 	});
 
 	it("preserves the JSON contract for fetch-style requests", async () => {
@@ -331,7 +430,6 @@ describe("oauth front-channel logout (jwt plugin disabled)", async () => {
 	const port = 3022;
 	const baseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5001";
-	const fcBaseUrl = "https://rp.example.com";
 	const state = "123";
 	const scopes = ["openid", "email", "profile"];
 
@@ -370,7 +468,7 @@ describe("oauth front-channel logout (jwt plugin disabled)", async () => {
 				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				enable_end_session: true,
-				frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel`,
+				frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
 			},
 		});
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
@@ -436,8 +534,10 @@ describe("oauth front-channel logout (jwt plugin disabled)", async () => {
 		);
 		expect(response.status).toBe(200);
 		expect(response.headers.get("content-type")).toContain("text/html");
-		expect(extractIframeSources(await response.text())).toEqual([
-			`${fcBaseUrl}/logout/frontchannel`,
-		]);
+		expect(
+			extractIframeSources(await response.text()).map(
+				(src) => new URL(src).pathname,
+			),
+		).toEqual(["/logout/frontchannel"]);
 	});
 });

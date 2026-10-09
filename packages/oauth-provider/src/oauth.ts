@@ -22,10 +22,11 @@ import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
-import type { BackchannelLogoutPlan } from "./logout";
+import type { SessionLogoutPlan } from "./logout";
 import {
-	applyBackchannelLogoutPlan,
-	prepareBackchannelLogoutPlan,
+	applySessionLogoutPlan,
+	prepareSessionLogoutPlan,
+	recordFrontchannelLogoutUris,
 	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
@@ -112,9 +113,9 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
-const backchannelLogoutPlansByContext = new WeakMap<
+const sessionLogoutPlansByContext = new WeakMap<
 	GenericEndpointContext,
-	Map<string, BackchannelLogoutPlan>
+	Map<string, SessionLogoutPlan>
 >();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
 
@@ -559,20 +560,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							delete: {
 								async before(session, hookCtx) {
 									if (!hookCtx) return;
-									const plan = await prepareBackchannelLogoutPlan(
-										hookCtx,
-										opts,
-										{
-											sessionId: session.id,
-											userId: session.userId,
-										},
-									);
+									const plan = await prepareSessionLogoutPlan(hookCtx, opts, {
+										sessionId: session.id,
+										userId: session.userId,
+									});
 									if (!plan) return;
 									const logoutPlanBySessionId =
-										backchannelLogoutPlansByContext.get(hookCtx) ??
-										new Map<string, BackchannelLogoutPlan>();
+										sessionLogoutPlansByContext.get(hookCtx) ??
+										new Map<string, SessionLogoutPlan>();
 									logoutPlanBySessionId.set(session.id, plan);
-									backchannelLogoutPlansByContext.set(
+									sessionLogoutPlansByContext.set(
 										hookCtx,
 										logoutPlanBySessionId,
 									);
@@ -580,20 +577,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								async after(session, hookCtx) {
 									if (!hookCtx) return;
 									const logoutPlanBySessionId =
-										backchannelLogoutPlansByContext.get(hookCtx);
+										sessionLogoutPlansByContext.get(hookCtx);
 									if (!logoutPlanBySessionId) return;
 									const plan = logoutPlanBySessionId.get(session.id);
 									logoutPlanBySessionId.delete(session.id);
 									if (logoutPlanBySessionId.size === 0) {
-										backchannelLogoutPlansByContext.delete(hookCtx);
+										sessionLogoutPlansByContext.delete(hookCtx);
 									}
 									if (!plan) return;
-									const logoutTask = applyBackchannelLogoutPlan(
+									// Recorded synchronously so the logout page of this request
+									// can render the iframes; delivery below may run after the
+									// response.
+									await recordFrontchannelLogoutUris(
+										plan.frontchannelLogoutUris,
+									);
+									const logoutTask = applySessionLogoutPlan(
 										hookCtx,
 										plan,
 									).catch((error) => {
 										hookCtx.context.logger.error(
-											"Back-channel logout failed after session deletion",
+											"Logout notification failed after session deletion",
 											error,
 										);
 									});
@@ -1638,7 +1641,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													frontchannel_logout_session_required: {
 														type: "boolean",
 														description:
-															"Whether the OP appends `iss` and `sid` query parameters to the front-channel logout URI",
+															"Whether the RP requires `iss` and `sid` query parameters on its front-channel logout URI. The OP always sends both.",
 													},
 													token_endpoint_auth_method: {
 														type: "string",
