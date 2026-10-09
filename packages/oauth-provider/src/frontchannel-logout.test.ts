@@ -329,9 +329,9 @@ describe("oauth front-channel logout", async () => {
 		expect(location).toContain(`state=${state}`);
 	});
 
-	it("keeps the registered query and escapes it in the iframe source", async () => {
+	it("keeps the registered query, overwrites a registered sid, and escapes the iframe source", async () => {
 		const fcClient = await registerClient({
-			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel?a=1&b=2`,
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel?a=1&b=2&sid=stale`,
 		});
 		const tokens = await issueTokens({ client: fcClient });
 
@@ -340,13 +340,14 @@ describe("oauth front-channel logout", async () => {
 		});
 		const html = await response.text();
 		// Raw `&` must be entity-encoded inside the attribute value
-		expect(html).toContain("a=1&amp;b=2&amp;iss=");
+		expect(html).toContain("a=1&amp;b=2&amp;sid=");
 		const [source] = extractIframeSources(html).map((src) => new URL(src));
 		expect(source!.searchParams.get("a")).toBe("1");
 		expect(source!.searchParams.get("b")).toBe("2");
-		expect(source!.searchParams.get("sid")).toBe(
+		expect(source!.searchParams.getAll("sid")).toEqual([
 			decodeJwt(tokens.id_token).sid,
-		);
+		]);
+		expect(source!.searchParams.getAll("iss")).toEqual([issuer]);
 	});
 
 	it("does not notify relying parties when a hook vetoes the session deletion", async () => {

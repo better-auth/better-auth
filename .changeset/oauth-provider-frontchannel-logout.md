@@ -6,4 +6,4 @@ OAuth providers can now notify relying parties through the browser with OpenID C
 
 Front-channel logout is reliable only when the provider and its relying parties share a registrable domain, because browsers block or partition third-party cookies. Use back-channel logout for relying parties on other sites. Providers with no front-channel clients see no change.
 
-Run `npx auth migrate`, or `npx auth generate` if you manage the schema yourself, to add the `frontchannelLogoutUri` and `frontchannelLogoutSessionRequired` columns to `oauthClient`.
+Run `npx auth@latest migrate`, or `npx auth@latest generate` if you manage the schema yourself, to add the `frontchannelLogoutUri` and `frontchannelLogoutSessionRequired` columns to `oauthClient`.

@@ -415,8 +415,9 @@ export interface OAuthClient {
 	frontchannel_logout_uri?: string;
 	/**
 	 * When true, the RP requires `iss` and `sid` query parameters on its
-	 * `frontchannel_logout_uri`. The OP sends both to every front-channel
-	 * client, so such clients are always served.
+	 * `frontchannel_logout_uri`. The OP includes both whenever it notifies a
+	 * front-channel client, so this flag is stored but does not change
+	 * delivery.
 	 *
 	 * @default false
 	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout

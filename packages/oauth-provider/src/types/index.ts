@@ -1814,8 +1814,9 @@ export interface SchemaClient<
 	frontchannelLogoutUri?: string;
 	/**
 	 * When true, the RP requires `iss` and `sid` query parameters on its
-	 * front-channel logout URI. The OP sends both to every front-channel
-	 * client, so such clients are always served.
+	 * front-channel logout URI. The OP includes both whenever it notifies a
+	 * front-channel client, so this flag is stored but does not change
+	 * delivery.
 	 *
 	 * @default false
 	 */

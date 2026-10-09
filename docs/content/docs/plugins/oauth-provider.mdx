@@ -784,7 +784,7 @@ The Logout Token carries the §2.4 claims (`iss`, `aud`, `iat`, `exp`, `jti`, `e
 [Front-Channel Logout](https://openid.net/specs/openid-connect-frontchannel-1_0.html) notifies Relying Parties through the user's browser. When a user logs out at `/oauth2/end-session`, the OP renders a page with one hidden iframe per Relying Party that holds tokens on the session. Each iframe loads that RP's `frontchannel_logout_uri`, so the RP can clear its own session cookies.
 
 <Callout type="warn">
-  The iframes are third-party content. Safari blocks third-party cookies, and Firefox and Chrome Incognito partition them, so an RP on a different site often cannot see its session cookie inside the iframe. Front-channel logout is reliable only when the OP and its Relying Parties share a registrable domain, such as `auth.example.com` and `app.example.com`. Use [Back-Channel Logout](#back-channel-logout) when RPs run on other sites or when logout must not depend on the browser.
+  The iframes are third-party content. Safari blocks third-party cookies, Firefox partitions them by default, and Chrome blocks them in Incognito and for users who turn them off, so an RP on a different site often cannot see its session cookie inside the iframe. Front-channel logout is reliable only when the OP and its Relying Parties share a registrable domain, such as `auth.example.com` and `app.example.com`. Use [Back-Channel Logout](#back-channel-logout) when RPs run on other sites or when logout must not depend on the browser.
 </Callout>
 
 To opt a client in, register a `frontchannel_logout_uri` on the same scheme, host, and port as one of its `redirect_uris`:
@@ -800,12 +800,12 @@ await auth.api.adminCreateOAuthClient({
 });
 ```
 
-The OP loads the URI with `iss` and `sid` query parameters appended to any query it already has. `sid` matches the `sid` claim in the ID Tokens issued to that client, so the RP can ignore requests that don't match its current session. The RP endpoint should clear its session state and respond with `Cache-Control: no-store`. Setting `frontchannel_logout_session_required: true` is accepted and stored, but changes nothing, because the OP always sends both parameters.
+The OP loads the URI with `iss` and `sid` query parameters added to any query it already has, replacing a registered `iss` or `sid`. `sid` matches the `sid` claim in the ID Tokens issued to that client, so the RP can ignore requests that don't match its current session. The RP endpoint should clear its session state and respond with `Cache-Control: no-store`. Setting `frontchannel_logout_session_required: true` is accepted and stored, but changes nothing, because the OP always sends both parameters.
 
 The `frontchannel_logout_uri` is validated at registration and on every client update:
 
 * It must be an absolute `http` or `https` URL with no fragment and no credentials.
-* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback or private-network redirect URI is accepted, because the browser loads it, not the OP.
+* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback or private-network redirect URI is accepted, because the browser loads it, not the OP. For `http` loopback redirect URIs, the port may differ, matching how native loopback redirects are accepted.
 * It does not require the `jwt` plugin, because nothing is signed.
 
 A URI that fails validation is rejected with `invalid_client_metadata`.
@@ -816,10 +816,11 @@ The page is rendered only when the session actually ends during a browser naviga
 
 Front-channel logout does not run for:
 
-* `/sign-out`, admin session revocation, or session expiry, because no logout page is shown in the user's browser.
+* `/sign-out` or admin session revocation, because no logout page is shown in the user's browser.
 * Fetch-style calls such as `authClient.oauth2.endSession()`, which keep the JSON response.
+* Session expiry, which does not delete the session when it happens.
 
-Back-Channel Logout still fires in all of these cases. A client that registers both URIs receives both notifications, so make RP logout handlers idempotent.
+Back-Channel Logout still fires for the first two, because they delete the session. A client that registers both URIs receives both notifications, so make RP logout handlers idempotent.
 
 After the iframes load, or after 3 seconds if an RP doesn't respond, the page redirects to the verified `post_logout_redirect_uri`, or shows the logged-out message when there is none. Without JavaScript, the iframes still load and a meta refresh performs the redirect. The page keeps the same Content Security Policy as the other logout pages, extended only with `frame-src` for the RP origins and its own script, and sends `Referrer-Policy: no-referrer` so the `id_token_hint` in the URL never reaches an RP.
 

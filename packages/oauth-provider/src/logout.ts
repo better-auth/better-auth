@@ -5,7 +5,6 @@ import {
 	hasRequestState,
 } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
-import { appendQueryParams } from "@better-auth/core/utils/url";
 import { createHash } from "@better-auth/utils/hash";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
@@ -222,14 +221,17 @@ async function prepareSessionLogoutPlan(
 		// client registered `frontchannel_logout_session_required`, but if either
 		// is sent both must be. Sending them to every client lets each RP match
 		// the request to its session, the same way every Logout Token carries
-		// `sid`.
-		const sessionParams = new URLSearchParams({
-			iss: getIssuer(ctx, opts),
-			sid: sessionId,
-		});
+		// `sid`. They overwrite any registered `iss` or `sid` so the RP never
+		// reads a stale value first.
+		const issuer = getIssuer(ctx, opts);
 		const frontchannelLogoutUris = clients
 			.filter((c) => Boolean(c.frontchannelLogoutUri) && !c.disabled)
-			.map((c) => appendQueryParams(c.frontchannelLogoutUri!, sessionParams));
+			.map((c) => {
+				const uri = new URL(c.frontchannelLogoutUri!);
+				uri.searchParams.set("iss", issuer);
+				uri.searchParams.set("sid", sessionId);
+				return uri.toString();
+			});
 
 		return {
 			accessTokenIds: accessToRevokeIds,

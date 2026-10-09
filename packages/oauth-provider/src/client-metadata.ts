@@ -77,6 +77,8 @@ const OAUTH_CLIENT_WIRE_FIELD_NAMES = [
 	"post_logout_redirect_uris",
 	"backchannel_logout_uri",
 	"backchannel_logout_session_required",
+	"frontchannel_logout_uri",
+	"frontchannel_logout_session_required",
 	"token_endpoint_auth_method",
 	"grant_types",
 	"response_types",

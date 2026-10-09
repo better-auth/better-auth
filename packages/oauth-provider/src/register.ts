@@ -691,17 +691,29 @@ export async function checkOAuthClient(
 					"frontchannel_logout_uri must not contain credentials",
 			});
 		}
-		const isHttp = url.protocol === "https:" || url.protocol === "http:";
+		const isHttpOrHttps = url.protocol === "https:" || url.protocol === "http:";
+		// RFC 8252 §7.3 lets a native loopback redirect use any port at runtime,
+		// so a loopback logout URI matches on scheme and host alone.
+		const isHttpLoopback =
+			url.protocol === "http:" &&
+			(isLoopbackIP(url.hostname) || url.hostname === "localhost");
 		const sharesRedirectOrigin = (clientWithDefaults.redirect_uris ?? []).some(
 			(redirectUri) => {
+				let redirect: URL;
 				try {
-					return new URL(redirectUri).origin === url.origin;
+					redirect = new URL(redirectUri);
 				} catch {
 					return false;
 				}
+				if (redirect.origin === url.origin) return true;
+				return (
+					isHttpLoopback &&
+					redirect.protocol === "http:" &&
+					redirect.hostname === url.hostname
+				);
 			},
 		);
-		if (!isHttp || !sharesRedirectOrigin) {
+		if (!isHttpOrHttps || !sharesRedirectOrigin) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
