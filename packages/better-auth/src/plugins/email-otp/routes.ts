@@ -17,6 +17,7 @@ import { getDate } from "../../utils/date";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
+	resetCredentialPassword,
 } from "../../utils/password";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
@@ -965,22 +966,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			const account = await ctx.context.internalAdapter.findCredentialAccount(
-				user.user.id,
-			);
-			if (!account) {
-				await ctx.context.internalAdapter.createAccount({
-					userId: user.user.id,
-					providerId: "credential",
-					accountId: user.user.id,
-					password: passwordHash,
-				});
-			} else {
-				await ctx.context.internalAdapter.updatePassword(
-					user.user.id,
-					passwordHash,
-				);
-			}
+			await resetCredentialPassword(ctx, user.user.id, passwordHash);
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 				await ctx.context.options.emailAndPassword.onPasswordReset(
@@ -997,9 +983,6 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-				await ctx.context.internalAdapter.deleteUserSessions(user.user.id);
-			}
 			return ctx.json({
 				success: true,
 			});

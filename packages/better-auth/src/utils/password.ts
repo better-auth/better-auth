@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 
 export function assertPasswordNotTooShort(
@@ -19,6 +20,41 @@ export function assertPasswordNotTooLong(
 		ctx.context.logger.warn("Password is too long");
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 	}
+}
+
+/**
+ * Sets a user's credential password after a reset, revoking their sessions
+ * when `emailAndPassword.revokeSessionsOnPasswordReset` is enabled.
+ *
+ * Database revocation and the password write run in one transaction, so a
+ * failure in either leaves both unchanged. Secondary-storage sessions are
+ * removed by an after-commit hook, so they can't roll back with the write.
+ * Sessions are revoked first so that on an adapter without transactions a
+ * failure still keeps the old password rather than committing a new one while
+ * existing sessions stay valid.
+ */
+export async function resetCredentialPassword(
+	ctx: GenericEndpointContext,
+	userId: string,
+	passwordHash: string,
+) {
+	await runWithTransaction(ctx.context.adapter, async () => {
+		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
+			await ctx.context.internalAdapter.deleteUserSessions(userId);
+		}
+		const account =
+			await ctx.context.internalAdapter.findCredentialAccount(userId);
+		if (!account) {
+			await ctx.context.internalAdapter.createAccount({
+				userId,
+				providerId: "credential",
+				accountId: userId,
+				password: passwordHash,
+			});
+			return;
+		}
+		await ctx.context.internalAdapter.updatePassword(userId, passwordHash);
+	});
 }
 
 export async function validatePassword(
