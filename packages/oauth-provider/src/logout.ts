@@ -224,14 +224,23 @@ async function prepareSessionLogoutPlan(
 		// `sid`. They overwrite any registered `iss` or `sid` so the RP never
 		// reads a stale value first.
 		const issuer = getIssuer(ctx, opts);
-		const frontchannelLogoutUris = clients
-			.filter((c) => Boolean(c.frontchannelLogoutUri) && !c.disabled)
-			.map((c) => {
-				const uri = new URL(c.frontchannelLogoutUri!);
+		const frontchannelLogoutUris = clients.flatMap((client) => {
+			if (!client.frontchannelLogoutUri || client.disabled) return [];
+			// A stored URI that bypassed registration validation must not cost
+			// every other client its revocation and back-channel delivery.
+			try {
+				const uri = new URL(client.frontchannelLogoutUri);
 				uri.searchParams.set("iss", issuer);
 				uri.searchParams.set("sid", sessionId);
-				return uri.toString();
-			});
+				return [uri.toString()];
+			} catch (error) {
+				logger.warn(
+					`front-channel logout: invalid frontchannel_logout_uri for client ${client.clientId}`,
+					error,
+				);
+				return [];
+			}
+		});
 
 		return {
 			accessTokenIds: accessToRevokeIds,

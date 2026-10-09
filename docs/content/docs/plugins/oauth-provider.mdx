@@ -805,7 +805,7 @@ The OP loads the URI with `iss` and `sid` query parameters added to any query it
 The `frontchannel_logout_uri` is validated at registration and on every client update:
 
 * It must be an absolute `http` or `https` URL with no fragment and no credentials.
-* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback or private-network redirect URI is accepted, because the browser loads it, not the OP. For `http` loopback redirect URIs, the port may differ, matching how native loopback redirects are accepted.
+* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback or private-network redirect URI is accepted, because the browser loads it, not the OP.
 * It does not require the `jwt` plugin, because nothing is signed.
 
 A URI that fails validation is rejected with `invalid_client_metadata`.

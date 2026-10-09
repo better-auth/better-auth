@@ -692,25 +692,13 @@ export async function checkOAuthClient(
 			});
 		}
 		const isHttpOrHttps = url.protocol === "https:" || url.protocol === "http:";
-		// RFC 8252 §7.3 lets a native loopback redirect use any port at runtime,
-		// so a loopback logout URI matches on scheme and host alone.
-		const isHttpLoopback =
-			url.protocol === "http:" &&
-			(isLoopbackIP(url.hostname) || url.hostname === "localhost");
 		const sharesRedirectOrigin = (clientWithDefaults.redirect_uris ?? []).some(
 			(redirectUri) => {
-				let redirect: URL;
 				try {
-					redirect = new URL(redirectUri);
+					return new URL(redirectUri).origin === url.origin;
 				} catch {
 					return false;
 				}
-				if (redirect.origin === url.origin) return true;
-				return (
-					isHttpLoopback &&
-					redirect.protocol === "http:" &&
-					redirect.hostname === url.hostname
-				);
 			},
 		);
 		if (!isHttpOrHttps || !sharesRedirectOrigin) {

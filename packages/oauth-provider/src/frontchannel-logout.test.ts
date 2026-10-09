@@ -350,6 +350,29 @@ describe("oauth front-channel logout", async () => {
 		expect(source!.searchParams.getAll("iss")).toEqual([issuer]);
 	});
 
+	it("skips a client whose stored frontchannel_logout_uri is not a URL without dropping the others", async () => {
+		const validClient = await registerClient();
+		const corruptClient = await registerClient({
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/corrupt`,
+		});
+		const tokens = await issueTokens({ client: validClient });
+		await issueTokens({ client: corruptClient });
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: corruptClient.client_id }],
+			update: { frontchannelLogoutUri: "not a url" },
+		});
+
+		const response = await endSessionNavigation({
+			id_token_hint: tokens.id_token,
+		});
+		const sources = extractIframeSources(await response.text()).map(
+			(src) => new URL(src).pathname,
+		);
+		expect(sources).toEqual(["/logout/frontchannel"]);
+	});
+
 	it("does not notify relying parties when a hook vetoes the session deletion", async () => {
 		const fcClient = await registerClient();
 		const tokens = await issueTokens({ client: fcClient });

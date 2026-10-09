@@ -768,27 +768,16 @@ describe("oauth register", async () => {
 		);
 	});
 
-	/**
-	 * @see https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3
-	 */
-	it("allows a loopback frontchannel_logout_uri on another port of a loopback redirect host", async () => {
+	it("rejects a loopback frontchannel_logout_uri on a port no redirect_uri uses", async () => {
+		// Both values are fixed at registration, so the runtime port variance
+		// RFC 8252 §7.3 allows for loopback redirects does not apply here.
 		const response = await serverClient.oauth2.register({
-			redirect_uris: ["http://localhost/callback"],
+			redirect_uris: [`${rpBaseUrl}/callback`],
 			application_type: "native",
 			token_endpoint_auth_method: "none",
 			frontchannel_logout_uri: "http://localhost:6000/logout/frontchannel",
 		});
-		expect(response.data?.frontchannel_logout_uri).toBe(
-			"http://localhost:6000/logout/frontchannel",
-		);
-
-		const otherHost = await serverClient.oauth2.register({
-			redirect_uris: ["http://localhost/callback"],
-			application_type: "native",
-			token_endpoint_auth_method: "none",
-			frontchannel_logout_uri: "http://127.0.0.1:6000/logout/frontchannel",
-		});
-		expect(otherHost.error?.status).toBe(400);
+		expect(response.error?.status).toBe(400);
 	});
 
 	it("rejects a redirect_uris update that leaves frontchannel_logout_uri without a matching origin", async () => {
