@@ -391,7 +391,10 @@ function getReturnedSSOProviderAdditionalFields(
 }
 
 export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
-	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
+	const roles = Array.isArray(member.role)
+		? member.role
+		: String(member.role ?? "").split(",");
+	return roles.some((r) => ADMIN_ROLES.includes(String(r).trim()));
 }
 
 type ParsedCert = ReturnType<typeof parseCertificate>;
