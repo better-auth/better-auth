@@ -2,6 +2,10 @@ import type { DBAdapter, Where } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
+import {
+	canonicalizeSCIMAttributeNames,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type {
 	SCIMAttributeProjection,
 	SCIMCollectionQueryInput,
@@ -17,12 +21,17 @@ import {
 import type { SCIMConnection } from "./configuration";
 import type { SCIMConnectionMiddleware } from "./connection-authentication";
 import { fenceActiveSCIMConnection } from "./connection-state";
-import { SCIM_MAX_GROUP_MEMBERS } from "./group-schemas";
+import {
+	SCIM_MAX_GROUP_MEMBERS,
+	SCIMGroupResourceSchema,
+} from "./group-schemas";
 import {
 	acquireSCIMGroupMutationLock,
 	findSCIMGroup,
 	runGroupMutationTransaction,
 } from "./group-state";
+import type { SCIMPatchValueTarget } from "./null-attributes";
+import { expandSCIMPatchNullValues } from "./null-attributes";
 import type { SCIMGroup, SCIMGroupMember, SCIMUser } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
@@ -31,7 +40,7 @@ import {
 	SCIM_RESOURCE_SCHEMA_REGISTRY,
 	stripSCIMCoreAttributePrefix,
 } from "./resource-schema-registry";
-import { runSCIMCreateWithUniquenessCheck } from "./resource-uniqueness";
+import { runSCIMWriteWithUniquenessCheck } from "./resource-uniqueness";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
 	createSCIMOpenAPIContent,
@@ -280,6 +289,32 @@ function readMemberIdFromValuePath(path: string): string | undefined {
 
 function normalizeGroupPatchPath(path: string): string {
 	return stripSCIMCoreAttributePrefix("Group", path.trim());
+}
+
+const SCIM_GROUP_MEMBER_ATTRIBUTES =
+	SCIMGroupResourceSchema.attributes.find(
+		(attribute) => attribute.name === "members",
+	)?.subAttributes ?? [];
+
+/** Rewrite a Group PATCH value's attribute keys to the names its target declares. */
+export function canonicalizeSCIMGroupPatchValue(
+	path: string | undefined,
+	value: unknown,
+): unknown {
+	if (!path) return canonicalizeSCIMResourceAttributeNames("Group", value);
+	return normalizeGroupPatchPath(path).toLowerCase() === "members"
+		? canonicalizeSCIMAttributeNames(value, SCIM_GROUP_MEMBER_ATTRIBUTES)
+		: value;
+}
+
+function resolveSCIMGroupPatchValueTarget(path: string): SCIMPatchValueTarget {
+	const normalizedPath = normalizeGroupPatchPath(path).toLowerCase();
+	if (normalizedPath === "members") return { kind: "entries" };
+	// A pathless Group PATCH ignores `schemas` and `meta`, so their null values are ignored too.
+	if (normalizedPath === "schemas" || normalizedPath === "meta") {
+		return { kind: "readOnly" };
+	}
+	return { kind: "value" };
 }
 
 interface IncrementalMembershipPatch {
@@ -915,7 +950,7 @@ export function createSCIMGroup(
 			);
 			await assertDisplayNameAvailable(adapter, connection.id, displayNameKey);
 			await assertExternalIdAvailable(adapter, connection.id, externalIdKey);
-			const group = await runSCIMCreateWithUniquenessCheck(
+			const group = await runSCIMWriteWithUniquenessCheck(
 				() =>
 					runGroupMutationTransaction(adapter, async (trx) => {
 						await assertDisplayNameAvailable(
@@ -1355,9 +1390,11 @@ export function patchSCIMGroup(
 				});
 			}
 
-			const incrementalPatch = parseIncrementalMembershipPatch(
+			const operations = expandSCIMPatchNullValues(
 				ctx.body.Operations,
+				resolveSCIMGroupPatchValueTarget,
 			);
+			const incrementalPatch = parseIncrementalMembershipPatch(operations);
 			const updatedGroup = await runGroupMutationTransaction(
 				adapter,
 				async (trx) => {
@@ -1417,7 +1454,7 @@ export function patchSCIMGroup(
 						const patch = applyGroupPatch(
 							currentGroup,
 							currentMemberships.map((membership) => membership.scimUserId),
-							ctx.body.Operations,
+							operations,
 						);
 						await projection.acquireUserLocks({
 							database: trx,
