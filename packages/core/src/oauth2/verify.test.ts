@@ -35,6 +35,7 @@ describe("verifyBearerToken", () => {
 
 	afterEach(() => {
 		mockedFetch.mockReset();
+		vi.restoreAllMocks();
 	});
 
 	afterAll(() => {
@@ -587,6 +588,57 @@ describe("verifyBearerToken", () => {
 		vi.resetModules();
 	});
 
+	it("should sanitize TypeErrors from a function jwks source", async () => {
+		vi.resetModules();
+		const { logger } = await import("../env");
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const providerError = new TypeError(
+			"fetch failed for https://internal.example/private-jwks",
+		);
+		const loggerError = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const jwksFetch = vi.fn(async () => {
+			throw providerError;
+		});
+
+		const error = await verify(token, {
+			jwksFetch,
+			verifyOptions: { issuer, audience },
+		}).then(
+			() => undefined,
+			(thrown: unknown) => thrown,
+		);
+
+		expect(jwksFetch).toHaveBeenCalledOnce();
+		expect(error).toBeInstanceOf(Error);
+		expect(error).toMatchObject({ message: "JWKS fetch failed" });
+		expect(error).not.toHaveProperty("cause");
+		expect(loggerError).toHaveBeenCalledWith("JWKS fetch failed:", providerError);
+		expect(mockedFetch).not.toHaveBeenCalled();
+		vi.resetModules();
+	});
+
+	it("should preserve non-TypeError failures from a function jwks source", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const providerError = new Error("custom JWKS provider failed");
+		const jwksFetch = vi.fn(async () => {
+			throw providerError;
+		});
+
+		await expect(
+			verify(token, {
+				jwksFetch,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toBe(providerError);
+		expect(jwksFetch).toHaveBeenCalledOnce();
+		vi.resetModules();
+	});
+
 	it("should fetch a function jwks source once across verifications sharing a jwksCacheKey", async () => {
 		vi.resetModules();
 		const { verifyJwsAccessToken: verify } = await import("./verify");
@@ -806,6 +858,35 @@ describe("verifyBearerToken", () => {
 		} finally {
 			vi.resetModules();
 		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11611
+	 */
+	it("should not fall through to opaque verification after a rejected JWKS fetch", async () => {
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		mockedFetch.mockRejectedValueOnce(
+			new TypeError("fetch failed for https://internal.example/private-jwks"),
+		);
+
+		const error = await verifyBearerToken(token, {
+			jwksUrl,
+			verifyOptions: { issuer, audience },
+			remoteVerify: {
+				introspectUrl: `${issuer}/oauth2/introspect`,
+				clientId: "rs-client",
+				clientSecret: "rs-secret",
+			},
+		}).then(
+			() => undefined,
+			(thrown: unknown) => thrown,
+		);
+
+		expect(error).toBeInstanceOf(Error);
+		expect(error).toMatchObject({ message: "JWKS fetch failed" });
+		expect(error).not.toHaveProperty("cause");
+		expect(mockedFetch).toHaveBeenCalledOnce();
 	});
 
 	describe("remote introspection audience validation", () => {
