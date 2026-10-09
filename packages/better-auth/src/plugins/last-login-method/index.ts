@@ -82,6 +82,9 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		if (path.startsWith("/callback/")) {
 			return ctx.params?.id || path.split("/").pop();
 		}
+		if (path === "/one-tap/callback") {
+			return "google";
+		}
 		// Check for email sign-in/sign-up
 		if (path === "/sign-in/email" || path === "/sign-up/email") {
 			return "email";
