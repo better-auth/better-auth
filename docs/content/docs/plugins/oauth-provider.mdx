@@ -1398,6 +1398,30 @@ oauthProvider({
 })
 ```
 
+#### Client-Specific Access Token Claims
+
+Use an `extensions[].claims.accessToken` contributor when a claim depends on the registered client. Unlike `customAccessTokenClaims`, it receives `client`. With [`clientReference`](#organizations) configured to assign each client to an organization, this example adds that organization reference only to tokens for one API:
+
+```ts title="auth.ts"
+const apiResource = "https://api.example.com";
+
+oauthProvider({
+  loginPage: "/login",
+  consentPage: "/consent",
+  resources: [apiResource],
+  extensions: [{
+    claims: {
+      accessToken: ({ client, resources }) => {
+        if (!resources?.includes(apiResource) || !client.referenceId) return {};
+        return { "https://example.com/organization_id": client.referenceId };
+      },
+    },
+  }],
+})
+```
+
+`client.referenceId` is the owner assigned by `clientReference` at registration. The contributor also receives `grantType` when issuing a token, but not when re-deriving claims for opaque-token introspection. Derive claims needed at introspection from stable client, scope, and resource context. An owner claim does not prove that an integration is still connected; resource servers that need immediate disconnection must check current authorization state.
+
 #### Custom Token Response Fields
 
 Unlike the claim callbacks above (which add data *inside* JWT payloads), `customTokenResponseFields` adds fields to the **token endpoint JSON response** alongside `access_token`, `token_type`, etc. Standard OAuth fields cannot be overridden.
