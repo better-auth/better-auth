@@ -157,7 +157,17 @@ export interface InternalAdapter<
 		override?: (Partial<Session> & Record<string, any>) | undefined,
 		overrideAll?: boolean | undefined,
 		storageOptions?:
-			| { deferSecondaryStorageWrites?: boolean | undefined }
+			| {
+					/**
+					 * Write the secondary-storage copy only after the current
+					 * transaction commits, so a rollback can't leave it cached.
+					 * Ignored when secondary storage is the session store
+					 * (`storeSessionInDatabase` off or `preserveSessionInDatabase`
+					 * on): the write then stays inside the transaction so a failure
+					 * rolls it back.
+					 */
+					deferSecondaryStorageWrites?: boolean | undefined;
+			  }
 			| undefined,
 	): Promise<Session>;
 
