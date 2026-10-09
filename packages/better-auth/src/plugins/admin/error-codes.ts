@@ -28,6 +28,8 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE:
 		"You are not allowed to set a non-existent role value",
 	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
+	YOU_CANNOT_IMPERSONATE_WITH_BEARER:
+		"You cannot impersonate users with bearer authentication",
 	INVALID_ROLE_TYPE: "Invalid role type",
 	YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL:
 		"You are not allowed to update users email",
