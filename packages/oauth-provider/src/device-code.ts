@@ -76,6 +76,7 @@ const oauthDeviceRequestFields = {
 type OAuthDeviceCodeFields = {
 	oauthClientId?: string | null;
 	resources?: string[] | null;
+	referenceId?: string | null;
 };
 
 function tokenError(
@@ -119,6 +120,7 @@ async function exchangeOAuthDeviceCode(
 	> & { scopes: string[] };
 	const {
 		authorizationContext: { client, confirmation, scopes },
+		claimedDeviceCode,
 		redemptionContext: resources,
 		user,
 	} = await redeemDeviceCode<
@@ -187,6 +189,7 @@ async function exchangeOAuthDeviceCode(
 		scopes,
 		user,
 		resources,
+		referenceId: claimedDeviceCode.referenceId ?? undefined,
 		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
@@ -240,6 +243,10 @@ function buildOAuthDeviceGrant() {
 				required: false,
 			},
 			oauthClientId: {
+				type: "string",
+				required: false,
+			},
+			referenceId: {
 				type: "string",
 				required: false,
 			},
@@ -312,6 +319,20 @@ function buildOAuthDeviceGrant() {
 					resources: toResourceList(resource) ?? null,
 				},
 			};
+		},
+		// Resolve the consent reference (for example, the active organization)
+		// while the approving session exists; the device polls without one.
+		authorizeApproval: async ({ ctx, deviceCode, session }) => {
+			if (typeof deviceCode.oauthClientId !== "string") return;
+			const consentReferenceId = getOAuthProviderPlugin(ctx.context)?.options
+				.postLogin?.consentReferenceId;
+			if (!consentReferenceId) return;
+			const referenceId = await consentReferenceId({
+				user: session.user,
+				session: session.session,
+				scopes: parseScopes(deviceCode.scope),
+			});
+			return { referenceId: referenceId ?? null };
 		},
 		assertSessionRedemption: ({ deviceCode }) => {
 			if (typeof deviceCode.oauthClientId !== "string") return;

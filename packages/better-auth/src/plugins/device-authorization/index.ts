@@ -7,6 +7,7 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import * as z from "zod";
 import { mergeSchema } from "../../db";
+import type { Session, User } from "../../types";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
@@ -19,6 +20,7 @@ import {
 	deviceToken,
 	deviceVerify,
 } from "./routes";
+import type { DeviceCode } from "./schema";
 import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH, schema } from "./schema";
 
 declare module "@better-auth/core" {
@@ -176,6 +178,22 @@ export interface DeviceAuthorizationGrant<
 		| DeviceAuthorizationGrantAuthorization
 		| undefined
 		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
+	/**
+	 * Return grant-owned fields to persist when the signed-in owner approves a
+	 * pending, unexpired device code. Fields not declared in
+	 * `deviceCodeSchemaFields` are ignored. Runs for every code, so return
+	 * `undefined` for codes this grant does not own. Throw to reject the
+	 * approval and leave the code pending. The approval can still lose a race
+	 * with a concurrent decision, so this hook must not have side effects.
+	 */
+	authorizeApproval?: (input: {
+		ctx: GenericEndpointContext;
+		deviceCode: DeviceCode & Record<string, unknown>;
+		session: { session: Session; user: User };
+	}) =>
+		| Record<string, unknown>
+		| undefined
+		| Promise<Record<string, unknown> | undefined>;
 	/** Refuse the standalone session-token endpoint for grant-owned codes. */
 	assertSessionRedemption: (input: {
 		ctx: GenericEndpointContext;
@@ -268,7 +286,7 @@ export const deviceAuthorization = <
 			deviceCode: deviceCode(opts, grant),
 			deviceToken: deviceToken(opts, grant),
 			deviceVerify: deviceVerify(grant),
-			deviceApprove,
+			deviceApprove: deviceApprove(grant),
 			deviceDeny,
 		},
 		rateLimit: [

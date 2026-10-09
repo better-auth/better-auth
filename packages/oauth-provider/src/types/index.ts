@@ -1044,6 +1044,11 @@ export interface OAuthOptions<
 		 *
 		 * Note that YOU must fail in this function if the requested
 		 * scope doesn't have a reference id and it should.
+		 *
+		 * With `oauthDeviceAuthorization()`, this also runs when a user
+		 * approves an OAuth device code, and the result is bound to that
+		 * device's tokens. Device approval never consults `shouldRedirect`,
+		 * so this function is the only check there.
 		 */
 		consentReferenceId: (context: {
 			user: User & Record<string, unknown>;

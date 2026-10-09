@@ -619,7 +619,7 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 
 #### Device code grant
 
-The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, and consent reference fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
 
 At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
 
@@ -1177,6 +1177,8 @@ await client.oauth2.oauth2Continue({
   postLogin: true,
 });
 ```
+
+With `oauthDeviceAuthorization()`, `consentReferenceId` also runs when a user approves a device code, and its result is bound to the device's tokens. Device approval never redirects to `postLogin.page` or calls `shouldRedirect`, so `consentReferenceId` must reject a missing reference itself. See [Grant device access for an organization](/docs/plugins/device-authorization#grant-device-access-for-an-organization).
 
 ### Cached Trusted Clients
 

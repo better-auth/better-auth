@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import { openAPI } from "better-auth/plugins";
@@ -1732,5 +1733,156 @@ describe("oauth-provider device-code grant reuse", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+	});
+});
+
+describe("oauth-provider device-code consent reference", async () => {
+	const baseURL = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const referenceClaim = "https://example.com/reference";
+	const firstPartyClientId = "first-party-cli";
+	const requireReference = (): string => {
+		throw new APIError("BAD_REQUEST", { error: "reference_required" });
+	};
+	let resolveReference: () => string | undefined = requireReference;
+	const consentReferenceId = vi.fn(() => resolveReference());
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [resource],
+				enforcePerClientResources: false,
+				scopes: ["openid", "offline_access"],
+				postLogin: {
+					page: "/select-organization",
+					shouldRedirect: () => false,
+					consentReferenceId,
+				},
+				customAccessTokenClaims: ({ referenceId }) => ({
+					[referenceClaim]: referenceId,
+				}),
+			}),
+			oauthDeviceAuthorization({
+				interval: "1s",
+				validateClient: (clientId) => clientId === firstPartyClientId,
+			}),
+		],
+	});
+
+	async function startApproval(registerClient = true) {
+		const { headers, user } = await signInWithTestUser();
+		const clientId = registerClient
+			? (
+					await auth.api.adminCreateOAuthClient({
+						headers,
+						body: {
+							token_endpoint_auth_method: "none",
+							application_type: "native",
+							grant_types: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+							scope: "openid offline_access",
+						},
+					})
+				).client_id
+			: firstPartyClientId;
+		const { device_code, user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: clientId,
+				scope: "openid offline_access",
+				...(registerClient ? { resource } : {}),
+			},
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		consentReferenceId.mockClear();
+		const approve = () =>
+			auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+		const poll = (body: Record<string, string>) =>
+			client.$fetch<{ access_token: string; refresh_token: string }>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: new URLSearchParams({ client_id: clientId, resource, ...body }),
+					headers: FORM_HEADERS,
+				},
+			);
+		return { device_code, user, approve, poll };
+	}
+
+	it("binds device tokens and their refreshes to the approval's reference", async () => {
+		resolveReference = () => "org_1";
+		const { device_code, user, approve, poll } = await startApproval();
+		await approve();
+		expect(consentReferenceId).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ id: user.id }),
+				scopes: ["openid", "offline_access"],
+			}),
+		);
+
+		const tokens = await poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect(tokens.error).toBeNull();
+		expect(decodeJwt(tokens.data!.access_token)[referenceClaim]).toBe("org_1");
+
+		resolveReference = () => "org_2";
+		const refreshed = await poll({
+			grant_type: "refresh_token",
+			refresh_token: tokens.data!.refresh_token,
+		});
+		expect(refreshed.error).toBeNull();
+		expect(decodeJwt(refreshed.data!.access_token)[referenceClaim]).toBe(
+			"org_1",
+		);
+	});
+
+	it("issues tokens without a reference when none is selected", async () => {
+		resolveReference = () => undefined;
+		const { device_code, approve, poll } = await startApproval();
+		await approve();
+
+		const tokens = await poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect(tokens.error).toBeNull();
+		expect(decodeJwt(tokens.data!.access_token)).not.toHaveProperty(
+			referenceClaim,
+		);
+	});
+
+	it("leaves the code pending when the reference cannot be resolved", async () => {
+		resolveReference = requireReference;
+		const { device_code, approve, poll } = await startApproval();
+		await expect(approve()).rejects.toMatchObject({
+			body: { error: "reference_required" },
+		});
+
+		const res = await poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect((res.error as TokenErrorBody | null)?.error).toBe(
+			"authorization_pending",
+		);
+	});
+
+	it("does not resolve a reference for first-party device codes", async () => {
+		resolveReference = requireReference;
+		const { device_code, approve } = await startApproval(false);
+		await approve();
+		expect(consentReferenceId).not.toHaveBeenCalled();
+
+		const tokens = await auth.api.deviceToken({
+			body: {
+				grant_type: DEVICE_CODE_GRANT_TYPE,
+				device_code,
+				client_id: firstPartyClientId,
+			},
+		});
+		expect(tokens.access_token).toEqual(expect.any(String));
 	});
 });
