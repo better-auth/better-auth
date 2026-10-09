@@ -31,7 +31,11 @@ import type {
 	Scope,
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import {
+	deriveSectorIdentifier,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
@@ -846,6 +850,17 @@ async function persistOAuthClientRegistration(
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
 			: null;
+	// A client created before sectors were stored keeps the sector derived
+	// from its redirect URI host, so refreshing it must not assign one.
+	const existingSectorIdentifier =
+		input.registrationSource === "clientMetadataDocument" &&
+		input.existingClient
+			? (input.existingClient.sectorIdentifier ?? null)
+			: undefined;
+	schema.sectorIdentifier =
+		existingSectorIdentifier === null
+			? null
+			: deriveSectorIdentifier(clientId, body.redirect_uris);
 	if (
 		input.registrationSource === "clientMetadataDocument" &&
 		body.application_type === undefined

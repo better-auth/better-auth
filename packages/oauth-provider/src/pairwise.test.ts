@@ -11,12 +11,15 @@ import { decodeJwt } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { resolveSubjectIdentifier } from "./utils";
 
 describe("pairwise subject identifiers", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
-	const rpBaseUrl2 = "http://localhost:6000";
+	// HTTPS hosts share a pairwise sector; loopback clients each get their own.
+	const rpBaseUrl = "https://rp-a.example.com";
+	const rpBaseUrl2 = "https://rp-b.example.com";
 	const validResource = "https://myapi.example.com";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -222,7 +225,7 @@ describe("pairwise subject identifiers", async () => {
 		const idTokenA = decodeJwt(tokensA.data!.id_token!);
 		const idTokenSameHost = decodeJwt(tokensSameHost.data!.id_token!);
 
-		// Same host (localhost) → same sector → same pairwise sub
+		// Same HTTPS host → same sector → same pairwise sub
 		expect(idTokenA.sub).toBe(idTokenSameHost.sub);
 	});
 
@@ -483,6 +486,117 @@ describe("pairwise DCR validation", async () => {
 		});
 
 		expect(response.data?.subject_type).toBe("pairwise");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11649
+ */
+describe("stored pairwise sector", async () => {
+	const opts: OAuthOptions<Scope[]> = {
+		loginPage: "/login",
+		consentPage: "/consent",
+		pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+	};
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [jwt(), oauthProvider(opts)],
+	});
+	const { headers, user } = await signInWithTestUser();
+	const adapter = (await auth.$context).adapter;
+
+	const storedClient = async (clientId: string) => {
+		const client = await adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		if (!client) throw new Error(`client ${clientId} not found`);
+		return client;
+	};
+	const sub = async (clientId: string) =>
+		resolveSubjectIdentifier("user-1", await storedClient(clientId), opts);
+	const createPairwise = async (
+		redirectUris: string[],
+		applicationType: "web" | "native" = "native",
+	) => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: redirectUris,
+				application_type: applicationType,
+				subject_type: "pairwise",
+			},
+		});
+		return client.client_id;
+	};
+	const insertLegacyClient = async (clientId: string, redirectUri: string) => {
+		await adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId,
+				redirectUris: [redirectUri],
+				subjectType: "pairwise",
+				userId: user.id,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		return clientId;
+	};
+
+	it("gives new authority-free native clients a sector of their own", async () => {
+		const a = await createPairwise(["com.example.app:/callback"]);
+		const b = await createPairwise(["com.other.app:/callback"]);
+		expect(await sub(a)).not.toBe(await sub(b));
+	});
+
+	it("gives new loopback clients on the same port a sector of their own", async () => {
+		const a = await createPairwise(["http://localhost:8787/callback"]);
+		const b = await createPairwise(["http://localhost:8787/callback"]);
+		expect(await sub(a)).not.toBe(await sub(b));
+	});
+
+	it("keeps a shared sector for new HTTPS clients on the same host", async () => {
+		const a = await createPairwise(["https://rp.example.com/a"], "web");
+		const b = await createPairwise(["https://rp.example.com/b"], "web");
+		expect((await storedClient(a)).sectorIdentifier).toBe("rp.example.com");
+		expect(await sub(a)).toBe(await sub(b));
+	});
+
+	it("keeps the host-derived sector for clients stored without one", async () => {
+		const a = await insertLegacyClient("legacy-a", "com.example.app:/callback");
+		const b = await insertLegacyClient("legacy-b", "com.other.app:/callback");
+		expect((await storedClient(a)).sectorIdentifier ?? null).toBeNull();
+		expect(await sub(a)).toBe(await sub(b));
+	});
+
+	it("recomputes the sector when redirect URIs move to another HTTPS host", async () => {
+		const clientId = await createPairwise(["https://rp.example.com/cb"], "web");
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: clientId,
+				update: { redirect_uris: ["https://other.example.com/cb"] },
+			},
+		});
+		expect((await storedClient(clientId)).sectorIdentifier).toBe(
+			"other.example.com",
+		);
+	});
+
+	it("does not assign a sector to a client stored without one when it is updated", async () => {
+		const clientId = await insertLegacyClient(
+			"legacy-update",
+			"https://legacy.example.com/cb",
+		);
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: clientId,
+				update: { redirect_uris: ["https://legacy.example.com/other"] },
+			},
+		});
+		expect((await storedClient(clientId)).sectorIdentifier ?? null).toBeNull();
 	});
 });
 

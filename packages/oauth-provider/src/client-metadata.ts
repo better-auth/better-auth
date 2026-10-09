@@ -41,6 +41,7 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	skipConsent: true,
 	enableEndSession: true,
 	subjectType: true,
+	sectorIdentifier: true,
 	referenceId: true,
 	metadata: true,
 } as const satisfies Record<keyof SchemaClient, true>;
@@ -110,6 +111,7 @@ const CIMD_FORBIDDEN_SERVER_FIELD_NAMES = new Set([
 	"resources",
 	"clientSecret",
 	"clientDiscoveryId",
+	"sectorIdentifier",
 	"skipConsent",
 	"enableEndSession",
 	"requirePKCE",
