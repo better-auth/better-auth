@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Device authorization now adds 5 seconds to a device code's polling interval each time it returns `slow_down`, as RFC 8628 requires. Clients that keep polling at the original interval continue to receive `slow_down`.
+Device clients that keep their original polling interval after a `slow_down` response no longer get through. Each `slow_down` from `/device/token` or `/oauth2/token` now adds 5 seconds to that device code's interval and restarts the wait, so such a client receives `slow_down` until the code expires. Previously, its next poll at the original interval succeeded. Clients that add 5 seconds after each `slow_down`, as RFC 8628 requires, are unaffected. A code polled too soon after it expires now returns `expired_token` instead of `slow_down`.

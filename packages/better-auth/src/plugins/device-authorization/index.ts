@@ -179,8 +179,11 @@ export interface DeviceAuthorizationGrant<
 		| undefined
 		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
 	/**
-	 * Return grant-owned fields to persist when the signed-in user approves a
-	 * device code. Throw to reject the approval and leave the code pending.
+	 * Return grant-owned fields to persist when the signed-in owner approves a
+	 * pending, unexpired device code. Runs for every code, so return
+	 * `undefined` for codes this grant does not own. Throw to reject the
+	 * approval and leave the code pending. The approval can still lose a race
+	 * with a concurrent decision, so this hook must not have side effects.
 	 */
 	authorizeApproval?: (input: {
 		ctx: GenericEndpointContext;

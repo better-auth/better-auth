@@ -324,6 +324,77 @@ describe("grant verification context", () => {
 	});
 });
 
+describe("grant approval", () => {
+	async function setup(
+		authorizeApproval: DeviceAuthorizationGrant["authorizeApproval"],
+	) {
+		const grant = {
+			requestSchemaFields: {},
+			deviceCodeSchemaFields: {
+				grantNote: { type: "string", required: false },
+			},
+			authorizeRequest: () => undefined,
+			authorizeApproval,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => undefined,
+		} satisfies DeviceAuthorizationGrant;
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({ grant, validateClient: async () => true }),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const { device_code, user_code } = await auth.api.deviceCode({
+			body: { client_id: "client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const findStored = () =>
+			db.findOne<DeviceCode & { grantNote?: string | null }>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+		return { auth, headers, user_code, findStored };
+	}
+
+	it("persists grant fields without letting them replace the decision", async () => {
+		const { auth, headers, user_code, findStored } = await setup(() => ({
+			grantNote: "from-grant",
+			status: "denied",
+		}));
+
+		await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+
+		expect(await findStored()).toMatchObject({
+			status: "approved",
+			grantNote: "from-grant",
+		});
+	});
+
+	it("keeps a denial that lands while the approval is being authorized", async () => {
+		let denyConcurrently = async () => {};
+		const { auth, headers, user_code, findStored } = await setup(async () => {
+			await denyConcurrently();
+			return { grantNote: "from-grant" };
+		});
+		denyConcurrently = async () => {
+			await auth.api.deviceDeny({ body: { userCode: user_code }, headers });
+		};
+
+		await expect(
+			auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_request",
+				error_description: "Device code already processed",
+			},
+		});
+		expect(await findStored()).toMatchObject({
+			status: "denied",
+			grantNote: null,
+		});
+	});
+});
+
 describe("device authorization flow", async () => {
 	const { auth, signInWithTestUser, db } = await getTestInstance(
 		{
@@ -381,6 +452,15 @@ describe("device authorization flow", async () => {
 			vi.useRealTimers();
 		});
 
+		const pollDeviceToken = (deviceCode: string) =>
+			auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code: deviceCode,
+					client_id: "test-client",
+				},
+			});
+
 		it("should return authorization_pending when not approved", async () => {
 			const { device_code } = await auth.api.deviceCode({
 				body: {
@@ -431,6 +511,57 @@ describe("device authorization flow", async () => {
 			});
 
 			vi.useRealTimers();
+		});
+
+		it("returns expired_token, not slow_down, for an expired code polled too soon", async () => {
+			vi.useFakeTimers();
+			const { device_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await vi.advanceTimersByTimeAsync(299_500);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
+
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "expired_token" },
+			});
+		});
+
+		/**
+		 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+		 */
+		it("adds 5 seconds to the polling interval after slow_down", async () => {
+			vi.useFakeTimers();
+			const { device_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
+
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "slow_down" },
+			});
+			const stored = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(stored?.pollingInterval).toBe(7000);
+
+			// The 7s wait restarts from the rejected poll, so 7.5s after the first
+			// poll is still too soon.
+			await vi.advanceTimersByTimeAsync(6500);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "slow_down" },
+			});
+
+			await vi.advanceTimersByTimeAsync(12_000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
 		});
 
 		it("should return error for invalid device code", async () => {
@@ -749,49 +880,6 @@ describe("device authorization flow", async () => {
 					error_description: "Polling too frequently",
 				},
 			});
-		});
-
-		/**
-		 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
-		 */
-		it("adds 5 seconds to the polling interval after slow_down", async () => {
-			const pollRequest = (deviceCode: string) =>
-				auth.api.deviceToken({
-					body: {
-						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-						device_code: deviceCode,
-						client_id: "test-client",
-					},
-				});
-			vi.useFakeTimers();
-			try {
-				const { device_code } = await auth.api.deviceCode({
-					body: { client_id: "test-client" },
-				});
-				await expect(pollRequest(device_code)).rejects.toMatchObject({
-					body: { error: "authorization_pending" },
-				});
-				await expect(pollRequest(device_code)).rejects.toMatchObject({
-					body: { error: "slow_down" },
-				});
-				const stored = await db.findOne<DeviceCode>({
-					model: "deviceCode",
-					where: [{ field: "deviceCode", value: device_code }],
-				});
-				expect(stored?.pollingInterval).toBe(7000);
-
-				// The configured 2s interval is no longer enough.
-				await vi.advanceTimersByTimeAsync(2500);
-				await expect(pollRequest(device_code)).rejects.toMatchObject({
-					body: { error: "slow_down" },
-				});
-				await vi.advanceTimersByTimeAsync(12_000);
-				await expect(pollRequest(device_code)).rejects.toMatchObject({
-					body: { error: "authorization_pending" },
-				});
-			} finally {
-				vi.useRealTimers();
-			}
 		});
 	});
 
