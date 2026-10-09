@@ -5,6 +5,22 @@ import { DANGEROUS_URL_SCHEMES } from "./url";
 const REVERSE_DOMAIN_PRIVATE_USE_SCHEME =
 	/^[a-z](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i;
 
+const NON_PRIVATE_USE_SCHEMES = new Set([
+	"http:",
+	"https:",
+	"ws:",
+	"wss:",
+	"file:",
+	"ftp:",
+	"mailto:",
+	"javascript:",
+	"data:",
+	"vbscript:",
+	"blob:",
+	"about:",
+	"view-source:",
+]);
+
 /**
  * Returns whether a parsed redirect URI uses an authority-free, reverse-domain
  * private-use scheme as recommended by RFC 8252 §7.1.
@@ -19,6 +35,39 @@ export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
 		schemeSpecificPart.startsWith("/") &&
 		!schemeSpecificPart.startsWith("//") &&
 		REVERSE_DOMAIN_PRIVATE_USE_SCHEME.test(scheme)
+	);
+}
+
+/**
+ * Returns whether a parsed redirect URI uses a non-reserved custom scheme with
+ * an authority component and a path (for example
+ * `cursor://anysphere.cursor-mcp/oauth/callback`).
+ *
+ * RFC 8252 §7.1 recommends the authority-free reverse-domain form, and §8.4
+ * says authorization servers SHOULD reject schemes without a period. Better
+ * Auth deliberately does not enforce either, because native MCP clients such
+ * as Cursor register host-bearing, period-free URIs. Bare-authority forms
+ * (`cursor://host`, `cursor://host?x=1`) are rejected because non-special
+ * schemes parse an empty pathname. Web, script, and browser-internal schemes
+ * in `NON_PRIVATE_USE_SCHEMES` are rejected; any other scheme is accepted.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10946
+ */
+function isHostBearingPrivateUseRedirectUri(uri: URL): boolean {
+	if (NON_PRIVATE_USE_SCHEMES.has(uri.protocol)) {
+		return false;
+	}
+	if (uri.host.length === 0) {
+		return false;
+	}
+	return uri.pathname.startsWith("/");
+}
+
+/** RFC 8252 recommended form or a host-bearing non-reserved custom scheme. */
+export function isNativePrivateUseRedirectUri(uri: URL): boolean {
+	return (
+		isReverseDomainPrivateUseRedirectUri(uri) ||
+		isHostBearingPrivateUseRedirectUri(uri)
 	);
 }
 
