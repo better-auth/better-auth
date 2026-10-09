@@ -1,6 +1,8 @@
 <script lang="ts">
+import type { PageProps } from "./$types";
+
 // biome-ignore lint/correctness/noUnusedVariables: used in the template
-let { data } = $props();
+let { data }: PageProps = $props();
 </script>
 
 {#if data.userName}
