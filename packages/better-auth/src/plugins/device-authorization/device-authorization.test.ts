@@ -343,9 +343,9 @@ describe("grant approval", () => {
 				deviceAuthorization({ grant, validateClient: async () => true }),
 			],
 		});
-		const { headers } = await signInWithTestUser();
+		const { headers, user } = await signInWithTestUser();
 		const { device_code, user_code } = await auth.api.deviceCode({
-			body: { client_id: "client" },
+			body: { client_id: "client", scope: "read" },
 		});
 		await auth.api.deviceVerify({ query: { user_code }, headers });
 		const findStored = () =>
@@ -353,13 +353,15 @@ describe("grant approval", () => {
 				model: "deviceCode",
 				where: [{ field: "deviceCode", value: device_code }],
 			});
-		return { auth, headers, user_code, findStored };
+		return { auth, headers, user, user_code, findStored };
 	}
 
-	it("persists grant fields without letting them replace the decision", async () => {
-		const { auth, headers, user_code, findStored } = await setup(() => ({
+	it("persists only the fields the grant declared", async () => {
+		const { auth, headers, user, user_code, findStored } = await setup(() => ({
 			grantNote: "from-grant",
 			status: "denied",
+			userId: "another-user",
+			scope: "admin",
 		}));
 
 		await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
@@ -367,6 +369,27 @@ describe("grant approval", () => {
 		expect(await findStored()).toMatchObject({
 			status: "approved",
 			grantNote: "from-grant",
+			userId: user.id,
+			scope: "read",
+		});
+	});
+
+	it("rejects an approval whose code expires while it is being authorized", async () => {
+		const { auth, headers, user_code, findStored } = await setup(() => {
+			vi.setSystemTime(Date.now() + 31 * 60 * 1000);
+			return { grantNote: "from-grant" };
+		});
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			await expect(
+				auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+			).rejects.toMatchObject({ body: { error: "expired_token" } });
+		} finally {
+			vi.useRealTimers();
+		}
+		expect(await findStored()).toMatchObject({
+			status: "pending",
+			grantNote: null,
 		});
 	});
 

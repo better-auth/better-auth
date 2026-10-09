@@ -373,7 +373,9 @@ After displaying the user code, poll for the Better Auth session token. The resp
 Example polling implementation:
 
 ```ts
-let pollingInterval = interval; // Seconds, from the device code response
+// `data` is the response from `authClient.device.code()` above
+const { device_code, interval } = data;
+let pollingInterval = interval; // Seconds
 const pollForToken = async () => {
   const { data, error } = await authClient.device.token({
     grant_type: "urn:ietf:params:oauth:grant-type:device_code",
@@ -417,11 +419,11 @@ pollForToken();
 
 The user authorization flow requires two steps:
 
-1. **Code Verification**: Validate the user code via `GET /device`. The verification request claims the pending device code for the calling session.
-2. **Authorization**: The session that claimed the code can approve or deny it.
+1. **Code Verification**: Validate the user code via `GET /device`. The verification request claims the pending device code for the signed-in user.
+2. **Authorization**: The user who claimed the code can approve or deny it.
 
 <Callout type="warn">
-  Users must be authenticated when calling `GET /device`, because the verification step binds the pending device code to that session. Only the same session can later approve or deny. If the user is not authenticated when entering the code, redirect them to the login page with a return URL and re-call `GET /device` after sign-in.
+  Users must be authenticated when calling `GET /device`, because the verification step binds the pending device code to the signed-in user. Only that user can later approve or deny it. If the user is not authenticated when entering the code, redirect them to the login page with a return URL and re-call `GET /device` after sign-in.
 </Callout>
 
 When the OAuth Provider integration is enabled, `GET /device` also returns the approved resource context to the authenticated user who owns the request. Show that context in the approval UI alongside the client and scopes. Standalone Device Authorization does not return an RFC 8707 `resource` field.
@@ -481,14 +483,14 @@ export default function DeviceAuthorizationPage() {
 
 ### Approving or Denying Device
 
-Users must be authenticated to approve or deny device authorization requests. Only the session that claimed the code with `GET /device` can decide it, and each code accepts one decision. Approve and deny return one of these errors instead of `success: true`:
+Users must be authenticated to approve or deny device authorization requests. Only the user who claimed the code with `GET /device`, or the user it was pre-bound to with `user_id`, can decide it, and each code accepts one decision. Approve and deny return one of these errors instead of `success: true`:
 
-| Error Code        | When                                                                                                                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `unauthorized`    | No user is signed in                                                                                                                                                                       |
-| `invalid_request` | The user code is unknown, was not claimed with `GET /device`, or already has a decision ("Device code already processed"), including from a concurrent approve or deny that finished first |
-| `expired_token`   | The code has expired                                                                                                                                                                       |
-| `access_denied`   | Another user claimed the code                                                                                                                                                              |
+| Error Code        | When                                                                                                                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unauthorized`    | No user is signed in                                                                                                                                                                                                                             |
+| `invalid_request` | The user code is unknown, has no user yet (it was neither claimed with `GET /device` nor pre-bound with `user_id`), or already has a decision ("Device code already processed"), including from a concurrent approve or deny that finished first |
+| `expired_token`   | The code has expired                                                                                                                                                                                                                             |
+| `access_denied`   | The code belongs to another user                                                                                                                                                                                                                 |
 
 With the OAuth Provider integration, approval also fails with the error that `postLogin.consentReferenceId` throws. See [Grant device access for an organization](#grant-device-access-for-an-organization).
 
@@ -796,7 +798,7 @@ authenticateCLI().catch((err) => {
 3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
 4. **HTTPS and approval UI**: Follow the [RFC 8628 TLS and user-interaction requirements](https://datatracker.ietf.org/doc/html/rfc8628#section-3.3) in production, including explicit approval or denial and [device-possession and remote-phishing guidance](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)
 5. **User Code Format**: User codes use a limited character set (excluding similar-looking characters like 0/O, 1/I) to reduce typing errors
-6. **Authentication Required**: Users must be authenticated when calling `GET /device`. The verification step claims the pending device code for the calling session, and only that session can later approve or deny it
+6. **Authentication Required**: Users must be authenticated when calling `GET /device`. The verification step claims the pending device code for the signed-in user, and only that user can later approve or deny it
 7. **Pre-binding**: Device codes issued with `user_id` skip the claiming step and can only be approved or denied by that user. Pass `user_id` from trusted server-side code only
 
 ## Options

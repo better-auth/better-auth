@@ -140,12 +140,14 @@ async function recordDeviceCodeDecision(
 		});
 	}
 
-	if (deviceCodeRecord.expiresAt < new Date()) {
-		throw new APIError("BAD_REQUEST", {
+	const expired = () =>
+		new APIError("BAD_REQUEST", {
 			error: "expired_token",
 			error_description:
 				DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
 		});
+	if (deviceCodeRecord.expiresAt < new Date()) {
+		throw expired();
 	}
 
 	const alreadyProcessed = () =>
@@ -174,7 +176,8 @@ async function recordDeviceCodeDecision(
 	}
 
 	// Nothing is written until the authorizer returns, so a throw leaves the
-	// code pending. The status follows its fields so they cannot replace it.
+	// code pending. The guard repeats the expiry check because the authorizer
+	// can outlast the code.
 	const decisionFields = await authorizeDecision?.({
 		deviceCode: deviceCodeRecord,
 		session,
@@ -185,12 +188,15 @@ async function recordDeviceCodeDecision(
 			{ field: "id", value: deviceCodeRecord.id },
 			{ field: "status", value: "pending" },
 			{ field: "userId", value: session.user.id },
+			{ field: "expiresAt", operator: "gt", value: new Date() },
 		],
 		increment: {},
 		set: { ...decisionFields, status: decision },
 	});
 	if (!decided) {
-		throw alreadyProcessed();
+		throw deviceCodeRecord.expiresAt < new Date()
+			? expired()
+			: alreadyProcessed();
 	}
 }
 
@@ -1064,7 +1070,20 @@ export const deviceApprove = <
 				ctx,
 				ctx.body.userCode,
 				"approved",
-				(approval) => grant?.authorizeApproval?.({ ctx, ...approval }),
+				async (approval) => {
+					const fields = await grant?.authorizeApproval?.({
+						ctx,
+						...approval,
+					});
+					// Persist only fields the grant declared, so it cannot replace the
+					// owner, status, or any other host-owned field.
+					return Object.fromEntries(
+						Object.entries(fields ?? {}).filter(
+							([field]) =>
+								grant !== undefined && field in grant.deviceCodeSchemaFields,
+						),
+					);
+				},
 			);
 			return ctx.json({
 				success: true,
