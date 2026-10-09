@@ -1864,11 +1864,18 @@ const response = await auth.api.createOAuthClient({
 
 #### How It Works
 
-Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** (the host of the client's first redirect URI) and the user ID, keyed with `pairwiseSecret`. This means:
+Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** and the user ID, keyed with `pairwiseSecret`. Better Auth assigns the sector when the client is created:
 
-* Two clients with different redirect URI hosts always receive different `sub` values for the same user
-* Two clients sharing the same redirect URI host receive the **same** pairwise `sub` (per OIDC Core Section 8.1)
+* A client whose redirect URIs all use `https` gets the host of its first redirect URI, including any port. Clients on the same `https` host share a sector and receive the **same** pairwise `sub` (per OIDC Core Section 8.1).
+* Any other client, such as one with a custom-scheme (`com.example.app:/callback`) or loopback (`http://localhost:8787/callback`) redirect URI, gets a sector of its own. Any app can register a custom scheme, and any local process can listen on a loopback port, so those redirect URIs do not identify the client.
+
+This means:
+
+* Two clients with different sectors always receive different `sub` values for the same user
 * The same client always receives the same `sub` for the same user (deterministic)
+* Changing a client's redirect URIs recomputes its sector, so moving to another host changes the `sub` its users receive
+
+Clients created before Better Auth stored sectors keep the sector of their first redirect URI host, so their users' `sub` does not change. Unrelated custom-scheme or loopback clients created before then can share a sector.
 
 Pairwise `sub` appears in:
 
@@ -1949,6 +1956,13 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       'Subject identifier type for this client. Set to "pairwise" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.',
+    isOptional: true,
+  },
+  {
+    name: "sectorIdentifier",
+    type: "string",
+    description:
+      "Pairwise sector assigned by the server when the client is created. Empty for clients created before sectors were stored, which use the host of their first redirect URI.",
     isOptional: true,
   },
   {

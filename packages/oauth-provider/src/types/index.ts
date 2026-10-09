@@ -1835,6 +1835,12 @@ export interface SchemaClient<
 	enableEndSession?: boolean;
 	/** Subject identifier type: "public" (default) or "pairwise" */
 	subjectType?: "public" | "pairwise";
+	/**
+	 * Pairwise sector, set by the server when the client is created. `null`
+	 * for clients created before sectors were stored; those keep the sector
+	 * derived from their first redirect URI host.
+	 */
+	sectorIdentifier?: string | null;
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**

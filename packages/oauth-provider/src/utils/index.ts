@@ -992,12 +992,48 @@ export function parsePrompt(prompt: string) {
 }
 
 /**
- * Extracts the sector identifier (hostname) from a client's first redirect URI.
+ * Derives the pairwise sector to store for a client.
+ *
+ * Only an `https` host identifies who controls a redirect URI, so clients
+ * whose redirect URIs are all `https` share the sector of that host. Any app
+ * can register a custom scheme, and any local process can listen on a
+ * loopback port, so every other client gets a sector of its own. `/` cannot
+ * appear in a URL host, so a client sector never equals a host sector.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+export function deriveSectorIdentifier(
+	clientId: string,
+	redirectUris: readonly string[] | undefined,
+): string {
+	const first = redirectUris?.[0];
+	if (
+		first &&
+		redirectUris.every((uri) => {
+			try {
+				return new URL(uri).protocol === "https:";
+			} catch {
+				return false;
+			}
+		})
+	) {
+		return new URL(first).host;
+	}
+	return `client/${clientId}`;
+}
+
+/**
+ * Returns the client's stored pairwise sector, or for a client created before
+ * sectors were stored, the host of its first redirect URI.
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
 function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+	if (client.sectorIdentifier) {
+		return client.sectorIdentifier;
+	}
 	const uri = client.redirectUris?.[0];
 	if (!uri) {
 		throw new BetterAuthError(
