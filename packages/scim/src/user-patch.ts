@@ -1,5 +1,11 @@
 import * as z from "zod";
+import {
+	canonicalizeSCIMAttributeNames,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type { SCIMCanonicalEmail, SCIMEmail, SCIMName } from "./configuration";
+import type { SCIMPatchValueTarget } from "./null-attributes";
+import { expandSCIMPatchNullValues } from "./null-attributes";
 import type { SCIMUser } from "./persistence";
 import {
 	resolveSCIMCanonicalAttributePath,
@@ -390,7 +396,7 @@ function findPatchAttribute(
 	);
 }
 
-function resolveMutableSCIMUserPatchPath(
+function resolveSCIMUserPatchPath(
 	path: string,
 ): ResolvedSCIMPatchPath | { enterpriseRoot: true } {
 	const canonicalPath = resolveSCIMCanonicalAttributePath("User", path.trim());
@@ -436,7 +442,6 @@ function resolveMutableSCIMUserPatchPath(
 			scimType: "invalidPath",
 		});
 	}
-	if (attribute.mutability === "readOnly") rejectReadOnlyAttribute(path);
 
 	const subAttribute = subAttributePath
 		? findPatchAttribute(attribute.subAttributes ?? [], subAttributePath)
@@ -447,7 +452,6 @@ function resolveMutableSCIMUserPatchPath(
 			scimType: "invalidPath",
 		});
 	}
-	if (subAttribute?.mutability === "readOnly") rejectReadOnlyAttribute(path);
 	if (filterMatch && !attribute.multiValued) {
 		throw createSCIMError("BAD_REQUEST", {
 			detail: `User PATCH path ${path} is not a multi-valued attribute`,
@@ -472,6 +476,105 @@ function resolveMutableSCIMUserPatchPath(
 				}
 			: {}),
 	};
+}
+
+function resolveMutableSCIMUserPatchPath(
+	path: string,
+): ResolvedSCIMPatchPath | { enterpriseRoot: true } {
+	const resolved = resolveSCIMUserPatchPath(path);
+	if (
+		!("enterpriseRoot" in resolved) &&
+		(resolved.attribute.mutability === "readOnly" ||
+			resolved.subAttribute?.mutability === "readOnly")
+	) {
+		rejectReadOnlyAttribute(path);
+	}
+	return resolved;
+}
+
+function resolveSCIMUserPatchValueTarget(path: string): SCIMPatchValueTarget {
+	if (normalizePatchPath(path) === "active") return { kind: "notNullable" };
+	let resolved: ReturnType<typeof resolveSCIMUserPatchPath>;
+	try {
+		resolved = resolveSCIMUserPatchPath(path);
+	} catch {
+		// Unsupported paths keep their original operation, which reports the error.
+		return { kind: "value" };
+	}
+	if ("enterpriseRoot" in resolved) {
+		// The URN joins its attributes with ":", and the `enterprise` alias with ".".
+		const separator = path.trim().toLowerCase() === "enterprise" ? "." : ":";
+		return {
+			kind: "merge",
+			subPath: (attribute) => `${path}${separator}${attribute}`,
+		};
+	}
+	if (
+		resolved.attribute.mutability === "readOnly" ||
+		resolved.subAttribute?.mutability === "readOnly"
+	) {
+		return { kind: "readOnly" };
+	}
+	const selectsEntries =
+		resolved.selectorType !== undefined ||
+		resolved.selectorPrimary !== undefined;
+	// Selected entries handle their own null keys, because a merged value can change what the selector matches.
+	if (
+		resolved.subAttribute ||
+		resolved.attribute.type !== "complex" ||
+		selectsEntries
+	) {
+		return { kind: "value" };
+	}
+	if (resolved.attribute.multiValued) return { kind: "entries" };
+	return { kind: "merge", subPath: (attribute) => `${path}.${attribute}` };
+}
+
+/**
+ * Rewrite a User PATCH value's attribute keys to the names its target
+ * declares. Pathless keys may be aliases or qualified paths, such as
+ * `manager` or `name.givenName`, so each entry resolves through its own path.
+ */
+export function canonicalizeSCIMUserPatchValue(
+	path: string | undefined,
+	value: unknown,
+): unknown {
+	if (path) return canonicalizeSCIMUserPatchPathValue(path, value);
+	const resource = canonicalizeSCIMResourceAttributeNames("User", value);
+	if (!isRecord(resource)) return resource;
+	const entries = Object.entries(resource).map(
+		([key, entry]): [string, unknown] => [
+			key,
+			canonicalizeSCIMUserPatchPathValue(key, entry),
+		],
+	);
+	return entries.every(([key, entry]) => entry === resource[key])
+		? resource
+		: Object.fromEntries(entries);
+}
+
+function canonicalizeSCIMUserPatchPathValue(
+	path: string,
+	value: unknown,
+): unknown {
+	let resolved: ReturnType<typeof resolveSCIMUserPatchPath>;
+	try {
+		resolved = resolveSCIMUserPatchPath(path);
+	} catch {
+		return value;
+	}
+	if ("enterpriseRoot" in resolved) {
+		return canonicalizeSCIMAttributeNames(
+			value,
+			SCIMEnterpriseUserResourceSchema.attributes,
+		);
+	}
+	const subAttributes = resolved.subAttribute
+		? resolved.subAttribute.subAttributes
+		: resolved.attribute.subAttributes;
+	return subAttributes
+		? canonicalizeSCIMAttributeNames(value, subAttributes)
+		: value;
 }
 
 function getSCIMPatchContainer(
@@ -593,6 +696,15 @@ function normalizeManagerPatchValue(value: unknown): Record<string, unknown> {
 		: invalidPatchValue("manager must contain value or $ref");
 }
 
+/** A null key in a value merged into a selected entry removes that sub-attribute. */
+function withoutNullAttributes(
+	value: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+	return Object.fromEntries(
+		Object.entries(value).filter(([, item]) => item !== null),
+	);
+}
+
 function normalizeMultiValueAdditions(value: unknown): unknown[] {
 	return (Array.isArray(value) ? value : [value]).map(clonePatchValue);
 }
@@ -678,17 +790,24 @@ function applySCIMMultiValuePatch(
 	if (!hasTarget) {
 		if (op === "remove") return;
 		if (!resolved.subAttributeName) {
-			const additions = normalizeMultiValueAdditions(value).map((item) =>
-				isRecord(item)
-					? {
-							...item,
-							...(resolved.selectorType ? { type: resolved.selectorType } : {}),
-							...(resolved.selectorPrimary === undefined
-								? {}
-								: { primary: resolved.selectorPrimary }),
-						}
-					: item,
-			);
+			const additions = normalizeMultiValueAdditions(value).flatMap((item) => {
+				if (!isRecord(item)) return [item];
+				const assigned = withoutNullAttributes(item);
+				// Clearing fields of an entry that does not exist is a no-op, like a remove.
+				const clearsOnly =
+					Object.keys(assigned).length === 0 && Object.keys(item).length > 0;
+				if (clearsOnly) return [];
+				return [
+					{
+						...assigned,
+						...(resolved.selectorType ? { type: resolved.selectorType } : {}),
+						...(resolved.selectorPrimary === undefined
+							? {}
+							: { primary: resolved.selectorPrimary }),
+					},
+				];
+			});
+			if (additions.length === 0) return;
 			const nextValues = [...currentValues, ...additions];
 			const firstAddedPrimary = additions.findIndex(
 				(item) => isRecord(item) && item.primary === true,
@@ -746,7 +865,7 @@ function applySCIMMultiValuePatch(
 					`${resolved.attributeName} must contain objects`,
 				);
 			}
-			return { ...item, ...replacement };
+			return withoutNullAttributes({ ...item, ...replacement });
 		});
 		const firstReplacedIndex = matches.findIndex(Boolean);
 		container[resolved.attributeName] = enforceSinglePatchedPrimary(
@@ -1155,7 +1274,10 @@ export function applySCIMUserPatch(
 		}
 	}
 
-	for (const operation of operations) {
+	for (const operation of expandSCIMPatchNullValues(
+		operations,
+		resolveSCIMUserPatchValueTarget,
+	)) {
 		const path = operation.path?.trim();
 		if (path) {
 			applyAttribute(operation.op, path, operation.value);

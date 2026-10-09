@@ -1,5 +1,11 @@
 # @better-auth/kysely-adapter
 
+## 1.7.7
+
+### Patch Changes
+
+- [#11495](https://github.com/better-auth/better-auth/pull/11495) [`07bdf7e`](https://github.com/better-auth/better-auth/commit/07bdf7ecafb75222f7a24e0733cc3b056f84e9e8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Kysely `consumeOne` now rejects a row if a concurrent write makes the original condition false. Previously, it could delete that row after waiting for the concurrent write. Consumption remains limited to one row.
+
 ## 1.7.6
 
 ### Patch Changes

@@ -157,9 +157,12 @@ description: Learn how to configure Better Auth in your project.
         import { client } from "@/db"; // your mongodb client
 
         export const auth = betterAuth({
-            database: mongodbAdapter(client),
+            database: mongodbAdapter(client.db(), { client }),
         });
         ```
+
+        See the [MongoDB adapter guide](/docs/adapters/mongo) for standalone
+        server setup.
       </Tab>
     </Tabs>
 
@@ -274,9 +277,9 @@ description: Learn how to configure Better Auth in your project.
 
       <Tab value="svelte-kit">
         ```ts title="hooks.server.ts"
-        import { auth } from "$lib/auth"; // path to your auth file
+        import { auth } from "#lib/auth.js"; // SvelteKit 2: "$lib/auth"
         import { svelteKitHandler } from "better-auth/svelte-kit";
-        import { building } from '$app/environment'
+        import { building } from "$app/env"; // SvelteKit 2: "$app/environment"
 
         export async function handle({ event, resolve }) {
             return svelteKitHandler({ event, resolve, auth, building });

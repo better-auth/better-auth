@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.7.6",
+  "version": "1.7.7",
   "bugs": {
     "url": "https://github.com/better-auth/better-auth/issues"
   },
@@ -53,7 +53,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
-    "@better-auth/utils": "catalog:",
+    "@better-auth/utils": "catalog:peer",
     "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0"
   },
   "peerDependenciesMeta": {
