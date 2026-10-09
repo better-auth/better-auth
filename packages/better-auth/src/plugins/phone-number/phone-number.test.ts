@@ -974,6 +974,35 @@ describe("reset password session revocation", async () => {
 		const session = await client.getSession({ fetchOptions: { headers } });
 		expect(session.data?.user).toBeTruthy();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10632
+	 */
+	it("leaves the OTP usable when the new password is rejected", async () => {
+		const phoneNumber = "+251911000002";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+		const ctx = await auth.$context;
+		const hash = vi
+			.spyOn(ctx.password, "hash")
+			.mockRejectedValueOnce(new Error("password rejected"));
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const resetWith = (newPassword: string) =>
+			client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: resetOtp,
+				newPassword,
+			});
+
+		expect((await resetWith("pwned-password")).error).not.toBeNull();
+		hash.mockRestore();
+		expect((await resetWith("safe-password")).data?.status).toBe(true);
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "safe-password",
+		});
+		expect(signInRes.data).not.toBeNull();
+	});
 });
 
 describe("reset password onPasswordReset callback", async () => {

@@ -404,6 +404,42 @@ describe("email-otp", async () => {
 		expect(await auth.api.getSession({ headers })).not.toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10632
+	 */
+	it("leaves the OTP usable when the new password is rejected", async () => {
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							otp = _otp;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const ctx = await auth.$context;
+		vi.spyOn(ctx.password, "hash").mockRejectedValueOnce(
+			new Error("password rejected"),
+		);
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+		const resetWith = (password: string) =>
+			client.emailOtp.resetPassword({ email: testUser.email, otp, password });
+
+		expect((await resetWith("pwned-password")).error).not.toBeNull();
+		expect((await resetWith("safe-password")).data?.success).toBe(true);
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: "safe-password",
+		});
+		expect(signIn.data).not.toBeNull();
+	});
+
 	it("should call onPasswordReset callback when resetting password", async () => {
 		const onPasswordResetMock = vi.fn();
 		const { client, testUser } = await getTestInstance(

@@ -26,19 +26,25 @@ export function assertPasswordNotTooLong(
  * Sets a user's credential password after a reset, revoking their sessions
  * when `emailAndPassword.revokeSessionsOnPasswordReset` is enabled.
  *
- * Database revocation and the password write run in one transaction, so a
- * failure in either leaves both unchanged. Secondary-storage sessions are
+ * `consumeResetToken` spends the single-use reset token or OTP and throws when
+ * it is no longer valid. It runs first inside the same transaction as
+ * revocation and the password write, so a failure in any of them leaves all
+ * three unchanged and the user can retry. Verification values held only in
+ * secondary storage are consumed with `getAndDelete`, which can't roll back,
+ * so a later failure there still spends the token. Secondary-storage sessions are
  * removed by an after-commit hook, so they can't roll back with the write.
- * Sessions are revoked first so that on an adapter without transactions a
- * failure still keeps the old password rather than committing a new one while
- * existing sessions stay valid.
+ * Sessions are revoked before the write so that on an adapter without
+ * transactions a failure still keeps the old password rather than committing a
+ * new one while existing sessions stay valid.
  */
 export async function resetCredentialPassword(
 	ctx: GenericEndpointContext,
 	userId: string,
 	passwordHash: string,
+	consumeResetToken?: () => Promise<void>,
 ) {
 	await runWithTransaction(ctx.context.adapter, async () => {
+		await consumeResetToken?.();
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteUserSessions(userId);
 		}

@@ -289,12 +289,12 @@ export const resetPassword = createAuthEndpoint(
 
 		const id = `reset-password:${token}`;
 
-		// Consume the single-use reset token before any password change so two
-		// concurrent requests with the same token cannot both proceed: the first
-		// caller wins, every racer (and any expired token) gets null.
+		// Look the token up without spending it, so a rejected password (including
+		// a haveIBeenPwned rejection inside `password.hash`) leaves the link usable.
+		// It is consumed inside the reset transaction below.
 		const verification =
-			await ctx.context.internalAdapter.consumeVerificationValue(id);
-		if (!verification) {
+			await ctx.context.internalAdapter.findVerificationValue(id);
+		if (!verification || verification.expiresAt < new Date()) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
@@ -303,7 +303,15 @@ export const resetPassword = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 		}
 		const hashedPassword = await ctx.context.password.hash(newPassword);
-		await resetCredentialPassword(ctx, userId, hashedPassword);
+		await resetCredentialPassword(ctx, userId, hashedPassword, async () => {
+			// Consuming is the single-winner gate: of two concurrent requests with
+			// the same token, only the first gets the row back.
+			const consumed =
+				await ctx.context.internalAdapter.consumeVerificationValue(id);
+			if (!consumed) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+			}
+		});
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			await ctx.context.options.emailAndPassword.onPasswordReset(
