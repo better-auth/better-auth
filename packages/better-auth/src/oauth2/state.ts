@@ -4,7 +4,7 @@ import { getOAuthServerContext, setOAuthState } from "../api/state/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
 import { generateGenericState, parseGenericState, StateError } from "../state";
-import { redirectOnError } from "./errors";
+import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
 
 /**
  * Mint the OIDC `nonce` for the redirect flow, or `undefined` when the provider
@@ -93,12 +93,12 @@ export async function parseState(c: GenericEndpointContext) {
 	} catch (error) {
 		c.context.logger.error("Failed to parse state", error);
 
-		let code = "internal_server_error";
+		let code: string = OAUTH_CALLBACK_ERROR_CODES.INTERNAL_SERVER_ERROR;
 		let redirectErrorURL = errorURL;
 		if (error instanceof StateError) {
 			code =
 				error.code === "state_security_mismatch"
-					? "state_mismatch"
+					? OAUTH_CALLBACK_ERROR_CODES.STATE_MISMATCH
 					: error.code;
 			redirectErrorURL = error.errorURL || errorURL;
 		}
