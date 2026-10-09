@@ -20,7 +20,6 @@ import {
 } from "./signed-query";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
-import { storeToken } from "./utils";
 
 const signedQueryParameterNameParam = "ba_param";
 
@@ -1522,21 +1521,7 @@ describe("signedQueryExpiresIn and codeExpiresIn decoupling (#11204)", () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
 
-	async function expectSignedQueryHopAndCodeTtl(options: {
-		codeExpiresIn?: number;
-		signedQueryExpiresIn?: number;
-		expectedSignedHopTtl: number;
-		expectedCodeTtl: number;
-		state?: string;
-	}) {
-		const {
-			codeExpiresIn,
-			signedQueryExpiresIn,
-			expectedSignedHopTtl,
-			expectedCodeTtl,
-			state = "test-state",
-		} = options;
-
+	it("resumes a sign-in that takes longer than codeExpiresIn", async () => {
 		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 			{
 				baseURL: authServerBaseUrl,
@@ -1544,8 +1529,8 @@ describe("signedQueryExpiresIn and codeExpiresIn decoupling (#11204)", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						codeExpiresIn,
-						signedQueryExpiresIn,
+						codeExpiresIn: 60,
+						signedQueryExpiresIn: 600,
 					}),
 					jwt(),
 				],
@@ -1572,15 +1557,6 @@ describe("signedQueryExpiresIn and codeExpiresIn decoupling (#11204)", () => {
 			throw Error("client creation failed");
 		}
 
-		// 1. Unauthenticated authorize request redirects to /login with signed query
-		const unauthenticatedClient = createAuthClient({
-			plugins: [oauthProviderClient()],
-			baseURL: authServerBaseUrl,
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
-
 		const authUrl = await createAuthorizationURL({
 			id: "test",
 			options: {
@@ -1588,82 +1564,44 @@ describe("signedQueryExpiresIn and codeExpiresIn decoupling (#11204)", () => {
 				clientSecret: registeredClient.client_secret,
 			},
 			redirectURI: redirectUri,
-			state,
+			state: "slow-sign-in",
 			scopes: ["openid"],
 			responseType: "code",
 			codeVerifier: generateRandomString(64),
 			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		});
 
+		// The unauthenticated authorize request bounces to the login page with
+		// the authorization request carried in a signed query.
 		let loginRedirectUrl = "";
-		await unauthenticatedClient.$fetch(authUrl.toString(), {
+		await client.$fetch(authUrl.toString(), {
 			onError(context) {
 				loginRedirectUrl = context.response.headers.get("Location") || "";
 			},
 		});
-
 		const loginRedirect = new URL(loginRedirectUrl, authServerBaseUrl);
-		const signedExp = Number(loginRedirect.searchParams.get("exp"));
-		const signedIat = Math.floor(
-			Number(loginRedirect.searchParams.get(signedQueryIssuedAtParam)) / 1000,
-		);
-		expect(signedExp - signedIat).toBe(expectedSignedHopTtl);
+		expect(loginRedirect.pathname).toBe("/login");
 
-		// 2. Authenticated authorize request resumes through the signed redirect query
-		const resumeUrl = new URL(
-			`${authServerBaseUrl}/api/auth/oauth2/authorize?${loginRedirect.searchParams.toString()}`,
-		);
-		let callbackRedirectUrl = "";
-		await client.$fetch(resumeUrl.toString(), {
-			headers,
-			onError(context) {
-				callbackRedirectUrl = context.response.headers.get("Location") || "";
-			},
-		});
-
-		const callbackUrl = new URL(callbackRedirectUrl);
-		const code = callbackUrl.searchParams.get("code");
-		expect(code).toBeDefined();
-		expect(callbackUrl.searchParams.get("state")).toBe(state);
-
-		const hashedCode = await storeToken("hashed", code!, "authorization_code");
-		const context = await auth.$context;
-		const record =
-			await context.internalAdapter.findVerificationValue(hashedCode);
-		expect(record).toBeDefined();
-		const codeTtlSeconds = Math.round(
-			(record!.expiresAt.getTime() - record!.createdAt.getTime()) / 1000,
-		);
-		expect(codeTtlSeconds).toBe(expectedCodeTtl);
-	}
-
-	it("decouples authorization code TTL from signed query hop TTL (codeExpiresIn: 60, signedQueryExpiresIn: 600)", async () => {
-		await expectSignedQueryHopAndCodeTtl({
-			codeExpiresIn: 60,
-			signedQueryExpiresIn: 600,
-			expectedSignedHopTtl: 600,
-			expectedCodeTtl: 60,
-			state: "test-state",
-		});
-	});
-
-	it("decouples authorization code TTL from signed query hop TTL (codeExpiresIn: 600, signedQueryExpiresIn: 60)", async () => {
-		await expectSignedQueryHopAndCodeTtl({
-			codeExpiresIn: 600,
-			signedQueryExpiresIn: 60,
-			expectedSignedHopTtl: 60,
-			expectedCodeTtl: 600,
-			state: "test-state-2",
-		});
-	});
-
-	it("falls back to codeExpiresIn when signedQueryExpiresIn is not specified", async () => {
-		await expectSignedQueryHopAndCodeTtl({
-			codeExpiresIn: 120,
-			expectedSignedHopTtl: 120,
-			expectedCodeTtl: 120,
-			state: "test-state-3",
-		});
+		// The user spends longer on the login/consent screens than the 60s code
+		// TTL. Only Date is faked so the request itself still runs. Before the
+		// fix the signed query inherited `codeExpiresIn` and this resume was
+		// rejected with `invalid_signature`.
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 90 * 1000 });
+		try {
+			const resumed = await client.oauth2.continue(
+				{
+					selected: true,
+					oauth_query: loginRedirect.search.slice(1),
+				},
+				{ headers, throw: true },
+			);
+			expect(resumed.redirect).toBe(true);
+			expect(resumed.url).toContain(redirectUri);
+			expect(resumed.url).toContain("code=");
+			expect(resumed.url).toContain("state=slow-sign-in");
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

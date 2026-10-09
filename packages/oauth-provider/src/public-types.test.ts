@@ -6,7 +6,6 @@ import type {
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
 	OAuthOptions,
-	OAuthProviderOptions,
 	SchemaClient,
 	Scope,
 	TokenEndpointAuthMethod,
@@ -81,10 +80,9 @@ describe("public oauth-provider types", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11204
 	 */
-	it("exports signedQueryExpiresIn and OAuthProviderOptions", () => {
+	it("exports signedQueryExpiresIn as an optional seconds option", () => {
 		expectTypeOf<OAuthOptions["signedQueryExpiresIn"]>().toEqualTypeOf<
 			number | undefined
 		>();
-		expectTypeOf<OAuthProviderOptions>().toEqualTypeOf<OAuthOptions>();
 	});
 });

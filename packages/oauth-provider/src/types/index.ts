@@ -1469,13 +1469,6 @@ export interface OAuthOptions<
 	};
 }
 
-/**
- * Alias for {@link OAuthOptions}.
- */
-export type OAuthProviderOptions<
-	Scopes extends readonly Scope[] = InternallySupportedScopes[],
-> = OAuthOptions<Scopes>;
-
 export interface OAuthAuthorizationQuery {
 	/**
 	 * The response type.

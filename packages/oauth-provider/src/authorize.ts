@@ -1104,7 +1104,7 @@ async function signParams(
 	// Add expiration to query parameters
 	const issuedAt = Date.now();
 	const iat = Math.floor(issuedAt / 1000);
-	const exp = iat + (opts.signedQueryExpiresIn ?? opts.codeExpiresIn ?? 600);
+	const exp = iat + (opts.signedQueryExpiresIn ?? 600);
 	const params = serializeAuthorizationQuery(
 		ctx.query as OAuthAuthorizationQuery,
 	);

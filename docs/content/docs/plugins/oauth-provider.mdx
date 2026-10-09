@@ -1400,6 +1400,8 @@ Each token type and grant type can independently can set a default expiration.
 
 Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privilege scopes that require shorter expiration times. The earliest expiration will take precedence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
 
+`signedQueryExpiresIn` has no upper bound: it only needs to outlive the slowest login, consent, or account-selection screen a user works through. A very large value keeps a valid, replayable signed query in a browser URL for that long, so raise it only as far as the slowest interactive screen requires.
+
 ```ts title="auth.ts"
 oauthProvider({
   scopeExpirations: {
