@@ -200,6 +200,146 @@ describe("sign-up with custom fields", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11642
+ */
+describe("sign-up session caching", () => {
+	function createStorage(store: Map<string, string>, shouldFail = () => false) {
+		return {
+			set(key: string, value: string) {
+				if (shouldFail()) throw new Error("storage unavailable");
+				store.set(key, value);
+			},
+			get(key: string) {
+				return store.get(key) || null;
+			},
+			getAndDelete(key: string) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key: string) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+			delete(key: string) {
+				store.delete(key);
+			},
+		};
+	}
+
+	const body = {
+		email: "cache-rollback@test.com",
+		password: "password",
+		name: "Cache Rollback",
+	};
+
+	it("does not cache the session when the sign-up rolls back after creating it", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store),
+				session: { storeSessionInDatabase: true },
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const transaction = ctx.adapter.transaction;
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+			transaction(async (trx) => {
+				await cb(trx);
+				throw new Error("rolled back");
+			}),
+		);
+
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow("rolled back");
+
+		expect([...store.keys()]).toEqual([]);
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(users.find((u) => u.email === body.email)).toBeUndefined();
+	});
+
+	it("rolls back the user when secondary storage cannot store the session", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance(
+			{ secondaryStorage: createStorage(store, () => true) },
+			{ disableTestUser: true },
+		);
+
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(users.find((u) => u.email === body.email)).toBeUndefined();
+	});
+
+	it("rolls back the user when a preserved session cannot be cached", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store, () => true),
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(users.find((u) => u.email === body.email)).toBeUndefined();
+	});
+
+	it("keeps a session revoked by its create.after hook revoked", async () => {
+		const store = new Map<string, string>();
+		let revoke: (token: string) => Promise<void> = async () => {};
+		const { auth } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store),
+				session: { storeSessionInDatabase: true },
+				databaseHooks: {
+					session: {
+						create: {
+							async after(session) {
+								await revoke(session.token);
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		revoke = (token) => ctx.internalAdapter.deleteSession(token);
+
+		const { token } = await auth.api.signUpEmail({ body });
+
+		expect(token).toBeTruthy();
+		expect(await ctx.internalAdapter.findSession(token!)).toBeNull();
+	});
+
+	it("lists the session when its cached copy failed to write", async () => {
+		const store = new Map<string, string>();
+		let failWrites = true;
+		const { auth } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store, () => failWrites),
+				session: { storeSessionInDatabase: true },
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+
+		const { token, user } = await auth.api.signUpEmail({ body });
+		failWrites = false;
+
+		const sessions = await ctx.internalAdapter.listSessions(user.id);
+		expect(sessions.map((session) => session.token)).toEqual([token]);
+	});
+});
+
 describe("validateUserInfo sign-up", async () => {
 	it("should allow email/password sign-up when validateUserInfo returns void", async () => {
 		let capturedSourceType: string | undefined;
