@@ -1,4 +1,6 @@
 ---
+icon: plugins2FA
+sidebarTitle: "Two Factor"
 title: Two-Factor Authentication (2FA)
 description: Enhance your app's security with two-factor authentication.
 ---
@@ -116,6 +118,10 @@ When `method` is `"totp"` (default):
 
 * Returns `{ method: "totp", totpURI, backupCodes }`. Use `totpURI` to display a QR code.
 * By default, `twoFactorEnabled` remains `false` until the user verifies a TOTP code. When the server plugin is configured with `skipVerificationOnEnable: true`, TOTP is enabled without enrollment-code verification. See [verifying TOTP](#totp).
+
+<Callout>
+  Calling `twoFactor.enable` when the user already has a verified TOTP authenticator returns `TOTP_ALREADY_ENABLED`. Disable the current authenticator before starting a new enrollment.
+</Callout>
 
 When `method` is `"otp"`:
 
@@ -256,6 +262,10 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
   ```
 </APIMethod>
 
+<Callout type="warn">
+  Treat the TOTP URI as a secret. It contains the user's email and the shared secret used to generate TOTP codes. Render the QR code locally in the browser rather than sending the URI to a third-party QR service.
+</Callout>
+
 **Example: Using React**
 
 Once you have the TOTP URI, you can use it to generate a QR code for the user to scan with their authenticator app.
@@ -279,10 +289,6 @@ export default function UserCard({ password }: { password: string }){
    )
 }
 ```
-
-<Callout>
-  By default the issuer for TOTP is set to the app name provided in the auth config or if not provided it will be set to `Better Auth`. You can override this by passing `issuer` to the plugin config.
-</Callout>
 
 #### Verifying TOTP
 

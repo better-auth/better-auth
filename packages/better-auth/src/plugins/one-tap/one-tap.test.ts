@@ -263,7 +263,6 @@ describe("one-tap implicit linking gate", async () => {
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
-			issuer: "local:github",
 			accountId: verifiedPayload.sub,
 		});
 
@@ -286,7 +285,6 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -331,7 +329,6 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});

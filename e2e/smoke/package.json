@@ -7,11 +7,15 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@better-auth-test/test-utils": "workspace:*",
     "@better-auth/cimd": "workspace:*",
     "@better-auth/core": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/redis-storage": "workspace:*",
     "@better-auth/sso": "workspace:*",
+    "@expo/metro-config": "57.0.12",
+    "@types/babel__core": "^7.20.5",
     "better-auth": "workspace:*",
     "ioredis": "^5.11.1",
     "msw": "^2.14.6"

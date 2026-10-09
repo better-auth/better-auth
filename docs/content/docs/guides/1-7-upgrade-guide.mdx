@@ -1,4 +1,7 @@
 ---
+icon: guidesV17UpgradeGuide
+sidebarTitle: "1.7 Upgrade Guide"
+sidebarBadge: "New"
 title: Upgrading to Better Auth 1.7
 description: Upgrade Better Auth from 1.6 to 1.7, including Expo, OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and custom adapter changes.
 ---
@@ -42,22 +45,31 @@ These features change the schema:
 | Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                                                        |
 | Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                                                        |
 | Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                                                        |
-| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **Yes, backfill**                                         |
 | SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**                                      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                                                        |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data**                                 |
 | Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`       | **Yes, deduplicate; MySQL/SQL Server also bound strings** |
 
 <Callout type="warn">
-  Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
+  Prepare OAuth clients and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not copy OAuth clients or convert legacy SCIM data.
 </Callout>
 
 Use this order:
 
-1. Complete the manual preparation in [Account identity](#account-identity-is-scoped-by-issuer), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
+1. Check for [duplicate account keys](#check-for-duplicate-account-keys) and complete the manual preparation in [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
 2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth generate`, review the output, and apply it with your migration tooling.
 3. Deploy the 1.7 packages and configuration changes together.
 4. Complete any post-deployment work, including SCIM reprovisioning.
+
+### Check for duplicate account keys
+
+Check for duplicate `(providerId, accountId)` pairs before upgrading, including from 1.6. In PostgreSQL, run:
+
+```sql
+SELECT "providerId", "accountId", count(*) FROM account GROUP BY 1, 2 HAVING count(*) > 1;
+```
+
+Use your configured table and column names. Resolve any rows returned before upgrading. If different issuers share a provider ID and use the same account IDs, give each issuer its own provider ID and update the matching account rows. Keep different users separate. Better Auth rejects account lookups when more than one row matches the key.
 
 ***
 
@@ -65,40 +77,90 @@ Use this order:
 
 This covers email and password, social login, the generic OAuth plugin, One Tap, and consuming SSO.
 
-### Account identity is scoped by issuer
+### Account identity keeps the provider key
 
-Better Auth now recognizes an external account by the unique pair of `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider. The account schema adds the required `issuer` field and creates a unique compound index across both identity fields without renaming `accountId`.
+Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account` table and a unique index on `issuer` and `accountId`. Better Auth 1.7.3 removes that requirement. Accounts are recognized by `providerId` and `accountId`, as in 1.6.
+
+**The account schema is unchanged from 1.6.** No column needs to be added.
 
 <Callout type="warn">
-  Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
+  Only databases that ran 1.7.0 through 1.7.2 need the steps below. New rows no longer write `issuer`, so a `NOT NULL` column rejects every sign-up and account link until you relax it.
 </Callout>
 
-**Backfill the account identity:**
+<Steps>
+  <Step>
+    #### Check whether the column is there
 
-1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
-2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column.
-3. Populate both fields according to the account type:
+    ```sql
+    SELECT * FROM account LIMIT 0;
+    ```
 
-   | Account type                     | `issuer`                                  | `accountId`                            |
-   | -------------------------------- | ----------------------------------------- | -------------------------------------- |
-   | Credential                       | `local:credential`                        | Stable `id` from the linked `user` row |
-   | Provider with an issuer          | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | OAuth provider without an issuer | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+    If the result has no `issuer` column, you are done. A 1.6 database whose `account` table already had rows could not take the column, because a `NOT NULL` column with no default cannot be added to a populated table.
+  </Step>
 
-   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
-4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
+  <Step>
+    #### Relax the constraint
 
-   ```sql title="Identity collision check"
-   SELECT issuer, accountId, COUNT(*) AS accountCount,
-          COUNT(DISTINCT userId) AS userCount
-   FROM account
-   GROUP BY issuer, accountId
-   HAVING COUNT(*) > 1;
-   ```
+    Dropping the constraint is enough, and it is reversible. Dropping the column is separate cleanup you can do whenever.
 
-   If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
-5. Confirm that every row has both identity fields, make `issuer` non-nullable, and add the unique compound index on `issuer` and `accountId`.
-6. Update custom adapters, database hooks, and generated schemas to include `issuer`. Credential accounts keep the linked user's stable `id` as `accountId`; email remains a mutable sign-in identifier and does not change the account key.
+    <Callout type="warn">
+      Drop the index before the column. MySQL keeps an index whose column disappears and rebuilds it on the remaining ones, turning the compound unique index into a unique constraint on `accountId` alone. That rejects a user who holds the same account ID at two providers.
+    </Callout>
+
+    <Tabs items={["Postgres", "MySQL and SQL Server", "SQLite", "Prisma and Drizzle", "MongoDB"]}>
+      <Tab value="Postgres">
+        ```sql
+        ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL;
+        DROP INDEX account_issuer_accountId_uidx;
+        ```
+      </Tab>
+
+      <Tab value="MySQL and SQL Server">
+        ```sql
+        ALTER TABLE account MODIFY issuer VARCHAR(255) NULL;
+        DROP INDEX account_issuer_accountId_uidx ON account;
+        ```
+
+        Outside strict mode MySQL never rejected the insert. It filled `issuer` with an empty string, so sign-ups kept working and the unique index quietly became a constraint on `accountId` alone. Relax the column there too.
+      </Tab>
+
+      <Tab value="SQLite">
+        SQLite has no `ALTER COLUMN`, so drop the column instead.
+
+        ```sql
+        DROP INDEX account_issuer_accountId_uidx;
+        ALTER TABLE account DROP COLUMN issuer;
+        ```
+      </Tab>
+
+      <Tab value="Prisma and Drizzle">
+        Regenerate instead of writing SQL. The generated `account` model drops both the field and the compound unique index, and your own tooling produces the migration.
+
+        ```bash
+        npx auth@latest generate
+        ```
+      </Tab>
+
+      <Tab value="MongoDB">
+        MongoDB has no `NOT NULL`, so inserts keep working. Drop the unique index if it exists: with `issuer` no longer written, it would treat every new account as sharing one issuer and reject two providers that use the same account ID. The index was created lazily on first use, so a collection that already held duplicate account IDs never received it.
+
+        ```js
+        db.account.dropIndex("account_issuer_accountId_uidx");
+        ```
+      </Tab>
+    </Tabs>
+
+    The generated index name is `account_issuer_accountId_uidx`. Adjust it if your own migration used another name, and use your column name if you renamed the column through `account.fields.issuer` on 1.7.
+  </Step>
+
+  <Step>
+    #### Confirm
+
+    Sign up a new user and sign in with an existing account.
+  </Step>
+</Steps>
+
+Provider configurations that shared one account issuer on 1.7.0 through 1.7.2 no longer collapse into a single account row. Each provider ID keeps its own row again, as in 1.6.
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
 
@@ -107,16 +169,14 @@ Account-specific APIs now use explicit, strongly typed selectors. Read `id` from
 
 Remove `providerId` from every account selector. The selector's `accountId` value is the local `account.id`, not the provider-side `account.accountId`. A token or provider-profile request that previously omitted the selector to use the account cookie must now send `useAccountCookie: true`; omitting both supported selectors is invalid.
 
-Deploy only after the collision query returns no rows and the required unique index exists. Verify email-and-password sign-in, returning OAuth and SSO sign-in, explicit account linking, unlinking, provider profile retrieval, and token refresh against the migrated data.
-
 Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.accountId` instead of `user.id`.
 
 #### Migrate Microsoft account identifiers
 
-Microsoft accounts now use the stable directory `oid` claim instead of the pairwise, app-specific `sub` claim. Complete this during step 3 of the account identity backfill, before checking for collisions or adding the compound account index:
+Microsoft accounts now use the stable directory `oid` claim instead of the pairwise, app-specific `sub` claim. Complete this data migration before accepting production traffic on 1.7:
 
 1. Inventory rows with `providerId: "microsoft"` for the built-in provider and `providerId: "microsoft-entra-id"` for the Generic OAuth helper.
-2. Assign each row its trusted issuer as part of the account identity backfill, and replace its old `sub`-based `accountId` with the verified `oid` for that directory user.
+2. Replace each row's old `sub`-based `accountId` with the verified `oid` for that directory user.
 3. When stored Microsoft ID tokens are available, verify each token and copy its `oid` claim. `mapProfileToUser` cannot override this provider-owned account identifier.
 4. When stored ID tokens are unavailable, pause Microsoft sign-in and account linking during the cutover and obtain the mapping from a trusted Microsoft Entra export. Better Auth cannot derive `oid` from the old account row alone; accepting traffic before the migration can create duplicate accounts.
 
@@ -419,9 +479,9 @@ OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based clients find 
 
 OIDC SSO now uses the verified `sub` claim as the account subject, and SAML uses the signed `NameID`. Profile mappings can still select email, name, image, and additional fields, but `oidcConfig.mapping.id` and `samlConfig.mapping.id` are removed. Manual SAML configurations that do not provide `idpMetadata.metadata` must set `idpMetadata.entityID`; `samlConfig.issuer` identifies the service provider and no longer acts as an IdP fallback.
 
-**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. During the account-identity backfill, use the exact OIDC issuer and subject or the exact SAML IdP entity ID and `NameID`. Provider aliases with the same OIDC issuer and subject deduplicate one external identity, but this change does not introduce independent grant or provider lifecycle records for those aliases.
+**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`.
 
-If a previous mapping used `mapping.id`, prepare its replacement before the maintenance window. Build a trusted mapping from every old account subject to the protocol-defined identity, then rewrite those account rows before adding the compound index: OIDC needs the exact issuer and verified `sub`; SAML needs the actual IdP metadata entity ID and signed `NameID`. Obtain this mapping from the identity provider, not email or a mutable profile attribute. Do not deploy a runtime fallback for the old mapping.
+If a previous mapping used `mapping.id`, prepare its replacement before the maintenance window. Build a trusted mapping from every old account subject to the protocol-defined identity, then rewrite those account rows: OIDC needs the verified `sub`; SAML needs the signed `NameID`. Obtain this mapping from the identity provider, not email or a mutable profile attribute. Do not deploy a runtime fallback for the old mapping.
 
 ### IdP-initiated SAML is off by default
 
@@ -562,13 +622,13 @@ Two OAuth-provider behaviors read the incoming request origin. Behind a custom s
 
 ## Custom adapters and storage
 
-The atomic-state work introduces required methods. If you use only the built-in adapters and storage, you can skip this.
+The atomic-state work changes custom adapter and storage contracts. If you use only the built-in adapters and storage, you can skip this.
 
-### Database adapters must implement `incrementOne` and `consumeOne`
+### Database adapter atomic methods are optional again
 
-`incrementOne` updates one row's counter atomically and returns the row, or null when the guard did not match. `consumeOne` reads and deletes a row in one step for single-use credentials. Both are now required, and the old fallback is gone.
+1.7.0 through 1.7.2 required custom database adapters to implement `incrementOne` and `consumeOne`. They are optional again. Built-in adapters continue using their native implementations.
 
-**What to do:** implement both `incrementOne` and `consumeOne` in any custom adapter. A missing `consumeOne` throws at runtime. All built-in adapters already do.
+**What to do:** ensure your adapter provides atomic conditional writes and accurate affected-row counts. The factory fallbacks check the stored values before writing and reject unsafe snapshots or exhausted retries. See the [adapter guide](/docs/guides/create-a-db-adapter#consumeone-method) for the complete fallback requirements.
 
 ### Secondary storage must implement `increment` and `getAndDelete`
 
