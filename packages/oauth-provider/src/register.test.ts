@@ -719,35 +719,31 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("rejects http frontchannel_logout_uri", async () => {
+	it("rejects frontchannel_logout_uri ending with a bare fragment delimiter", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-			frontchannel_logout_uri: "http://rp.example.com/logout/frontchannel",
+			frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel#`,
 		});
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("rejects http frontchannel_logout_uri on public clients too", async () => {
+	it("rejects credentials in frontchannel_logout_uri", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-			token_endpoint_auth_method: "none",
-			application_type: "native",
-			frontchannel_logout_uri: "http://rp.example.com/logout/frontchannel",
+			frontchannel_logout_uri:
+				"https://user:password@rp.example.com/logout/frontchannel",
 		});
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("rejects frontchannel_logout_uri pointing at private, tunneled, or metadata targets", async () => {
-		// The OP directs every end-user's browser at this URI from its own
-		// logout page, so non-public hosts are rejected just like the
-		// back-channel POST target.
+	/**
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	it("rejects frontchannel_logout_uri outside every registered redirect_uri origin", async () => {
 		const targets = [
-			"https://10.0.0.1/logout",
-			"https://169.254.169.254/logout",
-			"https://[::ffff:169.254.169.254]/logout",
-			"https://[64:ff9b::a9fe:a9fe]/logout",
-			"https://100.64.0.1/logout",
-			"https://metadata.google.internal/logout",
+			"https://other.example.com/logout/frontchannel",
+			"http://rp.example.com/logout/frontchannel",
+			"https://rp.example.com:8443/logout/frontchannel",
 		];
 		for (const frontchannel_logout_uri of targets) {
 			const response = await serverClient.oauth2.register({
@@ -757,12 +753,48 @@ describe("oauth register", async () => {
 			expect(response.error?.status).toBe(400);
 		}
 	});
+
+	it("allows a loopback frontchannel_logout_uri that matches a loopback redirect_uri", async () => {
+		// The browser loads this URI, not the OP, so the back-channel SSRF guard
+		// does not apply; local development works like it does for redirects.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+		});
+		expect(response.data?.frontchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
+	});
+
+	it("rejects a redirect_uris update that leaves frontchannel_logout_uri without a matching origin", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel`,
+			},
+		});
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: created.client_id,
+					update: {
+						redirect_uris: ["https://other.example.com/callback"],
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+	});
 });
 
 describe("oauth register - disableJwtPlugin", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const fcBaseUrl = "https://rp.example.com";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
@@ -797,11 +829,11 @@ describe("oauth register - disableJwtPlugin", async () => {
 			// http loopback redirects are native-only; web clients need https.
 			application_type: "native",
 			token_endpoint_auth_method: "none",
-			frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel`,
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
 		});
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.frontchannel_logout_uri).toBe(
-			`${fcBaseUrl}/logout/frontchannel`,
+			`${rpBaseUrl}/logout/frontchannel`,
 		);
 	});
 });

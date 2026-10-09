@@ -1806,15 +1806,16 @@ export interface SchemaClient<
 	 * RP URL rendered in a hidden iframe on the OP's logout page when the
 	 * end-user's session ends at `/oauth2/end-session`. Registering it is the
 	 * per-client opt-in for front-channel logout. Must be absolute, without a
-	 * fragment, and HTTPS for confidential clients.
+	 * fragment, and share the scheme, host, and port of a registered redirect
+	 * URI.
 	 *
 	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
 	 */
 	frontchannelLogoutUri?: string;
 	/**
-	 * When true, the OP appends `iss` and `sid` query parameters to the
-	 * client's `frontchannel_logout_uri` so the RP can validate the request
-	 * and target the right session.
+	 * When true, the RP requires `iss` and `sid` query parameters on its
+	 * front-channel logout URI. The OP sends both to every front-channel
+	 * client, so such clients are always served.
 	 *
 	 * @default false
 	 */

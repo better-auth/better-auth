@@ -407,15 +407,16 @@ export interface OAuthClient {
 	/**
 	 * RP URL that the OP renders in a hidden iframe on its logout page so the
 	 * RP can log itself out when the end-user's OP session ends at
-	 * `/oauth2/end-session`.
+	 * `/oauth2/end-session`. Must share the scheme, host, and port of one of
+	 * the client's `redirect_uris`.
 	 *
 	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
 	 */
 	frontchannel_logout_uri?: string;
 	/**
-	 * When true, the OP appends `iss` and `sid` query parameters to the
-	 * `frontchannel_logout_uri` so the RP can validate the request and
-	 * determine which session to terminate.
+	 * When true, the RP requires `iss` and `sid` query parameters on its
+	 * `frontchannel_logout_uri`. The OP sends both to every front-channel
+	 * client, so such clients are always served.
 	 *
 	 * @default false
 	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout

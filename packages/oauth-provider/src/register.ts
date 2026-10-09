@@ -660,9 +660,11 @@ export async function checkOAuthClient(
 		}
 	}
 
-	// Front-channel logout never signs anything, so unlike the back-channel URI
-	// this one has no JWT-plugin requirement. Every other constraint mirrors the
-	// back-channel treatment above so both logout URIs hold to one policy.
+	// The browser, not the OP, requests this URI, so the back-channel SSRF
+	// guard does not apply and private or loopback hosts are allowed. Its trust
+	// comes from Front-Channel Logout 1.0 §2 instead: the URI must share the
+	// scheme, host, and port of a registered redirect URI, so it inherits that
+	// URI's scheme policy. Nothing is signed, so the JWT plugin is not required.
 	if (clientWithDefaults.frontchannel_logout_uri !== undefined) {
 		let url: URL;
 		try {
@@ -673,20 +675,13 @@ export async function checkOAuthClient(
 				error_description: "frontchannel_logout_uri must be an absolute URL",
 			});
 		}
-		// The OP extends this URI with `iss`/`sid` query parameters, so a
-		// fragment has no defined meaning; check the raw value rather than
-		// `url.hash`, which is empty for a bare trailing `#`.
+		// Spec §2: the URI MUST NOT include a fragment. Check the raw value
+		// rather than `url.hash`, which is empty for a bare trailing `#`.
 		if (clientWithDefaults.frontchannel_logout_uri.includes("#")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
 					"frontchannel_logout_uri must not include a fragment component",
-			});
-		}
-		if (url.protocol !== "https:") {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: "frontchannel_logout_uri must use https",
 			});
 		}
 		if (url.username || url.password) {
@@ -696,15 +691,21 @@ export async function checkOAuthClient(
 					"frontchannel_logout_uri must not contain credentials",
 			});
 		}
-		// The OP points every end-user's browser at this URI from its own logout
-		// page, so a non-public host would make that page a way to drive browsers
-		// at internal endpoints — the browser-side analogue of the SSRF guard on
-		// the back-channel target.
-		if (isPrivateHostname(url.hostname)) {
+		const isHttp = url.protocol === "https:" || url.protocol === "http:";
+		const sharesRedirectOrigin = (clientWithDefaults.redirect_uris ?? []).some(
+			(redirectUri) => {
+				try {
+					return new URL(redirectUri).origin === url.origin;
+				} catch {
+					return false;
+				}
+			},
+		);
+		if (!isHttp || !sharesRedirectOrigin) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
-					"frontchannel_logout_uri must not point to a private or reserved address",
+					"frontchannel_logout_uri must use the scheme, host, and port of a registered redirect_uri",
 			});
 		}
 	}
