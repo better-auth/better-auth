@@ -978,7 +978,77 @@ describe("magic link verify callbackURL encoding", async () => {
 		expect(params.get("step")).toBeNull();
 	});
 
-	it("should not redirect to a foreign origin passed as an encoded callbackURL", async () => {
+	it("should redirect a new user to the exact newUserCallbackURL when it carries an encoded nested URL", async () => {
+		const nested = "https://example.com/welcome?state=abc&step=2";
+		const newUserCallbackURL = `http://localhost:3000/onboarding?return=${encodeURIComponent(nested)}`;
+		await client.signIn.magicLink({
+			email: "new-user-encoding@email.com",
+			callbackURL: "/dashboard",
+			newUserCallbackURL,
+		});
+
+		const res = await customFetchImpl(verificationEmail.url, {
+			method: "GET",
+			redirect: "manual",
+		});
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).toBe(newUserCallbackURL);
+		const params = new URL(location).searchParams;
+		expect(params.get("return")).toBe(nested);
+		expect(params.get("step")).toBeNull();
+	});
+
+	it("should keep an encoded nested URL in errorCallbackURL when the token is invalid", async () => {
+		const nested = "https://example.com/retry?state=abc&step=2";
+		const errorCallbackURL = `http://localhost:3000/sign-in?return=${encodeURIComponent(nested)}`;
+		const verifyURL = new URL(
+			"http://localhost:3000/api/auth/magic-link/verify",
+		);
+		verifyURL.searchParams.set("token", "invalid-token");
+		verifyURL.searchParams.set("callbackURL", "/dashboard");
+		verifyURL.searchParams.set("errorCallbackURL", errorCallbackURL);
+
+		const res = await customFetchImpl(verifyURL.toString(), {
+			method: "GET",
+			redirect: "manual",
+		});
+
+		expect(res.status).toBe(302);
+		const location = new URL(res.headers.get("location") || "");
+		expect(`${location.origin}${location.pathname}`).toBe(
+			"http://localhost:3000/sign-in",
+		);
+		expect(location.searchParams.get("return")).toBe(nested);
+		expect(location.searchParams.get("step")).toBeNull();
+		expect(location.searchParams.get("error")).toBe("INVALID_TOKEN");
+	});
+
+	it.each([
+		"callbackURL",
+		"newUserCallbackURL",
+		"errorCallbackURL",
+	])("should reject a foreign origin in %s", async (param) => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const verifyURL = new URL(verificationEmail.url);
+		verifyURL.searchParams.set(param, "http://malicious.com");
+
+		const res = await customFetchImpl(verifyURL.toString(), {
+			method: "GET",
+			redirect: "manual",
+		});
+
+		expect(res.status).toBe(403);
+		expect(res.headers.get("location")).toBeNull();
+	});
+
+	it("should not redirect to a foreign origin passed with an extra layer of encoding", async () => {
+		// Before this fix the verify endpoint decoded callbackURL a second time,
+		// turning this value into `http://malicious.com`. It must not become a
+		// redirect target either way.
 		await client.signIn.magicLink({
 			email: testUser.email,
 		});
