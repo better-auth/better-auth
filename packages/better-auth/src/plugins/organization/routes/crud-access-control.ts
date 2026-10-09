@@ -134,6 +134,11 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 
 			roleName = normalizeRoleName(roleName);
 
+			await checkForInvalidRoleName({
+				role: roleName,
+				ctx,
+			});
+
 			await checkIfRoleNameIsTakenByPreDefinedRole({
 				role: roleName,
 				organizationId,
@@ -1048,6 +1053,11 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 
 				newRoleName = normalizeRoleName(newRoleName);
 
+				await checkForInvalidRoleName({
+					role: newRoleName,
+					ctx,
+				});
+
 				await checkIfRoleNameIsTakenByPreDefinedRole({
 					role: newRoleName,
 					organizationId,
@@ -1100,6 +1110,33 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 		},
 	);
 };
+
+/**
+ * Member roles are stored comma-joined on the `member.role` field and resolved
+ * by splitting on `,` (e.g. in `hasPermissionFn` and member role updates), so a
+ * role name containing a comma could be created but never assigned. Reject it
+ * at every endpoint that persists a role name.
+ */
+async function checkForInvalidRoleName({
+	role,
+	ctx,
+}: {
+	role: string;
+	ctx: GenericEndpointContext;
+}) {
+	if (role.includes(",")) {
+		ctx.context.logger.error(
+			`[Dynamic Access Control] The role name contains a reserved character.`,
+			{
+				role: JSON.stringify(role),
+			},
+		);
+		throw APIError.from(
+			"BAD_REQUEST",
+			ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME,
+		);
+	}
+}
 
 async function checkForInvalidResources({
 	ac,
