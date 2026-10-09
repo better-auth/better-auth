@@ -2,17 +2,8 @@
 "@better-auth/oauth-provider": minor
 ---
 
-Add OIDC Front-Channel Logout 1.0 support to `@better-auth/oauth-provider`.
+OAuth providers can now notify relying parties of logout through the browser with OpenID Connect Front-Channel Logout 1.0. Register a `frontchannel_logout_uri` on a client, using the scheme, host, and port of one of its `redirect_uris`, through dynamic registration or the client create and update endpoints. When a user's session ends during a browser navigation to `/oauth2/end-session`, the provider shows a short page that loads each such client's URI in a hidden iframe with `iss` and `sid` appended, then continues to the verified `post_logout_redirect_uri`. Clients with a front-channel URI also receive `sid` in their ID tokens, and discovery now advertises `frontchannel_logout_supported` and `frontchannel_logout_session_supported`.
 
-When the end-user terminates their session with a browser navigation to `/oauth2/end-session`, the provider now responds with a logout page containing one hidden iframe per OAuth client that holds tokens on the session and has registered a `frontchannel_logout_uri`. The browser fans the logout out by loading each RP's URI so the RP can clear its own session cookies; once every iframe has settled — or after a 3-second safety timeout — the page redirects to the validated `post_logout_redirect_uri` when one was provided. Clients opt in by registering `frontchannel_logout_uri` (and optionally `frontchannel_logout_session_required`, which makes the provider append `iss` and `sid` query parameters) via DCR or the admin client endpoints.
+Front-channel logout works without the `jwt` plugin. It is reliable only when the provider and its relying parties share a registrable domain, because browsers block or partition third-party cookies; use back-channel logout for relying parties on other sites. It does not run for `/sign-out`, admin revocation, session expiry, or fetch-style calls to `/oauth2/end-session`, which keep their current responses.
 
-The URI is validated at registration with the same rules as `backchannel_logout_uri` (absolute http/https URL, no fragment, https for confidential clients with a loopback carve-out, non-public hosts rejected), but unlike back-channel logout it works with `disableJwtPlugin: true`, since nothing is signed.
-
-Behavior is unchanged when no front-channel client holds tokens on the session (immediate redirect, as before) and for fetch-style requests to `/oauth2/end-session`, which keep the JSON contract.
-
-Discovery documents at `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` now advertise `frontchannel_logout_supported: true` and `frontchannel_logout_session_supported: true`.
-
-Schema changes on `@better-auth/oauth-provider`:
-
-- `oauthClient.frontchannelLogoutUri: string | null`
-- `oauthClient.frontchannelLogoutSessionRequired: boolean`
+Providers with no client registering `frontchannel_logout_uri` see no change. This release adds `frontchannelLogoutUri` and `frontchannelLogoutSessionRequired` columns to the `oauthClient` table; run `npx auth migrate`, or `npx auth generate` if you manage the schema yourself.
