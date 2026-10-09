@@ -97,6 +97,13 @@ function applyOAuthClientRegistrationDefaults(
 	};
 }
 
+function isCustomSchemeWithHost(redirectUri: string): boolean {
+	const url = new URL(redirectUri);
+	return (
+		url.protocol !== "http:" && url.protocol !== "https:" && url.host !== ""
+	);
+}
+
 function isNonHttpRedirectUri(redirectUri: string): boolean {
 	try {
 		const protocol = new URL(redirectUri).protocol;
@@ -478,6 +485,19 @@ export async function checkOAuthClient(
 				error: "invalid_client_metadata",
 				error_description:
 					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+		// The pairwise sector is the redirect URI host. Any app can register a
+		// custom scheme, so the host in `app://rp.example.com/callback` does not
+		// identify the client and would share an HTTPS client's sector.
+		if (
+			clientWithDefaults.subject_type === "pairwise" &&
+			clientWithDefaults.redirect_uris?.some(isCustomSchemeWithHost)
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise clients cannot use custom-scheme redirect URIs that include a host",
 			});
 		}
 		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
