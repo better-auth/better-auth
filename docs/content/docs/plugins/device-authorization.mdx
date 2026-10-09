@@ -374,6 +374,7 @@ Example polling implementation:
 
 ```ts
 // `data` is the response from `authClient.device.code()` above
+if (!data) throw new Error("Could not start device authorization");
 const { device_code, interval } = data;
 let pollingInterval = interval; // Seconds
 const pollForToken = async () => {
