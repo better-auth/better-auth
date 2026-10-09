@@ -15,6 +15,7 @@
     "---Backend---",
     "hono",
     "fastify",
+    "effect",
     "encore",
     "express",
     "elysia",
