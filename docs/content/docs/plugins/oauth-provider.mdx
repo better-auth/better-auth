@@ -1271,7 +1271,7 @@ oauthProvider({
 
 Dynamic-registration resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
 
-For a managed client, pass `resources` to the server-only `adminCreateOAuthClient` call. The client and its resource links are created in one registration transaction. This selection uses the `resourcePrivileges` `link` action for each requested resource; the dynamic-registration allowlist does not restrict it. Resources must exist and be enabled.
+For a managed client, pass `resources` to the server-only `adminCreateOAuthClient` call. The client and its resource links are created in one registration transaction. This selection uses the `resourcePrivileges` `link` action for each requested resource; the dynamic-registration allowlist does not restrict it. Each resource must be an absolute URI without a fragment, and must exist and be enabled.
 
 ```ts
 await auth.api.adminCreateOAuthClient({

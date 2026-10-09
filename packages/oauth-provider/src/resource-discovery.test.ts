@@ -211,11 +211,15 @@ describe("DCR — resources field (RFC 7591 §2 extension)", () => {
 describe("managed client registration resources", () => {
 	it("links explicitly selected resources during managed client creation", async () => {
 		const resource = "https://api.example.com/managed-requested";
+		const resourcePrivileges = vi.fn(
+			({ action }: { action: string }) => action === "link",
+		);
 		const instance = await boot(
 			{
 				resources: [resource],
 				scopes: ["read:business"],
 				clientPrivileges: () => true,
+				resourcePrivileges,
 			},
 			true,
 		);
@@ -236,15 +240,20 @@ describe("managed client registration resources", () => {
 			where: [{ field: "clientId", value: result.client_id }],
 		});
 		expect(links.map((link) => link.resourceId)).toEqual([resource]);
+		expect(resourcePrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "link", resourceId: resource }),
+		);
 	});
 
 	it("checks resource-link privileges before creating a managed client", async () => {
-		const resource = "https://api.example.com/managed-denied";
+		const firstResource = "https://api.example.com/managed-allowed";
+		const deniedResource = "https://api.example.com/managed-denied";
 		const resourcePrivileges = vi.fn(
-			({ action }: { action: string }) => action !== "link",
+			({ action, resourceId }: { action: string; resourceId?: string }) =>
+				action !== "link" || resourceId !== deniedResource,
 		);
 		const instance = await boot(
-			{ resources: [resource], resourcePrivileges },
+			{ resources: [firstResource, deniedResource], resourcePrivileges },
 			true,
 		);
 		const { headers } = await instance.signInWithTestUser();
@@ -253,17 +262,74 @@ describe("managed client registration resources", () => {
 		await expect(
 			instance.auth.api.adminCreateOAuthClient({
 				headers,
-				body: { client_name: clientName, resources: [resource] },
+				body: {
+					client_name: clientName,
+					resources: [firstResource, deniedResource],
+				},
 			}),
-		).rejects.toThrow();
+		).rejects.toMatchObject({ statusCode: 401 });
 		expect(resourcePrivileges).toHaveBeenCalledWith(
-			expect.objectContaining({ action: "link", resourceId: resource }),
+			expect.objectContaining({ action: "link", resourceId: firstResource }),
+		);
+		expect(resourcePrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "link", resourceId: deniedResource }),
 		);
 		const storedClient = await instance.ctx.adapter.findOne({
 			model: "oauthClient",
 			where: [{ field: "name", value: clientName }],
 		});
 		expect(storedClient).toBeNull();
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "resourceId", value: firstResource }],
+		});
+		expect(links).toEqual([]);
+	});
+
+	it.each([
+		["missing", "https://api.example.com/managed-missing", "does not exist"],
+		["disabled", "https://api.example.com/managed-unavailable", "disabled"],
+		["relative", "managed-relative", "must be an absolute URI"],
+		[
+			"fragment",
+			"https://api.example.com/managed-unavailable#part",
+			"must not contain a fragment",
+		],
+	])("rejects a %s resource before creating a managed client", async (kind, requested, reason) => {
+		const configured = "https://api.example.com/managed-unavailable";
+		const instance = await boot({ resources: [configured] }, true);
+		if (kind === "disabled") {
+			await instance.ctx.adapter.update({
+				model: "oauthResource",
+				where: [{ field: "identifier", value: configured }],
+				update: { disabled: true },
+			});
+		}
+		const { headers } = await instance.signInWithTestUser();
+		const clientName = `managed-${kind}-resource`;
+		const expectedBody =
+			kind === "relative" || kind === "fragment"
+				? { code: "VALIDATION_ERROR", message: expect.stringContaining(reason) }
+				: {
+						error: "invalid_target",
+						error_description: expect.stringContaining(reason),
+					};
+		await expect(
+			instance.auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					client_name: clientName,
+					grant_types: ["client_credentials"],
+					resources: [requested],
+				},
+			}),
+		).rejects.toMatchObject({ body: expectedBody });
+		expect(
+			await instance.ctx.adapter.findOne({
+				model: "oauthClient",
+				where: [{ field: "name", value: clientName }],
+			}),
+		).toBeNull();
 	});
 
 	it("links server-owned defaults during managed client creation", async () => {
