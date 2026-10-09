@@ -7,7 +7,11 @@ import type {
 	PreinitializedWritableAtom,
 } from "../../client";
 import { createAuthClient } from "../../client";
-import { getCookieCache, parseSetCookieHeader } from "../../cookies";
+import {
+	getCookieCache,
+	parseSetCookieHeader,
+	splitSetCookieHeader,
+} from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
@@ -4288,5 +4292,131 @@ describe("acceptInvitation", async () => {
 			cache?.session?.activeOrganizationId,
 			"session_data cache cookie must contain the updated activeOrganizationId",
 		).toBe(org.data?.id);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11275
+	 */
+	it("refreshes cached session cookie for both organization and team upon accepting invitation", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: { enabled: true },
+					}),
+				],
+				session: {
+					cookieCache: {
+						enabled: true,
+					},
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient({ teams: { enabled: true } })],
+				},
+			},
+		);
+
+		const inviteeHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "Invitee",
+				email: "invitee@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess: cookieSetter(inviteeHeaders),
+			},
+		);
+
+		const ownerHeaders = new Headers();
+		await client.signUp.email(
+			{
+				name: "Owner",
+				email: "teams-owner@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		);
+
+		const org = await client.organization.create({
+			name: "Teams Test Org",
+			slug: "teams-test-org",
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		const team = await client.organization.createTeam({
+			name: "Teams Test Team",
+			organizationId: org.data!.id,
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: "invitee@example.com",
+			role: "member",
+			teamId: team.data!.id,
+			fetchOptions: {
+				headers: ownerHeaders,
+			},
+		});
+
+		// With teams enabled and a single invited team, accept-invitation stages
+		// two session cookies: the team session first, then the organization
+		// session. Both must still be written after the transaction commits.
+		let acceptResponseCookieHeader: string | null = null;
+		const accepted = await client.organization.acceptInvitation({
+			invitationId: invite.data!.id,
+			fetchOptions: {
+				headers: inviteeHeaders,
+				onSuccess(ctx) {
+					acceptResponseCookieHeader = ctx.response.headers.get("set-cookie");
+					cookieSetter(inviteeHeaders)(ctx);
+				},
+			},
+		});
+		expect(accepted.error).toBeNull();
+
+		const setCookieEntries = splitSetCookieHeader(
+			acceptResponseCookieHeader || "",
+		).filter((entry) => entry.startsWith("better-auth.session_data="));
+		expect(
+			setCookieEntries.length,
+			"acceptInvitation with teams must stage both the team and the organization session cookie",
+		).toBe(2);
+
+		const responseCookies = parseSetCookieHeader(
+			acceptResponseCookieHeader || "",
+		);
+		const sessionDataValue = responseCookies.get(
+			"better-auth.session_data",
+		)?.value;
+		expect(
+			sessionDataValue,
+			"acceptInvitation must set a fresh session_data cache cookie",
+		).toBeTruthy();
+
+		const cookieCacheHeaders = new Headers({
+			cookie: `better-auth.session_data=${sessionDataValue}`,
+		});
+		const cache = await getCookieCache(cookieCacheHeaders, {
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+		});
+		expect(
+			cache?.session?.activeOrganizationId,
+			"session_data cache cookie must contain the updated activeOrganizationId",
+		).toBe(org.data?.id);
+		expect(
+			cache?.session?.activeTeamId,
+			"session_data cache cookie must contain the activeTeamId from the invitation",
+		).toBe(team.data?.id);
 	});
 });

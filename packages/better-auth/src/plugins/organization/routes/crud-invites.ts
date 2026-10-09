@@ -872,10 +872,19 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			await setSessionCookie(ctx, {
-				session: updatedSession,
-				user: session.user,
-			});
+			// `setActiveOrganization` returns null when the session row was not
+			// updated — either it no longer exists or a `session.update.before`
+			// database hook vetoed the write. The membership and the invitation
+			// status are already committed at this point, so the cookie write
+			// must not throw: that would strand the invitation as `accepted`
+			// behind a 500 while the client keeps a `session_data` cache that
+			// matches the unchanged database row.
+			if (updatedSession) {
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
+			}
 
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
