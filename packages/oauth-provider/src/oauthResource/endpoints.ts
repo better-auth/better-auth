@@ -35,7 +35,7 @@ type ResourceAction =
  *
  * @internal
  */
-async function assertResourcePrivileges(
+export async function assertResourcePrivileges(
 	ctx: GenericEndpointContext,
 	session: { session: Session; user: User } | null,
 	opts: OAuthOptions<Scope[]>,

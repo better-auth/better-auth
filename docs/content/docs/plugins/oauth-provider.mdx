@@ -729,7 +729,7 @@ The caller must authenticate as a registered client ([RFC 7662 §2.1](https://da
 * it issued the token, or
 * it is a resource server linked to one of the token's resources.
 
-The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic client registration with a `resources` field creates the link for you; otherwise add a row to the `oauthClientResource` table.
+The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic registration and server-only `adminCreateOAuthClient` can link resources during registration; use `adminLinkClientResource` for an existing client.
 
 Any other authenticated client gets `{ active: false }`, the same response as an unknown or expired token, so introspection can't be used to fish for valid tokens. Refresh tokens are stricter: only the client that requested one can introspect it.
 
@@ -1269,7 +1269,19 @@ oauthProvider({
 })
 ```
 
-Explicit resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+Dynamic-registration resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+
+For a managed client, pass `resources` to the server-only `adminCreateOAuthClient` call. The client and its resource links are created in one registration transaction. This selection uses the `resourcePrivileges` `link` action for each requested resource; the dynamic-registration allowlist does not restrict it. Resources must exist and be enabled.
+
+```ts
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    resources: ["https://api.example.com/default"],
+  },
+});
+```
 
 ### Scopes
 

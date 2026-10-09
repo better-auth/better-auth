@@ -42,6 +42,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
 				client_credentials_scopes: z.array(z.string().trim().min(1)).optional(),
+				resources: z.array(z.string().min(1)).optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
 				// SERVER_ONLY applicable fields
 				client_secret_expires_at: z
