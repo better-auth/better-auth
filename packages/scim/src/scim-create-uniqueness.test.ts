@@ -97,6 +97,72 @@ function createConcurrentCommitAdapter(
 	};
 }
 
+type UpdateInput = Parameters<DBTransactionAdapter["update"]>[0];
+
+function createConcurrentUpdateAdapter(
+	data: ResourceCreateData,
+	injectConcurrentCommit: () => void,
+) {
+	const race = { armed: false };
+	const database = (options: BetterAuthOptions): DBAdapter => {
+		const adapter = memoryAdapter(data)(options);
+		return {
+			...adapter,
+			transaction: async <Result>(
+				callback: (transaction: DBTransactionAdapter) => Promise<Result>,
+			) =>
+				adapter.transaction(async (transaction) => {
+					const update = async (input: UpdateInput): Promise<unknown> => {
+						if (race.armed && input.model === "scimUser") {
+							race.armed = false;
+							injectConcurrentCommit();
+							throw new Error("Simulated scimUser unique constraint");
+						}
+						return transaction.update(input);
+					};
+
+					return callback({
+						...transaction,
+						update: update as DBTransactionAdapter["update"],
+					});
+				}),
+		};
+	};
+	return { database, race };
+}
+
+function createCommittedSCIMUser(userName: string): SCIMUser {
+	const now = new Date();
+	return {
+		id: "concurrent-scim-user",
+		connectionId: "workforce",
+		provisioningDomainId: "workforce",
+		userId: "concurrent-user",
+		connectionUserKey: createScopedKey([
+			"scim-user",
+			"workforce",
+			"concurrent-user",
+		]),
+		userName,
+		userNameKey: createScopedKey(["scim-user-name", "workforce", userName]),
+		primaryEmail: userName,
+		workEmailValueIndex: `|${userName}|`,
+		emailValueIndex: `|${userName}|`,
+		displayName: "Concurrent User",
+		formattedName: "Concurrent User",
+		serializedEmails: JSON.stringify([{ value: userName, primary: true }]),
+		serializedAttributes: JSON.stringify({
+			schemas: [USER_SCHEMA],
+			name: { formatted: "Concurrent User" },
+			emails: [{ value: userName, primary: true }],
+		}),
+		active: true,
+		orderKey: "concurrent-user-order",
+		createdAt: now,
+		updatedAt: now,
+	};
+}
+
 describe("SCIM resource create uniqueness races", () => {
 	it("normalizes a concurrent Group displayName commit to SCIM uniqueness", async () => {
 		const data = createData();
@@ -210,5 +276,94 @@ describe("SCIM resource create uniqueness races", () => {
 				headers,
 			}),
 		).rejects.toThrowError("Simulated scimGroup unique constraint");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11111
+	 */
+	it("normalizes a concurrent userName commit during inactive User reprovisioning", async () => {
+		const data = createData();
+		const { database, race } = createConcurrentUpdateAdapter(data, () => {
+			data.scimUser.push(createCommittedSCIMUser("grace@example.com"));
+		});
+		const auth = createAuth(database);
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: [USER_SCHEMA],
+				userName: "ada@example.com",
+				externalId: "directory-subject",
+			},
+			headers,
+		});
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [{ op: "replace", path: "active", value: false }],
+			},
+			headers,
+		});
+
+		race.armed = true;
+		await expect(
+			auth.api.createSCIMUser({
+				body: {
+					schemas: [USER_SCHEMA],
+					userName: "grace@example.com",
+					externalId: "directory-subject",
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({
+				status: "409",
+				scimType: "uniqueness",
+			}),
+		});
+	});
+
+	it("normalizes a concurrent userName commit during User replacement", async () => {
+		const data = createData();
+		const { database, race } = createConcurrentUpdateAdapter(data, () => {
+			data.scimUser.push(createCommittedSCIMUser("grace@example.com"));
+		});
+		const auth = createAuth(database);
+		const created = await auth.api.createSCIMUser({
+			body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
+			headers,
+		});
+
+		race.armed = true;
+		await expect(
+			auth.api.replaceSCIMUser({
+				params: { userId: created.id },
+				body: { schemas: [USER_SCHEMA], userName: "grace@example.com" },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({
+				status: "409",
+				scimType: "uniqueness",
+			}),
+		});
+	});
+
+	it("preserves a replacement failure when no committed uniqueness conflict exists", async () => {
+		const data = createData();
+		const { database, race } = createConcurrentUpdateAdapter(data, () => {});
+		const auth = createAuth(database);
+		const created = await auth.api.createSCIMUser({
+			body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
+			headers,
+		});
+
+		race.armed = true;
+		await expect(
+			auth.api.replaceSCIMUser({
+				params: { userId: created.id },
+				body: { schemas: [USER_SCHEMA], userName: "grace@example.com" },
+				headers,
+			}),
+		).rejects.toThrowError("Simulated scimUser unique constraint");
 	});
 });

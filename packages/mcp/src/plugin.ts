@@ -41,9 +41,9 @@ export interface McpOptions extends OAuthOptions<Scope[]> {
 	 *
 	 * @default 30
 	 */
-	refreshTokenReuseInterval?: OAuthOptions<
-		Scope[]
-	>["refreshTokenReuseInterval"];
+	refreshTokenReuseInterval?: NonNullable<
+		OAuthOptions<Scope[]>["refreshTokenReuseInterval"]
+	>;
 	/**
 	 * The canonical protected resource identifier (RFC 8707 / RFC 9728) for this
 	 * MCP server. Issued tokens are audience-bound to it, and it is published as

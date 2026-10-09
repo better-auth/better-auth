@@ -1262,6 +1262,47 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11642
+	 */
+	it("keeps a secondary-only session write inside the transaction even when deferral is requested", async () => {
+		const testMap = new Map<string, string>();
+		const secondaryStorage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...secondaryStorage,
+				set: async () => {
+					throw new Error("secondary storage unavailable");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				const user = await testCtx.internalAdapter.createUser(
+					{
+						name: "rolled-back-user",
+						email: "rolled-back@example.com",
+					},
+					{ method: "test" },
+				);
+				await testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				);
+			}),
+		).rejects.toThrow("secondary storage unavailable");
+		expect(
+			await testCtx.internalAdapter.findUserByEmail("rolled-back@example.com"),
+		).toBeNull();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
 	 */
 	it("preserves sessions created after user session deletion is requested", async () => {
@@ -2382,6 +2423,41 @@ describe("internal adapter test", async () => {
 					expiresAt: new Date(Date.now() + 60_000),
 				}),
 			).rejects.toThrow(/requires database-backed verification storage/);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10624
+		 */
+		describe("with configured id strategies", () => {
+			it("yields exactly one winner when ids are uuids", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "uuid" } },
+				});
+				const reserve = () =>
+					adapter.reserveVerificationValue({
+						identifier: "reserve:uuid-race",
+						value: "jti-uuid",
+						expiresAt: new Date(Date.now() + 60_000),
+					});
+
+				const results = await Promise.all([reserve(), reserve(), reserve()]);
+				expect(results.filter((r) => r === true)).toHaveLength(1);
+				expect(await reserve()).toBe(false);
+			});
+
+			it("keeps reserving when ids are database-generated numbers", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "serial" } },
+				});
+
+				await expect(
+					adapter.reserveVerificationValue({
+						identifier: "reserve:serial",
+						value: "jti-serial",
+						expiresAt: new Date(Date.now() + 60_000),
+					}),
+				).resolves.toBe(true);
+			});
 		});
 	});
 
