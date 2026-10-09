@@ -20,6 +20,7 @@ import {
 } from "./signed-query";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { storeToken } from "./utils";
 
 const signedQueryParameterNameParam = "ba_param";
 
@@ -1521,6 +1522,113 @@ describe("signedQueryExpiresIn and codeExpiresIn decoupling (#11204)", () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
 
+	/**
+	 * Issues one signed authorize query (the unauthenticated hop to the login
+	 * page) and one authorization code (the authenticated hop), then reports the
+	 * TTL each was stored with. Options are only set when defined so an omitted
+	 * option reaches `oauthProvider` as absent rather than `undefined`.
+	 */
+	async function measureHopTtls(options: {
+		codeExpiresIn?: number;
+		signedQueryExpiresIn?: number;
+		state: string;
+	}) {
+		const providerOptions: OAuthOptions<Scope[]> = {
+			loginPage: "/login",
+			consentPage: "/consent",
+		};
+		if (options.codeExpiresIn !== undefined) {
+			providerOptions.codeExpiresIn = options.codeExpiresIn;
+		}
+		if (options.signedQueryExpiresIn !== undefined) {
+			providerOptions.signedQueryExpiresIn = options.signedQueryExpiresIn;
+		}
+
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [oauthProvider(providerOptions), jwt()],
+			},
+		);
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const registeredClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		if (!registeredClient?.client_id || !registeredClient?.client_secret) {
+			throw Error("client creation failed");
+		}
+
+		const authUrl = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: registeredClient.client_id,
+				clientSecret: registeredClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: options.state,
+			scopes: ["openid"],
+			responseType: "code",
+			codeVerifier: generateRandomString(64),
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		});
+
+		// Unauthenticated hop: the signed query the login page receives.
+		const anonymousClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		let loginRedirectUrl = "";
+		await anonymousClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const signedParams = new URL(loginRedirectUrl, authServerBaseUrl)
+			.searchParams;
+		const signedQueryTtl =
+			Number(signedParams.get("exp")) -
+			Math.floor(Number(signedParams.get(signedQueryIssuedAtParam)) / 1000);
+
+		// Authenticated hop: the authorization code row the token endpoint reads.
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		if (!code) throw Error("authorization code was not issued");
+
+		const identifier = await storeToken("hashed", code, "authorization_code");
+		const ctx = await auth.$context;
+		const record = await ctx.internalAdapter.findVerificationValue(identifier);
+		if (!record) throw Error("authorization code was not stored");
+
+		return {
+			signedQueryTtl,
+			codeTtl: Math.round(
+				(record.expiresAt.getTime() - record.createdAt.getTime()) / 1000,
+			),
+		};
+	}
+
 	it("resumes a sign-in that takes longer than codeExpiresIn", async () => {
 		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 			{
@@ -1602,6 +1710,46 @@ describe("signedQueryExpiresIn and codeExpiresIn decoupling (#11204)", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("defaults the signed query lifetime to codeExpiresIn when signedQueryExpiresIn is omitted", async () => {
+		const { signedQueryTtl, codeTtl } = await measureHopTtls({
+			codeExpiresIn: 120,
+			state: "default-follows-code-ttl",
+		});
+
+		expect(signedQueryTtl).toBe(120);
+		expect(codeTtl).toBe(120);
+	});
+
+	it("defaults the signed query lifetime to 600 when neither option is set", async () => {
+		const { signedQueryTtl, codeTtl } = await measureHopTtls({
+			state: "default-to-600",
+		});
+
+		expect(signedQueryTtl).toBe(600);
+		expect(codeTtl).toBe(600);
+	});
+
+	it("resolves codeExpiresIn: 0 to 0 instead of the 600 fallback", async () => {
+		const { signedQueryTtl, codeTtl } = await measureHopTtls({
+			codeExpiresIn: 0,
+			state: "zero-is-not-nullish",
+		});
+
+		expect(signedQueryTtl).toBe(0);
+		expect(codeTtl).toBe(0);
+	});
+
+	it("keeps the authorization code expiry on codeExpiresIn when signedQueryExpiresIn is larger", async () => {
+		const { signedQueryTtl, codeTtl } = await measureHopTtls({
+			codeExpiresIn: 60,
+			signedQueryExpiresIn: 600,
+			state: "code-ttl-not-widened",
+		});
+
+		expect(signedQueryTtl).toBe(600);
+		expect(codeTtl).toBe(60);
 	});
 });
 
