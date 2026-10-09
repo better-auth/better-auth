@@ -20,10 +20,18 @@ import { assertClientPrivileges } from "./privileges";
 
 type OAuthClientUpdate = Omit<
 	OAuthClientRegistrationMetadata,
-	"application_type" | "client_id" | "resources"
+	| "application_type"
+	| "client_id"
+	| "resources"
+	| "backchannel_logout_uri"
+	| "frontchannel_logout_uri"
 > & {
 	application_type?: "web" | "native";
 	client_credentials_scopes?: string[];
+	/** `null` removes the URI and `backchannel_logout_session_required`. */
+	backchannel_logout_uri?: string | null;
+	/** `null` removes the URI and `frontchannel_logout_session_required`. */
+	frontchannel_logout_uri?: string | null;
 };
 
 export async function getClientEndpoint(
@@ -236,8 +244,27 @@ export async function updateClientEndpoint(
 		});
 	}
 
-	const { client_credentials_scopes: rawClientCredentialsScopes, ...updates } =
-		ctx.body.update;
+	const {
+		client_credentials_scopes: rawClientCredentialsScopes,
+		backchannel_logout_uri: backchannelLogoutUri,
+		frontchannel_logout_uri: frontchannelLogoutUri,
+		...otherUpdates
+	} = ctx.body.update;
+	const clearsBackchannelLogout = backchannelLogoutUri === null;
+	const clearsFrontchannelLogout = frontchannelLogoutUri === null;
+	const updates = {
+		...otherUpdates,
+		...(backchannelLogoutUri != null
+			? { backchannel_logout_uri: backchannelLogoutUri }
+			: {}),
+		...(frontchannelLogoutUri != null
+			? { frontchannel_logout_uri: frontchannelLogoutUri }
+			: {}),
+	};
+	const hasUpdates =
+		Object.keys(updates).length > 0 ||
+		clearsBackchannelLogout ||
+		clearsFrontchannelLogout;
 	const ownsClient = client.userId
 		? client.userId === session.user.id
 		: client.referenceId && opts.clientReference
@@ -247,7 +274,7 @@ export async function updateClientEndpoint(
 		!ownsClient &&
 		settings?.admin &&
 		rawClientCredentialsScopes !== undefined &&
-		Object.keys(updates).length === 0;
+		!hasUpdates;
 	if (!ownsClient && !isCrossOwnerScopeConfiguration) {
 		throw new APIError("UNAUTHORIZED");
 	}
@@ -260,10 +287,7 @@ export async function updateClientEndpoint(
 		);
 	}
 
-	if (
-		Object.keys(updates).length === 0 &&
-		rawClientCredentialsScopes === undefined
-	) {
+	if (!hasUpdates && rawClientCredentialsScopes === undefined) {
 		// Never return @internal client_secret
 		const res = schemaToOAuth(client);
 		res.client_secret = undefined;
@@ -302,21 +326,31 @@ export async function updateClientEndpoint(
 		}
 	}
 
-	await checkOAuthClient(
-		{
-			...schemaToOAuth(client),
-			...updates,
-		},
-		opts,
-		{
-			ctx,
-		},
-	);
+	const updatedMetadata = { ...schemaToOAuth(client), ...updates };
+	if (clearsBackchannelLogout) {
+		updatedMetadata.backchannel_logout_uri = undefined;
+		updatedMetadata.backchannel_logout_session_required = undefined;
+	}
+	if (clearsFrontchannelLogout) {
+		updatedMetadata.frontchannel_logout_uri = undefined;
+		updatedMetadata.frontchannel_logout_session_required = undefined;
+	}
+	await checkOAuthClient(updatedMetadata, opts, {
+		ctx,
+	});
 
 	// Clear obsolete auth material when switching auth methods
 	const schemaUpdates: Record<string, unknown> = {
 		...oauthToSchema(updates),
 	};
+	if (clearsBackchannelLogout) {
+		schemaUpdates.backchannelLogoutUri = null;
+		schemaUpdates.backchannelLogoutSessionRequired = null;
+	}
+	if (clearsFrontchannelLogout) {
+		schemaUpdates.frontchannelLogoutUri = null;
+		schemaUpdates.frontchannelLogoutSessionRequired = null;
+	}
 	if (
 		!finalGrantTypes.includes("client_credentials") ||
 		finalTokenEndpointAuthMethod === "none"

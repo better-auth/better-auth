@@ -271,6 +271,8 @@ To update an oauth client tied to a specific user or organization, use the `/oau
   ```
 </APIMethod>
 
+Omitted fields keep their current values. To remove a logout URI, send `null`: `backchannel_logout_uri: null` or `frontchannel_logout_uri: null` also clears the matching `*_session_required` flag, and the client stops receiving those logout notifications.
+
 Restrictions on this endpoint:
 
 * You cannot change `token_endpoint_auth_method` after creation. The method selected at creation determines whether the client has credential capability.

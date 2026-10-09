@@ -373,6 +373,26 @@ describe("oauth front-channel logout", async () => {
 		expect(sources).toEqual(["/logout/frontchannel"]);
 	});
 
+	it("stops notifying a client after an update clears its frontchannel_logout_uri", async () => {
+		const fcClient = await registerClient({
+			post_logout_redirect_uris: [`${rpBaseUrl}/logout/callback`],
+		});
+		const tokens = await issueTokens({ client: fcClient });
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: fcClient.client_id,
+				update: { frontchannel_logout_uri: null },
+			},
+		});
+
+		const response = await endSessionNavigation({
+			id_token_hint: tokens.id_token,
+			post_logout_redirect_uri: `${rpBaseUrl}/logout/callback`,
+		});
+		expect(response.status).toBe(302);
+	});
+
 	it("does not notify relying parties when a hook vetoes the session deletion", async () => {
 		const fcClient = await registerClient();
 		const tokens = await issueTokens({ client: fcClient });
