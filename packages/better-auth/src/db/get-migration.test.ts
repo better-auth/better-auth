@@ -6,6 +6,7 @@ import { PostgresAdapter, PostgresQueryCompiler } from "kysely";
 import { describe, expect, it } from "vitest";
 import { organization } from "../plugins/organization";
 import { getMigrations, UnsafeMigrationError } from "./get-migration";
+import { getSchema } from "./get-schema";
 
 // A 1.6-shape team/teamMember schema: the 1.7 `memberCount` and `membershipKey`
 // columns are missing, so getMigrations must ADD them to a populated table.
@@ -962,4 +963,162 @@ describe("get-migration: configured PostgreSQL schema", () => {
 
 		expect(toBeCreated.map(({ table }) => table)).toContain("user");
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8111
+ */
+describe("get-migration: foreign key model identity", () => {
+	it("references the user table when its name matches another model key", async () => {
+		const database = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database,
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+		};
+
+		const { runMigrations } = await getMigrations(config);
+		await runMigrations();
+
+		const sessionForeignKeys = database
+			.prepare('PRAGMA foreign_key_list("session")')
+			.all();
+		const identityForeignKeys = database
+			.prepare('PRAGMA foreign_key_list("identity")')
+			.all();
+		expect(sessionForeignKeys).toContainEqual(
+			expect.objectContaining({ table: "account", from: "userId", to: "id" }),
+		);
+		expect(identityForeignKeys).toContainEqual(
+			expect.objectContaining({ table: "account", from: "userId", to: "id" }),
+		);
+	});
+
+	it("references the user table when adding a column", async () => {
+		const database = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database,
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+		};
+		await (await getMigrations(config)).runMigrations();
+
+		const { compileMigrations } = await getMigrations({
+			...config,
+			account: {
+				modelName: "identity",
+				additionalFields: {
+					inviterId: {
+						type: "string",
+						required: false,
+						references: { model: "user", field: "id" },
+					},
+				},
+			},
+		});
+
+		expect(await compileMigrations()).toContain(
+			'alter table "identity" add column "inviterId" text references "account" ("id")',
+		);
+	});
+
+	it("retains the reference key after reading the public schema", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			user: {
+				modelName: "account",
+				fields: { email: "email_address" },
+			},
+			account: { modelName: "identity" },
+			plugins: [
+				{
+					id: "audit",
+					schema: {
+						audit: {
+							fields: {
+								userEmail: {
+									type: "string",
+									references: { model: "user", field: "email" },
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		expect(getSchema(config).audit?.fields.userEmail?.references).toMatchObject(
+			{
+				model: "account",
+				field: "email",
+			},
+		);
+		const { compileMigrations } = await getMigrations(config);
+
+		expect(await compileMigrations()).toContain(
+			'"userEmail" text not null references "account" ("email_address")',
+		);
+	});
+
+	it("keeps the referenced key when two models share a table", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			plugins: [
+				{
+					id: "shared-table",
+					schema: {
+						first: {
+							modelName: "shared",
+							fields: { name: { type: "string" } },
+						},
+						second: {
+							modelName: "shared",
+							fields: {
+								code: { type: "string", fieldName: "shared_code" },
+							},
+						},
+						audit: {
+							fields: {
+								sharedCode: {
+									type: "string",
+									references: { model: "second", field: "code" },
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const { compileMigrations } = await getMigrations(config);
+		expect(await compileMigrations()).toContain(
+			'"sharedCode" text not null references "shared" ("shared_code")',
+		);
+	});
+});
+
+it("preserves external table references in generated migrations", async () => {
+	const config: BetterAuthOptions = {
+		database: new DatabaseSync(":memory:"),
+		plugins: [
+			{
+				id: "audit",
+				schema: {
+					audit: {
+						fields: {
+							externalUserId: {
+								type: "string",
+								references: { model: "external_user", field: "id" },
+							},
+						},
+					},
+				},
+			},
+		],
+	};
+
+	const { compileMigrations } = await getMigrations(config);
+	expect(await compileMigrations()).toContain(
+		'"externalUserId" text not null references "external_user" ("id")',
+	);
 });

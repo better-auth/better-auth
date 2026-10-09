@@ -495,3 +495,81 @@ describe("Okta SCIM 2.0 CRUD test net wire sequence", () => {
 		}
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11111
+ */
+describe("Okta SCIM 2.0 reassignment after deactivation", () => {
+	it("reprovisions the inactive user when Okta POSTs the same externalId", async () => {
+		const { instance, sqlite } = await createTestInstance();
+		try {
+			const usersURL = `${instance.baseURL}/api/auth/scim/v2/Users`;
+			const externalId = "00ujl29u0le5T6Aj10h7";
+
+			const createResponse = await fetch(usersURL, {
+				method: "POST",
+				headers: createSCIMHeaders(),
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA],
+					externalId,
+					userName: "casey.before@atko.com",
+					emails: [{ value: "casey.before@atko.com", primary: true }],
+					active: true,
+				}),
+			});
+			expect(createResponse.status).toBe(201);
+			const created = await readJSON<SCIMUserResponse>(createResponse);
+
+			const deactivateResponse = await fetch(`${usersURL}/${created.id}`, {
+				method: "PATCH",
+				headers: createSCIMHeaders(),
+				body: JSON.stringify({
+					schemas: [SCIM_PATCH_SCHEMA],
+					Operations: [{ op: "replace", value: { active: false } }],
+				}),
+			});
+			expect(deactivateResponse.status).toBe(200);
+
+			// Okta looks up the reassigned user by its current userName before it
+			// POSTs. A changed userName misses the retained resource, so Okta
+			// creates the user again with the same Okta user ID as externalId.
+			const reprovisionResponse = await fetch(usersURL, {
+				method: "POST",
+				headers: createSCIMHeaders(),
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA],
+					externalId,
+					userName: "casey.after@atko.com",
+					emails: [{ value: "casey.after@atko.com", primary: true }],
+					active: true,
+				}),
+			});
+			expect(reprovisionResponse.status).toBe(201);
+			expect(reprovisionResponse.headers.get("location")).toBe(
+				`${usersURL}/${created.id}`,
+			);
+			const reprovisioned =
+				await readJSON<SCIMUserResponse>(reprovisionResponse);
+			expect(reprovisioned).toMatchObject({
+				id: created.id,
+				userName: "casey.after@atko.com",
+				active: true,
+			});
+
+			const duplicateResponse = await fetch(usersURL, {
+				method: "POST",
+				headers: createSCIMHeaders(),
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA],
+					externalId,
+					userName: "casey.duplicate@atko.com",
+					active: true,
+				}),
+			});
+			expect(duplicateResponse.status).toBe(409);
+		} finally {
+			await instance.server.close();
+			sqlite.close();
+		}
+	});
+});

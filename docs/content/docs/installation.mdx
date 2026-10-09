@@ -157,9 +157,12 @@ description: Learn how to configure Better Auth in your project.
         import { client } from "@/db"; // your mongodb client
 
         export const auth = betterAuth({
-            database: mongodbAdapter(client),
+            database: mongodbAdapter(client.db(), { client }),
         });
         ```
+
+        See the [MongoDB adapter guide](/docs/adapters/mongo) for standalone
+        server setup.
       </Tab>
     </Tabs>
 
