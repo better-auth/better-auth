@@ -31,7 +31,7 @@ export async function getClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "read");
+	await assertClientPrivileges(ctx, session, opts, "read", ctx.query.client_id);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const client = await getClient(ctx, opts, ctx.query.client_id);
@@ -143,7 +143,13 @@ export async function deleteClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "delete");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"delete",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
@@ -216,7 +222,13 @@ export async function updateClientEndpoint(
 	OAuthClientAdministrativeResponse | OAuthClientRegistrationResponse
 > {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "update");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"update",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
@@ -257,6 +269,7 @@ export async function updateClientEndpoint(
 			session,
 			opts,
 			"configure-client-credentials-scopes",
+			clientId,
 		);
 	}
 
@@ -298,6 +311,7 @@ export async function updateClientEndpoint(
 				session,
 				opts,
 				"configure-client-credentials-scopes",
+				clientId,
 			);
 		}
 	}
@@ -386,7 +400,13 @@ export async function rotateClientSecretEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "rotate");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"rotate",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;

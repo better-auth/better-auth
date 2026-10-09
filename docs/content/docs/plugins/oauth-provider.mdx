@@ -1706,6 +1706,10 @@ To set user-specific permissions and roles on tokens see [Claims](#claims).
 
 To determine whether a logged in user has the ability to perform specific actions in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or `clientReference`.
 
+The callback receives `clientId` for reads, updates, deletion, secret rotation, and client-credentials scope changes to an existing client. It is absent for creation, listing, and scope configuration during creation. Use it with a shared `clientReference` to apply per-client collaborator permissions within an organization.
+
+`clientId` is the requested OAuth `client_id`, so treat it as untrusted until you check your policy. Ordinary client CRUD checks ownership after the callback; returning `true` cannot grant a collaborator access to a user-owned client. The administrative scope-configuration action has its own privilege check and can operate across owners.
+
 The following is a basic example that allows all OAuth Client CRUD actions for organization owners assuming ordinary users cannot create clients:
 
 ```ts title="auth.ts"

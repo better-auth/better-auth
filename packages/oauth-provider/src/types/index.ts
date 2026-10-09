@@ -943,6 +943,8 @@ export interface OAuthOptions<
 			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
+		/** Requested client ID, when known. It is not proof of ownership or existence. */
+		clientId?: string;
 	}) => Awaitable<boolean | undefined>;
 	/**
 	 * Grant types supported by the token endpoint

@@ -5,7 +5,12 @@ import { getTestInstance } from "better-auth/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "../client";
 import { oauthProvider } from "../oauth";
+import type { OAuthOptions } from "../types";
 import type { OAuthClient } from "../types/oauth";
+
+type ClientPrivilegeContext = Parameters<
+	NonNullable<OAuthOptions["clientPrivileges"]>
+>[0];
 
 type TestOAuthClientUiMetadata = Pick<
 	OAuthClient,
@@ -32,7 +37,7 @@ describe("oauthClient", async () => {
 		password: "test123456",
 		name: "forbidden user",
 	};
-	const clientPrivileges = vi.fn(({ user }) => {
+	const clientPrivileges = vi.fn(({ user }: ClientPrivilegeContext) => {
 		if (user?.email === allowedUser.email) {
 			return true;
 		}
@@ -144,6 +149,7 @@ describe("oauthClient", async () => {
 		expect(client?.data?.client_id_issued_at).toBeDefined();
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges.mock.calls[0]?.[0]).not.toHaveProperty("clientId");
 	});
 
 	it("should not create client with forbidden user via admin api", async () => {
@@ -219,6 +225,30 @@ describe("oauthClient", async () => {
 			}),
 		);
 		expect(clientPrivileges).toHaveBeenCalledTimes(2);
+		expect(clientPrivileges.mock.calls[1]?.[0]).not.toHaveProperty("clientId");
+
+		clientPrivileges.mockClear();
+		await auth.api.adminUpdateOAuthClient({
+			headers: allowedUserHeaders,
+			body: {
+				client_id: adminClient.client_id,
+				update: { client_credentials_scopes: ["m2m:read"] },
+			},
+		});
+		expect(clientPrivileges).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				action: "update",
+				clientId: adminClient.client_id,
+			}),
+		);
+		expect(clientPrivileges).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				action: "configure-client-credentials-scopes",
+				clientId: adminClient.client_id,
+			}),
+		);
 		await allowedAuthClient.oauth2.deleteClient({
 			client_id: adminClient.client_id,
 		});
@@ -309,6 +339,12 @@ describe("oauthClient", async () => {
 		expect(check).toMatchObject(expected);
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "read",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should get public-only information about a client with any user", async () => {
@@ -356,6 +392,36 @@ describe("oauthClient", async () => {
 		expect(check).toMatchObject(expected);
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges.mock.calls[0]?.[0]).not.toHaveProperty("clientId");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11589
+	 */
+	it("distinguishes shared clients for a collaborator", async () => {
+		const otherClient = await auth.api.adminCreateOAuthClient({
+			headers: allowedUserHeaders,
+			body: { redirect_uris: [redirectUri] },
+		});
+		clientPrivileges.mockClear();
+		clientPrivileges.mockImplementationOnce(
+			({ clientId }) => clientId !== oauthClient.client_id,
+		);
+		const denied = await forbiddenAuthClient.oauth2.getClient({
+			query: { client_id: oauthClient.client_id },
+		});
+		expect(denied.error?.status).toBe(401);
+
+		clientPrivileges.mockImplementationOnce(
+			({ clientId }) => clientId === otherClient.client_id,
+		);
+		const allowed = await forbiddenAuthClient.oauth2.getClient({
+			query: { client_id: otherClient.client_id },
+		});
+		expect(allowed.data?.client_id).toBe(otherClient.client_id);
+		await allowedAuthClient.oauth2.deleteClient({
+			client_id: otherClient.client_id,
+		});
 	});
 
 	it("should not update the client with forbidden user", async () => {
@@ -393,6 +459,12 @@ describe("oauthClient", async () => {
 		oauthClient = client.data!;
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "update",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should not rotate the client secret with forbidden user", async () => {
@@ -420,6 +492,12 @@ describe("oauthClient", async () => {
 		oauthClient = client.data!;
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "rotate",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should not delete the client with forbidden user", async () => {
@@ -442,6 +520,12 @@ describe("oauthClient", async () => {
 		expect(client.data).toBeNull();
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "delete",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should not create client via admin api without a session", async () => {
