@@ -927,3 +927,73 @@ describe("magic link send origin/CSRF protection", async () => {
 		expect(sendMagicLink).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("magic link verify callbackURL encoding", async () => {
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+	const { customFetchImpl, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					verificationEmail = data;
+				},
+			}),
+		],
+		advanced: {
+			disableOriginCheck: false,
+		},
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
+	});
+
+	it("should redirect to the exact callbackURL when it carries an encoded nested URL", async () => {
+		const nested = "https://example.com/return?state=abc&step=2";
+		const callbackURL = `http://localhost:3000/connect?return=${encodeURIComponent(nested)}`;
+		await client.signIn.magicLink({
+			email: testUser.email,
+			callbackURL,
+		});
+
+		const res = await customFetchImpl(verificationEmail.url, {
+			method: "GET",
+			redirect: "manual",
+		});
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).toBe(callbackURL);
+		const params = new URL(location).searchParams;
+		expect(params.get("return")).toBe(nested);
+		expect(params.get("step")).toBeNull();
+	});
+
+	it("should not redirect to a foreign origin passed as an encoded callbackURL", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const verifyURL = new URL(verificationEmail.url);
+		verifyURL.searchParams.set(
+			"callbackURL",
+			encodeURIComponent("http://malicious.com"),
+		);
+
+		const res = await customFetchImpl(verifyURL.toString(), {
+			method: "GET",
+			redirect: "manual",
+		});
+
+		expect(res.status).toBe(403);
+		expect(res.headers.get("location")).toBeNull();
+	});
+});
