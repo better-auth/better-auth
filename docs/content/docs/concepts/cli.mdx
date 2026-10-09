@@ -197,6 +197,6 @@ npx auth@latest secret
 
 **Error: Cannot find module X**
 
-The CLI resolves most imports for you: `tsconfig.json` path aliases (including SvelteKit's `$lib`) and stubbed framework virtual modules (`$env/*`, `$app/*`, `cloudflare:workers`, Vite assets like `?raw`). For SvelteKit, run `svelte-kit sync` first so `.svelte-kit/tsconfig.json` exists.
+The CLI resolves most imports for you: `tsconfig.json` path aliases, `package.json` subpath imports (including SvelteKit 3's `#lib`), and stubbed framework virtual modules (`$env/*`, `$app/*`, `cloudflare:workers`, Vite assets like `?raw`). On SvelteKit 2, run `svelte-kit sync` first so `.svelte-kit/tsconfig.json` exists and `$lib` resolves.
 
 A few module types can't load outside their bundler (e.g. `.svelte` components or `import.meta.glob`). Keep those out of your config file's import graph.
