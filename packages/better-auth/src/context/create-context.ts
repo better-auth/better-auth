@@ -95,10 +95,14 @@ function validateSecret(
 	}
 }
 
+/** Receives the telemetry install report of one Initialization Attempt. */
+export type InstallReport = { send?: (() => Promise<void>) | undefined };
+
 export async function createAuthContext<Options extends BetterAuthOptions>(
 	adapter: DBAdapter,
 	options: Options,
 	getDatabaseType: (database: Options["database"]) => string,
+	install?: InstallReport,
 ): Promise<AuthContext<Options>> {
 	// secondaryStorage is a durable server-side session store, so treat it like
 	// a database for session cache defaults.
@@ -265,13 +269,15 @@ Most of the features of Better Auth will not work correctly.`,
 		return generateId(size);
 	};
 
-	const { publish } = await createTelemetry(options, {
+	const { publish, reportInstall } = await createTelemetry(options, {
 		adapter: adapter.id,
 		database:
 			typeof options.database === "function"
 				? "adapter"
 				: getDatabaseType(options.database),
+		deferInitEvent: install !== undefined,
 	});
+	if (install) install.send = reportInstall;
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 

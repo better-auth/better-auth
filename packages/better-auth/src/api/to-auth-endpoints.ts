@@ -17,6 +17,8 @@ import {
 	resolveRequestContext,
 } from "../context/helpers";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
+import type { AuthContextSource } from "./auth-context-source";
+import { resolveAuthContext } from "./auth-context-source";
 import { dispatchAuthEndpoint, getOperationId } from "./dispatch";
 
 type UserInputContext = Partial<
@@ -73,7 +75,7 @@ async function resolveDynamicContext(
  */
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
-	ctx: AuthContext | Promise<AuthContext>,
+	ctx: AuthContextSource,
 ): E {
 	const api: Record<
 		string,
@@ -90,8 +92,8 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 			const operationId = getOperationId(endpoint, key);
 
 			const run = async () => {
-				const rawContext = await ctx;
-				const pendingSchemaCheck = rawContext.checkSchema?.();
+				const rawContext = await resolveAuthContext(ctx);
+				const pendingSchemaCheck = rawContext.checkSchema?.(rawContext.logger);
 				if (pendingSchemaCheck) await pendingSchemaCheck;
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
