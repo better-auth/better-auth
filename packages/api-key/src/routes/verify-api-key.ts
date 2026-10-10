@@ -441,7 +441,10 @@ async function claimUsageInSecondaryStorage({
 
 	const updated = await performUpdate();
 	if (!updated) {
-		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+		);
 	}
 	return updated;
 }

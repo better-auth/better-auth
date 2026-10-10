@@ -3,7 +3,11 @@ import type { APIError } from "@better-auth/core/error";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
+import {
+	apiKey,
+	defaultKeyHasher,
+	API_KEY_ERROR_CODES as ERROR_CODES,
+} from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
 
@@ -5089,15 +5093,35 @@ describe("verify should not write back stale state", async () => {
 				});
 			};
 
-			const result = await auth.api.verifyApiKey({
-				body: { key: created.key },
+			await expect(
+				auth.api.verifyApiKey({ body: { key: created.key } }),
+			).rejects.toMatchObject({
+				statusCode: 500,
+				body: { code: "FAILED_TO_UPDATE_API_KEY" },
 			});
-			expect(result.valid).toBe(false);
 
 			const apiKeyEntries = [...store.keys()].filter((k) =>
 				k.startsWith("api-key:"),
 			);
 			expect(apiKeyEntries).toEqual([]);
+		});
+
+		it("should report malformed storage data after validation as a verification failure", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+			const storageKey = `api-key:${await defaultKeyHasher(created.key)}`;
+
+			onValidate = async () => {
+				store.set(storageKey, "{invalid-json");
+			};
+
+			await expect(
+				auth.api.verifyApiKey({ body: { key: created.key } }),
+			).rejects.toMatchObject({
+				statusCode: 500,
+				body: { code: "FAILED_TO_UPDATE_API_KEY" },
+			});
+			expect(store.get(storageKey)).toBe("{invalid-json");
 		});
 	});
 });
