@@ -11,6 +11,7 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import { errors as joseErrors } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -109,6 +110,26 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	}
 	return plugin;
 };
+
+const joseInfrastructureErrorCodes = new Set([
+	joseErrors.JWKSTimeout.code,
+	joseErrors.JWKSInvalid.code,
+	joseErrors.JWKSMultipleMatchingKeys.code,
+]);
+
+/**
+ * Whether a JWT verification error comes from the token itself (malformed,
+ * bad signature, unsupported alg, unknown kid, failed claim checks), as
+ * opposed to a key set failure that should still surface as a server error.
+ *
+ * @internal
+ */
+export function isInvalidJwtError(error: unknown) {
+	return (
+		error instanceof joseErrors.JOSEError &&
+		!joseInfrastructureErrorCodes.has(error.code)
+	);
+}
 
 /**
  * Normalizes timestamp-like values returned by adapters.

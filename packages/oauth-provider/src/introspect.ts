@@ -30,6 +30,7 @@ import {
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
@@ -153,21 +154,23 @@ async function validateJwtAccessToken(
 		jwtPayload = verified.payload;
 	} catch (error) {
 		if (error instanceof Error) {
-			if (error.name === "TypeError" || error.name === "JWSInvalid") {
-				// likely an opaque token
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid JWT signature",
-					error: "invalid_request",
-				});
-			} else if (error.name === "JWTExpired") {
+			if (error.name === "JWTExpired") {
 				return {
 					active: false,
 				};
 			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
+				// malformed JWT (payload is not a JSON claims set, or unencoded)
 				return {
 					active: false,
 				};
+			} else if (error.name === "TypeError" || isInvalidJwtError(error)) {
+				// likely an opaque token, or a JWT this server cannot verify (bad
+				// signature, unknown key, failed claim checks such as `iss`), which
+				// may still be a stored opaque token (`generateOpaqueAccessToken`)
+				throw new APIError("BAD_REQUEST", {
+					error_description: "invalid JWT signature",
+					error: "invalid_request",
+				});
 			}
 			throw error;
 		}
