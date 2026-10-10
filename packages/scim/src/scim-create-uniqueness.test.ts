@@ -101,6 +101,7 @@ type UpdateInput = Parameters<DBTransactionAdapter["update"]>[0];
 
 function createConcurrentUpdateAdapter(
 	data: ResourceCreateData,
+	model: "scimUser" | "scimGroup",
 	injectConcurrentCommit: () => void,
 ) {
 	const race = { armed: false };
@@ -113,10 +114,10 @@ function createConcurrentUpdateAdapter(
 			) =>
 				adapter.transaction(async (transaction) => {
 					const update = async (input: UpdateInput): Promise<unknown> => {
-						if (race.armed && input.model === "scimUser") {
+						if (race.armed && input.model === model) {
 							race.armed = false;
 							injectConcurrentCommit();
-							throw new Error("Simulated scimUser unique constraint");
+							throw new Error(`Simulated ${model} unique constraint`);
 						}
 						return transaction.update(input);
 					};
@@ -158,6 +159,25 @@ function createCommittedSCIMUser(userName: string): SCIMUser {
 		}),
 		active: true,
 		orderKey: "concurrent-user-order",
+		createdAt: now,
+		updatedAt: now,
+	};
+}
+
+function createCommittedSCIMGroup(displayName: string): SCIMGroup {
+	const now = new Date();
+	return {
+		id: "concurrent-group",
+		connectionId: "workforce",
+		provisioningDomainId: "workforce",
+		revision: 0,
+		displayName,
+		displayNameKey: createScopedKey([
+			"scim-group-display-name",
+			"workforce",
+			displayName.toLowerCase(),
+		]),
+		orderKey: "concurrent-group-order",
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -283,9 +303,13 @@ describe("SCIM resource create uniqueness races", () => {
 	 */
 	it("normalizes a concurrent userName commit during inactive User reprovisioning", async () => {
 		const data = createData();
-		const { database, race } = createConcurrentUpdateAdapter(data, () => {
-			data.scimUser.push(createCommittedSCIMUser("grace@example.com"));
-		});
+		const { database, race } = createConcurrentUpdateAdapter(
+			data,
+			"scimUser",
+			() => {
+				data.scimUser.push(createCommittedSCIMUser("grace@example.com"));
+			},
+		);
 		const auth = createAuth(database);
 		const created = await auth.api.createSCIMUser({
 			body: {
@@ -324,9 +348,13 @@ describe("SCIM resource create uniqueness races", () => {
 
 	it("normalizes a concurrent userName commit during User replacement", async () => {
 		const data = createData();
-		const { database, race } = createConcurrentUpdateAdapter(data, () => {
-			data.scimUser.push(createCommittedSCIMUser("grace@example.com"));
-		});
+		const { database, race } = createConcurrentUpdateAdapter(
+			data,
+			"scimUser",
+			() => {
+				data.scimUser.push(createCommittedSCIMUser("grace@example.com"));
+			},
+		);
 		const auth = createAuth(database);
 		const created = await auth.api.createSCIMUser({
 			body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
@@ -350,7 +378,11 @@ describe("SCIM resource create uniqueness races", () => {
 
 	it("preserves a replacement failure when no committed uniqueness conflict exists", async () => {
 		const data = createData();
-		const { database, race } = createConcurrentUpdateAdapter(data, () => {});
+		const { database, race } = createConcurrentUpdateAdapter(
+			data,
+			"scimUser",
+			() => {},
+		);
 		const auth = createAuth(database);
 		const created = await auth.api.createSCIMUser({
 			body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
@@ -365,5 +397,133 @@ describe("SCIM resource create uniqueness races", () => {
 				headers,
 			}),
 		).rejects.toThrowError("Simulated scimUser unique constraint");
+	});
+
+	it("normalizes a concurrent userName commit during User PATCH", async () => {
+		const data = createData();
+		const { database, race } = createConcurrentUpdateAdapter(
+			data,
+			"scimUser",
+			() => {
+				data.scimUser.push(createCommittedSCIMUser("grace@example.com"));
+			},
+		);
+		const auth = createAuth(database);
+		const created = await auth.api.createSCIMUser({
+			body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
+			headers,
+		});
+
+		race.armed = true;
+		await expect(
+			auth.api.patchSCIMUser({
+				params: { userId: created.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "replace", path: "userName", value: "grace@example.com" },
+					],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({
+				status: "409",
+				scimType: "uniqueness",
+			}),
+		});
+	});
+
+	it("normalizes a concurrent displayName commit during Group replacement", async () => {
+		const data = createData();
+		const { database, race } = createConcurrentUpdateAdapter(
+			data,
+			"scimGroup",
+			() => {
+				data.scimGroup.push(createCommittedSCIMGroup("Finance"));
+			},
+		);
+		const auth = createAuth(database);
+		const created = await auth.api.createSCIMGroup({
+			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering" },
+			headers,
+		});
+
+		race.armed = true;
+		await expect(
+			auth.api.replaceSCIMGroup({
+				params: { groupId: created.id },
+				body: { schemas: [GROUP_SCHEMA], displayName: "Finance" },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({
+				status: "409",
+				scimType: "uniqueness",
+			}),
+		});
+	});
+
+	it("normalizes a concurrent displayName commit during Group PATCH", async () => {
+		const data = createData();
+		const { database, race } = createConcurrentUpdateAdapter(
+			data,
+			"scimGroup",
+			() => {
+				data.scimGroup.push(createCommittedSCIMGroup("Finance"));
+			},
+		);
+		const auth = createAuth(database);
+		const created = await auth.api.createSCIMGroup({
+			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering" },
+			headers,
+		});
+
+		race.armed = true;
+		await expect(
+			auth.api.patchSCIMGroup({
+				params: { groupId: created.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "replace", path: "displayName", value: "Finance" },
+					],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({
+				status: "409",
+				scimType: "uniqueness",
+			}),
+		});
+	});
+
+	it("preserves a Group PATCH failure when no committed uniqueness conflict exists", async () => {
+		const data = createData();
+		const { database, race } = createConcurrentUpdateAdapter(
+			data,
+			"scimGroup",
+			() => {},
+		);
+		const auth = createAuth(database);
+		const created = await auth.api.createSCIMGroup({
+			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering" },
+			headers,
+		});
+
+		race.armed = true;
+		await expect(
+			auth.api.patchSCIMGroup({
+				params: { groupId: created.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "replace", path: "displayName", value: "Finance" },
+					],
+				},
+				headers,
+			}),
+		).rejects.toThrowError("Simulated scimGroup unique constraint");
 	});
 });
