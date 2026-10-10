@@ -67,6 +67,7 @@ import {
 	toAudienceClaim,
 	toResourceList,
 	validateClientCredentials,
+	validateClientScopes,
 } from "./utils";
 
 // Seed the ID token with the standard UserInfo claim names set to `undefined`,
@@ -1524,6 +1525,20 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the code lookup can report
+	 * `invalid_grant` and before a one-time code is consumed). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret,
+		undefined,
+		preVerified,
+		"authorization_code",
+		authMethod,
+	);
+
 	/** Get and check Verification Value */
 	const {
 		verificationValue,
@@ -1545,18 +1560,7 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_scope",
 		});
 	}
-
-	/** Verify Client */
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret,
-		scopes,
-		preVerified,
-		"authorization_code",
-		authMethod,
-	);
+	validateClientScopes(client, scopes);
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
@@ -1820,6 +1824,21 @@ async function handleRefreshTokenGrant(
 			error: "invalid_request",
 		});
 	}
+
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the refresh token lookup can
+	 * report `invalid_grant`). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret, // Optional for refresh_grant but required on confidential clients
+		undefined,
+		preVerified,
+		"refresh_token",
+		authMethod,
+	);
+
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
 	const refreshToken = await ctx.context.adapter.findOne<
@@ -1884,16 +1903,7 @@ async function handleRefreshTokenGrant(
 		}
 	}
 
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret, // Optional for refresh_grant but required on confidential clients
-		requestedScopes ?? scopes,
-		preVerified,
-		"refresh_token",
-		authMethod,
-	);
+	validateClientScopes(client, requestedScopes ?? scopes);
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
