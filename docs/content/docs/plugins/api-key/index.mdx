@@ -197,6 +197,14 @@ Otherwise if it throws, it will throw an `APIError`.
 
 #### Result
 
+`valid: true` means the key passed verification. Failures in best-effort storage updates are logged without changing the verification result.
+
+| Outcome                        | Behavior                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------- |
+| The key is accepted            | Returns `valid: true`, the key details, and `error: null`.                              |
+| The key is rejected            | Returns `valid: false`, an error describing the rejection, and `key: null`.             |
+| Verification fails to complete | Throws an `APIError` when a required verification step fails, such as a storage lookup. |
+
 ```ts
 type Result = {
   valid: boolean;

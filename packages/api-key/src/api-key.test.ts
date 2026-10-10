@@ -1,11 +1,15 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
+import {
+	apiKey,
+	defaultKeyHasher,
+	API_KEY_ERROR_CODES as ERROR_CODES,
+} from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
-import { isAPIError } from "./utils";
 
 describe("api-key", async () => {
 	const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -5089,15 +5093,35 @@ describe("verify should not write back stale state", async () => {
 				});
 			};
 
-			const result = await auth.api.verifyApiKey({
-				body: { key: created.key },
+			await expect(
+				auth.api.verifyApiKey({ body: { key: created.key } }),
+			).rejects.toMatchObject({
+				statusCode: 500,
+				body: { code: "FAILED_TO_UPDATE_API_KEY" },
 			});
-			expect(result.valid).toBe(false);
 
 			const apiKeyEntries = [...store.keys()].filter((k) =>
 				k.startsWith("api-key:"),
 			);
 			expect(apiKeyEntries).toEqual([]);
+		});
+
+		it("should report malformed storage data after validation as a verification failure", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({ body: {}, headers });
+			const storageKey = `api-key:${await defaultKeyHasher(created.key)}`;
+
+			onValidate = async () => {
+				store.set(storageKey, "{invalid-json");
+			};
+
+			await expect(
+				auth.api.verifyApiKey({ body: { key: created.key } }),
+			).rejects.toMatchObject({
+				statusCode: 500,
+				body: { code: "FAILED_TO_UPDATE_API_KEY" },
+			});
+			expect(store.get(storageKey)).toBe("{invalid-json");
 		});
 	});
 });
@@ -5288,24 +5312,24 @@ describe("concurrent verification enforces atomic counters", async () => {
 	});
 });
 
-describe("listApiKeys with integer user.id (postgres + serial)", async () => {
-	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
-	const { auth, signInWithTestUser } = await getTestInstance(
-		{
-			plugins: [apiKey()],
-			advanced: {
-				database: { generateId: "serial" },
-			},
-		},
-		{
-			testWith: "postgres",
-			testUser: { email: testUserEmail },
-			clientOptions: { plugins: [apiKeyClient()] },
-		},
-	);
-	const { headers } = await signInWithTestUser();
-
+describe("listApiKeys with integer user.id (postgres + serial)", () => {
 	it("returns the key that createApiKey just wrote", async () => {
+		const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey()],
+				advanced: {
+					database: { generateId: "serial" },
+				},
+			},
+			{
+				testWith: "postgres",
+				testUser: { email: testUserEmail },
+				clientOptions: { plugins: [apiKeyClient()] },
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
 		const created = await auth.api.createApiKey({ body: {}, headers });
 		expect(created.id).toBeDefined();
 
