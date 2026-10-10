@@ -16,7 +16,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
-	const authContext = initFn(options).then((ctx) => {
+	const postInit = (ctx: AuthContext) => {
 		const validateSchema = ctx.options.advanced?.database?.validateSchema;
 		if (!ctx.checkSchema && validateSchema !== false) {
 			const level = validateSchema === true ? "warn" : "debug";
@@ -35,7 +35,33 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			});
 		}
 		return ctx;
-	});
+	};
+	// A rejected init must not be cached forever, otherwise a transient
+	// failure (e.g. a plugin's init briefly losing its DB connection) would
+	// 500 every request for the lifetime of the process. `pending` is cleared
+	// on rejection so the next caller retries `initFn` instead of re-awaiting
+	// the same failed promise. A successful context is memoized and never
+	// re-created.
+	let pending: Promise<AuthContext> | undefined;
+	const getAuthContext = (): Promise<AuthContext> =>
+		(pending ??= initFn(options)
+			.then(postInit)
+			.catch((error: unknown) => {
+				pending = undefined;
+				throw error;
+			}));
+	// Start init eagerly so cold-start latency isn't paid on the first
+	// request, without letting that eager attempt become an unhandled
+	// rejection if it fails before anything awaits it.
+	void getAuthContext().catch(() => {});
+	// A thenable rather than a plain cached promise: every `await authContext`
+	// re-invokes `getAuthContext()`, so callers that resolved this once at
+	// startup (like the `api` object below) still observe a retried context
+	// after a failed init.
+	const authContext: Promise<AuthContext> = {
+		then: (onFulfilled, onRejected) =>
+			getAuthContext().then(onFulfilled, onRejected),
+	} as Promise<AuthContext>;
 	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
@@ -47,7 +73,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		return acc;
 	}, {});
 	const handler = async (request: Request) => {
-		const ctx = await authContext;
+		const ctx = await getAuthContext();
 		const basePath = ctx.options.basePath || "/api/auth";
 
 		let handlerCtx: AuthContext;
@@ -112,7 +138,9 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		fetch: handler,
 		api,
 		options: options,
-		$context: authContext,
+		get $context() {
+			return getAuthContext();
+		},
 		$ERROR_CODES: {
 			...errorCodes,
 			...BASE_ERROR_CODES,
