@@ -1788,7 +1788,7 @@ async function handleOIDCCallback(
 		}
 	}
 	if (linked.error) {
-		return redirectOIDCError(linked.error);
+		return redirectOIDCError(linked.error.split(" ").join("_"));
 	}
 	const { session, user } = linked.data!;
 
