@@ -859,11 +859,11 @@ export const revokeOtherSessions = createAuthEndpoint(
 		const otherSessions = activeSessions.filter(
 			(session) => session.token !== ctx.context.session.session.token,
 		);
-		await Promise.all(
-			otherSessions.map((session) =>
-				ctx.context.internalAdapter.deleteSession(session.token),
-			),
-		);
+		if (otherSessions.length > 0) {
+			await ctx.context.internalAdapter.deleteSessions(
+				otherSessions.map((session) => session.token),
+			);
+		}
 		return ctx.json({
 			status: true,
 		});
