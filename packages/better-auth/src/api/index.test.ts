@@ -4,6 +4,7 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getEndpoints } from "./index";
@@ -181,6 +182,148 @@ describe("onRequest chain", () => {
 		expect(onRequestOrder).toEqual(["plugin-a"]);
 		// Response should be from plugin-a
 		expect(result.error?.status).toBe(403);
+	});
+});
+
+describe("HTTP hook lifecycle", () => {
+	it("keeps HTTP hooks out of direct API calls", async () => {
+		const calls: string[] = [];
+		const onError = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				onAPIError: { onError },
+				plugins: [
+					{
+						id: "http-hooks",
+						async onRequest() {
+							calls.push("request");
+						},
+						async onResponse() {
+							calls.push("response");
+						},
+					},
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		expect(await auth.api.getSession({ headers: new Headers() })).toBeNull();
+		const response = await auth.api.getSession({
+			headers: new Headers(),
+			asResponse: true,
+		});
+		expect(response).toBeInstanceOf(Response);
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: "missing@example.com",
+					password: "wrong-password",
+				},
+			}),
+		).rejects.toBeInstanceOf(APIError);
+		expect(calls).toEqual([]);
+		expect(onError).not.toHaveBeenCalled();
+	});
+
+	it("observes a plugin onRequest response", async () => {
+		const observedStatuses: number[] = [];
+		const onError = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				onAPIError: { onError },
+				plugins: [
+					{
+						id: "early-response",
+						async onRequest() {
+							return {
+								response: Response.json({ code: "BLOCKED" }, { status: 403 }),
+							};
+						},
+					},
+					{
+						id: "observe-response",
+						async onResponse(response) {
+							observedStatuses.push(response.status);
+						},
+					},
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session"),
+		);
+		expect(response.status).toBe(403);
+		expect(observedStatuses).toEqual([403]);
+		expect(onError).not.toHaveBeenCalled();
+	});
+
+	it("observes a rate limit response", async () => {
+		const observedStatuses: number[] = [];
+		const { auth } = await getTestInstance(
+			{
+				rateLimit: { enabled: true, window: 10, max: 1 },
+				plugins: [
+					{
+						id: "observe-response",
+						async onResponse(response) {
+							observedStatuses.push(response.status);
+						},
+					},
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const request = () =>
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "203.0.113.221" },
+			});
+
+		expect((await auth.handler(request())).status).toBe(200);
+		expect((await auth.handler(request())).status).toBe(429);
+		expect(observedStatuses).toEqual([200, 429]);
+	});
+
+	it("observes an onRequest error and its HTTP response", async () => {
+		const observedErrors: unknown[] = [];
+		const observedStatuses: number[] = [];
+		const order: string[] = [];
+		const error = new APIError("BAD_REQUEST", { message: "blocked" });
+		const { auth } = await getTestInstance(
+			{
+				onAPIError: {
+					onError(receivedError) {
+						observedErrors.push(receivedError);
+						order.push("error");
+					},
+				},
+				plugins: [
+					{
+						id: "reject-request",
+						onRequest() {
+							throw error;
+						},
+					},
+					{
+						id: "observe-response",
+						async onResponse(response) {
+							observedStatuses.push(response.status);
+							order.push("response");
+						},
+					},
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session"),
+		);
+		expect(response.status).toBe(400);
+		expect(observedErrors).toEqual([error]);
+		expect(observedStatuses).toEqual([400]);
+		expect(order).toEqual(["error", "response"]);
 	});
 });
 
