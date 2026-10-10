@@ -1,6 +1,18 @@
 // @vitest-environment node
 import { expect, it, vi } from "vitest";
+import { getClientConfig } from "./config";
 import { createAuthClient as createVueClient } from "./vue";
+
+it("appends an unprefixed auth path to an inferred Vercel URL", () => {
+	vi.stubEnv("VERCEL_URL", "auth.example.com");
+	try {
+		expect(getClientConfig({ basePath: "custom/auth" }, false).baseURL).toBe(
+			"https://auth.example.com/custom/auth",
+		);
+	} finally {
+		vi.unstubAllEnvs();
+	}
+});
 
 it("should call '/api/auth' for vue client", async () => {
 	const customFetchImpl = vi.fn(async (url: string | Request | URL) => {

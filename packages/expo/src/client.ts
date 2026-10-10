@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -421,7 +422,18 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							if (oauthStateValue) {
 								params.append("oauthState", oauthStateValue);
 							}
-							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
+							if (!context.request.baseURL) {
+								throw new TypeError(
+									"Expo authorization proxy requires a base URL",
+								);
+							}
+							const proxyURL = appendQueryParams(
+								appendURLPath(
+									context.request.baseURL,
+									"/expo-authorization-proxy",
+								),
+								params,
+							);
 							const result = await Browser!.openAuthSessionAsync(
 								proxyURL,
 								to,

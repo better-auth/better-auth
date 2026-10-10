@@ -3,6 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 	ClientStore,
 } from "@better-auth/core";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type { BetterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
 import { getBaseURL } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
@@ -259,9 +260,7 @@ export function createSignInPopup({
 		// Navigate the popup straight to the server start endpoint on the auth
 		// origin, so it is first-party there and the state/marker cookies land in
 		// the right partition even when the app is on a different origin.
-		const startUrl = new URL(
-			`${authUrl.href.replace(/\/$/, "")}/oauth-popup/start`,
-		);
+		const startUrl = new URL(appendURLPath(authUrl.href, "/oauth-popup/start"));
 		startUrl.searchParams.set("provider", (provider ?? providerId) as string);
 		startUrl.searchParams.set("popupOrigin", window.location.origin);
 		startUrl.searchParams.set("popupNonce", nonce);

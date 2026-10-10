@@ -4,6 +4,7 @@ import type {
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
@@ -166,7 +167,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		// Passing `useFetch` opts into Nuxt-managed session fetching and hydration.
 		if (useFetch) {
 			const sessionSignal = useStore($sessionSignal);
-			return useFetch(`${baseURL}/get-session`, {
+			return useFetch(appendURLPath(baseURL, "/get-session"), {
 				headers: toHeadersInit(options?.fetchOptions?.headers),
 				key: sessionCacheKey,
 				watch: [sessionSignal],
