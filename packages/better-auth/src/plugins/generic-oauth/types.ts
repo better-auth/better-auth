@@ -300,8 +300,8 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	disableIdTokenNonceBinding?: boolean | undefined;
 	/**
-	 * Allowed clock skew when verifying this provider's `id_token` (`exp`, `nbf`,
-	 * `iat`), in seconds or as a duration string such as `"5s"`. Use it when the
+	 * Allowed clock skew when verifying this provider's `id_token` (`exp`, `nbf`),
+	 * in seconds or as a duration string such as `"5s"`. Use it when the
 	 * provider's clock runs slightly ahead of your server's.
 	 *
 	 * @default 0

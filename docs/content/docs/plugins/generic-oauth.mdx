@@ -249,7 +249,7 @@ interface GenericOAuthConfig {
 
 **disableIdTokenNonceBinding**: (Optional) Turn off OIDC `nonce` binding for a discovery provider's `id_token`. Binding is on by default and rejects an `id_token` that does not echo the server-generated `nonce` (OIDC Core 1.0 §3.1.3.7). Set this to `true` only for providers that do not return the `nonce` claim in the authorization-code flow; it removes `id_token` replay protection for the provider.
 
-**idTokenClockTolerance**: (Optional) Allowed clock skew when verifying a discovery provider's `id_token` (`exp`, `nbf`, `iat`), in seconds or as a duration string such as `"5s"`. Use it when the provider's clock runs slightly ahead of your server's. Defaults to no tolerance.
+**idTokenClockTolerance**: (Optional) Allowed clock skew when verifying a discovery provider's `id_token` (`exp`, `nbf`), in seconds or as a duration string such as `"5s"`. Use it when the provider's clock runs slightly ahead of your server's. Defaults to no tolerance.
 
 **authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
 

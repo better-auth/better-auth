@@ -204,7 +204,7 @@ describe("verifyProviderIdToken", () => {
 		const { jwks, sign } = await makeKeyset();
 		const token = await sign({
 			sub: "u1",
-			nbf: Math.floor(Date.now() / 1000) + 5,
+			nbf: Math.floor(Date.now() / 1000) + 60,
 		});
 		expect(
 			await verifyProviderIdToken(
@@ -218,7 +218,7 @@ describe("verifyProviderIdToken", () => {
 					jwks,
 					issuer: ISSUER,
 					audience: AUDIENCE,
-					clockTolerance: 10,
+					clockTolerance: 120,
 				}),
 				token,
 			),
