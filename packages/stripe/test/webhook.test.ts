@@ -1583,6 +1583,66 @@ describe("stripe webhook", () => {
 		expect(sub?.stripeScheduleId).toBeNull();
 	});
 
+	test("should safely skip customer.subscription.updated when subscription is not found in database", async ({
+		memory,
+		stripeOptions,
+	}) => {
+		const updateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_not_in_db",
+					customer: "cus_not_in_db",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: { id: TEST_PRICES.starter },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(updateEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} satisfies StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const response = await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(updateEvent),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+	});
+
 	test("should clear stripeScheduleId on subscription deleted webhook", async ({
 		memory,
 		stripeOptions,
