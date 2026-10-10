@@ -202,7 +202,7 @@ function createBetterAuthUser(id: string, email: string): User {
 }
 
 const replaceEmailsWith = (email: string) => ({
-	schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+	schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp" as const],
 	Operations: [
 		{ op: "replace", path: "emails", value: [{ value: email, primary: true }] },
 	],
