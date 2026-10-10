@@ -15,6 +15,7 @@ import type { PrettifyDeep } from "../../types/helper";
 import { isAPIError } from "../../utils/is-api-error";
 import { createAccessControl } from "../access";
 import { admin } from "../admin";
+import { openAPI } from "../open-api";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
@@ -4182,5 +4183,654 @@ describe("delete cascade rollback", async () => {
 			],
 		});
 		expect(teamMemberCount).toBe(1);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11096
+ */
+describe("checkMemberPermission", async () => {
+	// `project` is declared on the ac but granted to no built-in role, so a
+	// `project` lookup exercises the "unknown to this role's statements"
+	// denial without leaving the statement-derived key space.
+	const ac = createAccessControl({
+		project: ["create", "read", "update", "delete"],
+		...defaultStatements,
+	});
+	// `viewer` grants nothing that `member` does not, so it can sit at either
+	// end of the multi-role list without making the assertion pass for the
+	// wrong reason. It needs to be a named role for that to be checkable at
+	// all: the built-in set is exactly `member`, `admin` and `owner`, and
+	// `owner` is a superset of `admin`.
+	const viewer = ac.newRole({ ...memberAc.statements });
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				ac,
+				roles: {
+					admin: adminAc,
+					member: memberAc,
+					owner: ownerAc,
+					viewer,
+				},
+			}),
+		],
+	});
+	const ctx = await auth.$context;
+	const { headers } = await signInWithTestUser();
+
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "test",
+			slug: "test",
+		},
+		headers,
+	});
+
+	const addTargetMember = async (
+		email: string,
+		name: string,
+		role: ("admin" | "member" | "owner" | "viewer")[],
+	) => {
+		const user = await ctx.adapter.create({
+			model: "user",
+			data: { email, name },
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org.id,
+				userId: user.id,
+				role,
+			},
+		});
+		return user;
+	};
+
+	const targetMember = await addTargetMember(
+		"target-member@example.com",
+		"target-member",
+		["admin"],
+	);
+	const multiRoleMember = await addTargetMember(
+		"multi-role-member@example.com",
+		"multi-role-member",
+		// `member` first, `admin` second, `viewer` third: the permission
+		// asserted below is granted by `admin` alone, so it can only be
+		// resolved from the middle of the list. Neither the first nor the last
+		// role grants it, which pins that neither end alone can answer.
+		["member", "admin", "viewer"],
+	);
+	const singleRoleMember = await addTargetMember(
+		"single-role-member@example.com",
+		"single-role-member",
+		["member"],
+	);
+	const ownerMember = await addTargetMember(
+		"owner-member@example.com",
+		"owner-member",
+		["owner"],
+	);
+	const nonMember = await ctx.adapter.create({
+		model: "user",
+		data: {
+			email: "non-member@example.com",
+			name: "non-member",
+		},
+	});
+
+	it("should check an arbitrary member's permissions server-side", async () => {
+		const allowed = await auth.api.checkMemberPermission({
+			body: {
+				userId: targetMember.id,
+				organizationId: org.id,
+				permissions: {
+					organization: ["update"],
+				},
+			},
+		});
+		expect(allowed.error).toBeNull();
+		expect(allowed.success).toBe(true);
+
+		// The caller owns the organization and may delete it, the checked
+		// member's `admin` role may not. Resolving the caller's own role
+		// instead would answer the wrong question.
+		const denied = await auth.api.checkMemberPermission({
+			body: {
+				userId: targetMember.id,
+				organizationId: org.id,
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(denied.success).toBe(false);
+	});
+
+	it("should return success false for a user who is not a member", async () => {
+		const result = await auth.api.checkMemberPermission({
+			body: {
+				userId: nonMember.id,
+				organizationId: org.id,
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(result).toEqual({ error: null, success: false });
+	});
+
+	it("should be marked server only", () => {
+		const api = auth.api as unknown as Record<
+			string,
+			{
+				path?: string;
+				options?: { metadata?: { SERVER_ONLY?: boolean } };
+			}
+		>;
+		expect(api.checkMemberPermission?.options?.metadata?.SERVER_ONLY).toBe(
+			true,
+		);
+	});
+
+	it("should resolve the creator role from its statements, not a blanket allow", async () => {
+		const granted = await auth.api.checkMemberPermission({
+			body: {
+				userId: ownerMember.id,
+				organizationId: org.id,
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(granted.success).toBe(true);
+
+		const ungranted = await auth.api.checkMemberPermission({
+			body: {
+				userId: ownerMember.id,
+				organizationId: org.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+		expect(ungranted.success).toBe(false);
+	});
+
+	it("should resolve permissions for a member holding multiple roles", async () => {
+		const result = await auth.api.checkMemberPermission({
+			body: {
+				userId: multiRoleMember.id,
+				organizationId: org.id,
+				permissions: {
+					organization: ["update"],
+				},
+			},
+		});
+		expect(result.success).toBe(true);
+
+		// Control: `member` alone does not grant `organization: ["update"]`, so
+		// the `true` above can only come from the second role in the list.
+		const firstRoleOnly = await auth.api.checkMemberPermission({
+			body: {
+				userId: singleRoleMember.id,
+				organizationId: org.id,
+				permissions: {
+					organization: ["update"],
+				},
+			},
+		});
+		expect(firstRoleOnly).toEqual({ error: null, success: false });
+	});
+
+	it("should scope the member lookup to the organization in the body", async () => {
+		const otherOrg = await auth.api.createOrganization({
+			body: {
+				name: "other",
+				slug: "other",
+			},
+			headers,
+		});
+		const otherOrgMember = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "other-org-member@example.com",
+				name: "other-org-member",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: otherOrg.id,
+				userId: otherOrgMember.id,
+				role: ["owner"],
+			},
+		});
+
+		// `otherOrgMember` owns `otherOrg` outright but is not a member of
+		// `org`. An unscoped member lookup would answer `true` here.
+		const result = await auth.api.checkMemberPermission({
+			body: {
+				userId: otherOrgMember.id,
+				organizationId: org.id,
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(result).toEqual({ error: null, success: false });
+	});
+
+	it("should reject a body without the permissions key", async () => {
+		await expect(
+			auth.api.checkMemberPermission({
+				// @ts-expect-error - `permissions` is required
+				body: {
+					userId: targetMember.id,
+					organizationId: org.id,
+				},
+			}),
+		).rejects.toThrow(
+			/^\[body\.permissions\] Invalid input: expected record, received undefined$/,
+		);
+	});
+
+	// Both are the only source of the subject and the scope, so a schema that
+	// made either optional would silently widen the query instead of failing.
+	it.each([
+		"userId",
+		"organizationId",
+	] as const)("should reject a body without the required %s key", async (field) => {
+		const body: {
+			userId: string;
+			organizationId: string;
+			permissions: Record<string, string[]>;
+		} = {
+			userId: targetMember.id,
+			organizationId: org.id,
+			permissions: { organization: ["update"] },
+		};
+		delete (body as Record<string, unknown>)[field];
+
+		const error = await auth.api.checkMemberPermission({ body }).then(
+			() => null,
+			(e) => e,
+		);
+
+		expect(isAPIError(error)).toBe(true);
+		expect((error as { status: number }).status).toBe(400);
+		// Anchored on the exact `body.<field>` prefix: an optional field
+		// would report nothing here at all, and a neighbouring field's
+		// message would not match.
+		expect((error as Error).message).toBe(
+			`[body.${field}] Invalid input: expected string, received undefined`,
+		);
+	});
+
+	it("should reject a non-string userId instead of coercing it", async () => {
+		await expect(
+			auth.api.checkMemberPermission({
+				body: {
+					// @ts-expect-error - `userId` is a string, not a string[]
+					userId: [targetMember.id],
+					organizationId: org.id,
+					permissions: {
+						organization: ["update"],
+					},
+				},
+			}),
+		).rejects.toThrow(
+			/^\[body\.userId\] Invalid input: expected string, received array$/,
+		);
+
+		await expect(
+			auth.api.checkMemberPermission({
+				body: {
+					// @ts-expect-error - `userId` is a string, not a number
+					userId: 1,
+					organizationId: org.id,
+					permissions: {
+						organization: ["update"],
+					},
+				},
+			}),
+		).rejects.toThrow(
+			/^\[body\.userId\] Invalid input: expected string, received number$/,
+		);
+	});
+
+	it("should reject a bare string where an action list is required", async () => {
+		const body: {
+			userId: string;
+			organizationId: string;
+			permissions: Record<string, string[]>;
+		} = {
+			userId: targetMember.id,
+			organizationId: org.id,
+			permissions: {
+				// @ts-expect-error - an action list, not a bare string
+				organization: "update",
+			},
+		};
+
+		const error = await auth.api.checkMemberPermission({ body }).then(
+			() => null,
+			(e) => e,
+		);
+
+		expect(isAPIError(error)).toBe(true);
+		expect((error as { status: number }).status).toBe(400);
+		// Anchored on the full nested path: a scalar action would authorize
+		// whichever resource it named, so the resource key has to survive
+		// into the message rather than collapsing to `body.permissions`.
+		expect((error as Error).message).toBe(
+			"[body.permissions.organization] Invalid input: expected array, received string",
+		);
+	});
+
+	it("should be omitted from the OpenAPI schema", async () => {
+		const { auth: openAPIAuth } = await getTestInstance({
+			plugins: [organization({ ac }), openAPI()],
+		});
+		const schema = await openAPIAuth.api.generateOpenAPISchema();
+		const paths = Object.keys(schema.paths);
+
+		// Control: the generator did document organization routes, so the
+		// absence below is the pathless-endpoint skip and not an empty
+		// schema. That skip is the falsy-`path` guard, which runs ahead of the
+		// server-only marker check, so this assertion alone says nothing about
+		// the marker: the "marked server only" case pins the flag, and
+		// `server-only-endpoints.test.ts` pins the missing path.
+		expect(paths).toContain("/organization/has-permission");
+		expect(
+			paths.filter((path) => path.includes("check-member-permission")),
+		).toEqual([]);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11096
+ */
+describe("checkMemberPermission with dynamic access control", async () => {
+	const dacAc = createAccessControl({
+		project: ["create", "read", "update", "delete"],
+		sales: ["create", "read", "update", "delete"],
+		...defaultStatements,
+	});
+	const dacOwner = dacAc.newRole({
+		project: ["create", "read", "update", "delete"],
+		sales: ["create", "read", "update", "delete"],
+		...ownerAc.statements,
+	});
+	const dacAdmin = dacAc.newRole({
+		project: ["create", "read", "update", "delete"],
+		sales: ["create", "read"],
+		...adminAc.statements,
+	});
+	const dacMember = dacAc.newRole({
+		project: ["read"],
+		sales: ["read"],
+		...memberAc.statements,
+	});
+
+	const {
+		auth: dacAuth,
+		db: dacDb,
+		signInWithTestUser: dacSignInWithTestUser,
+	} = await getTestInstance({
+		plugins: [
+			organization({
+				ac: dacAc,
+				roles: {
+					admin: dacAdmin,
+					member: dacMember,
+					owner: dacOwner,
+				},
+				dynamicAccessControl: {
+					enabled: true,
+				},
+			}),
+		],
+	});
+	const { headers: dacHeaders } = await dacSignInWithTestUser();
+
+	const dacOrg = await dacAuth.api.createOrganization({
+		body: {
+			name: "dac-check",
+			slug: "dac-check",
+		},
+		headers: dacHeaders,
+	});
+
+	// `createOrgRole` lowercases the role name, so it must stay lowercase
+	// here for the member row and the `organizationRole` row to line up.
+	const dbRoleName = "dac-readonly";
+	const createdRole = await dacAuth.api.createOrgRole({
+		body: {
+			organizationId: dacOrg.id,
+			role: dbRoleName,
+			permission: {
+				project: ["read"],
+			},
+		},
+		headers: dacHeaders,
+	});
+
+	const dbRoleMember = await dacDb.create({
+		model: "user",
+		data: {
+			email: "db-role-member@example.com",
+			name: "db-role-member",
+		},
+	});
+	await dacAuth.api.addMember({
+		body: {
+			organizationId: dacOrg.id,
+			userId: dbRoleMember.id,
+			// @ts-expect-error - a role that only exists in the database
+			role: dbRoleName,
+		},
+	});
+
+	it("should create the database role under the lowercased role name", async () => {
+		expect(createdRole.success).toBe(true);
+		expect(createdRole.roleData.role).toBe(dbRoleName);
+	});
+
+	it("should merge database roles into the permission check", async () => {
+		const granted = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: dbRoleMember.id,
+				organizationId: dacOrg.id,
+				permissions: {
+					project: ["read"],
+				},
+			},
+		});
+		expect(granted).toEqual({ error: null, success: true });
+
+		const ungranted = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: dbRoleMember.id,
+				organizationId: dacOrg.id,
+				permissions: {
+					project: ["delete"],
+				},
+			},
+		});
+		expect(ungranted).toEqual({ error: null, success: false });
+	});
+
+	it("should scope database roles to one organization", async () => {
+		const otherOrg = await dacAuth.api.createOrganization({
+			body: {
+				name: "dac-other",
+				slug: "dac-other",
+			},
+			headers: dacHeaders,
+		});
+		// Same role name in both organizations, different permission. If the
+		// database role lookup were not scoped to `organizationId`, both rows
+		// would merge into one role and `dacOrg`'s member would inherit
+		// `sales: ["create"]` from another tenant.
+		await dacAuth.api.createOrgRole({
+			body: {
+				organizationId: otherOrg.id,
+				role: dbRoleName,
+				permission: {
+					sales: ["create"],
+				},
+			},
+			headers: dacHeaders,
+		});
+
+		const otherOrgMember = await dacDb.create({
+			model: "user",
+			data: {
+				email: "db-role-other-org@example.com",
+				name: "db-role-other-org",
+			},
+		});
+		await dacAuth.api.addMember({
+			body: {
+				organizationId: otherOrg.id,
+				userId: otherOrgMember.id,
+				// @ts-expect-error - a role that only exists in the database
+				role: dbRoleName,
+			},
+		});
+
+		// The member is not in `dacOrg`, so nothing is granted there.
+		const crossOrg = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: otherOrgMember.id,
+				organizationId: dacOrg.id,
+				permissions: {
+					sales: ["create"],
+				},
+			},
+		});
+		expect(crossOrg).toEqual({ error: null, success: false });
+
+		// In their own organization the same role name does grant it.
+		const ownOrg = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: otherOrgMember.id,
+				organizationId: otherOrg.id,
+				permissions: {
+					sales: ["create"],
+				},
+			},
+		});
+		expect(ownOrg).toEqual({ error: null, success: true });
+
+		// And `dacOrg`'s member of the same role name does not gain the other
+		// organization's permission.
+		const sameOrg = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: dbRoleMember.id,
+				organizationId: dacOrg.id,
+				permissions: {
+					sales: ["create"],
+				},
+			},
+		});
+		expect(sameOrg).toEqual({ error: null, success: false });
+	});
+
+	it("should fail closed for a role that exists nowhere", async () => {
+		const unknownRoleMember = await dacDb.create({
+			model: "user",
+			data: {
+				email: "unknown-role@example.com",
+				name: "unknown-role",
+			},
+		});
+		await dacAuth.api.addMember({
+			body: {
+				organizationId: dacOrg.id,
+				userId: unknownRoleMember.id,
+				// @ts-expect-error - a role that is neither configured nor in the database
+				role: "dac-does-not-exist",
+			},
+		});
+
+		const result = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: unknownRoleMember.id,
+				organizationId: dacOrg.id,
+				permissions: {
+					organization: ["update"],
+				},
+			},
+		});
+		expect(result).toEqual({ error: null, success: false });
+	});
+
+	it("should read the role from the database again after it is updated", async () => {
+		// The role check can be told to reuse a process-global role cache that
+		// nothing ever invalidates. This endpoint is what an integrator calls
+		// right after editing a role, so a cached read here would keep
+		// answering with the pre-edit statements forever.
+		const freshRoleName = "dac-fresh";
+		await dacAuth.api.createOrgRole({
+			body: {
+				organizationId: dacOrg.id,
+				role: freshRoleName,
+				permission: {
+					project: ["read"],
+				},
+			},
+			headers: dacHeaders,
+		});
+
+		const freshMember = await dacDb.create({
+			model: "user",
+			data: {
+				email: "fresh-role-member@example.com",
+				name: "fresh-role-member",
+			},
+		});
+		await dacAuth.api.addMember({
+			body: {
+				organizationId: dacOrg.id,
+				userId: freshMember.id,
+				// @ts-expect-error - a role that only exists in the database
+				role: freshRoleName,
+			},
+		});
+
+		const beforeUpdate = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: freshMember.id,
+				organizationId: dacOrg.id,
+				permissions: {
+					project: ["read"],
+				},
+			},
+		});
+		expect(beforeUpdate).toEqual({ error: null, success: true });
+
+		await dacAuth.api.updateOrgRole({
+			body: {
+				organizationId: dacOrg.id,
+				roleName: freshRoleName,
+				data: {
+					permission: {
+						project: ["read", "delete"],
+					},
+				},
+			},
+			headers: dacHeaders,
+		});
+
+		const afterUpdate = await dacAuth.api.checkMemberPermission({
+			body: {
+				userId: freshMember.id,
+				organizationId: dacOrg.id,
+				permissions: {
+					project: ["delete"],
+				},
+			},
+		});
+		expect(afterUpdate).toEqual({ error: null, success: true });
 	});
 });
