@@ -819,6 +819,43 @@ describe("useAuthQuery - error handling", () => {
 		unsubscribeSecond();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should send a JSON content-type and body on the session refresh POST", async () => {
+		let refreshInit: RequestInit | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				const method = init?.method ?? "GET";
+				if (method === "POST") {
+					refreshInit = init;
+					return new Response(JSON.stringify({ session: null, user: null }));
+				}
+				return new Response(
+					JSON.stringify({
+						needsRefresh: true,
+						session: {
+							id: "session-1",
+							expiresAt: new Date(Date.now() + 60_000),
+						},
+						user: { id: "user-1" },
+					}),
+				);
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribe();
+
+		expect(refreshInit).toBeDefined();
+		const refreshHeaders = refreshInit?.headers as Headers | undefined;
+		expect(refreshHeaders?.get("content-type")).toBe("application/json");
+		expect(refreshInit?.body).toBe("{}");
+	});
+
 	it("should revalidate after the session signal changes", async () => {
 		let fetchCount = 0;
 		let resolveSessionRequest: ((response: Response) => void) | undefined;
