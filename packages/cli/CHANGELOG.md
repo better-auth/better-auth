@@ -1,5 +1,14 @@
 # auth
 
+## 1.7.8
+
+### Patch Changes
+
+- Updated dependencies [[`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a), [`b1cfc1e`](https://github.com/better-auth/better-auth/commit/b1cfc1ec1e006a52654c5441422fa26c240ee123), [`435645e`](https://github.com/better-auth/better-auth/commit/435645e5eb6fcd0a3a9a2bbd1fd486f47ff4c4cc), [`678c555`](https://github.com/better-auth/better-auth/commit/678c555beb533c1416c1411a0d77129de2e97d31), [`193efff`](https://github.com/better-auth/better-auth/commit/193efff3d290740b1fd7c564b4b9b6f18343d05e), [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41), [`352d04c`](https://github.com/better-auth/better-auth/commit/352d04c8eb40c597a54da8667d68e05a1cb69426), [`1bd5c37`](https://github.com/better-auth/better-auth/commit/1bd5c37884f95766c737e35f4be86dfb46d31d36), [`c46992f`](https://github.com/better-auth/better-auth/commit/c46992f6ce548fad0f26f5f07dc8525893e8196c), [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78), [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9), [`2627237`](https://github.com/better-auth/better-auth/commit/2627237fae3d02c53b3ba68b3812cbc31905a24b), [`3d1f008`](https://github.com/better-auth/better-auth/commit/3d1f008ae381dec01751725b7422985c84c74aae), [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509), [`07a0938`](https://github.com/better-auth/better-auth/commit/07a09389ef00c0fc322983f2eca463194c642865), [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2), [`e15625f`](https://github.com/better-auth/better-auth/commit/e15625ff382a2dd9ea41e7d142d4098f6a8715a2), [`a9f455d`](https://github.com/better-auth/better-auth/commit/a9f455d586f4124bf8c544345f47130a93580103)]:
+  - better-auth@1.7.8
+  - @better-auth/core@1.7.8
+  - @better-auth/telemetry@1.7.8
+
 ## 1.7.7
 
 ### Patch Changes

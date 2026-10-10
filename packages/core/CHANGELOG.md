@@ -1,5 +1,31 @@
 # @better-auth/core
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11592](https://github.com/better-auth/better-auth/pull/11592) [`435645e`](https://github.com/better-auth/better-auth/commit/435645e5eb6fcd0a3a9a2bbd1fd486f47ff4c4cc) Thanks [@drewsephski](https://github.com/drewsephski)! - Fix Atlassian user info errors being logged as coming from Figma.
+
+- [#11625](https://github.com/better-auth/better-auth/pull/11625) [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
+  - On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+  - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
+
+  With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
+
+- [#10956](https://github.com/better-auth/better-auth/pull/10956) [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78) Thanks [@disbell](https://github.com/disbell)! - Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs with a host and a path, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+  Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
+
+  Pairwise clients (`subject_type: "pairwise"`) cannot use these host-bearing custom-scheme redirect URIs. Web clients are unaffected: they still accept only `https` redirect URIs on non-loopback hosts.
+
+- [#11626](https://github.com/better-auth/better-auth/pull/11626) [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Password resets and password changes no longer keep the new password when revoking the user's sessions fails. With `revokeSessionsOnPasswordReset` or `revokeOtherSessions`, database sessions are revoked and the password is saved in one transaction when transactions are enabled for the adapter, so a failure leaves the old password and sessions in place. Sessions in secondary storage are still removed after commit, on a best-effort basis. This covers `/reset-password`, the email OTP and phone number reset endpoints, and `/change-password`. `onPasswordReset` now runs after sessions are revoked, so a throwing callback no longer leaves them active, and a callback that lists the user's sessions no longer sees the revoked ones.
+
+- [#11643](https://github.com/better-auth/better-auth/pull/11643) [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A sign-up that fails after its session is created no longer leaves that session in secondary storage. With `storeSessionInDatabase` enabled and `preserveSessionInDatabase` off, the secondary-storage copy is written only after the sign-up commits, and listing a user's sessions now reads the database, so a session whose cached copy failed to write is still listed and revoked. With other secondary-storage settings, sign-up, passkey registration and SSO sign-in with `resolveUser` keep the session write inside their transaction, so a storage failure rolls back the new user, passkey or account instead of keeping them without a session. A session revoked by a `session.create.after` database hook also stays revoked.
+
+- [#11645](https://github.com/better-auth/better-auth/pull/11645) [`a9f455d`](https://github.com/better-auth/better-auth/commit/a9f455d586f4124bf8c544345f47130a93580103) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On database adapters without transactions enabled, a request that fails after writing data now still runs the after hooks for those writes, such as `databaseHooks` `after` callbacks and secondary-storage session cleanup. Previously they were skipped even though the writes were kept.
+
 ## 1.7.7
 
 ## 1.7.6
