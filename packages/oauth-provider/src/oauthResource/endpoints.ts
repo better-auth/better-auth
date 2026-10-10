@@ -8,6 +8,7 @@ import type {
 	OAuthResourceInput,
 	Scope,
 } from "../types";
+import { isUniqueConstraintError } from "../utils/db-errors";
 
 /**
  * Action types passed to {@link OAuthOptions.resourcePrivileges}. Mirrors
@@ -145,8 +146,7 @@ export async function createResourceEndpoint(
 			data: buildResourceRow(input, now),
 		});
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		if (/unique|duplicate|UNIQUE/i.test(message)) {
+		if (isUniqueConstraintError(err)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description: `resource ${input.identifier} already exists`,
@@ -347,8 +347,7 @@ export async function linkClientResourceEndpoint(
 			} as never,
 		});
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		if (/unique|duplicate|UNIQUE/i.test(message)) {
+		if (isUniqueConstraintError(err)) {
 			return ctx.json({ linked: true, alreadyLinked: true });
 		}
 		throw err;
