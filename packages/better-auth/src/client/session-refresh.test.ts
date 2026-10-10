@@ -349,3 +349,32 @@ describe("session-refresh", () => {
 		secondManager.cleanup();
 	});
 });
+
+describe("manager teardown after the environment removes globals", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
+		delete (globalThis as any)[Symbol.for("better-auth:focus-manager")];
+		delete (globalThis as any)[Symbol.for("better-auth:online-manager")];
+	});
+
+	it("cleanup callbacks do not throw when window/document are gone", async () => {
+		const { getGlobalFocusManager } = await import("./focus-manager");
+		const broadcast = getGlobalBroadcastChannel("better-auth.message");
+		const focus = getGlobalFocusManager();
+		const online = getGlobalOnlineManager();
+
+		const cleanupBroadcast = broadcast.setup();
+		const cleanupFocus = focus.setup();
+		const cleanupOnline = online.setup();
+
+		// simulate the test environment tearing down the DOM globals
+		// before the deferred cleanup runs
+		vi.stubGlobal("window", undefined);
+		vi.stubGlobal("document", undefined);
+
+		expect(() => cleanupBroadcast()).not.toThrow();
+		expect(() => cleanupFocus()).not.toThrow();
+		expect(() => cleanupOnline()).not.toThrow();
+	});
+});
