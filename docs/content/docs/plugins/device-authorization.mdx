@@ -457,7 +457,15 @@ Users must be authenticated to approve or deny device authorization requests:
 
 #### Example Approval Page
 
+`GET /device` returns `client_id` and `scope` only to the signed-in user who claimed the code. `client_id` is the identifier the device sent, so show a name from your own client registry rather than the raw value, and accept only registered IDs in `validateClient`. Keep Approve disabled until the request details load.
+
+Avoid approval pages that show only the user code, or that enable Approve before the client and scopes appear. On such a page the user cannot tell a request from their own device apart from one started by someone else, for example a code sent to them in a message. The risk is higher when `validateClient` is not configured, because anyone can then start a request.
+
 ```tsx title="app/device/approve/page.tsx"
+// Client IDs you registered, mapped to names your users recognize.
+// Accept only these IDs in `validateClient` so the name can be trusted.
+const knownClients = new Map([["acme-cli", "Acme CLI"]]);
+
 export default function DeviceApprovalPage() {
   const { user } = useAuth(); // Must be authenticated
   const searchParams = useSearchParams();
@@ -470,10 +478,16 @@ export default function DeviceApprovalPage() {
   } | null>(null);
 
   useEffect(() => {
+    setRequest(null);
     if (!user || !userCode) return;
+    let active = true;
     authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
-      setRequest(data);
+      // Owner-only details are missing when another session claimed the code.
+      if (active && data?.client_id) setRequest(data);
     });
+    return () => {
+      active = false;
+    };
   }, [user, userCode]);
   
   const handleApprove = async () => {
@@ -515,7 +529,11 @@ export default function DeviceApprovalPage() {
   return (
     <div>
       <h2>Device Authorization Request</h2>
-      <p>Client: {request?.client_id}</p>
+      <p>
+        Client: {request?.client_id
+          ? knownClients.get(request.client_id) ?? `Unrecognized client (${request.client_id})`
+          : "Loading..."}
+      </p>
       <p>Scopes: {request?.scope || "None"}</p>
       <p>
         Resources: {Array.isArray(request?.resource)
@@ -523,8 +541,9 @@ export default function DeviceApprovalPage() {
           : request?.resource || "None"}
       </p>
       <p>Code: {userCode}</p>
+      <p>Approve only if this code is showing right now on a device you have.</p>
       
-      <button onClick={handleApprove} disabled={isProcessing}>
+      <button onClick={handleApprove} disabled={isProcessing || !request}>
         Approve
       </button>
       <button onClick={handleDeny} disabled={isProcessing}>
