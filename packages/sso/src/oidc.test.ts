@@ -759,6 +759,9 @@ describe("SSO disable implicit sign in", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9412
+	 */
 	it("should not create user with SSO provider when sign ups are disabled", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({
@@ -774,10 +777,10 @@ describe("SSO disable implicit sign in", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
-		expect(callbackURL).not.toContain("error=signup disabled");
+		expect(callbackURL).toContain("error=signup_disabled");
 		const url = new URL(callbackURL);
 		expect(url.pathname).toBe("/api/auth/error");
-		expect(url.searchParams.get("error")).toBe("signup disabled");
+		expect(url.searchParams.get("error")).toBe("signup_disabled");
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
