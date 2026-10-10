@@ -82,7 +82,11 @@ export async function createJwk(
 	const jwk: Omit<Jwk, "id"> = {
 		alg,
 		...(crv ? { crv: crv as (typeof jwk)["crv"] } : {}),
-		publicKey: JSON.stringify(publicWebKey),
+		// RSA key material alone cannot tell RS256 from PS256.
+		publicKey: JSON.stringify({
+			...publicWebKey,
+			alg,
+		}),
 		privateKey: privateKeyEncryptionEnabled
 			? JSON.stringify(
 					await symmetricEncrypt({

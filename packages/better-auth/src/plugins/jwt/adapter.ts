@@ -4,7 +4,24 @@ import type {
 } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import type { JWK } from "jose";
 import type { Jwk, JwtOptions } from "./types";
+
+/**
+ * Parses the public JWK of a stored key.
+ *
+ * `alg` is absent when the key does not declare one, and callers fall back
+ * to `keyPairConfig.alg`.
+ */
+export function parsePublicJwk(key: Jwk): JWK {
+	const jwk: JWK = JSON.parse(key.publicKey);
+
+	// Keys minted before the JWK carried `alg` keep it only in the column.
+	// Remove this line together with the `alg` column.
+	jwk.alg ??= key.alg;
+
+	return jwk;
+}
 
 export const getJwksAdapter = (
 	baseAdapter: DBAdapter<BetterAuthOptions>,
@@ -89,9 +106,9 @@ export const getJwksAdapter = (
 			const configAlg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 			const now = new Date();
 			return candidates
-				.filter((k) => k.alg === alg || (k.alg == null && configAlg === alg))
 				.filter((k) => !k.expiresAt || k.expiresAt > now)
-				.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+				.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+				.find((k) => (parsePublicJwk(k).alg ?? configAlg) === alg);
 		},
 		createJwk: async (ctx: GenericEndpointContext, webKey: Omit<Jwk, "id">) => {
 			if (options?.adapter?.createJwk) {
