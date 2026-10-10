@@ -894,3 +894,110 @@ describe("inviteMember role validation", async () => {
 		expect(data).toBeDefined();
 	});
 });
+
+describe("leaveOrganization hooks", async () => {
+	const calls: {
+		hook: "before" | "after";
+		memberId: string;
+		userId: string;
+		organizationId: string;
+		memberExists: boolean;
+	}[] = [];
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						beforeRemoveMember: async ({ member, user, organization }) => {
+							calls.push({
+								hook: "before",
+								memberId: member.id,
+								userId: user.id,
+								organizationId: organization.id,
+								memberExists: !!(await findMember(member.id)),
+							});
+						},
+						afterRemoveMember: async ({ member, user, organization }) => {
+							calls.push({
+								hook: "after",
+								memberId: member.id,
+								userId: user.id,
+								organizationId: organization.id,
+								memberExists: !!(await findMember(member.id)),
+							});
+						},
+					},
+				}),
+			],
+		});
+	const ctx = await auth.$context;
+	const findMember = (id: string) =>
+		ctx.adapter.findOne({
+			model: "member",
+			where: [{ field: "id", value: id }],
+		});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: { customFetchImpl },
+	});
+
+	it("runs the remove-member hooks when a member leaves", async () => {
+		calls.length = 0;
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "leave-hooks",
+			slug: "leave-hooks",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const orgId = org.data!.id;
+
+		const leaver = await auth.api.signUpEmail({
+			body: { email: "leaver@test.com", name: "leaver", password: "password" },
+		});
+		const member = await auth.api.addMember({
+			body: { organizationId: orgId, userId: leaver.user.id, role: "member" },
+		});
+		calls.length = 0;
+
+		const leaverHeaders = new Headers();
+		await client.signIn.email(
+			{ email: "leaver@test.com", password: "password" },
+			{ onSuccess: cookieSetter(leaverHeaders) },
+		);
+		const res = await client.organization.leave(
+			{ organizationId: orgId },
+			{ headers: leaverHeaders },
+		);
+		expect(res.error).toBeNull();
+
+		const expected = {
+			memberId: member!.id,
+			userId: leaver.user.id,
+			organizationId: orgId,
+		};
+		expect(calls).toEqual([
+			{ hook: "before", ...expected, memberExists: true },
+			{ hook: "after", ...expected, memberExists: false },
+		]);
+	});
+
+	it("does not run the hooks when the only owner cannot leave", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "leave-hooks-owner",
+			slug: "leave-hooks-owner",
+			fetchOptions: { headers },
+		});
+		calls.length = 0;
+
+		const res = await client.organization.leave(
+			{ organizationId: org.data!.id },
+			{ headers },
+		);
+		expect(res.error?.code).toBe(
+			"YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER",
+		);
+		expect(calls).toEqual([]);
+	});
+});
