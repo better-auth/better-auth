@@ -1,4 +1,11 @@
-import { is, Param, SQL, sql } from "drizzle-orm";
+import type { Where } from "@better-auth/core/db/adapter";
+import { and, is, Param, SQL, sql } from "drizzle-orm";
+import {
+	MySqlDialect,
+	mysqlTable,
+	timestamp as mysqlTimestamp,
+	varchar,
+} from "drizzle-orm/mysql-core";
 import {
 	boolean,
 	integer,
@@ -455,6 +462,70 @@ describe("drizzle-adapter", () => {
 			).rejects.toThrow(
 				"Drizzle adapter updateMany returned an invalid affected row count",
 			);
+		});
+	});
+
+	describe("MySQL update reread", () => {
+		const sessionTable = mysqlTable("session", {
+			id: varchar("id", { length: 36 }),
+			token: varchar("token", { length: 64 }),
+			expiresAt: mysqlTimestamp("expiresAt"),
+		});
+
+		/**
+		 * Runs a MySQL update and returns the SQL of the query that rereads the
+		 * updated row.
+		 */
+		async function rereadQuery(
+			where: Where[],
+			update: Record<string, unknown>,
+		) {
+			const reread = vi.fn().mockResolvedValue([{ id: "session-id" }]);
+			const db = {
+				_: { fullSchema: { session: sessionTable } },
+				update: vi.fn().mockReturnValue({
+					set: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({ execute: vi.fn() }),
+					}),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({ where: reread }),
+				}),
+			} as any;
+			const adapter = drizzleAdapter(db, { provider: "mysql" })({
+				secret: "test-secret-that-is-at-least-32-chars-long!!",
+			});
+			await adapter.update({ model: "session", where, update });
+			return new MySqlDialect().sqlToQuery(and(...reread.mock.calls[0]!)!);
+		}
+
+		it("keeps a range guard on an updated field", async () => {
+			const query = await rereadQuery(
+				[
+					{ field: "token", value: "session-token" },
+					{
+						field: "expiresAt",
+						value: new Date("2026-01-01T00:00:00Z"),
+						operator: "gt",
+					},
+				],
+				{ expiresAt: new Date("2026-01-08T00:00:00Z") },
+			);
+
+			expect(query.sql).toContain("`expiresAt` > ?");
+			expect(query.params).toEqual([
+				"session-token",
+				"2026-01-01 00:00:00.000",
+			]);
+		});
+
+		it("rereads an equality match by its new value", async () => {
+			const query = await rereadQuery(
+				[{ field: "token", value: "old-token" }],
+				{ token: "new-token" },
+			);
+
+			expect(query.params).toEqual(["new-token"]);
 		});
 	});
 

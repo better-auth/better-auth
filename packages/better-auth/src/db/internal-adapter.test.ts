@@ -721,7 +721,8 @@ describe("internal adapter test", async () => {
 		expect(lastTTL).toBeLessThanOrEqual(expectedTTL);
 		expect(lastTTL).toBeGreaterThanOrEqual(expectedTTL - 1); // Allow for 1 second of test execution time
 
-		// Test case 2: Very small TTL (less than 1 second should round to 0)
+		// Test case 2: Very small TTL (less than 1 second rounds to 0). Some
+		// stores treat a TTL of 0 as no expiry, so the refresh skips the write.
 		capturedTTLs.length = 0; // Clear array
 		const almostExpiredSession = {
 			...session,
@@ -748,8 +749,7 @@ describe("internal adapter test", async () => {
 			name: "Updated Again",
 		});
 
-		// Should be rounded down to 0
-		expect(capturedTTLs.at(-1)).toBe(0);
+		expect(capturedTTLs).toEqual([]);
 
 		// Test case 3: Large TTL with fractional component
 		capturedTTLs.length = 0; // Clear array
@@ -1641,6 +1641,403 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL).toBeDefined();
 		expect(updatedTTL! - expectedTTL).toBeLessThanOrEqual(1);
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
+	});
+
+	describe("storeSessionInDatabase session refresh", () => {
+		async function createStoredSessionContext(
+			options?: Partial<BetterAuthOptions>,
+		) {
+			const store = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: { storeSessionInDatabase: true },
+				...options,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{
+					name: "stored-session-user",
+					email: `stored-${Math.random().toString(36).slice(2)}@email.com`,
+				},
+				{ method: "test" },
+			);
+			const session = await testCtx.internalAdapter.createSession(user.id);
+			return { store, testCtx, user, session };
+		}
+
+		function listedTokens(store: Map<string, string>, userId: string) {
+			const raw = store.get(`active-sessions-${userId}`);
+			if (!raw) return [];
+			return (
+				safeJSONParse<{ token: string }[]>(raw)?.map((entry) => entry.token) ??
+				[]
+			);
+		}
+
+		it("mirrors the updated row to the cache and list", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{
+					ipAddress: "192.0.2.10",
+					expiresAt,
+				},
+			);
+
+			expect(updated).not.toBeNull();
+			const stored = safeJSONParse<{ session: Session }>(
+				store.get(session.token)!,
+			);
+			expect(stored?.session.ipAddress).toBe("192.0.2.10");
+			expect(listedTokens(store, user.id)).toEqual([session.token]);
+			expect(
+				safeJSONParse<{ expiresAt: number }[]>(
+					store.get(`active-sessions-${user.id}`)!,
+				)?.[0]?.expiresAt,
+			).toBe(new Date(updated!.expiresAt).getTime());
+		});
+
+		it("drops the cached session when the database row is gone", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			await testCtx.adapter.delete({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{
+					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+				},
+			);
+
+			expect(updated).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(listedTokens(store, user.id)).not.toContain(session.token);
+		});
+
+		it("keeps the cached session when an update hook rejects the write", async () => {
+			let rejectUpdate = false;
+			const { store, testCtx, session } = await createStoredSessionContext({
+				databaseHooks: {
+					session: {
+						update: {
+							async before() {
+								if (rejectUpdate) return false;
+							},
+						},
+					},
+				},
+			});
+			const before = store.get(session.token);
+			rejectUpdate = true;
+
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{ ipAddress: "198.51.100.8" },
+			);
+
+			expect(updated).toBeNull();
+			expect(store.get(session.token)).toBe(before);
+		});
+
+		it("does not extend an ended preserved session from a stale cache", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext({
+					session: {
+						storeSessionInDatabase: true,
+						preserveSessionInDatabase: true,
+					},
+				});
+			await testCtx.internalAdapter.deleteSession(session.token);
+			const future = Date.now() + 7 * 24 * 60 * 60 * 1000;
+			store.set(
+				session.token,
+				JSON.stringify({
+					session: {
+						...session,
+						expiresAt: new Date(future).toISOString(),
+					},
+					user,
+				}),
+			);
+			store.set(
+				`active-sessions-${user.id}`,
+				JSON.stringify([{ token: session.token, expiresAt: future }]),
+			);
+
+			const updated = await testCtx.internalAdapter.updateSession(
+				session.token,
+				{
+					expiresAt: new Date(future),
+					updatedAt: new Date(),
+				},
+			);
+			const row = await testCtx.adapter.findOne<{ expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+
+			expect(updated).toBeNull();
+			expect(store.has(session.token)).toBe(false);
+			expect(listedTokens(store, user.id)).not.toContain(session.token);
+			expect(new Date(row!.expiresAt).getTime()).toBeLessThanOrEqual(
+				Date.now(),
+			);
+		});
+
+		/**
+		 * Writes go to `central`. Reads return a copy from `stale` first, like a
+		 * replica that has not received a delete yet.
+		 */
+		function createStaleStorage() {
+			const central = new Map<string, string>();
+			const stale = new Map<string, string>();
+			const storage: SecondaryStorage = {
+				get(key) {
+					return stale.get(key) ?? central.get(key) ?? null;
+				},
+				set(key, value) {
+					central.set(key, value);
+				},
+				delete(key) {
+					central.delete(key);
+				},
+				getAndDelete(key) {
+					const value = stale.get(key) ?? central.get(key) ?? null;
+					central.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(central.get(key) ?? 0) + 1;
+					central.set(key, String(count));
+					return count;
+				},
+			};
+			return { central, stale, storage };
+		}
+
+		it("does not restore a session that an update hook revokes", async () => {
+			const { central, stale, storage } = createStaleStorage();
+			let revoke: (() => Promise<void>) | undefined;
+			const { testCtx, user, session } = await createStoredSessionContext({
+				secondaryStorage: storage,
+				databaseHooks: {
+					session: {
+						update: {
+							async after() {
+								await revoke?.();
+							},
+						},
+					},
+				},
+			});
+			stale.set(session.token, central.get(session.token)!);
+			revoke = () => testCtx.internalAdapter.deleteSession(session.token);
+
+			await testCtx.internalAdapter.updateSession(session.token, {
+				expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+			});
+
+			expect(central.has(session.token)).toBe(false);
+			expect(listedTokens(central, user.id)).not.toContain(session.token);
+		});
+
+		it("does not restore a session refreshed while it is being revoked", async () => {
+			const { central, stale, storage } = createStaleStorage();
+			let refresh: (() => Promise<unknown>) | undefined;
+			const { testCtx, session } = await createStoredSessionContext({
+				secondaryStorage: storage,
+				databaseHooks: {
+					session: {
+						delete: {
+							async before() {
+								await refresh?.();
+							},
+						},
+					},
+				},
+			});
+			stale.set(session.token, central.get(session.token)!);
+			// Runs after the revocation deletes the cached key and before it
+			// deletes the row.
+			refresh = () =>
+				testCtx.internalAdapter.updateSession(session.token, {
+					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+				});
+
+			await testCtx.internalAdapter.deleteSession(session.token);
+			stale.clear();
+
+			expect(central.has(session.token)).toBe(false);
+			expect(
+				await testCtx.internalAdapter.findSession(session.token),
+			).toBeNull();
+		});
+
+		/**
+		 * Runs `during` right after the user update sweep reads the session rows.
+		 */
+		function afterSweepRowRead(
+			testCtx: Awaited<ReturnType<typeof init>>,
+			during: () => unknown,
+		) {
+			const findMany = testCtx.adapter.findMany.bind(testCtx.adapter);
+			vi.spyOn(testCtx.adapter, "findMany").mockImplementation(
+				async (query) => {
+					const rows = await findMany(query);
+					if (query.model === "session") await during();
+					return rows;
+				},
+			);
+		}
+
+		it("keeps a session created while a user update sweeps the list", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const listKey = `active-sessions-${user.id}`;
+			await testCtx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+				update: { expiresAt: new Date(Date.now() - 1000) },
+			});
+			afterSweepRowRead(testCtx, () => {
+				const list = JSON.parse(store.get(listKey)!) as unknown[];
+				store.set(
+					listKey,
+					JSON.stringify([
+						...list,
+						{ token: "concurrent-token", expiresAt: Date.now() + 60_000 },
+					]),
+				);
+			});
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			expect(store.has(session.token)).toBe(false);
+			expect(listedTokens(store, user.id)).toEqual(["concurrent-token"]);
+		});
+
+		it("does not restore a session signed out while a user update reads rows", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			// Sign-out deletes the cached key first. The row stays readable, like
+			// a read replica that has not received the delete yet.
+			afterSweepRowRead(testCtx, () => store.delete(session.token));
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			expect(store.has(session.token)).toBe(false);
+		});
+
+		it("keeps a refresh that lands while a user update reads rows", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const refreshedExpiresAt = new Date(Date.now() + 30 * 86_400_000);
+			// A refresh updates the row, then the cache, after the sweep read it.
+			afterSweepRowRead(testCtx, async () => {
+				await testCtx.adapter.update({
+					model: "session",
+					where: [{ field: "token", value: session.token }],
+					update: { expiresAt: refreshedExpiresAt },
+				});
+				const cached = JSON.parse(store.get(session.token)!);
+				cached.session.expiresAt = refreshedExpiresAt;
+				store.set(session.token, JSON.stringify(cached));
+			});
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			const cached = JSON.parse(store.get(session.token)!);
+			expect(new Date(cached.session.expiresAt)).toEqual(refreshedExpiresAt);
+			expect(cached.user.name).toBe("Renamed User");
+			const list = JSON.parse(store.get(`active-sessions-${user.id}`)!);
+			expect(list).toEqual([
+				{ token: session.token, expiresAt: refreshedExpiresAt.getTime() },
+			]);
+		});
+
+		it("does not extend a shortened session from a stale cached copy", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const shortenedExpiresAt = new Date(Date.now() + 3_600_000);
+			// The cache still holds the original, later expiry.
+			await testCtx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+				update: { expiresAt: shortenedExpiresAt },
+			});
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			const cached = JSON.parse(store.get(session.token)!);
+			expect(new Date(cached.session.expiresAt)).toEqual(shortenedExpiresAt);
+		});
+
+		it("writes the database expiry to the cache and list when the user is updated", async () => {
+			const { store, testCtx, user, session } =
+				await createStoredSessionContext();
+			const extended = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+			await testCtx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+				update: { expiresAt: extended },
+			});
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			const stored = safeJSONParse<{ session: Session; user: User }>(
+				store.get(session.token)!,
+			);
+			expect(new Date(stored!.session.expiresAt).getTime()).toBe(
+				extended.getTime(),
+			);
+			expect(stored!.user.name).toBe("Renamed User");
+			// User-wide revocation finds sessions through this list, so the
+			// entry must last as long as the cached key.
+			expect(
+				safeJSONParse<{ expiresAt: number }[]>(
+					store.get(`active-sessions-${user.id}`)!,
+				)?.[0]?.expiresAt,
+			).toBe(extended.getTime());
+		});
+
+		it("does not recreate a deleted session when the user is updated", async () => {
+			const { central, stale, storage } = createStaleStorage();
+			const { testCtx, user, session } = await createStoredSessionContext({
+				secondaryStorage: storage,
+			});
+			stale.set(session.token, central.get(session.token)!);
+			await testCtx.adapter.delete({
+				model: "session",
+				where: [{ field: "token", value: session.token }],
+			});
+			central.delete(session.token);
+
+			await testCtx.internalAdapter.updateUser(user.id, {
+				name: "Renamed User",
+			});
+
+			expect(central.has(session.token)).toBe(false);
+			// A missing row can be a new session that a lagging read replica has
+			// not received, so its list entry stays for user-wide revocation.
+			expect(listedTokens(central, user.id)).toContain(session.token);
+		});
 	});
 
 	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {

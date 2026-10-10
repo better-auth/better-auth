@@ -111,6 +111,146 @@ export const createInternalAdapter = (
 		});
 	};
 
+	async function writeActiveSessions(
+		userId: string,
+		sessions: { token: string; expiresAt: number }[],
+	) {
+		if (!secondaryStorage) return;
+		const now = Date.now();
+		const sorted = sessions
+			.filter((entry) => entry.expiresAt > now)
+			.sort((a, b) => a.expiresAt - b.expiresAt);
+		const furthestSessionExp = sorted.at(-1)?.expiresAt;
+		const listKey = `active-sessions-${userId}`;
+		if (furthestSessionExp && furthestSessionExp > now) {
+			await secondaryStorage.set(
+				listKey,
+				JSON.stringify(sorted),
+				getTTLSeconds(furthestSessionExp, now),
+			);
+			return;
+		}
+		await secondaryStorage.delete(listKey);
+	}
+
+	/**
+	 * Removes one cached session and its entry in the user's active-sessions
+	 * list. Pass `userId` when you know it, so the list entry goes away even
+	 * after the cached key has expired or been deleted.
+	 */
+	async function deleteCachedSession(sessionToken: string, userId?: string) {
+		if (!secondaryStorage) return;
+		const cached = await secondaryStorage.get(sessionToken);
+		const ownerId =
+			(cached
+				? safeJSONParse<{ session: Session }>(cached)?.session?.userId
+				: undefined) ?? userId;
+		if (!ownerId) {
+			await secondaryStorage.delete(sessionToken);
+			return;
+		}
+		await deleteCachedUserSessions(ownerId, [
+			{ token: sessionToken, expiresAt: 0 },
+		]);
+	}
+
+	function hasEnded(session: Session) {
+		return new Date(session.expiresAt).getTime() <= Date.now();
+	}
+
+	async function writeRefreshedCachedSession(
+		sessionToken: string,
+		session: Session,
+	) {
+		if (!secondaryStorage) return;
+		const currentSession = await secondaryStorage.get(sessionToken);
+		if (!currentSession) return;
+		const parsedSession = safeJSONParse<{
+			session: Session;
+			user: User;
+		}>(currentSession);
+		if (!parsedSession) return;
+
+		const sessionToStore = parseSessionOutput(ctx.options, {
+			...session,
+			expiresAt: new Date(session.expiresAt),
+			createdAt: new Date(session.createdAt),
+			updatedAt: new Date(session.updatedAt),
+		});
+		const now = Date.now();
+		const expiresMs = new Date(sessionToStore.expiresAt).getTime();
+		const sessionTTL = getTTLSeconds(expiresMs, now);
+		if (sessionTTL <= 0) {
+			await deleteCachedSession(sessionToken, sessionToStore.userId);
+			return;
+		}
+
+		await secondaryStorage.set(
+			sessionToken,
+			JSON.stringify({
+				session: sessionToStore,
+				user: parsedSession.user,
+			}),
+			sessionTTL,
+		);
+
+		const listKey = `active-sessions-${sessionToStore.userId}`;
+		const listRaw = await secondaryStorage.get(listKey);
+		const list: { token: string; expiresAt: number }[] = listRaw
+			? safeJSONParse(listRaw) || []
+			: [];
+		const filtered = list
+			.filter((entry) => entry.token !== sessionToken && entry.expiresAt > now)
+			.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+		await writeActiveSessions(sessionToStore.userId, filtered);
+	}
+
+	/**
+	 * Updates a database-backed session, then mirrors the updated row to
+	 * secondary storage before the update.after hooks run. Returns null when a
+	 * before hook rejects the update or no live row matches.
+	 *
+	 * The database write runs first. A stale reader can still return a revoked
+	 * session, and writing that copy first recreates the key for the full
+	 * session lifetime. The cache gets the row returned by the write, not a
+	 * separate read that a lagging read replica could serve.
+	 */
+	async function updateStoredSession(
+		sessionToken: string,
+		session: Partial<Session> & Record<string, any>,
+	) {
+		const where: Where[] = [
+			{ field: "token", value: sessionToken },
+			// An ended row kept for audit has expiresAt in the past. Leave it
+			// ended instead of extending it from a stale cache.
+			{ field: "expiresAt", value: new Date(), operator: "gt" },
+		];
+		let beforeHooksPassed = false;
+		const updatedSession = await updateWithHooks<Session>(
+			session,
+			where,
+			"session",
+			{
+				async fn(data) {
+					beforeHooksPassed = true;
+					const updated = await (
+						await getCurrentAdapter(adapter)
+					).update<Session>({ model: "session", update: data, where });
+					if (updated) await writeRefreshedCachedSession(sessionToken, updated);
+					return updated;
+				},
+				executeMainFn: false,
+			},
+		);
+
+		// No live row matched, so the session was revoked or has ended. A before
+		// hook that rejects the update leaves the cached copy in place.
+		if (!updatedSession && beforeHooksPassed) {
+			await deleteCachedSession(sessionToken);
+		}
+		return updatedSession;
+	}
+
 	async function refreshUserSessions(user: User) {
 		if (!secondaryStorage) return;
 
@@ -121,26 +261,123 @@ export const createInternalAdapter = (
 		const list =
 			safeJSONParse<{ token: string; expiresAt: number }[]>(listRaw) || [];
 		const validSessions = list.filter((s) => s.expiresAt > now);
+		if (validSessions.length === 0) return;
 
-		await Promise.all(
-			validSessions.map(async ({ token }) => {
-				const cached = await secondaryStorage.get(token);
-				if (!cached) return;
-				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
-				if (!parsed) return;
+		if (!options.session?.storeSessionInDatabase) {
+			// The cached copy is the only source. Write each one right after
+			// reading it, so a sign-out can only land between those two steps.
+			await Promise.all(
+				validSessions.map(async ({ token }) => {
+					const cached = await secondaryStorage.get(token);
+					const parsed = cached
+						? safeJSONParse<{ session: Session; user: User }>(cached)
+						: null;
+					if (!parsed) return;
+					// Some stores treat a TTL of 0 as no expiry.
+					const sessionTTL = getTTLSeconds(new Date(parsed.session.expiresAt));
+					if (sessionTTL <= 0) return;
+					await secondaryStorage.set(
+						token,
+						JSON.stringify({ session: parsed.session, user }),
+						sessionTTL,
+					);
+				}),
+			);
+			return;
+		}
 
-				const sessionTTL = getTTLSeconds(parsed.session.expiresAt, now);
+		// A stale reader can return a revoked session, and a concurrent refresh
+		// can extend the row. Write back the database row, not the cached copy.
+		const tokens = validSessions.map((entry) => entry.token);
+		const rows = new Map(
+			(
+				await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session>({
+					model: "session",
+					where: [{ field: "token", value: tokens, operator: "in" }],
+					limit: tokens.length,
+				})
+			).map((row) => [row.token, row]),
+		);
 
-				await secondaryStorage.set(
-					token,
-					JSON.stringify({
-						session: parsed.session,
-						user,
-					}),
-					Math.floor(sessionTTL),
+		/**
+		 * Writes a live row with the new user to the cache. Returns the written
+		 * expiry, null for an ended row, or undefined when nothing was written.
+		 */
+		const writeRow = async (
+			row: Session | null | undefined,
+			reread: boolean,
+		): Promise<number | null | undefined> => {
+			// A missing row is either revoked or new and not yet on a read
+			// replica. Skip the write and keep the list entry, so user-wide
+			// revocation can still find a new session.
+			if (!row) return;
+			if (hasEnded(row)) {
+				await secondaryStorage.delete(row.token);
+				return null;
+			}
+			// Sign-out deletes the cached key. Check the key after reading the
+			// row, so a lagging read replica that still returns a revoked row
+			// cannot bring the session back.
+			const cached = await secondaryStorage.get(row.token);
+			if (!cached) return;
+			// A refresh extends the row before it writes the cache. A later
+			// cached expiry means the row read may have missed a refresh, so
+			// read the row again and let the database decide.
+			const cachedSession = safeJSONParse<{ session: Session }>(
+				cached,
+			)?.session;
+			if (
+				reread &&
+				cachedSession &&
+				new Date(cachedSession.expiresAt) > new Date(row.expiresAt)
+			) {
+				const fresh = await (await getCurrentAdapter(adapter)).findOne<Session>(
+					{
+						model: "session",
+						where: [{ field: "token", value: row.token }],
+					},
 				);
+				return writeRow(fresh, false);
+			}
+			// Some stores treat a TTL of 0 as no expiry.
+			const sessionTTL = getTTLSeconds(new Date(row.expiresAt));
+			if (sessionTTL <= 0) return;
+			await secondaryStorage.set(
+				row.token,
+				JSON.stringify({ session: row, user }),
+				sessionTTL,
+			);
+			return new Date(row.expiresAt).getTime();
+		};
+
+		// Written expiry for each token. Null marks an ended session.
+		const rowExpiries = new Map<string, number | null>();
+		await Promise.all(
+			tokens.map(async (token) => {
+				const expiresAt = await writeRow(rows.get(token), true);
+				if (expiresAt !== undefined) rowExpiries.set(token, expiresAt);
 			}),
 		);
+
+		// Keep each list entry at least as long as its cached key, so user-wide
+		// revocation can still find it. Rereads the list, so a session created
+		// during this sweep keeps its entry.
+		const current = await getActiveSessionReferences(user.id);
+		let changed = false;
+		const next = current.flatMap((entry) => {
+			const rowExpiresAt = rowExpiries.get(entry.token);
+			if (rowExpiresAt === undefined) return [entry];
+			if (rowExpiresAt === null) {
+				changed = true;
+				return [];
+			}
+			if (rowExpiresAt <= entry.expiresAt) return [entry];
+			changed = true;
+			return [{ token: entry.token, expiresAt: rowExpiresAt }];
+		});
+		if (changed) await writeActiveSessions(user.id, next);
 	}
 
 	async function getActiveSessionReferences(userId: string) {
@@ -787,6 +1024,9 @@ export const createInternalAdapter = (
 			sessionToken: string,
 			session: Partial<Session> & Record<string, any>,
 		) => {
+			if (secondaryStorage && options.session?.storeSessionInDatabase) {
+				return updateStoredSession(sessionToken, session);
+			}
 			const updatedSession = await updateWithHooks<Session>(
 				session,
 				[{ field: "token", value: sessionToken }],
@@ -927,6 +1167,8 @@ export const createInternalAdapter = (
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
 					await endPreservedSessions([{ field: "token", value: token }]);
+					// A refresh that ran before the row ended can write the key back.
+					await secondaryStorage.delete(token);
 					return;
 				}
 			}
@@ -936,6 +1178,8 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
+			// A refresh that ran before the row was deleted can write the key back.
+			await secondaryStorage?.delete(token);
 		},
 		deleteAccounts: async (userId: string) => {
 			await deleteManyWithHooks(
@@ -1010,6 +1254,10 @@ export const createInternalAdapter = (
 					await endPreservedSessions([
 						{ field: "token", value: sessionTokens, operator: "in" },
 					]);
+					// A refresh that ran before the rows ended can write keys back.
+					await Promise.all(
+						sessionTokens.map((token) => secondaryStorage.delete(token)),
+					);
 					return;
 				}
 			}
@@ -1024,6 +1272,12 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
+			// A refresh that ran before the rows were deleted can write keys back.
+			if (secondaryStorage) {
+				await Promise.all(
+					sessionTokens.map((token) => secondaryStorage.delete(token)),
+				);
+			}
 		},
 		findAccountOwnerByKey: async ({ providerId, accountId }) => {
 			const accountsWithUsers = await (

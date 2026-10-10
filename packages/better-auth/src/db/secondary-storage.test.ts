@@ -542,3 +542,147 @@ describe("secondary storage - /delete-anonymous-user cleans up sessions", async 
 		expect(after.data).toBeNull();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11585
+ */
+describe("secondary storage stale session refresh", () => {
+	const expiresIn = 7 * 24 * 60 * 60;
+	const updateAge = 24 * 60 * 60;
+
+	function createEventuallyConsistentStorage() {
+		const central = new Map<string, string>();
+		const stale = new Map<string, string>();
+		const ttl = new Map<string, number>();
+		const storage: SecondaryStorage = {
+			get(key) {
+				return stale.get(key) ?? central.get(key) ?? null;
+			},
+			set(key, value, seconds) {
+				central.set(key, value);
+				if (seconds !== undefined) ttl.set(key, seconds);
+			},
+			delete(key) {
+				central.delete(key);
+				ttl.delete(key);
+			},
+			getAndDelete(key) {
+				const value = stale.get(key) ?? central.get(key) ?? null;
+				central.delete(key);
+				ttl.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(central.get(key) ?? 0) + 1;
+				central.set(key, String(count));
+				return count;
+			},
+		};
+		return { central, stale, ttl, storage };
+	}
+
+	function ageCachedSession(raw: string) {
+		const copy = JSON.parse(raw) as {
+			session: { expiresAt: string; updatedAt: string };
+		};
+		const shift = 2 * 24 * 60 * 60 * 1000;
+		const shiftBack = (value: string) =>
+			new Date(new Date(value).getTime() - shift).toISOString();
+		copy.session.expiresAt = shiftBack(copy.session.expiresAt);
+		copy.session.updatedAt = shiftBack(copy.session.updatedAt);
+		return JSON.stringify(copy);
+	}
+
+	async function signInWithStaleStore() {
+		const stores = createEventuallyConsistentStorage();
+		const instance = await getTestInstance(
+			{
+				secondaryStorage: stores.storage,
+				session: {
+					storeSessionInDatabase: true,
+					expiresIn,
+					updateAge,
+				},
+				rateLimit: { enabled: false },
+			},
+			{ disableTestUser: true },
+		);
+		const signUp = await instance.auth.api.signUpEmail({
+			body: {
+				email: "stale-session@example.com",
+				password: "password-1234",
+				name: "Stale Session",
+			},
+		});
+		const token = signUp.token;
+		if (!token) throw new Error("Sign-up returned no session token.");
+		const headers = new Headers({
+			authorization: `Bearer ${token}`,
+		});
+		return { ...instance, ...stores, headers, token };
+	}
+
+	it("refreshes a live session when the cached copy is due", async () => {
+		const { auth, central, headers, token, db } = await signInWithStaleStore();
+		const aged = ageCachedSession(central.get(token)!);
+		central.set(token, aged);
+		const agedSession = JSON.parse(aged) as {
+			session: { expiresAt: string; updatedAt: string };
+		};
+		await db.update({
+			model: "session",
+			where: [{ field: "token", value: token }],
+			update: {
+				expiresAt: new Date(agedSession.session.expiresAt),
+				updatedAt: new Date(agedSession.session.updatedAt),
+			},
+		});
+
+		const session = await auth.api.getSession({ headers });
+		const stored = JSON.parse(central.get(token)!) as {
+			session: { expiresAt: string };
+		};
+
+		expect(session).not.toBeNull();
+		expect(new Date(stored.session.expiresAt).getTime()).toBeGreaterThan(
+			Date.now() + 6 * 24 * 60 * 60 * 1000,
+		);
+	});
+
+	it("does not recreate a revoked session from a stale copy", async () => {
+		const { auth, central, stale, ttl, headers, token, db } =
+			await signInWithStaleStore();
+		const aged = ageCachedSession(central.get(token)!);
+		central.set(token, aged);
+		const session = JSON.parse(aged) as { session: { userId: string } };
+		const listKey = `active-sessions-${session.session.userId}`;
+		stale.set(token, aged);
+		stale.set(listKey, central.get(listKey)!);
+		await db.delete({
+			model: "session",
+			where: [{ field: "token", value: token }],
+		});
+		central.delete(token);
+		ttl.delete(token);
+		const remaining = (
+			JSON.parse(central.get(listKey)!) as { token: string }[]
+		).filter((entry) => entry.token !== token);
+		if (remaining.length === 0) central.delete(listKey);
+		else central.set(listKey, JSON.stringify(remaining));
+
+		await expect(auth.api.getSession({ headers })).rejects.toMatchObject({
+			body: { code: "FAILED_TO_GET_SESSION" },
+		});
+
+		expect(central.has(token)).toBe(false);
+		expect(ttl.has(token)).toBe(false);
+		const list = central.get(listKey);
+		const tokens = list
+			? (JSON.parse(list) as { token: string }[]).map((entry) => entry.token)
+			: [];
+		expect(tokens).not.toContain(token);
+
+		stale.clear();
+		await expect(auth.api.getSession({ headers })).resolves.toBeNull();
+	});
+});
