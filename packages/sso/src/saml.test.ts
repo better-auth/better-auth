@@ -8755,3 +8755,222 @@ describe("SAML SSO Hardening", () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11578
+ */
+describe("outgoing SAML logout signatures", () => {
+	const providerId = "outgoing-slo";
+	const baseURL = "http://localhost:3000";
+	const sloLocation = `${baseURL}/api/auth/sso/saml2/sp/slo/${providerId}`;
+	const signingCert = extractSigningCertificateFromMetadata(idpMetadata);
+	const binding = {
+		post: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+		redirect: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+	};
+
+	async function createOutgoingLogoutInstance(
+		options: NonNullable<SSOOptions["saml"]>,
+		metadata: "manual" | "xml" = "manual",
+	) {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [sso({ saml: { enableSingleLogout: true, ...options } })],
+		});
+		const { headers } = await signInWithTestUser();
+		const spXML = saml
+			.SPMetadata({
+				entityID: "https://sp.example.com/metadata",
+				signingCert,
+				assertionConsumerService: [
+					{ Binding: binding.post, Location: `${baseURL}/callback` },
+				],
+				singleLogoutService: [
+					{ Binding: binding.post, Location: sloLocation },
+					{ Binding: binding.redirect, Location: sloLocation },
+				],
+			})
+			.getMetadata();
+		const idpSettings = {
+			entityID: "https://idp.example.com/metadata",
+			signingCert,
+			singleSignOnService: [
+				{
+					Binding: binding.redirect,
+					Location: "https://idp.example.com/login",
+				},
+			],
+			singleLogoutService: [
+				{ Binding: binding.post, Location: "https://idp.example.com/logout" },
+				{
+					Binding: binding.redirect,
+					Location: "https://idp.example.com/logout",
+				},
+			],
+		};
+		await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				providerId,
+				issuer: "https://sp.example.com/metadata",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "https://idp.example.com/login",
+					cert: signingCert,
+					idpMetadata:
+						metadata === "xml"
+							? { metadata: saml.IdPMetadata(idpSettings).getMetadata() }
+							: idpSettings,
+					spMetadata: {
+						metadata: spXML,
+						privateKey: idPk,
+						privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+					},
+				},
+			},
+		});
+		const idp = saml.IdentityProvider({
+			...idpSettings,
+			privateKey: idPk,
+			privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			wantLogoutResponseSigned: true,
+		});
+		const sp = saml.ServiceProvider({ metadata: spXML });
+
+		async function sendIdPLogout(
+			requestBinding: "post" | "redirect",
+			signed = false,
+		) {
+			const receivingSP = saml.ServiceProvider({
+				metadata: spXML,
+				wantLogoutRequestSigned: signed,
+			});
+			const request = idp.createLogoutRequest(
+				receivingSP,
+				requestBinding,
+				{ logoutNameID: "employee@example.com" },
+				{ relayState: "logout-state" },
+			);
+			const response = await auth.handler(
+				requestBinding === "post"
+					? new Request(sloLocation, {
+							method: "POST",
+							headers: { "content-type": "application/x-www-form-urlencoded" },
+							body: new URLSearchParams({
+								SAMLRequest: request.context,
+								RelayState: "logout-state",
+							}),
+						})
+					: new Request(request.context),
+			);
+			return { response, request };
+		}
+
+		return { auth, headers, idp, sp, testUser, sendIdPLogout };
+	}
+
+	function assertRedirectSignature(
+		url: URL,
+		parameter: "SAMLRequest" | "SAMLResponse",
+	) {
+		expect(url.searchParams.get("SigAlg")).toBe(
+			"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+		);
+		const rawQuery = url.search.slice(1).split("&");
+		const signedQuery = [parameter, "RelayState", "SigAlg"]
+			.map((key) => rawQuery.find((part) => part.startsWith(`${key}=`)))
+			.filter((part) => part !== undefined)
+			.join("&");
+		const signature = url.searchParams.get("Signature");
+		expect(signature).toBeTruthy();
+		const verifier = createVerify("RSA-SHA256");
+		verifier.update(signedQuery);
+		expect(
+			verifier.verify(signingCert, Buffer.from(signature!, "base64")),
+		).toBe(true);
+	}
+
+	it.each([
+		"manual",
+		"xml",
+	] as const)("signs POST LogoutResponses with %s IdP metadata", async (metadata) => {
+		const fixture = await createOutgoingLogoutInstance(
+			{ signLogoutResponses: true },
+			metadata,
+		);
+		const { response, request } = await fixture.sendIdPLogout("post");
+		expect(response.status).toBe(200);
+		const html = await response.text();
+		const encoded = html.match(/name="SAMLResponse" value="([^"]+)"/)?.[1];
+		expect(encoded).toBeTruthy();
+		expect(Buffer.from(encoded!, "base64").toString()).toContain(
+			"<ds:Signature",
+		);
+		const parsed = await fixture.idp.parseLogoutResponse(fixture.sp, "post", {
+			body: { SAMLResponse: encoded!, RelayState: "logout-state" },
+		});
+		expect(parsed.extract.response?.inResponseTo).toBe(request.id);
+	});
+
+	it("signs Redirect LogoutResponses over the encoded query and preserves RelayState", async () => {
+		const fixture = await createOutgoingLogoutInstance({
+			signLogoutResponses: true,
+		});
+		const { response } = await fixture.sendIdPLogout("redirect");
+		expect(response.status).toBe(302);
+		const url = new URL(response.headers.get("location")!);
+		expect(url.searchParams.get("RelayState")).toBe("logout-state");
+		assertRedirectSignature(url, "SAMLResponse");
+	});
+
+	it("signs SP-initiated LogoutRequests and preserves the callback RelayState", async () => {
+		const fixture = await createOutgoingLogoutInstance({
+			signLogoutRequests: true,
+		});
+		const callbackURL = `${baseURL}/logged-out?reason=user`;
+		const response = await fixture.auth.handler(
+			new Request(`${baseURL}/api/auth/sso/saml2/logout/${providerId}`, {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: fixture.headers.get("cookie")!,
+				},
+				body: JSON.stringify({ callbackURL }),
+			}),
+		);
+		expect(response.status).toBe(302);
+		const url = new URL(response.headers.get("location")!);
+		expect(url.searchParams.get("RelayState")).toBe(callbackURL);
+		assertRedirectSignature(url, "SAMLRequest");
+		const xml = Buffer.from(
+			saml.Utility.inflateString(url.searchParams.get("SAMLRequest")!),
+		).toString();
+		expect(xml).toContain(fixture.testUser.email);
+	});
+
+	it("keeps outgoing messages unsigned by default when incoming signatures are required", async () => {
+		const fixture = await createOutgoingLogoutInstance({
+			wantLogoutRequestSigned: true,
+		});
+		const { response } = await fixture.sendIdPLogout("post", true);
+		expect(response.status).toBe(200);
+		const encoded = (await response.text()).match(
+			/name="SAMLResponse" value="([^"]+)"/,
+		)?.[1];
+		expect(encoded).toBeTruthy();
+		expect(Buffer.from(encoded!, "base64").toString()).not.toContain(
+			"<ds:Signature",
+		);
+	});
+
+	it("still rejects unsigned incoming requests independently of outgoing controls", async () => {
+		const fixture = await createOutgoingLogoutInstance({
+			wantLogoutRequestSigned: true,
+			signLogoutResponses: false,
+		});
+		const { response } = await fixture.sendIdPLogout("post");
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			code: "INVALID_LOGOUT_REQUEST",
+		});
+	});
+});
