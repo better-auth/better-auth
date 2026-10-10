@@ -1,6 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { role } from "better-auth/plugins/access";
 import * as z from "zod";
@@ -15,7 +16,6 @@ import {
 import { evaluateRateLimit } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { isAPIError } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
 
@@ -123,7 +123,7 @@ export async function validateApiKey({
 		if (!apiKeyPermissions) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
-		const r = role(apiKeyPermissions as any);
+		const r = role(apiKeyPermissions);
 		const result = r.authorize(permissions);
 		if (!result.success) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
@@ -441,10 +441,7 @@ async function claimUsageInSecondaryStorage({
 
 	const updated = await performUpdate();
 	if (!updated) {
-		throw APIError.from(
-			"INTERNAL_SERVER_ERROR",
-			ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-		);
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 	return updated;
 }
@@ -518,34 +515,27 @@ export function verifyApiKey({
 		},
 		async (ctx) => {
 			const { configId, key } = ctx.body;
-
-			// Use provided configId or fall back to default config
 			const lookupOpts = resolveConfiguration(
 				ctx.context,
 				configurations,
 				configId,
 			);
 
-			// Scoped: lookup config is the key's config, so run the validator now.
-			// Unscoped runs it inside validateApiKey once the key's config is known.
-			if (configId !== undefined && lookupOpts.customAPIKeyValidator) {
-				const isValid = await lookupOpts.customAPIKeyValidator({ ctx, key });
-				if (!isValid) {
-					return ctx.json({
-						valid: false,
-						error: {
-							message: ERROR_CODES.INVALID_API_KEY,
-							code: "KEY_NOT_FOUND" as const,
-						},
-						key: null,
-					});
-				}
-			}
-
-			let apiKey: ApiKey | null = null;
-			let opts: PredefinedApiKeyOptions;
-
 			try {
+				if (configId !== undefined && lookupOpts.customAPIKeyValidator) {
+					const valid = await lookupOpts.customAPIKeyValidator({ ctx, key });
+					if (!valid) {
+						return ctx.json({
+							valid: false as const,
+							error: {
+								message: ERROR_CODES.INVALID_API_KEY.message,
+								code: "KEY_NOT_FOUND",
+							},
+							key: null,
+						});
+					}
+				}
+
 				const result = await validateApiKey({
 					key,
 					permissions: ctx.body.permissions,
@@ -554,78 +544,65 @@ export function verifyApiKey({
 					configurations,
 					schema,
 					expectedConfigId: configId,
-					// Scoped calls already ran the validator above with the right config.
 					runCustomValidator: configId === undefined,
 				});
-				apiKey = result.apiKey;
-				opts = result.opts;
-
+				const { apiKey, opts } = result;
 				if (opts.deferUpdates) {
 					ctx.context.runInBackground(
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+						deleteAllExpiredApiKeys(ctx.context).catch((error) => {
 							ctx.context.logger.error(
 								"Failed to delete expired API keys:",
-								err,
+								error,
 							);
 						}),
 					);
 				}
-			} catch (error) {
-				ctx.context.logger.error("Failed to validate API key:", error);
-				if (isAPIError(error)) {
-					return ctx.json({
-						valid: false,
-						error: {
-							...error.body,
-							message: error.body?.message,
-							code: error.body?.code as string,
-						},
-						key: null,
-					});
-				}
 
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "INVALID_API_KEY" as const,
-					},
-					key: null,
-				});
-			}
-
-			const { key: _, ...returningApiKey } = apiKey ?? {
-				key: 1,
-				permissions: undefined,
-			};
-
-			// Migrate legacy double-stringified metadata if needed
-			let migratedMetadata: Record<string, any> | null = null;
-			if (apiKey) {
-				migratedMetadata = await migrateDoubleStringifiedMetadata(
+				const { key: _, ...returningApiKey } = apiKey;
+				const metadata = await migrateDoubleStringifiedMetadata(
 					ctx,
 					apiKey,
 					opts,
 				);
+				const permissions = returningApiKey.permissions
+					? safeJSONParse<Record<string, string[]>>(returningApiKey.permissions)
+					: null;
+
+				return ctx.json({
+					valid: true as const,
+					error: null,
+					key: {
+						...returningApiKey,
+						permissions,
+						metadata,
+					} as Omit<ApiKey, "key">,
+				});
+			} catch (error) {
+				if (!isAPIError(error)) {
+					ctx.context.logger.error("Failed to validate API key:", error);
+					const apiError = APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+						message: "Internal error during API key verification.",
+					});
+					Object.defineProperty(apiError, "cause", {
+						value: error,
+						writable: true,
+						configurable: true,
+					});
+					throw apiError;
+				}
+				if (error.statusCode >= 500) {
+					throw error;
+				}
+				return ctx.json({
+					valid: false as const,
+					error: {
+						...error.body,
+						message: error.message,
+						code: error.body?.code as string,
+					},
+					key: null,
+				});
 			}
-
-			returningApiKey.permissions = returningApiKey.permissions
-				? safeJSONParse<{
-						[key: string]: string[];
-					}>(returningApiKey.permissions)
-				: null;
-
-			return ctx.json({
-				valid: true,
-				error: null,
-				key:
-					apiKey === null
-						? null
-						: ({
-								...returningApiKey,
-								metadata: migratedMetadata,
-							} as Omit<ApiKey, "key">),
-			});
 		},
 	);
 }

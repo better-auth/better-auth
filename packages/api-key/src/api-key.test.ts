@@ -1,11 +1,11 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
-import { isAPIError } from "./utils";
 
 describe("api-key", async () => {
 	const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -5288,24 +5288,24 @@ describe("concurrent verification enforces atomic counters", async () => {
 	});
 });
 
-describe("listApiKeys with integer user.id (postgres + serial)", async () => {
-	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
-	const { auth, signInWithTestUser } = await getTestInstance(
-		{
-			plugins: [apiKey()],
-			advanced: {
-				database: { generateId: "serial" },
-			},
-		},
-		{
-			testWith: "postgres",
-			testUser: { email: testUserEmail },
-			clientOptions: { plugins: [apiKeyClient()] },
-		},
-	);
-	const { headers } = await signInWithTestUser();
-
+describe("listApiKeys with integer user.id (postgres + serial)", () => {
 	it("returns the key that createApiKey just wrote", async () => {
+		const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey()],
+				advanced: {
+					database: { generateId: "serial" },
+				},
+			},
+			{
+				testWith: "postgres",
+				testUser: { email: testUserEmail },
+				clientOptions: { plugins: [apiKeyClient()] },
+			},
+		);
+		const { headers } = await signInWithTestUser();
+
 		const created = await auth.api.createApiKey({ body: {}, headers });
 		expect(created.id).toBeDefined();
 
