@@ -1546,6 +1546,166 @@ describe("internal adapter test", async () => {
 		]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10884
+	 */
+	describe("secondary storage cache with a null user", () => {
+		it.each([
+			{ caseName: "secondary storage only", storeSessionInDatabase: false },
+			{ caseName: "with storeSessionInDatabase", storeSessionInDatabase: true },
+		])("findSession still returns the user when the write-time lookup returns null once ($caseName)", async ({
+			storeSessionInDatabase,
+		}) => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{
+					name: "lag-user",
+					email: `lag-user-${storeSessionInDatabase}@example.com`,
+				},
+				{ method: "test" },
+			);
+
+			// Simulate the user row being momentarily unreadable (e.g. replica
+			// lag) for the very next lookup, which is the one createSession
+			// makes to cache the session alongside its user.
+			vi.spyOn(testCtx.adapter, "findOne").mockImplementationOnce(
+				async () => null,
+			);
+
+			const session = await testCtx.internalAdapter.createSession(user.id);
+
+			const found = await testCtx.internalAdapter.findSession(session.token);
+			expect(found).not.toBeNull();
+			expect(found?.session.token).toBe(session.token);
+			expect(found?.user.id).toBe(user.id);
+		});
+
+		it.each([
+			{ caseName: "secondary storage only", storeSessionInDatabase: false },
+			{ caseName: "with storeSessionInDatabase", storeSessionInDatabase: true },
+		])("findSession treats a null cached user as a miss once the user is genuinely deleted ($caseName)", async ({
+			storeSessionInDatabase,
+		}) => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{
+					name: "deleted-user",
+					email: `deleted-user-${storeSessionInDatabase}@example.com`,
+				},
+				{ method: "test" },
+			);
+			const session = await testCtx.internalAdapter.createSession(user.id);
+
+			await testCtx.internalAdapter.deleteUser(user.id);
+			// deleteUser purges the cached session too; recreate it with a
+			// null user to simulate a stale cache entry outliving the user
+			// (e.g. its write-time retry never resolved the row).
+			testMap.set(session.token, JSON.stringify({ session, user: null }));
+
+			await expect(
+				testCtx.internalAdapter.findSession(session.token),
+			).resolves.toBeNull();
+		});
+
+		it("findSession repairs a stale null cached user without needing a write-time retry", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{
+					name: "repair-user",
+					email: "repair-user@example.com",
+				},
+				{ method: "test" },
+			);
+			const session = await testCtx.internalAdapter.createSession(user.id);
+
+			// Simulate a cache entry that was written with no user at all.
+			testMap.set(session.token, JSON.stringify({ session, user: null }));
+
+			const found = await testCtx.internalAdapter.findSession(session.token);
+			expect(found?.user.id).toBe(user.id);
+
+			// The cache entry should have been repaired in place.
+			const repaired = safeJSONParse<{ user: User | null }>(
+				testMap.get(session.token),
+			);
+			expect(repaired?.user?.id).toBe(user.id);
+		});
+
+		it("findSessions repairs a null cached user for one token while skipping a deleted one", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{
+					name: "repair-list-user",
+					email: "repair-list-user@example.com",
+				},
+				{ method: "test" },
+			);
+			const otherUser = await testCtx.internalAdapter.createUser(
+				{
+					name: "repair-list-other-user",
+					email: "repair-list-other-user@example.com",
+				},
+				{ method: "test" },
+			);
+			const repairedSession = await testCtx.internalAdapter.createSession(
+				user.id,
+			);
+			const deletedUserSession = await testCtx.internalAdapter.createSession(
+				otherUser.id,
+			);
+
+			testMap.set(
+				repairedSession.token,
+				JSON.stringify({ session: repairedSession, user: null }),
+			);
+			await testCtx.internalAdapter.deleteUser(otherUser.id);
+			testMap.set(
+				deletedUserSession.token,
+				JSON.stringify({ session: deletedUserSession, user: null }),
+			);
+
+			const sessions = await testCtx.internalAdapter.findSessions([
+				repairedSession.token,
+				deletedUserSession.token,
+			]);
+
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				repairedSession.token,
+			]);
+			expect(sessions[0]?.user.id).toBe(user.id);
+		});
+	});
+
 	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
