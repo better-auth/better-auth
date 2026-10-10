@@ -10,11 +10,9 @@ import type {
 } from "kysely";
 import {
 	Kysely,
-	Migrator,
 	PostgresAdapter,
 	PostgresIntrospector,
 	PostgresQueryCompiler,
-	sql,
 } from "kysely";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -300,123 +298,6 @@ describe("D1 table introspection", () => {
 			"PRAGMA index_list('plain''s')",
 			"PRAGMA index_list('descending')",
 		]);
-	});
-});
-
-/**
- * A D1 stand-in backed by in-memory SQLite, so statements really run.
- */
-function sqliteBackedD1Database() {
-	const sqlite = new DatabaseSync(":memory:");
-	type Params = (string | number | null)[];
-	const statement = (query: string, params: Params) => ({
-		all: async () => {
-			const prepared = sqlite.prepare(query);
-			if (prepared.columns().length > 0) {
-				return {
-					results: prepared.all(...params),
-					meta: { changes: 0, last_row_id: 0 },
-				};
-			}
-			const { changes, lastInsertRowid } = prepared.run(...params);
-			return {
-				results: [],
-				meta: {
-					changes: Number(changes),
-					last_row_id: Number(lastInsertRowid),
-				},
-			};
-		},
-	});
-	return {
-		batch: (statements: ReturnType<typeof statement>[]) =>
-			Promise.all(statements.map((prepared) => prepared.all())),
-		exec: vi.fn(),
-		prepare: (query: string) => ({
-			...statement(query, []),
-			bind: (...params: Params) => statement(query, params),
-		}),
-	} as unknown as D1Database;
-}
-
-async function readMigrationLock(db: Kysely<unknown>) {
-	const { rows } = await sql<{
-		is_locked: number;
-	}>`select is_locked from kysely_migration_lock`.execute(db);
-	return rows;
-}
-
-/**
- * With `supportsMultipleConnections: true`, Kysely no longer serializes
- * migrations behind its connection mutex, so the D1 adapter has to lock them.
- *
- * @see https://github.com/better-auth/better-auth/issues/11483
- */
-describe("D1 migration lock", () => {
-	it("applies a migration once when two migrators run concurrently", async ({
-		onTestFinished,
-	}) => {
-		const db = new Kysely<unknown>({
-			dialect: new D1SqliteDialect({ database: sqliteBackedD1Database() }),
-		});
-		onTestFinished(() => db.destroy());
-		const up = vi.fn(async (migrationDb: Kysely<unknown>) => {
-			await new Promise((resolve) => setTimeout(resolve, 50));
-			await migrationDb.schema
-				.createTable("note")
-				.addColumn("id", "text")
-				.execute();
-		});
-		const migrator = () =>
-			new Migrator({
-				db,
-				provider: { getMigrations: async () => ({ "0001_note": { up } }) },
-			});
-
-		const results = await Promise.all([
-			migrator().migrateToLatest(),
-			migrator().migrateToLatest(),
-		]);
-
-		expect(results.map(({ error }) => error)).toEqual([undefined, undefined]);
-		expect(up).toHaveBeenCalledOnce();
-		expect(await readMigrationLock(db)).toEqual([{ is_locked: 0 }]);
-	});
-
-	it("does not release a lock held by another run after timing out", async ({
-		onTestFinished,
-	}) => {
-		const db = new Kysely<unknown>({
-			dialect: new D1SqliteDialect({ database: sqliteBackedD1Database() }),
-		});
-		onTestFinished(() => db.destroy());
-		await sql`create table kysely_migration_lock (id text primary key, is_locked integer not null default 0)`.execute(
-			db,
-		);
-		await sql`insert into kysely_migration_lock values ('migration_lock', 1)`.execute(
-			db,
-		);
-		const adapter = new D1SqliteDialect({
-			database: fakeD1Database(),
-		}).createAdapter();
-		const options = {
-			lockTable: "kysely_migration_lock",
-			lockRowId: "migration_lock",
-		};
-		vi.useFakeTimers();
-		onTestFinished(() => {
-			vi.useRealTimers();
-		});
-
-		const acquire = expect(
-			adapter.acquireMigrationLock(db, options),
-		).rejects.toThrow(/kysely_migration_lock/);
-		await vi.advanceTimersByTimeAsync(60_000);
-		await acquire;
-		// Kysely's Migrator releases in a `finally`, even when acquiring failed.
-		await adapter.releaseMigrationLock(db, options);
-
-		expect(await readMigrationLock(db)).toEqual([{ is_locked: 1 }]);
 	});
 });
 

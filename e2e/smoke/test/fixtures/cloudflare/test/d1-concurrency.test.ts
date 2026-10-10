@@ -24,26 +24,27 @@ it("lets independent D1 requests complete while another query is pending", async
 	const slowRequest = server.fetch(
 		"http://localhost:8787/_test/d1-concurrency/slow",
 	);
-	await vi.waitFor(async () => {
-		const response = await server.fetch(
-			"http://localhost:8787/_test/d1-concurrency/status",
+	let slowStatus: number;
+	try {
+		await vi.waitFor(
+			async () => {
+				const response = await server.fetch(
+					"http://localhost:8787/_test/d1-concurrency/status",
+				);
+				expect(await response.json()).toEqual({ slowQueryStarted: true });
+			},
+			{ timeout: 5000 },
 		);
-		expect(await response.json()).toEqual({ slowQueryStarted: true });
-	});
 
-	const fastRequest = server.fetch(
-		"http://localhost:8787/_test/d1-concurrency/fast",
-	);
-	const completedFirst = await Promise.race([
-		slowRequest.then(() => "slow"),
-		fastRequest.then(() => "fast"),
-	]);
-	const [slowResponse, fastResponse] = await Promise.all([
-		slowRequest,
-		fastRequest,
-	]);
+		const fastResponse = await server.fetch(
+			"http://localhost:8787/_test/d1-concurrency/fast",
+			{ signal: AbortSignal.timeout(5000) },
+		);
+		expect(fastResponse.status).toBe(204);
+	} finally {
+		await server.fetch("http://localhost:8787/_test/d1-concurrency/release");
+		slowStatus = (await slowRequest).status;
+	}
 
-	expect(slowResponse.status).toBe(204);
-	expect(fastResponse.status).toBe(204);
-	expect(completedFirst).toBe("fast");
-});
+	expect(slowStatus).toBe(204);
+}, 15_000);

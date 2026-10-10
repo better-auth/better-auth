@@ -9,13 +9,12 @@ import type {
 	DialectAdapter,
 	Driver,
 	Kysely,
-	MigrationLockOptions,
 	QueryCompiler,
 	QueryResult,
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
-import { SqliteAdapter, SqliteQueryCompiler, sql } from "kysely";
+import { SqliteAdapter, SqliteQueryCompiler } from "kysely";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
@@ -82,49 +81,9 @@ export function createD1IndexIntrospector(
 	};
 }
 
-const MIGRATION_LOCK_TIMEOUT_MS = 60_000;
-
 class D1SqliteAdapter extends SqliteAdapter {
-	readonly #migrationLockHolders = new WeakSet<Kysely<unknown>>();
-
 	get supportsMultipleConnections(): boolean {
 		return true;
-	}
-
-	/**
-	 * `SqliteAdapter` relies on Kysely's connection mutex to serialize
-	 * migrations, which D1 opts out of above. Claim the lock row instead.
-	 */
-	async acquireMigrationLock(
-		db: Kysely<unknown>,
-		{ lockTable, lockRowId }: MigrationLockOptions,
-	): Promise<void> {
-		const deadline = Date.now() + MIGRATION_LOCK_TIMEOUT_MS;
-		while (Date.now() < deadline) {
-			const { numAffectedRows } =
-				await sql`update ${sql.table(lockTable)} set is_locked = 1 where id = ${lockRowId} and is_locked = 0`.execute(
-					db,
-				);
-			if (numAffectedRows === 1n) {
-				this.#migrationLockHolders.add(db);
-				return;
-			}
-			await new Promise((resolve) => setTimeout(resolve, 250));
-		}
-		throw new Error(
-			`Timed out waiting for the "${lockTable}" migration lock. If no migration is running, release it with: UPDATE "${lockTable}" SET is_locked = 0 WHERE id = '${lockRowId}'`,
-		);
-	}
-
-	async releaseMigrationLock(
-		db: Kysely<unknown>,
-		{ lockTable, lockRowId }: MigrationLockOptions,
-	): Promise<void> {
-		// Kysely releases in a `finally` even when acquiring failed.
-		if (!this.#migrationLockHolders.delete(db)) return;
-		await sql`update ${sql.table(lockTable)} set is_locked = 0 where id = ${lockRowId}`.execute(
-			db,
-		);
 	}
 }
 

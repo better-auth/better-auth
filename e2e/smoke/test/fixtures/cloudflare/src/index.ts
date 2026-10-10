@@ -18,6 +18,7 @@ import { auth } from "./auth";
 const app = new Hono();
 
 let slowQueryStarted = false;
+let releaseSlowQuery = false;
 const delayedDatabase = {
 	prepare(query: string) {
 		const statement = env.DB.prepare(query);
@@ -28,8 +29,14 @@ const delayedDatabase = {
 					async all() {
 						if (query.includes("slow_marker")) {
 							slowQueryStarted = true;
-							await new Promise((resolve) => setTimeout(resolve, 500));
-							slowQueryStarted = false;
+							try {
+								while (!releaseSlowQuery) {
+									await new Promise((resolve) => setTimeout(resolve, 10));
+								}
+							} finally {
+								slowQueryStarted = false;
+								releaseSlowQuery = false;
+							}
 						}
 						return bound.all();
 					},
@@ -57,6 +64,10 @@ app.get("/_test/session", async (c) => {
 app.get("/_test/d1-concurrency/:query", async (c) => {
 	if (c.req.param("query") === "status") {
 		return c.json({ slowQueryStarted });
+	}
+	if (c.req.param("query") === "release") {
+		releaseSlowQuery = true;
+		return c.body(null, 204);
 	}
 
 	const slow = c.req.param("query") === "slow";
