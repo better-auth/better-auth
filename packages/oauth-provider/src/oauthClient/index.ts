@@ -519,6 +519,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 						.optional(),
 					skip_consent: z.boolean().optional(),
 					enable_end_session: z.boolean().optional(),
+					disabled: z.boolean().optional(),
 					// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 					dpop_bound_access_tokens: z.boolean().optional(),
 					metadata: z.record(z.string(), z.unknown()).optional(),

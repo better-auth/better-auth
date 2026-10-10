@@ -292,6 +292,17 @@ await auth.api.adminUpdateOAuthClient({
 });
 ```
 
+To pause token issuance without deleting a client, set `disabled` through the server-only update API:
+
+```ts
+await auth.api.adminUpdateOAuthClient({
+  headers,
+  body: { client_id, update: { disabled: true } },
+});
+```
+
+Set `disabled: false` to resume issuance. A disabled client cannot obtain new tokens, and introspection reports its existing tokens as inactive. A resource server that verifies an existing JWT locally must still check current client or application authorization if it needs immediate disconnection; the JWT signature remains valid until expiry. The session-bound `updateOAuthClient` endpoint cannot change `disabled`.
+
 #### Rotate Client Secret
 
 <Callout type="warn">
