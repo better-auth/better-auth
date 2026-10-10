@@ -98,7 +98,7 @@ async function checkIdentifier(
 	if (!parsed.success) {
 		return {
 			ok: false,
-			reason: `resource identifier ${identifier}: ${parsed.error.issues[0]?.message ?? "invalid URI"}`,
+			reason: `resource identifier ${identifier} is invalid: ${parsed.error.issues[0]?.message ?? "not an absolute URI"} (RFC 8707 §2)`,
 		};
 	}
 	return { ok: true };

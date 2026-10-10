@@ -1271,7 +1271,7 @@ oauthProvider({
 
 Dynamic-registration resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
 
-For a managed client, pass `resources` to the server-only `adminCreateOAuthClient` call. The client and its resource links are created in one registration transaction. This selection uses the `resourcePrivileges` `link` action for each requested resource; the dynamic-registration allowlist does not restrict it. Each resource must be an absolute URI without a fragment, and must exist and be enabled.
+To link resources to a client your server registers, pass `resources` to the server-only `adminCreateOAuthClient` call. The dynamic-registration allowlist does not apply here. Instead, `resourcePrivileges` is called with the `link` action for each requested resource before the client is created. `clientRegistrationDefaultResources` are still added, without a privilege check.
 
 ```ts
 await auth.api.adminCreateOAuthClient({
@@ -1282,6 +1282,14 @@ await auth.api.adminCreateOAuthClient({
   },
 });
 ```
+
+The call creates nothing when a resource is rejected:
+
+* A resource that is not an absolute URI, or that contains a fragment, fails request validation with `VALIDATION_ERROR`.
+* A resource that does not exist or is disabled returns `400` with `invalid_target`.
+* A `resourcePrivileges` denial returns `401`.
+
+The client and its resource links are written in one transaction when the database adapter supports transactions. On an adapter without them, such as standalone MongoDB, a failed link can leave the client registered without its links. To link a resource to an existing client, use `adminLinkClientResource`.
 
 ### Scopes
 
