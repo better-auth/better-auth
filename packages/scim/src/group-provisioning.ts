@@ -1415,6 +1415,7 @@ export function patchSCIMGroup(
 			const updatedGroup = await runSCIMWriteWithUniquenessCheck(
 				() =>
 					runGroupMutationTransaction(adapter, async (trx) => {
+						attemptedKeys = undefined;
 						const currentGroup = await acquireSCIMGroupMutationLock(
 							trx,
 							connection,

@@ -1108,6 +1108,7 @@ export function patchSCIMUser(
 			const updatedSCIMUser = await runSCIMWriteWithUniquenessCheck(
 				() =>
 					runIdentityMutationTransaction(adapter, async (trx) => {
+						attemptedUpdate = undefined;
 						const sourceBeforeLock = await findSCIMUser(
 							trx,
 							connection,
