@@ -128,6 +128,51 @@ describe("createSchemaCheck", () => {
 		await expect(check()).resolves.toBeUndefined();
 		expect(find).toHaveBeenCalledTimes(2);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11651
+	 */
+	it("recovers from an unsettled lookup after timeout and permits subsequent retries", async () => {
+		vi.useFakeTimers();
+		try {
+			// Simulate an abandoned in-flight query that never resolves or rejects
+			const neverSettling = new Promise<SchemaFinding[]>(() => {});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(neverSettling)
+				.mockResolvedValueOnce([]);
+
+			const check = createSchemaCheck(find, "database", undefined, {
+				timeoutMs: 5000,
+			});
+
+			// First invocation starts the never-settling promise
+			const firstCall = check();
+			expect(firstCall).toBeDefined();
+
+			// Attach rejection handler to catch expected timeout rejection
+			let firstError: Error | undefined;
+			firstCall?.catch((err: Error) => {
+				firstError = err;
+			});
+
+			// Advance fake timers past the 5000ms threshold
+			await vi.advanceTimersByTimeAsync(5000);
+
+			// Assert first call rejected due to timeout
+			expect(firstError).toBeDefined();
+			expect(firstError?.message).toContain(
+				"Database schema validation timed out after 5000ms",
+			);
+
+			// Second invocation must retry cleanly and resolve without deadlock
+			const secondCall = check();
+			await expect(secondCall).resolves.toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });
 
 describe("checksSchema", () => {
