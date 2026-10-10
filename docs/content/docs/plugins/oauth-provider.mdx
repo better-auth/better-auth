@@ -1406,6 +1406,7 @@ Each token type and grant type can independently can set a default expiration.
 * `refreshTokenExpiresIn` defaults 30 days
 * `refreshTokenReuseInterval` defaults 0 seconds
 * `codeExpiresIn` defaults 10 minutes
+* `signedQueryExpiresIn` defaults to `codeExpiresIn` (10 minutes) — lifetime of the signed authorize query hop for the login, create, consent, select-account, and post-login pages
 * `assertionMaxLifetime` defaults 5 minutes — maximum allowed lifetime for `private_key_jwt` client assertions
 
 Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privilege scopes that require shorter expiration times. The earliest expiration will take precedence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
@@ -1418,6 +1419,8 @@ oauthProvider({
   },
 })
 ```
+
+`signedQueryExpiresIn` has no upper bound: it only needs to outlive the slowest login, create, consent, account-selection, or post-login screen a user works through. The same signed query is also replayable at the prelogin endpoint until it expires, so a large value widens the `allowPublicClientPrelogin` window as well. A very large value keeps a valid, replayable signed query in a browser URL for that long, so raise it only as far as the slowest interactive screen requires.
 
 ### Registration
 

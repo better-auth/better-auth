@@ -76,4 +76,13 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<"configure-client-credentials-scopes">().toMatchTypeOf<ClientPrivilegeAction>();
 		expectTypeOf<"configure-client-credentials">().not.toMatchTypeOf<ClientPrivilegeAction>();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11204
+	 */
+	it("exports signedQueryExpiresIn as an optional seconds option", () => {
+		expectTypeOf<OAuthOptions["signedQueryExpiresIn"]>().toEqualTypeOf<
+			number | undefined
+		>();
+	});
 });

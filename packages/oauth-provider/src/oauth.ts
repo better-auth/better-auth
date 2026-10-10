@@ -226,6 +226,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		storeTokens: "hashed",
 		grantTypes: ["authorization_code", "client_credentials", "refresh_token"],
 		...options,
+		signedQueryExpiresIn:
+			options.signedQueryExpiresIn ?? options.codeExpiresIn ?? 600,
 		scopes: Array.from(scopes),
 		claims: Array.from(claims),
 		clientRegistrationAllowedScopes,
