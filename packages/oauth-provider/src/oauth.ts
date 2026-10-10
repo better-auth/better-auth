@@ -638,11 +638,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							postLoginClearedForSession,
 						});
 
-						// On the social sign-in path the authorize query has to survive the
-						// provider redirect to be resumed after login. Carry it in the
-						// server-only OAuth state so a client cannot inject its own `query`
-						// through the request body.
-						if (ctx.path === "/sign-in/social") {
+						// On the social and SSO sign-in paths the authorize query has to
+						// survive the provider redirect to be resumed after login. Carry it
+						// in the server-only OAuth state so a client cannot inject its own
+						// `query` through the request body.
+						if (ctx.path === "/sign-in/social" || ctx.path === "/sign-in/sso") {
 							await addOAuthServerContext({
 								query: queryParams.toString(),
 								...(signedQueryIssuedAt
