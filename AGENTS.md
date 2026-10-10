@@ -36,6 +36,8 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 
 ### URL Composition
 
+- When appending a path to an absolute or root-relative URL, use `appendURLPath` from `@better-auth/core/utils/url`.
+- When appending a raw dynamic segment, use `appendURLSegment` so its value is encoded separately.
 - When appending query parameters to callback or redirect URLs, use `appendQueryParams` from `@better-auth/core/utils/url`. Keep origin and trust validation separate.
 
 ```ts
