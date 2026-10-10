@@ -382,6 +382,20 @@ export const auth = betterAuth({
 });
 ```
 
+## Deleting Expired Sessions
+
+Better Auth deletes an expired session when its token comes back to `getSession` (only on POST requests when `deferSessionRefresh` is enabled), and when the user signs out or a session is revoked. A session whose cookie never comes back stays in the table, with its IP address and user agent, until you delete it. You can do that from a scheduled job:
+
+```ts
+const { adapter } = await auth.$context;
+await adapter.deleteMany({
+    model: "session",
+    where: [{ field: "expiresAt", operator: "lt", value: new Date() }],
+});
+```
+
+This bypasses `databaseHooks`. On a large table, add an index on the session's expiry column. With `preserveSessionInDatabase`, a revoked session keeps its row with `expiresAt` set to the revocation time, so use an older cutoff if you keep those rows for auditing. Expired `verification` rows can be removed the same way with `model: "verification"`.
+
 ## Stateless Session Management
 
 Better Auth supports stateless session management without any database. This means that the session data is stored in a signed/encrypted cookie and the server never queries a database to validate sessions - it simply verifies the cookie signature and checks expiration.
