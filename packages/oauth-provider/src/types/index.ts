@@ -943,7 +943,11 @@ export interface OAuthOptions<
 			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
-		/** Requested client ID, when known. It is not proof of ownership or existence. */
+		/**
+		 * The `client_id` from the request, for actions on an existing client.
+		 * Absent for `create`, `list`, and scope configuration during creation.
+		 * The client may not exist, and ownership is checked after this callback.
+		 */
 		clientId?: string;
 	}) => Awaitable<boolean | undefined>;
 	/**

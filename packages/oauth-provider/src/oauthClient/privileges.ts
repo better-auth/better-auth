@@ -42,7 +42,7 @@ export async function assertClientPrivileges(
 			action,
 			session: session.session,
 			user: session.user,
-			...(clientId === undefined ? {} : { clientId }),
+			clientId,
 		}))
 	) {
 		throw new APIError("UNAUTHORIZED");
