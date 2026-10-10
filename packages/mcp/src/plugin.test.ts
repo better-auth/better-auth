@@ -291,9 +291,13 @@ describe("mcp plugin", async () => {
 			).toThrow("MCP resource");
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11337
+		 */
 		it.each([
 			"https://api.example.com/mcp",
 			"http://localhost:3000/mcp",
+			"http://my-branch.api.localhost/mcp",
 			"http://127.0.0.1:3000/mcp",
 			"http://127.42.0.1/mcp",
 			"http://[::1]:3000/mcp",
