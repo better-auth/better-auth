@@ -735,7 +735,7 @@ Any other authenticated client gets `{ active: false }`, the same response as an
 
 #### Which claims come back
 
-Opaque and JWT access tokens return the same claims for the same grant: your `customAccessTokenClaims` and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
+Opaque and JWT access tokens return the same claims for the same grant: extension `claims.accessToken` contributors, your `customAccessTokenClaims`, and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
 
 The two formats differ in one way. An opaque token is recomputed on each call, so introspection shows its current state: change a resource's claims, and the next introspection reflects the change. A JWT carries what was signed at issuance and never changes. Request a JWT (by passing a `resource`) when you want claims frozen at issuance; use an opaque token when you want the current state.
 
@@ -1400,27 +1400,31 @@ oauthProvider({
 
 #### Client-Specific Access Token Claims
 
-Use an `extensions[].claims.accessToken` contributor when a claim depends on the registered client. Unlike `customAccessTokenClaims`, it receives `client`. With [`clientReference`](#organizations) configured to assign each client to an organization, this example adds that organization reference only to tokens for one API:
+Use an `extensions[].claims.accessToken` contributor when a claim depends on the client a token is issued to. `customAccessTokenClaims` receives only the client's `metadata`, while a contributor receives the full `client` record, including its `clientId` and `referenceId`.
+
+This example adds the client's organization to tokens for one API. It assumes [`clientReference`](#organizations) assigns each client to an organization, and that clients are linked to the API resource, for example with `resources` on [`adminCreateOAuthClient`](#resources):
 
 ```ts title="auth.ts"
 const apiResource = "https://api.example.com";
 
 oauthProvider({
-  loginPage: "/login",
-  consentPage: "/consent",
   resources: [apiResource],
   extensions: [{
     claims: {
       accessToken: ({ client, resources }) => {
         if (!resources?.includes(apiResource) || !client.referenceId) return {};
-        return { "https://example.com/organization_id": client.referenceId };
+        return { "https://example.com/org": client.referenceId };
       },
     },
   }],
 })
 ```
 
-`client.referenceId` is the owner assigned by `clientReference` at registration. The contributor also receives `grantType` when issuing a token, but not when re-deriving claims for opaque-token introspection. Derive claims needed at introspection from stable client, scope, and resource context. An owner claim does not prove that an integration is still connected; resource servers that need immediate disconnection must check current authorization state.
+`client.referenceId` is the client's owner, set at registration by `clientReference` or by an [initial access token](#dynamic-client-registration) during protected dynamic registration. It is not the top-level `referenceId` that both callbacks also receive, which is the consent reference from `postLogin.consentReferenceId`.
+
+Opaque-token introspection re-derives contributor claims without `grantType` or `sessionId`, so base any claim needed at introspection on the client, scopes, and resources. `customAccessTokenClaims` and per-resource `customClaims` override a contributor claim with the same name; see [Claim precedence](#claim-precedence).
+
+An organization claim does not prove that the client is still connected. A JWT keeps its claims until it expires, so a resource server that must react to a disabled client right away should introspect the token, which reports tokens of disabled clients as inactive.
 
 #### Custom Token Response Fields
 
