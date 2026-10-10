@@ -490,6 +490,14 @@ export const auth = betterAuth({
 
 #### Hook Error Handling
 
+### Transactional membership policy
+
+Use `withMembershipMutation` to run native role updates, member removals, organization leaves, and invitation acceptance under application policy. It receives `organizationId`, the current `database` transaction, `operation` (`"mutation"` or `"invitation_acceptance"`), and `mutate`. Call and await `mutate()` exactly once, returning its result. Native permissions and role constraints still apply. Throwing before or after `mutate()` rolls back database writes on adapters with transaction support.
+
+`authorizeInvitationAcceptance` receives `organizationId` and `database` after native recipient, email verification, and membership limit checks. Return `{ allowed: true }` or `{ allowed: false, code, message }`. A denial leaves the invitation pending and creates no membership. When both callbacks are configured, authorization runs in the membership policy transaction.
+
+The callbacks are optional. Add-member server operations are not included. Adapters without transaction support cannot guarantee rollback; use an adapter with transactions for atomic policy enforcement. External side effects in organization hooks cannot be rolled back.
+
 All hooks support error handling. Throwing an error in a `before` hook will prevent the operation from proceeding:
 
 ```ts title="auth.ts"
