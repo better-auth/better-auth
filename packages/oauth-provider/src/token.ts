@@ -590,6 +590,12 @@ async function revokeTokensIssuedForAuthorizationCode(
 	await deleteIssuedTokens("oauthRefreshToken");
 }
 
+/**
+ * Errors `createRefreshToken` throws because a concurrent request rotated the
+ * parent refresh token first, as opposed to any other `invalid_grant`.
+ */
+const lostRotationErrors = new WeakSet<APIError>();
+
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -651,9 +657,11 @@ async function createRefreshToken(
 	// Rotation: atomic compare-and-swap on the parent row. Concurrent
 	// rotations against the same parent both observe `revoked === null` on
 	// the read in `handleRefreshTokenGrant`, but only one wins this update.
-	// The loser fails closed with `invalid_grant`; the parent row is now
-	// revoked, so any subsequent reuse of the original refresh token is handled
-	// by the replay/invalid-grant path in `handleRefreshTokenGrant`.
+	// The loser fails here with `invalid_grant`. Inside the reuse interval,
+	// `handleRefreshTokenGrant` answers it with the winner's response instead;
+	// otherwise it stays refused. The parent row is now revoked, so any later
+	// reuse of the original refresh token takes the replay/invalid-grant path
+	// in `handleRefreshTokenGrant`.
 	//
 	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes
 	// immediate family invalidation on detected concurrent redemption.
@@ -685,10 +693,12 @@ async function createRefreshToken(
 	});
 
 	if (!won) {
-		throw new APIError("BAD_REQUEST", {
+		const error = new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
 		});
+		lostRotationErrors.add(error);
+		throw error;
 	}
 
 	const refreshToken = await ctx.context.adapter.create<
@@ -1046,6 +1056,49 @@ async function getRefreshTokenRotationReplay(
 	} catch (error) {
 		ctx.context.logger.error("refresh token rotation replay failed", error);
 		return undefined;
+	}
+}
+
+/**
+ * How long a duplicate refresh waits for the response of the request that
+ * rotated its token.
+ */
+const ROTATION_REPLAY_WAIT_MS = 5000;
+
+/**
+ * The response of the request that rotated this refresh token, for a
+ * concurrent duplicate. That request stores its response only once its tokens
+ * exist, so a duplicate that gets here first waits for it, up to
+ * `ROTATION_REPLAY_WAIT_MS`. Returns nothing when the token was not rotated
+ * inside the reuse interval, or the stored response is for a different
+ * request.
+ */
+async function waitForRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	refreshTokenId: string,
+	request: RefreshTokenRotationReplayRequest,
+) {
+	const deadline = Date.now() + ROTATION_REPLAY_WAIT_MS;
+	for (let delay = 25; ; delay = Math.min(delay * 2, 400)) {
+		const refreshToken = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]>
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshTokenId }],
+		});
+		if (!refreshToken || !isWithinRefreshTokenReuseInterval(refreshToken)) {
+			return undefined;
+		}
+		if (refreshToken.rotationReplayResponse) {
+			return getRefreshTokenRotationReplay(ctx, refreshToken, request);
+		}
+		const remaining = deadline - Date.now();
+		if (remaining <= 0) {
+			return undefined;
+		}
+		await new Promise((resolve) =>
+			setTimeout(resolve, Math.min(delay, remaining)),
+		);
 	}
 }
 
@@ -1907,9 +1960,9 @@ async function handleRefreshTokenGrant(
 					resources: resources ?? refreshToken.resources,
 				},
 			);
-			const replay = await getRefreshTokenRotationReplay(
+			const replay = await waitForRefreshTokenRotationReplay(
 				ctx,
-				refreshToken,
+				refreshToken.id,
 				replayRequest,
 			);
 			if (replay) {
@@ -1943,17 +1996,48 @@ async function handleRefreshTokenGrant(
 			: undefined;
 
 	// Generate new tokens
-	return createUserTokens(ctx, opts, {
-		client,
-		scopes: requestedScopes ?? scopes,
-		user,
-		grantType: "refresh_token",
-		referenceId: refreshToken.referenceId,
-		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
-		refreshToken,
-		resources: resources ?? refreshToken.resources,
-		authTime,
-		requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
-	});
+	try {
+		return await createUserTokens(ctx, opts, {
+			client,
+			scopes: requestedScopes ?? scopes,
+			user,
+			grantType: "refresh_token",
+			referenceId: refreshToken.referenceId,
+			authorizationCodeId: refreshToken.authorizationCodeId,
+			sessionId: refreshToken.sessionId,
+			refreshToken,
+			resources: resources ?? refreshToken.resources,
+			authTime,
+			requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
+		});
+	} catch (error) {
+		// A concurrent duplicate rotated the token after it was read above, so
+		// this request lost the rotation. Inside the reuse interval the winner's
+		// response is this request's too. Any other error, such as a token
+		// response callback rejecting this request, stands. A DPoP proof is
+		// single-use and was spent on the attempt, so a DPoP-bound duplicate
+		// still fails closed.
+		if (
+			!(error instanceof APIError) ||
+			!lostRotationErrors.has(error) ||
+			(opts.refreshTokenReuseInterval ?? 0) <= 0 ||
+			getDpopProofJwt(ctx)
+		) {
+			throw error;
+		}
+		const replay = await waitForRefreshTokenRotationReplay(
+			ctx,
+			refreshToken.id,
+			await resolveRefreshTokenRotationReplayRequest(ctx, opts, {
+				client,
+				refreshToken,
+				scopes: requestedScopes ?? scopes,
+				resources: resources ?? refreshToken.resources,
+			}),
+		);
+		if (replay) {
+			return replayRefreshTokenRotationResponse(ctx, replay);
+		}
+		throw error;
+	}
 }
