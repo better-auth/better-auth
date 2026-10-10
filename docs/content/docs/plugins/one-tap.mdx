@@ -158,6 +158,14 @@ await authClient.oneTap({
 });
 ```
 
+#### Replay Protection
+
+`oneTap()` automatically obtains a short-lived nonce from your Better Auth server before it initializes Google One Tap. The server binds that nonce to the browser with a signed, HttpOnly cookie, verifies the ID token's nonce claim, and consumes the sign-in attempt after a successful verification. A captured ID token therefore cannot be replayed from another browser or reused after the attempt succeeds.
+
+Button-mode attempts are automatically renewed after each credential callback and shortly before an idle attempt expires, so the rendered button does not keep using a consumed or expired nonce.
+
+No nonce configuration is required. Do not pass `nonce` through `oneTap()` or `additionalOptions`; Better Auth ignores caller-provided values so the expected nonce remains server-controlled.
+
 #### Handling Prompt Dismissals with Exponential Backoff
 
 If the user dismisses or skips the prompt, the plugin will retry showing the One Tap prompt using exponential backoff based on your configured promptOptions.
