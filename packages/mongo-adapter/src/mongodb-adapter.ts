@@ -8,6 +8,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
+import { logger } from "@better-auth/core/env";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
 import {
@@ -783,6 +784,28 @@ export const mongodbAdapter = (
 							} catch (err) {
 								if (session.inTransaction()) {
 									await session.abortTransaction();
+								} else {
+									// A commit that failed in flight leaves the transaction
+									// open on the server, but the driver no longer reports the
+									// session as being in one, so `abortTransaction()` is not
+									// an option. Send the abort as a command on the same
+									// session so the server does not hold the writes until
+									// `transactionLifetimeLimitSeconds`.
+									try {
+										await config.client
+											.db("admin")
+											.command({ abortTransaction: 1 }, { session });
+									} catch (abortError) {
+										const code = (abortError as { code?: number })?.code;
+										// NoSuchTransaction (251) and TransactionCommitted (256)
+										// both mean nothing is left open.
+										if (code !== 251 && code !== 256) {
+											logger.error(
+												"Failed to abort a MongoDB transaction whose commit did not complete",
+												abortError,
+											);
+										}
+									}
 								}
 								throw err;
 							} finally {
