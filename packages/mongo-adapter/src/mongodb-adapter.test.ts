@@ -474,6 +474,85 @@ describe("mongodb-adapter", () => {
 	});
 });
 
+describe("transactions", () => {
+	function createTransientError() {
+		return Object.assign(new Error("WriteConflict"), {
+			hasErrorLabel: (label: string) => label === "TransientTransactionError",
+		});
+	}
+
+	function createClient() {
+		const session = {
+			startTransaction: vi.fn(),
+			commitTransaction: vi.fn(async () => {}),
+			abortTransaction: vi.fn(async () => {}),
+			endSession: vi.fn(async () => {}),
+			// Mirrors the driver: a callback that rejects with the
+			// `TransientTransactionError` label runs again in a new transaction,
+			// within a bounded budget.
+			withTransaction: vi.fn(async (fn: () => Promise<unknown>) => {
+				for (let attempt = 1; ; attempt++) {
+					try {
+						return await fn();
+					} catch (error) {
+						const transient =
+							error instanceof Error &&
+							"hasErrorLabel" in error &&
+							typeof error.hasErrorLabel === "function" &&
+							error.hasErrorLabel("TransientTransactionError");
+						if (!transient || attempt >= 3) throw error;
+					}
+				}
+			}),
+		};
+		const client = { startSession: vi.fn(() => session) };
+		const db = { collection: vi.fn() };
+		return { client, db, session };
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 * @see https://www.mongodb.com/docs/manual/core/transactions-in-applications/
+	 */
+	it("retries the callback when MongoDB aborts the transaction with a transient error", async () => {
+		const { client, db, session } = createClient();
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			client: client as unknown as MongoClient,
+		})({});
+		let attempts = 0;
+
+		const result = await adapter.transaction(async () => {
+			attempts += 1;
+			if (attempts === 1) throw createTransientError();
+			return "committed";
+		});
+
+		expect(result).toBe("committed");
+		expect(attempts).toBe(2);
+		expect(session.withTransaction).toHaveBeenCalledTimes(1);
+		expect(session.startTransaction).not.toHaveBeenCalled();
+		expect(session.endSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects with a non-transient error and ends the session", async () => {
+		const { client, db, session } = createClient();
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			client: client as unknown as MongoClient,
+		})({});
+		let attempts = 0;
+
+		await expect(
+			adapter.transaction(async () => {
+				attempts += 1;
+				throw new Error("duplicate key");
+			}),
+		).rejects.toThrow("duplicate key");
+
+		expect(attempts).toBe(1);
+		expect(session.endSession).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("uuid support", () => {
 	const uuidRegex =
 		/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
