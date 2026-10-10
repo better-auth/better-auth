@@ -1801,6 +1801,13 @@ export type BetterAuthOptions = {
 		  }
 		| undefined;
 	/**
+	 * Enabled paths
+	 *
+	 * When set, only these paths are served and every other path
+	 * returns `404`. Supports wildcards (e.g. `"/callback/*"`).
+	 */
+	enabledPaths?: string[] | undefined;
+	/**
 	 * Disabled paths
 	 *
 	 * Paths you want to disable.
