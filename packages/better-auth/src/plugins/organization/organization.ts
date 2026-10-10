@@ -1247,6 +1247,43 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 	return {
 		id: "organization",
 		version: PACKAGE_VERSION,
+		...(teamSupport
+			? {
+					init(ctx) {
+						const teamIdsByDeletedUser = new WeakMap<object, string[]>();
+						return {
+							options: {
+								databaseHooks: {
+									user: {
+										delete: {
+											async before(user) {
+												const teams = await getOrgAdapter<O>(
+													ctx,
+													opts,
+												).listTeamsByUser({ userId: user.id });
+												teamIdsByDeletedUser.set(
+													user,
+													teams.map((team) => team.id),
+												);
+											},
+											async after(user) {
+												const teamIds = teamIdsByDeletedUser.get(user) ?? [];
+												const adapter = getOrgAdapter<O>(ctx, opts);
+												for (const teamId of teamIds) {
+													await adapter.removeDeletedUserFromTeam({
+														teamId,
+														userId: user.id,
+													});
+												}
+											},
+										},
+									},
+								},
+							},
+						};
+					},
+				}
+			: {}),
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
 			hasPermission: createHasPermission(opts),
