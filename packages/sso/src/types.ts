@@ -296,7 +296,13 @@ export type SSOUserResolution =
 			userId: string;
 			profile: "preserve" | "update";
 	  }
-	| { action: "reject"; code: string; message?: string | undefined };
+	| {
+			action: "reject";
+			code: string;
+			message?: string | undefined;
+			/** For SAML, retry once with a new ForceAuthn request after rolling back authentication. */
+			requestFreshAuthentication?: boolean;
+	  };
 
 /** Normalized provider attributes available to an SSO user resolver. */
 export type SSOProviderUserProfile = {
@@ -346,6 +352,12 @@ export interface SSOSAMLUserResolutionInput extends BaseSSOUserResolutionInput {
 	 * arrays and all scalar values remain strings.
 	 */
 	providerAttributes: Record<string, string | readonly string[]>;
+	/** Authentication facts from the verified assertion, or null when absent or ambiguous. */
+	authenticationStatement: {
+		authnInstant?: string;
+		sessionIndex?: string;
+		sessionNotOnOrAfter?: string;
+	} | null;
 }
 
 /** Verified SSO identity and provider data available to an application resolver. */

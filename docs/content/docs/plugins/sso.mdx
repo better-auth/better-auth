@@ -1103,6 +1103,12 @@ If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata`
 
 Applications can use `guardProviderMutation` to coordinate SSO changes with a paired directory-sync control plane. IdP entity IDs, endpoints, signing certificates, SP entity IDs, NameID formats, POST assertion-consumer URLs, and assertion-signing policy are authentication-boundary changes. If the guard blocks authentication-boundary changes while a directory is paired, unpair the directory, update the IdP trust configuration, and then re-pair it. OIDC client-secret rotation and SAML SP private-key rotation do not change the authentication boundary.
 
+### Authentication freshness in a SAML resolver
+
+For SAML, `resolveUser` receives `authenticationStatement` from the verified assertion. It contains optional `authnInstant`, `sessionIndex`, and `sessionNotOnOrAfter` strings, or `null` if no single statement is available. Treat missing facts according to application policy. The callback is invoked only after signature and protocol checks.
+
+Return `{ action: "reject", code: "fresh_authentication_required", requestFreshAuthentication: true }` to roll back the current authentication and retry once with SAML `ForceAuthn="true"`. The retry has new RelayState, request correlation, and the current provider reference; the original authentication creates no account or session. A second rejection returns the normal error redirect, preventing an automatic retry loop. This flag applies to SAML only. The IdP must support ForceAuthn, and application policy must validate the new authentication facts before accepting the retry.
+
 ### SAML Attribute Mapping
 
 Configure how SAML attributes map to user fields:

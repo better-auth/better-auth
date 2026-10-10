@@ -31,7 +31,11 @@ import {
 } from "../saml";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
-import { parseRelayState } from "../saml-state";
+import {
+	createSAMLAuthenticationRequest,
+	parseRelayState,
+	SAML_FRESH_AUTHENTICATION_STATE_KEY,
+} from "../saml-state";
 import { saml } from "../samlify";
 import type {
 	SAMLAssertionExtract,
@@ -40,6 +44,7 @@ import type {
 	SSOOptions,
 	SSOProvider,
 	SSOProviderReference,
+	SSOSAMLUserResolutionInput,
 } from "../types";
 import {
 	assertSSOUserResolutionAsyncContextSupport,
@@ -62,6 +67,25 @@ import {
 	findSAMLProvider,
 } from "./helpers";
 import { lockSSOProviderForAccountLink } from "./providers";
+
+function getAuthenticationStatement(
+	value: unknown,
+): SSOSAMLUserResolutionInput["authenticationStatement"] {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const { authnInstant, sessionIndex, sessionNotOnOrAfter } = value as Record<
+		string,
+		unknown
+	>;
+	if (
+		(authnInstant !== undefined && typeof authnInstant !== "string") ||
+		(sessionIndex !== undefined && typeof sessionIndex !== "string") ||
+		(sessionNotOnOrAfter !== undefined &&
+			typeof sessionNotOnOrAfter !== "string")
+	)
+		return null;
+	if (!authnInstant && !sessionIndex && !sessionNotOnOrAfter) return null;
+	return { authnInstant, sessionIndex, sessionNotOnOrAfter };
+}
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -727,6 +751,9 @@ export async function processSAMLResponse(
 								accountKey,
 								providerUser,
 								providerAttributes,
+								authenticationStatement: getAuthenticationStatement(
+									extract.sessionIndex,
+								),
 								providerReference,
 							},
 							await getCurrentAdapter(ctx.context.adapter),
@@ -736,6 +763,9 @@ export async function processSAMLResponse(
 				if (resolution?.action === "reject") {
 					throw new APIError("FORBIDDEN", {
 						code: resolution.code,
+						...(resolution.requestFreshAuthentication === true
+							? { requestFreshAuthentication: true }
+							: {}),
 						...(resolution.message === undefined
 							? {}
 							: { message: resolution.message }),
@@ -787,6 +817,26 @@ export async function processSAMLResponse(
 		if (failedAuthentication) {
 			result = failedAuthentication;
 		} else if (isAPIError(e) && e.body?.code) {
+			if (
+				e.body.requestFreshAuthentication === true &&
+				relayState?.serverContext?.[SAML_FRESH_AUTHENTICATION_STATE_KEY] !==
+					true
+			) {
+				const request = await createSAMLAuthenticationRequest(
+					ctx,
+					provider,
+					parsedSamlConfig,
+					options,
+					{
+						callbackURL: callbackUrl,
+						errorCallbackURL: errorUrl,
+						newUserCallbackURL: relayState?.newUserURL,
+						requestSignUp: relayState?.requestSignUp,
+					},
+					true,
+				);
+				throw ctx.redirect(request.context);
+			}
 			throw ctx.redirect(
 				buildSAMLRedirectUrl(errorUrl, {
 					error: e.body.code,
