@@ -9,11 +9,12 @@ vi.mock("@better-fetch/fetch", () => ({
 import { betterFetch } from "@better-fetch/fetch";
 
 import { verifyProviderIdToken } from "../oauth2";
-import { microsoft } from "./microsoft-entra-id";
+import { getMicrosoftPublicKey, microsoft } from "./microsoft-entra-id";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 
 const CLIENT_ID = "ms-app";
+const CLIENT_SECRET = "ms-secret";
 const AUTHORITY = "https://login.microsoftonline.com";
 const CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const WORK_TENANT_ID = "11111111-2222-3333-4444-555555555555";
@@ -27,7 +28,6 @@ beforeEach(async () => {
 	privateKey = keyPair.privateKey;
 	publicJWK = await exportJWK(keyPair.publicKey);
 	publicJWK.kid = KID;
-	publicJWK.alg = "RS256";
 	publicJWK.use = "sig";
 
 	mockedBetterFetch.mockReset();
@@ -276,5 +276,86 @@ describe("microsoft account subject", () => {
 			}),
 		).resolves.toBeNull();
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+});
+
+describe("microsoft id_token alg omission", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11652
+	 */
+	it("should successfully verify Microsoft ID token when JWKS keys have no alg property", async () => {
+		expect(publicJWK.alg).toBeUndefined();
+
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const token = await new SignJWT({
+			sub: "user-123",
+			email: "user@example.com",
+			tid: WORK_TENANT_ID,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: KID })
+			.setIssuer(`${AUTHORITY}/${WORK_TENANT_ID}/v2.0`)
+			.setAudience(CLIENT_ID)
+			.setExpirationTime("1h")
+			.setIssuedAt()
+			.sign(privateKey);
+
+		const isValid = await verifyProviderIdToken(provider, token);
+		expect(isValid).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11652
+	 */
+	it("should allow getMicrosoftPublicKey to fall back to default RS256 when jwk.alg is missing", async () => {
+		expect(publicJWK.alg).toBeUndefined();
+
+		const key = await getMicrosoftPublicKey(
+			KID,
+			"common",
+			"https://login.microsoftonline.com",
+		);
+		expect(key).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11652
+	 */
+	it("rejects non-RS256 tokens even when matching JWK omits alg", async () => {
+		const ecKeyPair = await generateKeyPair("ES256", { extractable: true });
+		const ecJWK = await exportJWK(ecKeyPair.publicKey);
+		const ecKid = "ms-test-es256-key";
+		ecJWK.kid = ecKid;
+		ecJWK.use = "sig";
+
+		expect(ecJWK.alg).toBeUndefined();
+
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { keys: [ecJWK] },
+			error: null,
+		} as Awaited<ReturnType<typeof betterFetch>>);
+
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const token = await new SignJWT({
+			sub: "user-123",
+			email: "user@example.com",
+			tid: WORK_TENANT_ID,
+		})
+			.setProtectedHeader({ alg: "ES256", kid: ecKid })
+			.setIssuer(`${AUTHORITY}/${WORK_TENANT_ID}/v2.0`)
+			.setAudience(CLIENT_ID)
+			.setExpirationTime("1h")
+			.setIssuedAt()
+			.sign(ecKeyPair.privateKey);
+
+		const isValid = await verifyProviderIdToken(provider, token);
+		expect(isValid).toBe(false);
 	});
 });
