@@ -20,6 +20,7 @@ export class APIError extends BaseAPIError {
 	declare statusCode: BaseAPIErrorInstance["statusCode"];
 	declare message: string;
 	declare errorStack: BaseAPIErrorInstance["errorStack"];
+	declare cause?: unknown;
 
 	constructor(...args: ConstructorParameters<typeof BaseAPIError>) {
 		super(...args);
@@ -42,7 +43,12 @@ export class APIError extends BaseAPIError {
 			code: error.code,
 		});
 		if (options?.cause !== undefined) {
-			apiError.cause = options.cause;
+			Object.defineProperty(apiError, "cause", {
+				value: options.cause,
+				writable: true,
+				configurable: true,
+				enumerable: false,
+			});
 		}
 		return apiError;
 	}
