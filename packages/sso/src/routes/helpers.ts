@@ -94,6 +94,7 @@ export function createSP(
 								},
 							]
 						: undefined,
+					signingCert: normalizePem(spData?.signingCert),
 					wantAssertionsSigned: config.wantAssertionsSigned || false,
 					authnRequestsSigned: config.authnRequestsSigned || false,
 					nameIDFormat: config.identifierFormat
@@ -216,7 +217,10 @@ export function assertSAMLIdentityProviderAuthority<
 	});
 }
 
-export function createIdP(config: SAMLConfig) {
+export function createIdP(
+	config: SAMLConfig,
+	opts?: { logoutResponse?: boolean },
+) {
 	assertSAMLIdentityProviderAuthority(config);
 	const idpData = config.idpMetadata;
 	if (idpData?.metadata) {
@@ -237,7 +241,14 @@ export function createIdP(config: SAMLConfig) {
 				Location: config.entryPoint,
 			},
 		],
-		singleLogoutService: idpData.singleLogoutService,
+		// samlify uses Location for both message types. Choose the response endpoint
+		// before constructing the XML so Destination and any signature agree.
+		singleLogoutService: idpData.singleLogoutService?.map((service) => ({
+			...service,
+			Location: opts?.logoutResponse
+				? (service.ResponseLocation ?? service.Location)
+				: service.Location,
+		})),
 		signingCert: normalizePemList(resolveSigningCerts(config)),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
 		isAssertionEncrypted: idpData.isAssertionEncrypted || false,

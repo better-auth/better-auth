@@ -1103,6 +1103,12 @@ If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata`
 
 Applications can use `guardProviderMutation` to coordinate SSO changes with a paired directory-sync control plane. IdP entity IDs, endpoints, signing certificates, SP entity IDs, NameID formats, POST assertion-consumer URLs, and assertion-signing policy are authentication-boundary changes. If the guard blocks authentication-boundary changes while a directory is paired, unpair the directory, update the IdP trust configuration, and then re-pair it. OIDC client-secret rotation and SAML SP private-key rotation do not change the authentication boundary.
 
+### Manual SLO and SP signing metadata
+
+When configuring IdP endpoints manually, `idpMetadata.singleLogoutService` accepts the standard optional `ResponseLocation` alongside `Binding` and `Location`. LogoutRequests use `Location`; LogoutResponses use `ResponseLocation` when present and otherwise fall back to `Location`. The response endpoint is selected before XML construction, so its `Destination` agrees with the browser dispatch endpoint. This applies to manual endpoint configuration; existing metadata XML is used as supplied.
+
+Set `spMetadata.signingCert` to the public PEM certificate corresponding to the SP signing key to advertise it in auto-generated SP metadata. Custom `spMetadata.metadata` XML remains authoritative. This publishes the certificate; it does not change whether messages require or produce signatures.
+
 ### SAML Attribute Mapping
 
 Configure how SAML attributes map to user fields:
