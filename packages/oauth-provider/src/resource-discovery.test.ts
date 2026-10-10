@@ -209,6 +209,187 @@ describe("DCR — resources field (RFC 7591 §2 extension)", () => {
 });
 
 describe("managed client registration resources", () => {
+	it("links explicitly selected resources during managed client creation", async () => {
+		const resource = "https://api.example.com/managed-requested";
+		const resourcePrivileges = vi.fn(
+			({ action }: { action: string }) => action === "link",
+		);
+		const instance = await boot(
+			{
+				resources: [resource],
+				scopes: ["read:business"],
+				clientPrivileges: () => true,
+				resourcePrivileges,
+			},
+			true,
+		);
+		const { headers } = await instance.signInWithTestUser();
+
+		const result = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:business"],
+				resources: [resource, resource],
+			},
+		});
+
+		expect(result.resources).toEqual([resource]);
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: result.client_id }],
+		});
+		expect(links.map((link) => link.resourceId)).toEqual([resource]);
+		expect(resourcePrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "link", resourceId: resource }),
+		);
+	});
+
+	it("checks resource-link privileges before creating a managed client", async () => {
+		const firstResource = "https://api.example.com/managed-allowed";
+		const deniedResource = "https://api.example.com/managed-denied";
+		const resourcePrivileges = vi.fn(
+			({ action, resourceId }: { action: string; resourceId?: string }) =>
+				action !== "link" || resourceId !== deniedResource,
+		);
+		const instance = await boot(
+			{ resources: [firstResource, deniedResource], resourcePrivileges },
+			true,
+		);
+		const { headers } = await instance.signInWithTestUser();
+		const clientName = "denied-resource-link";
+
+		await expect(
+			instance.auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					client_name: clientName,
+					resources: [firstResource, deniedResource],
+				},
+			}),
+		).rejects.toMatchObject({ statusCode: 401 });
+		expect(resourcePrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "link", resourceId: firstResource }),
+		);
+		expect(resourcePrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "link", resourceId: deniedResource }),
+		);
+		const storedClient = await instance.ctx.adapter.findOne({
+			model: "oauthClient",
+			where: [{ field: "name", value: clientName }],
+		});
+		expect(storedClient).toBeNull();
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "resourceId", value: firstResource }],
+		});
+		expect(links).toEqual([]);
+	});
+
+	it.each([
+		["missing", "https://api.example.com/managed-missing", "does not exist"],
+		["disabled", "https://api.example.com/managed-unavailable", "disabled"],
+	])("rejects a %s resource before creating a managed client", async (kind, requested, reason) => {
+		const configured = "https://api.example.com/managed-unavailable";
+		const instance = await boot({ resources: [configured] }, true);
+		if (kind === "disabled") {
+			await instance.ctx.adapter.update({
+				model: "oauthResource",
+				where: [{ field: "identifier", value: configured }],
+				update: { disabled: true },
+			});
+		}
+		const { headers } = await instance.signInWithTestUser();
+		const clientName = `managed-${kind}-resource`;
+		await expect(
+			instance.auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					client_name: clientName,
+					grant_types: ["client_credentials"],
+					resources: [requested],
+				},
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: {
+				error: "invalid_target",
+				error_description: expect.stringContaining(reason),
+			},
+		});
+		expect(
+			await instance.ctx.adapter.findOne({
+				model: "oauthClient",
+				where: [{ field: "name", value: clientName }],
+			}),
+		).toBeNull();
+	});
+
+	it.each([
+		["relative", "managed-relative", "must be an absolute URI"],
+		[
+			"fragment",
+			"https://api.example.com/managed-unavailable#part",
+			"must not contain a fragment",
+		],
+	])("rejects a %s resource URI in the request body", async (kind, requested, reason) => {
+		const instance = await boot(
+			{ resources: ["https://api.example.com/managed-unavailable"] },
+			true,
+		);
+		const { headers } = await instance.signInWithTestUser();
+		const clientName = `managed-${kind}-resource`;
+		await expect(
+			instance.auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					client_name: clientName,
+					grant_types: ["client_credentials"],
+					resources: [requested],
+				},
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: {
+				code: "VALIDATION_ERROR",
+				message: expect.stringContaining(reason),
+			},
+		});
+		expect(
+			await instance.ctx.adapter.findOne({
+				model: "oauthClient",
+				where: [{ field: "name", value: clientName }],
+			}),
+		).toBeNull();
+	});
+
+	it("ignores resources sent to the session-facing create endpoint", async () => {
+		const resource = "https://api.example.com/session-facing";
+		const resourcePrivileges = vi.fn(() => true);
+		const instance = await boot(
+			{ resources: [resource], resourcePrivileges },
+			true,
+		);
+		const { headers } = await instance.signInWithTestUser();
+		const body = {
+			redirect_uris: ["https://app.example.com/callback"],
+			resources: [resource],
+		};
+
+		const result = (await instance.auth.api.createOAuthClient({
+			headers,
+			body,
+		})) as { client_id: string; resources?: string[] };
+
+		expect(result.resources).toBeUndefined();
+		expect(resourcePrivileges).not.toHaveBeenCalled();
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: result.client_id }],
+		});
+		expect(links).toEqual([]);
+	});
+
 	it("links server-owned defaults during managed client creation", async () => {
 		const defaultResource = "https://api.example.com/managed-default";
 		const instance = await boot(
@@ -242,14 +423,8 @@ describe("managed client registration resources", () => {
 
 	it("rolls back the client when a resource link cannot be inserted", async () => {
 		const clientName = "transaction-rollback-client";
-		const defaultResource = "https://api.example.com/rollback-default";
-		const instance = await boot(
-			{
-				resources: [defaultResource],
-				clientRegistrationDefaultResources: [defaultResource],
-			},
-			true,
-		);
+		const resource = "https://api.example.com/rollback-requested";
+		const instance = await boot({ resources: [resource] }, true);
 		const { headers } = await instance.signInWithTestUser();
 		const originalTransaction = instance.ctx.adapter.transaction.bind(
 			instance.ctx.adapter,
@@ -277,6 +452,7 @@ describe("managed client registration resources", () => {
 				body: {
 					client_name: clientName,
 					redirect_uris: ["https://app.example.com/callback"],
+					resources: [resource],
 				},
 			}),
 		).rejects.toThrow("forced resource-link insertion failure");

@@ -20,6 +20,7 @@ import {
 	validateClientCredentialsScopes,
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
+import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
 import type {
 	ClientRegistrationRequest,
@@ -152,14 +153,12 @@ function getRawHttpHostname(redirectUri: string): string | null {
 	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
 }
 
-async function resolveClientRegistrationResources(
-	ctx: GenericEndpointContext,
+function assertDynamicRegistrationResourcesAllowed(
 	opts: OAuthOptions<Scope[]>,
 	requestedResources: readonly string[],
-): Promise<string[]> {
-	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
+) {
 	const allowedResources = new Set([
-		...defaultResources,
+		...(opts.clientRegistrationDefaultResources ?? []),
 		...(opts.clientRegistrationAllowedResources ?? []),
 	]);
 	for (const identifier of requestedResources) {
@@ -170,7 +169,14 @@ async function resolveClientRegistrationResources(
 			});
 		}
 	}
+}
 
+async function resolveClientRegistrationResources(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	requestedResources: readonly string[],
+): Promise<string[]> {
+	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
 	const resources = [...new Set([...defaultResources, ...requestedResources])];
 	for (const identifier of resources) {
 		const row = await getResource(ctx, opts, identifier);
@@ -720,7 +726,11 @@ export type CreateOAuthClientRegistrationInput =
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
-			requestedResources?: never;
+			/**
+			 * Resources to link to the new client. The caller must authorize the
+			 * `link` resource privilege for each one before persisting.
+			 */
+			requestedResources?: string[];
 			/** Server-owned scope ceiling configured by an administrator. */
 			clientCredentialsScopes?: Scope[];
 	  });
@@ -900,12 +910,17 @@ async function persistOAuthClientRegistration(
 	) {
 		schema.applicationType = null;
 	}
+	const requestedResources =
+		input.registrationSource === "clientMetadataDocument"
+			? []
+			: (input.requestedResources ?? []);
+	if (input.registrationSource === "dynamic") {
+		assertDynamicRegistrationResourcesAllowed(opts, requestedResources);
+	}
 	const resources = await resolveClientRegistrationResources(
 		ctx,
 		opts,
-		input.registrationSource === "dynamic"
-			? (input.requestedResources ?? [])
-			: [],
+		requestedResources,
 	);
 	const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
 	const clientResourceModel =
@@ -1255,12 +1270,17 @@ export async function createOAuthClientEndpoint(
 			"configure-client-credentials-scopes",
 		);
 	}
+	const requestedResources = settings?.admin ? metadata.resources : undefined;
+	for (const identifier of new Set(requestedResources ?? [])) {
+		await assertResourcePrivileges(ctx, session, opts, "link", identifier);
+	}
 	const registrationInput: CreateOAuthClientRegistrationInput = {
 		metadata,
 		registrationSource: "managed",
 		userId: referenceId ? undefined : session.session.userId,
 		referenceId,
 		clientCredentialsScopes,
+		...(requestedResources ? { requestedResources } : {}),
 	};
 	const responseBody = settings?.admin
 		? await createOAuthClientAdministrativeRegistration(
