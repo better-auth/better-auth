@@ -33,6 +33,36 @@ function createStringSecondaryStorage(
 	};
 }
 
+function createFlakySecondaryStorage(
+	inner: SecondaryStorage,
+	isOutage: () => boolean = () => true,
+): SecondaryStorage {
+	// Wraps a working store but throws on every get/set while the outage flag
+	// holds, at primary-Redis-outage level: used to prove cache failures
+	// cannot break the session read. Tests sign in with the store healthy
+	// (session creation touches the cache synchronously), then flip the
+	// outage on before exercising the read path.
+	const guard = <T>(fn: () => T): T => {
+		if (isOutage()) throw new Error("redis: connection refused");
+		return fn();
+	};
+	return {
+		...inner,
+		get(key) {
+			return guard(() => inner.get(key));
+		},
+		set(key, value, ttl) {
+			return guard(() => inner.set(key, value, ttl));
+		},
+		getAndDelete(key) {
+			return guard(() => inner.getAndDelete(key));
+		},
+		increment(key, ttl) {
+			return guard(() => inner.increment(key, ttl));
+		},
+	};
+}
+
 function createParsedSecondaryStorage(
 	store: Map<string, unknown>,
 ): SecondaryStorage {
@@ -202,6 +232,63 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			const after = await client.getSession({ fetchOptions: { headers } });
 			expect(after.data).toBeNull();
 		});
+
+		it("repopulates secondary storage after a database fallback", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const s1 = await client.getSession({ fetchOptions: { headers } });
+			expect(s1.data).not.toBeNull();
+			const token = s1.data!.session.token;
+			const userId = s1.data!.user.id;
+
+			expect(store.has(token)).toBe(true);
+
+			// Simulate a cache flush for this user: both the session entry and
+			// the active-sessions index are gone, the database row is still valid.
+			store.delete(token);
+			store.delete(`active-sessions-${userId}`);
+
+			const s2 = await client.getSession({ fetchOptions: { headers } });
+			expect(s2.data).not.toBeNull();
+			expect(s2.data!.session.token).toBe(token);
+
+			// The fallback repaired the cache: subsequent requests must not hit
+			// the primary database for this session anymore.
+			expect(store.has(token)).toBe(true);
+			const listRaw = store.get(`active-sessions-${userId}`);
+			expect(listRaw).toBeTruthy();
+			expect(JSON.parse(listRaw!)).toEqual([
+				{ token, expiresAt: s2.data!.session.expiresAt.getTime() },
+			]);
+
+			const s3 = await client.getSession({ fetchOptions: { headers } });
+			expect(s3.data).not.toBeNull();
+		});
+
+		it("revoke-all still sweeps a session repopulated by a database fallback", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const s1 = await client.getSession({ fetchOptions: { headers } });
+			expect(s1.data).not.toBeNull();
+			const token = s1.data!.session.token;
+			const userId = s1.data!.user.id;
+
+			// Flush the cache, then let the database fallback repopulate it.
+			store.delete(token);
+			store.delete(`active-sessions-${userId}`);
+			const s2 = await client.getSession({ fetchOptions: { headers } });
+			expect(s2.data).not.toBeNull();
+			expect(store.has(token)).toBe(true);
+
+			const revokeAll = await client.revokeSessions({
+				fetchOptions: { headers },
+			});
+			expect(revokeAll.data?.status).toBe(true);
+
+			expect(store.has(token)).toBe(false);
+			const after = await client.getSession({ fetchOptions: { headers } });
+			expect(after.data).toBeNull();
+		});
 	});
 
 	describe("preserveSessionInDatabase: true", async () => {
@@ -296,6 +383,67 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			await (await auth.$context).internalAdapter.deleteSession(token);
 			expect(deletedSessionIds).toHaveLength(1);
 		});
+	});
+});
+
+describe("secondary storage - best-effort cache repair", () => {
+	it("a secondary-storage outage cannot turn the database fallback into a 500", async () => {
+		const store = new Map<string, string>();
+		let outage = false;
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createFlakySecondaryStorage(
+				createStringSecondaryStorage(store),
+				() => outage,
+			),
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: false,
+			},
+			rateLimit: {
+				enabled: false,
+			},
+		});
+
+		// Sign in against the healthy store: session creation mirrors into
+		// the cache synchronously, so it must run before the outage starts.
+		const { headers } = await signInWithTestUser();
+
+		// Redis "goes down": every cache operation now throws. The guarded
+		// initial read treats this as a miss and falls back to the database,
+		// and the cache-aside repair fails internally as well - the request
+		// must still return the authoritative database session.
+		outage = true;
+		const s1 = await client.getSession({ fetchOptions: { headers } });
+		expect(s1.error).toBeNull();
+		expect(s1.data).not.toBeNull();
+		expect(s1.data!.session.token).toBeTruthy();
+	});
+
+	it("without storeSessionInDatabase, an outage surfaces as an error instead of a silent logout", async () => {
+		const store = new Map<string, string>();
+		let outage = false;
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createFlakySecondaryStorage(
+				createStringSecondaryStorage(store),
+				() => outage,
+			),
+			rateLimit: {
+				enabled: false,
+			},
+		});
+
+		// storeSessionInDatabase is disabled (the default), so secondary
+		// storage is the authoritative session store with no database
+		// fallback. Sign in against the healthy store first.
+		const { headers } = await signInWithTestUser();
+
+		// During an outage the read must fail loudly (request error, cookie
+		// intact) - a null here would clear a valid session on a transient
+		// blip and log the user out.
+		outage = true;
+		const s1 = await client.getSession({ fetchOptions: { headers } });
+		expect(s1.data).toBeNull();
+		expect(s1.error).not.toBeNull();
 	});
 });
 
