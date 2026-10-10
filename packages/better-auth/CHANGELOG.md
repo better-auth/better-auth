@@ -1,5 +1,52 @@
 # better-auth
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11565](https://github.com/better-auth/better-auth/pull/11565) [`b1cfc1e`](https://github.com/better-auth/better-auth/commit/b1cfc1ec1e006a52654c5441422fa26c240ee123) Thanks [@bytaesu](https://github.com/bytaesu)! - Omit non-returned custom fields from inferred output schema types.
+
+- [#11540](https://github.com/better-auth/better-auth/pull/11540) [`678c555`](https://github.com/better-auth/better-auth/commit/678c555beb533c1416c1411a0d77129de2e97d31) Thanks [@bytaesu](https://github.com/bytaesu)! - Align cookie security attributes with RFC 6265bis.
+
+- [#10591](https://github.com/better-auth/better-auth/pull/10591) [`193efff`](https://github.com/better-auth/better-auth/commit/193efff3d290740b1fd7c564b4b9b6f18343d05e) Thanks [@kdelay](https://github.com/kdelay)! - Expired or revoked sessions now clear stale cookies when using `customSession`.
+
+- [#11625](https://github.com/better-auth/better-auth/pull/11625) [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
+  - On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+  - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
+
+  With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
+
+- [#11391](https://github.com/better-auth/better-auth/pull/11391) [`352d04c`](https://github.com/better-auth/better-auth/commit/352d04c8eb40c597a54da8667d68e05a1cb69426) Thanks [@breken-ai](https://github.com/breken-ai)! - Fix `customSession` treating session lookup failures as signed-out users. Server-side `getSession` now throws an API error, and HTTP clients receive an error response.
+
+- [#11549](https://github.com/better-auth/better-auth/pull/11549) [`1bd5c37`](https://github.com/better-auth/better-auth/commit/1bd5c37884f95766c737e35f4be86dfb46d31d36) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `lastLoginMethod` failing sign-in when `cookieName` or `maxAge` is explicitly `undefined`.
+
+- [#11505](https://github.com/better-auth/better-auth/pull/11505) [`c46992f`](https://github.com/better-auth/better-auth/commit/c46992f6ce548fad0f26f5f07dc8525893e8196c) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve the referenced model and field keys when generating Kysely migrations, so custom table names that match another model key produce the intended foreign keys.
+
+- [#10266](https://github.com/better-auth/better-auth/pull/10266) [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9) Thanks [@shiminshen](https://github.com/shiminshen)! - Projects that enable `exactOptionalPropertyTypes` can use the `oauthProvider()` and `mcp()` plugins again. Since 1.7.0, adding either plugin to `betterAuth()` failed to type-check with a TS2322 error.
+
+- [#11637](https://github.com/better-auth/better-auth/pull/11637) [`2627237`](https://github.com/better-auth/better-auth/commit/2627237fae3d02c53b3ba68b3812cbc31905a24b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Projects using the organization plugin with `skipLibCheck: false` no longer get `TS2536: Type '"role"' cannot be used to index type ...` from `crud-members.d.mts`. The `role` returned by `getActiveMemberRole` is now typed as the organization's role names directly. Projects with `skipLibCheck: true` (the default in most templates) were unaffected.
+
+- [#10866](https://github.com/better-auth/better-auth/pull/10866) [`3d1f008`](https://github.com/better-auth/better-auth/commit/3d1f008ae381dec01751725b7422985c84c74aae) Thanks [@heliohm](https://github.com/heliohm)! - The organization plugin no longer pulls every zod locale into server bundles.
+
+- [#11626](https://github.com/better-auth/better-auth/pull/11626) [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Password resets and password changes no longer keep the new password when revoking the user's sessions fails. With `revokeSessionsOnPasswordReset` or `revokeOtherSessions`, database sessions are revoked and the password is saved in one transaction when transactions are enabled for the adapter, so a failure leaves the old password and sessions in place. Sessions in secondary storage are still removed after commit, on a best-effort basis. This covers `/reset-password`, the email OTP and phone number reset endpoints, and `/change-password`. `onPasswordReset` now runs after sessions are revoked, so a throwing callback no longer leaves them active, and a callback that lists the user's sessions no longer sees the revoked ones.
+
+- [#11646](https://github.com/better-auth/better-auth/pull/11646) [`07a0938`](https://github.com/better-auth/better-auth/commit/07a09389ef00c0fc322983f2eca463194c642865) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A failed password reset no longer spends the reset link or OTP. `/reset-password`, `/email-otp/reset-password` and `/phone-number/reset-password` now check the token or code without consuming it, validate and hash the new password, then consume it in the same transaction as the session revocation and password write. A rejected password, such as one refused by `haveIBeenPwned`, always leaves the link or OTP usable. A later failure, such as a failed session revocation or password write, also leaves it usable when the adapter's transactions are enabled and verification values are stored in the database (the default without secondary storage, or `verification.storeInDatabase: true`). Wrong codes still count against the OTP attempt limit.
+
+- [#11643](https://github.com/better-auth/better-auth/pull/11643) [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A sign-up that fails after its session is created no longer leaves that session in secondary storage. With `storeSessionInDatabase` enabled and `preserveSessionInDatabase` off, the secondary-storage copy is written only after the sign-up commits, and listing a user's sessions now reads the database, so a session whose cached copy failed to write is still listed and revoked. With other secondary-storage settings, sign-up, passkey registration and SSO sign-in with `resolveUser` keep the session write inside their transaction, so a storage failure rolls back the new user, passkey or account instead of keeping them without a session. A session revoked by a `session.create.after` database hook also stays revoked.
+
+- [#11488](https://github.com/better-auth/better-auth/pull/11488) [`e15625f`](https://github.com/better-auth/better-auth/commit/e15625ff382a2dd9ea41e7d142d4098f6a8715a2) Thanks [@Bekacru](https://github.com/Bekacru)! - SvelteKit 3 projects can now install Better Auth without `--legacy-peer-deps`. The `@sveltejs/kit` peer range now includes `^3.0.0`; SvelteKit 2 projects are unaffected.
+
+- Updated dependencies [[`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a), [`435645e`](https://github.com/better-auth/better-auth/commit/435645e5eb6fcd0a3a9a2bbd1fd486f47ff4c4cc), [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41), [`9904b29`](https://github.com/better-auth/better-auth/commit/9904b29ece82ecf10f0bf5aa4b194d77aea2e898), [`8133265`](https://github.com/better-auth/better-auth/commit/813326536c79291d70897a18b63272fa1e7346a7), [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78), [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509), [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2), [`a9f455d`](https://github.com/better-auth/better-auth/commit/a9f455d586f4124bf8c544345f47130a93580103)]:
+  - @better-auth/core@1.7.8
+  - @better-auth/drizzle-adapter@1.7.8
+  - @better-auth/kysely-adapter@1.7.8
+  - @better-auth/memory-adapter@1.7.8
+  - @better-auth/mongo-adapter@1.7.8
+  - @better-auth/prisma-adapter@1.7.8
+  - @better-auth/telemetry@1.7.8
+
 ## 1.7.7
 
 ### Patch Changes

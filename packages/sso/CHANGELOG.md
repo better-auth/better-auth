@@ -1,5 +1,13 @@
 # @better-auth/sso
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11438](https://github.com/better-auth/better-auth/pull/11438) [`61f64f4`](https://github.com/better-auth/better-auth/commit/61f64f46adacc1c7c1053aa62e4f6b83619ccb61) Thanks [@Tushar-Khandelwal-2004](https://github.com/Tushar-Khandelwal-2004)! - Reject OIDC SSO provider registration when the configured issuer differs from the discovery document, including trailing slash mismatches, instead of failing later during sign-in. Existing providers with a mismatched issuer are unchanged and must be reconfigured to match the discovery document.
+
 ## 1.7.7
 
 ## 1.7.6

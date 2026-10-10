@@ -1,5 +1,27 @@
 # @better-auth/oauth-provider
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11625](https://github.com/better-auth/better-auth/pull/11625) [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
+  - On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+  - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
+
+  With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
+
+- [#10956](https://github.com/better-auth/better-auth/pull/10956) [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78) Thanks [@disbell](https://github.com/disbell)! - Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs with a host and a path, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+  Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
+
+  Pairwise clients (`subject_type: "pairwise"`) cannot use these host-bearing custom-scheme redirect URIs. Web clients are unaffected: they still accept only `https` redirect URIs on non-loopback hosts.
+
+- [#10266](https://github.com/better-auth/better-auth/pull/10266) [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9) Thanks [@shiminshen](https://github.com/shiminshen)! - Projects that enable `exactOptionalPropertyTypes` can use the `oauthProvider()` and `mcp()` plugins again. Since 1.7.0, adding either plugin to `betterAuth()` failed to type-check with a TS2322 error.
+
+- [#11654](https://github.com/better-auth/better-auth/pull/11654) [`1a9be41`](https://github.com/better-auth/better-auth/commit/1a9be41d184ee2fcbc7f39b1ef1ab5cb492f7147) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorized client owners can pause and resume an OAuth client by updating its `disabled` field through `adminUpdateOAuthClient`. A disabled client cannot obtain new tokens, and token introspection reports its existing tokens as inactive.
+
 ## 1.7.7
 
 ### Patch Changes
