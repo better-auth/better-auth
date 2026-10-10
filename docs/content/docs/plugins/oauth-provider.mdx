@@ -1706,9 +1706,7 @@ To set user-specific permissions and roles on tokens see [Claims](#claims).
 
 To determine whether a logged in user has the ability to perform specific actions in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or `clientReference`.
 
-The callback receives `clientId` for reads, updates, deletion, secret rotation, and client-credentials scope changes to an existing client. It is absent for creation, listing, and scope configuration during creation. Use it with a shared `clientReference` to apply per-client collaborator permissions within an organization.
-
-`clientId` is the requested OAuth `client_id`, so treat it as untrusted until you check your policy. Ordinary client CRUD checks ownership after the callback; returning `true` cannot grant a collaborator access to a user-owned client. The administrative scope-configuration action has its own privilege check and can operate across owners.
+The callback can only deny an action. Client CRUD still checks ownership after the callback, so returning `true` cannot give a user access to a client owned by another user or another `clientReference`. The one exception is scope configuration on another owner's client through `adminUpdateOAuthClient`: when the update changes only `client_credentials_scopes`, the callback's `update` and `configure-client-credentials-scopes` decisions authorize it without an ownership check.
 
 The following is a basic example that allows all OAuth Client CRUD actions for organization owners assuming ordinary users cannot create clients:
 
@@ -1720,6 +1718,24 @@ oauthProvider({
       headers,
     });
     return member.role === 'owner';
+  },
+})
+```
+
+For actions on an existing client (`read`, `update`, `delete`, `rotate`, and `configure-client-credentials-scopes`), the callback also receives `clientId`. It is absent for `create`, `list`, and scope configuration during creation. `clientId` is the `client_id` from the request, so the client may not exist and the value proves nothing about ownership.
+
+Use `clientId` to restrict individual clients among users who share a `clientReference`, such as the members of an organization. In this example, every member can read the organization's clients, but only a client's maintainers can change it. `getClientMaintainers` stands for your own lookup:
+
+```ts title="auth.ts"
+oauthProvider({
+  clientReference: ({ session }) => {
+    return (session?.activeOrganizationId as string | undefined) ?? undefined;
+  },
+  clientPrivileges: async ({ action, user, clientId }) => {
+    if (!user) return false;
+    if (!clientId || action === "read") return true;
+    const maintainers = await getClientMaintainers(clientId);
+    return maintainers.includes(user.id);
   },
 })
 ```
