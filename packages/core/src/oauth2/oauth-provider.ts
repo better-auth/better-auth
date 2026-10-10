@@ -30,6 +30,11 @@ export type OAuthIdTokenConfig =
 			/** Maximum token age passed to jose (e.g. `"1h"`). */
 			maxTokenAge?: string | undefined;
 			/**
+			 * Allowed clock skew when checking `exp`, `nbf`, and `iat`, passed to jose
+			 * (seconds, or a duration string such as `"5s"`). Defaults to no tolerance.
+			 */
+			clockTolerance?: (string | number) | undefined;
+			/**
 			 * How the `nonce` claim is compared to the expected nonce.
 			 * - `"exact"` (default): strict equality.
 			 * - `"exact-or-sha256"`: matches the raw nonce or its SHA-256 hex digest (Apple).

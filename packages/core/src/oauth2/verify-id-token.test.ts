@@ -197,6 +197,34 @@ describe("verifyProviderIdToken", () => {
 		).toBe(false);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11636
+	 */
+	it("honors clockTolerance for a token that is not valid yet", async () => {
+		const { jwks, sign } = await makeKeyset();
+		const token = await sign({
+			sub: "u1",
+			nbf: Math.floor(Date.now() / 1000) + 5,
+		});
+		expect(
+			await verifyProviderIdToken(
+				providerWith({ jwks, issuer: ISSUER, audience: AUDIENCE }),
+				token,
+			),
+		).toBe(false);
+		expect(
+			await verifyProviderIdToken(
+				providerWith({
+					jwks,
+					issuer: ISSUER,
+					audience: AUDIENCE,
+					clockTolerance: 10,
+				}),
+				token,
+			),
+		).toBe(true);
+	});
+
 	describe("provider regressions", () => {
 		it("PayPal no longer accepts client id_token sign-in", () => {
 			// Previously verifyIdToken returned true for any decodable token without
