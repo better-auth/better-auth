@@ -217,6 +217,30 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11613
+	 */
+	it("should reject a non-object session response", async () => {
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response("<!doctype html><html></html>", {
+						headers: { "content-type": "text/html" },
+					}),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const session = client.useSession();
+		await vi.runAllTimersAsync();
+
+		expect(session().data).toBeNull();
+		expect(session().error).toBeInstanceOf(TypeError);
+		expect(session().error?.message).toBe("Invalid session response");
+		expect(session().error?.status).toBe(200);
+	});
+
 	it("should preserve non-null session responses without a session object", async () => {
 		const client = createAuthClient({
 			plugins: [testClientPlugin()],
