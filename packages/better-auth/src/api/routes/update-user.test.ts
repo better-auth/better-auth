@@ -140,6 +140,149 @@ describe("updateUser", () => {
 		expect(signInCurrentPassword.data).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	describe("with revokeOtherSessions, when a step fails", () => {
+		async function setup(options?: Parameters<typeof getTestInstance>[0]) {
+			const instance = await getTestInstance(options);
+			const { headers } = await instance.signInWithTestUser();
+			const ctx = await instance.auth.$context;
+			const changePassword = () =>
+				instance.client.changePassword({
+					newPassword: "newPassword",
+					currentPassword: instance.testUser.password,
+					revokeOtherSessions: true,
+					fetchOptions: { headers },
+				});
+			const signInWith = (password: string) =>
+				instance.client.signIn.email({
+					email: instance.testUser.email,
+					password,
+				});
+			const getExistingSession = () =>
+				instance.auth.api.getSession({ headers });
+			return {
+				...instance,
+				ctx,
+				changePassword,
+				signInWith,
+				getExistingSession,
+			};
+		}
+
+		it("keeps the old password when revocation fails", async () => {
+			const { ctx, testUser, changePassword, signInWith, getExistingSession } =
+				await setup();
+			vi.spyOn(ctx.internalAdapter, "deleteUserSessions").mockRejectedValue(
+				new Error("session store unavailable"),
+			);
+
+			expect((await changePassword()).error?.status).toBe(500);
+			expect((await signInWith("newPassword")).error?.status).toBe(401);
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
+			expect(await getExistingSession()).not.toBeNull();
+		});
+
+		it("keeps existing sessions when the password write fails", async () => {
+			const { ctx, testUser, changePassword, signInWith, getExistingSession } =
+				await setup();
+			vi.spyOn(ctx.internalAdapter, "updateAccount").mockRejectedValue(
+				new Error("database unavailable"),
+			);
+
+			expect((await changePassword()).error?.status).toBe(500);
+			expect(await getExistingSession()).not.toBeNull();
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
+		});
+
+		it("keeps the old password and sessions when the replacement session cannot be created", async () => {
+			const { ctx, testUser, changePassword, signInWith, getExistingSession } =
+				await setup();
+			const createSession = vi
+				.spyOn(ctx.internalAdapter, "createSession")
+				.mockResolvedValue(null as never);
+
+			expect((await changePassword()).error?.status).toBe(500);
+			createSession.mockRestore();
+			expect(await getExistingSession()).not.toBeNull();
+			expect((await signInWith("newPassword")).error?.status).toBe(401);
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
+		});
+
+		it("keeps the old password when secondary storage cannot store the replacement session", async () => {
+			const store = new Map<string, string>();
+			let failWrites = false;
+			const { testUser, changePassword, signInWith } = await setup({
+				secondaryStorage: {
+					set(key, value) {
+						if (failWrites) throw new Error("storage unavailable");
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+			failWrites = true;
+
+			expect((await changePassword()).error?.status).toBe(500);
+			failWrites = false;
+			expect((await signInWith("newPassword")).error?.status).toBe(401);
+			expect((await signInWith(testUser.password)).data).not.toBeNull();
+		});
+
+		it("does not cache the replacement session when the transaction fails", async () => {
+			const store = new Map<string, string>();
+			const { ctx, changePassword } = await setup({
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+				session: { storeSessionInDatabase: true },
+			});
+			const transaction = ctx.adapter.transaction;
+			vi.spyOn(ctx.adapter, "transaction").mockImplementation(async (cb) => {
+				await transaction(cb);
+				throw new Error("commit failed");
+			});
+			const keysBefore = [...store.keys()].sort();
+
+			expect((await changePassword()).error?.status).toBe(500);
+			expect([...store.keys()].sort()).toEqual(keysBefore);
+		});
+	});
+
 	it("should update account's updatedAt when changing password", async () => {
 		const { client, sessionSetter, db } = await getTestInstance();
 		const newHeaders = new Headers();
