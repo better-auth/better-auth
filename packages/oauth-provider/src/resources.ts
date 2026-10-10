@@ -814,6 +814,20 @@ function buildSeedUpdate(
 const MISSING_TABLE_PATTERN =
 	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist/i;
 
+function isResourceStorageUnavailable(message: string, modelName: string): boolean {
+	const missingDrizzleSchemaModel =
+		message.includes(
+			`The model "${modelName}" was not found in the schema object`,
+		) ||
+		message.includes(
+			`The model "${modelName}s" was not found in the schema object`,
+		);
+	return (
+		MISSING_TABLE_PATTERN.test(message) ||
+		missingDrizzleSchemaModel
+	);
+}
+
 interface SeedState {
 	completed: boolean;
 	promise: Promise<void> | null;
@@ -878,9 +892,9 @@ export function resetSeedStateForTests(): void {
 export async function seedResources(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
-): Promise<void> {
+): Promise<boolean> {
 	const inputs = collectResourceInputs(opts);
-	if (inputs.length === 0) return;
+	if (inputs.length === 0) return true;
 
 	const mode = opts.resourceSeedMode ?? "insertOnly";
 	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
@@ -923,11 +937,11 @@ export async function seedResources(
 			});
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			if (MISSING_TABLE_PATTERN.test(message)) {
+			if (isResourceStorageUnavailable(message, modelName)) {
 				logger.debug(
-					"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
+					"oauth-provider: oauthResource storage is not ready; deferring resource seed to first access.",
 				);
-				return;
+				return false;
 			}
 			throw err;
 		}
@@ -950,11 +964,11 @@ export async function seedResources(
 					);
 					continue;
 				}
-				if (MISSING_TABLE_PATTERN.test(message)) {
+				if (isResourceStorageUnavailable(message, modelName)) {
 					logger.debug(
-						"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
+						"oauth-provider: oauthResource storage is not ready; deferring resource seed to first access.",
 					);
-					return;
+					return false;
 				}
 				throw err;
 			}
@@ -969,6 +983,7 @@ export async function seedResources(
 			update: buildSeedUpdate(input, mode, now),
 		});
 	}
+	return true;
 }
 
 /**
@@ -993,8 +1008,9 @@ export async function seedResourcesOnce(
 	if (state.completed === true) return;
 	if (state.promise !== null) return state.promise;
 	state.promise = seedResources(ctx, opts)
-		.then(() => {
-			state.completed = true;
+		.then((seeded) => {
+			state.completed = seeded;
+			if (!seeded) state.promise = null;
 		})
 		.catch((err) => {
 			// Reset so a later call can retry — transient errors shouldn't
