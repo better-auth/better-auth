@@ -194,6 +194,21 @@ Requests with a body may use `application/scim+json` or `application/json`. Resp
 
 The Enterprise User URI may be declared without an extension object, as Microsoft Entra does in some requests, and the declaration remains in the response. An Enterprise object without its URI is invalid. PATCH bodies must include `urn:ietf:params:scim:api:messages:2.0:PatchOp`. User and Group create or replace requests with unsupported or duplicate schema URNs return `400 Bad Request` with `scimType: "invalidValue"`.
 
+Attribute names are case-insensitive, as [RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643#section-2.1) requires. In User and Group HTTP requests, keys in `POST` and `PUT` bodies and in PATCH values match the declared attribute and subattribute names regardless of letter case, including the Enterprise User URI key. Responses use the declared names. A body or PATCH value that names the same attribute twice with different letter case, such as `active` and `Active`, returns `400 Bad Request` with `scimType: "invalidSyntax"`.
+
+### Null attribute values
+
+[RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643#section-2.5) treats a JSON `null` as an unassigned attribute. [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups) sends `null` for attributes that are not populated in the directory. User and Group HTTP requests handle `null` by where it appears:
+
+| Where `null` appears                                                                                                                                                             | Effect                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An attribute or subattribute in a `POST` or `PUT` body                                                                                                                           | Treated as omitted. A complex attribute whose subattributes are all `null` is omitted too. Because `PUT` replaces the resource, an omitted attribute is cleared. |
+| The `value` of a PATCH `add` or `replace` operation                                                                                                                              | Removes the target, like a `remove` operation on the same path.                                                                                                  |
+| A key in a PATCH value that merges into the stored value: a pathless value, `name`, the Enterprise extension, `manager`, or a filtered value such as `addresses[type eq "work"]` | Removes that attribute or subattribute after the operation's other keys apply. A `name.formatted` removal therefore uses the updated name parts.                 |
+| A subattribute of a value in a PATCH that adds or replaces whole values, such as `emails` or `addresses`                                                                         | Treated as omitted from that value.                                                                                                                              |
+
+`active: null` returns `400 Bad Request` in every request, because an omitted or removed `active` becomes `true` and would reactivate the User. In PATCH, a `null` on an attribute that cannot be removed, such as User `userName` or `emails` or Group `displayName`, fails the same way a `remove` operation does. In `POST` and `PUT` bodies, a required attribute sent as `null` is reported as missing. A `null` on a read-only subattribute such as `manager.displayName` is ignored. `null` entries inside an array are kept and fail validation.
+
 ### Microsoft Entra Group compatibility
 
 Microsoft's classic Entra provisioning client includes the attribute-less URI `http://schemas.microsoft.com/2006/11/ResourceManagement/ADSCIM/2.0/Group` in some `POST /Groups` schema lists. Enable the exact, input-only exception when that client targets the endpoint:
@@ -215,31 +230,31 @@ The plugin passes Microsoft's [Entra SCIM Validator](https://learn.microsoft.com
 
 ## Users
 
-| Method   | Path                     | Result                                                                                 |
-| -------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `POST`   | `/scim/v2/Users`         | Creates a SCIM User and creates or explicitly links a Better Auth User. Returns `201`. |
-| `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                               |
-| `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                              |
-| `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.         |
-| `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `200` with the updated resource.              |
-| `DELETE` | `/scim/v2/Users/:userId` | Deletes the SCIM resource while preserving the Better Auth User. Returns `204`.        |
+| Method   | Path                     | Result                                                                                                                                              |
+| -------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/scim/v2/Users`         | Creates a SCIM User and creates or explicitly links a Better Auth User, or reprovisions an inactive User with the same `externalId`. Returns `201`. |
+| `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                                                                                            |
+| `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                                                                                           |
+| `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.                                                                      |
+| `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `200` with the updated resource.                                                                           |
+| `DELETE` | `/scim/v2/Users/:userId` | Deletes the SCIM resource while preserving the Better Auth User. Returns `204`.                                                                     |
 
 Deleting a User also removes its direct Group memberships and projected grants, updates the affected Groups, and reconciles lifecycle and access state. When `externalId` is present, the plugin preserves the link needed to attach a later reprovisioned resource to the same Better Auth User.
 
 ### Supported User attributes
 
-| Attribute                                                         | Behavior                                                                                    |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `userName`                                                        | Required and unique case-insensitively within the connection. Supplied casing is preserved. |
-| `externalId`                                                      | Optional and unique exactly as supplied within the connection.                              |
-| `active`                                                          | Optional lifecycle state. Defaults to `true`.                                               |
-| `displayName`                                                     | Optional display name. The plugin derives a value when omitted.                             |
-| `name.formatted`, `name.givenName`, `name.familyName`             | Optional name fields. The plugin derives `formatted` when omitted.                          |
-| `name.middleName`, `name.honorificPrefix`, `name.honorificSuffix` | Optional classic name fields.                                                               |
-| `emails`                                                          | Up to 20 typed email values, each no longer than 254 characters.                            |
-| `title`, `userType`, `preferredLanguage`, `locale`, `timezone`    | Optional classic User strings.                                                              |
-| `phoneNumbers`, `addresses`, `roles`, `entitlements`              | Optional bounded multi-valued attributes. At most 1 value in each attribute may be primary. |
-| `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`      | Optional standard Enterprise User extension described below.                                |
+| Attribute                                                         | Behavior                                                                                                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `userName`                                                        | Required and unique case-insensitively within the connection. Supplied casing is preserved.                                                 |
+| `externalId`                                                      | Optional and unique exactly as supplied within the connection. Creating a User with an inactive User's `externalId` reprovisions that User. |
+| `active`                                                          | Optional lifecycle state. Defaults to `true`.                                                                                               |
+| `displayName`                                                     | Optional display name. The plugin derives a value when omitted.                                                                             |
+| `name.formatted`, `name.givenName`, `name.familyName`             | Optional name fields. The plugin derives `formatted` when omitted.                                                                          |
+| `name.middleName`, `name.honorificPrefix`, `name.honorificSuffix` | Optional classic name fields.                                                                                                               |
+| `emails`                                                          | Up to 20 typed email values, each no longer than 254 characters.                                                                            |
+| `title`, `userType`, `preferredLanguage`, `locale`, `timezone`    | Optional classic User strings.                                                                                                              |
+| `phoneNumbers`, `addresses`, `roles`, `entitlements`              | Optional bounded multi-valued attributes. At most 1 value in each attribute may be primary.                                                 |
+| `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`      | Optional standard Enterprise User extension described below.                                                                                |
 
 RFC 7643 defines `active` as a JSON Boolean, and SCIM examples, discovery, responses, callbacks, and persisted values remain Boolean. As a narrow Microsoft Entra interoperability exception, the HTTP ingress for User `POST`, `PUT`, and `PATCH` also accepts the exact case-insensitive strings `"true"` and `"false"` for `active`, including pathless and core-schema-qualified PATCH operations. Other strings, surrounding whitespace, numbers, `null`, arrays, and objects are not coerced and return `400 Bad Request`. This normalization does not apply to Groups or unrelated attributes.
 
@@ -369,7 +384,7 @@ Operations run in array order and accept case-insensitive `add`, `replace`, and 
 
 In this table, `enterpriseUrn` is `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`.
 
-User paths may include the core User schema prefix. An `add` or `replace` operation may omit `path` and provide an object of writable attributes, including flat Enterprise URI keys. Unfiltered `replace` adds a missing target. `id`, `schemas`, `meta`, and `manager.displayName` are read-only.
+User paths may include the core User schema prefix. An `add` or `replace` operation may omit `path` and provide an object of writable attributes, including flat Enterprise URI keys. Unfiltered `replace` adds a missing target. `id`, `schemas`, `meta`, and `manager.displayName` are read-only. A `null` value removes its target, as described in [Null attribute values](#null-attribute-values).
 
 When a filtered value path such as `phoneNumbers[type eq "work"].value` matches no stored value, Better Auth creates the value with the filtered `type` or `primary` stamped on it instead of returning the [RFC 7644](https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2.3) `noTarget` error. [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups) sends these operations for attributes that are not populated yet, and because PATCH is atomic, rejecting one of them would also discard every other operation in the same request. A created email is never primary, so a filter miss cannot move the sign-in address. A `remove` on a filtered path that matches nothing stays a no-op, and a `remove` without a path still returns `noTarget`.
 
@@ -384,7 +399,7 @@ When a filtered value path such as `phoneNumbers[type eq "work"].value` matches 
 | `members`                            | `remove`                   | Clears all members when no value is supplied, or removes the supplied references. |
 | `members[value eq "<scim-user-id>"]` | `remove`                   | Removes one User reference.                                                       |
 
-Group paths may include the core Group schema prefix. An `add` or `replace` operation may omit `path` and provide an object with `displayName`, `externalId`, or `members`.
+Group paths may include the core Group schema prefix. An `add` or `replace` operation may omit `path` and provide an object with `displayName`, `externalId`, or `members`. A `null` value removes its target, as described in [Null attribute values](#null-attribute-values).
 
 ## Identity callbacks
 
