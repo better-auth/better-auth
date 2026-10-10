@@ -128,6 +128,7 @@ out
 # Nuxt.js build / generate output
 
 .nuxt
+.svelte-kit
 dist
 
 # Gatsby files

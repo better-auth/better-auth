@@ -1262,6 +1262,47 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11642
+	 */
+	it("keeps a secondary-only session write inside the transaction even when deferral is requested", async () => {
+		const testMap = new Map<string, string>();
+		const secondaryStorage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...secondaryStorage,
+				set: async () => {
+					throw new Error("secondary storage unavailable");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				const user = await testCtx.internalAdapter.createUser(
+					{
+						name: "rolled-back-user",
+						email: "rolled-back@example.com",
+					},
+					{ method: "test" },
+				);
+				await testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				);
+			}),
+		).rejects.toThrow("secondary storage unavailable");
+		expect(
+			await testCtx.internalAdapter.findUserByEmail("rolled-back@example.com"),
+		).toBeNull();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
 	 */
 	it("preserves sessions created after user session deletion is requested", async () => {
