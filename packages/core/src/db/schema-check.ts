@@ -72,6 +72,16 @@ export function runtimeSchemaCheckFor(
 }
 
 /**
+ * Default timeout for database schema validation (5 seconds).
+ * Prevents isolate deadlocks in serverless runtimes when initial requests are cancelled.
+ */
+export const DEFAULT_SCHEMA_CHECK_TIMEOUT_MS = 5000;
+
+export interface SchemaCheckOptions {
+	timeoutMs?: number;
+}
+
+/**
  * Turns a schema comparison into a check shared by one adapter instance.
  *
  * The first call runs `find` and every concurrent call shares that promise. A
@@ -96,7 +106,9 @@ export function createSchemaCheck(
 	find: () => Awaitable<SchemaFinding[]>,
 	source: SchemaSource,
 	database?: object,
+	options?: SchemaCheckOptions,
 ): SchemaCheck {
+	const timeoutMs = options?.timeoutMs ?? DEFAULT_SCHEMA_CHECK_TIMEOUT_MS;
 	let revision = database ? schemaRevisions.get(database) : undefined;
 	if (database && !revision) {
 		revision = { value: 0 };
@@ -115,20 +127,37 @@ export function createSchemaCheck(
 			verdict = undefined;
 		}
 		if (clean) return;
-		return (verdict ??= Promise.resolve()
+		if (verdict !== undefined) return verdict;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timer = setTimeout(() => {
+				reject(
+					new Error(
+						`Database schema validation timed out after ${timeoutMs}ms`,
+					),
+				);
+			}, timeoutMs);
+		});
+		const executeFind = Promise.resolve()
 			.then(find)
-			.then(
-				(findings) => {
-					if (revision?.value !== currentRevision) return checkSchema();
-					if (findings.length) throw new SchemaMismatchError(findings, source);
-					if (checkedRevision === currentRevision) clean = true;
-				},
-				(error: unknown) => {
-					if (revision?.value !== currentRevision) return checkSchema();
-					if (checkedRevision === currentRevision) verdict = undefined;
-					throw error;
-				},
-			));
+			.finally(() => {
+				if (timer !== undefined) {
+					clearTimeout(timer);
+				}
+			});
+
+		return (verdict ??= Promise.race([executeFind, timeoutPromise]).then(
+			(findings) => {
+				if (revision?.value !== currentRevision) return checkSchema();
+				if (findings.length) throw new SchemaMismatchError(findings, source);
+				if (checkedRevision === currentRevision) clean = true;
+			},
+			(error: unknown) => {
+				if (revision?.value !== currentRevision) return checkSchema();
+				if (checkedRevision === currentRevision) verdict = undefined;
+				throw error;
+			},
+		));
 	};
 	checkSchema.source = source;
 	return checkSchema;
