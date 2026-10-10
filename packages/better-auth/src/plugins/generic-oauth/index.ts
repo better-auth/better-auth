@@ -245,6 +245,7 @@ export const genericOAuth = <const ID extends string>(
 								issuer: discovered.issuer,
 								audience: c.clientId,
 								algorithms: isOidc ? signingAlgs : undefined,
+								clockTolerance: c.idTokenClockTolerance,
 							};
 						}
 					}

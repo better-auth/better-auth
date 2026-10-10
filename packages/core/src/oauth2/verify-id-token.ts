@@ -97,6 +97,7 @@ export async function verifyProviderIdToken(
 			audience: config.audience,
 			algorithms: config.algorithms ?? (alg ? [alg] : undefined),
 			maxTokenAge: config.maxTokenAge,
+			clockTolerance: config.clockTolerance,
 		});
 		if (
 			nonce &&
