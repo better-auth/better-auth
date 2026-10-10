@@ -15,6 +15,9 @@ import { describe, expectTypeOf, it } from "vitest";
 type ClientPrivilegeAction = Parameters<
 	NonNullable<OAuthOptions["clientPrivileges"]>
 >[0]["action"];
+type ClientPrivilegeContext = Parameters<
+	NonNullable<OAuthOptions["clientPrivileges"]>
+>[0];
 
 describe("public oauth-provider types", () => {
 	it("exports the signed-query verifier with a server-side secret", () => {
@@ -75,5 +78,8 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<SchemaClient>().not.toHaveProperty("type");
 		expectTypeOf<"configure-client-credentials-scopes">().toMatchTypeOf<ClientPrivilegeAction>();
 		expectTypeOf<"configure-client-credentials">().not.toMatchTypeOf<ClientPrivilegeAction>();
+		expectTypeOf<ClientPrivilegeContext["clientId"]>().toEqualTypeOf<
+			string | undefined
+		>();
 	});
 });

@@ -25,6 +25,7 @@ export async function assertClientPrivileges(
 		| "list"
 		| "rotate"
 		| "configure-client-credentials-scopes",
+	clientId?: string,
 ) {
 	if (!session) throw new APIError("UNAUTHORIZED");
 	if (!ctx.headers) throw new APIError("BAD_REQUEST");
@@ -41,6 +42,7 @@ export async function assertClientPrivileges(
 			action,
 			session: session.session,
 			user: session.user,
+			clientId,
 		}))
 	) {
 		throw new APIError("UNAUTHORIZED");
