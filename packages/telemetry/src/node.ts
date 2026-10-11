@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
@@ -18,41 +19,38 @@ export { getTelemetryAuthConfig };
 
 // --- Node-specific: package.json reading ---
 
-let packageJSONCache: PackageJson | undefined;
+let packageJSONCache: { cwd: string; data: PackageJson } | undefined;
 
 async function readRootPackageJson(): Promise<PackageJson | undefined> {
-	if (packageJSONCache) return packageJSONCache;
+	const cwd = process.cwd();
+	if (!cwd) return undefined;
+	if (packageJSONCache && packageJSONCache.cwd === cwd) {
+		return packageJSONCache.data;
+	}
 	try {
-		const cwd = process.cwd();
-		if (!cwd) return undefined;
-		const raw = await fsPromises.readFile(
-			path.join(cwd, "package.json"),
-			"utf-8",
-		);
-		packageJSONCache = JSON.parse(raw);
-		return packageJSONCache as PackageJson;
+		const req = createRequire(path.join(cwd, "index.js"));
+		const resolved = req.resolve("./package.json");
+		const raw = await fsPromises.readFile(resolved, "utf-8");
+		const json = JSON.parse(raw) as PackageJson;
+		packageJSONCache = { cwd, data: json };
+		return json;
 	} catch {}
 	return undefined;
 }
 
-async function getPackageVersion(pkg: string): Promise<string | undefined> {
-	if (packageJSONCache) {
-		return (packageJSONCache.dependencies?.[pkg] ||
-			packageJSONCache.devDependencies?.[pkg] ||
-			packageJSONCache.peerDependencies?.[pkg]) as string | undefined;
-	}
-
+export async function getPackageVersion(
+	pkg: string,
+): Promise<string | undefined> {
 	try {
 		const cwd = process.cwd();
-		if (!cwd) throw new Error("no-cwd");
-		const pkgJsonPath = path.join(cwd, "node_modules", pkg, "package.json");
-		const raw = await fsPromises.readFile(pkgJsonPath, "utf-8");
+		if (!cwd) return undefined;
+		const req = createRequire(path.join(cwd, "index.js"));
+		const resolved = req.resolve(`${pkg}/package.json`);
+		const raw = await fsPromises.readFile(resolved, "utf-8");
 		const json = JSON.parse(raw);
-		const resolved =
-			(json.version as string) ||
-			(await getVersionFromLocalPackageJson(pkg)) ||
-			undefined;
-		return resolved;
+		if (typeof json?.version === "string" && json.version) {
+			return json.version;
+		}
 	} catch {}
 
 	return getVersionFromLocalPackageJson(pkg);
