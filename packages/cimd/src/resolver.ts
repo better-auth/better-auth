@@ -10,6 +10,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
+	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
 	persistMetadataDocumentClient,
 } from "./client-store";
@@ -17,6 +18,13 @@ import type { CimdOptions } from "./types";
 import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 
 const FETCH_BUDGET_WINDOW_MS = 60_000;
+// A deduplicated in-flight resolution must never outlive the library's own
+// fetch bound: FETCH_TIMEOUT_MS for the fetch itself, plus headroom for
+// validation and persistence before the resolution settles. The race below
+// enforces this bound on the shared promise, and the lazy expiry eviction in
+// the resolver entry point is the second line of defense for runtimes where
+// the caller's cancellation can invalidate timers along with the transport.
+const IN_FLIGHT_RESOLUTION_MAX_AGE_MS = FETCH_TIMEOUT_MS + 1_000;
 const DEFAULT_METADATA_FETCH_POLICY = {
 	minimumFetchInterval: 1,
 	maximumConcurrentFetches: 16,
@@ -291,6 +299,37 @@ function createCacheEntry(
 }
 
 /**
+ * Bound how long any caller waits on a shared in-flight resolution.
+ *
+ * The bound is enforced with a timer created in the calling request's own
+ * context and always cleared once the race settles, so it cannot leak the
+ * event loop on runtimes where the timer would otherwise outlive the
+ * request. The rejection uses `temporarily_unavailable` because a timed-out
+ * in-flight resolution is a server-side wedge, not a problem with the
+ * client's metadata document.
+ */
+function boundInFlightResolution(
+	resolution: Promise<SchemaClient<Scope[]> | null>,
+): Promise<SchemaClient<Scope[]> | null> {
+	let cancelBound = () => {};
+	const bound = Promise.race([
+		resolution,
+		new Promise<never>((_resolve, reject) => {
+			const timer = setTimeout(() => {
+				reject(
+					createMetadataFetchUnavailableError(
+						`Timed out waiting for an in-flight metadata document resolution after ${IN_FLIGHT_RESOLUTION_MAX_AGE_MS}ms`,
+					),
+				);
+			}, IN_FLIGHT_RESOLUTION_MAX_AGE_MS);
+			cancelBound = () => clearTimeout(timer);
+		}),
+	]);
+	void bound.then(cancelBound, cancelBound);
+	return bound;
+}
+
+/**
  * Build the resolver for one plugin-owned CIMD metadata cache.
  *
  * The cache lives in this closure, so separate `cimd()` plugin instances never
@@ -309,7 +348,11 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
 	const inFlightResolutionByClientId = new Map<
 		string,
-		Promise<SchemaClient<Scope[]> | null>
+		{
+			resolution: Promise<SchemaClient<Scope[]> | null>;
+			startedAtMs: number;
+			releaseMetadataFetchPermit: () => void;
+		}
 	>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
 	const fetchStateByOrigin = new Map<string, OriginFetchState>();
@@ -490,8 +533,37 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			);
 		}
 
+		// Reclaim in-flight entries that outlived the library's own fetch
+		// bound. On runtimes that tie timers and I/O to the incoming request
+		// (e.g. Cloudflare Workers), cancelling the request that started a
+		// resolution can leave both the underlying fetch and the originator's
+		// own bound dead: the resolution promise never settles, so its cleanup
+		// never runs. Left alone, such a wedge holds a fetch permit forever
+		// and starves the global concurrency budget for every other client,
+		// so sweep expired entries on every resolution attempt. The release
+		// closure is idempotent, so a late settlement releasing a swept
+		// permit again is a no-op.
+		for (const [
+			staleClientId,
+			staleResolution,
+		] of inFlightResolutionByClientId) {
+			if (
+				nowMs - staleResolution.startedAtMs >
+				IN_FLIGHT_RESOLUTION_MAX_AGE_MS
+			) {
+				inFlightResolutionByClientId.delete(staleClientId);
+				staleResolution.releaseMetadataFetchPermit();
+			}
+		}
+
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
-		if (inFlightResolution) return inFlightResolution;
+		if (inFlightResolution) {
+			// Join the shared resolution, but bound the wait in *this*
+			// request's context: the originator's own bound may already be
+			// dead (see the sweep above), and no caller may hang past the
+			// library's fetch bound on the runtime it actually runs on.
+			return await boundInFlightResolution(inFlightResolution.resolution);
+		}
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
 		const resolution = (async () => {
@@ -549,18 +621,32 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			lastFetchStartAtMsByClientId.delete(clientId);
 			return storedClient;
 		})();
-		inFlightResolutionByClientId.set(clientId, resolution);
+		inFlightResolutionByClientId.set(clientId, {
+			resolution,
+			startedAtMs: nowMs,
+			releaseMetadataFetchPermit,
+		});
+		// Clean up when the shared resolution settles, not only when this
+		// caller's continuation resumes: a cancelled request may never resume
+		// even though the resolution itself settled. Every cleanup path here
+		// is idempotent, so double cleanup is harmless.
+		const cleanupInFlightEntry = () => {
+			if (
+				inFlightResolutionByClientId.get(clientId)?.resolution === resolution
+			) {
+				inFlightResolutionByClientId.delete(clientId);
+			}
+			releaseMetadataFetchPermit();
+		};
+		void resolution.then(cleanupInFlightEntry, cleanupInFlightEntry);
 		try {
-			return await resolution;
+			return await boundInFlightResolution(resolution);
 		} catch (error) {
 			lastFetchStartAtMsByClientId.delete(clientId);
 			lastFetchStartAtMsByClientId.set(clientId, Date.now());
 			throw error;
 		} finally {
-			if (inFlightResolutionByClientId.get(clientId) === resolution) {
-				inFlightResolutionByClientId.delete(clientId);
-			}
-			releaseMetadataFetchPermit();
+			cleanupInFlightEntry();
 		}
 	};
 }
