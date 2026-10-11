@@ -1724,7 +1724,7 @@ oauthProvider({
 
 For actions on an existing client (`read`, `update`, `delete`, `rotate`, and `configure-client-credentials-scopes`), the callback also receives `clientId`. It is absent for `create`, `list`, and scope configuration during creation. `clientId` is the `client_id` from the request, so the client may not exist and the value proves nothing about ownership.
 
-Use `clientId` to restrict individual clients among users who share a `clientReference`, such as the members of an organization. In this example, every member can read the organization's clients, but only a client's maintainers can change it. `getClientMaintainers` stands for your own lookup:
+Use `clientId` to restrict individual clients among users who share a `clientReference`, such as the members of an organization. In this example, every member can create, list, and read the organization's clients, but only a client's maintainers can change it or configure its scopes. `getClientMaintainers` stands for your own lookup:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1733,7 +1733,11 @@ oauthProvider({
   },
   clientPrivileges: async ({ action, user, clientId }) => {
     if (!user) return false;
-    if (!clientId || action === "read") return true;
+    if (action === "create" || action === "list" || action === "read") {
+      return true;
+    }
+    // Scope configuration during creation has no client ID, so deny it here.
+    if (!clientId) return false;
     const maintainers = await getClientMaintainers(clientId);
     return maintainers.includes(user.id);
   },
