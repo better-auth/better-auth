@@ -2,10 +2,23 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
+import { parseSessionOutput, parseUserOutput } from "better-auth/db";
+import {
+	createDpopReplayStore,
+	getConfirmationJkt,
+	isDpopProofError,
+	verifyDpopProof,
+} from "better-auth/oauth2";
 import * as z from "zod";
+import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import { decodeRefreshToken } from "./token";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
-import { getStoredToken, parseBearerToken, storeToken } from "./utils";
+import {
+	getClient,
+	getStoredToken,
+	parseBearerToken,
+	storeToken,
+} from "./utils";
 
 const DEFAULT_SESSION_CODE_EXPIRES_IN = 180;
 const SESSION_CODE_PREFIX = "oauth-session-code:";
@@ -60,6 +73,40 @@ async function findLiveRefreshToken(
 	if (!refreshToken?.userId) return null;
 	if (refreshToken.revoked) return null;
 	if (new Date(refreshToken.expiresAt).getTime() <= Date.now()) return null;
+
+	const client = await getClient(ctx, opts, refreshToken.clientId);
+	if (!client || client.disabled) return null;
+
+	const boundJkt = getConfirmationJkt(refreshToken.confirmation);
+	if (boundJkt) {
+		const proofJwt = getDpopProofJwt(ctx);
+		if (!proofJwt) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_dpop_proof",
+				error_description: "DPoP proof header is required",
+			});
+		}
+		try {
+			await verifyDpopProof({
+				proofJwt,
+				method: "POST",
+				url: getEndpointUrl(ctx, "/oauth2/session-code"),
+				expectedJkt: boundJkt,
+				proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+				signingAlgorithms: opts.dpop?.signingAlgorithms,
+				replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			});
+		} catch (error) {
+			if (isDpopProofError(error)) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_dpop_proof",
+					error_description: error.message,
+				});
+			}
+			throw error;
+		}
+	}
+
 	return refreshToken;
 }
 
@@ -166,7 +213,11 @@ export function createSessionCodeEndpoints(opts: OAuthOptions<Scope[]>) {
 				}
 
 				await setSessionCookie(ctx, { session, user });
-				return ctx.json({ token: session.token, user, session });
+				return ctx.json({
+					token: session.token,
+					user: parseUserOutput(ctx.context.options, user),
+					session: parseSessionOutput(ctx.context.options, session),
+				});
 			},
 		),
 	};
