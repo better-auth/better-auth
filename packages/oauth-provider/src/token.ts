@@ -532,14 +532,21 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
-	const revokedAt = new Date();
+	// A concurrent rotation can stamp `rotatedAt` while this write is in flight.
+	// A clock a minute ahead still lands after that stamp, and clearing the
+	// replay cache stops the old token from returning the cached successor.
+	const revokedAt = new Date(Date.now() + 60_000);
 	await ctx.context.adapter.updateMany({
 		model: "oauthRefreshToken",
 		where: [
 			{ field: "clientId", value: clientId },
 			{ field: "userId", value: userId },
 		],
-		update: { revoked: revokedAt },
+		update: {
+			revoked: revokedAt,
+			rotationReplayExpiresAt: null,
+			rotationReplayResponse: null,
+		},
 	});
 
 	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
@@ -727,6 +734,11 @@ async function createRefreshToken(
 		where: [{ field: "id", value: originalRefresh.id }],
 	});
 	if (familyWasInvalidatedAfterRotation(parent)) {
+		await ctx.context.adapter.update({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+			update: { revoked: new Date() },
+		});
 		await ctx.context.adapter.delete({
 			model: "oauthRefreshToken",
 			where: [{ field: "id", value: refreshToken.id }],
@@ -1345,6 +1357,28 @@ async function createUserTokens(
 					)
 				: undefined,
 	]);
+
+	// Family invalidation can remove the successor after it is inserted and
+	// before this access row is written. Drop that access row if the refresh
+	// row is already gone or revoked.
+	if (earlyRefreshToken?.id) {
+		const liveRefresh = await ctx.context.adapter.findOne<{
+			revoked?: Date | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: earlyRefreshToken.id }],
+		});
+		if (!liveRefresh || liveRefresh.revoked) {
+			await ctx.context.adapter.deleteMany({
+				model: "oauthAccessToken",
+				where: [{ field: "refreshId", value: earlyRefreshToken.id }],
+			});
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid refresh token",
+				error: "invalid_grant",
+			});
+		}
+	}
 
 	// ID token created after access token so at_hash can be computed
 	const idToken = isIdToken
