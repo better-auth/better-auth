@@ -78,6 +78,8 @@ async function findLiveRefreshToken(
 	if (!client || client.disabled) return null;
 
 	const boundJkt = getConfirmationJkt(refreshToken.confirmation);
+	// mTLS `cnf.x5t#S256` is a sender constraint this endpoint cannot check.
+	if (refreshToken.confirmation && !boundJkt) return null;
 	if (boundJkt) {
 		const proofJwt = getDpopProofJwt(ctx);
 		if (!proofJwt) {
