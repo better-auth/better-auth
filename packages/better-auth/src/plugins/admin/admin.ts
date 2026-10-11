@@ -166,7 +166,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		$Infer: {
-			User: {} as UserWithRole,
+			User: {} as UserWithRole<O>,
 		},
 		schema: mergeSchema(schema, opts.schema),
 		options: options as NoInfer<O>,
