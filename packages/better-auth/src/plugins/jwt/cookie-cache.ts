@@ -74,12 +74,21 @@ async function importLocalPublicKey(
 }
 
 const REMOTE_JWKS_CACHE_MS = 10 * 60 * 1000;
+const REMOTE_JWKS_CACHE_LIMIT = 32;
 const remoteJwks = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 function remoteJwkSet(url: string) {
 	const cached = remoteJwks.get(url);
 	if (cached) {
+		remoteJwks.delete(url);
+		remoteJwks.set(url, cached);
 		return cached;
+	}
+	if (remoteJwks.size >= REMOTE_JWKS_CACHE_LIMIT) {
+		const oldest = remoteJwks.keys().next().value;
+		if (oldest) {
+			remoteJwks.delete(oldest);
+		}
 	}
 	const set = createRemoteJWKSet(new URL(url), {
 		cacheMaxAge: REMOTE_JWKS_CACHE_MS,
@@ -154,22 +163,23 @@ async function verifyCookieCacheJWT(
 				issuer: getCookieCacheJwtIssuer(ctx),
 			}),
 		};
-		const { payload } = options?.jwks?.remoteUrl
-			? await jwtVerify(
-					token,
-					remoteJwkSet(options.jwks.remoteUrl),
-					verifyOptions,
-				)
-			: await (async () => {
-					const key = await importLocalPublicKey(ctx, token, options);
-					if (!key) {
-						return { payload: null };
-					}
-					return jwtVerify(token, key.publicKey, {
-						...verifyOptions,
-						algorithms: [key.alg],
-					});
-				})();
+		const { payload } =
+			options?.jwks?.remoteUrl && options?.jwt?.sign
+				? await jwtVerify(
+						token,
+						remoteJwkSet(options.jwks.remoteUrl),
+						verifyOptions,
+					)
+				: await (async () => {
+						const key = await importLocalPublicKey(ctx, token, options);
+						if (!key) {
+							return { payload: null };
+						}
+						return jwtVerify(token, key.publicKey, {
+							...verifyOptions,
+							algorithms: [key.alg],
+						});
+					})();
 		if (!payload) {
 			return null;
 		}
