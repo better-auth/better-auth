@@ -946,7 +946,11 @@ export interface OAuthOptions<
 		/**
 		 * The `client_id` from the request, for actions on an existing client.
 		 * Absent for `create`, `list`, and scope configuration during creation.
-		 * The client may not exist, and ownership is checked after this callback.
+		 * The client may not exist, and this value does not establish ownership.
+		 * Client CRUD enforces ownership except when `adminUpdateOAuthClient`
+		 * changes only `client_credentials_scopes`: the `update` and
+		 * `configure-client-credentials-scopes` decisions can authorize access
+		 * to another owner's client.
 		 */
 		clientId?: string;
 	}) => Awaitable<boolean | undefined>;
