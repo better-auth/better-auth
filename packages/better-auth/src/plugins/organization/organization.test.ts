@@ -1197,6 +1197,159 @@ describe("organization", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10835
+	 */
+	it("should synchronize activeOrganizationId in cookie cache when cookieCache is enabled", async () => {
+		const { auth, client, signInWithTestUser, cookieSetter } =
+			await getTestInstance(
+				{
+					plugins: [
+						organization({
+							async sendInvitationEmail() {},
+						}),
+					],
+					session: {
+						cookieCache: {
+							enabled: true,
+						},
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [organizationClient()],
+					},
+				},
+			);
+
+		const { headers: userHeaders } = await signInWithTestUser();
+
+		const org1 = await client.organization.create({
+			name: "Cache Org 1",
+			slug: `cache-org-1-${crypto.randomUUID()}`,
+			fetchOptions: {
+				headers: userHeaders,
+				onResponse(context) {
+					cookieSetter(userHeaders)(context);
+				},
+			},
+		});
+		expect(org1.data).toBeDefined();
+
+		const org2 = await client.organization.create({
+			name: "Cache Org 2",
+			slug: `cache-org-2-${crypto.randomUUID()}`,
+			keepCurrentActiveOrganization: true,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(org2.data).toBeDefined();
+
+		const beforeSwitchSession = await client.getSession({
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(beforeSwitchSession.data?.session.activeOrganizationId).toBe(
+			org1.data!.id,
+		);
+
+		let setActiveCookieHeader: string | null = null;
+		const setActiveRes = await client.organization.setActive({
+			organizationId: org2.data!.id,
+			fetchOptions: {
+				headers: userHeaders,
+				onResponse(context) {
+					setActiveCookieHeader = context.response.headers.get("set-cookie");
+					cookieSetter(userHeaders)(context);
+				},
+			},
+		});
+		expect(setActiveRes.data).toBeDefined();
+		expect(setActiveCookieHeader).toBeTruthy();
+
+		const setActiveCookies = parseSetCookieHeader(setActiveCookieHeader || "");
+		expect(
+			setActiveCookies.get("better-auth.session_data")?.value,
+		).toBeDefined();
+
+		const clientSession = await client.getSession({
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(clientSession.data?.session.activeOrganizationId).toBe(
+			org2.data!.id,
+		);
+
+		const apiSession = await auth.api.getSession({
+			headers: userHeaders,
+		});
+		expect(apiSession?.session.activeOrganizationId).toBe(org2.data!.id);
+
+		const memberEmail = `member-${crypto.randomUUID()}@example.com`;
+		const memberHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: memberEmail,
+				password: "password123",
+				name: "Member User",
+			},
+			{
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		);
+
+		const beforeAcceptSession = await client.getSession({
+			fetchOptions: {
+				headers: memberHeaders,
+			},
+		});
+		expect(beforeAcceptSession.data?.session.activeOrganizationId).toBeNull();
+
+		const inviteRes = await client.organization.inviteMember({
+			organizationId: org1.data!.id,
+			email: memberEmail,
+			role: "member",
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(inviteRes.data).toBeDefined();
+
+		let acceptCookieHeader: string | null = null;
+		const acceptRes = await client.organization.acceptInvitation({
+			invitationId: inviteRes.data!.id,
+			fetchOptions: {
+				headers: memberHeaders,
+				onResponse(context) {
+					acceptCookieHeader = context.response.headers.get("set-cookie");
+					cookieSetter(memberHeaders)(context);
+				},
+			},
+		});
+		expect(acceptRes.data?.invitation.status).toBe("accepted");
+		expect(acceptCookieHeader).toBeTruthy();
+
+		const acceptCookies = parseSetCookieHeader(acceptCookieHeader || "");
+		expect(acceptCookies.get("better-auth.session_data")?.value).toBeDefined();
+
+		const memberSession = await client.getSession({
+			fetchOptions: {
+				headers: memberHeaders,
+			},
+		});
+		expect(memberSession.data?.session.activeOrganizationId).toBe(
+			org1.data!.id,
+		);
+
+		const memberApiSession = await auth.api.getSession({
+			headers: memberHeaders,
+		});
+		expect(memberApiSession?.session.activeOrganizationId).toBe(org1.data!.id);
+	});
+
 	it("should allow getting a member", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.setActive({
@@ -3768,7 +3921,28 @@ describe("Additional Fields", async () => {
 	});
 
 	it("remove member", async () => {
-		if (!org) return;
+		if (!org) {
+			const orgRes = await auth.api.createOrganization({
+				body: {
+					name: "test",
+					slug: "test",
+					someRequiredField: "hey",
+					someOptionalField: "hey",
+				},
+				headers,
+			});
+			org = orgRes!;
+			await auth.api.addMember({
+				body: {
+					organizationId: org.id,
+					userId: addedMember.user.id,
+					role: "member",
+					memberRequiredField: "hey",
+					memberOptionalField: "hey2",
+				},
+			});
+		}
+		expect(org).toBeDefined();
 		const removedMember = await auth.api.removeMember({
 			body: {
 				organizationId: org.id,
