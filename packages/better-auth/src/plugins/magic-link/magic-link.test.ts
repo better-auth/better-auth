@@ -600,6 +600,91 @@ describe("magic link verify origin validation", async () => {
 		);
 	});
 
+	it("should preserve encoded values in newUserCallbackURL queries", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const newUserCallbackURL =
+			"/after-sign-up?next=https%3A%2F%2Fexample.com%2Fcallback";
+		const { client, customFetchImpl } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							verificationEmail = data;
+						},
+					}),
+				],
+				advanced: {
+					disableOriginCheck: false,
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.signIn.magicLink({
+			email: "new-user@example.com",
+			newUserCallbackURL,
+		});
+
+		const response = await customFetchImpl(verificationEmail.url);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe(
+			`http://localhost:3000${newUserCallbackURL}`,
+		);
+	});
+
+	it("should preserve encoded values in errorCallbackURL queries", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const errorCallbackURL =
+			"/magic-link-error?next=https%3A%2F%2Fexample.com%2Fcallback";
+		const { client, customFetchImpl, testUser } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							verificationEmail = data;
+						},
+					}),
+				],
+				advanced: {
+					disableOriginCheck: false,
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+			},
+		);
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+			errorCallbackURL,
+		});
+
+		const verifyURL = new URL(verificationEmail.url);
+		verifyURL.searchParams.set("token", "invalid-token");
+		const response = await customFetchImpl(verifyURL.toString());
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe(
+			`http://localhost:3000${errorCallbackURL}&error=INVALID_TOKEN`,
+		);
+	});
+
 	it("should reject untrusted callbackURL on verify", async () => {
 		let verificationEmail: VerificationEmail = {
 			email: "",
