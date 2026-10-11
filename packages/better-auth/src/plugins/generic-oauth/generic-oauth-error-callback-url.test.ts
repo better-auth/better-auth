@@ -7,8 +7,9 @@ import { genericOAuth } from ".";
 /**
  * Provider-side OAuth failures (`?error=...` on the callback) must honor the
  * per-flow `errorCallbackURL` persisted with the state, and anything
- * unrecognizable — missing, forged, consumed, or expired state — must fail
- * closed to Better Auth's default error page.
+ * unrecognizable — missing, forged, or consumed state — must fail closed to
+ * Better Auth's default error page. An expired state still carries its
+ * per-flow target, so it reports `state_mismatch` there instead.
  *
  * @see https://github.com/better-auth/better-auth/issues/11564
  */
