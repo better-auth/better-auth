@@ -419,4 +419,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/devodii.png",
 		},
 	},
+	{
+		name: "@octopi-ai/better-enrollment",
+		url: "https://github.com/OctopiAI/better-enrollment",
+		description:
+			"Invite-only sign-ups, role-merging invite links, and organization invites. Supports private (email-bound) and public (shareable, capped, revocable) invites, organization seat limits, and an append-only audit trail.",
+		author: {
+			name: "Talat Mahmud",
+			github: "FalconiZzare",
+			avatar: "https://github.com/FalconiZzare.png",
+		},
+	},
 ];

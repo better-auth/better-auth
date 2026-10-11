@@ -887,6 +887,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../../packages/core
+      '@better-auth/kysely-adapter':
+        specifier: workspace:*
+        version: link:../../../../../packages/kysely-adapter
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
@@ -897,6 +900,9 @@ importers:
         specifier: ^4.13.7
         version: 4.13.7
     devDependencies:
+      kysely-029:
+        specifier: npm:kysely@0.29.6
+        version: kysely@0.29.6
       vitest:
         specifier: catalog:vitest
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(@vitest/coverage-istanbul@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.8.9)(msw@2.14.6(@types/node@25.9.4)(typescript@6.0.3))(vite@8.2.0(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
@@ -11273,6 +11279,10 @@ packages:
 
   kysely@0.29.3:
     resolution: {integrity: sha512-VHtBdW6XB/pgoTSqraM3UAa2rYoYdNXqnNPpX+8XXP+cwYbVEFuAp3HyPt1vpNfU9l7Y2kpUrA9QDPsy8uUqOQ==}
+    engines: {node: '>=22.0.0'}
+
+  kysely@0.29.6:
+    resolution: {integrity: sha512-hHaB8C/rfzDDtr/t8YZwxAuPJTT0zHyaPoVzcXwDYhYNAgH/4sIfVhi/XLLIY+bL/FqaIJnjATDbi8ObSELmxg==}
     engines: {node: '>=22.0.0'}
 
   lan-network@0.1.7:
@@ -27523,6 +27533,8 @@ snapshots:
   kysely@0.28.17: {}
 
   kysely@0.29.3: {}
+
+  kysely@0.29.6: {}
 
   lan-network@0.1.7: {}
 
