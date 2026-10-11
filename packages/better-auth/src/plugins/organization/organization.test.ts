@@ -7,7 +7,7 @@ import type {
 	PreinitializedWritableAtom,
 } from "../../client";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
+import { applySetCookies, parseSetCookieHeader } from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
@@ -672,37 +672,105 @@ describe("organization", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/10835
 	 */
 	it("should update session cookie with activeOrganizationId when accepting invitation", async () => {
+		const { auth, client, signInWithTestUser, cookieSetter } =
+			await getTestInstance(
+				{
+					plugins: [
+						organization({
+							teams: {
+								enabled: true,
+							},
+							async sendInvitationEmail() {},
+						}),
+					],
+					session: {
+						cookieCache: {
+							enabled: true,
+						},
+					},
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => ({
+									data: { ...user, emailVerified: true },
+								}),
+							},
+						},
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [
+							organizationClient({
+								teams: {
+									enabled: true,
+								},
+							}),
+						],
+					},
+				},
+			);
+
+		const { headers: userAHeaders } = await signInWithTestUser();
 		const rng = crypto.randomUUID();
 		const org = await client.organization.create({
 			name: `test-org-${rng}`,
 			slug: `test-org-${rng}`,
 			fetchOptions: {
-				headers,
+				headers: userAHeaders,
+				onResponse(context) {
+					cookieSetter(userAHeaders)(context);
+				},
 			},
 		});
 		if (!org.data) throw new Error("Organization not created");
+
+		const team = await client.organization.createTeam(
+			{
+				name: `test-team-${rng}`,
+				organizationId: org.data.id,
+			},
+			{
+				headers: userAHeaders,
+			},
+		);
+		if (!team.data) throw new Error("Team not created");
 
 		const user = {
 			email: `${rng}@email.com`,
 			password: rng,
 			name: `User ${rng}`,
 		};
-		await client.signUp.email({
-			email: user.email,
-			password: user.password,
-			name: user.name,
-		});
-		const { headers: userHeaders } = await signInWithUser(
-			user.email,
-			user.password,
+		const userBHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: user.email,
+				password: user.password,
+				name: user.name,
+			},
+			{
+				onSuccess: cookieSetter(userBHeaders),
+			},
 		);
+		const userBCookies = userBHeaders.get("cookie");
+		if (!userBCookies) throw new Error("User B cookies not found");
+
+		const beforeAcceptSession = await client.getSession({
+			fetchOptions: {
+				headers: {
+					cookie: userBCookies,
+				},
+			},
+		});
+		expect(beforeAcceptSession.data?.session.activeOrganizationId).toBeNull();
 
 		const invite = await client.organization.inviteMember({
 			organizationId: org.data.id,
 			email: user.email,
 			role: "member",
+			teamId: team.data.id,
 			fetchOptions: {
-				headers,
+				headers: userAHeaders,
 			},
 		});
 		if (!invite.data) throw new Error("Invitation not created");
@@ -711,7 +779,9 @@ describe("organization", async () => {
 		const acceptRes = await client.organization.acceptInvitation({
 			invitationId: invite.data.id,
 			fetchOptions: {
-				headers: userHeaders,
+				headers: {
+					cookie: userBCookies,
+				},
 				onResponse(context) {
 					setCookieHeader = context.response.headers.get("set-cookie");
 				},
@@ -719,17 +789,30 @@ describe("organization", async () => {
 		});
 		expect(acceptRes.data?.invitation.status).toBe("accepted");
 		expect(setCookieHeader).toBeTruthy();
+
 		const cookies = parseSetCookieHeader(setCookieHeader || "");
 		expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+		expect(cookies.get("better-auth.session_data")?.value).toBeDefined();
+
+		const mergedHeaders = new Headers({ cookie: userBCookies });
+		applySetCookies(mergedHeaders, [setCookieHeader!]);
+		const mergedCookies = mergedHeaders.get("cookie")!;
 
 		const sessionRes = await client.getSession({
 			fetchOptions: {
 				headers: {
-					cookie: setCookieHeader!,
+					cookie: mergedCookies,
 				},
 			},
 		});
 		expect(sessionRes.data?.session.activeOrganizationId).toBe(org.data?.id);
+		expect((sessionRes.data?.session as any)?.activeTeamId).toBe(team.data?.id);
+
+		const apiSession = await auth.api.getSession({
+			headers: mergedHeaders,
+		});
+		expect(apiSession?.session.activeOrganizationId).toBe(org.data?.id);
+		expect((apiSession?.session as any)?.activeTeamId).toBe(team.data?.id);
 	});
 
 	/**
