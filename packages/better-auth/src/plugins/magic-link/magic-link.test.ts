@@ -556,6 +556,50 @@ describe("magic link verify", async () => {
 });
 
 describe("magic link verify origin validation", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11674
+	 */
+	it("should preserve encoded values in callbackURL queries", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const callbackURL =
+			"/after-sign-in?next=https%3A%2F%2Fexample.com%2Fcallback";
+		const { client, customFetchImpl, testUser } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							verificationEmail = data;
+						},
+					}),
+				],
+				advanced: {
+					disableOriginCheck: false,
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+			},
+		);
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+			callbackURL,
+		});
+
+		const response = await customFetchImpl(verificationEmail.url);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe(
+			`http://localhost:3000${callbackURL}`,
+		);
+	});
+
 	it("should reject untrusted callbackURL on verify", async () => {
 		let verificationEmail: VerificationEmail = {
 			email: "",
