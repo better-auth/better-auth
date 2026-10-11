@@ -5,7 +5,8 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cimd } from "./index";
-import type { CimdMetadataFetchPolicy } from "./types";
+import { IN_FLIGHT_RESOLUTION_MAX_AGE_MS } from "./resolver";
+import type { CimdMetadataFetchPolicy, CimdOptions } from "./types";
 
 const REDIRECT_URI = "http://127.0.0.1:5207/callback";
 const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
@@ -40,6 +41,7 @@ function deferred<T>() {
 
 async function createInFlightHarness(
 	metadataFetchPolicy?: CimdMetadataFetchPolicy,
+	extraCimdOptions?: Partial<CimdOptions>,
 ) {
 	instanceSequence += 1;
 	const baseURL = "http://localhost:" + String(3400 + instanceSequence);
@@ -70,6 +72,7 @@ async function createInFlightHarness(
 				fetchClientMetadataResource,
 				maxCacheEntries: 8,
 				metadataFetchPolicy,
+				...extraCimdOptions,
 			}),
 		],
 	});
@@ -79,7 +82,7 @@ async function createInFlightHarness(
 		plugins: [oauthProviderClient()],
 		fetchOptions: { customFetchImpl: instance.customFetchImpl, headers },
 	});
-	const authorize = async (clientId: string) => {
+	const authorize = async (clientId: string, redirectUri = REDIRECT_URI) => {
 		let status = 200;
 		let location = "";
 		await client.$fetch(
@@ -89,7 +92,7 @@ async function createInFlightHarness(
 				encodeURIComponent(clientId) +
 				"&response_type=code" +
 				"&redirect_uri=" +
-				encodeURIComponent(REDIRECT_URI) +
+				encodeURIComponent(redirectUri) +
 				"&scope=openid" +
 				"&code_challenge=" +
 				PKCE_CHALLENGE +
@@ -143,17 +146,20 @@ describe("CIMD in-flight resolution liveness", () => {
 		// exactly the state a cancelled Workers request leaves behind. Its
 		// bound runs on the request's own clock; keep the parked promise from
 		// turning into an unhandled rejection once the test returns.
+		//
+		// Fake timers are installed *before* the first request so that the
+		// originator's fetch and wait bounds are created on the mocked clock
+		// too: the final timer-count assertion can then prove that no bound
+		// leaks, rather than being unable to see pre-installation timers.
+		vi.useFakeTimers();
+		const wedgedStartMs = Date.now();
+		vi.setSystemTime(wedgedStartMs);
+
 		const firstAuthorize = harness.authorize(clientId);
 		void firstAuthorize.catch(() => {});
 		await vi.waitFor(() =>
 			expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1),
 		);
-		const wedgedStartMs = Date.now();
-
-		// Pin the mocked clock to the wall-clock time the resolver stamped
-		// the in-flight entry with, so the expiry arithmetic is deterministic.
-		vi.useFakeTimers();
-		vi.setSystemTime(wedgedStartMs);
 
 		// The second request joins the in-flight resolution while it is
 		// within the fetch bound, carrying its own bound in its request
@@ -183,9 +189,10 @@ describe("CIMD in-flight resolution liveness", () => {
 		expect(third.status).toBeLessThan(400);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 
-		// Let the wedged resolution settle late: cleanup must be a no-op
-		// (the entry is gone and its permit was already reclaimed), and no
-		// timer may be left behind.
+		// Let the wedged resolution settle late: the sweep superseded it, so
+		// its stale document must not overwrite the replacement's work, its
+		// cleanup must be a no-op (the entry is gone and its permit was
+		// already reclaimed), and no timer may be left behind.
 		wedged.resolve(
 			Response.json(metadata(clientId), {
 				headers: { "cache-control": "no-store" },
@@ -193,37 +200,164 @@ describe("CIMD in-flight resolution liveness", () => {
 		);
 		await vi.advanceTimersByTimeAsync(1);
 		expect(vi.getTimerCount()).toBe(0);
+		// Superseded attempt published nothing: the third request's fetch is
+		// still the last one, and a fourth request re-serves from the cache
+		// the replacement built (no fresh fetch, no revalidation error).
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 	});
 
-	it("deduplicates concurrent requests for one client within the bound", async () => {
+	it("does not publish a superseded resolution over its replacement", async () => {
+		const allowFirstGate = { ...deferred<boolean>(), resolved: false };
+		const harness = await createInFlightHarness(
+			{
+				minimumFetchInterval: 0,
+				maximumFetchesPerMinute: 1_000,
+				maximumFetchesPerOriginPerMinute: 1_000,
+			},
+			{
+				// Park the *first* resolution before its transport fetch, at
+				// an await point that exists on pristine main too. Once the
+				// originator's wait bound has fired and a replacement has
+				// published, releasing this gate lets the stale attempt
+				// continue into persist + cache publication.
+				isMetadataDocumentUrlAllowed: (clientIdUrl) => {
+					if (clientIdUrl === "https://superseded.example/client.json") {
+						if (!allowFirstGate.resolved) {
+							allowFirstGate.resolved = true;
+							return allowFirstGate.promise;
+						}
+					}
+					return true;
+				},
+			},
+		);
+		const clientId = "https://superseded.example/client.json";
+		const STALE_REDIRECT_URI = "http://127.0.0.1:5207/stale-callback";
+		const FRESH_REDIRECT_URI = "http://127.0.0.1:5207/fresh-callback";
+		let secondFetchCount = 0;
+		harness.responders.set(clientId, () => {
+			secondFetchCount += 1;
+			return Response.json(
+				{
+					...metadata(clientId),
+					redirect_uris: [FRESH_REDIRECT_URI],
+				},
+				{ headers: { "cache-control": "max-age=60" } },
+			);
+		});
+
+		vi.useFakeTimers();
+		const wedgedStartMs = Date.now();
+		vi.setSystemTime(wedgedStartMs);
+
+		// The first request parks in the URL allowlist gate, before any
+		// fetch: its resolution stays pending well past the wait bound.
+		const firstAuthorize = harness.authorize(clientId);
+		void firstAuthorize.catch(() => {});
+		await vi.advanceTimersByTimeAsync(1);
+
+		// The originator's own wait bound fires: authorize settles with
+		// the library's temporarily_unavailable error (429) rather than
+		// hanging, and the still-pending attempt is superseded.
+		await vi.advanceTimersByTimeAsync(IN_FLIGHT_RESOLUTION_MAX_AGE_MS);
+		const first = await firstAuthorize;
+		expect(first.status).toBe(429);
+
+		// A replacement attempt runs and publishes the fresh document,
+		// whose redirect_uris the old attempt never saw. The fresh fetch
+		// and its persist work need real ticks under fake timers.
+		const replacementRequest = harness.authorize(clientId, FRESH_REDIRECT_URI);
+		await vi.advanceTimersByTimeAsync(1);
+		const replacement = await replacementRequest;
+		expect(replacement.status).toBeLessThan(400);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+		expect(secondFetchCount).toBe(1);
+
+		// Release the stale attempt's gate: it proceeds to its own fetch
+		// and returns the *old* document (with the stale redirect URI).
+		allowFirstGate.resolve(true);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+
+		// The superseded attempt must publish nothing: the client row must
+		// keep the replacement's redirect_uris, so a request with the
+		// stale redirect URI is refused (redirect to the server error
+		// page with invalid_redirect) and one with the fresh URI is
+		// served from the cache without a third fetch.
+		const staleAttemptRequest = harness.authorize(clientId, STALE_REDIRECT_URI);
+		await vi.advanceTimersByTimeAsync(1);
+		const staleAttempt = await staleAttemptRequest;
+		expect(staleAttempt.location).toContain("invalid_redirect");
+		const freshAfterRequest = harness.authorize(clientId, FRESH_REDIRECT_URI);
+		await vi.advanceTimersByTimeAsync(1);
+		const freshAfter = await freshAfterRequest;
+		expect(freshAfter.status).toBeLessThan(400);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+	});
+
+	it("recovers when the originator's own bound fires on a pending resolution", async () => {
 		const harness = await createInFlightHarness({
 			minimumFetchInterval: 0,
 			maximumFetchesPerMinute: 1_000,
 			maximumFetchesPerOriginPerMinute: 1_000,
 		});
-		const clientId = "https://dedup.example/client.json";
-		const gate = deferred<void>();
-		harness.responders.set(clientId, async () => {
-			await gate.promise;
+		const clientId = "https://originator-bound.example/client.json";
+		const wedged = deferred<Response>();
+		let wedgedOnce = false;
+		harness.responders.set(clientId, () => {
+			if (!wedgedOnce) {
+				wedgedOnce = true;
+				return wedged.promise;
+			}
 			return Response.json(metadata(clientId), {
 				headers: { "cache-control": "no-store" },
 			});
 		});
 
-		const first = harness.authorize(clientId);
+		// Fake timers first, so the originator's wait bound is created on
+		// the mocked clock and the final timer count is meaningful.
+		vi.useFakeTimers();
+		const wedgedStartMs = Date.now();
+		vi.setSystemTime(wedgedStartMs);
+
+		const firstAuthorize = harness.authorize(clientId);
+		void firstAuthorize.catch(() => {});
 		await vi.waitFor(() =>
 			expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1),
 		);
-		const second = harness.authorize(clientId);
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1);
 
-		gate.resolve();
-		const [firstResult, secondResult] = await Promise.all([first, second]);
-		expect(firstResult.status).toBeLessThan(400);
-		expect(secondResult.status).toBeLessThan(400);
-		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+		// The originator's own wait bound fires while the shared work is
+		// still pending: unlike the joining-request path, this exercises
+		// the originator's finally cleanup before the resolution settles,
+		// which deregisters (and supersedes) the still-pending attempt.
+		await vi.advanceTimersByTimeAsync(IN_FLIGHT_RESOLUTION_MAX_AGE_MS);
+		const first = await firstAuthorize;
+		expect(first.status).toBe(429);
+		expect(vi.getTimerCount()).toBe(0);
+
+		// A request arriving after the bound does not join the superseded
+		// attempt: the entry is gone, so it starts a fresh resolution that
+		// succeeds once the transport is healthy. The fresh fetch needs a
+		// real tick to run under fake timers, so step the clock while it
+		// settles.
+		const afterRequest = harness.authorize(clientId);
+		await vi.advanceTimersByTimeAsync(1);
+		const after = await afterRequest;
+		expect(after.status).toBeLessThan(400);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+
+		// The superseded attempt settles late; it must publish nothing and
+		// leave no timer behind.
+		wedged.resolve(
+			Response.json(metadata(clientId), {
+				headers: { "cache-control": "no-store" },
+			}),
+		);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+		expect(vi.getTimerCount()).toBe(0);
 	});
+
 	it("reclaims the fetch permit of a wedged resolution", async () => {
 		const harness = await createInFlightHarness({
 			minimumFetchInterval: 0,
@@ -270,14 +404,24 @@ describe("CIMD in-flight resolution liveness", () => {
 		expect(after.status).toBeLessThan(400);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 
-		// Let the wedged request finish cleanly so no work outlives the test.
+		// Let the wedged request finish: the entry was swept out from
+		// under it, so its attempt is superseded and its late settlement
+		// must publish nothing. Only the mocked clock moved in this test
+		// (no fake timers), so the originator's own wait bound is a real
+		// timer that has not fired; it is still parked on the shared
+		// resolution. The invariant under test is the permit: no fourth
+		// fetch happens, and the superseded settlement is a no-op.
 		wedged.resolve(
 			Response.json(metadata(wedgedClientId), {
 				headers: { "cache-control": "no-store" },
 			}),
 		);
 		const wedgedResult = await wedgedRequest;
-		expect(wedgedResult.status).toBeLessThan(400);
+		// The wedged attempt was deregistered by the sweep, so it is
+		// superseded: it settles with the superseded error rather than
+		// publishing its document over whatever the client's next
+		// resolution publishes.
+		expect(wedgedResult.status).toBe(429);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 	});
 });

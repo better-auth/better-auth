@@ -24,7 +24,7 @@ const FETCH_BUDGET_WINDOW_MS = 60_000;
 // enforces this bound on the shared promise, and the lazy expiry eviction in
 // the resolver entry point is the second line of defense for runtimes where
 // the caller's cancellation can invalidate timers along with the transport.
-const IN_FLIGHT_RESOLUTION_MAX_AGE_MS = FETCH_TIMEOUT_MS + 1_000;
+export const IN_FLIGHT_RESOLUTION_MAX_AGE_MS = FETCH_TIMEOUT_MS + 1_000;
 const DEFAULT_METADATA_FETCH_POLICY = {
 	minimumFetchInterval: 1,
 	maximumConcurrentFetches: 16,
@@ -352,6 +352,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			resolution: Promise<SchemaClient<Scope[]> | null>;
 			startedAtMs: number;
 			releaseMetadataFetchPermit: () => void;
+			/**
+			 * Publication state shared with the attempt's resolution.
+			 * Deregistering the entry supersedes the attempt: its late
+			 * settlement may no longer publish, because a replacement
+			 * attempt may already be persisting a fresher document.
+			 */
+			attempt: { isCurrent: boolean };
 		}
 	>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
@@ -552,6 +559,12 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				IN_FLIGHT_RESOLUTION_MAX_AGE_MS
 			) {
 				inFlightResolutionByClientId.delete(staleClientId);
+				// Supersede, not just deregister: the wedged resolution can
+				// still settle later, and its data may already be outdated by
+				// whatever document a replacement attempt fetched in the
+				// meantime. Publishing it would overwrite the replacement's
+				// client row and cache entry with stale metadata.
+				staleResolution.attempt.isCurrent = false;
 				staleResolution.releaseMetadataFetchPermit();
 			}
 		}
@@ -566,6 +579,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		}
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
+		// Per-attempt publication state, captured by the attempt's own
+		// resolution below and by the in-flight entry above. Deregistering
+		// the entry (expiry sweep, or the originator's bound firing before
+		// the shared work settles) flips `isCurrent` so the attempt's late
+		// settlement cannot publish over a replacement attempt. A map
+		// lookup would be unsafe here: a replacement attempt may already
+		// have registered a fresh entry for the same client.
+		const attempt = { isCurrent: true };
 		const resolution = (async () => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
@@ -589,6 +610,17 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				fetched.status === "modified"
 					? fetched.metadata
 					: (cachedEntry as CimdMetadataCacheEntry).metadata;
+			// Superseded attempts must not publish. If this attempt has been
+			// deregistered (expiry sweep, or its originator's bound fired
+			// before the shared work settled), a replacement attempt may
+			// already have fetched and persisted a fresher document for
+			// this client; persisting here would overwrite that row with
+			// the stale document this attempt fetched.
+			if (!attempt.isCurrent) {
+				throw createMetadataFetchUnavailableError(
+					"metadata document resolution was superseded by a replacement attempt",
+				);
+			}
 			const storedClient = await persistMetadataDocumentClient(
 				ctx,
 				clientId,
@@ -611,6 +643,11 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				metadataRevalidationInterval,
 				Date.now(),
 			);
+			if (!attempt.isCurrent) {
+				throw createMetadataFetchUnavailableError(
+					"metadata document resolution was superseded by a replacement attempt",
+				);
+			}
 			if (nextEntry) {
 				storeCacheEntry(clientId, nextEntry);
 			} else {
@@ -625,16 +662,23 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			resolution,
 			startedAtMs: nowMs,
 			releaseMetadataFetchPermit,
+			attempt,
 		});
 		// Clean up when the shared resolution settles, not only when this
 		// caller's continuation resumes: a cancelled request may never resume
 		// even though the resolution itself settled. Every cleanup path here
 		// is idempotent, so double cleanup is harmless.
 		const cleanupInFlightEntry = () => {
-			if (
-				inFlightResolutionByClientId.get(clientId)?.resolution === resolution
-			) {
+			const entry = inFlightResolutionByClientId.get(clientId);
+			if (entry?.resolution === resolution) {
 				inFlightResolutionByClientId.delete(clientId);
+				// Deregistering an attempt that has not settled yet
+				// supersedes it: the originator's bound can fire while the
+				// shared work is still pending (the bound is a *wait* bound,
+				// not a work bound), and a replacement attempt may already
+				// be publishing a fresher document. Its late settlement
+				// must not overwrite that replacement.
+				attempt.isCurrent = false;
 			}
 			releaseMetadataFetchPermit();
 		};
