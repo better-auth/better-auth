@@ -143,6 +143,14 @@ describe("telemetry node package resolution (NFT bundle bloat fix)", () => {
 		await expect(getPackageVersion("some-package")).resolves.toBeUndefined();
 	});
 
+	it("returns undefined and never throws when process.cwd throws an error", async () => {
+		vi.spyOn(process, "cwd").mockImplementation(() => {
+			throw new Error("ENOENT: no such file or directory");
+		});
+
+		await expect(getPackageVersion("pg")).resolves.toBeUndefined();
+	});
+
 	it("detects installed database in createTelemetry without throwing", async () => {
 		const rootPkg = {
 			name: "fixture-app",

@@ -22,20 +22,21 @@ export { getTelemetryAuthConfig };
 let packageJSONCache: { cwd: string; data: PackageJson } | undefined;
 
 async function readRootPackageJson(): Promise<PackageJson | undefined> {
-	const cwd = process.cwd();
-	if (!cwd) return undefined;
-	if (packageJSONCache && packageJSONCache.cwd === cwd) {
-		return packageJSONCache.data;
-	}
 	try {
+		const cwd = process.cwd();
+		if (!cwd) return undefined;
+		if (packageJSONCache && packageJSONCache.cwd === cwd) {
+			return packageJSONCache.data;
+		}
 		const req = createRequire(path.join(cwd, "index.js"));
 		const resolved = req.resolve("./package.json");
 		const raw = await fsPromises.readFile(resolved, "utf-8");
 		const json = JSON.parse(raw) as PackageJson;
 		packageJSONCache = { cwd, data: json };
 		return json;
-	} catch {}
-	return undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 export async function getPackageVersion(
