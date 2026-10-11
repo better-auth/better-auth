@@ -1285,7 +1285,7 @@ await auth.api.adminCreateOAuthClient({
 
 The call creates nothing when a resource is rejected:
 
-* A resource that is not an absolute URI, or that contains a fragment, fails request validation with `VALIDATION_ERROR`.
+* A resource that is not an absolute URI, contains a fragment, or uses a `javascript:`, `data:`, or `vbscript:` scheme fails request validation with `VALIDATION_ERROR`.
 * A resource that does not exist or is disabled returns `400` with `invalid_target`.
 * A `resourcePrivileges` denial returns `401`.
 
