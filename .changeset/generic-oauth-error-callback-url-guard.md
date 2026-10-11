@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-test(oauth): guard link errorCallbackURL on provider denial
+fix(oauth): honor the account-linking errorCallbackURL when the provider denies consent
