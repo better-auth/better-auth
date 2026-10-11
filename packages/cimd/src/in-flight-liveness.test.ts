@@ -234,13 +234,21 @@ describe("CIMD in-flight resolution liveness", () => {
 		const clientId = "https://superseded.example/client.json";
 		const STALE_REDIRECT_URI = "http://127.0.0.1:5207/stale-callback";
 		const FRESH_REDIRECT_URI = "http://127.0.0.1:5207/fresh-callback";
-		let secondFetchCount = 0;
+		let fetchCount = 0;
 		harness.responders.set(clientId, () => {
-			secondFetchCount += 1;
+			fetchCount += 1;
+			// The stale attempt's own fetch must return the *old*
+			// document, otherwise a stale publish would be invisible
+			// to the final redirect-URI assertions: the first fetch
+			// (the replacement attempt) serves the fresh document,
+			// the second (the superseded attempt) serves the stale
+			// one with the pre-rotation redirect URI.
+			const redirectUris =
+				fetchCount === 1 ? [FRESH_REDIRECT_URI] : [STALE_REDIRECT_URI];
 			return Response.json(
 				{
 					...metadata(clientId),
-					redirect_uris: [FRESH_REDIRECT_URI],
+					redirect_uris: redirectUris,
 				},
 				{ headers: { "cache-control": "max-age=60" } },
 			);
@@ -271,7 +279,7 @@ describe("CIMD in-flight resolution liveness", () => {
 		const replacement = await replacementRequest;
 		expect(replacement.status).toBeLessThan(400);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1);
-		expect(secondFetchCount).toBe(1);
+		expect(fetchCount).toBe(1);
 
 		// Release the stale attempt's gate: it proceeds to its own fetch
 		// and returns the *old* document (with the stale redirect URI).
