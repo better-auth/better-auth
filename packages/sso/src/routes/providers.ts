@@ -126,12 +126,47 @@ function oidcIdentityBoundaryChanged(
 	return hasChangedField(current, updated, OIDC_IDENTITY_BOUNDARY_FIELDS);
 }
 
+function samlTrustAnchors(
+	identityProvider: ReturnType<typeof createIdP>["entityMeta"],
+) {
+	const certificates = identityProvider.getX509Certificate("signing");
+	return (
+		Array.isArray(certificates)
+			? certificates
+			: certificates
+				? [certificates]
+				: []
+	)
+		.map((certificate) => normalizePem(certificate) ?? certificate)
+		.sort();
+}
+
+function samlTrustAnchorsChanged(
+	current: SAMLConfig,
+	updated: SAMLConfig,
+	currentIdentityProvider: ReturnType<
+		typeof createIdP
+	>["entityMeta"] = createIdP(current).entityMeta,
+	updatedIdentityProvider: ReturnType<
+		typeof createIdP
+	>["entityMeta"] = createIdP(updated).entityMeta,
+): boolean {
+	return identityValueChanged(
+		samlTrustAnchors(currentIdentityProvider),
+		samlTrustAnchors(updatedIdentityProvider),
+	);
+}
+
 function samlIdentityBoundaryChanged(
 	current: SAMLConfig,
 	updated: SAMLConfig,
+	currentIdentityProvider: ReturnType<
+		typeof createIdP
+	>["entityMeta"] = createIdP(current).entityMeta,
+	updatedIdentityProvider: ReturnType<
+		typeof createIdP
+	>["entityMeta"] = createIdP(updated).entityMeta,
 ): boolean {
-	const currentIdentityProvider = createIdP(current).entityMeta;
-	const updatedIdentityProvider = createIdP(updated).entityMeta;
 	let currentServiceProvider: ReturnType<
 		typeof parseSAMLServiceProviderMetadata
 	> | null;
@@ -173,26 +208,8 @@ function samlIdentityBoundaryChanged(
 				config.wantAssertionsSigned === true,
 		};
 	};
-	const trustAnchors = (
-		identityProvider: ReturnType<typeof createIdP>["entityMeta"],
-	) => {
-		const certificates = identityProvider.getX509Certificate("signing");
-		return (
-			Array.isArray(certificates)
-				? certificates
-				: certificates
-					? [certificates]
-					: []
-		)
-			.map((certificate) => normalizePem(certificate) ?? certificate)
-			.sort();
-	};
 	return (
 		hasChangedField(current, updated, SAML_IDENTITY_BOUNDARY_FIELDS) ||
-		identityValueChanged(
-			trustAnchors(currentIdentityProvider),
-			trustAnchors(updatedIdentityProvider),
-		) ||
 		identityValueChanged(
 			effectiveIdentityBoundary(current),
 			effectiveIdentityBoundary(updated),
@@ -882,6 +899,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					let providerIdentityBoundaryChanged =
 						body.issuer !== undefined &&
 						body.issuer !== existingProvider.issuer;
+					let isAuthenticationBoundaryChange = providerIdentityBoundaryChanged;
 
 					if (body.issuer !== undefined) {
 						updateData.issuer = body.issuer;
@@ -937,10 +955,30 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						validateCertSources(updatedSamlConfig);
 						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
 						assertSAMLServiceProviderMetadataPolicy(updatedSamlConfig);
+						const currentIdentityProvider =
+							createIdP(currentSamlConfig).entityMeta;
+						const updatedIdentityProvider =
+							createIdP(updatedSamlConfig).entityMeta;
+
 						if (
-							samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)
+							samlIdentityBoundaryChanged(
+								currentSamlConfig,
+								updatedSamlConfig,
+								currentIdentityProvider,
+								updatedIdentityProvider,
+							)
 						) {
 							providerIdentityBoundaryChanged = true;
+						}
+						if (
+							samlTrustAnchorsChanged(
+								currentSamlConfig,
+								updatedSamlConfig,
+								currentIdentityProvider,
+								updatedIdentityProvider,
+							)
+						) {
+							isAuthenticationBoundaryChange = true;
 						}
 
 						updateData.samlConfig = JSON.stringify(updatedSamlConfig);
@@ -1013,7 +1051,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						options,
 						{
 							action: "update",
-							isAuthenticationBoundaryChange: providerIdentityBoundaryChanged,
+							isAuthenticationBoundaryChange:
+								isAuthenticationBoundaryChange ||
+								providerIdentityBoundaryChanged,
 						},
 						existingProvider,
 						trx,

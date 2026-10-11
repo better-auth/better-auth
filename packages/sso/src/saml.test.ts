@@ -44,7 +44,11 @@ import { computeSSOProviderReference } from "./provider-reference";
 import { findSAMLProvider } from "./routes/helpers";
 import { getSafeRedirectUrl } from "./routes/saml-pipeline";
 import { saml } from "./samlify";
-import type { SSOOptions, SSOUserResolutionInput } from "./types";
+import type {
+	SSOOptions,
+	SSOProviderMutationGuardInput,
+	SSOUserResolutionInput,
+} from "./types";
 import { normalizePem } from "./utils";
 
 const spMetadata = `
@@ -8752,6 +8756,285 @@ describe("SAML SSO Hardening", () => {
 			expect(redirectUrl.origin).toBe(frontendOrigin);
 			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
 			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11471
+	 */
+	it("[Issue #11471] allows rotating SAML signing certificates when linked accounts exist without throwing 409", async () => {
+		let capturedGuardInput: SSOProviderMutationGuardInput | undefined;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					guardProviderMutation(input) {
+						capturedGuardInput = input;
+					},
+				}),
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const providerId = "saml-cert-rotation-test";
+		const originalCert = certificate;
+		const rotatedCert = extractSigningCertificateFromMetadata(idpMetadata);
+
+		// 1. Register SAML provider
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId,
+				issuer: "http://localhost:8081",
+				domain: "cert-rotation.example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: originalCert,
+					callbackUrl: `http://localhost:3000/api/auth/sso/saml2/callback/${providerId}`,
+					idpMetadata: { entityID: "http://localhost:8081" },
+					spMetadata: { metadata: spMetadata },
+				},
+			},
+			headers,
+		});
+
+		// 2. Link account
+		await context.adapter.create({
+			model: "account",
+			data: {
+				id: "linked-saml-account",
+				userId: user.id,
+				providerId,
+				accountId: "saml-subject-12345",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		// 3. Update non-boundary field (domain) -> isAuthenticationBoundaryChange is false
+		await auth.api.updateSSOProvider({
+			body: {
+				providerId,
+				domain: "updated-cert-rotation.example.com",
+			},
+			headers,
+		});
+		expect(capturedGuardInput).toMatchObject({
+			action: "update",
+			isAuthenticationBoundaryChange: false,
+		});
+
+		// 4. Update SAML provider with rotated signing certificate array (succeeds without 409)
+		const updateResult = await auth.api.updateSSOProvider({
+			body: {
+				providerId,
+				samlConfig: {
+					cert: [originalCert, rotatedCert],
+				},
+			},
+			headers,
+		});
+
+		expect(updateResult).toBeDefined();
+
+		// 5. Assert cert updated in DB and mutation guard received isAuthenticationBoundaryChange: true
+		const updatedProvider = await context.adapter.findOne<{
+			samlConfig: string;
+		}>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: providerId }],
+		});
+		const parsedSamlConfig = JSON.parse(updatedProvider!.samlConfig);
+		expect(parsedSamlConfig.cert).toEqual([originalCert, rotatedCert]);
+		expect(capturedGuardInput).toMatchObject({
+			action: "update",
+			isAuthenticationBoundaryChange: true,
+		});
+
+		// 6. Assert identity boundary mutation (e.g. entryPoint) is STILL rejected with 409
+		await expect(
+			auth.api.updateSSOProvider({
+				body: {
+					providerId,
+					samlConfig: {
+						entryPoint: "https://malicious-idp.attacker.com/sso",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "CONFLICT",
+			body: {
+				message:
+					"Cannot change SSO provider identity fields while linked accounts exist",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11471
+	 */
+	it("[Issue #11471] allows single-string cert replacement when linked accounts exist without throwing 409", async () => {
+		let capturedGuardInput: SSOProviderMutationGuardInput | undefined;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					guardProviderMutation(input) {
+						capturedGuardInput = input;
+					},
+				}),
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const providerId = "saml-single-cert-replacement-test";
+		const originalCert = certificate;
+		const rotatedCert = extractSigningCertificateFromMetadata(idpMetadata);
+
+		// 1. Register SAML provider
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId,
+				issuer: "http://localhost:8081",
+				domain: "single-cert.example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: originalCert,
+					callbackUrl: `http://localhost:3000/api/auth/sso/saml2/callback/${providerId}`,
+					idpMetadata: { entityID: "http://localhost:8081" },
+					spMetadata: { metadata: spMetadata },
+				},
+			},
+			headers,
+		});
+
+		// 2. Link account
+		await context.adapter.create({
+			model: "account",
+			data: {
+				id: "linked-saml-account-single",
+				userId: user.id,
+				providerId,
+				accountId: "saml-subject-single-12345",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		// 3. Update SAML provider with single-string rotated signing certificate
+		const updateResult = await auth.api.updateSSOProvider({
+			body: {
+				providerId,
+				samlConfig: {
+					cert: rotatedCert,
+				},
+			},
+			headers,
+		});
+
+		expect(updateResult).toBeDefined();
+
+		// 4. Assert cert updated in DB and mutation guard received isAuthenticationBoundaryChange: true
+		const updatedProvider = await context.adapter.findOne<{
+			samlConfig: string;
+		}>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: providerId }],
+		});
+		const parsedSamlConfig = JSON.parse(updatedProvider!.samlConfig);
+		expect(parsedSamlConfig.cert).toBe(rotatedCert);
+		expect(capturedGuardInput).toMatchObject({
+			action: "update",
+			isAuthenticationBoundaryChange: true,
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11471
+	 */
+	it("[Issue #11471] allows IdP metadata XML cert update when linked accounts exist without throwing 409", async () => {
+		let capturedGuardInput: SSOProviderMutationGuardInput | undefined;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					guardProviderMutation(input) {
+						capturedGuardInput = input;
+					},
+				}),
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const providerId = "saml-idp-metadata-cert-update-test";
+		const rawReplacementCert = certificate.replace(
+			/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s+/g,
+			"",
+		);
+		const rotatedIdpMetadata = idpMetadata.replace(
+			/<md:KeyDescriptor use="signing">[\s\S]*?<ds:X509Certificate>[^<]+<\/ds:X509Certificate>/,
+			`<md:KeyDescriptor use="signing">\n<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">\n<ds:X509Data>\n<ds:X509Certificate>${rawReplacementCert}</ds:X509Certificate>`,
+		);
+
+		// 1. Register SAML provider with initial idpMetadata XML
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId,
+				issuer: "http://localhost:8081",
+				domain: "idp-metadata-cert-rotation.example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					callbackUrl: `http://localhost:3000/api/auth/sso/saml2/callback/${providerId}`,
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+				},
+			},
+			headers,
+		});
+
+		// 2. Link account
+		await context.adapter.create({
+			model: "account",
+			data: {
+				id: "linked-saml-account-metadata",
+				userId: user.id,
+				providerId,
+				accountId: "saml-subject-metadata-12345",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		// 3. Update SAML provider with rotated IdP metadata XML
+		const updateResult = await auth.api.updateSSOProvider({
+			body: {
+				providerId,
+				samlConfig: {
+					idpMetadata: {
+						metadata: rotatedIdpMetadata,
+					},
+				},
+			},
+			headers,
+		});
+
+		expect(updateResult).toBeDefined();
+
+		// 4. Assert metadata updated in DB and mutation guard received isAuthenticationBoundaryChange: true
+		const updatedProvider = await context.adapter.findOne<{
+			samlConfig: string;
+		}>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: providerId }],
+		});
+		const parsedSamlConfig = JSON.parse(updatedProvider!.samlConfig);
+		expect(parsedSamlConfig.idpMetadata.metadata).toBe(rotatedIdpMetadata);
+		expect(capturedGuardInput).toMatchObject({
+			action: "update",
+			isAuthenticationBoundaryChange: true,
 		});
 	});
 });
