@@ -11,7 +11,7 @@ import type {
 	Scope,
 } from "../types";
 import type { GrantType } from "../types/oauth";
-import { getClient, storeClientSecret } from "../utils";
+import { assertNotTrustedClient, getClient, storeClientSecret } from "../utils";
 import {
 	normalizeClientCredentialsScopes,
 	validateClientCredentialsScopes,
@@ -153,13 +153,7 @@ export async function deleteClientEndpoint(
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
-	const trustedClient = opts.cachedTrustedClients?.has(clientId);
-	if (trustedClient) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "trusted clients must be updated manually",
-			error: "invalid_client",
-		});
-	}
+	assertNotTrustedClient(opts, clientId);
 
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
@@ -232,13 +226,7 @@ export async function updateClientEndpoint(
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
-	const trustedClient = opts.cachedTrustedClients?.has(clientId);
-	if (trustedClient) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "trusted clients must be updated manually",
-			error: "invalid_client",
-		});
-	}
+	assertNotTrustedClient(opts, clientId);
 
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
@@ -410,13 +398,7 @@ export async function rotateClientSecretEndpoint(
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
-	const trustedClient = opts.cachedTrustedClients?.has(clientId);
-	if (trustedClient) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "trusted clients must be updated manually",
-			error: "invalid_client",
-		});
-	}
+	assertNotTrustedClient(opts, clientId);
 
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {

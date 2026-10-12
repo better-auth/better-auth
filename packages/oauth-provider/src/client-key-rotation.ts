@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, NO_STORE_HEADERS } from "better-auth/api";
 import { assertValidClientJwks } from "./register";
 import type { OAuthClient, OAuthOptions, SchemaClient, Scope } from "./types";
+import { assertNotTrustedClient } from "./utils";
 import { verifyClientAssertion } from "./utils/client-assertion";
 
 type ClientJwks = NonNullable<OAuthClient["jwks"]>;
@@ -85,12 +86,7 @@ function assertRotatable(
 	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
 ) {
-	if (opts.cachedTrustedClients?.has(client.clientId)) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_client",
-			error_description: "trusted clients must be updated manually",
-		});
-	}
+	assertNotTrustedClient(opts, client.clientId);
 	if (client.clientDiscoveryId || client.jwksUri || !client.jwks) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client",
