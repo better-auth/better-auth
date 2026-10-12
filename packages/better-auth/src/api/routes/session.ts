@@ -733,6 +733,12 @@ export const revokeSession = createAuthEndpoint(
 		if (session?.session.userId === ctx.context.session.user.id) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
+				if (token === ctx.context.session.session.token) {
+					// the caller revoked the session they are calling from, so
+					// expire the session (and cookie cache) cookies in the
+					// response, matching what sign-out does
+					deleteSessionCookie(ctx);
+				}
 			} catch (error) {
 				ctx.context.logger.error(
 					error && typeof error === "object" && "name" in error
@@ -791,6 +797,10 @@ export const revokeSessions = createAuthEndpoint(
 			await ctx.context.internalAdapter.deleteUserSessions(
 				ctx.context.session.user.id,
 			);
+			// the current session is revoked along with every other one, so
+			// expire the session (and cookie cache) cookies in the response,
+			// matching what sign-out does
+			deleteSessionCookie(ctx);
 		} catch (error) {
 			ctx.context.logger.error(
 				error && typeof error === "object" && "name" in error
