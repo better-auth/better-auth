@@ -101,6 +101,19 @@ export interface EmailOTPOptions {
 	 */
 	resendStrategy?: "rotate" | "reuse" | undefined;
 	/**
+	 * Callback fired when an OTP is generated (before hashing/storing).
+	 *
+	 * This is primarily used by the `testUtils` plugin with `captureOTP: true`
+	 * to capture plaintext OTPs for testing purposes.
+	 *
+	 * @internal
+	 */
+	onOTPCreated?: (data: {
+		email: string;
+		otp: string;
+		type: "sign-in" | "email-verification" | "forget-password" | "change-email";
+	}) => void;
+	/**
 	 * Change email configuration for the change email with OTP flow
 	 *
 	 * @default {
