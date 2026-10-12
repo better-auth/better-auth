@@ -701,12 +701,14 @@ export const createInternalAdapter = (
 				  }
 				| undefined,
 		) => {
+			const uniqueTokens = [...new Set(sessionTokens)];
+			const sessionsByToken = new Map<
+				string,
+				{ session: Session; user: User }
+			>();
+			const missingTokens: string[] = [];
 			if (secondaryStorage) {
-				const sessions: {
-					session: Session;
-					user: User;
-				}[] = [];
-				for (const sessionToken of sessionTokens) {
+				for (const sessionToken of uniqueTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
 						try {
@@ -737,50 +739,57 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							sessions.push(session);
+							sessionsByToken.set(sessionToken, session);
 						} catch {
 							// Skip invalid/corrupt session data
 							continue;
 						}
+					} else {
+						missingTokens.push(sessionToken);
 					}
 				}
-				return sessions;
 			}
 
-			const sessions = await (await getCurrentAdapter(adapter)).findMany<
-				Session & { user: User | null }
-			>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
+			const databaseTokens = secondaryStorage ? missingTokens : uniqueTokens;
+			if (
+				databaseTokens.length > 0 &&
+				(!secondaryStorage || databaseSessionFallbackEnabled)
+			) {
+				const databaseSessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session & { user: User | null }>({
+					model: "session",
+					limit: databaseTokens.length,
+					where: [
+						{
+							field: "token",
+							value: databaseTokens,
+							operator: "in",
+						},
+						...(options?.onlyActiveSessions
+							? [
+									{
+										field: "expiresAt",
+										value: new Date(),
+										operator: "gt",
+									} satisfies Where,
+								]
+							: []),
+					],
+					join: {
+						user: true,
 					},
-					...(options?.onlyActiveSessions
-						? [
-								{
-									field: "expiresAt",
-									value: new Date(),
-									operator: "gt",
-								} satisfies Where,
-							]
-						: []),
-				],
-				join: {
-					user: true,
-				},
-			});
+				});
 
-			if (!sessions.length) return [];
-			if (sessions.some((session) => !session.user)) return [];
-
-			return sessions.map((_session) => {
-				const { user, ...session } = _session;
-				return {
-					session,
-					user: user!,
-				};
+				for (const { user, ...session } of databaseSessions) {
+					if (user) {
+						sessionsByToken.set(session.token, { session, user });
+					}
+				}
+			}
+			return uniqueTokens.flatMap((token) => {
+				const session = sessionsByToken.get(token);
+				return session ? [session] : [];
 			});
 		},
 		updateSession: async (
