@@ -519,8 +519,11 @@ async function createOpaqueAccessToken(
 /**
  * Tear down the entire refresh-token family for a (client, user) pair, plus
  * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
- * Access tokens are deleted first so the parent rows' foreign-key children
- * do not block the refresh-row delete.
+ * The family's unrevoked refresh rows are marked revoked in one write before
+ * anything is deleted, so if a delete fails, rotation's `revoked` guard still
+ * refuses every row and `validateOpaqueAccessToken` reports the access tokens
+ * of the newly revoked rows inactive. Access tokens are deleted first so the
+ * parent rows' foreign-key children do not block the refresh-row delete.
  *
  * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
  * with respect to each other. Between them, a concurrent rotation in a
@@ -538,13 +541,24 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
-	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
+	const refreshTokens = await ctx.context.adapter.findMany<{
+		id: string;
+		revoked?: Date | null;
+	}>({
 		model: "oauthRefreshToken",
 		where: [
 			{ field: "clientId", value: clientId },
 			{ field: "userId", value: userId },
 		],
 	});
+	const unrevokedIds = refreshTokens.filter((r) => !r.revoked).map((r) => r.id);
+	if (unrevokedIds.length) {
+		await ctx.context.adapter.updateMany({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", operator: "in", value: unrevokedIds }],
+			update: { revoked: new Date() },
+		});
+	}
 	if (refreshTokens.length) {
 		await ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
