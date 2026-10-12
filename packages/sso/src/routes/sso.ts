@@ -3,11 +3,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
-import {
-	appendQueryParams,
-	appendURLPath,
-	appendURLSegment,
-} from "@better-auth/core/utils/url";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
@@ -46,7 +42,6 @@ import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
-	computeDiscoveryUrl,
 	DiscoveryError,
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
@@ -139,12 +134,12 @@ function getOIDCRedirectURI(
 		if (URL.canParse(options.redirectURI)) {
 			return options.redirectURI;
 		}
-		// Resolve relative redirect paths under the auth base, even with a leading slash.
-		const redirectPath = options.redirectURI.replace(/^\/+/, "");
-		const authBaseURL = appendURLPath(baseURL, "/");
-		return new URL(redirectPath, authBaseURL).href;
+		const path = options.redirectURI.startsWith("/")
+			? options.redirectURI
+			: `/${options.redirectURI}`;
+		return `${baseURL}${path}`;
 	}
-	return appendURLSegment(appendURLPath(baseURL, "/sso/callback"), providerId);
+	return `${baseURL}/sso/callback/${providerId}`;
 }
 
 const spMetadataQuerySchema = z.object({
@@ -582,7 +577,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						pkce: body.oidcConfig.pkce,
 						discoveryEndpoint:
 							body.oidcConfig.discoveryEndpoint ||
-							computeDiscoveryUrl(body.issuer),
+							`${body.issuer}/.well-known/openid-configuration`,
 						mapping: body.oidcConfig.mapping,
 						scopes: body.oidcConfig.scopes,
 						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,

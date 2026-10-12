@@ -1,15 +1,70 @@
 import { APIError } from "better-auth/api";
-import { describe, expect, it } from "vitest";
+import { getTestInstance } from "better-auth/test";
+import { describe, expect, it, vi } from "vitest";
+import { sso } from "../index";
 import type { SAMLConfig } from "../types";
 import {
 	createSAMLPostForm,
 	createSP,
 	deriveSAMLIdentityProviderEntityID,
 	deriveSAMLServiceProviderPolicy,
+	getSAMLServiceProviderURL,
 } from "./helpers";
 
 const invalidSAMLBindingLocationMessage =
 	"SAML POST binding location must be an absolute http or https URL";
+
+/** @see https://url.spec.whatwg.org/#percent-encoded-bytes */
+it("preserves the configured provider ID for a SAML logout lookup", async () => {
+	const { auth } = await getTestInstance({
+		plugins: [sso({ saml: { enableSingleLogout: true } })],
+	});
+	const context = await auth.$context;
+	const lookup = vi.spyOn(context.adapter, "findOne");
+	await auth.handler(
+		new Request(
+			"http://localhost:3000/api/auth/sso/saml2/sp/slo/team%2Fmember?SAMLRequest=payload",
+		),
+	);
+	expect(lookup).toHaveBeenCalledWith(
+		expect.objectContaining({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "team%2Fmember" }],
+		}),
+	);
+});
+
+describe("getSAMLServiceProviderURL", () => {
+	it("preserves the slash boundary of a registered ACS URL", () => {
+		expect(
+			getSAMLServiceProviderURL(
+				"https://Auth.Example.com:443/api/auth/",
+				"acs",
+				"acme:prod",
+			),
+		).toBe("https://Auth.Example.com:443/api/auth//sso/saml2/sp/acs/acme:prod");
+	});
+
+	it.each([
+		"acme:prod",
+		"okta@corp",
+		"a+b",
+		"team%2Fmember",
+		"okta%3Aacme",
+	])("preserves registered ACS and SLO URLs for provider %s", (providerId) => {
+		for (const endpoint of ["acs", "slo"] as const) {
+			expect(
+				getSAMLServiceProviderURL(
+					"https://Auth.Example.com:443/api/auth",
+					endpoint,
+					providerId,
+				),
+			).toBe(
+				`https://Auth.Example.com:443/api/auth/sso/saml2/sp/${endpoint}/${providerId}`,
+			);
+		}
+	});
+});
 
 function expectInvalidSAMLBindingLocation(action: string) {
 	try {
@@ -120,11 +175,11 @@ describe("createSP assertion-signing metadata", () => {
 		expect(provider.getMetadata()).toContain('WantAssertionsSigned="true"');
 	});
 
-	it("keeps ACS and SLO URLs under a trailing auth base slash", () => {
+	it("preserves registered ACS and SLO slash boundaries in metadata", () => {
 		const provider = createSP(
 			configuration,
 			"https://service.example.com/api/auth/",
-			"team one",
+			"team%20one",
 			{
 				sloOptions: {
 					wantLogoutRequestSigned: false,
@@ -135,10 +190,10 @@ describe("createSP assertion-signing metadata", () => {
 		const metadata = provider.getMetadata();
 
 		expect(metadata).toContain(
-			"https://service.example.com/api/auth/sso/saml2/sp/acs/team%20one",
+			"https://service.example.com/api/auth//sso/saml2/sp/acs/team%20one",
 		);
 		expect(metadata).toContain(
-			"https://service.example.com/api/auth/sso/saml2/sp/slo/team%20one",
+			"https://service.example.com/api/auth//sso/saml2/sp/slo/team%20one",
 		);
 	});
 

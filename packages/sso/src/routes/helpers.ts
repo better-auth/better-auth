@@ -1,5 +1,4 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import { appendURLPath, appendURLSegment } from "@better-auth/core/utils/url";
 import { APIError } from "better-auth/api";
 import { resolveSigningCerts } from "../saml";
 import { parseSAMLServiceProviderMetadata } from "../saml/response-binding";
@@ -51,15 +50,13 @@ export async function findSAMLProvider(
 	};
 }
 
+/** Builds the registered SP endpoint identifier without changing its spelling. */
 export function getSAMLServiceProviderURL(
 	baseURL: string,
 	endpoint: "acs" | "slo",
 	providerId: string,
 ): string {
-	return appendURLSegment(
-		appendURLPath(baseURL, `/sso/saml2/sp/${endpoint}`),
-		providerId,
-	);
+	return `${baseURL}/sso/saml2/sp/${endpoint}/${providerId}`;
 }
 
 export function createSP(
