@@ -11,11 +11,7 @@ import type { AccountKey } from "@better-auth/core/db";
 import { accountSchema, userSchema } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import {
-	appendQueryParams,
-	appendURLPath,
-	appendURLSegment,
-} from "@better-auth/core/utils/url";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -42,7 +38,7 @@ import {
 	parseGenericState,
 } from "../../state";
 import { isAPIError } from "../../utils/is-api-error";
-import { getBaseURL, getOrigin } from "../../utils/url";
+import { getBaseURL, getOrigin, trimTrailingSlashes } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import { checkSkipProxy, resolveCurrentURL } from "./utils";
 
@@ -66,6 +62,7 @@ export interface OAuthProxyOptions {
 	currentURL?: string | undefined;
 	/**
 	 * If a request in a production url it won't be proxied.
+	 * The configured auth basePath is appended to this application URL.
 	 *
 	 * default to `BETTER_AUTH_URL`
 	 */
@@ -391,9 +388,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						// Override baseURL to production so redirect_uri points to production
 						// This ensures OAuth provider callbacks go to the production server
 						if (productionURL) {
-							ctx.context.baseURL =
-								getBaseURL(productionURL, ctx.context.options.basePath) ??
-								productionURL;
+							const authPath = ctx.context.options.basePath || "/api/auth";
+							ctx.context.baseURL = appendURLPath(
+								trimTrailingSlashes(productionURL),
+								authPath.startsWith("/") ? authPath : `/${authPath}`,
+							);
 						}
 
 						// Construct proxy callback URL
@@ -401,11 +400,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							getBaseURL(currentURL.origin, ctx.context.options.basePath) ??
 							currentURL.origin;
 						const proxyCallbackURL = appendURLPath(
-							appendURLSegment(
-								appendURLPath(proxyBaseURL, "/callback"),
-								providerId,
-							),
-							"/oauth-proxy",
+							proxyBaseURL,
+							`/callback/${providerId}/oauth-proxy`,
 						);
 						const newCallbackURL = appendQueryParams(
 							proxyCallbackURL,
@@ -526,10 +522,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: appendURLPath(
-									ctx.context.baseURL,
-									getOAuthCallbackPath(provider),
-								),
+								redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
 							});
 						} catch (e) {
 							ctx.context.logger.error(

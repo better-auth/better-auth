@@ -2,11 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { AccountKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import {
-	appendQueryParams,
-	appendURLPath,
-	appendURLSegment,
-} from "@better-auth/core/utils/url";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
@@ -77,9 +73,9 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			const redirectURL = appendQueryParams(
-				appendURLSegment(
-					appendURLPath(c.context.baseURL, "/callback"),
-					c.params.id,
+				appendURLPath(
+					c.context.baseURL,
+					getOAuthCallbackPath({ id: c.params.id }),
 				),
 				params,
 			);
@@ -127,10 +123,7 @@ export const callbackOAuth = createAuthEndpoint(
 					state: freshState,
 					codeVerifier,
 					idTokenNonce,
-					redirectURI: appendURLPath(
-						c.context.baseURL,
-						getOAuthCallbackPath(provider),
-					),
+					redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				});
 				throw c.redirect(authUrl.toString());
 			}
@@ -215,10 +208,7 @@ export const callbackOAuth = createAuthEndpoint(
 				code: code,
 				codeVerifier,
 				deviceId: device_id,
-				redirectURI: appendURLPath(
-					c.context.baseURL,
-					getOAuthCallbackPath(provider),
-				),
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			});
 		} catch (e) {
 			c.context.logger.error("", e);

@@ -5,7 +5,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import {
 	appendQueryParams,
 	appendURLPath,
-	appendURLSegment,
+	appendURLSegments,
 } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getDate } from "../../utils/date";
@@ -140,7 +140,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			expiresAt,
 		});
 		const url = appendQueryParams(
-			appendURLSegment(
+			appendURLSegments(
 				appendURLPath(ctx.context.baseURL, "/reset-password"),
 				verificationToken,
 			),

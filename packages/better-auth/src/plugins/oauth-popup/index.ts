@@ -8,7 +8,6 @@ import {
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { appendURLPath, appendURLSegment } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { setOAuthState } from "../../api/state/oauth";
 import { getAwaitableValue } from "../../context/helpers";
@@ -19,6 +18,7 @@ import {
 } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { generateIdTokenNonce } from "../../oauth2/state";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { generateGenericState, INTERNAL_STATE_KEYS } from "../../state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
@@ -254,10 +254,7 @@ const oauthPopupStart = createAuthEndpoint(
 				state,
 				codeVerifier,
 				idTokenNonce,
-				redirectURI: appendURLSegment(
-					appendURLPath(c.context.baseURL, "/callback"),
-					provider.id,
-				),
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
 			});
 		} catch (error) {

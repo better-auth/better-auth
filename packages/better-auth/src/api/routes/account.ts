@@ -9,7 +9,6 @@ import {
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
-import { appendURLPath } from "@better-auth/core/utils/url";
 
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
@@ -435,10 +434,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			state: state.state,
 			codeVerifier: state.codeVerifier,
 			idTokenNonce,
-			redirectURI: appendURLPath(
-				c.context.baseURL,
-				getOAuthCallbackPath(provider),
-			),
+			redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			scopes: c.body.scopes,
 			loginHint: c.body.loginHint,
 			additionalParams: c.body.additionalParams,

@@ -2,7 +2,6 @@ import type {
 	BetterAuthClientOptions,
 	ClientAtomListener,
 } from "@better-auth/core";
-import { appendURLPath } from "@better-auth/core/utils/url";
 import { createFetch } from "@better-fetch/fetch";
 import { defu } from "defu";
 import type { WritableAtom } from "nanostores";
@@ -31,9 +30,7 @@ const resolvePublicAuthUrl = (basePath?: string) => {
 					? ""
 					: "https://";
 				const url = new URL(`${protocol}${process.env.VERCEL_URL}`);
-				return path
-					? appendURLPath(url.origin, path.startsWith("/") ? path : `/${path}`)
-					: url.origin;
+				return path ? getBaseURL(url.origin, path) : url.origin;
 			} catch {
 				// ignore invalid Vercel URL
 			}

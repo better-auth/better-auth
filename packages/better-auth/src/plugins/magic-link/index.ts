@@ -272,12 +272,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
-					const authURL = new URL(ctx.context.baseURL);
-					if (authURL.pathname === "/") {
-						authURL.pathname = ctx.context.options.basePath || "/";
-					}
 					const url = new URL(
-						appendURLPath(authURL.href, "/magic-link/verify"),
+						appendURLPath(ctx.context.baseURL, "/magic-link/verify"),
 					);
 					url.searchParams.set("token", verificationToken);
 					url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");

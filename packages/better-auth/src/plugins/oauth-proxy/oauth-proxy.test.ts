@@ -157,7 +157,7 @@ describe("oauth-proxy", async () => {
 		expect(new URL(location!).pathname).toBe("/custom/auth/error");
 	});
 
-	it("does not append the base path twice to a production URL with a path", async () => {
+	it("appends the auth base path to a production application URL with a path", async () => {
 		const { client } = await getTestInstance({
 			baseURL: "https://myapp.com",
 			plugins: [
@@ -177,7 +177,7 @@ describe("oauth-proxy", async () => {
 		);
 		expect(result.url).toBeDefined();
 		expect(new URL(result.url!).searchParams.get("redirect_uri")).toBe(
-			"https://login.myapp.com/custom/auth/callback/google",
+			"https://login.myapp.com/custom/auth/api/auth/callback/google",
 		);
 	});
 

@@ -122,6 +122,8 @@ The encrypted profile data is passed via URL query parameters and can only be de
 
 **productionURL**: The URL of the production server that handles provider callbacks for development and preview sign-ins. Sign-in requests are not proxied when the current origin matches this URL's origin. Defaults to the `BETTER_AUTH_URL` environment variable, then the auth `baseURL`.
 
+When set explicitly, `productionURL` is the application URL. The configured auth `basePath` is appended to it, including when the application URL contains a path.
+
 **currentURL**: The application's current URL is automatically determined by the plugin. It first checks the request URL, then vendor-specific environment variables from popular hosting providers, and finally falls back to the `baseURL` in your auth config. You only need to set this if the URL isn't being inferred correctly in your environment.
 
 **maxAge**: Maximum age in seconds for encrypted profile payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
