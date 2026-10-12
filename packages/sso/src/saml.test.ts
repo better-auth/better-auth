@@ -8994,5 +8994,120 @@ describe("SAML SSO Hardening", () => {
 				}),
 			).not.toThrow();
 		});
+
+		it("should query assertion consumer service using 'post' binding during processSAMLResponse execution", async () => {
+			const customAcsUrl =
+				"https://sp.example.com/api/auth/sso/saml2/custom-callback";
+			const config: SAMLConfig = {
+				issuer: "https://sp.example.com/saml/metadata",
+				entryPoint: "https://idp.example.com/sso",
+				cert: certificate,
+				idpMetadata: {
+					metadata: idpMetadata,
+				},
+				spMetadata: {
+					entityID: "https://sp.example.com/saml/metadata",
+				},
+			};
+
+			const spInstance = createSP(
+				config,
+				"http://localhost:3000",
+				"test-provider",
+			);
+			const spProto = Object.getPrototypeOf(spInstance);
+			const metaProto = Object.getPrototypeOf(spInstance.entityMeta);
+
+			const getAcsSpy = vi
+				.spyOn(metaProto, "getAssertionConsumerService")
+				.mockImplementation((binding: unknown) => {
+					if (binding === "post") {
+						return customAcsUrl;
+					}
+					return undefined;
+				});
+
+			const now = Date.now();
+			const notBefore = new Date(now - 60_000).toISOString();
+			const notOnOrAfter = new Date(now + 300_000).toISOString();
+
+			const samlXml = `
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="response-id" Version="2.0" IssueInstant="${notBefore}" Destination="${customAcsUrl}">
+	<saml:Issuer>https://idp.example.com</saml:Issuer>
+	<samlp:Status>
+		<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+	</samlp:Status>
+	<saml:Assertion ID="assertion-id" Version="2.0" IssueInstant="${notBefore}">
+		<saml:Issuer>https://idp.example.com</saml:Issuer>
+		<saml:Subject>
+			<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">user@example.com</saml:NameID>
+			<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+				<saml:SubjectConfirmationData Recipient="${customAcsUrl}" NotOnOrAfter="${notOnOrAfter}"/>
+			</saml:SubjectConfirmation>
+		</saml:Subject>
+		<saml:Conditions NotBefore="${notBefore}" NotOnOrAfter="${notOnOrAfter}">
+			<saml:AudienceRestriction>
+				<saml:Audience>https://sp.example.com/saml/metadata</saml:Audience>
+			</saml:AudienceRestriction>
+		</saml:Conditions>
+	</saml:Assertion>
+</samlp:Response>
+`;
+
+			const parseSpy = vi
+				.spyOn(spProto, "parseLoginResponse")
+				.mockResolvedValue({
+					extract: {
+						audience: "https://sp.example.com/saml/metadata",
+						conditions: {
+							notBefore,
+							notOnOrAfter,
+						},
+						nameID: "user@example.com",
+						attributes: {
+							email: "user@example.com",
+						},
+					},
+					samlContent: samlXml,
+				} as unknown as ReturnType<typeof spInstance.parseLoginResponse>);
+
+			const { auth } = await getTestInstance({
+				plugins: [
+					sso({
+						defaultSSO: [
+							{
+								providerId: "test-provider",
+								domain: "example.com",
+								samlConfig: config,
+							},
+						],
+						saml: {
+							allowIdpInitiated: true,
+						},
+					}),
+				],
+			});
+
+			const callbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: Buffer.from(samlXml).toString("base64"),
+				},
+				params: {
+					providerId: "test-provider",
+				},
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(callbackResponse.status).toBe(302);
+			const location = callbackResponse.headers.get("location") || "";
+			expect(location).not.toContain("error=invalid_saml_response");
+
+			expect(getAcsSpy).toHaveBeenCalledWith("post");
+			expect(getAcsSpy).not.toHaveBeenCalledWith(SAML_HTTP_POST_BINDING);
+
+			getAcsSpy.mockRestore();
+			parseSpy.mockRestore();
+		});
 	});
 });
