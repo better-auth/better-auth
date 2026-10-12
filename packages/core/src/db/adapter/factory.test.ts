@@ -368,12 +368,77 @@ describe("createAdapterFactory where value coercion", () => {
 
 	/**
 	 * A non-numeric value on an id field used to be coerced with a bare
-	 * `Number()`, so it reached the driver as `NaN` and surfaced as an opaque
-	 * driver-level validation error.
+	 * `Number()`, so it reached the driver as `NaN`. Depending on the driver,
+	 * that either matched nothing or failed with an opaque validation error.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/10773
 	 */
-	it("rejects non-numeric id values instead of passing NaN to the adapter", async () => {
+	it("matches no row for an id filter that cannot be a numeric id", async () => {
+		const seenWhere: CleanedWhere[][] = [];
+		const seenCreateData: Record<string, unknown>[] = [];
+		const adapter = createSerialIdAdapter({ seenWhere, seenCreateData });
+
+		expect(
+			await adapter.findMany({
+				model: "user",
+				where: [{ field: "id", operator: "eq", value: "agent-host-xyz" }],
+			}),
+		).toEqual([]);
+		expect(
+			await adapter.findMany({
+				model: "session",
+				where: [{ field: "userId", value: "agent-host-xyz" }],
+			}),
+		).toEqual([]);
+		// `Number("")` and `Number(" ")` are `0`, which no serial column ever holds.
+		expect(
+			await adapter.findMany({
+				model: "user",
+				where: [{ field: "id", value: " " }],
+			}),
+		).toEqual([]);
+		expect(
+			await adapter.findMany({
+				model: "user",
+				where: [{ field: "id", operator: "in", value: ["agent-host-xyz"] }],
+			}),
+		).toEqual([]);
+		// An unmatchable AND clause empties the result even beside an OR group.
+		expect(
+			await adapter.findMany({
+				model: "user",
+				where: [
+					{ field: "id", value: "agent-host-xyz" },
+					{ field: "email", value: "a@example.com", connector: "OR" },
+				],
+			}),
+		).toEqual([]);
+		expect(seenWhere).toEqual([]);
+
+		await adapter.findMany({
+			model: "user",
+			where: [
+				{ field: "id", operator: "in", value: ["1", "agent-host-xyz"] },
+				{ field: "id", value: "agent-host-xyz", connector: "OR" },
+				{ field: "email", value: "a@example.com", connector: "OR" },
+			],
+		});
+		expect(
+			seenWhere[0]?.map(({ field, value, connector }) => ({
+				field,
+				value,
+				connector,
+			})),
+		).toEqual([
+			{ field: "id", value: [1], connector: "AND" },
+			{ field: "email", value: "a@example.com", connector: "OR" },
+		]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10773
+	 */
+	it("rejects non-numeric ids outside equality filters and in writes", async () => {
 		const seenWhere: CleanedWhere[][] = [];
 		const seenCreateData: Record<string, unknown>[] = [];
 		const adapter = createSerialIdAdapter({ seenWhere, seenCreateData });
@@ -381,35 +446,9 @@ describe("createAdapterFactory where value coercion", () => {
 		await expect(
 			adapter.findMany({
 				model: "user",
-				where: [{ field: "id", operator: "eq", value: "agent-host-xyz" }],
+				where: [{ field: "id", operator: "ne", value: "agent-host-xyz" }],
 			}),
 		).rejects.toThrow(/numeric id/);
-
-		await expect(
-			adapter.findMany({
-				model: "session",
-				where: [{ field: "userId", operator: "eq", value: "agent-host-xyz" }],
-			}),
-		).rejects.toThrow(/numeric id/);
-
-		await expect(
-			adapter.findMany({
-				model: "user",
-				where: [
-					{ field: "id", operator: "in", value: ["1", "agent-host-xyz"] },
-				],
-			}),
-		).rejects.toThrow(/numeric id/);
-
-		// `Number("")` and `Number(" ")` are `0`, which no serial column ever holds.
-		await expect(
-			adapter.findMany({
-				model: "user",
-				where: [{ field: "id", operator: "eq", value: " " }],
-			}),
-		).rejects.toThrow(/numeric id/);
-
-		// the write path coerces id-referencing fields with the same bare `Number()`
 		await expect(
 			adapter.create({
 				model: "session",

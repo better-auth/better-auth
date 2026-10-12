@@ -195,6 +195,19 @@ export const createAdapterFactory =
 		});
 
 		/**
+		 * Parses a value for a numeric (`serial`) id column, or returns `undefined`
+		 * when no serial id can equal it.
+		 */
+		const parseNumberId = (value: unknown): number | undefined => {
+			// `Number("")` and `Number(" ")` are `0`, which no serial column holds.
+			const parsed =
+				typeof value === "string" && value.trim() === ""
+					? Number.NaN
+					: Number(value);
+			return Number.isInteger(parsed) ? parsed : undefined;
+		};
+
+		/**
 		 * Coerce a value that targets a numeric (`serial`) id column.
 		 *
 		 * A bare `Number()` turns any non-numeric input into `NaN`, which is then
@@ -206,12 +219,8 @@ export const createAdapterFactory =
 			model: string,
 			field: string,
 		): number => {
-			// `Number("")` and `Number(" ")` are `0`, which no serial column holds.
-			const parsed =
-				typeof value === "string" && value.trim() === ""
-					? Number.NaN
-					: Number(value);
-			if (!Number.isInteger(parsed)) {
+			const parsed = parseNumberId(value);
+			if (parsed === undefined) {
 				throw new BetterAuthError(
 					`[${config.adapterName}] Expected a numeric id for "${model}.${field}" because "advanced.database.generateId" is set to "serial", but received ${JSON.stringify(value)}.`,
 				);
@@ -512,29 +521,39 @@ export const createAdapterFactory =
 			return transformedData as any;
 		};
 
-		const transformWhereClause = <W extends Where[] | undefined>({
+		type WhereAction =
+			| "create"
+			| "update"
+			| "findOne"
+			| "findMany"
+			| "updateMany"
+			| "delete"
+			| "deleteMany"
+			| "consumeOne"
+			| "incrementOne"
+			| "count";
+
+		/**
+		 * Transforms a where clause, or returns `null` when it can match no row.
+		 *
+		 * Under serial ids, an `eq` or `in` filter on an id field whose values
+		 * cannot be ids (such as a client-supplied `"abc"`) matches nothing, like
+		 * any other id that does not exist. Callers then skip the query.
+		 */
+		const resolveWhereClause = <W extends Where[] | undefined>({
 			model,
 			where,
 			action,
 		}: {
 			where: W;
 			model: string;
-			action:
-				| "create"
-				| "update"
-				| "findOne"
-				| "findMany"
-				| "updateMany"
-				| "delete"
-				| "deleteMany"
-				| "consumeOne"
-				| "incrementOne"
-				| "count";
-		}): W extends undefined ? undefined : CleanedWhere[] => {
+			action: WhereAction;
+		}): W extends undefined ? undefined : CleanedWhere[] | null => {
 			if (!where) return undefined as any;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
+			const unmatchable = new Set<number>();
 
-			return where.map((w) => {
+			const cleaned = where.map((w, index) => {
 				const {
 					field: unsafe_field,
 					value,
@@ -574,12 +593,24 @@ export const createAdapterFactory =
 					fieldAttr!.references?.field === "id"
 				) {
 					if (useNumberId) {
-						if (Array.isArray(value)) {
+						if (Array.isArray(value) && operator === "in") {
+							const ids = value.flatMap((v) => {
+								if (v === null || v === undefined) return [v];
+								const id = parseNumberId(v);
+								return id === undefined ? [] : [id];
+							});
+							if (value.length > 0 && ids.length === 0) unmatchable.add(index);
+							newValue = ids as typeof value;
+						} else if (Array.isArray(value)) {
 							newValue = value.map((v) =>
 								v === null || v === undefined
 									? v
 									: toNumberId(v, defaultModelName, defaultFieldName),
 							);
+						} else if (value !== null && operator === "eq") {
+							const id = parseNumberId(value);
+							if (id === undefined) unmatchable.add(index);
+							else newValue = id;
 						} else if (value !== null) {
 							newValue = toNumberId(value, defaultModelName, defaultFieldName);
 						}
@@ -657,7 +688,33 @@ export const createAdapterFactory =
 					value: newValue,
 					mode,
 				} satisfies CleanedWhere;
-			}) as any;
+			});
+			if (unmatchable.size === 0) return cleaned as any;
+			// AND clauses must all match, so one unmatchable clause empties the
+			// result. An unmatchable OR clause only drops out of its group.
+			if (cleaned.some((w, i) => unmatchable.has(i) && w.connector !== "OR")) {
+				return null as any;
+			}
+			const remaining = cleaned.filter((_, i) => !unmatchable.has(i));
+			const hadOr = cleaned.some((w) => w.connector === "OR");
+			if (hadOr && !remaining.some((w) => w.connector === "OR")) {
+				return null as any;
+			}
+			return remaining as any;
+		};
+
+		const transformWhereClause = <W extends Where[] | undefined>(input: {
+			where: W;
+			model: string;
+			action: WhereAction;
+		}): W extends undefined ? undefined : CleanedWhere[] => {
+			const where = resolveWhereClause(input);
+			if (where === null) {
+				throw new BetterAuthError(
+					`[${config.adapterName}] The where clause for "${input.model}" compares an id field to a value that is not a numeric id, which "advanced.database.generateId": "serial" requires.`,
+				);
+			}
+			return where as any;
 		};
 
 		const transformJoinClause = (
@@ -1013,14 +1070,14 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "update",
 				});
 				// `update` targets a single row. Empty predicates have no
 				// target, so fail closed and leave bulk writes to `updateMany`.
-				if (where.length === 0) {
+				if (!where || where.length === 0) {
 					return null;
 				}
 				debugLog(
@@ -1089,11 +1146,12 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "updateMany",
 				});
+				if (where === null) return 0;
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -1162,11 +1220,12 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "findOne",
 				});
+				if (where === null) return null;
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
@@ -1254,11 +1313,12 @@ export const createAdapterFactory =
 					100;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "findMany",
 				});
+				if (where === null) return [];
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
@@ -1338,11 +1398,12 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "delete",
 				});
+				if (where === null) return;
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1380,11 +1441,12 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "deleteMany",
 				});
+				if (where === null) return 0;
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1423,11 +1485,12 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "consumeOne",
 				});
+				if (where === null) return null;
 				debugLog(
 					{ method: "consumeOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -1503,11 +1566,12 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "incrementOne",
 				});
+				if (where === null) return null;
 				debugLog(
 					{ method: "incrementOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -1594,11 +1658,12 @@ export const createAdapterFactory =
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
-				const where = transformWhereClause({
+				const where = resolveWhereClause({
 					model: modelKey,
 					where: unsafeWhere,
 					action: "count",
 				});
+				if (where === null) return 0;
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
