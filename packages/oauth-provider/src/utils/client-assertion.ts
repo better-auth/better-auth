@@ -74,6 +74,18 @@ function getJwksCacheEntry(
 	return entry;
 }
 
+// Drops an entry whose fetch left no key set, so failing `jwks_uri`s cannot
+// evict cached key sets from the bounded cache.
+function discardEmptyJwksCacheEntry(
+	opts: OAuthOptions<Scope[]>,
+	cacheKey: string,
+	entry: JwksCacheEntry,
+): void {
+	if (entry.jwks || isFetching(entry, Date.now())) return;
+	const cache = jwksCaches.get(opts);
+	if (cache?.get(cacheKey) === entry) cache.delete(cacheKey);
+}
+
 // A fetch older than its own timeout is dead: Cloudflare Workers cancels a
 // request's I/O when that request ends, so its promise may never settle.
 function isFetching(entry: JwksCacheEntry, now: number): boolean {
@@ -336,11 +348,14 @@ async function loadClientJwks(
 	);
 
 	const readAt = Date.now();
-	const entry = getJwksCacheEntry(opts, getJwksCacheKey(client));
+	const cacheKey = getJwksCacheKey(client);
+	const entry = getJwksCacheEntry(opts, cacheKey);
 	const load = () =>
-		loadJwks(entry, jwksUri, discovery?.fetchClientMetadataResource);
+		loadJwks(entry, jwksUri, discovery?.fetchClientMetadataResource).finally(
+			() => discardEmptyJwksCacheEntry(opts, cacheKey, entry),
+		);
 	const { jwks, fetched } = await readJwks(entry, readAt, load);
-	return { jwks, refresh: () => refreshJwks(entry, fetched, load) };
+	return { jwks, refresh: () => refreshJwks(entry, jwks, fetched, load) };
 }
 
 async function readJwks(
@@ -370,18 +385,21 @@ async function readJwks(
 /**
  * Fetches a newer key set after the cached one had no key for an assertion,
  * such as one naming a `kid` the client published after the set was cached.
- * Joins a fetch already in flight. Otherwise refetches, unless this request
- * just fetched the set or another unknown-key refetch started within
+ * Joins a fetch already in flight, or uses a set another request fetched after
+ * `current` was read. Otherwise refetches, unless this request just fetched
+ * `current` or another unknown-key refetch started within
  * `JWKS_REFETCH_COOLDOWN_MS`. A refetch consumes the cooldown whether or not it
  * succeeds.
  */
 async function refreshJwks(
 	entry: JwksCacheEntry,
+	current: JSONWebKeySet,
 	fetched: boolean,
 	load: () => Promise<FetchedJwksResult>,
 ): Promise<JSONWebKeySet | null> {
 	const now = Date.now();
 	if (!isFetching(entry, now)) {
+		if (entry.jwks && entry.jwks !== current) return entry.jwks;
 		if (fetched) return null;
 		if (now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) return null;
 		entry.refetchedAt = now;
