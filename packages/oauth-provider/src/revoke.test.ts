@@ -6,6 +6,8 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { APIError } from "better-call";
+import { createLocalJWKSet, importJWK, jwtVerify, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -753,5 +755,307 @@ describe("oauth revoke - config", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+	});
+});
+
+describe("oauth revoke - decrypt failures inside the search loop (cubic P2/P3)", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+
+	async function createDecryptInstance(
+		decryptImpl: (token: string) => { sessionId?: string; token: string },
+	) {
+		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						formatRefreshToken: {
+							encrypt: (token) => `wrapped-${token}`,
+							decrypt: decryptImpl,
+						},
+					}),
+				],
+			},
+		);
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["http://localhost:5000/api/auth/callback/test"],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
+		});
+		return { client, registered };
+	}
+
+	it("returns 500 when the decrypt callback fails with a server-class APIError instead of masking it as 200", async () => {
+		// cubic finding 2: only lookup failures (BAD_REQUEST) may fall
+		// through to the other token type. A non-400 APIError from the
+		// user-supplied decrypt callback is a backend failure: the old loop
+		// swallowed it into a 200, hiding the failure from the client.
+		const boom = new APIError("INTERNAL_SERVER_ERROR", {
+			error_description: "decrypt backend failure",
+			error: "server_error",
+		});
+		const { client, registered } = await createDecryptInstance(() => {
+			throw boom;
+		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: registered?.client_id,
+				client_secret: registered?.client_secret,
+				token: "any-token-value",
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error?.status).toBe(500);
+	});
+
+	it("returns 200 when the decrypt callback rejects a malformed token with a plain Error (unrecognized token, not a 500)", async () => {
+		// cubic finding 3: `formatRefreshToken.decrypt` is user-supplied and
+		// commonly throws a plain Error for malformed input. The old loop
+		// let that escape to the outer handler, turning an unrecognized
+		// token into a 500. RFC 7009 section 2.2 requires a 200.
+		const { client, registered } = await createDecryptInstance(() => {
+			throw new Error("malformed token payload");
+		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: registered?.client_id,
+				client_secret: registered?.client_secret,
+				token: "not-a-valid-wrapped-token",
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+});
+
+describe("oauth revoke - jwt-formatted refresh token (cubic P2 null short-circuit)", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const scopes = ["openid", "email", "profile", "offline_access"];
+
+	it("revokes a JWT-formatted refresh token sent with the wrong hint (verifier null must continue the search)", async () => {
+		// cubic finding 1 end-to-end: a deployment formats its refresh
+		// tokens as JWTs via formatRefreshToken.decrypt. Revoked with the
+		// wrong hint, the access-token verifier signature-verifies the JWT
+		// and then disowns it (no azp claim) and resolves null. The old
+		// loop treated that null as a successful revocation and exited:
+		// 200 reported, refresh token left active. The fixed loop continues
+		// into the refresh store and actually revokes it.
+		const { auth, customFetchImpl, signInWithTestUser, db } =
+			await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+						jwks: {
+							disablePrivateKeyEncryption: true,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						// decrypt is configured up-front: the JWT-formatted
+						// token presentation only needs the decode half of
+						// formatRefreshToken. encrypt stays identity so the
+						// stored token is the raw opaque value.
+						formatRefreshToken: {
+							encrypt: (token) => token,
+							decrypt: async (token: string) => {
+								const jwkRow = (await db.findOne({
+									model: "jwks",
+									where: [],
+								})) as { privateKey: string; alg?: string; id?: string } | null;
+								const alg = jwkRow?.alg ?? "EdDSA";
+								// The public half of the stored private JWK is the same JWK
+								// without the private `d` member, so the wrapper verifies
+								// without an extractable-key round trip.
+								const privateJwk = JSON.parse(jwkRow!.privateKey) as Record<
+									string,
+									unknown
+								>;
+								const { payload } = await jwtVerify(
+									token,
+									createLocalJWKSet({
+										keys: [
+											{
+												...privateJwk,
+												d: undefined,
+												alg,
+												kid: jwkRow?.id,
+											},
+										],
+									}),
+									{ issuer: authServerBaseUrl },
+								);
+								if (typeof payload.jti !== "string") {
+									throw new Error("malformed refresh token");
+								}
+								return { token: payload.jti };
+							},
+						},
+					}),
+				],
+			});
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
+		});
+		expect(registered?.client_id).toBeDefined();
+
+		// Mint a refresh token. encrypt is the identity, so the stored row
+		// holds the raw opaque token that is returned to the client.
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: registered!.client_id,
+				clientSecret: registered!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes,
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code: callbackUrl.searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: registered!.client_id,
+				clientSecret: registered!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<{ refresh_token?: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body,
+				headers: tokenHeaders,
+			},
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+		const rawRefresh = tokens.data?.refresh_token!;
+
+		// The deployment presents this token to clients as a JWT signed
+		// with the AS's own key (an opaque-token-in-a-JWT wrapper, the
+		// shape formatRefreshToken is for). The AS key now exists: the
+		// access token in the same response was minted with it.
+		const jwkRow = (await db.findOne({
+			model: "jwks",
+			where: [],
+		})) as { privateKey: string; alg?: string; id?: string } | null;
+		expect(jwkRow).toBeTruthy();
+		const alg = jwkRow!.alg ?? "EdDSA";
+		const key = await importJWK(JSON.parse(jwkRow!.privateKey) as never, alg);
+		const jwtRefresh = await new SignJWT({ jti: rawRefresh })
+			.setProtectedHeader({ alg, kid: jwkRow!.id })
+			.setIssuer(authServerBaseUrl)
+			.setIssuedAt()
+			.setExpirationTime("30d")
+			.sign(key);
+
+		// Revoke with the WRONG hint (access_token): signature-valid JWT,
+		// disowned by the access verifier (no azp claim -> null).
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: registered!.client_id,
+				client_secret: registered!.client_secret,
+				token: jwtRefresh,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+
+		// The refresh token MUST actually be revoked: the refresh grant
+		// fails with invalid_grant afterwards. On the old code the null
+		// exited the search early and this grant would succeed.
+		const refreshed = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: jwtRefresh,
+					client_id: registered!.client_id,
+					client_secret: registered!.client_secret!,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshed.error?.status).toBe(400);
+		expect((refreshed.error as { error?: string })?.error).toBe(
+			"invalid_grant",
+		);
 	});
 });

@@ -357,7 +357,23 @@ export async function revokeEndpoint(
 		const revokeAsAccessToken = async () =>
 			await revokeAccessToken(ctx, opts, client.clientId, token);
 		const revokeAsRefreshToken = async () => {
-			const refreshToken = await decodeRefreshToken(opts, token);
+			let refreshToken: { token: string };
+			try {
+				refreshToken = await decodeRefreshToken(opts, token);
+			} catch (error) {
+				// The refresh-token format is deployment-defined (prefix
+				// check + optional user-supplied decrypt). A token that
+				// fails to decode is an unrecognized token (RFC 7009
+				// section 2.2: still a 200), not an internal failure: let
+				// the search continue instead of returning a 500.
+				if (error instanceof APIError) {
+					throw error;
+				}
+				throw new APIError("BAD_REQUEST", {
+					error_description: "refresh token not found",
+					error: "invalid_request",
+				});
+			}
 			return await revokeRefreshToken(
 				ctx,
 				opts,
@@ -373,7 +389,17 @@ export async function revokeEndpoint(
 
 		for (const attempt of attempts) {
 			try {
-				return await attempt();
+				const result = await attempt();
+				if (result === null) {
+					// The token was structurally recognized (a signature-verified
+					// JWT) but is inactive as this type (expired or
+					// audience-rejected). That is "unrecognized as an active
+					// token of this type", not a revocation success: continue
+					// the search across the other token type instead of ending
+					// it here.
+					continue;
+				}
+				return result;
 			} catch (error) {
 				if (error instanceof APIError) {
 					// An explicit protocol error (the token is a type this
@@ -382,8 +408,13 @@ export async function revokeEndpoint(
 					if (error.body?.error === "unsupported_token_type") {
 						throw error;
 					}
-					// Not found (or already revoked) as this type: continue
-					// to the other token type.
+					// Only a not-found/already-revoked BAD_REQUEST means
+					// "keep searching as the other type". Any other status is
+					// a backend or protocol failure that must not be masked
+					// by a 200.
+					if (error.status !== "BAD_REQUEST") {
+						throw error;
+					}
 					continue;
 				}
 				if (error instanceof Error) {
