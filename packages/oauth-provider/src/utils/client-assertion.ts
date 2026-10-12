@@ -327,9 +327,10 @@ async function fetchClientJwks(
 /**
  * Refetch JWKS from jwks_uri when the assertion names a `kid` that the cached
  * JWKS does not contain. Handles key rotation: the client may have published a
- * new key that isn't in our cache yet. A known `kid` with a bad signature, or
- * an assertion without a `kid`, never refetches, and refetches are limited to
- * one per client per `JWKS_REFETCH_COOLDOWN_MS`.
+ * new key that isn't in our cache yet. A `kid` already in the cached JWKS, or
+ * an assertion without a `kid`, never refetches. Other failures (such as an
+ * expired assertion) do not prevent a refetch when the `kid` is unknown.
+ * Refetches are limited to one per client per `JWKS_REFETCH_COOLDOWN_MS`.
  */
 async function refetchClientJwks(
 	opts: OAuthOptions<Scope[]>,
@@ -605,9 +606,10 @@ export async function verifyClientAssertion(
 			verifyOpts,
 		));
 	} catch {
-		// Claim failures (expired, bad audience) and bad signatures under a known
-		// kid never refetch; only a kid missing from the cached JWKS can mean
-		// the client rotated keys.
+		// Any verification failure reaches here, including claim failures, because
+		// jose resolves the key before it checks claims. A refetch needs a present
+		// `kid` missing from the cached JWKS, whatever else is wrong, and is
+		// bounded by the per-client cooldown.
 		const refreshed = await refetchClientJwks(opts, client, jwks, header.kid);
 		if (!refreshed) {
 			throw new APIError("UNAUTHORIZED", {

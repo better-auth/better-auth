@@ -607,7 +607,7 @@ const response = await auth.api.adminCreateOAuthClient({
 
 #### Rotating `jwks_uri` keys
 
-Better Auth caches a client's `jwks_uri` response for 5 minutes. When an assertion's header `kid` is missing from the cached key set, Better Auth refetches the `jwks_uri` once and verifies the assertion against the fresh keys. A known `kid` with a bad signature, an assertion without a `kid`, and claim failures such as an expired or mismatched `aud` never trigger a refetch. Refetches are limited to one per client every 60 seconds per server process, whether or not the previous attempt succeeded, so unknown `kid` values cannot be used to make the provider call the client's endpoint repeatedly.
+Better Auth caches a client's `jwks_uri` response for 5 minutes. When an assertion's header `kid` is missing from the cached key set, Better Auth refetches the `jwks_uri` once and verifies the assertion against the fresh keys. A refetch requires a `kid` that is present but missing from the cached key set. A `kid` that is already cached, including one with a bad signature or failing claims, and an assertion without a `kid` never trigger a refetch. An assertion with an unknown `kid` can trigger it even if it also fails for another reason, such as being expired or having a mismatched `aud`. Refetches are limited to one per client every 60 seconds per server process, whether or not the previous attempt succeeded, so unknown `kid` values cannot be used to make the provider call the client's endpoint repeatedly.
 
 To rotate without failed authentications, give every key a unique `kid` and follow this order:
 

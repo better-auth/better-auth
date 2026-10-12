@@ -404,7 +404,31 @@ describe("private_key_jwt authentication", async () => {
 					clientId,
 					audience,
 				);
+			const verifyRaw = async (
+				key: CryptoKey,
+				header: { alg: "RS256"; kid?: string },
+				expiresIn = 120,
+			) => {
+				const now = Math.floor(Date.now() / 1000);
+				return verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					await new SignJWT({})
+						.setProtectedHeader(header)
+						.setIssuer(clientId)
+						.setSubject(clientId)
+						.setAudience(audience)
+						.setIssuedAt(now - 600)
+						.setExpirationTime(now + expiresIn)
+						.setJti(crypto.randomUUID())
+						.sign(key),
+					CLIENT_ASSERTION_TYPE,
+					clientId,
+					audience,
+				);
+			};
 			return {
+				verifyRaw,
 				clientId,
 				oldKey: oldPair.privateKey as CryptoKey,
 				newKey: newPair.privateKey as CryptoKey,
@@ -456,6 +480,82 @@ describe("private_key_jwt authentication", async () => {
 
 			await expect(t.verify("old", t.newKey)).rejects.toBeDefined();
 			expect(t.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("never refetches for an assertion without a kid", async () => {
+			const t = await setup("kid-missing");
+			await t.verify("old", t.oldKey);
+			t.publishNewKey();
+
+			await expect(
+				t.verifyRaw(t.newKey, { alg: "RS256" }),
+			).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("does not refetch for a claim failure under a known kid", async () => {
+			const t = await setup("kid-claims");
+			await t.verify("old", t.oldKey);
+
+			await expect(
+				t.verifyRaw(t.oldKey, { alg: "RS256", kid: "old" }, -10),
+			).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("refetches for an unknown kid even when the claims also fail", async () => {
+			const t = await setup("kid-unknown-expired");
+			await t.verify("old", t.oldKey);
+			t.publishNewKey();
+
+			await expect(
+				t.verifyRaw(t.newKey, { alg: "RS256", kid: "new" }, -10),
+			).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("consumes the cooldown when the refetch fails", async () => {
+			const t = await setup("kid-failed-fetch");
+			await t.verify("old", t.oldKey);
+			t.transport.mockImplementationOnce(() =>
+				Promise.resolve(new Response("nope", { status: 500 })),
+			);
+
+			await expect(t.verify("new", t.newKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(2);
+
+			t.publishNewKey();
+			await expect(t.verify("new", t.newKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("consumes the cooldown when the refetched JWKS is invalid", async () => {
+			const t = await setup("kid-invalid-fetch");
+			await t.verify("old", t.oldKey);
+			t.transport.mockImplementationOnce(() =>
+				Promise.resolve(Response.json({ keys: "not-an-array" })),
+			);
+
+			await expect(t.verify("new", t.newKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(2);
+
+			t.publishNewKey();
+			await expect(t.verify("new", t.newKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("fetches at most once for concurrent unknown-kid assertions", async () => {
+			const t = await setup("kid-concurrent");
+			await t.verify("old", t.oldKey);
+			t.publishNewKey();
+
+			const results = await Promise.allSettled(
+				Array.from({ length: 5 }, () => t.verify("new", t.newKey)),
+			);
+			expect(t.transport).toHaveBeenCalledTimes(2);
+			expect(
+				results.filter((r) => r.status === "fulfilled").length,
+			).toBeGreaterThanOrEqual(1);
 		});
 	});
 
