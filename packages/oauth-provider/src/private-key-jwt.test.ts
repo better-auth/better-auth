@@ -5,6 +5,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
@@ -377,7 +378,7 @@ describe("private_key_jwt authentication", async () => {
 				exportJWK(oldPair.publicKey),
 				exportJWK(newPair.publicKey),
 			]);
-			const published = [{ ...oldJwk, kid: "old", alg: "RS256" }];
+			const published: JWK[] = [{ ...oldJwk, kid: "old", alg: "RS256" }];
 			const transport = vi
 				.fn()
 				.mockImplementation(() =>
@@ -406,7 +407,7 @@ describe("private_key_jwt authentication", async () => {
 				);
 			const verifyRaw = async (
 				key: CryptoKey,
-				header: { alg: "RS256"; kid?: string },
+				header: { alg: string; kid?: string },
 				expiresIn = 120,
 			) => {
 				const now = Math.floor(Date.now() / 1000);
@@ -418,7 +419,7 @@ describe("private_key_jwt authentication", async () => {
 						.setIssuer(clientId)
 						.setSubject(clientId)
 						.setAudience(audience)
-						.setIssuedAt(now - 600)
+						.setIssuedAt(now)
 						.setExpirationTime(now + expiresIn)
 						.setJti(crypto.randomUUID())
 						.sign(key),
@@ -432,6 +433,7 @@ describe("private_key_jwt authentication", async () => {
 				clientId,
 				oldKey: oldPair.privateKey as CryptoKey,
 				newKey: newPair.privateKey as CryptoKey,
+				publish: (jwk: JWK) => published.push(jwk),
 				publishNewKey: () =>
 					published.push({ ...newJwk, kid: "new", alg: "RS256" }),
 				transport,
@@ -544,18 +546,68 @@ describe("private_key_jwt authentication", async () => {
 			expect(t.transport).toHaveBeenCalledTimes(2);
 		});
 
-		it("fetches at most once for concurrent unknown-kid assertions", async () => {
+		it("shares one refetch across concurrent unknown-kid assertions", async () => {
 			const t = await setup("kid-concurrent");
 			await t.verify("old", t.oldKey);
 			t.publishNewKey();
+			const fetchJwks = t.transport.getMockImplementation()!;
+			t.transport.mockImplementation(async (...args) => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return fetchJwks(...args);
+			});
 
 			const results = await Promise.allSettled(
 				Array.from({ length: 5 }, () => t.verify("new", t.newKey)),
 			);
+			expect(results.map((r) => r.status)).toEqual(Array(5).fill("fulfilled"));
 			expect(t.transport).toHaveBeenCalledTimes(2);
-			expect(
-				results.filter((r) => r.status === "fulfilled").length,
-			).toBeGreaterThanOrEqual(1);
+		});
+
+		it("does not refetch a key set fetched by the same request", async () => {
+			const t = await setup("kid-cold");
+
+			await expect(t.verify("ghost", t.oldKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("refetches when a kid-less assertion matches no cached key type", async () => {
+			const t = await setup("kid-less-key-type");
+			await t.verify("old", t.oldKey);
+			const ecPair = await generateKeyPair("ES256", { extractable: true });
+			t.publish({ ...(await exportJWK(ecPair.publicKey)), alg: "ES256" });
+
+			await expect(
+				t.verifyRaw(ecPair.privateKey as CryptoKey, { alg: "ES256" }),
+			).resolves.toEqual({ clientId: t.clientId });
+			expect(t.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("replaces a fetch that outlived its timeout", async () => {
+			const t = await setup("kid-dead-fetch");
+			await t.verify("old", t.oldKey);
+			vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+			let fetchStarted!: () => void;
+			const started = new Promise<void>((resolve) => {
+				fetchStarted = resolve;
+			});
+			// A fetch whose request was canceled never settles.
+			t.transport.mockImplementationOnce(() => {
+				fetchStarted();
+				return new Promise(() => {});
+			});
+
+			const stuck = t.verify("new", t.newKey);
+			const stuckResult = expect(stuck).rejects.toBeDefined();
+			await started;
+			await vi.advanceTimersByTimeAsync(5_000);
+			await stuckResult;
+
+			// Past the stale-cache grace period, so only a new fetch can verify.
+			vi.setSystemTime(Date.now() + 10 * 60 * 1000 + 1);
+			await expect(t.verify("old", t.oldKey)).resolves.toEqual({
+				clientId: t.clientId,
+			});
+			expect(t.transport).toHaveBeenCalledTimes(3);
 		});
 	});
 

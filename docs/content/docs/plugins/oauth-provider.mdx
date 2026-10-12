@@ -607,14 +607,14 @@ const response = await auth.api.adminCreateOAuthClient({
 
 #### Rotating `jwks_uri` keys
 
-Better Auth caches a client's `jwks_uri` response for 5 minutes. When an assertion's header `kid` is missing from the cached key set, Better Auth refetches the `jwks_uri` once and verifies the assertion against the fresh keys. A refetch requires a `kid` that is present but missing from the cached key set. A `kid` that is already cached, including one with a bad signature or failing claims, and an assertion without a `kid` never trigger a refetch. An assertion with an unknown `kid` can trigger it even if it also fails for another reason, such as being expired or having a mismatched `aud`. Refetches are limited to one per client every 60 seconds per server process, whether or not the previous attempt succeeded, so unknown `kid` values cannot be used to make the provider call the client's endpoint repeatedly.
+Better Auth caches a client's `jwks_uri` key set for 5 minutes. When an assertion names a key the cached set lacks, such as a new `kid`, Better Auth refetches the `jwks_uri` and verifies against the fresh set. Each server process refetches a `jwks_uri` at most once every 60 seconds, whether or not the refetch succeeds, and concurrent assertions share one refetch. This keeps assertions naming unknown keys from making the provider call the client's endpoint repeatedly.
 
 To rotate without failed authentications, give every key a unique `kid` and follow this order:
 
 1. Publish the new key at the `jwks_uri` next to the old key.
-2. Start signing assertions with the new key. An assertion that arrives while the cache is stale triggers the refetch. If another unknown-`kid` refetch happened in the last 60 seconds, the assertion fails and the client can retry after the cooldown.
-3. Keep the old key published for at least 10 minutes, which covers the 5 minute cache lifetime, the 60 second cooldown, and assertions already signed with it.
-4. Remove the old key. Provider processes that still hold a cached copy accept it until the cache expires, at most 5 minutes after removal, or 10 minutes if the `jwks_uri` is unreachable.
+2. Wait 5 minutes, so every cached copy includes the new key, then start signing with it. Signing right away also works through the refetch, unless another refetch of the same `jwks_uri` happened in the last 60 seconds. In that case the assertion fails and the client can retry after the cooldown.
+3. Keep the old key published until assertions signed with it have expired, which takes `assertionMaxLifetime` (5 minutes by default).
+4. Remove the old key. Processes that cached it keep accepting it until their cache expires: at most 5 minutes after removal, or 10 minutes if the `jwks_uri` is unreachable.
 
 Clients that register inline `jwks` have no refetch; update the registration to rotate.
 
