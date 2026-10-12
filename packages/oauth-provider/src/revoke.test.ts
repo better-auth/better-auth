@@ -211,7 +211,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
+	it("revokes a refresh token sent with the wrong token_type_hint (RFC 7009 section 2.2.1)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -227,7 +227,37 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		// RFC 7009 section 2.2.1: if the server is unable to locate the token
+		// using the given hint, it MUST extend its search across all of its
+		// supported token types. The hint only orders the search; it must not
+		// turn a valid revocation into an error.
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+
+		// The refresh token must actually be revoked: the refresh grant fails
+		// with invalid_grant afterwards.
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const refreshed = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: tokens.data?.refresh_token!,
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshed.error?.status).toBe(400);
+		expect((refreshed.error as { error?: string })?.error).toBe(
+			"invalid_grant",
+		);
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
@@ -250,7 +280,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
+	it("revokes an opaque access token sent with the wrong token_type_hint (RFC 7009 section 2.2.1)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -266,7 +296,31 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		// The hint only orders the search; the search extends across all
+		// supported token types when the hinted lookup fails.
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+
+		// The opaque access token must actually be revoked: introspection
+		// reports it inactive afterwards.
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const introspection = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/introspect",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					token: tokens.data?.access_token!,
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data?.active).toBe(false);
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
@@ -326,6 +380,153 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+	});
+
+	it("returns 200 for a nonexistent token (RFC 7009 section 2.2)", async () => {
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "not-a-real-token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		// RFC 7009 section 2.2: the server responds with 200 if the token has
+		// been revoked successfully OR if the client submitted an invalid
+		// token. An invalid token must not produce an error response.
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+
+	it("returns 200 for a nonexistent token with token_type_hint access_token", async () => {
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "not-a-real-token",
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+
+	it("returns 200 for a nonexistent token with token_type_hint refresh_token", async () => {
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "not-a-real-token",
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+
+	it("returns 200 when revoking an already-revoked refresh token", async () => {
+		const tokens = await getTokens();
+		{
+			const first = await client.oauth2.revoke(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token: tokens.data?.refresh_token!,
+					token_type_hint: "refresh_token",
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(first.data).toBe(null);
+			expect(first.error).toBe(null);
+		}
+		// Second revocation of the same (now revoked) token: the family
+		// teardown still runs, but the response is 200 per RFC 7009.
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+
+	it("returns 200 for a refresh_token sent with token_type_hint access_token", async () => {
+		const tokens = await getTokens();
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		// The hint is only a hint (RFC 7009 section 2.2.1): the server
+		// searches across all supported token types. Revoking a refresh
+		// token succeeds regardless of the hint the client sent.
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+
+		// The refresh token must actually be revoked: the refresh grant
+		// fails with invalid_grant afterwards.
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const refreshed = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: tokens.data?.refresh_token!,
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshed.error?.status).toBe(400);
+		expect((refreshed.error as { error?: string })?.error).toBe(
+			"invalid_grant",
+		);
 	});
 });
 

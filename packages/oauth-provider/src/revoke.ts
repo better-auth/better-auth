@@ -350,44 +350,46 @@ export async function revokeEndpoint(
 	);
 
 	try {
-		if (token_type_hint === undefined || token_type_hint === "access_token") {
-			try {
-				return await revokeAccessToken(ctx, opts, client.clientId, token);
-			} catch (error) {
-				if (error instanceof APIError) {
-					if (
-						token_type_hint === "access_token" ||
-						error.body?.error === "unsupported_token_type"
-					) {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
-				}
-			}
-		}
+		// RFC 7009 section 2.2.1: the hint only orders the search. When the
+		// hinted lookup fails to locate the token, the search extends across
+		// all supported token types instead of failing, so a client sending
+		// a wrong or missing hint still gets its token revoked.
+		const revokeAsAccessToken = async () =>
+			await revokeAccessToken(ctx, opts, client.clientId, token);
+		const revokeAsRefreshToken = async () => {
+			const refreshToken = await decodeRefreshToken(opts, token);
+			return await revokeRefreshToken(
+				ctx,
+				opts,
+				refreshToken.token,
+				client.clientId,
+			);
+		};
 
-		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
+		const attempts =
+			token_type_hint === "refresh_token"
+				? [revokeAsRefreshToken, revokeAsAccessToken]
+				: [revokeAsAccessToken, revokeAsRefreshToken];
+
+		for (const attempt of attempts) {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
-				return await revokeRefreshToken(
-					ctx,
-					opts,
-					refreshToken.token,
-					client.clientId,
-				);
+				return await attempt();
 			} catch (error) {
 				if (error instanceof APIError) {
-					if (token_type_hint === "refresh_token") {
+					// An explicit protocol error (the token is a type this
+					// server cannot revoke) must surface rather than being
+					// masked by the other type's not-found failure.
+					if (error.body?.error === "unsupported_token_type") {
 						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
+					}
+					// Not found (or already revoked) as this type: continue
+					// to the other token type.
+					continue;
 				}
+				if (error instanceof Error) {
+					throw error;
+				}
+				throw new Error(error as unknown as string);
 			}
 		}
 
@@ -402,7 +404,13 @@ export async function revokeEndpoint(
 			if (error.body?.error === "unsupported_token_type") {
 				throw error;
 			}
-			if (error.name === "BAD_REQUEST") {
+			// RFC 7009 §2.2: the server responds with 200 if the token has been
+			// revoked successfully or if the client submitted an invalid token.
+			// `APIError#name` is always "APIError" (better-call), so the status
+			// field is the discriminator. 400s from token lookup/revocation
+			// become a successful empty response; other statuses (e.g. the 401
+			// invalid_client) still surface.
+			if (error.status === "BAD_REQUEST") {
 				return null;
 			}
 			throw error;
