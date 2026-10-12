@@ -2187,6 +2187,35 @@ describe("oauth token - refresh_token family invalidation", async () => {
 		}
 	}
 
+	/**
+	 * Like `withFailingDeleteMany`, but fails the first `updateMany` against
+	 * `model`.
+	 */
+	async function withFailingUpdateMany<T>(
+		model: "oauthAccessToken" | "oauthRefreshToken",
+		request: () => Promise<T>,
+	) {
+		const context = await authorizationServer.$context;
+		const updateMany = context.adapter.updateMany.bind(context.adapter);
+		let failed = false;
+		const spy = vi
+			.spyOn(context.adapter, "updateMany")
+			.mockImplementation(async (data) => {
+				if (!failed && data.model === model) {
+					failed = true;
+					throw new Error(`${model} update failed`);
+				}
+				return updateMany(data);
+			});
+		try {
+			const result = await request();
+			expect(failed).toBe(true);
+			return result;
+		} finally {
+			spy.mockRestore();
+		}
+	}
+
 	it.each([
 		"oauthRefreshToken",
 		"oauthAccessToken",
@@ -2195,6 +2224,21 @@ describe("oauth token - refresh_token family invalidation", async () => {
 		const { r0, r1 } = await rotateOnce(oauthClient);
 
 		const replay = await withFailingDeleteMany(model, () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect(await refresh(oauthClient, r1)).toMatchObject({
+			data: null,
+			error: { status: 400, error: "invalid_grant" },
+		});
+	});
+
+	it("rejects the rotated successor when the oauthAccessToken update fails during reuse detection", async () => {
+		const oauthClient = await createOAuthClient();
+		const { r0, r1 } = await rotateOnce(oauthClient);
+
+		const replay = await withFailingUpdateMany("oauthAccessToken", () =>
 			refresh(oauthClient, r0),
 		);
 		expect(replay.error?.status).toBe(500);

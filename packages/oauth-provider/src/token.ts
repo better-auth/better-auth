@@ -528,8 +528,10 @@ const REFRESH_FAMILY_PAGE_SIZE = 50;
  * Every refresh row and access token in the family is marked revoked before
  * anything is deleted, so if a delete fails, rotation's `revoked` guard still
  * refuses every refresh row and `validateOpaqueAccessToken` treats every
- * access token as inactive. Access tokens are deleted first so the parent
- * rows' foreign-key children do not block the refresh-row delete.
+ * access token as inactive. If an access-token update fails, the refresh rows
+ * stay revoked, but access tokens not yet marked stay valid until they expire.
+ * Access tokens are deleted first so the parent rows' foreign-key children do
+ * not block the refresh-row delete.
  *
  * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
  * with respect to each other. Between them, a concurrent rotation in a
@@ -553,6 +555,8 @@ export async function invalidateRefreshFamily(
 		where: [
 			{ field: "clientId", value: clientId },
 			{ field: "userId", value: userId },
+			// Same filter as rotation's CAS, so skipped rows can't rotate (#10309).
+			{ field: "revoked", operator: "eq", value: null },
 		],
 		update: { revoked: revokedAt },
 	});
