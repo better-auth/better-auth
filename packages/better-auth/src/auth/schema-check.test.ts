@@ -92,7 +92,7 @@ describe.each([
 		expect(log).not.toHaveBeenCalled();
 	});
 
-	it("shares the initialization verdict with concurrent requests", async () => {
+	it("blocks concurrent requests with a completed initialization mismatch", async () => {
 		let finish = (_findings: SchemaFinding[]) => {};
 		const pending = new Promise<SchemaFinding[]>((resolve) => {
 			finish = resolve;
@@ -118,6 +118,59 @@ describe.each([
 			auth.api.getSession({ headers: new Headers() }),
 		).rejects.toThrow(SchemaMismatchError);
 		expect(find).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11651
+	 */
+	it.each([
+		{ name: "clean", findings: [] },
+		{ name: "mismatch", findings: issuerDrift },
+	])("validates API and HTTP requests while startup validation is still pending: $name", async ({
+		findings,
+	}) => {
+		let finish = (_findings: SchemaFinding[]) => {};
+		const pending = new Promise<SchemaFinding[]>((resolve) => {
+			finish = resolve;
+		});
+		const find = vi
+			.fn<() => Promise<SchemaFinding[]>>()
+			.mockReturnValueOnce(pending)
+			.mockResolvedValue(findings);
+		const { auth } = createAuth(find);
+		await auth.$context;
+		expect(find).toHaveBeenCalledOnce();
+
+		const outcomes = await Promise.allSettled([
+			auth.api.getSession({ headers: new Headers() }),
+			auth
+				.handler(new Request("https://auth.example.com/api/auth/get-session"))
+				.then(async (response) => ({
+					status: response.status,
+					body: await response.json(),
+				})),
+		]);
+		if (findings.length) {
+			expect(outcomes).toEqual([
+				{ status: "rejected", reason: expect.any(SchemaMismatchError) },
+				{ status: "rejected", reason: expect.any(SchemaMismatchError) },
+			]);
+		} else {
+			expect(outcomes).toEqual([
+				{ status: "fulfilled", value: null },
+				{ status: "fulfilled", value: { status: 200, body: null } },
+			]);
+		}
+		const lookupCount = find.mock.calls.length;
+		expect(lookupCount).toBeGreaterThan(1);
+		finish([]);
+		const cached = auth.api.getSession({ headers: new Headers() });
+		if (findings.length) {
+			await expect(cached).rejects.toThrow(SchemaMismatchError);
+		} else {
+			await expect(cached).resolves.toBeNull();
+		}
+		expect(find).toHaveBeenCalledTimes(lookupCount);
 	});
 
 	it("validates before a plugin can handle an HTTP request", async () => {

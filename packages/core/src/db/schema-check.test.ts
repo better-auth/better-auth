@@ -20,6 +20,88 @@ const issuerDrift: SchemaFinding = {
  * @see https://www.better-auth.com/docs/concepts/database#programmatic-migrations
  */
 describe("createSchemaCheck", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11651
+	 */
+	describe("pending lookups", () => {
+		it("lets a later check complete while an earlier lookup is still pending", async ({
+			onTestFinished,
+		}) => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValueOnce([]);
+			const check = createSchemaCheck(find, "database");
+			onTestFinished(() => finish([]));
+			const earlier = check();
+			await expect(check()).resolves.toBeUndefined();
+			expect(check()).toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(2);
+			finish([]);
+			await earlier;
+		}, 1_000);
+
+		it("does not let an older clean lookup overwrite a newer mismatch", async () => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValueOnce([issuerDrift]);
+			const check = createSchemaCheck(find, "database");
+			const earlier = check();
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			finish([]);
+			await expect(earlier).rejects.toThrow(SchemaMismatchError);
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+
+		it("keeps a completed clean result after an earlier lookup fails", async () => {
+			const failure = new Error("connection unavailable");
+			let fail = (_error: Error) => {};
+			const pending = new Promise<SchemaFinding[]>((_resolve, reject) => {
+				fail = reject;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValueOnce([]);
+			const check = createSchemaCheck(find, "database");
+			const earlier = check();
+			await check();
+			fail(failure);
+			await expect(earlier).rejects.toBe(failure);
+			expect(check()).toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not hide a newer mismatch when an older lookup completes cleanly first", async () => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockResolvedValueOnce([])
+				.mockReturnValueOnce(pending);
+			const check = createSchemaCheck(find, "database");
+			const earlier = check();
+			const later = check();
+			await earlier;
+			finish([issuerDrift]);
+			await expect(later).rejects.toThrow(SchemaMismatchError);
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+	});
+
 	it("invalidates only checks for the migrated database", async () => {
 		const database = {};
 		const find = vi.fn(async () => []);
@@ -100,11 +182,11 @@ describe("createSchemaCheck", () => {
 		expect(find).toHaveBeenCalledTimes(1);
 	});
 
-	it("shares one lookup between concurrent first calls", async () => {
+	it("runs independent lookups between concurrent first calls", async () => {
 		const find = vi.fn(async () => []);
 		const check = createSchemaCheck(find, "database");
 		await Promise.all([check(), check(), check()]);
-		expect(find).toHaveBeenCalledTimes(1);
+		expect(find).toHaveBeenCalledTimes(3);
 	});
 
 	it("keeps one mismatch and rethrows it without asking again", async () => {
