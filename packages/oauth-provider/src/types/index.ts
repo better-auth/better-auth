@@ -1028,6 +1028,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** The resources requested via RFC 8707 resource indicators. */
+			resources?: string[];
 		}) => Awaitable<boolean | string>;
 	};
 	/**
@@ -1057,6 +1059,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** The resources requested via RFC 8707 resource indicators. */
+			resources?: string[];
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1077,6 +1081,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** The resources requested via RFC 8707 resource indicators. */
+			resources?: string[];
 		}) => Awaitable<string | undefined>;
 		/**
 		 * After login and before consent, request the user to
@@ -1095,6 +1101,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** The resources requested via RFC 8707 resource indicators. */
+			resources?: string[];
 		}) => Awaitable<boolean>;
 	};
 	/**

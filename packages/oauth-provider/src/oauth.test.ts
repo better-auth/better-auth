@@ -1,6 +1,8 @@
 import { createAuthMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
+import { generateRandomString } from "better-auth/crypto";
 import { toNodeHandler } from "better-auth/node";
+import { createAuthorizationURL } from "better-auth/oauth2";
 import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
@@ -3687,4 +3689,323 @@ describe("oauth - rate limiting", () => {
 
 	// Note: Window expiry/reset behavior is tested in the core rate-limiter tests.
 	// See packages/better-auth/src/api/rate-limiter/rate-limiter.test.ts
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11039
+ */
+describe("RFC 8707 resources in authorize lifecycle hooks (#11039)", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const resourceA = "https://api-a.example.com";
+	const resourceB = "https://api-b.example.com";
+
+	type HookContext = {
+		resources?: string[];
+		scopes: unknown;
+	};
+
+	const hookCalls = {
+		selectAccount: [] as HookContext[],
+		signup: [] as HookContext[],
+		postLoginShouldRedirect: [] as HookContext[],
+		consentReferenceId: [] as HookContext[],
+	};
+
+	function clearHookCalls() {
+		hookCalls.selectAccount.length = 0;
+		hookCalls.signup.length = 0;
+		hookCalls.postLoginShouldRedirect.length = 0;
+		hookCalls.consentReferenceId.length = 0;
+	}
+
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [resourceA, resourceB],
+					enforcePerClientResources: false,
+					selectAccount: {
+						page: "/select-account",
+						shouldRedirect(context) {
+							hookCalls.selectAccount.push(context);
+							return false;
+						},
+					},
+					signup: {
+						page: "/signup",
+						shouldRedirect(context) {
+							hookCalls.signup.push(context);
+							return false;
+						},
+					},
+					postLogin: {
+						page: "/select-organization",
+						shouldRedirect(context) {
+							hookCalls.postLoginShouldRedirect.push(context);
+							return false;
+						},
+						consentReferenceId(context) {
+							hookCalls.consentReferenceId.push(context);
+							return "ref-11039";
+						},
+					},
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+
+	const { headers } = await signInWithTestUser();
+	const providerId = "test-11039";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	let oauthClientWithConsent: OAuthClient | null = null;
+	let oauthClientSkipConsent: OAuthClient | null = null;
+
+	beforeAll(async () => {
+		oauthClientSkipConsent = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				client_name: "test-skip-consent",
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
+		});
+
+		oauthClientWithConsent = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				client_name: "test-with-consent",
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: false,
+			},
+		});
+	});
+
+	async function driveAuthorize(options: {
+		clientId: string;
+		clientSecret?: string;
+		resources?: string[];
+		prompt?: string;
+	}) {
+		clearHookCalls();
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: options.clientId,
+				clientSecret: options.clientSecret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: `state-${generateRandomString(8)}`,
+			scopes: ["openid", "profile"],
+			codeVerifier,
+		});
+		if (options.prompt) {
+			url.searchParams.append("prompt", options.prompt);
+		}
+		if (options.resources) {
+			for (const r of options.resources) {
+				url.searchParams.append("resource", r);
+			}
+		}
+
+		let redirectUrl = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				redirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		return redirectUrl;
+	}
+
+	async function driveConsent(options: {
+		clientId: string;
+		clientSecret?: string;
+		resources?: string[];
+	}) {
+		// Drive authorize with prompt=consent to ensure consent page is forced
+		// and verify consentReferenceId is NOT called prematurely during authorize
+		const consentRedirectUrl = await driveAuthorize({
+			clientId: options.clientId,
+			clientSecret: options.clientSecret,
+			resources: options.resources,
+			prompt: "consent",
+		});
+		expect(consentRedirectUrl).toContain("/consent");
+		expect(hookCalls.consentReferenceId).toHaveLength(0);
+
+		clearHookCalls();
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+
+		await client.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+
+		vi.unstubAllGlobals();
+	}
+
+	describe("multiple requested resources", () => {
+		beforeAll(async () => {
+			const redirectUrl = await driveAuthorize({
+				clientId: oauthClientSkipConsent!.client_id,
+				clientSecret: oauthClientSkipConsent!.client_secret,
+				resources: [resourceA, resourceB],
+			});
+			expect(redirectUrl).toContain(redirectUri);
+		});
+
+		it("passes requested resources to selectAccount.shouldRedirect", () => {
+			expect(hookCalls.selectAccount).toHaveLength(1);
+			expect(hookCalls.selectAccount[0]?.resources).toEqual([
+				resourceA,
+				resourceB,
+			]);
+		});
+
+		it("passes requested resources to signup.shouldRedirect", () => {
+			expect(hookCalls.signup).toHaveLength(1);
+			expect(hookCalls.signup[0]?.resources).toEqual([resourceA, resourceB]);
+		});
+
+		it("passes requested resources to postLogin.shouldRedirect", () => {
+			expect(hookCalls.postLoginShouldRedirect).toHaveLength(1);
+			expect(hookCalls.postLoginShouldRedirect[0]?.resources).toEqual([
+				resourceA,
+				resourceB,
+			]);
+		});
+
+		it("passes requested resources to postLogin.consentReferenceId during authorize", () => {
+			expect(hookCalls.consentReferenceId).toHaveLength(1);
+			expect(hookCalls.consentReferenceId[0]?.resources).toEqual([
+				resourceA,
+				resourceB,
+			]);
+		});
+
+		it("passes requested resources to postLogin.consentReferenceId during consent", async () => {
+			await driveConsent({
+				clientId: oauthClientWithConsent!.client_id,
+				clientSecret: oauthClientWithConsent!.client_secret,
+				resources: [resourceA, resourceB],
+			});
+			// consentEndpoint calls consentReferenceId, followed by the authorize continuation
+			expect(hookCalls.consentReferenceId).toHaveLength(2);
+			expect(hookCalls.consentReferenceId[0]?.resources).toEqual([
+				resourceA,
+				resourceB,
+			]);
+			expect(hookCalls.consentReferenceId[1]?.resources).toEqual([
+				resourceA,
+				resourceB,
+			]);
+		});
+	});
+
+	describe("single requested resource (scalar normalization)", () => {
+		beforeAll(async () => {
+			const redirectUrl = await driveAuthorize({
+				clientId: oauthClientSkipConsent!.client_id,
+				clientSecret: oauthClientSkipConsent!.client_secret,
+				resources: [resourceA],
+			});
+			expect(redirectUrl).toContain(redirectUri);
+		});
+
+		it("normalizes single scalar resource and passes to selectAccount.shouldRedirect", () => {
+			expect(hookCalls.selectAccount).toHaveLength(1);
+			expect(hookCalls.selectAccount[0]?.resources).toEqual([resourceA]);
+		});
+
+		it("normalizes single scalar resource and passes to signup.shouldRedirect", () => {
+			expect(hookCalls.signup).toHaveLength(1);
+			expect(hookCalls.signup[0]?.resources).toEqual([resourceA]);
+		});
+
+		it("normalizes single scalar resource and passes to postLogin.shouldRedirect", () => {
+			expect(hookCalls.postLoginShouldRedirect).toHaveLength(1);
+			expect(hookCalls.postLoginShouldRedirect[0]?.resources).toEqual([
+				resourceA,
+			]);
+		});
+
+		it("normalizes single scalar resource and passes to postLogin.consentReferenceId during authorize", () => {
+			expect(hookCalls.consentReferenceId).toHaveLength(1);
+			expect(hookCalls.consentReferenceId[0]?.resources).toEqual([resourceA]);
+		});
+
+		it("normalizes single scalar resource and passes to postLogin.consentReferenceId during consent", async () => {
+			await driveConsent({
+				clientId: oauthClientWithConsent!.client_id,
+				clientSecret: oauthClientWithConsent!.client_secret,
+				resources: [resourceA],
+			});
+			expect(hookCalls.consentReferenceId).toHaveLength(2);
+			expect(hookCalls.consentReferenceId[0]?.resources).toEqual([resourceA]);
+			expect(hookCalls.consentReferenceId[1]?.resources).toEqual([resourceA]);
+		});
+	});
+
+	describe("no resource parameter supplied", () => {
+		beforeAll(async () => {
+			const redirectUrl = await driveAuthorize({
+				clientId: oauthClientSkipConsent!.client_id,
+				clientSecret: oauthClientSkipConsent!.client_secret,
+			});
+			expect(redirectUrl).toContain(redirectUri);
+		});
+
+		it("passes undefined resources to selectAccount.shouldRedirect", () => {
+			expect(hookCalls.selectAccount).toHaveLength(1);
+			expect(hookCalls.selectAccount[0]?.resources).toBeUndefined();
+		});
+
+		it("passes undefined resources to signup.shouldRedirect", () => {
+			expect(hookCalls.signup).toHaveLength(1);
+			expect(hookCalls.signup[0]?.resources).toBeUndefined();
+		});
+
+		it("passes undefined resources to postLogin.shouldRedirect", () => {
+			expect(hookCalls.postLoginShouldRedirect).toHaveLength(1);
+			expect(hookCalls.postLoginShouldRedirect[0]?.resources).toBeUndefined();
+		});
+
+		it("passes undefined resources to postLogin.consentReferenceId during authorize", () => {
+			expect(hookCalls.consentReferenceId).toHaveLength(1);
+			expect(hookCalls.consentReferenceId[0]?.resources).toBeUndefined();
+		});
+
+		it("passes undefined resources to postLogin.consentReferenceId during consent", async () => {
+			await driveConsent({
+				clientId: oauthClientWithConsent!.client_id,
+				clientSecret: oauthClientWithConsent!.client_secret,
+			});
+			expect(hookCalls.consentReferenceId).toHaveLength(2);
+			expect(hookCalls.consentReferenceId[0]?.resources).toBeUndefined();
+			expect(hookCalls.consentReferenceId[1]?.resources).toBeUndefined();
+		});
+	});
 });
