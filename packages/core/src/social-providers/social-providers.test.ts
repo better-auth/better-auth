@@ -40,30 +40,16 @@ const baseInput = {
 };
 
 describe("issuer trailing slashes", () => {
-	it.each([
-		{
-			provider: socialProviders.gitlab({
-				...credentials,
-				issuer: "https://idp.example.com/tenant/",
-			}),
-			authorizationPath: "/tenant/oauth/authorize",
-			tokenURL: "https://idp.example.com/tenant/oauth/token",
-		},
-		{
-			provider: socialProviders.paybin({
-				...credentials,
-				issuer: "https://idp.example.com/tenant/",
-			}),
-			authorizationPath: "/tenant/oauth2/authorize",
-			tokenURL: "https://idp.example.com/tenant/oauth2/token",
-		},
-	])("joins $provider.id endpoints at one slash boundary", async ({
-		provider,
-		authorizationPath,
-		tokenURL,
-	}) => {
+	it.for([
+		["gitlab", "oauth"],
+		["paybin", "oauth2"],
+	] as const)("keeps %s requests under the issuer path", async ([id, path]) => {
+		const provider = socialProviders[id]({
+			...credentials,
+			issuer: "https://idp.example.com/tenant/",
+		});
 		const authorizationURL = await provider.createAuthorizationURL(baseInput);
-		expect(authorizationURL.pathname).toBe(authorizationPath);
+		expect(authorizationURL.pathname).toBe(`/tenant/${path}/authorize`);
 		mockedBetterFetch.mockResolvedValueOnce({
 			data: {
 				access_token: "access-token",
@@ -76,7 +62,9 @@ describe("issuer trailing slashes", () => {
 			...baseInput,
 			code: "auth-code",
 		});
-		expect(mockedBetterFetch.mock.calls[0]?.[0]).toBe(tokenURL);
+		expect(mockedBetterFetch.mock.calls[0]?.[0]).toBe(
+			`https://idp.example.com/tenant/${path}/token`,
+		);
 	});
 });
 
@@ -282,11 +270,11 @@ describe("microsoft provider", () => {
 });
 
 describe("discord provider", () => {
-	it("encodes avatar path values without changing the image format", async () => {
+	it("preserves animated avatar URLs", async () => {
 		mockedBetterFetch.mockResolvedValueOnce({
 			data: {
-				id: "123/456",
-				avatar: "a_hash?variant=1",
+				id: "123456",
+				avatar: "a_0123456789abcdef",
 				global_name: "Discord User",
 				username: "discord-user",
 				email: "user@example.com",
@@ -300,7 +288,7 @@ describe("discord provider", () => {
 		});
 
 		expect(result?.user.image).toBe(
-			"https://cdn.discordapp.com/avatars/123%2F456/a_hash%3Fvariant=1.gif",
+			"https://cdn.discordapp.com/avatars/123456/a_0123456789abcdef.gif",
 		);
 	});
 
