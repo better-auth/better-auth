@@ -143,7 +143,9 @@ export const apiKeySchema = ({
 					input: false,
 				},
 				/**
-				 * The date and time of the last request made to the key.
+				 * The date and time of the request that opened the current
+				 * rate-limit window. When rate limiting is disabled for the
+				 * key, this tracks the last request for informational purposes.
 				 */
 				lastRequest: {
 					type: "date",

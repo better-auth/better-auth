@@ -277,10 +277,13 @@ async function consumeRemaining(
 /**
  * Guarded rate-limit consumption. The common in-window path increments
  * `requestCount` only while it is below the max (compare-and-swap), so a burst
- * of concurrent verifications can never exceed the limit. Window resets and the
- * first request in a window are guarded conditional sets; a request that loses
- * every guard within an active window is rejected. Returns the updated row, or
- * the unchanged row when rate limiting does not apply.
+ * of concurrent verifications can never exceed the limit. The window is fixed
+ * and anchored at `lastRequest`: allowed requests do not move it, so the
+ * counter resets after `rateLimitTimeWindow` has elapsed since the request
+ * that opened the window. Window resets and the first request in a window are
+ * guarded conditional sets; a request that loses every guard within an active
+ * window is rejected. Returns the updated row, or the unchanged row when rate
+ * limiting does not apply.
  */
 async function consumeRateLimit(
 	ctx: GenericEndpointContext,
@@ -310,6 +313,9 @@ async function consumeRateLimit(
 	}
 
 	if (decision.type === "increment") {
+		// `lastRequest` is the window's opening time and stays untouched, so
+		// the window does not slide forward with every allowed request and
+		// steady traffic below the max is never rate limited.
 		const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [
@@ -326,7 +332,6 @@ async function consumeRateLimit(
 				},
 			],
 			increment: { requestCount: 1 },
-			set: { lastRequest: decision.now },
 		});
 		if (incremented) {
 			return incremented;
@@ -473,8 +478,8 @@ function applyRateLimitToSnapshot(
 		case "reset":
 			return { lastRequest: decision.now, requestCount: 1 };
 		case "increment":
+			// The window stays anchored; only the count moves.
 			return {
-				lastRequest: decision.now,
 				requestCount: apiKey.requestCount + 1,
 			};
 	}

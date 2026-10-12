@@ -14,7 +14,7 @@ export type RateLimitDecision =
 			lastRequest: Date | null;
 	  }
 	| {
-			/** First request in a fresh window: set `requestCount` to 1. */
+			/** First request in a fresh window: set `requestCount` to 1 and stamp `lastRequest` as the window's opening time. */
 			type: "start";
 			now: Date;
 	  }
@@ -43,6 +43,13 @@ export type RateLimitDecision =
  * Decides how the current request affects the per-key rate-limit counter, based
  * on the read-in-memory ApiKey. The verify route applies the result atomically;
  * this function performs no writes.
+ *
+ * The window is a fixed window anchored at the request that opened it:
+ * `lastRequest` holds the opening time, allowed requests inside the window do
+ * not move it, and the count resets once `rateLimitTimeWindow` has elapsed
+ * since that opening request. A key under steady traffic below `rateLimitMax`
+ * therefore never sees `RATE_LIMITED` (the window used to slide forward with
+ * every allowed request, requiring a full window of silence before it reset).
  */
 export function evaluateRateLimit(
 	apiKey: ApiKey,
@@ -72,7 +79,12 @@ export function evaluateRateLimit(
 
 	const timeSinceLastRequest = now.getTime() - new Date(lastRequest).getTime();
 
-	if (timeSinceLastRequest > rateLimitTimeWindow) {
+	// `>=` (not `>`) so the window is exactly `rateLimitTimeWindow` long and
+	// the guarded reset below succeeds at the seam: the reset guard requires
+	// `lastRequest <= windowStart`, which holds at equality. A strict `>` here
+	// would leave the increment guard (`lastRequest > windowStart`) unsatisfiable
+	// for the anchoring request and retry forever at the window's end.
+	if (timeSinceLastRequest >= rateLimitTimeWindow) {
 		return {
 			type: "reset",
 			now,
@@ -81,6 +93,8 @@ export function evaluateRateLimit(
 	}
 
 	if (apiKey.requestCount >= rateLimitMax) {
+		// The window is anchored at `lastRequest`, so the wait is the time
+		// left in that window, not the time since the latest allowed request.
 		return {
 			type: "deny",
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
