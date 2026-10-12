@@ -41,10 +41,14 @@ import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
 import { computeSSOProviderReference } from "./provider-reference";
-import { findSAMLProvider } from "./routes/helpers";
-import { getSafeRedirectUrl } from "./routes/saml-pipeline";
+import { createSP, findSAMLProvider } from "./routes/helpers";
+import {
+	getExpectedSAMLRecipients,
+	getSafeRedirectUrl,
+} from "./routes/saml-pipeline";
+import { SAML_HTTP_POST_BINDING, validateSAMLResponseBinding } from "./saml";
 import { saml } from "./samlify";
-import type { SSOOptions, SSOUserResolutionInput } from "./types";
+import type { SAMLConfig, SSOOptions, SSOUserResolutionInput } from "./types";
 import { normalizePem } from "./utils";
 
 const spMetadata = `
@@ -8752,6 +8756,243 @@ describe("SAML SSO Hardening", () => {
 			expect(redirectUrl.origin).toBe(frontendOrigin);
 			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
 			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11296
+	 */
+	describe("SAML assertion consumer service binding lookup (Issue #11296)", () => {
+		it("should resolve ACS URL using short binding name 'post' from SP metadata and include it in expected recipients", () => {
+			const customAcsUrl =
+				"https://sp.example.com/api/auth/sso/saml2/custom-callback";
+			const customSpMetadata = `
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com/saml/metadata">
+	<md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+		<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="${customAcsUrl}" index="1"/>
+	</md:SPSSODescriptor>
+</md:EntityDescriptor>
+`;
+			const config: SAMLConfig = {
+				issuer: "https://sp.example.com/saml/metadata",
+				entryPoint: "https://idp.example.com/sso",
+				cert: certificate,
+				idpMetadata: {
+					metadata: idpMetadata,
+				},
+				spMetadata: {
+					metadata: customSpMetadata,
+				},
+			};
+
+			const spInstance = createSP(
+				config,
+				"http://localhost:3000",
+				"test-provider",
+			);
+
+			// Calling getAssertionConsumerService with full URN returns undefined due to samlify indexing by short name
+			expect(
+				spInstance.entityMeta.getAssertionConsumerService(
+					SAML_HTTP_POST_BINDING,
+				),
+			).toBeUndefined();
+
+			// Calling getAssertionConsumerService with short binding name "post" resolves the ACS URL
+			const resolvedAcsUrl =
+				spInstance.entityMeta.getAssertionConsumerService("post");
+			expect(resolvedAcsUrl).toBe(customAcsUrl);
+
+			// getExpectedSAMLRecipients includes the resolved ACS URL
+			const expectedRecipients = getExpectedSAMLRecipients(
+				config,
+				"http://localhost:3000",
+				"test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/callback/test-provider",
+				resolvedAcsUrl,
+			);
+
+			expect(expectedRecipients).toContain(customAcsUrl);
+
+			// Validates that response binding succeeds with the resolved ACS URL
+			const samlXml = `
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="response-id" Version="2.0" IssueInstant="2026-10-12T12:00:00Z" Destination="${customAcsUrl}">
+	<saml:Issuer>https://idp.example.com</saml:Issuer>
+	<samlp:Status>
+		<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+	</samlp:Status>
+	<saml:Assertion ID="assertion-id" Version="2.0" IssueInstant="2026-10-12T12:00:00Z">
+		<saml:Issuer>https://idp.example.com</saml:Issuer>
+		<saml:Subject>
+			<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">user@example.com</saml:NameID>
+			<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+				<saml:SubjectConfirmationData Recipient="${customAcsUrl}" NotOnOrAfter="2026-10-12T12:05:00Z"/>
+			</saml:SubjectConfirmation>
+		</saml:Subject>
+		<saml:Conditions NotBefore="2026-10-12T12:00:00Z" NotOnOrAfter="2026-10-12T12:05:00Z">
+			<saml:AudienceRestriction>
+				<saml:Audience>https://sp.example.com/saml/metadata</saml:Audience>
+			</saml:AudienceRestriction>
+		</saml:Conditions>
+	</saml:Assertion>
+</samlp:Response>
+`;
+			expect(() =>
+				validateSAMLResponseBinding(samlXml, {
+					expectedAudiences: ["https://sp.example.com/saml/metadata"],
+					expectedRecipients,
+				}),
+			).not.toThrow();
+		});
+
+		it("should resolve default ACS URL using 'post' when SP metadata is auto-generated", () => {
+			const config: SAMLConfig = {
+				issuer: "https://sp.example.com/saml/metadata",
+				entryPoint: "https://idp.example.com/sso",
+				cert: certificate,
+				idpMetadata: {
+					metadata: idpMetadata,
+				},
+			};
+
+			const spInstance = createSP(
+				config,
+				"http://localhost:3000",
+				"test-provider",
+			);
+
+			// Full URN binding lookup returns undefined
+			expect(
+				spInstance.entityMeta.getAssertionConsumerService(
+					SAML_HTTP_POST_BINDING,
+				),
+			).toBeUndefined();
+
+			// Short binding name "post" correctly resolves the default ACS URL
+			const resolvedAcsUrl =
+				spInstance.entityMeta.getAssertionConsumerService("post");
+			expect(resolvedAcsUrl).toBe(
+				"http://localhost:3000/sso/saml2/sp/acs/test-provider",
+			);
+
+			const expectedRecipients = getExpectedSAMLRecipients(
+				config,
+				"http://localhost:3000",
+				"test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/callback/test-provider",
+				resolvedAcsUrl,
+			);
+
+			expect(expectedRecipients).toContain(
+				"http://localhost:3000/sso/saml2/sp/acs/test-provider",
+			);
+		});
+
+		it("should fail recipient validation if full URN binding is used when SP metadata XML is not configured", () => {
+			const customAcsUrl =
+				"https://sp.example.com/api/auth/sso/saml2/custom-callback";
+			const config: SAMLConfig = {
+				issuer: "https://sp.example.com/saml/metadata",
+				entryPoint: "https://idp.example.com/sso",
+				cert: certificate,
+				idpMetadata: {
+					metadata: idpMetadata,
+				},
+				spMetadata: {
+					entityID: "https://sp.example.com/saml/metadata",
+				},
+			};
+
+			const spInstance = saml.ServiceProvider({
+				metadata:
+					saml
+						.SPMetadata({
+							entityID: "https://sp.example.com/saml/metadata",
+							assertionConsumerService: [
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+									Location: customAcsUrl,
+								},
+							],
+						})
+						.getMetadata() || "",
+			});
+
+			// 1. sp.entityMeta.getAssertionConsumerService(SAML_HTTP_POST_BINDING) evaluates to undefined
+			const brokenAcsUrl = spInstance.entityMeta.getAssertionConsumerService(
+				SAML_HTTP_POST_BINDING,
+			);
+			expect(brokenAcsUrl).toBeUndefined();
+
+			// 2. Passing sp.entityMeta.getAssertionConsumerService(SAML_HTTP_POST_BINDING) into getExpectedSAMLRecipients
+			// results in expectedRecipients missing customAcsUrl
+			const brokenRecipients = getExpectedSAMLRecipients(
+				config,
+				"http://localhost:3000",
+				"test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/callback/test-provider",
+				brokenAcsUrl,
+			);
+			expect(brokenRecipients).not.toContain(customAcsUrl);
+
+			// 3. Passing sp.entityMeta.getAssertionConsumerService("post") into getExpectedSAMLRecipients
+			// results in expectedRecipients containing customAcsUrl
+			const fixedAcsUrl =
+				spInstance.entityMeta.getAssertionConsumerService("post");
+			expect(fixedAcsUrl).toBe(customAcsUrl);
+
+			const fixedRecipients = getExpectedSAMLRecipients(
+				config,
+				"http://localhost:3000",
+				"test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/callback/test-provider",
+				fixedAcsUrl,
+			);
+			expect(fixedRecipients).toContain(customAcsUrl);
+
+			// 4. Response binding validation fails with SAML_RECIPIENT_MISMATCH when recipient is customAcsUrl
+			// using the broken recipients list, but succeeds using the fixed recipients list
+			const samlXml = `
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="response-id" Version="2.0" IssueInstant="2026-10-12T12:00:00Z" Destination="${customAcsUrl}">
+	<saml:Issuer>https://idp.example.com</saml:Issuer>
+	<samlp:Status>
+		<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+	</samlp:Status>
+	<saml:Assertion ID="assertion-id" Version="2.0" IssueInstant="2026-10-12T12:00:00Z">
+		<saml:Issuer>https://idp.example.com</saml:Issuer>
+		<saml:Subject>
+			<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">user@example.com</saml:NameID>
+			<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+				<saml:SubjectConfirmationData Recipient="${customAcsUrl}" NotOnOrAfter="2026-10-12T12:05:00Z"/>
+			</saml:SubjectConfirmation>
+		</saml:Subject>
+		<saml:Conditions NotBefore="2026-10-12T12:00:00Z" NotOnOrAfter="2026-10-12T12:05:00Z">
+			<saml:AudienceRestriction>
+				<saml:Audience>https://sp.example.com/saml/metadata</saml:Audience>
+			</saml:AudienceRestriction>
+		</saml:Conditions>
+	</saml:Assertion>
+</samlp:Response>
+`;
+
+			let recipientMismatchError: any;
+			try {
+				validateSAMLResponseBinding(samlXml, {
+					expectedAudiences: ["https://sp.example.com/saml/metadata"],
+					expectedRecipients: brokenRecipients,
+				});
+			} catch (error) {
+				recipientMismatchError = error;
+			}
+			expect(recipientMismatchError).toBeDefined();
+			expect(recipientMismatchError.body?.code).toBe("SAML_RECIPIENT_MISMATCH");
+
+			expect(() =>
+				validateSAMLResponseBinding(samlXml, {
+					expectedAudiences: ["https://sp.example.com/saml/metadata"],
+					expectedRecipients: fixedRecipients,
+				}),
+			).not.toThrow();
 		});
 	});
 });
