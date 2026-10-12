@@ -365,6 +365,100 @@ describe("private_key_jwt authentication", async () => {
 		expect(transportB).toHaveBeenCalledTimes(1);
 	});
 
+	describe("jwks_uri key rotation refetch", () => {
+		async function setup(name: string) {
+			const clientId = `https://${name}.example.com/client.json`;
+			const audience = `https://${name}-provider.example.com/oauth2/token`;
+			const [oldPair, newPair] = await Promise.all([
+				generateKeyPair("RS256", { extractable: true }),
+				generateKeyPair("RS256", { extractable: true }),
+			]);
+			const [oldJwk, newJwk] = await Promise.all([
+				exportJWK(oldPair.publicKey),
+				exportJWK(newPair.publicKey),
+			]);
+			const published = [{ ...oldJwk, kid: "old", alg: "RS256" }];
+			const transport = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(Response.json({ keys: published })),
+				);
+			const provider = await createDiscoveredClientVerifier({
+				baseURL: new URL(audience).origin,
+				clientId,
+				clientDiscoveryId: `${name}-discovery`,
+				fetchClientMetadataResource: transport,
+				jwksUri: `https://${name}.example.com/jwks.json`,
+			});
+			const verify = async (keyId: string, key: CryptoKey) =>
+				verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					await signDiscoveredClientAssertion({
+						audience,
+						clientId,
+						key,
+						keyId,
+					}),
+					CLIENT_ASSERTION_TYPE,
+					clientId,
+					audience,
+				);
+			return {
+				clientId,
+				oldKey: oldPair.privateKey as CryptoKey,
+				newKey: newPair.privateKey as CryptoKey,
+				publishNewKey: () =>
+					published.push({ ...newJwk, kid: "new", alg: "RS256" }),
+				transport,
+				verify,
+			};
+		}
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("refetches once when the kid is not in the cached JWKS", async () => {
+			const t = await setup("kid-unknown");
+			await t.verify("old", t.oldKey);
+			expect(t.transport).toHaveBeenCalledTimes(1);
+
+			t.publishNewKey();
+			await expect(t.verify("new", t.newKey)).resolves.toEqual({
+				clientId: t.clientId,
+			});
+			expect(t.transport).toHaveBeenCalledTimes(2);
+
+			await t.verify("new", t.newKey);
+			expect(t.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("suppresses repeated refetches during the cooldown", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			const t = await setup("kid-cooldown");
+			await t.verify("old", t.oldKey);
+
+			await expect(t.verify("ghost", t.oldKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(2);
+			await expect(t.verify("ghost", t.oldKey)).rejects.toBeDefined();
+			await expect(t.verify("ghost2", t.oldKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(2);
+
+			vi.setSystemTime(Date.now() + 60_000 + 1);
+			await expect(t.verify("ghost", t.oldKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("does not refetch for a known kid with a bad signature", async () => {
+			const t = await setup("kid-known");
+			await t.verify("old", t.oldKey);
+
+			await expect(t.verify("old", t.newKey)).rejects.toBeDefined();
+			expect(t.transport).toHaveBeenCalledTimes(1);
+		});
+	});
+
 	it.each([
 		{
 			name: "bare-array",

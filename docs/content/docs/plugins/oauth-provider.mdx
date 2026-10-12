@@ -605,6 +605,19 @@ const response = await auth.api.adminCreateOAuthClient({
   `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must be an RFC 7517 JWK Set object with a non-empty `keys` array containing only public asymmetric signing keys; a bare key array is rejected. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. A key may omit `alg`. When present, `alg` must be a supported `private_key_jwt` algorithm that matches the key type and curve. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host and must return the same JWK Set object shape.
 </Callout>
 
+#### Rotating `jwks_uri` keys
+
+Better Auth caches a client's `jwks_uri` response for 5 minutes. When an assertion's header `kid` is missing from the cached key set, Better Auth refetches the `jwks_uri` once and verifies the assertion against the fresh keys. A known `kid` with a bad signature, an assertion without a `kid`, and claim failures such as an expired or mismatched `aud` never trigger a refetch. Refetches are limited to one per client every 60 seconds per server process, whether or not the previous attempt succeeded, so unknown `kid` values cannot be used to make the provider call the client's endpoint repeatedly.
+
+To rotate without failed authentications, give every key a unique `kid` and follow this order:
+
+1. Publish the new key at the `jwks_uri` next to the old key.
+2. Start signing assertions with the new key. An assertion that arrives while the cache is stale triggers the refetch. If another unknown-`kid` refetch happened in the last 60 seconds, the assertion fails and the client can retry after the cooldown.
+3. Keep the old key published for at least 10 minutes, which covers the 5 minute cache lifetime, the 60 second cooldown, and assertions already signed with it.
+4. Remove the old key. Provider processes that still hold a cached copy accept it until the cache expires, at most 5 minutes after removal, or 10 minutes if the `jwks_uri` is unreachable.
+
+Clients that register inline `jwks` have no refetch; update the registration to rotate.
+
 When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
 
 ```
