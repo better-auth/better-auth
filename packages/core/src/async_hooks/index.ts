@@ -34,12 +34,13 @@ export async function getAsyncLocalStorage(): Promise<
 		cachedAsyncLocalStorageConstructor ??= constructor;
 		return cachedAsyncLocalStorageConstructor;
 	} catch (err) {
-		if ("AsyncLocalStorage" in globalThis) {
-			cachedAsyncLocalStorageConstructor ??= (
-				globalThis as typeof globalThis & {
-					AsyncLocalStorage: typeof AsyncLocalStorage;
-				}
-			).AsyncLocalStorage;
+		const constructor = (
+			globalThis as typeof globalThis & {
+				AsyncLocalStorage?: typeof AsyncLocalStorage | null;
+			}
+		).AsyncLocalStorage;
+		if (typeof constructor === "function") {
+			cachedAsyncLocalStorageConstructor ??= constructor;
 			return cachedAsyncLocalStorageConstructor;
 		}
 		if (typeof window !== "undefined") {
