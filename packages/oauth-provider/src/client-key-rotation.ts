@@ -49,9 +49,11 @@ export async function rotateClientKeysEndpoint(
 		body.client_assertion_type,
 		body.client_id,
 		`${ctx.context.baseURL}/oauth2/client/rotate-keys`,
-		{ endpointAudienceOnly: true },
+		{
+			endpointAudienceOnly: true,
+			assertClient: (candidate) => assertRotatable(opts, candidate),
+		},
 	);
-	assertRotatable(opts, client);
 
 	const updated = await ctx.context.adapter.incrementOne<SchemaClient<Scope[]>>(
 		{

@@ -460,6 +460,10 @@ export async function consumeClientAssertion(
  * an assertion addressed to `expectedAudience` itself verifies. Endpoints that
  * change client credentials use it, so an assertion minted for the token
  * endpoint or the issuer cannot be redirected to them.
+ *
+ * `assertClient` runs on the looked-up client before any key is fetched or the
+ * jti is consumed, so a caller can refuse a client it does not serve without
+ * spending the assertion or reaching out to a `jwks_uri`.
  */
 export async function verifyClientAssertion(
 	ctx: GenericEndpointContext,
@@ -468,7 +472,10 @@ export async function verifyClientAssertion(
 	clientAssertionType: string,
 	clientIdHint?: string,
 	expectedAudience?: string,
-	options?: { endpointAudienceOnly?: boolean },
+	options?: {
+		endpointAudienceOnly?: boolean;
+		assertClient?: (client: SchemaClient<Scope[]>) => void;
+	},
 ): Promise<{ clientId: string; client: SchemaClient<Scope[]> }> {
 	if (clientAssertionType !== CLIENT_ASSERTION_TYPE) {
 		throw new APIError("BAD_REQUEST", {
@@ -542,6 +549,7 @@ export async function verifyClientAssertion(
 			error: "invalid_client",
 		});
 	}
+	options?.assertClient?.(client);
 
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, opts, client);

@@ -428,6 +428,36 @@ describe.each(adapters)("client key rotation ($name)", async ({
 		trustedClients.delete(clientId);
 	});
 
+	// The memory adapter does not enforce the primary key the jti tombstone relies on.
+	it.skipIf(name === "memory adapter")(
+		"refuses a client it cannot rotate before spending the assertion",
+		async () => {
+			const oldKey = await createKey("old");
+			const newKey = await createKey("new");
+			const clientId = await createClient([oldKey]);
+			const assertion = await sign(clientId, oldKey, rotateURL);
+
+			trustedClients.add(clientId);
+			const refused = await rotate({
+				clientId,
+				signer: oldKey,
+				next: [newKey],
+				assertion,
+			});
+			trustedClients.delete(clientId);
+			expect(refused.status).toBe(400);
+
+			// The refusal came before verification, so the jti was never consumed.
+			const accepted = await rotate({
+				clientId,
+				signer: oldKey,
+				next: [newKey],
+				assertion,
+			});
+			expect(accepted.status).toBe(200);
+		},
+	);
+
 	it("rejects a disabled client", async () => {
 		const oldKey = await createKey("old");
 		const clientId = await createClient([oldKey]);
