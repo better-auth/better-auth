@@ -1142,6 +1142,198 @@ describe("one-tap mapProfileToUser and OIDC profile claims", () => {
 		expect(userInDb?.locale).toBe("en-DEFAULT");
 		expect(userInDb?.given_name).toBe("DefaultGiven");
 	});
+
+	it("filters undefined values from mapProfileToUser so claims and schema defaults are preserved", async () => {
+		verifiedPayload.email = "one-tap-filter-undefined@example.com";
+		verifiedPayload.sub = "google_sub_filter_undefined";
+		Object.assign(verifiedPayload, {
+			given_name: "OriginalGiven",
+		});
+
+		const { client, auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					given_name: { type: "string", required: false },
+					role: {
+						type: "string",
+						required: false,
+						defaultValue: "user",
+					},
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					mapProfileToUser: () => ({
+						given_name: undefined,
+						role: undefined,
+					}),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				given_name?: string;
+				role?: string;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.user?.given_name).toBe("OriginalGiven");
+		expect(res.data?.user?.role).toBe("user");
+
+		const ctx = await auth.$context;
+		const userInDb = await ctx.adapter.findOne<{
+			given_name?: string;
+			role?: string;
+		}>({
+			model: "user",
+			where: [
+				{ field: "email", value: "one-tap-filter-undefined@example.com" },
+			],
+		});
+		expect(userInDb?.given_name).toBe("OriginalGiven");
+		expect(userInDb?.role).toBe("user");
+	});
+
+	it("filters undefined values so required schema fields are not bypassed", async () => {
+		verifiedPayload.email = "one-tap-required-field@example.com";
+		verifiedPayload.sub = "google_sub_required_field";
+
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						mandatoryRole: { type: "string", required: true },
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						enabled: true,
+						mapProfileToUser: () => ({
+							mandatoryRole: undefined,
+						}),
+					},
+				},
+				plugins: [oneTap()],
+			},
+			{ disableTestUser: true },
+		);
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: expect.objectContaining({
+				message: expect.stringContaining("mandatoryRole is required"),
+			}),
+		});
+	});
+
+	it("allows sign-in when token lacks email but mapProfileToUser synthesizes a placeholder email", async () => {
+		verifiedPayload.email = "";
+		verifiedPayload.sub = "google_sub_placeholder_email";
+
+		const placeholderEmail = "placeholder_user@internal.app";
+		const { client, auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					mapProfileToUser: () => ({
+						email: placeholderEmail,
+					}),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				email: string;
+				emailVerified: boolean;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.user?.email).toBe(placeholderEmail);
+		expect(res.data?.user?.emailVerified).toBe(false);
+
+		const ctx = await auth.$context;
+		const userInDb = await ctx.adapter.findOne<{
+			email: string;
+			emailVerified: boolean;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: placeholderEmail }],
+		});
+		expect(userInDb?.email).toBe(placeholderEmail);
+		expect(userInDb?.emailVerified).toBe(false);
+	});
+
+	it("defaults emailVerified to false when mapProfileToUser modifies email without an explicit emailVerified flag", async () => {
+		verifiedPayload.email = "google-verified@example.com";
+		verifiedPayload.email_verified = true;
+		verifiedPayload.sub = "google_sub_override_email_unverified";
+
+		const alteredEmail = "custom-override@example.com";
+		const { client, auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					mapProfileToUser: () => ({
+						email: alteredEmail,
+					}),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				email: string;
+				emailVerified: boolean;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.user?.email).toBe(alteredEmail);
+		expect(res.data?.user?.emailVerified).toBe(false);
+
+		const ctx = await auth.$context;
+		const userInDb = await ctx.adapter.findOne<{
+			email: string;
+			emailVerified: boolean;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: alteredEmail }],
+		});
+		expect(userInDb?.email).toBe(alteredEmail);
+		expect(userInDb?.emailVerified).toBe(false);
+	});
 });
 
 /**

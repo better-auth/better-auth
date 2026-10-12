@@ -167,17 +167,15 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						family_name,
 						locale,
 					} = payload;
-					if (typeof rawEmail !== "string" || !rawEmail) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Email not available in token",
-						});
-					}
 					if (typeof sub !== "string" || !sub) {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
 					}
-					const email = rawEmail.toLowerCase();
+					const email =
+						typeof rawEmail === "string" && rawEmail
+							? rawEmail.toLowerCase()
+							: undefined;
 
 					const emailVerified =
 						typeof email_verified === "boolean"
@@ -187,7 +185,28 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					const mappedUser = profileMapper
 						? await profileMapper(payload as GoogleProfile)
 						: undefined;
-					const { id: _discardId, ...restMapped } = mappedUser ?? {};
+
+					const resolvedEmail = mappedUser?.email ? mappedUser.email : email;
+					if (!resolvedEmail) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Email not available in token",
+						});
+					}
+
+					let isEmailVerified = emailVerified;
+					if (typeof mappedUser?.emailVerified === "boolean") {
+						isEmailVerified = mappedUser.emailVerified;
+					} else if (
+						mappedUser?.email &&
+						(!email || mappedUser.email.toLowerCase() !== email.toLowerCase())
+					) {
+						isEmailVerified = false;
+					}
+
+					const { id: _discardId, ...restMappedRaw } = mappedUser ?? {};
+					const restMapped = Object.fromEntries(
+						Object.entries(restMappedRaw).filter(([, v]) => v !== undefined),
+					);
 
 					const profileClaims: Record<string, unknown> = {
 						...(given_name !== undefined ? { given_name } : {}),
@@ -204,11 +223,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						userInfo: {
 							...profileClaims,
 							id: sub,
-							email: mappedUser?.email ? mappedUser.email : email,
-							emailVerified:
-								typeof mappedUser?.emailVerified === "boolean"
-									? mappedUser.emailVerified
-									: emailVerified,
+							email: resolvedEmail,
+							emailVerified: isEmailVerified,
 							name:
 								mappedUser?.name !== undefined
 									? mappedUser.name
