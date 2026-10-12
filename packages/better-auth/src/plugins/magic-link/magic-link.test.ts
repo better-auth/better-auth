@@ -941,52 +941,61 @@ describe("magic link callback URL encoding", async () => {
 			}),
 		],
 	});
-	const signIn = (body: Record<string, string>) =>
-		auth.handler(
+	const signIn = async (body: Record<string, string>) => {
+		const response = await auth.handler(
 			new Request("http://localhost:3000/api/auth/sign-in/magic-link", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify(body),
 			}),
 		);
+		expect(response.status).toBe(200);
+	};
 	const verifyAndGetLocation = async (url: string) => {
 		const res = await auth.handler(new Request(url));
 		expect(res.status).toBe(302);
 		return new URL(res.headers.get("location")!);
 	};
 
-	it("should not double-decode callbackURL on verify", async () => {
+	it("should preserve the callback URL when signing in an existing user", async () => {
+		const callbackURL =
+			"http://localhost:3000/cb?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2";
 		await signIn({
 			email: testUser.email,
-			callbackURL: "http://localhost:3000/cb?sig=a%2Bb",
+			callbackURL,
 		});
 		const location = await verifyAndGetLocation(sent.url);
-		expect(location.pathname).toBe("/cb");
-		expect(location.searchParams.get("sig")).toBe("a+b");
+		expect(location.href).toBe(callbackURL);
 	});
 
-	it("should not double-decode newUserCallbackURL on verify", async () => {
+	it("should preserve the welcome URL when signing up a new user", async () => {
+		const newUserCallbackURL =
+			"http://localhost:3000/welcome?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2";
 		await signIn({
 			email: "new-user-10916@email.com",
 			callbackURL: "http://localhost:3000/cb",
-			newUserCallbackURL: "http://localhost:3000/welcome?sig=a%2Bb",
+			newUserCallbackURL,
 		});
 		const location = await verifyAndGetLocation(sent.url);
-		expect(location.pathname).toBe("/welcome");
-		expect(location.searchParams.get("sig")).toBe("a+b");
+		expect(location.href).toBe(newUserCallbackURL);
 	});
 
-	it("should not double-decode errorCallbackURL on verify", async () => {
+	it("should preserve error callback query values when verification fails", async () => {
 		await signIn({
 			email: testUser.email,
 			callbackURL: "http://localhost:3000/cb",
-			errorCallbackURL: "http://localhost:3000/error?sig=a%2Bb",
+			errorCallbackURL:
+				"http://localhost:3000/error?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2",
 		});
 		const url = new URL(sent.url);
 		url.searchParams.set("token", "invalid-token");
 		const location = await verifyAndGetLocation(url.toString());
+		expect(location.origin).toBe("http://localhost:3000");
 		expect(location.pathname).toBe("/error");
-		expect(location.searchParams.get("sig")).toBe("a+b");
-		expect(location.searchParams.get("error")).toBe("INVALID_TOKEN");
+		expect(Object.fromEntries(location.searchParams)).toEqual({
+			sig: "a+b",
+			returnTo: "https://example.com/resume?state=abc&step=2",
+			error: "INVALID_TOKEN",
+		});
 	});
 });
