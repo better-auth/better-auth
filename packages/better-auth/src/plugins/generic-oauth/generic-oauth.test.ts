@@ -217,6 +217,79 @@ describe("oauth2", async () => {
 		}
 	});
 
+	/** @see https://www.rfc-editor.org/rfc/rfc6749.html#section-4.1 */
+	it.for([
+		"acme:prod@corp+team",
+		"team%2Fmember",
+	])("signs in with provider ID %s unchanged", async (id) => {
+		const {
+			auth: providerAuth,
+			client,
+			cookieSetter: saveCookies,
+		} = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: id,
+							clientId,
+							clientSecret,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const result = await client.signIn.social({
+			provider: id,
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: saveCookies(headers) },
+		});
+		expect.assert(result.data?.url);
+		expect(new URL(result.data.url).searchParams.get("redirect_uri")).toBe(
+			`http://localhost:3000/api/auth/callback/${id}`,
+		);
+		const authorization = await fetch(result.data.url, { redirect: "manual" });
+		const location = authorization.headers.get("location");
+		expect.assert(location);
+		const callback = await providerAuth.handler(
+			new Request(location, { headers }),
+		);
+		expect(callback.headers.get("location")).toBe(
+			"http://localhost:3000/dashboard",
+		);
+		const sessionHeaders = new Headers();
+		saveCookies(sessionHeaders)({ response: callback });
+		const session = await client.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("oauth2@test.com");
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(accounts.data).toEqual([
+			expect.objectContaining({ providerId: id, accountId: "oauth2" }),
+		]);
+	});
+
+	it("preserves callback data when redirecting POST to GET", async () => {
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/callback/team%2Fmember", {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					code: "callback-code",
+					state: "callback-state",
+				}),
+			}),
+		);
+		expect(response.headers.get("location")).toBe(
+			"http://localhost:3000/api/auth/callback/team%2Fmember?code=callback-code&state=callback-state",
+		);
+	});
+
 	it("should delete state cookie with path attribute", async () => {
 		const headers = new Headers();
 		const signInRes = await authClient.signIn.social({
@@ -3534,61 +3607,47 @@ describe("oauth2", async () => {
 
 		/** @see https://yandex.ru/dev/id/doc/en/user-information */
 		it("preserves the path structure of a Yandex avatar ID", async () => {
-			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-				new Response(
-					JSON.stringify({
+			mswServer.use(
+				http.get("https://login.yandex.ru/info", () =>
+					HttpResponse.json({
 						id: "yandex-user-id",
-						login: "yandex-user",
-						client_id: "yandex-client-id",
-						psuid: "yandex-psuid",
 						default_email: "user@example.com",
 						default_avatar_id: "31804/avatar-id",
 					}),
-					{ headers: { "content-type": "application/json" } },
 				),
 			);
-
-			try {
-				const userInfo = await yandex({
-					clientId: "yandex-client-id",
-					clientSecret: "yandex-client-secret",
-				}).getUserInfo?.({ accessToken: "yandex-access-token" });
-
-				expect(userInfo?.image).toBe(
-					"https://avatars.yandex.net/get-yapic/31804/avatar-id/islands-200",
-				);
-			} finally {
-				fetchSpy.mockRestore();
-			}
+			const userInfo = await yandex({ clientId, clientSecret }).getUserInfo?.({
+				accessToken: "yandex-access-token",
+			});
+			expect(userInfo?.image).toBe(
+				"https://avatars.yandex.net/get-yapic/31804/avatar-id/islands-200",
+			);
 		});
 	});
 
 	describe("HubSpot Provider Helper", () => {
 		it("encodes the access token as one URL path segment", async () => {
-			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-				new Response(
-					JSON.stringify({
-						user: "user@example.com",
-						user_id: "hubspot-user-id",
-						hub_domain: "example.com",
-						hub_id: "hub-id",
-					}),
-					{ headers: { "content-type": "application/json" } },
+			let requestedURL: string | undefined;
+			mswServer.use(
+				http.get(
+					"https://api.hubapi.com/oauth/v1/access-tokens/*",
+					({ request }) => {
+						requestedURL = request.url;
+						return HttpResponse.json({
+							user: "user@example.com",
+							user_id: "hubspot-user-id",
+							hub_domain: "example.com",
+							hub_id: "hub-id",
+						});
+					},
 				),
 			);
-
-			try {
-				await hubspot({
-					clientId: "hubspot-client-id",
-					clientSecret: "hubspot-client-secret",
-				}).getUserInfo?.({ accessToken: "token/part?variant=1" });
-
-				expect(fetchSpy.mock.calls[0]?.[0].toString()).toBe(
-					"https://api.hubapi.com/oauth/v1/access-tokens/token%2Fpart%3Fvariant%3D1",
-				);
-			} finally {
-				fetchSpy.mockRestore();
-			}
+			await hubspot({ clientId, clientSecret }).getUserInfo?.({
+				accessToken: "token/part?variant=1",
+			});
+			expect(requestedURL).toBe(
+				"https://api.hubapi.com/oauth/v1/access-tokens/token%2Fpart%3Fvariant%3D1",
+			);
 		});
 	});
 
@@ -5545,7 +5604,7 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 
 	it("preserves the registered redirect_uri slash boundary", async () => {
 		const { auth } = await getTestInstance({
-			baseURL: "http://localhost:3000/api/auth/",
+			baseURL: "http://LOCALHOST:3000/api/auth/",
 			plugins: [
 				genericOAuth({
 					config: [
@@ -5567,35 +5626,7 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 			"dynamic-oauth-test",
 		);
 		expect(redirectUri).toBe(
-			"http://localhost:3000/api/auth//callback/dynamic-oauth-test",
-		);
-	});
-
-	it("preserves an escaped provider ID in the registered redirect_uri", async () => {
-		const { auth } = await getTestInstance({
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "team%2Fmember",
-							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
-							clientId: "test-client-id",
-							clientSecret: "test-client-secret",
-						},
-					],
-				}),
-			],
-		});
-
-		const redirectUri = await getAuthorizeRedirectUri(
-			auth,
-			"/api/auth/sign-in/social",
-			"localhost:3000",
-			"team%2Fmember",
-		);
-		expect.assert(redirectUri);
-		expect(redirectUri).toBe(
-			"http://localhost:3000/api/auth/callback/team%2Fmember",
+			"http://LOCALHOST:3000/api/auth//callback/dynamic-oauth-test",
 		);
 	});
 

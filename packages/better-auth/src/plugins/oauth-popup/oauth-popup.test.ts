@@ -24,58 +24,6 @@ describe("oauth popup completion script", () => {
 	});
 });
 
-/**
- * @see https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1.2.3
- */
-describe("oauth popup redirect URI", () => {
-	it.each([
-		"http://localhost:3000/api/auth",
-		"http://LOCALHOST:3000/api/auth/",
-	])("uses the provider callback path without changing the registered URL: %s", async (baseURL) => {
-		const { auth } = await getTestInstance({
-			baseURL,
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "custom-provider",
-							clientId: "client-id",
-							clientSecret: "client-secret",
-							authorizationUrl: "https://idp.example.com/authorize",
-							tokenUrl: "https://idp.example.com/token",
-							userInfoUrl: "https://idp.example.com/userinfo",
-						},
-					],
-				}),
-				oauthPopup(),
-			],
-		});
-		const context = await auth.$context;
-		const provider = context.socialProviders.find(
-			(entry) => entry.id === "custom-provider",
-		);
-		expect.assert(provider);
-		provider.callbackPath = "/callback/custom/provider";
-		const regular = await auth.api.signInSocial({
-			body: {
-				provider: "custom-provider",
-				callbackURL: "/dashboard",
-				disableRedirect: true,
-			},
-		});
-		const popup = await auth.handler(
-			new Request(
-				"http://localhost:3000/api/auth/oauth-popup/start?provider=custom-provider&popupOrigin=http%3A%2F%2Flocalhost%3A3000",
-			),
-		);
-		const location = popup.headers.get("location");
-		expect.assert(location);
-		expect(new URL(location).searchParams.get("redirect_uri")).toBe(
-			new URL(regular.url!).searchParams.get("redirect_uri"),
-		);
-	});
-});
-
 describe("oauth popup server flow", async () => {
 	const providerId = "test";
 	const popupOrigin = "http://localhost:3000";
@@ -164,6 +112,26 @@ describe("oauth popup server flow", async () => {
 		});
 		return { startRes, callbackRes, cookies };
 	}
+
+	/** @see https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1.2.3 */
+	it("uses the provider's custom callback path", async ({ onTestFinished }) => {
+		const context = await auth.$context;
+		const provider = context.socialProviders.find(
+			(entry) => entry.id === providerId,
+		);
+		expect.assert(provider);
+		const originalPath = provider.callbackPath;
+		onTestFinished(() => {
+			provider.callbackPath = originalPath;
+		});
+		provider.callbackPath = "/callback/custom/provider";
+		const response = await auth.handler(new Request(startUrl));
+		const location = response.headers.get("location");
+		expect.assert(location);
+		expect(new URL(location).searchParams.get("redirect_uri")).toBe(
+			"http://localhost:3000/api/auth/callback/custom/provider",
+		);
+	});
 
 	it("redirects to the provider and sets the opener marker cookie", async () => {
 		const { startRes } = await runPopupFlow();
