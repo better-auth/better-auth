@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeEach(() => {
 	vi.resetModules();
+	vi.stubGlobal("AsyncLocalStorage", undefined);
+	Reflect.deleteProperty(globalThis, "AsyncLocalStorage");
 });
 
 afterEach(() => {
@@ -16,7 +18,7 @@ describe("pure getAsyncLocalStorage", () => {
 		const result = getAsyncLocalStorage();
 		expect(result).toBeInstanceOf(Promise);
 		await expect(result).resolves.toBe(AsyncLocalStorage);
-		vi.unstubAllGlobals();
+		vi.stubGlobal("AsyncLocalStorage", undefined);
 		await expect(getAsyncLocalStorage()).resolves.toBe(AsyncLocalStorage);
 	});
 
