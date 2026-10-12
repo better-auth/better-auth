@@ -122,7 +122,16 @@ export async function discoverOIDCConfig(
  * Handles trailing slashes correctly.
  */
 export function computeDiscoveryUrl(issuer: string): string {
-	return appendURLPath(issuer, "/.well-known/openid-configuration");
+	try {
+		return appendURLPath(issuer, "/.well-known/openid-configuration");
+	} catch (error) {
+		if (!(error instanceof TypeError)) throw error;
+		throw new DiscoveryError(
+			"discovery_invalid_url",
+			`The issuer URL "${issuer}" cannot be used for discovery.`,
+			{ url: issuer },
+		);
+	}
 }
 
 /**

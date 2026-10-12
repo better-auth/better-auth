@@ -2,4 +2,4 @@
 "@better-auth/sso": patch
 ---
 
-Fix SSO discovery and SAML callback URLs for custom base paths, and prevent SAML logout self-redirects.
+Preserve registered OIDC and SAML callback URLs and provider IDs when composing URLs. Report invalid discovery issuers as configuration errors and prevent SAML logout self-redirects under custom auth base paths.

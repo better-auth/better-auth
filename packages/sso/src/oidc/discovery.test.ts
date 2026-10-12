@@ -62,6 +62,14 @@ const createMockDiscoveryDocument = (
 
 describe("OIDC Discovery", () => {
 	describe("computeDiscoveryUrl", () => {
+		it.each([
+			"urn:example:id",
+			"not-a-url",
+			"https://idp.example.com/a\\b",
+		])("reports an invalid issuer as a discovery error: %s", (issuer) => {
+			expect(() => computeDiscoveryUrl(issuer)).toThrow(DiscoveryError);
+		});
+
 		it("should compute discovery URL from issuer without trailing slash", () => {
 			const url = computeDiscoveryUrl("https://idp.example.com");
 			expect(url).toBe(
@@ -90,9 +98,9 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it("does not leave a double slash after a trailing issuer path", () => {
+		it("preserves repeated slashes in the configured issuer path", () => {
 			expect(computeDiscoveryUrl("https://idp.example.com/tenant/v1//")).toBe(
-				"https://idp.example.com/tenant/v1/.well-known/openid-configuration",
+				"https://idp.example.com/tenant/v1//.well-known/openid-configuration",
 			);
 		});
 	});
