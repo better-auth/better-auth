@@ -113,10 +113,10 @@ describe("(cloudflare) simple server", () => {
 			"node:module",
 		]);
 		assertContentDoesNotInclude("index.js", indexJs, unexpectedContents);
-		// A module-scope import("node:async_hooks") never settles if the request evaluating it is canceled.
+		// The Worker entry must not load node:async_hooks through a cached dynamic import (#10315).
 		assert.doesNotMatch(
 			indexJs,
-			/import\(\s*(?:\/\*[^]*?\*\/\s*)*"node:async_hooks"\s*\)/,
+			/import\([^)]*"node:async_hooks"/,
 			"index.js should import node:async_hooks statically",
 		);
 		assert.match(indexJs, /from "node:async_hooks"/);

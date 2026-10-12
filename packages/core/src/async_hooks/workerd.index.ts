@@ -1,8 +1,8 @@
 /**
- * Cloudflare Workers entry. `nodejs_compat` (or `nodejs_als`) provides
- * `node:async_hooks` as a module, not as a global, so it is imported
- * statically: a module-scope dynamic import evaluated inside a request
- * never settles once workerd cancels that request.
+ * Cloudflare Workers entry. The `nodejs_compat` and `nodejs_als` flags
+ * provide `node:async_hooks` as a module, not as a global. Importing it
+ * statically avoids caching a dynamic import that can stay unsettled after
+ * the request that started it is canceled.
  *
  * @see https://github.com/better-auth/better-auth/issues/10315
  */
