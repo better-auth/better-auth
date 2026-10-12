@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import { appendURLPath } from "@better-auth/core/utils/url";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
@@ -126,7 +125,7 @@ async function validateJwtAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 	const baseURL = ctx.context.baseURL ?? "";
-	const userInfoAud = appendURLPath(baseURL, "/oauth2/userinfo");
+	const userInfoAud = `${baseURL}/oauth2/userinfo`;
 	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
 	let jwtPayload: JWTPayload & {
 		sid?: string;
@@ -347,10 +346,7 @@ async function validateOpaqueAccessToken(
 	if (accessToken.userId) {
 		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
 	}
-	const userInfoEndpoint = appendURLPath(
-		ctx.context.baseURL,
-		"/oauth2/userinfo",
-	);
+	const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
 
 	// Deleting a resource row revokes the tokens bound to it: introspection
 	// reports inactive (RFC 7662 §2.2 stable failure), mirroring the JWT path so
@@ -681,7 +677,7 @@ export async function introspectEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		appendURLPath(ctx.context.baseURL, "/oauth2/introspect"),
+		`${ctx.context.baseURL}/oauth2/introspect`,
 	);
 	const {
 		clientId: client_id,

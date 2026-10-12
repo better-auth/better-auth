@@ -1232,7 +1232,10 @@ describe("oauth-provider extensions", async () => {
 		expect(introspection.data?.cnf).toEqual({ jkt: "opaque-bound-jkt" });
 	});
 
-	it("authenticateClient binds the assertion audience to the served endpoint with a trailing base slash", async () => {
+	it.each([
+		"",
+		"/",
+	])("authenticateClient binds the assertion audience to the served endpoint with base suffix %j", async (suffix) => {
 		let observedAudience: string | undefined;
 		const opts = {
 			extensions: [
@@ -1259,7 +1262,7 @@ describe("oauth-provider extensions", async () => {
 		} as unknown as Parameters<typeof getOAuthProviderApi>[1];
 		const ctx = {
 			path: "/oauth2/bc-authorize",
-			context: { baseURL: `${authServerBaseUrl}/` },
+			context: { baseURL: `${authServerBaseUrl}${suffix}` },
 			body: {
 				client_id: "probe-client",
 				client_assertion: "probe-assertion",
@@ -1276,7 +1279,9 @@ describe("oauth-provider extensions", async () => {
 		).rejects.toBeDefined();
 		// The audience is the endpoint serving the request, not a hardcoded token
 		// endpoint, so the same assertion cannot be replayed at another endpoint.
-		expect(observedAudience).toBe(`${authServerBaseUrl}/oauth2/bc-authorize`);
+		expect(observedAudience).toBe(
+			`${authServerBaseUrl}${suffix}/oauth2/bc-authorize`,
+		);
 	});
 
 	it("getOAuthProviderApi.issueTokens requires a bound grant type", () => {

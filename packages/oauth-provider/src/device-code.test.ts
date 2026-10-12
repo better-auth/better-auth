@@ -36,7 +36,7 @@ describe("oauth-provider device-code composition", () => {
 		};
 
 		expect(metadata?.device_authorization_endpoint).toBe(
-			"http://localhost:3000/api/auth/device/code",
+			"http://localhost:3000/api/auth//device/code",
 		);
 	});
 

@@ -219,6 +219,64 @@ describe("private_key_jwt authentication", async () => {
 		});
 	}
 
+	it.each([
+		"/oauth2/token",
+		"/oauth2/introspect",
+		"/oauth2/revoke",
+	])("preserves the configured endpoint audience for %s", async (path) => {
+		const context = await auth.$context;
+		const baseURL = "https://Auth.Example.com:443/api/auth/";
+		const ctx = {
+			path,
+			context: { ...context, baseURL },
+		} as unknown as GenericEndpointContext;
+		const opts = { loginPage: "/login", consentPage: "/consent" };
+		const expectedAudience = `${baseURL}${path}`;
+		const assertion = await signAssertion({ aud: `${baseURL}${path}` });
+		await expect(
+			verifyClientAssertion(
+				ctx,
+				opts,
+				assertion,
+				CLIENT_ASSERTION_TYPE,
+				assertionClient.client_id,
+				expectedAudience,
+			),
+		).resolves.toEqual({ clientId: assertionClient.client_id });
+		await expect(
+			verifyClientAssertion(
+				ctx,
+				opts,
+				assertion,
+				CLIENT_ASSERTION_TYPE,
+				assertionClient.client_id,
+				expectedAudience,
+			),
+		).rejects.toMatchObject({ body: { error: "invalid_client" } });
+		await expect(
+			verifyClientAssertion(
+				ctx,
+				opts,
+				await signAssertion({
+					aud: "https://other.example.com/api/auth/oauth2/token",
+				}),
+				CLIENT_ASSERTION_TYPE,
+				assertionClient.client_id,
+				expectedAudience,
+			),
+		).rejects.toMatchObject({ body: { error: "invalid_client" } });
+		await expect(
+			verifyClientAssertion(
+				ctx,
+				opts,
+				await signAssertion({ aud: `${baseURL}/oauth2/other` }),
+				CLIENT_ASSERTION_TYPE,
+				assertionClient.client_id,
+				expectedAudience,
+			),
+		).rejects.toMatchObject({ body: { error: "invalid_client" } });
+	});
+
 	async function createDiscoveredClientVerifier(input: {
 		baseURL: string;
 		clientId: string;

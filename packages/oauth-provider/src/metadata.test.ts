@@ -133,14 +133,14 @@ describe("oauth metadata", async () => {
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
-	it("keeps discovery endpoint URLs canonical with a trailing base URL slash", async () => {
+	it("preserves advertised endpoint identities with a trailing base URL slash", async () => {
 		const { auth } = await createTestInstance({
 			baseURL: `${baseURL}/`,
 		});
 		const metadata = await auth.api.getOpenIdConfig();
 
-		expect(metadata?.token_endpoint).toBe(`${baseURL}/oauth2/token`);
-		expect(metadata?.userinfo_endpoint).toBe(`${baseURL}/oauth2/userinfo`);
+		expect(metadata?.token_endpoint).toBe(`${baseURL}//oauth2/token`);
+		expect(metadata?.userinfo_endpoint).toBe(`${baseURL}//oauth2/userinfo`);
 	});
 
 	it("advertises the registered custom JWKS path with a trailing base URL slash", async () => {

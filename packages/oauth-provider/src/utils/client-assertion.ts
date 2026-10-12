@@ -5,7 +5,6 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
-import { appendURLPath } from "@better-auth/core/utils/url";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
@@ -538,7 +537,7 @@ export async function verifyClientAssertion(
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, opts, client);
 	const endpointAudience =
-		expectedAudience ?? appendURLPath(ctx.context.baseURL, "/oauth2/token");
+		expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
 	const issuerAudience = getIssuer(ctx, opts);
 	const acceptedAudiences = [...new Set([endpointAudience, issuerAudience])];
 	const verifyOpts = {

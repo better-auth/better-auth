@@ -14,6 +14,67 @@ import type { OAuthClient } from "./types/oauth";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
+/** @see https://www.rfc-editor.org/rfc/rfc7519.html#section-4.1.3 */
+describe("configured UserInfo audience identity", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: "https://Auth.Example.com:443/api/auth/",
+		advanced: { useSecureCookies: false },
+		plugins: [
+			jwt({ jwt: { issuer: "https://issuer.example.com" } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "client_secret_post",
+		},
+	});
+
+	it.each([
+		{
+			audience: "https://Auth.Example.com:443/api/auth//oauth2/userinfo",
+			active: true,
+		},
+		{
+			audience: "https://Auth.Example.com:443/api/auth/oauth2/userinfo",
+			active: false,
+		},
+		{
+			audience: "https://other.example.com/api/auth//oauth2/userinfo",
+			active: false,
+		},
+		{
+			audience: [
+				"https://Auth.Example.com:443/api/auth//oauth2/userinfo",
+				"https://other.example.com/api/auth//oauth2/userinfo",
+			],
+			active: false,
+		},
+	])("reports active=$active for $audience", async ({ audience, active }) => {
+		const { token } = await auth.api.signJWT({
+			body: { payload: { azp: client.client_id, aud: audience } },
+		});
+		const body = {
+			client_id: client.client_id,
+			client_secret: client.client_secret,
+			token,
+			token_type_hint: "access_token",
+		};
+		expect(await auth.api.oauth2Introspect({ body })).toMatchObject({ active });
+		const response = await auth.api.oauth2Revoke({ body, asResponse: true });
+		if (active) {
+			expect(await response.json()).toMatchObject({
+				error: "unsupported_token_type",
+			});
+		} else {
+			expect(response.status).toBe(200);
+		}
+	});
+});
+
 describe("oauth introspect", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";

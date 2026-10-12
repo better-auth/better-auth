@@ -1,5 +1,4 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { appendURLPath } from "@better-auth/core/utils/url";
 import { APIError } from "better-auth/api";
 import {
 	generateRandomString,
@@ -159,7 +158,7 @@ export function getOAuthProviderApi(
 				// or a plugin's own endpoint out-of-grant. A fixed token-endpoint
 				// audience would let an assertion be replayed across endpoints, or
 				// reject a valid assertion minted for the real endpoint.
-				appendURLPath(ctx.context.baseURL, ctx.path ?? "/oauth2/token"),
+				`${ctx.context.baseURL}${ctx.path ?? "/oauth2/token"}`,
 			);
 			const { clientId, clientSecret, preVerified, authMethod, confirmation } =
 				destructureCredentials(credentials);
@@ -1477,7 +1476,7 @@ async function handleAuthorizationCodeGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		appendURLPath(ctx.context.baseURL, "/oauth2/token"),
+		`${ctx.context.baseURL}/oauth2/token`,
 	);
 	const {
 		clientId: client_id,
@@ -1701,7 +1700,7 @@ async function handleClientCredentialsGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		appendURLPath(ctx.context.baseURL, "/oauth2/token"),
+		`${ctx.context.baseURL}/oauth2/token`,
 	);
 	const {
 		clientId: client_id,
@@ -1787,7 +1786,7 @@ async function handleRefreshTokenGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		appendURLPath(ctx.context.baseURL, "/oauth2/token"),
+		`${ctx.context.baseURL}/oauth2/token`,
 	);
 	const {
 		clientId: client_id,
