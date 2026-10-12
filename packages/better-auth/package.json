@@ -286,6 +286,11 @@
       "types": "./dist/plugins/one-time-token/index.d.mts",
       "default": "./dist/plugins/one-time-token/index.mjs"
     },
+    "./plugins/one-tap": {
+      "dev-source": "./src/plugins/one-tap/index.ts",
+      "types": "./dist/plugins/one-tap/index.d.mts",
+      "default": "./dist/plugins/one-tap/index.mjs"
+    },
     "./plugins/phone-number": {
       "dev-source": "./src/plugins/phone-number/index.ts",
       "types": "./dist/plugins/phone-number/index.d.mts",
@@ -442,6 +447,9 @@
       ],
       "plugins/one-time-token": [
         "./dist/plugins/one-time-token/index.d.mts"
+      ],
+      "plugins/one-tap": [
+        "./dist/plugins/one-tap/index.d.mts"
       ],
       "plugins/jwt": [
         "./dist/plugins/jwt/index.d.mts"
