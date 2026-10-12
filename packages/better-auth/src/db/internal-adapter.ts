@@ -702,16 +702,23 @@ export const createInternalAdapter = (
 				| undefined,
 		) => {
 			if (secondaryStorage) {
-				const sessions: {
-					session: Session;
-					user: User;
-				}[] = [];
-				// Tokens resolved from secondary storage. When the database is
-				// the authoritative session store (storeSessionInDatabase),
-				// tokens missing from the cache fall back to a batch database
-				// lookup, mirroring findSession's single-token fallback.
-				const resolvedTokens = new Set<string>();
+				// Results are keyed by token and emitted in the caller's input
+				// order (deduplicated), so cache hits and database fallbacks keep
+				// the relative precedence the caller expressed. This mirrors
+				// findSession's cache-then-database contract per token.
+				const resolvedByToken = new Map<
+					string,
+					{
+						session: Session;
+						user: User;
+					}
+				>();
+				const uniqueTokens: string[] = [];
+				const seenTokens = new Set<string>();
 				for (const sessionToken of sessionTokens) {
+					if (seenTokens.has(sessionToken)) continue;
+					seenTokens.add(sessionToken);
+					uniqueTokens.push(sessionToken);
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
 						try {
@@ -725,10 +732,16 @@ export const createInternalAdapter = (
 							};
 							if (!s) continue;
 							const expiresAt = new Date(s.session.expiresAt);
+							if (Number.isNaN(expiresAt.getTime())) {
+								// A parseable entry with an invalid expiry is
+								// corrupt: leave the token unresolved so the
+								// database fallback can still recover it.
+								continue;
+							}
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
 							}
-							const session = {
+							resolvedByToken.set(sessionToken, {
 								session: {
 									...s.session,
 									expiresAt,
@@ -738,12 +751,7 @@ export const createInternalAdapter = (
 									createdAt: new Date(s.user.createdAt),
 									updatedAt: new Date(s.user.updatedAt),
 								},
-							} as {
-								session: Session;
-								user: User;
-							};
-							sessions.push(session);
-							resolvedTokens.add(sessionToken);
+							});
 						} catch {
 							// Skip invalid/corrupt session data. The token stays
 							// unresolved so the database fallback below can still
@@ -752,50 +760,55 @@ export const createInternalAdapter = (
 						}
 					}
 				}
-				if (!databaseSessionFallbackEnabled) {
-					return sessions;
-				}
-				const missingTokens = sessionTokens.filter(
-					(token, index) =>
-						!resolvedTokens.has(token) &&
-						sessionTokens.indexOf(token) === index,
-				);
-				if (missingTokens.length > 0) {
-					const currentAdapter = await getCurrentAdapter(adapter);
-					const dbSessions = await currentAdapter.findMany<
-						Session & { user: User | null }
-					>({
-						model: "session",
-						where: [
-							{
-								field: "token",
-								operator: "in",
-								value: missingTokens,
+				if (databaseSessionFallbackEnabled) {
+					const missingTokens = uniqueTokens.filter(
+						(token) => !resolvedByToken.has(token),
+					);
+					if (missingTokens.length > 0) {
+						const currentAdapter = await getCurrentAdapter(adapter);
+						const dbSessions = await currentAdapter.findMany<
+							Session & { user: User | null }
+						>({
+							model: "session",
+							// Query exactly the missing tokens: the default findMany
+							// limit (advanced.database.defaultFindManyLimit, 100 by
+							// default) must not silently drop the tail of a large
+							// batch.
+							limit: missingTokens.length,
+							where: [
+								{
+									field: "token",
+									operator: "in",
+									value: missingTokens,
+								},
+								...(options?.onlyActiveSessions
+									? [
+											{
+												field: "expiresAt",
+												value: new Date(),
+												operator: "gt",
+											} satisfies Where,
+										]
+									: []),
+							],
+							join: {
+								user: true,
 							},
-							...(options?.onlyActiveSessions
-								? [
-										{
-											field: "expiresAt",
-											value: new Date(),
-											operator: "gt",
-										} satisfies Where,
-									]
-								: []),
-						],
-						join: {
-							user: true,
-						},
-					});
-					for (const item of dbSessions) {
-						const { user, ...session } = item;
-						if (!user) continue;
-						sessions.push({
-							session: parseSessionOutput(ctx.options, session),
-							user: parseUserOutput(ctx.options, user),
 						});
+						for (const item of dbSessions) {
+							const { user, ...session } = item;
+							if (!user) continue;
+							resolvedByToken.set(session.token, {
+								session: parseSessionOutput(ctx.options, session),
+								user: parseUserOutput(ctx.options, user),
+							});
+						}
 					}
 				}
-				return sessions;
+				return uniqueTokens.flatMap((token) => {
+					const session = resolvedByToken.get(token);
+					return session ? [session] : [];
+				});
 			}
 
 			const sessions = await (await getCurrentAdapter(adapter)).findMany<

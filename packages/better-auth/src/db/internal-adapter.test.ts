@@ -1710,7 +1710,8 @@ describe("internal adapter test", async () => {
 			} satisfies BetterAuthOptions;
 
 			(await getMigrations(testOpts)).runMigrations();
-			const { internalAdapter } = await init(testOpts);
+			const testCtx = await init(testOpts);
+			const { internalAdapter } = testCtx;
 			const user = await internalAdapter.createUser(
 				{
 					name: "cache-only-user",
@@ -1724,8 +1725,91 @@ describe("internal adapter test", async () => {
 			// so the row lives only in secondary storage.
 			testMap.delete(session.token);
 
+			const findManySpy = vi.spyOn(testCtx.adapter, "findMany");
 			const sessions = await internalAdapter.findSessions([session.token]);
 			expect(sessions.length).toBe(0);
+			expect(findManySpy).not.toHaveBeenCalled();
+		});
+
+		it("preserves the caller's token order across cache hits and database fallbacks", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase: true },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "order-fallback-user",
+					email: "order-fallback@example.com",
+				},
+				{ method: "test" },
+			);
+			const [evictedFirst, cachedMiddle, evictedLast] = await Promise.all([
+				internalAdapter.createSession(user.id),
+				internalAdapter.createSession(user.id),
+				internalAdapter.createSession(user.id),
+			]);
+
+			// Evict the first and last tokens; the middle one stays cached.
+			testMap.delete(evictedFirst.token);
+			testMap.delete(evictedLast.token);
+
+			const sessions = await internalAdapter.findSessions([
+				evictedFirst.token,
+				cachedMiddle.token,
+				evictedLast.token,
+			]);
+			// The caller's order decides precedence (multi-session rotation
+			// picks the first result), so database fallbacks must not jump
+			// ahead of earlier cache-resolved tokens.
+			expect(sessions.map((s) => s.session.token)).toEqual([
+				evictedFirst.token,
+				cachedMiddle.token,
+				evictedLast.token,
+			]);
+		});
+
+		it("recovers a session whose cached entry has an invalid expiry instead of surfacing it", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase: true },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "bad-expiry-fallback-user",
+					email: "bad-expiry-fallback@example.com",
+				},
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			// Parseable JSON with a non-date expiry: `new Date(null-ish)`
+			// produces an Invalid Date that would slip past the
+			// active-session check and block the database fallback.
+			testMap.set(
+				session.token,
+				JSON.stringify({
+					session: { ...session, expiresAt: "not-a-date" },
+					user: { ...user },
+				}),
+			);
+
+			const sessions = await internalAdapter.findSessions([session.token]);
+			expect(sessions.length).toBe(1);
+			expect(sessions[0]!.session.token).toBe(session.token);
+			expect(
+				sessions[0]!.session.expiresAt instanceof Date &&
+					!Number.isNaN(sessions[0]!.session.expiresAt.getTime()),
+			).toBe(true);
 		});
 	});
 
