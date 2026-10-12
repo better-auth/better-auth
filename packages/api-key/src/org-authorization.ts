@@ -25,6 +25,15 @@ interface Member {
 	createdAt: Date;
 }
 
+interface Organization {
+	id: string;
+	name: string;
+	slug: string;
+	logo: string | null | undefined;
+	metadata?: Record<string, unknown> | string;
+	createdAt: Date;
+}
+
 /**
  * Gets the organization plugin options from the context.
  * Returns null if the organization plugin is not installed.
@@ -43,6 +52,34 @@ function getOrgOptions(
 	}
 
 	return null;
+}
+
+/**
+ * Validates that an organization exists and that the organization plugin is installed.
+ * Use this for server-side trusted calls where no user context is available.
+ *
+ * @param ctx - The endpoint context
+ * @param organizationId - The ID of the organization to validate
+ * @throws APIError if the organization plugin is not installed or the organization does not exist
+ */
+export async function checkOrgExists(
+	ctx: GenericEndpointContext,
+	organizationId: string,
+): Promise<void> {
+	const orgOptions = getOrgOptions(ctx);
+	if (!orgOptions) {
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			ERROR_CODES.ORGANIZATION_PLUGIN_REQUIRED,
+		);
+	}
+	const org = await ctx.context.adapter.findOne<Organization>({
+		model: "organization",
+		where: [{ field: "id", value: organizationId }],
+	});
+	if (!org) {
+		throw APIError.from("BAD_REQUEST", ERROR_CODES.ORGANIZATION_NOT_FOUND);
+	}
 }
 
 /**
