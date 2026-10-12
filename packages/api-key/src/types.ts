@@ -339,8 +339,9 @@ export type ApiKey = {
 	remaining: number | null;
 	/**
 	 * The time of the request that opened the current rate-limit window.
-	 * When rate limiting is disabled for the key, this tracks the last
-	 * request time for informational purposes.
+	 * When limiting is disabled through the enabled flags, this is
+	 * still updated with each request for informational purposes; when
+	 * disabled by clearing the window or the max, it is left untouched.
 	 */
 	lastRequest: Date | null;
 	/**

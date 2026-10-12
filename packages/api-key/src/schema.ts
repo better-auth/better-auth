@@ -144,8 +144,11 @@ export const apiKeySchema = ({
 				},
 				/**
 				 * The date and time of the request that opened the current
-				 * rate-limit window. When rate limiting is disabled for the
-				 * key, this tracks the last request for informational purposes.
+				 * rate-limit window. When limiting is disabled for the key
+				 * through the enabled flags, this is still updated with
+				 * each request for informational purposes; when limiting
+				 * is disabled by clearing the window or the max, it is
+				 * left untouched.
 				 */
 				lastRequest: {
 					type: "date",
