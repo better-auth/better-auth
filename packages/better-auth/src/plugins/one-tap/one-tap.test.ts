@@ -1,5 +1,7 @@
 // cspell:ignore AQAB
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { OAuthMappedUser } from "@better-auth/core/oauth2";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
@@ -793,6 +795,352 @@ describe("one-tap disableSignUp", () => {
 			status: "UNAUTHORIZED",
 			body: { message: "signup disabled" },
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9460
+ */
+describe("one-tap mapProfileToUser and OIDC profile claims", () => {
+	afterEach(() => {
+		// biome-ignore lint/performance/noDelete: test cleanup
+		delete (verifiedPayload as Record<string, unknown>).given_name;
+		// biome-ignore lint/performance/noDelete: test cleanup
+		delete (verifiedPayload as Record<string, unknown>).family_name;
+		// biome-ignore lint/performance/noDelete: test cleanup
+		delete (verifiedPayload as Record<string, unknown>).locale;
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
+	it("honors socialProviders.google.mapProfileToUser and populates mapped attributes on user creation", async () => {
+		verifiedPayload.email = "one-tap-map-provider@example.com";
+		verifiedPayload.sub = "google_sub_map_provider";
+		Object.assign(verifiedPayload, {
+			given_name: "Alice",
+			family_name: "Smith",
+			locale: "en-US",
+		});
+
+		const mapProfileToUser = vi.fn((profile: GoogleProfile) => ({
+			firstName: profile.given_name,
+			lastName: profile.family_name,
+			locale: profile.locale,
+		}));
+
+		const { client } = await getTestInstance({
+			user: {
+				additionalFields: {
+					firstName: { type: "string", required: false },
+					lastName: { type: "string", required: false },
+					locale: { type: "string", required: false },
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					mapProfileToUser,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				firstName?: string;
+				lastName?: string;
+				locale?: string;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(mapProfileToUser).toHaveBeenCalled();
+		expect(res.data?.user?.firstName).toBe("Alice");
+		expect(res.data?.user?.lastName).toBe("Smith");
+		expect(res.data?.user?.locale).toBe("en-US");
+	});
+
+	it("honors oneTap({ mapProfileToUser }) option directly", async () => {
+		verifiedPayload.email = "one-tap-plugin-mapper@example.com";
+		verifiedPayload.sub = "google_sub_plugin_mapper";
+		Object.assign(verifiedPayload, {
+			given_name: "Bob",
+			family_name: "Jones",
+			locale: "fr-FR",
+		});
+
+		const providerMapper = vi.fn();
+		const pluginMapper = vi.fn((profile: GoogleProfile) => ({
+			firstName: `plugin_${profile.given_name}`,
+			lastName: `plugin_${profile.family_name}`,
+		}));
+
+		const { client } = await getTestInstance({
+			user: {
+				additionalFields: {
+					firstName: { type: "string", required: false },
+					lastName: { type: "string", required: false },
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					mapProfileToUser: providerMapper,
+				},
+			},
+			plugins: [
+				oneTap({
+					mapProfileToUser: pluginMapper,
+				}),
+			],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				firstName?: string;
+				lastName?: string;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(pluginMapper).toHaveBeenCalled();
+		expect(providerMapper).not.toHaveBeenCalled();
+		expect(res.data?.user?.firstName).toBe("plugin_Bob");
+		expect(res.data?.user?.lastName).toBe("plugin_Jones");
+	});
+
+	it("passes standard OIDC claims (given_name, family_name, locale) to user if defined in schema additionalFields", async () => {
+		verifiedPayload.email = "one-tap-claims@example.com";
+		verifiedPayload.sub = "google_sub_claims";
+		Object.assign(verifiedPayload, {
+			given_name: "Jane",
+			family_name: "Doe",
+			locale: "en-US",
+		});
+
+		const { client, auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					given_name: { type: "string", required: false },
+					family_name: { type: "string", required: false },
+					locale: { type: "string", required: false },
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				given_name?: string;
+				family_name?: string;
+				locale?: string;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+
+		const ctx = await auth.$context;
+		const userInDb = await ctx.adapter.findOne<{
+			given_name?: string;
+			family_name?: string;
+			locale?: string;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: "one-tap-claims@example.com" }],
+		});
+
+		expect(userInDb?.given_name).toBe("Jane");
+		expect(userInDb?.family_name).toBe("Doe");
+		expect(userInDb?.locale).toBe("en-US");
+	});
+
+	it("strips id if returned from mapProfileToUser so local user primary key is preserved", async () => {
+		verifiedPayload.email = "one-tap-strip-id@example.com";
+		verifiedPayload.sub = "google_sub_strip_id";
+
+		const { client, auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					mapProfileToUser: () =>
+						({
+							id: "malicious-external-id",
+							name: "Mapped Name",
+						}) as unknown as OAuthMappedUser,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				name: string;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.user?.name).toBe("Mapped Name");
+		expect(res.data?.user?.id).not.toBe("malicious-external-id");
+
+		const ctx = await auth.$context;
+		const userInDb = await ctx.adapter.findOne<{
+			id: string;
+			name: string;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: "one-tap-strip-id@example.com" }],
+		});
+
+		expect(userInDb?.id).not.toBe("malicious-external-id");
+		expect(userInDb?.id).toBe(res.data?.user?.id);
+	});
+
+	it("honors async Promise-returning mapProfileToUser and can override emailVerified", async () => {
+		verifiedPayload.email = "one-tap-async-mapper@example.com";
+		verifiedPayload.sub = "google_sub_async_mapper";
+		verifiedPayload.email_verified = false;
+		Object.assign(verifiedPayload, {
+			given_name: "AsyncAlice",
+			family_name: "AsyncSmith",
+		});
+
+		const mapProfileToUser = vi.fn(async (profile: GoogleProfile) => {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			return {
+				firstName: profile.given_name,
+				emailVerified: true,
+			};
+		});
+
+		const { client, auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					firstName: { type: "string", required: false },
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					mapProfileToUser,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				firstName?: string;
+				emailVerified?: boolean;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(mapProfileToUser).toHaveBeenCalled();
+		expect(res.data?.user?.firstName).toBe("AsyncAlice");
+		expect(res.data?.user?.emailVerified).toBe(true);
+
+		const ctx = await auth.$context;
+		const userInDb = await ctx.adapter.findOne<{
+			firstName?: string;
+			emailVerified?: boolean;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: "one-tap-async-mapper@example.com" }],
+		});
+
+		expect(userInDb?.firstName).toBe("AsyncAlice");
+		expect(userInDb?.emailVerified).toBe(true);
+	});
+
+	it("preserves schema defaultValue for OIDC claims when ID token omits them", async () => {
+		verifiedPayload.email = "one-tap-defaults@example.com";
+		verifiedPayload.sub = "google_sub_defaults";
+
+		const { client, auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					locale: {
+						type: "string",
+						required: false,
+						defaultValue: "en-DEFAULT",
+					},
+					given_name: {
+						type: "string",
+						required: false,
+						defaultValue: "DefaultGiven",
+					},
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			user?: {
+				id: string;
+				locale?: string;
+				given_name?: string;
+			};
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error).toBeFalsy();
+		expect(res.data?.user?.locale).toBe("en-DEFAULT");
+		expect(res.data?.user?.given_name).toBe("DefaultGiven");
+
+		const ctx = await auth.$context;
+		const userInDb = await ctx.adapter.findOne<{
+			locale?: string;
+			given_name?: string;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: "one-tap-defaults@example.com" }],
+		});
+
+		expect(userInDb?.locale).toBe("en-DEFAULT");
+		expect(userInDb?.given_name).toBe("DefaultGiven");
 	});
 });
 

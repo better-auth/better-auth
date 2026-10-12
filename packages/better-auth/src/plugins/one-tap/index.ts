@@ -1,7 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type {
+	GoogleOptions,
+	GoogleProfile,
+} from "@better-auth/core/social-providers";
 import {
 	isGoogleHostedDomainAllowed,
 	verifyGoogleIdToken,
@@ -37,6 +40,12 @@ export interface OneTapOptions {
 	 * it will be used.
 	 */
 	clientId?: string | undefined;
+	/**
+	 * Custom function to map Google profile to user attributes.
+	 *
+	 * If not provided, falls back to `socialProviders.google.mapProfileToUser`.
+	 */
+	mapProfileToUser?: GoogleOptions["mapProfileToUser"] | undefined;
 }
 
 const oneTapCallbackBodySchema = z.object({
@@ -110,6 +119,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// Google client would be accepted. Resolve and require it before
 					// verification.
 					const audience = options?.clientId || googleProvider?.clientId;
+					const profileMapper =
+						options?.mapProfileToUser ?? googleProvider?.mapProfileToUser;
 					if (!audience || (Array.isArray(audience) && audience.length === 0)) {
 						throw new APIError("BAD_REQUEST", {
 							message:
@@ -152,6 +163,9 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						name,
 						picture,
 						sub,
+						given_name,
+						family_name,
+						locale,
 					} = payload;
 					if (typeof rawEmail !== "string" || !rawEmail) {
 						throw new APIError("BAD_REQUEST", {
@@ -170,17 +184,43 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							? email_verified
 							: toBoolean(email_verified);
 
+					const mappedUser = profileMapper
+						? await profileMapper(payload as GoogleProfile)
+						: undefined;
+					const { id: _discardId, ...restMapped } = mappedUser ?? {};
+
+					const profileClaims: Record<string, unknown> = {
+						...(given_name !== undefined ? { given_name } : {}),
+						...(family_name !== undefined ? { family_name } : {}),
+						...(locale !== undefined ? { locale } : {}),
+						...restMapped,
+					};
+
 					// Resolve identity through the shared OAuth path so One Tap matches
 					// the redirect and `signIn.social` flows: the account that owns the
 					// Google `sub` wins, never whichever local user happens to share the
 					// token's email.
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo: {
+							...profileClaims,
 							id: sub,
-							email,
-							emailVerified,
-							name: typeof name === "string" ? name : "",
-							image: typeof picture === "string" ? picture : undefined,
+							email: mappedUser?.email ? mappedUser.email : email,
+							emailVerified:
+								typeof mappedUser?.emailVerified === "boolean"
+									? mappedUser.emailVerified
+									: emailVerified,
+							name:
+								mappedUser?.name !== undefined
+									? mappedUser.name
+									: typeof name === "string"
+										? name
+										: "",
+							image:
+								mappedUser?.image !== undefined
+									? mappedUser.image
+									: typeof picture === "string"
+										? picture
+										: undefined,
 						},
 						account: {
 							providerId: "google",
