@@ -7,7 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-
+import { createHMAC } from "@better-auth/utils/hmac";
 import * as z from "zod";
 import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
@@ -16,6 +16,7 @@ import {
 	deleteSessionCookie,
 	expireCookie,
 	getChunkedCookie,
+	parseCookies,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
@@ -671,6 +672,69 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 	);
 
 /**
+ * Whether the session-token cookie the *original* request carried matches the
+ * revoked session's token.
+ *
+ * `ctx.headers` (and therefore `ctx.getSignedCookie`) reflects the effective
+ * session, which the bearer plugin can swap for the Authorization token while
+ * the browser is holding an unrelated session's cookie. `ctx.request` keeps
+ * the request as the client sent it, so it is the source of truth for which
+ * cookies the response would actually expire.
+ *
+ * When there is no `Request` (server-side `auth.api.*` calls), no plugin can
+ * have rewritten the headers, so the signed cookie is the original one.
+ *
+ * Returns `false` when the original request carries no session-token cookie
+ * (bearer-only clients) so non-browser callers get a clean `Set-Cookie`-free
+ * response rather than expiry headers for cookies they never held.
+ */
+async function revokedSessionOwnsRequestCookies(
+	ctx: GenericEndpointContext,
+	revokedToken: string,
+): Promise<boolean> {
+	let cookieHeader: string | null = null;
+	if (ctx.request) {
+		// original request cookies; plugin before-hooks may have rewritten
+		// ctx.headers, but ctx.request stays as the client sent it
+		cookieHeader = ctx.request.headers.get("cookie");
+	} else if (!ctx.headers?.get("authorization")) {
+		// server-side auth.api call without an Authorization header: nothing
+		// could have swapped the session cookie, so ctx.headers is original
+		cookieHeader = ctx.headers?.get("cookie") ?? null;
+	}
+	if (!cookieHeader) {
+		return false;
+	}
+	const signedValue = parseCookies(cookieHeader).get(
+		ctx.context.authCookies.sessionToken.name,
+	);
+	if (!signedValue) {
+		return false;
+	}
+	// the cookie holds `token.signature`; the signature is appended after the
+	// last dot (session tokens are alphanumeric, see generateId)
+	const dotIndex = signedValue.lastIndexOf(".");
+	const cookieToken = dotIndex > 0 ? signedValue.substring(0, dotIndex) : "";
+	if (!cookieToken || cookieToken !== revokedToken) {
+		return false;
+	}
+	// verify the signature so a cookie cannot claim ownership of a session
+	// the caller does not hold by pairing a foreign token with a valid
+	// signature of a different value
+	const signature = signedValue.substring(dotIndex + 1);
+	try {
+		const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
+			ctx.context.secret,
+			cookieToken,
+			signature,
+		);
+		return isValid;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * revoke a single session
  */
 export const revokeSession = createAuthEndpoint(
@@ -733,8 +797,8 @@ export const revokeSession = createAuthEndpoint(
 		if (session?.session.userId === ctx.context.session.user.id) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
-				if (token === ctx.context.session.session.token) {
-					// the caller revoked the session they are calling from, so
+				if (await revokedSessionOwnsRequestCookies(ctx, token)) {
+					// the caller's cookies hold the revoked session, so
 					// expire the session (and cookie cache) cookies in the
 					// response, matching what sign-out does
 					deleteSessionCookie(ctx);
