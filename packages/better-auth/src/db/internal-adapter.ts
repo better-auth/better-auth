@@ -706,6 +706,11 @@ export const createInternalAdapter = (
 					session: Session;
 					user: User;
 				}[] = [];
+				// Tokens resolved from secondary storage. When the database is
+				// the authoritative session store (storeSessionInDatabase),
+				// tokens missing from the cache fall back to a batch database
+				// lookup, mirroring findSession's single-token fallback.
+				const resolvedTokens = new Set<string>();
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
@@ -726,7 +731,7 @@ export const createInternalAdapter = (
 							const session = {
 								session: {
 									...s.session,
-									expiresAt: new Date(s.session.expiresAt),
+									expiresAt,
 								},
 								user: {
 									...s.user,
@@ -738,10 +743,56 @@ export const createInternalAdapter = (
 								user: User;
 							};
 							sessions.push(session);
+							resolvedTokens.add(sessionToken);
 						} catch {
-							// Skip invalid/corrupt session data
+							// Skip invalid/corrupt session data. The token stays
+							// unresolved so the database fallback below can still
+							// recover it.
 							continue;
 						}
+					}
+				}
+				if (!databaseSessionFallbackEnabled) {
+					return sessions;
+				}
+				const missingTokens = sessionTokens.filter(
+					(token, index) =>
+						!resolvedTokens.has(token) &&
+						sessionTokens.indexOf(token) === index,
+				);
+				if (missingTokens.length > 0) {
+					const currentAdapter = await getCurrentAdapter(adapter);
+					const dbSessions = await currentAdapter.findMany<
+						Session & { user: User | null }
+					>({
+						model: "session",
+						where: [
+							{
+								field: "token",
+								operator: "in",
+								value: missingTokens,
+							},
+							...(options?.onlyActiveSessions
+								? [
+										{
+											field: "expiresAt",
+											value: new Date(),
+											operator: "gt",
+										} satisfies Where,
+									]
+								: []),
+						],
+						join: {
+							user: true,
+						},
+					});
+					for (const item of dbSessions) {
+						const { user, ...session } = item;
+						if (!user) continue;
+						sessions.push({
+							session: parseSessionOutput(ctx.options, session),
+							user: parseUserOutput(ctx.options, user),
+						});
 					}
 				}
 				return sessions;

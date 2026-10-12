@@ -1546,6 +1546,189 @@ describe("internal adapter test", async () => {
 		]);
 	});
 
+	describe("findSessions database fallback", () => {
+		/**
+		 * Regression tests for the findSession/findSessions parity break:
+		 * with secondaryStorage configured as a read-through cache and
+		 * session.storeSessionInDatabase enabled, sessions evicted from the
+		 * cache but still valid in the database must still be returned by
+		 * findSessions, exactly like findSession already does.
+		 * @see https://github.com/better-auth/better-auth/issues/11713
+		 */
+		it("falls back to the database for tokens missing from secondary storage", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase: true },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "fallback-user",
+					email: "fallback@example.com",
+				},
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			// Simulate cache eviction (TTL expiry / restart) while the
+			// database record stays intact.
+			testMap.delete(session.token);
+
+			// Parity: the single lookup finds the session via DB fallback.
+			const single = await internalAdapter.findSession(session.token);
+			expect(single?.session.token).toBe(session.token);
+
+			// Before the fix this returned [] and silently dropped every
+			// evicted-but-valid session from bulk lookups.
+			const bulk = await internalAdapter.findSessions([session.token]);
+			expect(bulk.length).toBe(1);
+			expect(bulk[0]!.session.token).toBe(session.token);
+			expect(bulk[0]!.user.id).toBe(user.id);
+		});
+
+		it("keeps cache hits and recovers only the missing tokens, without duplicates", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase: true },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "partial-fallback-user",
+					email: "partial-fallback@example.com",
+				},
+				{ method: "test" },
+			);
+			const [session1, session2] = await Promise.all([
+				internalAdapter.createSession(user.id),
+				internalAdapter.createSession(user.id),
+			]);
+
+			// Evict only session2 from the cache; session1 stays cached.
+			testMap.delete(session2.token);
+
+			const sessions = await internalAdapter.findSessions([
+				session2.token,
+				session1.token,
+				session2.token, // duplicate input token must not double-return
+			]);
+			expect(sessions.map((s) => s.session.token).sort()).toEqual(
+				[session1.token, session2.token].sort(),
+			);
+		});
+
+		it("recovers a session whose cached entry is corrupt instead of dropping it", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase: true },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "corrupt-fallback-user",
+					email: "corrupt-fallback@example.com",
+				},
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			// Corrupt the cached copy; the database copy stays valid.
+			testMap.set(session.token, "invalid-json{{{");
+
+			const sessions = await internalAdapter.findSessions([session.token]);
+			expect(sessions.length).toBe(1);
+			expect(sessions[0]!.session.token).toBe(session.token);
+		});
+
+		it("honors onlyActiveSessions when resolving tokens from the database", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				session: { storeSessionInDatabase: true },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "active-fallback-user",
+					email: "active-fallback@example.com",
+				},
+				{ method: "test" },
+			);
+			const activeSession = await internalAdapter.createSession(user.id);
+			// Expired session: valid in the database, but not active.
+			const expiredSession = await internalAdapter.createSession(user.id);
+			const testCtx2 = await init(testOpts);
+			const currentAdapter = testCtx2.adapter;
+			await currentAdapter.update({
+				model: "session",
+				update: { expiresAt: new Date(Date.now() - 60_000) },
+				where: [{ field: "token", value: expiredSession.token }],
+			});
+			// Evict both from the cache so the DB fallback path decides.
+			testMap.delete(activeSession.token);
+			testMap.delete(expiredSession.token);
+
+			const allSessions = await internalAdapter.findSessions([
+				activeSession.token,
+				expiredSession.token,
+			]);
+			expect(allSessions.map((s) => s.session.token).sort()).toEqual(
+				[activeSession.token, expiredSession.token].sort(),
+			);
+
+			const activeOnly = await internalAdapter.findSessions(
+				[activeSession.token, expiredSession.token],
+				{ onlyActiveSessions: true },
+			);
+			expect(activeOnly.map((s) => s.session.token)).toEqual([
+				activeSession.token,
+			]);
+		});
+
+		it("does not hit the database when the session store is cache-only", async () => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+				// storeSessionInDatabase defaults to false: the cache is the
+				// only session store, so a cache miss must stay a miss.
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "cache-only-user",
+					email: "cache-only@example.com",
+				},
+				{ method: "test" },
+			);
+			const session = await internalAdapter.createSession(user.id);
+
+			// Cache-only deployments do not persist sessions to the database,
+			// so the row lives only in secondary storage.
+			testMap.delete(session.token);
+
+			const sessions = await internalAdapter.findSessions([session.token]);
+			expect(sessions.length).toBe(0);
+		});
+	});
+
 	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
