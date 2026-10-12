@@ -113,6 +113,13 @@ describe("(cloudflare) simple server", () => {
 			"node:module",
 		]);
 		assertContentDoesNotInclude("index.js", indexJs, unexpectedContents);
+		// A module-scope import("node:async_hooks") never settles if the request evaluating it is canceled.
+		assert.doesNotMatch(
+			indexJs,
+			/import\(\s*(?:\/\*[^]*?\*\/\s*)*"node:async_hooks"\s*\)/,
+			"index.js should import node:async_hooks statically",
+		);
+		assert.match(indexJs, /from "node:async_hooks"/);
 
 		const rolldownRuntime = await fs.readFile(
 			join(
