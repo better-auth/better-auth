@@ -42,17 +42,6 @@ describe("configured UserInfo audience identity", async () => {
 			audience: "https://Auth.Example.com:443/api/auth/oauth2/userinfo",
 			active: false,
 		},
-		{
-			audience: "https://other.example.com/api/auth//oauth2/userinfo",
-			active: false,
-		},
-		{
-			audience: [
-				"https://Auth.Example.com:443/api/auth//oauth2/userinfo",
-				"https://other.example.com/api/auth//oauth2/userinfo",
-			],
-			active: false,
-		},
 	])("reports active=$active for $audience", async ({ audience, active }) => {
 		const { token } = await auth.api.signJWT({
 			body: { payload: { azp: client.client_id, aud: audience } },

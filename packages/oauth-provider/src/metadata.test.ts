@@ -133,22 +133,15 @@ describe("oauth metadata", async () => {
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
-	it("preserves advertised endpoint identities with a trailing base URL slash", async () => {
-		const { auth } = await createTestInstance({
-			baseURL: `${baseURL}/`,
-		});
-		const metadata = await auth.api.getOpenIdConfig();
-
-		expect(metadata?.token_endpoint).toBe(`${baseURL}//oauth2/token`);
-		expect(metadata?.userinfo_endpoint).toBe(`${baseURL}//oauth2/userinfo`);
-	});
-
-	it("advertises the registered custom JWKS path with a trailing base URL slash", async () => {
+	it("serves the advertised JWKS without changing endpoint identities", async () => {
 		const { auth } = await createTestInstance({
 			baseURL: `${baseURL}/`,
 			jwtConfig: { jwks: { jwksPath: "/.well-known/jwks.json" } },
 		});
 		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata?.token_endpoint).toBe(`${baseURL}//oauth2/token`);
+		expect(metadata?.userinfo_endpoint).toBe(`${baseURL}//oauth2/userinfo`);
 		const jwksURI = `${baseURL}/.well-known/jwks.json`;
 
 		expect(metadata?.jwks_uri).toBe(jwksURI);
