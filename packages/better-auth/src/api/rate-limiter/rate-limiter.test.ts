@@ -252,6 +252,51 @@ describe("atomic concurrent enforcement", () => {
 	}
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11660
+ */
+describe("fixed window anchoring", () => {
+	for (const storage of ["memory", "database"] as const) {
+		describe(`${storage} storage`, async () => {
+			const { auth } = await getTestInstance(
+				{
+					rateLimit: {
+						enabled: true,
+						storage,
+						window: 60,
+						max: 20,
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			// The memory backend keeps a process-global store shared across test
+			// instances (see "atomic concurrent enforcement" above).
+			afterEach(() => {
+				vi.useRealTimers();
+			});
+
+			it("does not reject steady traffic below the limit", async () => {
+				vi.useFakeTimers();
+				// Start far past any prior window and give each storage its own
+				// key so cases never collide.
+				vi.advanceTimersByTime(10_000_000);
+				const ip = storage === "memory" ? "203.0.113.7" : "203.0.113.8";
+				// One request every 59s: never more than 2 in any 60s window.
+				for (let i = 0; i < 22; i++) {
+					const res = await auth.handler(
+						new Request("http://localhost:3000/api/auth/get-session", {
+							headers: { "x-forwarded-for": ip },
+						}),
+					);
+					expect(res.status).toBe(200);
+					vi.advanceTimersByTime(59_000);
+				}
+			});
+		});
+	}
+});
+
 describe("database rate-limit pruning", async () => {
 	const backgroundTasks: Promise<unknown>[] = [];
 	const { client, db, testUser } = await getTestInstance({

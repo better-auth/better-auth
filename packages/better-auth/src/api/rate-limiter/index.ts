@@ -43,9 +43,11 @@ function pruneMemoryStore() {
 
 /**
  * Decide an atomic rate-limit step against an in-memory `RateLimit` snapshot
- * for the rolling `window` (seconds) and `max`. Shared by the memory backend
- * (read-decide-write is atomic under single-threaded JS) and as the fallback
- * for storages lacking an atomic primitive.
+ * for the fixed `window` (seconds) and `max`, anchored to the first request
+ * in the window. `lastRequest` stores the window start, not the most recent
+ * request, so steady traffic below the limit is never rejected. Shared by the
+ * memory backend (read-decide-write is atomic under single-threaded JS) and
+ * as the fallback for storages lacking an atomic primitive.
  */
 function decideConsume(
 	data: RateLimit | null | undefined,
@@ -66,8 +68,8 @@ function decideConsume(
 			retryAfter: null,
 		};
 	}
-	const timeSinceLastRequest = now - data.lastRequest;
-	if (timeSinceLastRequest >= windowInMs) {
+	const timeSinceWindowStart = now - data.lastRequest;
+	if (timeSinceWindowStart >= windowInMs) {
 		return {
 			next: { ...data, count: 1, lastRequest: now },
 			update: true,
@@ -84,7 +86,7 @@ function decideConsume(
 		};
 	}
 	return {
-		next: { ...data, count: data.count + 1, lastRequest: now },
+		next: { ...data, count: data.count + 1 },
 		update: true,
 		allowed: true,
 		retryAfter: null,
@@ -107,10 +109,10 @@ function rateLimitResponse(retryAfter: number) {
 	);
 }
 
-function getRetryAfter(lastRequest: number, window: number) {
+function getRetryAfter(windowStart: number, window: number) {
 	const now = Date.now();
 	const windowInMs = window * 1000;
-	return Math.ceil((lastRequest + windowInMs - now) / 1000);
+	return Math.ceil((windowStart + windowInMs - now) / 1000);
 }
 
 function createDatabaseStorageWrapper(
@@ -166,11 +168,13 @@ function createDatabaseStorageWrapper(
 			}
 		}
 
-		const timeSinceLastRequest = now - data.lastRequest;
+		// `lastRequest` is the window start (fixed window anchored to the
+		// first request), not the most recent request.
+		const timeSinceWindowStart = now - data.lastRequest;
 
 		// Window elapsed: reset to a single request, guarded on the window so a
 		// concurrent increment in a new window cannot be clobbered.
-		if (timeSinceLastRequest >= windowInMs) {
+		if (timeSinceWindowStart >= windowInMs) {
 			const reset = await db.incrementOne<RateLimit>({
 				model,
 				where: [
@@ -191,9 +195,10 @@ function createDatabaseStorageWrapper(
 			return consume(key, rule);
 		}
 
-		// Within the window and under the max: increment guarded on both the
-		// window and the max, so a burst of concurrent requests can never exceed
-		// the limit.
+		// Within the window and under the max: increment the count only, keeping
+		// `lastRequest` as the window start so the window does not slide.
+		// Guarded on both the window and the max, so a burst of concurrent
+		// requests can never exceed the limit.
 		const windowStart = now - windowInMs;
 		const incremented = await db.incrementOne<RateLimit>({
 			model,
@@ -203,7 +208,6 @@ function createDatabaseStorageWrapper(
 				{ field: "count", operator: "lt", value: rule.max },
 			],
 			increment: { count: 1 },
-			set: { lastRequest: now },
 		});
 		if (incremented) {
 			return { allowed: true, retryAfter: null };
@@ -315,7 +319,7 @@ function getRateLimitStorage(
 				if (decision.allowed) {
 					memory.set(key, {
 						data: { ...decision.next, key },
-						expiresAt: now + ttlFor(rule.window) * 1000,
+						expiresAt: decision.next.lastRequest + ttlFor(rule.window) * 1000,
 					});
 				}
 				return {
