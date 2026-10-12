@@ -1720,20 +1720,33 @@ describe("stripe checkout", () => {
 			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 	});
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/9129
-	 * @see https://github.com/better-auth/better-auth/issues/9130
-	 */
-	describe("getCheckoutSessionParams subscription_data merge", () => {
-		test("keeps checkout URLs canonical with a trailing auth base slash", async ({
-			stripeMock,
-			memory,
-			stripeOptions,
-		}) => {
+	/** @see https://docs.stripe.com/api/checkout/sessions/create */
+	describe("checkout URL composition", () => {
+		test.for([
+			{
+				baseURL: "http://localhost:3000",
+				successPath: "/api/auth/subscription/success",
+			},
+			{
+				baseURL: "http://localhost:3000/app",
+				successPath: "/app/subscription/success",
+			},
+			{
+				baseURL: "http://localhost:3000/api/auth/",
+				successPath: "/api/auth/subscription/success",
+			},
+			{
+				baseURL: { allowedHosts: ["localhost:3000"] },
+				successPath: "/api/auth/subscription/success",
+			},
+		])("preserves checkout redirects with base URL $baseURL", async ({
+			baseURL,
+			successPath,
+		}, { stripeMock, memory, stripeOptions }) => {
 			const { client, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					baseURL: "http://localhost:3000/api/auth/",
+					baseURL,
 					plugins: [stripe(stripeOptions)],
 				},
 				{
@@ -1763,23 +1776,26 @@ describe("stripe checkout", () => {
 			expect(checkout?.cancel_url).toBe(
 				"http://localhost:3000/billing?tab=plans",
 			);
-			expect(new URL(checkout!.success_url!).pathname).toBe(
-				"/api/auth/subscription/success",
-			);
+			expect(new URL(checkout!.success_url!).pathname).toBe(successPath);
 			expect(checkout?.success_url).toContain(
 				"checkoutSessionId={CHECKOUT_SESSION_ID}",
 			);
 		});
 
-		test("rejects protocol-relative checkout redirects", async ({
-			stripeMock,
-			memory,
-			stripeOptions,
-		}) => {
+		test.for([
+			{ originCheckEnabled: true },
+			{ originCheckEnabled: false },
+		])("keeps double-slash checkout paths on the configured origin with origin check $originCheckEnabled", async ({
+			originCheckEnabled,
+		}, { stripeMock, memory, stripeOptions }) => {
 			const { client, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					advanced: { disableOriginCheck: true, disableCSRFCheck: true },
+					...(originCheckEnabled
+						? {}
+						: {
+								advanced: { disableOriginCheck: true, disableCSRFCheck: true },
+							}),
 					plugins: [stripe(stripeOptions)],
 				},
 				{
@@ -1792,6 +1808,7 @@ describe("stripe checkout", () => {
 			const email = "protocol-relative-checkout@example.com";
 			await client.signUp.email({ ...testUser, email }, { throw: true });
 			const headers = new Headers();
+			headers.set("origin", "http://localhost:3000");
 			await client.signIn.email(
 				{ ...testUser, email },
 				{ throw: true, onSuccess: sessionSetter(headers) },
@@ -1804,10 +1821,23 @@ describe("stripe checkout", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(result.error?.status).toBe(400);
-			expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+			expect(result.error).toBeNull();
+			const checkout =
+				stripeMock.checkout.sessions.create.mock.calls.at(-1)?.[0];
+			expect(checkout?.cancel_url).toBe(
+				"http://localhost:3000//evil.example/cancel",
+			);
+			expect(new URL(checkout!.cancel_url!).origin).toBe(
+				"http://localhost:3000",
+			);
 		});
+	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9129
+	 * @see https://github.com/better-auth/better-auth/issues/9130
+	 */
+	describe("getCheckoutSessionParams subscription_data merge", () => {
 		const buildTrialOptions = (mock: StripeMock): StripeOptions => ({
 			stripeClient: mock as unknown as Stripe,
 			stripeWebhookSecret: TEST_WEBHOOK_SECRET,

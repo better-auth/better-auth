@@ -73,21 +73,19 @@ function isMeteredPrice(price: Stripe.Price | undefined): boolean {
 }
 
 /**
- * Resolves a relative Stripe redirect URL against the application origin.
+ * Converts a relative URL using the configured application base URL.
  * @internal
  */
 function getUrl(ctx: GenericEndpointContext, url: string) {
 	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
 		return url;
 	}
-	const origin = new URL(ctx.context.baseURL).origin;
-	const resolvedURL = new URL(url, origin);
-	if (resolvedURL.origin !== origin) {
-		throw APIError.fromStatus("BAD_REQUEST", {
-			message: "Invalid relative URL",
-		});
-	}
-	return resolvedURL.href;
+	const configuredBaseURL = ctx.context.options.baseURL;
+	const baseURL =
+		typeof configuredBaseURL === "string"
+			? configuredBaseURL
+			: new URL(ctx.context.baseURL).origin;
+	return `${baseURL}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 /**
