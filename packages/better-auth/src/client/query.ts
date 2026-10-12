@@ -59,10 +59,12 @@ export const useAuthQuery = <T>(
 		refetch: (queryParams) => fn(queryParams),
 	});
 	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
+	let latestRequestId = 0;
 
 	const fn = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	) => {
+		const requestId = ++latestRequestId;
 		return new Promise<void>((resolve) => {
 			const opts =
 				typeof options === "function"
@@ -80,20 +82,22 @@ export const useAuthQuery = <T>(
 					...queryParams?.query,
 				},
 				async onSuccess(context) {
-					const current = value.get();
-					const stableData =
-						current.data != null &&
-						context.data != null &&
-						isJsonEqual(current.data, context.data)
-							? current.data
-							: context.data;
-					value.set({
-						data: stableData,
-						error: null,
-						isPending: false,
-						isRefetching: false,
-						refetch: value.value.refetch,
-					});
+					if (requestId === latestRequestId) {
+						const current = value.get();
+						const stableData =
+							current.data != null &&
+							context.data != null &&
+							isJsonEqual(current.data, context.data)
+								? current.data
+								: context.data;
+						value.set({
+							data: stableData,
+							error: null,
+							isPending: false,
+							isRefetching: false,
+							refetch: value.value.refetch,
+						});
+					}
 					await opts?.onSuccess?.(context);
 				},
 				async onError(context) {
@@ -104,31 +108,36 @@ export const useAuthQuery = <T>(
 							: request.retry?.attempts;
 					const retryAttempt = request.retryAttempt || 0;
 					if (retryAttempts && retryAttempt < retryAttempts) return;
-					const isUnauthorized = context.error.status === 401;
-					value.set({
-						error: context.error,
-						data: isUnauthorized
-							? null // clear session on HTTP 401
-							: value.get().data, // preserve stale data on other errors
-						isPending: false,
-						isRefetching: false,
-						refetch: value.value.refetch,
-					});
+					if (requestId === latestRequestId) {
+						const isUnauthorized = context.error.status === 401;
+						value.set({
+							error: context.error,
+							data: isUnauthorized
+								? null // clear session on HTTP 401
+								: value.get().data, // preserve stale data on other errors
+							isPending: false,
+							isRefetching: false,
+							refetch: value.value.refetch,
+						});
+					}
 					await opts?.onError?.(context);
 				},
 				async onRequest(context) {
-					const currentValue = value.get();
-					value.set({
-						isPending: currentValue.data === null,
-						data: currentValue.data,
-						error: null,
-						isRefetching: true,
-						refetch: value.value.refetch,
-					});
+					if (requestId === latestRequestId) {
+						const currentValue = value.get();
+						value.set({
+							isPending: currentValue.data === null,
+							data: currentValue.data,
+							error: null,
+							isRefetching: true,
+							refetch: value.value.refetch,
+						});
+					}
 					await opts?.onRequest?.(context);
 				},
 			})
 				.catch((error) => {
+					if (requestId !== latestRequestId) return;
 					value.set({
 						error,
 						data: value.get().data,

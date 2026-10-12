@@ -45,6 +45,50 @@ async function seedWidget(
 	});
 }
 
+it("keeps model identity when a custom name matches another schema key", async () => {
+	const db: MemoryDB = { account: [], identity: [], session: [] };
+	const adapter = memoryAdapter(db)({
+		user: { modelName: "account" },
+		account: { modelName: "identity" },
+		advanced: { database: { joins: true } },
+	});
+
+	await adapter.create({
+		model: "user",
+		data: {
+			id: "user-id",
+			name: "Ada",
+			email: "ada@example.com",
+			emailVerified: false,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		},
+		forceAllowId: true,
+	});
+	await adapter.create({
+		model: "session",
+		data: {
+			id: "session-id",
+			token: "session-token",
+			userId: "user-id",
+			expiresAt: new Date(Date.now() + 60_000),
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		},
+		forceAllowId: true,
+	});
+
+	const session = await adapter.findOne<{
+		user: { email: string };
+	}>({
+		model: "session",
+		where: [{ field: "id", value: "session-id" }],
+		join: { user: true },
+	});
+
+	expect(session?.user.email).toBe("ada@example.com");
+});
+
 describe("memory adapter singular mutation with empty predicate", () => {
 	it("singular update with an empty where is a no-op and leaves every row untouched", async () => {
 		const { adapter } = setup();

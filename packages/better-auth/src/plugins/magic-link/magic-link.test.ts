@@ -631,9 +631,10 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = await defaultKeyHasher(verificationEmail.token);
-		const storedToken =
-			await internalAdapter.findVerificationValue(hashedToken);
-		expect(storedToken).toBeDefined();
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
+		expect(storedToken).not.toBeNull();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,
@@ -674,9 +675,10 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = `${verificationEmail.token}hashed`;
-		const storedToken =
-			await internalAdapter.findVerificationValue(hashedToken);
-		expect(storedToken).toBeDefined();
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
+		expect(storedToken).not.toBeNull();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,

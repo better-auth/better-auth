@@ -92,6 +92,35 @@ describe("captcha", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	it("returns JSON content type for captcha errors", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: "test@test.com",
+					password: "test123456",
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(response.headers.get("content-type")).toBe("application/json");
+		expect(await response.json()).toMatchObject({ code: "MISSING_RESPONSE" });
+	});
+
 	it("should apply rate limits before verifying captcha tokens", async () => {
 		mockBetterFetch.mockClear();
 		mockBetterFetch.mockResolvedValue({

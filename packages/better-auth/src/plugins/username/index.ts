@@ -11,6 +11,7 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { assertPasswordNotTooLong } from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
@@ -454,6 +455,8 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 							ERROR_CODES.INVALID_USERNAME,
 						);
 					}
+
+					assertPasswordNotTooLong(ctx, ctx.body.password);
 
 					const user = await ctx.context.adapter.findOne<
 						User & { username: string; displayUsername: string }

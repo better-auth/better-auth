@@ -35,4 +35,5 @@ export {
 	oauthClientMetadataSchema,
 	ResourceUriSchema,
 } from "./types/zod";
+export { verifyOAuthQueryParams } from "./utils";
 export { consumeClientAssertion } from "./utils/client-assertion";

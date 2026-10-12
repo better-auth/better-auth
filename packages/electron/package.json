@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/electron",
-  "version": "1.7.5",
+  "version": "1.7.7",
   "description": "Better Auth integration for Electron applications.",
   "type": "module",
   "license": "MIT",
@@ -94,7 +94,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
-    "@better-auth/utils": "catalog:",
+    "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
     "better-call": "catalog:",
