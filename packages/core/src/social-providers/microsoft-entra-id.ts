@@ -15,7 +15,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-import { appendURLPath, appendURLSegment } from "../utils/url";
+import { appendURLPath, appendURLSegments } from "../utils/url";
 
 /**
  * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
@@ -171,7 +171,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 	while (authority.endsWith("/")) {
 		authority = authority.slice(0, -1);
 	}
-	const tenantURL = appendURLSegment(authority, tenant);
+	const tenantURL = appendURLSegments(authority, tenant);
 	const authorizationEndpoint = appendURLPath(
 		tenantURL,
 		"/oauth2/v2.0/authorize",
@@ -244,7 +244,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				tenant !== "common" &&
 				tenant !== "organizations" &&
 				tenant !== "consumers"
-					? appendURLPath(tenantURL, "/v2.0")
+					? `${authority}/${tenant}/v2.0`
 					: undefined,
 			/**
 			 * The multi-tenant endpoints (common/organizations/consumers) skip the
@@ -259,8 +259,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				const tid = claims.tid;
 				if (
 					typeof tid !== "string" ||
-					claims.iss !==
-						appendURLPath(appendURLSegment(authority, tid), "/v2.0")
+					claims.iss !== `${authority}/${tid}/v2.0`
 				) {
 					return false;
 				}
@@ -385,7 +384,7 @@ export const getMicrosoftPublicKey = async (
 			x5t?: string;
 		}>;
 	}>(
-		appendURLPath(appendURLSegment(authority, tenant), "/discovery/v2.0/keys"),
+		appendURLPath(appendURLSegments(authority, tenant), "/discovery/v2.0/keys"),
 	);
 
 	if (!data?.keys) {

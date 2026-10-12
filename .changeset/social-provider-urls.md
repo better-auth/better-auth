@@ -2,4 +2,4 @@
 "@better-auth/core": patch
 ---
 
-Fix social-provider endpoint and profile image URLs when issuer paths have trailing slashes or identifiers need encoding.
+Fix Paybin endpoints for trailing-slash issuers. Invalid scheme-less issuer or authority URLs now fail during provider initialization instead of at sign-in.

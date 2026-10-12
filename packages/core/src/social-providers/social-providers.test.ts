@@ -39,6 +39,47 @@ const baseInput = {
 	redirectURI: baseCallback,
 };
 
+describe("issuer trailing slashes", () => {
+	it.each([
+		{
+			provider: socialProviders.gitlab({
+				...credentials,
+				issuer: "https://idp.example.com/tenant/",
+			}),
+			authorizationPath: "/tenant/oauth/authorize",
+			tokenURL: "https://idp.example.com/tenant/oauth/token",
+		},
+		{
+			provider: socialProviders.paybin({
+				...credentials,
+				issuer: "https://idp.example.com/tenant/",
+			}),
+			authorizationPath: "/tenant/oauth2/authorize",
+			tokenURL: "https://idp.example.com/tenant/oauth2/token",
+		},
+	])("joins $provider.id endpoints at one slash boundary", async ({
+		provider,
+		authorizationPath,
+		tokenURL,
+	}) => {
+		const authorizationURL = await provider.createAuthorizationURL(baseInput);
+		expect(authorizationURL.pathname).toBe(authorizationPath);
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "access-token",
+				token_type: "Bearer",
+				expires_in: 3600,
+			},
+			error: null,
+		});
+		await provider.validateAuthorizationCode({
+			...baseInput,
+			code: "auth-code",
+		});
+		expect(mockedBetterFetch.mock.calls[0]?.[0]).toBe(tokenURL);
+	});
+});
+
 describe("OAuth account identity contract", () => {
 	const providerOptions = {
 		clientId: credentials.clientId,
@@ -259,7 +300,7 @@ describe("discord provider", () => {
 		});
 
 		expect(result?.user.image).toBe(
-			"https://cdn.discordapp.com/avatars/123%2F456/a_hash%3Fvariant%3D1.gif",
+			"https://cdn.discordapp.com/avatars/123%2F456/a_hash%3Fvariant=1.gif",
 		);
 	});
 
