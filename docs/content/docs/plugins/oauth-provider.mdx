@@ -632,6 +632,53 @@ The assertion JWT must contain:
 
 Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
 
+##### Rotating client keys
+
+A client with inline `jwks` can replace its own keys without a user session. This is how a service rotates its signing key on a schedule. Enable it on the provider:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowClientKeyRotation: true,
+})
+```
+
+The client generates a new key pair, then calls the endpoint with a client assertion signed by one of its current keys:
+
+```
+POST /api/auth/oauth2/client/rotate-keys
+Content-Type: application/json
+
+{
+  "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+  "client_assertion": "eyJhbGciOiJFUzI1NiIs...",
+  "jwks": { "keys": [{ "kty": "EC", "crv": "P-256", "kid": "key-2", "x": "...", "y": "..." }] }
+}
+```
+
+The assertion follows the claims in the table above, with one difference: `aud` must be the URL of the rotation endpoint itself. An assertion issued for the token endpoint or the issuer is rejected here, so it cannot be redirected to take over a client's keys. The assertion is also single-use.
+
+`jwks` is the client's complete new key set. A key that is not in it stops verifying at once, and a key that is in both sets stays active. The response returns the new set:
+
+```json
+{
+  "client_id": "CLIENT_ID",
+  "jwks": { "keys": [{ "kid": "key-2" }] }
+}
+```
+
+To replace a key without breaking instances that still sign with the old one, roll it in two steps, the same way a client that publishes a `jwks_uri` does:
+
+1. Send a set with both the old key and the new key, signed by the old key. Nothing stops working.
+2. Once every instance signs with the new key, send a set with only the new key, signed by the new key. The old key stops working.
+
+To retire a leaked key, send a set without it. It stops working with that request.
+
+If the client's keys change while a rotation is in flight, for example through two simultaneous rotations, the losing request fails with `409`, or with `401` when the key that signed it has already been removed. Sign a fresh assertion with a current key and retry.
+
+<Callout type="info">
+  Only clients that register inline `jwks` can use this endpoint. A client that publishes a `jwks_uri` rotates its keys at that URI, and trusted clients configured in code are updated in code. Rotation is not available to `client_secret_*` clients; use `/oauth2/client/rotate-secret`.
+</Callout>
+
 #### Authorization code grant
 
 The authorization code grant enables clients to obtain access user access tokens and optionally refresh tokens (with the "offline\_access" scope).
@@ -1793,14 +1840,15 @@ The OAuth Provider includes built-in rate limiting for all OAuth endpoints to pr
 
 **Default limits:**
 
-| Endpoint             | Window | Max Requests |
-| -------------------- | ------ | ------------ |
-| `/oauth2/token`      | 60s    | 20           |
-| `/oauth2/authorize`  | 60s    | 30           |
-| `/oauth2/introspect` | 60s    | 100          |
-| `/oauth2/revoke`     | 60s    | 30           |
-| `/oauth2/register`   | 60s    | 5            |
-| `/oauth2/userinfo`   | 60s    | 60           |
+| Endpoint                     | Window | Max Requests |
+| ---------------------------- | ------ | ------------ |
+| `/oauth2/token`              | 60s    | 20           |
+| `/oauth2/authorize`          | 60s    | 30           |
+| `/oauth2/introspect`         | 60s    | 100          |
+| `/oauth2/revoke`             | 60s    | 30           |
+| `/oauth2/register`           | 60s    | 5            |
+| `/oauth2/client/rotate-keys` | 60s    | 5            |
+| `/oauth2/userinfo`           | 60s    | 60           |
 
 You can customize the rate limits for each endpoint:
 
@@ -1812,6 +1860,7 @@ oauthProvider({
     introspect: { window: 60, max: 100 },  // 100 requests per minute
     revoke: { window: 60, max: 30 },       // 30 requests per minute
     register: { window: 60, max: 5 },      // 5 requests per minute
+    rotateClientKeys: { window: 60, max: 5 }, // 5 requests per minute
     userinfo: { window: 60, max: 60 },     // 60 requests per minute
   },
 })
@@ -2203,6 +2252,20 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       "OIDC application type used to classify redirect URI policy. Supports: ['web', 'native']",
+    isOptional: true,
+  },
+  {
+    name: "jwks",
+    type: "string",
+    description:
+      "The client's public JWK Set as JSON, for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`",
+    isOptional: true,
+  },
+  {
+    name: "jwksUri",
+    type: "string",
+    description:
+      "HTTPS URI of the client's public JWK Set. Mutually exclusive with `jwks`",
     isOptional: true,
   },
   {

@@ -264,7 +264,7 @@ function validateClientRedirectUri(
 	}
 }
 
-function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
+export function assertValidClientJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
 	const result = validatePublicClientJwks(jwks);
 	if (!result.valid) {
 		throw new APIError("BAD_REQUEST", {
@@ -640,7 +640,7 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			assertValidRegistrationJwks(clientWithDefaults.jwks);
+			assertValidClientJwks(clientWithDefaults.jwks);
 		}
 	}
 	// private_key_jwt requires key material; other methods may still register

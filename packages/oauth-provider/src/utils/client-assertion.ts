@@ -452,6 +452,14 @@ export async function consumeClientAssertion(
  * Validates: signature, iss=client_id, sub=client_id, aud=the endpoint serving
  * the assertion or the normalized OP issuer, exp, assertion max lifetime,
  * jti uniqueness (replay prevention).
+ *
+ * Returns the client record the signature was checked against, so a caller that
+ * mutates the client can guard its write on exactly that snapshot.
+ *
+ * With `endpointAudienceOnly`, the issuer is not an accepted audience, so only
+ * an assertion addressed to `expectedAudience` itself verifies. Endpoints that
+ * change client credentials use it, so an assertion minted for the token
+ * endpoint or the issuer cannot be redirected to them.
  */
 export async function verifyClientAssertion(
 	ctx: GenericEndpointContext,
@@ -460,7 +468,8 @@ export async function verifyClientAssertion(
 	clientAssertionType: string,
 	clientIdHint?: string,
 	expectedAudience?: string,
-): Promise<{ clientId: string }> {
+	options?: { endpointAudienceOnly?: boolean },
+): Promise<{ clientId: string; client: SchemaClient<Scope[]> }> {
 	if (clientAssertionType !== CLIENT_ASSERTION_TYPE) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "unsupported client_assertion_type",
@@ -539,7 +548,9 @@ export async function verifyClientAssertion(
 	const endpointAudience =
 		expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
 	const issuerAudience = getIssuer(ctx, opts);
-	const acceptedAudiences = [...new Set([endpointAudience, issuerAudience])];
+	const acceptedAudiences = options?.endpointAudienceOnly
+		? [endpointAudience]
+		: [...new Set([endpointAudience, issuerAudience])];
 	const verifyOpts = {
 		issuer: clientId,
 		subject: clientId,
@@ -614,5 +625,5 @@ export async function verifyClientAssertion(
 		expectedAudience: acceptedAudience,
 	});
 
-	return { clientId };
+	return { clientId, client };
 }

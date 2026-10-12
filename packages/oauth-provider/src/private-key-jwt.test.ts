@@ -344,7 +344,7 @@ describe("private_key_jwt authentication", async () => {
 				clientId,
 				audienceA,
 			),
-		).resolves.toEqual({ clientId });
+		).resolves.toMatchObject({ clientId });
 		await expect(
 			verifyClientAssertion(
 				providerB.ctx,
@@ -359,7 +359,7 @@ describe("private_key_jwt authentication", async () => {
 				clientId,
 				audienceB,
 			),
-		).resolves.toEqual({ clientId });
+		).resolves.toMatchObject({ clientId });
 
 		expect(transportA).toHaveBeenCalledTimes(1);
 		expect(transportB).toHaveBeenCalledTimes(1);
@@ -532,7 +532,7 @@ describe("private_key_jwt authentication", async () => {
 				clientId,
 				audience,
 			),
-		).resolves.toEqual({ clientId });
+		).resolves.toMatchObject({ clientId });
 		expect(transport).toHaveBeenCalledTimes(2);
 	});
 

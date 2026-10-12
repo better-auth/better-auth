@@ -1,6 +1,8 @@
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
+import { rotateClientKeysEndpoint } from "../client-key-rotation";
 import { publicSessionMiddleware } from "../middleware";
+import { createOAuthEndpoint } from "../oauth-endpoint";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
 import {
@@ -601,6 +603,76 @@ export const rotateClientSecret = (opts: OAuthOptions<Scope[]>) =>
 		},
 		async (ctx) => {
 			return rotateClientSecretEndpoint(ctx, opts);
+		},
+	);
+
+/**
+ * Replaces a `private_key_jwt` client's own signing keys. The client proves it
+ * holds a current key with a client assertion, so no session is needed.
+ */
+export const rotateClientKeys = (opts: OAuthOptions<Scope[]>) =>
+	createOAuthEndpoint(
+		"/oauth2/client/rotate-keys",
+		{
+			method: "POST",
+			body: z.object({
+				client_id: z.string().optional(),
+				client_assertion: z.string(),
+				client_assertion_type: z.string(),
+				jwks: clientJwksSchema,
+			}),
+			errorCodesByField: {
+				client_assertion: "invalid_client",
+				client_assertion_type: "invalid_client",
+				jwks: "invalid_client_metadata",
+			},
+			metadata: {
+				noStore: true,
+				openapi: {
+					description:
+						"Replaces the signing keys of a private_key_jwt client. The request is authenticated by a client assertion signed with one of the client's current keys and addressed to this endpoint. Keys left out of the new set stop verifying at once.",
+					requestBody: {
+						required: true,
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										client_id: {
+											type: "string",
+											description:
+												"Optional; must match the assertion's iss and sub",
+										},
+										client_assertion: {
+											type: "string",
+											description:
+												"JWT signed with a current client key; aud must be this endpoint's URL",
+										},
+										client_assertion_type: {
+											type: "string",
+											description:
+												"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+										},
+										jwks: {
+											type: "object",
+											description:
+												"The client's complete new public JWK Set. Keys omitted from it stop verifying at once",
+										},
+									},
+									required: [
+										"client_assertion",
+										"client_assertion_type",
+										"jwks",
+									],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			return ctx.json(await rotateClientKeysEndpoint(ctx, opts));
 		},
 	);
 
