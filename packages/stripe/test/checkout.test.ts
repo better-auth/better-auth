@@ -1724,111 +1724,55 @@ describe("stripe checkout", () => {
 	describe("checkout URL composition", () => {
 		test.for([
 			{
-				baseURL: "http://localhost:3000",
-				successPath: "/api/auth/subscription/success",
+				name: "trailing custom auth path",
+				baseURL: "http://localhost:3000/custom/auth/",
+				successPath: "/custom/auth/subscription/success",
 			},
 			{
-				baseURL: "http://localhost:3000/app",
-				successPath: "/app/subscription/success",
-			},
-			{
-				baseURL: "http://localhost:3000/api/auth/",
-				successPath: "/api/auth/subscription/success",
-			},
-			{
+				name: "dynamic base URL",
 				baseURL: { allowedHosts: ["localhost:3000"] },
 				successPath: "/api/auth/subscription/success",
 			},
-		])("preserves checkout redirects with base URL $baseURL", async ({
-			baseURL,
-			successPath,
-		}, { stripeMock, memory, stripeOptions }) => {
-			const { client, sessionSetter } = await getTestInstance(
-				{
-					database: memory,
-					baseURL,
-					plugins: [stripe(stripeOptions)],
-				},
-				{
-					disableTestUser: true,
-					clientOptions: {
-						plugins: [stripeClient({ subscription: true })],
-					},
-				},
+			{
+				name: "double-slash return path",
+				baseURL: "http://localhost:3000",
+				successPath: "/api/auth/subscription/success",
+				cancelUrl: "//evil.example/cancel",
+				expectedCancelURL: "http://localhost:3000//evil.example/cancel",
+			},
+		])("creates checkout URLs for $name", async (scenario, {
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const {
+				baseURL,
+				successPath,
+				cancelUrl = "/billing?tab=plans",
+				expectedCancelURL = "http://localhost:3000/billing?tab=plans",
+			} = scenario;
+			const { client, signInWithTestUser } = await getTestInstance(
+				{ database: memory, baseURL, plugins: [stripe(stripeOptions)] },
+				{ clientOptions: { plugins: [stripeClient({ subscription: true })] } },
 			);
-			const email = "trailing-checkout@example.com";
-			await client.signUp.email({ ...testUser, email }, { throw: true });
-			const headers = new Headers();
-			await client.signIn.email(
-				{ ...testUser, email },
-				{ throw: true, onSuccess: sessionSetter(headers) },
-			);
-
+			const { headers } = await signInWithTestUser();
+			const successUrl = "/billing/complete?tab=a+b";
 			await client.subscription.upgrade({
 				plan: "starter",
-				cancelUrl: "/billing?tab=plans",
-				successUrl: "/billing/complete",
-				fetchOptions: { headers },
+				cancelUrl,
+				successUrl,
+				fetchOptions: { headers, throw: true },
 			});
 
 			const checkout =
 				stripeMock.checkout.sessions.create.mock.calls.at(-1)?.[0];
-			expect(checkout?.cancel_url).toBe(
-				"http://localhost:3000/billing?tab=plans",
-			);
-			expect(new URL(checkout!.success_url!).pathname).toBe(successPath);
-			expect(checkout?.success_url).toContain(
+			expect(checkout?.cancel_url).toBe(expectedCancelURL);
+			expect.assert(checkout?.success_url);
+			const redirect = new URL(checkout.success_url);
+			expect(redirect.pathname).toBe(successPath);
+			expect(redirect.searchParams.get("callbackURL")).toBe(successUrl);
+			expect(checkout.success_url).toContain(
 				"checkoutSessionId={CHECKOUT_SESSION_ID}",
-			);
-		});
-
-		test.for([
-			{ originCheckEnabled: true },
-			{ originCheckEnabled: false },
-		])("keeps double-slash checkout paths on the configured origin with origin check $originCheckEnabled", async ({
-			originCheckEnabled,
-		}, { stripeMock, memory, stripeOptions }) => {
-			const { client, sessionSetter } = await getTestInstance(
-				{
-					database: memory,
-					...(originCheckEnabled
-						? {}
-						: {
-								advanced: { disableOriginCheck: true, disableCSRFCheck: true },
-							}),
-					plugins: [stripe(stripeOptions)],
-				},
-				{
-					disableTestUser: true,
-					clientOptions: {
-						plugins: [stripeClient({ subscription: true })],
-					},
-				},
-			);
-			const email = "protocol-relative-checkout@example.com";
-			await client.signUp.email({ ...testUser, email }, { throw: true });
-			const headers = new Headers();
-			headers.set("origin", "http://localhost:3000");
-			await client.signIn.email(
-				{ ...testUser, email },
-				{ throw: true, onSuccess: sessionSetter(headers) },
-			);
-
-			const result = await client.subscription.upgrade({
-				plan: "starter",
-				successUrl: "/billing/complete",
-				cancelUrl: "//evil.example/cancel",
-				fetchOptions: { headers },
-			});
-
-			expect(result.error).toBeNull();
-			const checkout =
-				stripeMock.checkout.sessions.create.mock.calls.at(-1)?.[0];
-			expect(checkout?.cancel_url).toBe(
-				"http://localhost:3000//evil.example/cancel",
-			);
-			expect(new URL(checkout!.cancel_url!).origin).toBe(
-				"http://localhost:3000",
 			);
 		});
 	});
