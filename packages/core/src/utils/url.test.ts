@@ -7,12 +7,24 @@ import {
 import {
 	appendQueryParams,
 	appendURLPath,
-	appendURLSegment,
+	appendURLSegments,
 	isSafeUrlScheme,
 	normalizePathname,
 } from "./url";
 
 describe("appendURLPath", () => {
+	it.each([
+		"https://Auth.Example.com/api/auth",
+		"https://auth.example.com:443/api/auth",
+		"https://bücher.example/api/auth",
+		"https://auth.example.com/api^auth",
+		"https://auth.example.com/tenant%2fone",
+	])("preserves the configured base URL spelling: %s", (baseURL) => {
+		expect(appendURLPath(baseURL, "/oauth2/userinfo")).toBe(
+			`${baseURL}/oauth2/userinfo`,
+		);
+	});
+
 	it("treats an empty base URL as a root-relative path", () => {
 		expect(appendURLPath("", "/reset-password")).toBe("/reset-password");
 	});
@@ -37,11 +49,15 @@ describe("appendURLPath", () => {
 	 * @see https://url.spec.whatwg.org/#url-path-segment
 	 * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-4.2
 	 */
-	it("rejects authority-like results after normalizing the base", () => {
+	it("preserves root-relative path text without introducing an authority", () => {
 		for (const base of ["/a/..//evil.example", "/%2e//evil.example"]) {
-			expect(() => appendURLPath(base, "/callback")).toThrow(TypeError);
+			const result = appendURLPath(base, "/callback");
+			expect(result).toBe(`${base}/callback`);
+			expect(new URL(result, "https://app.example.com").origin).toBe(
+				"https://app.example.com",
+			);
 		}
-		expect(appendURLPath("/a/..", "/callback")).toBe("/callback");
+		expect(appendURLPath("/a/..", "/callback")).toBe("/a/../callback");
 	});
 
 	/**
@@ -50,6 +66,37 @@ describe("appendURLPath", () => {
 	it("supports an empty path on a hierarchical URL", () => {
 		expect(appendURLPath("foo://host", "/callback")).toBe(
 			"foo://host/callback",
+		);
+	});
+
+	it.each([
+		["foo:/api", "foo:/api/callback"],
+		["foo://", "foo:///callback"],
+		["file:///", "file:///callback"],
+		["file:///tmp/auth/", "file:///tmp/auth/callback"],
+		["https://Auth.Example.com:443/", "https://Auth.Example.com:443/callback"],
+	])("preserves the scheme and authority of %s", (baseURL, expectedURL) => {
+		expect(appendURLPath(baseURL, "/callback")).toBe(expectedURL);
+	});
+
+	it.each([
+		"https://example.com/\napi",
+		"https://example.com/api\u0000auth",
+		"https://example.com/api\u001fauth",
+		"https://example.com/api\u007fauth",
+		" https://example.com/api ",
+	])("rejects control characters and surrounding whitespace: %s", (baseURL) => {
+		expect(() => appendURLPath(baseURL, "/callback")).toThrow(TypeError);
+	});
+
+	it("preserves suffix text and encoded path text", () => {
+		expect(
+			appendURLPath(
+				"https://Auth.Example.com:443/기존%2f경로/?next=a%2Fb#",
+				"/%EC%83%88%20%EA%B2%BD%EB%A1%9C/%2F",
+			),
+		).toBe(
+			"https://Auth.Example.com:443/기존%2f경로/%EC%83%88%20%EA%B2%BD%EB%A1%9C/%2F?next=a%2Fb#",
 		);
 	});
 
@@ -77,7 +124,7 @@ describe("appendURLPath", () => {
 		);
 		expect(
 			appendURLPath("https://auth.example.com/api/auth///", "/oauth2"),
-		).toBe("https://auth.example.com/api/auth/oauth2");
+		).toBe("https://auth.example.com/api/auth///oauth2");
 		expect(
 			appendURLPath("https://auth.example.com/api//auth/", "/oauth2"),
 		).toBe("https://auth.example.com/api//auth/oauth2");
@@ -92,11 +139,59 @@ describe("appendURLPath", () => {
 		);
 	});
 
-	it("encodes characters in an unescaped path without changing its separators", () => {
-		expect(
-			appendURLPath("https://auth.example.com/api/auth", "/사용자/a b"),
-		).toBe(
-			"https://auth.example.com/api/auth/%EC%82%AC%EC%9A%A9%EC%9E%90/a%20b",
+	it("preserves base path bytes when URL parsing normalizes dot segments", () => {
+		expect(appendURLPath("https://example.com/a//%2e/", "/callback")).toBe(
+			"https://example.com/a//%2e/callback",
+		);
+		expect(appendURLPath("https://example.com/a/../", "/callback")).toBe(
+			"https://example.com/a/../callback",
+		);
+	});
+
+	it("preserves pathname text without encoding or decoding it", () => {
+		expect(appendURLPath("/auth", "/사용자/a b")).toBe("/auth/사용자/a b");
+		expect(appendURLPath("/auth", "/a%zz")).toBe("/auth/a%zz");
+	});
+
+	it.each([
+		"/-._~!$&'()*+,;=:@/AZaz09",
+		"/%00%2f%FE",
+	])("accepts encoded path characters without changing them: %s", (path) => {
+		expect(appendURLPath("/auth", path)).toBe(`/auth${path}`);
+	});
+
+	it.each([
+		"/%",
+		"/%0",
+		"/%gg",
+		"/a^b",
+		"/[]",
+	])("does not act as a URI syntax validator: %s", (path) => {
+		expect(appendURLPath("/auth", path)).toBe(`/auth${path}`);
+	});
+
+	it.each([
+		"/token?x=1",
+		"/token#step",
+		"/a\\b",
+		"//evil.example",
+	])("rejects paths that introduce another URL component: %s", (path) => {
+		expect(() => appendURLPath("/auth", path)).toThrow(TypeError);
+	});
+
+	it.each([
+		"\n",
+		"\r",
+		"\r\n",
+		"\u2028",
+		"\u2029",
+	])("rejects controls and trailing whitespace in the appended path: %j", (ending) => {
+		expect(() => appendURLPath("/auth", `/token${ending}`)).toThrow(TypeError);
+	});
+
+	it("preserves path structure without resolving dot segments", () => {
+		expect(appendURLPath("https://example.com/auth", "/a/../b//c")).toBe(
+			"https://example.com/auth/a/../b//c",
 		);
 	});
 
@@ -109,6 +204,25 @@ describe("appendURLPath", () => {
 		).toBe("https://auth.example.com/api/auth/oauth2/token?lang=ko#details");
 	});
 
+	it("preserves backslashes in existing query and fragment text", () => {
+		expect(
+			appendURLPath("https://example.com/auth?next=\\foo#\\bar", "/token"),
+		).toBe("https://example.com/auth/token?next=\\foo#\\bar");
+	});
+
+	it("preserves Unicode line separators in existing suffix text", () => {
+		expect(
+			appendURLPath("https://example.com/auth?q=a\u2028b#c\u2029d", "/token"),
+		).toBe("https://example.com/auth/token?q=a\u2028b#c\u2029d");
+	});
+
+	it.each([
+		"https://example.com/a\\b",
+		"/a\\b",
+	])("rejects backslashes in the base path: %s", (baseURL) => {
+		expect(() => appendURLPath(baseURL, "/callback")).toThrow(TypeError);
+	});
+
 	it("rejects paths that cannot be appended as given", () => {
 		expect(() => appendURLPath("//evil.example", "/oauth2")).toThrow(TypeError);
 		expect(() => appendURLPath("mailto:user@example.com", "/oauth2")).toThrow(
@@ -118,12 +232,6 @@ describe("appendURLPath", () => {
 			TypeError,
 		);
 		expect(() =>
-			appendURLPath("https://auth.example.com/api/auth", "/.."),
-		).toThrow(TypeError);
-		expect(() =>
-			appendURLPath("https://auth.example.com/api/auth", "/a/%2e%2e/b"),
-		).toThrow(TypeError);
-		expect(() =>
 			appendURLPath("https://auth.example.com/api/auth", "/jwks?x=1"),
 		).toThrow(TypeError);
 	});
@@ -132,49 +240,130 @@ describe("appendURLPath", () => {
 	 * @see https://url.spec.whatwg.org/#concept-basic-url-parser
 	 */
 	it("rejects tabs and newlines before URL parsing strips them", () => {
-		for (const path of ["/a\tb", "/a\nb", "/a\rb"]) {
+		for (const path of [
+			"/a\tb",
+			"/a\nb",
+			"/a\rb",
+			"/a\u0000b",
+			"/a\u001fb",
+			"/a\u007fb",
+		]) {
 			expect(() => appendURLPath("https://auth.example.com", path)).toThrow(
 				TypeError,
 			);
 		}
 	});
 
-	it("rejects every URL dot-segment spelling", () => {
+	it("preserves every encoded dot-segment spelling without normalizing it", () => {
 		for (const segment of [".", "%2e", "..", ".%2e", "%2e.", "%2e%2e"]) {
-			expect(() =>
+			expect(
 				appendURLPath("https://auth.example.com/api/auth", `/a/${segment}/b`),
-			).toThrow(TypeError);
+			).toBe(`https://auth.example.com/api/auth/a/${segment}/b`);
 		}
 	});
 });
 
-describe("appendURLSegment", () => {
+describe("appendURLSegments", () => {
+	it("encodes each raw value independently", () => {
+		expect(
+			appendURLSegments(
+				"https://Auth.Example.com:443/api/auth/",
+				"callback",
+				"team/member?x#y%2F",
+			),
+		).toBe(
+			"https://Auth.Example.com:443/api/auth/callback/team%2Fmember%3Fx%23y%252F",
+		);
+	});
+
+	it("encodes raw Unicode and spaces as data", () => {
+		expect(appendURLSegments("https://example.com/auth", "사용자", "a b")).toBe(
+			"https://example.com/auth/%EC%82%AC%EC%9A%A9%EC%9E%90/a%20b",
+		);
+	});
+
+	/**
+	 * @see https://tc39.es/ecma262/multipage/global-object.html#sec-encode
+	 */
+	it.each([
+		"\ud800",
+		"\udfff",
+		"a\ud800",
+		"\udfffz",
+	])("preserves URIError for a lone surrogate: %j", (segment) => {
+		expect(() => appendURLSegments("/auth", "callback", segment)).toThrow(
+			URIError,
+		);
+	});
+
+	it("encodes a valid surrogate pair", () => {
+		expect(appendURLSegments("/auth", "user\ud83d\ude00")).toBe(
+			"/auth/user%F0%9F%98%80",
+		);
+	});
+
+	it("propagates TypeError when the URL cannot accept a path", () => {
+		expect(() => appendURLSegments("urn:example:id", "callback")).toThrow(
+			TypeError,
+		);
+	});
+
+	it("retains existing query and fragment text", () => {
+		expect(
+			appendURLSegments("/auth?x=a%20b#step", "callback", "acme:prod"),
+		).toBe("/auth/callback/acme:prod?x=a%20b#step");
+	});
+
+	it.each([
+		"",
+		".",
+		"..",
+	])("rejects an unrepresentable raw segment: %j", (segment) => {
+		expect(() => appendURLSegments("/auth", "callback", segment)).toThrow(
+			TypeError,
+		);
+	});
+
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-3.3
+	 */
+	it.each([
+		"acme:prod",
+		"okta@corp",
+		"a+b",
+		"!$&'()*+,;=:@~",
+	])("preserves valid path-segment characters: %s", (segment) => {
+		expect(appendURLSegments("https://example.com/callback", segment)).toBe(
+			`https://example.com/callback/${segment}`,
+		);
+	});
+
 	it("treats an empty base URL as a root-relative path", () => {
-		expect(appendURLSegment("", "team/member")).toBe("/team%2Fmember");
+		expect(appendURLSegments("", "team/member")).toBe("/team%2Fmember");
 	});
 
 	it("encodes a segment under a root-relative base URL", () => {
-		expect(appendURLSegment("/api/auth/callback", "team/member")).toBe(
+		expect(appendURLSegments("/api/auth/callback", "team/member")).toBe(
 			"/api/auth/callback/team%2Fmember",
 		);
 	});
 
 	it("encodes a raw segment without changing path structure", () => {
 		expect(
-			appendURLSegment(
+			appendURLSegments(
 				"https://auth.example.com/tenant%2Fone/callback",
 				"team/member?x#y",
 			),
 		).toBe(
 			"https://auth.example.com/tenant%2Fone/callback/team%2Fmember%3Fx%23y",
 		);
-		expect(appendURLSegment("https://auth.example.com", "%2F")).toBe(
+		expect(appendURLSegments("https://auth.example.com", "%2F")).toBe(
 			"https://auth.example.com/%252F",
 		);
-		expect(appendURLSegment("https://auth.example.com", "%ZZ")).toBe(
+		expect(appendURLSegments("https://auth.example.com", "%ZZ")).toBe(
 			"https://auth.example.com/%25ZZ",
 		);
-		expect(appendURLSegment("https://auth.example.com", "한글")).toBe(
+		expect(appendURLSegments("https://auth.example.com", "한글")).toBe(
 			"https://auth.example.com/%ED%95%9C%EA%B8%80",
 		);
 	});
@@ -182,13 +371,96 @@ describe("appendURLSegment", () => {
 	it("rejects empty and dot segments", () => {
 		for (const segment of ["", ".", ".."] as const) {
 			expect(() =>
-				appendURLSegment("https://auth.example.com/api/auth", segment),
+				appendURLSegments("https://auth.example.com/api/auth", segment),
 			).toThrow(TypeError);
 		}
+	});
+
+	it.each([
+		"/",
+		"?",
+		"#",
+		"\\",
+		"%",
+		"\u0000",
+		" ",
+		"한글",
+	])("keeps a raw value within one segment: %j", (segment) => {
+		const result = new URL(
+			appendURLSegments("https://example.com/base", segment),
+		);
+		expect(result.origin).toBe("https://example.com");
+		expect(result.search).toBe("");
+		expect(result.hash).toBe("");
+		expect(result.pathname.split("/")).toHaveLength(3);
+		expect(decodeURIComponent(result.pathname.slice("/base/".length))).toBe(
+			segment,
+		);
 	});
 });
 
 describe("appendQueryParams", () => {
+	it.each([
+		"https://Auth.Example.com:443/api/auth",
+		"https://bücher.example/api/auth",
+		"https://example.com/api^auth",
+	])("preserves URL spelling when appending query parameters: %s", (url) => {
+		expect(
+			appendQueryParams(url, new URLSearchParams({ next: "/dashboard" })),
+		).toBe(`${url}?next=%2Fdashboard`);
+	});
+
+	it("composes path, segment, and query without reserializing the base", () => {
+		const base = "https://Auth.Example.com:443/api/auth/?lang=ko#details";
+		const callback = appendURLSegments(
+			appendURLPath(base, "/callback"),
+			"acme:prod",
+		);
+		expect(
+			appendQueryParams(callback, new URLSearchParams({ next: "/dashboard" })),
+		).toBe(
+			"https://Auth.Example.com:443/api/auth/callback/acme:prod?lang=ko&next=%2Fdashboard#details",
+		);
+		expect(base).toBe("https://Auth.Example.com:443/api/auth/?lang=ko#details");
+	});
+
+	it("preserves an empty query marker and repeated existing parameters", () => {
+		expect(
+			appendQueryParams("/callback?#", new URLSearchParams({ x: "3" })),
+		).toBe("/callback?x=3#");
+		expect(
+			appendQueryParams("/callback?x=1&x=2#", new URLSearchParams({ x: "3" })),
+		).toBe("/callback?x=1&x=2&x=3#");
+	});
+
+	it("keeps a trailing question mark in an existing query value", () => {
+		expect(
+			appendQueryParams(
+				"/callback?next=a?#details",
+				new URLSearchParams({ x: "1" }),
+			),
+		).toBe("/callback?next=a?&x=1#details");
+	});
+
+	it("preserves an opaque URL when appending query parameters", () => {
+		expect(
+			appendQueryParams(
+				"mailto:user@example.com#details",
+				new URLSearchParams({ subject: "hello" }),
+			),
+		).toBe("mailto:user@example.com?subject=hello#details");
+	});
+
+	it("does not mutate parameters or accumulate changes across calls", () => {
+		const input = "https://Auth.Example.com:443/callback?x=1#";
+		const params = new URLSearchParams({ x: "2" });
+		expect(appendQueryParams(input, params)).toBe(
+			appendQueryParams(input, params),
+		);
+		expect(params.toString()).toBe("x=2");
+		expect(input).toBe("https://Auth.Example.com:443/callback?x=1#");
+	});
+
 	it("should append query parameters before the fragment", () => {
 		const params = new URLSearchParams({ error: "access denied" });
 
@@ -244,6 +516,10 @@ describe("appendQueryParams", () => {
 		);
 	});
 
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc3986.html#section-4.2
+	 * @see https://url.spec.whatwg.org/#url-path-segment
+	 */
 	it.each([
 		new URLSearchParams({ error: "access_denied" }),
 		new URLSearchParams(),
@@ -257,6 +533,17 @@ describe("appendQueryParams", () => {
 				"Expected an absolute or root-relative URL",
 			);
 		}
+	});
+
+	it("keeps a root-relative location on the same origin without reserializing its path", () => {
+		const result = appendQueryParams(
+			"/a/..//evil.example.com",
+			new URLSearchParams({ error: "access_denied" }),
+		);
+		expect(result).toBe("/a/..//evil.example.com?error=access_denied");
+		expect(new URL(result, "https://app.example.com").origin).toBe(
+			"https://app.example.com",
+		);
 	});
 });
 

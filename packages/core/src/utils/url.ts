@@ -49,14 +49,64 @@ export function normalizePathname(
 }
 
 const URL_REFERENCE_ORIGIN = "https://better-auth.invalid";
-const DOT_SEGMENTS = new Set([".", "..", "%2e", ".%2e", "%2e.", "%2e%2e"]);
-const INVALID_PATH_CHARACTER = /[?#\\\t\n\r]/;
 
 /**
- * Appends a pathname to an absolute or root-relative URL at one slash boundary.
- * An empty base URL produces a root-relative URL.
- * Preserves existing escapes, query, and fragment. Use `appendURLSegment` for
- * raw dynamic values.
+ * Reject raw ASCII controls.
+ * URL parsing may silently strip or encode them.
+ * @see https://infra.spec.whatwg.org/#control
+ * @see https://url.spec.whatwg.org/#concept-basic-url-parser
+ */
+const ASCII_CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
+// Encode delimiters within a raw segment.
+const PATH_SEGMENT_DELIMITERS = /[/?#]/g;
+
+// Reject query, fragment, and backslash delimiters in a pathname.
+const PATHNAME_DELIMITERS = /[?#\\]/;
+
+function parseURLReference(input: string) {
+	const fragmentIndex = input.indexOf("#");
+	const beforeFragment =
+		fragmentIndex === -1 ? input : input.slice(0, fragmentIndex);
+	const hash = fragmentIndex === -1 ? "" : input.slice(fragmentIndex);
+	const queryIndex = beforeFragment.indexOf("?");
+	const base =
+		queryIndex === -1 ? beforeFragment : beforeFragment.slice(0, queryIndex);
+	const search = queryIndex === -1 ? "" : beforeFragment.slice(queryIndex);
+
+	if (
+		input.trim() !== input ||
+		input.startsWith("//") ||
+		base.includes("\\") ||
+		ASCII_CONTROL_CHARACTERS.test(input)
+	) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+	const relative = input === "" || input.startsWith("/");
+	const parsed = new URL(input, relative ? URL_REFERENCE_ORIGIN : undefined);
+	return { base, search, hash, scheme: relative ? "" : parsed.protocol };
+}
+
+function encodePathSegment(segment: string) {
+	if (segment === "" || segment === "." || segment === "..") {
+		throw new TypeError(
+			"URL path segments must be nonempty and not dot segments",
+		);
+	}
+	return encodeURI(segment).replace(
+		PATH_SEGMENT_DELIMITERS,
+		encodeURIComponent,
+	);
+}
+
+/**
+ * Appends a root-relative pathname, merging only the shared slash boundary.
+ * Existing URL spelling, path structure, query, and fragment are preserved.
+ * Dot segments are preserved; this function does not resolve them.
+ * An empty base produces a root-relative URL. Path text is not re-encoded or
+ * checked for URI syntax; callers must validate untrusted input.
+ *
+ * @throws TypeError if the URL is invalid or the path introduces another URL component.
  *
  * @example
  * const baseURL = "https://example.com/api/auth";
@@ -67,53 +117,51 @@ export function appendURLPath(url: string, path: string): string {
 	if (
 		!path.startsWith("/") ||
 		path.startsWith("//") ||
-		INVALID_PATH_CHARACTER.test(path) ||
-		path.split("/").some((segment) => DOT_SEGMENTS.has(segment.toLowerCase()))
+		PATHNAME_DELIMITERS.test(path) ||
+		path.trim() !== path ||
+		ASCII_CONTROL_CHARACTERS.test(path)
 	) {
-		throw new TypeError("Path must be a valid root-relative URL pathname");
+		throw new TypeError("Expected a root-relative pathname");
 	}
+	const { base, search, hash, scheme } = parseURLReference(url);
 
-	const relative = url === "" || url.startsWith("/");
-	if (relative && (url.startsWith("//") || url.startsWith("/\\"))) {
-		throw new TypeError("Expected an absolute or root-relative URL");
-	}
-	const parsedURL = new URL(url, relative ? URL_REFERENCE_ORIGIN : undefined);
-	if (relative && parsedURL.origin !== URL_REFERENCE_ORIGIN) {
-		throw new TypeError("Expected an absolute or root-relative URL");
-	}
-	parsedURL.pathname = `${parsedURL.pathname.replace(/\/+$/, "")}${path}`;
-	if (!parsedURL.pathname.startsWith("/")) {
+	// Avoid URL serialization, which changes host and port spelling.
+	if (scheme && !base.startsWith("/", scheme.length)) {
 		throw new TypeError("URL does not support path appending");
 	}
 
-	const result = relative
-		? parsedURL.href.slice(parsedURL.origin.length)
-		: parsedURL.href;
-	if (relative && result.startsWith("//")) {
-		throw new TypeError("Root-relative URL cannot contain an authority");
-	}
-	return result;
+	const pathnameStart = base.startsWith("//", scheme.length)
+		? base.indexOf("/", scheme.length + 2)
+		: scheme.length;
+	const pathname = pathnameStart === -1 ? "" : base.slice(pathnameStart);
+	const appendedPath = pathname.endsWith("/") ? path.slice(1) : path;
+	return base + appendedPath + search + hash;
 }
 
 /**
- * Appends one raw path segment to an absolute or root-relative URL, encoding its value.
+ * Appends raw values as separately encoded, nonempty path segments.
  * An empty base URL produces a root-relative URL.
  *
+ * @throws TypeError if a segment is empty, `.` or `..`, or the URL cannot accept a path.
+ * @throws URIError if a segment contains a lone surrogate.
+ *
  * @example
- * const baseURL = "https://example.com/api/auth/callback";
- * const callbackURL = appendURLSegment(baseURL, "team/member");
+ * const baseURL = "https://example.com/api/auth";
+ * const callbackURL = appendURLSegments(baseURL, "callback", "team/member");
  * // callbackURL === "https://example.com/api/auth/callback/team%2Fmember"
  */
-export function appendURLSegment(url: string, segment: string): string {
-	if (segment === "") {
-		throw new TypeError("URL path segment must be nonempty");
-	}
-	return appendURLPath(url, `/${encodeURIComponent(segment)}`);
+export function appendURLSegments(
+	url: string,
+	segment: string,
+	...segments: string[]
+): string {
+	const path = [segment, ...segments].map(encodePathSegment).join("/");
+	return appendURLPath(url, `/${path}`);
 }
 
 /**
  * Appends query parameters before the fragment of an absolute or root-relative URL.
- * Existing query text is retained without parsing it into name-value pairs.
+ * Preserves URL spelling and existing query text without parsing name-value pairs.
  *
  * This function only composes URLs. Callers must validate untrusted input.
  *
@@ -123,33 +171,17 @@ export function appendQueryParams(
 	input: string,
 	params: URLSearchParams,
 ): string {
-	const relative = input.startsWith("/");
-	const hasAuthorityPrefix = input.startsWith("//") || input.startsWith("/\\");
-	if (hasAuthorityPrefix) {
+	if (!input) {
 		throw new TypeError("Expected an absolute or root-relative URL");
 	}
-
-	const parsedURL = relative
-		? new URL(input, URL_REFERENCE_ORIGIN)
-		: new URL(input);
-
-	if (relative && parsedURL.origin !== URL_REFERENCE_ORIGIN) {
-		throw new TypeError("Expected an absolute or root-relative URL");
-	}
-
+	const { base, search, hash } = parseURLReference(input);
 	const query = params.toString();
 	if (!query) {
 		return input;
 	}
-
-	const separator = parsedURL.search.endsWith("&") ? "" : "&";
-	parsedURL.search = parsedURL.search
-		? `${parsedURL.search}${separator}${query}`
-		: query;
-
-	return relative
-		? parsedURL.href.slice(parsedURL.origin.length)
-		: parsedURL.href;
+	const prefix = search || "?";
+	const separator = prefix === "?" || prefix.endsWith("&") ? "" : "&";
+	return base + prefix + separator + query + hash;
 }
 
 /**
