@@ -612,7 +612,7 @@ The rate limiting system uses a fixed window approach:
 
 1. **First Request**: When an API key is used for the first time (no previous `lastRequest`), the request is allowed, `requestCount` is set to 1, and `lastRequest` records the time this window opened.
 
-2. **Within Window**: For subsequent requests within the `timeWindow`, the `requestCount` is incremented. Allowed requests do not move the window: it stays anchored at the request that opened it, so `rateLimitMax` means "at most N requests in any `timeWindow`". If `requestCount` reaches `rateLimitMax`, the request is rejected with a `RATE_LIMITED` error code.
+2. **Within Window**: For subsequent requests within the `timeWindow`, the `requestCount` is incremented. Allowed requests do not move the window: it stays anchored at the request that opened it, and `requestCount` caps the requests counted inside the current window. Like every fixed window, a burst straddling a window boundary can briefly admit close to two windows' worth of requests; that is the trade-off for keeping the counter in the key row with no external state. If `requestCount` reaches `rateLimitMax`, the request is rejected with a `RATE_LIMITED` error code.
 
 3. **Window Reset**: Once `timeWindow` has elapsed since the request that opened the window, the window resets: `requestCount` is reset to 1 and `lastRequest` records the new window's opening time.
 

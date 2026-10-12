@@ -63,9 +63,10 @@ describe("api-key rate limit fixed window", async () => {
 				denied++;
 			}
 		}
-		// A clock seam between the decision read and the guarded write can
-		// race the window boundary; one request at most.
-		expect(denied).toBeLessThanOrEqual(1);
+		// Requests run one at a time under a frozen fake clock, so no
+		// request can straddle the window seam mid-decision: the fixed
+		// window must deny none of them.
+		expect(denied).toBe(0);
 	});
 
 	it("anchors the window: lastRequest keeps the opening time while requests are allowed", async () => {
