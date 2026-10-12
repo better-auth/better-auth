@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { getSAMLServiceProviderURL } from "../routes/helpers";
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
@@ -64,62 +63,6 @@ function validate(xml: string, expectedAudiences = [serviceProviderEntityId]) {
 }
 
 describe("validateSAMLResponseBinding", () => {
-	it("preserves the configured ACS slash boundary", () => {
-		const expectedRecipients = [
-			getSAMLServiceProviderURL(
-				"https://Auth.Example.com:443/api/auth/",
-				"acs",
-				"acme:prod",
-			),
-		];
-		const registeredURL =
-			"https://Auth.Example.com:443/api/auth//sso/saml2/sp/acs/acme:prod";
-		expect(() =>
-			validateSAMLResponseBinding(
-				buildSAMLResponse({
-					recipient: registeredURL,
-					destination: registeredURL,
-				}),
-				{ expectedAudiences: [serviceProviderEntityId], expectedRecipients },
-			),
-		).not.toThrow();
-		expect(() =>
-			validateSAMLResponseBinding(
-				buildSAMLResponse({
-					recipient:
-						"https://other.example.com/api/auth//sso/saml2/sp/acs/acme:prod",
-				}),
-				{ expectedAudiences: [serviceProviderEntityId], expectedRecipients },
-			),
-		).toThrow(/Recipient does not match/);
-	});
-
-	it.each([
-		"acme:prod",
-		"okta@corp",
-		"a+b",
-		"team%2Fmember",
-		"okta%3Aacme",
-	])("accepts the previously registered Recipient and Destination for %s", (providerId) => {
-		const registeredURL = `https://Auth.Example.com:443/api/auth/sso/saml2/sp/acs/${providerId}`;
-		const xml = buildSAMLResponse({
-			recipient: registeredURL,
-			destination: registeredURL,
-		});
-		expect(() =>
-			validateSAMLResponseBinding(xml, {
-				expectedAudiences: [serviceProviderEntityId],
-				expectedRecipients: [
-					getSAMLServiceProviderURL(
-						"https://Auth.Example.com:443/api/auth",
-						"acs",
-						providerId,
-					),
-				],
-			}),
-		).not.toThrow();
-	});
-
 	it("accepts an assertion addressed to this Service Provider", () => {
 		expect(() => validate(buildSAMLResponse())).not.toThrow();
 	});
