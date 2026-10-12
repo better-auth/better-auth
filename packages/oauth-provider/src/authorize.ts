@@ -839,7 +839,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
-			resources,
+			resources: resources ? [...resources] : undefined,
 		});
 		if (selectedAccountRedirect) {
 			if (promptNone) {
@@ -862,7 +862,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
-			resources,
+			resources: resources ? [...resources] : undefined,
 		});
 		if (signupRedirect) {
 			if (promptNone) {
@@ -886,7 +886,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
-			resources,
+			resources: resources ? [...resources] : undefined,
 		});
 		if (postLoginRedirect) {
 			if (promptNone) {
@@ -913,7 +913,7 @@ export async function authorizeEndpoint(
 		user: session.user,
 		session: session.session,
 		scopes: requestedScopes,
-		resources,
+		resources: resources ? [...resources] : undefined,
 	});
 
 	// Can skip consent (unless forced by prompt above)

@@ -110,7 +110,7 @@ export async function consentEndpoint<Result>(
 		user: session?.user!,
 		session: session?.session!,
 		scopes: requestedScopes ?? originalRequestedScopes,
-		resources,
+		resources: resources ? [...resources] : undefined,
 	});
 	const foundConsent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>(
 		{

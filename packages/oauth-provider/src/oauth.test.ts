@@ -3854,17 +3854,19 @@ describe("RFC 8707 resources in authorize lifecycle hooks (#11039)", async () =>
 			},
 		});
 
-		await client.oauth2.consent(
-			{
-				accept: true,
-			},
-			{
-				headers,
-				throw: true,
-			},
-		);
-
-		vi.unstubAllGlobals();
+		try {
+			await client.oauth2.consent(
+				{
+					accept: true,
+				},
+				{
+					headers,
+					throw: true,
+				},
+			);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	}
 
 	describe("multiple requested resources", () => {
