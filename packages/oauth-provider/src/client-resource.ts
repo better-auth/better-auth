@@ -66,18 +66,6 @@ export const oauthProviderResourceClient = <
 		const jwtPluginOptions = await getJwtPluginOptions();
 		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 	};
-	const authServerBasePath = auth?.options.basePath;
-	const authServerEndpointBaseURL =
-		authServerBaseUrl &&
-		authServerBasePath &&
-		new URL(authServerBaseUrl).pathname === "/"
-			? appendURLPath(
-					authServerBaseUrl,
-					authServerBasePath.startsWith("/")
-						? authServerBasePath
-						: `/${authServerBasePath}`,
-				)
-			: authServerBaseUrl;
 	const resolveVerifyAccessTokenOptions = async (
 		opts:
 			| (VerifyAccessTokenAuthOpts & {
@@ -87,6 +75,10 @@ export const oauthProviderResourceClient = <
 			| VerifyAccessTokenNoAuthOpts
 			| undefined,
 	): Promise<VerifyAccessTokenRequestOptions> => {
+		const authContext = auth
+			? ((await auth.$context) as Parameters<typeof getJwtPlugin>[0])
+			: undefined;
+		const authServerEndpointBaseURL = authContext?.baseURL;
 		const jwtPluginOptions = await getJwtPluginOptions();
 		const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 		const issuer =
