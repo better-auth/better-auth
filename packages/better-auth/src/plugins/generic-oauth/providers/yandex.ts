@@ -1,5 +1,5 @@
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { appendURLSegments } from "@better-auth/core/utils/url";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import { betterFetch } from "@better-fetch/fetch";
 import type {
 	BaseOAuthProviderOptions,
@@ -85,10 +85,9 @@ export function yandex(options: YandexOptions): GenericOAuthConfig {
 			emailVerified: false,
 			image:
 				!profile.is_avatar_empty && profile.default_avatar_id
-					? appendURLSegments(
+					? appendURLPath(
 							"https://avatars.yandex.net/get-yapic",
-							profile.default_avatar_id,
-							"islands-200",
+							`/${profile.default_avatar_id}/islands-200`,
 						)
 					: undefined,
 		};

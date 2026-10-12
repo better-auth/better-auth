@@ -3532,7 +3532,8 @@ describe("oauth2", async () => {
 			}
 		});
 
-		it("encodes the avatar ID as one URL path segment", async () => {
+		/** @see https://yandex.ru/dev/id/doc/en/user-information */
+		it("preserves the path structure of a Yandex avatar ID", async () => {
 			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
 				new Response(
 					JSON.stringify({
@@ -3541,7 +3542,7 @@ describe("oauth2", async () => {
 						client_id: "yandex-client-id",
 						psuid: "yandex-psuid",
 						default_email: "user@example.com",
-						default_avatar_id: "avatar/part?variant=1",
+						default_avatar_id: "31804/avatar-id",
 					}),
 					{ headers: { "content-type": "application/json" } },
 				),
@@ -3554,7 +3555,7 @@ describe("oauth2", async () => {
 				}).getUserInfo?.({ accessToken: "yandex-access-token" });
 
 				expect(userInfo?.image).toBe(
-					"https://avatars.yandex.net/get-yapic/avatar%2Fpart%3Fvariant=1/islands-200",
+					"https://avatars.yandex.net/get-yapic/31804/avatar-id/islands-200",
 				);
 			} finally {
 				fetchSpy.mockRestore();
