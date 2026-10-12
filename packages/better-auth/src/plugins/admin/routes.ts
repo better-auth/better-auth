@@ -442,6 +442,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
+			const hashedPassword = ctx.body.password
+				? await ctx.context.password.hash(ctx.body.password)
+				: undefined;
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
 				{
 					...userData,
@@ -462,10 +465,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				);
 			}
 			// Only create credential account if password is provided
-			if (ctx.body.password) {
-				const hashedPassword = await ctx.context.password.hash(
-					ctx.body.password,
-				);
+			if (hashedPassword) {
 				await ctx.context.internalAdapter.linkAccount({
 					providerId: "credential",
 					accountId: user.id,

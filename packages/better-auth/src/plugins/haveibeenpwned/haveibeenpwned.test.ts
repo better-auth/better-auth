@@ -401,3 +401,53 @@ describe("isPasswordCompromised", () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11706
+ */
+describe("have-i-been-pwned with admin create-user", async () => {
+	const { client, auth, signInWithUser } = await getTestInstance(
+		{
+			plugins: [admin(), haveIBeenPwned()],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [adminClient()],
+			},
+		},
+	);
+	const ctx = await auth.$context;
+
+	it("should not create a user when admin create-user uses a compromised password", async () => {
+		const adminEmail = `admin-${Date.now()}@example.com`;
+		const adminPassword = `Str0ng!P@ssw0rd-${Date.now()}`;
+		await client.signUp.email({
+			email: adminEmail,
+			password: adminPassword,
+			name: "Admin",
+		});
+		const adminUser = await ctx.internalAdapter.findUserByEmail(adminEmail);
+		await ctx.internalAdapter.updateUser(adminUser!.user.id, { role: "admin" });
+		const { headers } = await signInWithUser(adminEmail, adminPassword);
+
+		const uniqueEmail = `test-${Date.now()}@example.com`;
+		const compromisedPassword = "123456789";
+		await mockBreached(compromisedPassword);
+
+		const result = await client.admin.createUser(
+			{
+				email: uniqueEmail,
+				password: compromisedPassword,
+				name: "Test User",
+				role: "user",
+			},
+			{ headers },
+		);
+		expect(result.error?.status).toBe(400);
+		expect(result.error?.code).toBe("PASSWORD_COMPROMISED");
+
+		const user = await ctx.internalAdapter.findUserByEmail(uniqueEmail);
+		expect(user).toBeNull();
+	});
+});
