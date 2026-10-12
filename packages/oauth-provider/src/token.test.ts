@@ -2226,6 +2226,19 @@ describe("oauth token - refresh_token family invalidation", async () => {
 		expect((await introspect(oauthClient, a0)).data?.active).toBe(true);
 	});
 
+	it("reports the access token issued with a rotated refresh token inactive when the oauthAccessToken delete fails", async () => {
+		const oauthClient = await createOAuthClient();
+		const { r0, a0 } = await rotateOnce(oauthClient);
+		expect((await introspect(oauthClient, a0)).data?.active).toBe(true);
+
+		const replay = await withFailingDeleteMany("oauthAccessToken", () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect((await introspect(oauthClient, a0)).data?.active).toBe(false);
+	});
+
 	it.each([
 		"oauthRefreshToken",
 		"oauthAccessToken",
@@ -2251,6 +2264,33 @@ describe("oauth token - refresh_token family invalidation", async () => {
 		expect(revocation.error?.status).toBe(500);
 
 		expect(await refresh(oauthClient, r1)).toMatchObject({
+			data: null,
+			error: { status: 400, error: "invalid_grant" },
+		});
+	});
+
+	it("rejects the newest refresh token of a family past the findMany limit when the oauthAccessToken delete fails", async () => {
+		const oauthClient = await createOAuthClient();
+		const { r0, r1, a1 } = await rotateOnce(oauthClient);
+		let refreshToken = r1;
+		let accessToken = a1;
+		// 102 refresh rows, past the adapter's default findMany limit of 100.
+		for (let i = 0; i < 100; i++) {
+			const rotated = await refresh(oauthClient, refreshToken);
+			expect(rotated.error).toBeNull();
+			refreshToken = rotated.data!.refresh_token!;
+			accessToken = rotated.data!.access_token!;
+		}
+
+		const replay = await withFailingDeleteMany("oauthAccessToken", () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect((await introspect(oauthClient, accessToken)).data?.active).toBe(
+			false,
+		);
+		expect(await refresh(oauthClient, refreshToken)).toMatchObject({
 			data: null,
 			error: { status: 400, error: "invalid_grant" },
 		});

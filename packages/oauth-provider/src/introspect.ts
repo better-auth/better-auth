@@ -298,19 +298,6 @@ async function validateOpaqueAccessToken(
 	if (accessToken.revoked) {
 		return inactiveAccessToken();
 	}
-	// Rotation also sets `revoked`, so only a revoked refresh row without
-	// `rotatedAt` makes the access token inactive.
-	if (accessToken.refreshId) {
-		const refreshToken = await ctx.context.adapter.findOne<
-			OAuthRefreshToken<Scope[]>
-		>({
-			model: "oauthRefreshToken",
-			where: [{ field: "id", value: accessToken.refreshId }],
-		});
-		if (refreshToken?.revoked && !refreshToken.rotatedAt) {
-			return inactiveAccessToken();
-		}
-	}
 
 	const resources = Array.isArray(accessToken.resources)
 		? accessToken.resources
