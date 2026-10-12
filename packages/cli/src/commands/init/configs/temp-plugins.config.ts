@@ -1520,7 +1520,7 @@ export const tempPluginsConfig = {
 				{
 					flag: "siwe-email-domain-name",
 					question: "What is the email domain name?",
-					description: "The email domain name for anonymous users.",
+					description: "A custom email domain for wallet-derived addresses.",
 					skip: "prompt",
 					argument: {
 						index: 0,

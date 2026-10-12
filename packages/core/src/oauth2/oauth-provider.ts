@@ -252,16 +252,6 @@ export interface OAuthProvider<
 	 */
 	issuer?: string | undefined;
 	/**
-	 * Stable issuer used with the provider subject to recognize an account.
-	 *
-	 * Use the validated OpenID Connect issuer for OIDC providers. A resolver is
-	 * supported for tenant-specific issuers and receives only provider-verified
-	 * data. OAuth providers without an issuer omit this property and are scoped
-	 * to the synthetic `local:oauth:<encoded providerId>` issuer, where the
-	 * provider ID segment is percent-encoded.
-	 */
-	accountIssuer?: string | OAuthAccountKeyResolver<T, string> | undefined;
-	/**
 	 * Require shared OAuth redirect routes to bind ID-token verification to an
 	 * authorization request nonce. When true, routes generate `idTokenNonce`,
 	 * pass it to `createAuthorizationURL`, persist it in state, and provide it

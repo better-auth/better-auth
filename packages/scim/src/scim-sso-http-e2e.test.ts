@@ -490,7 +490,6 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 			where: [],
 		});
 		expect(account).toMatchObject({
-			issuer: identityProvider.issuer.url,
 			accountId: externalId,
 			providerId: "workforce",
 			userId: provisionedUserId,
@@ -528,7 +527,6 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 		expect(
 			await instance.db.findOne<Account>({ model: "account", where: [] }),
 		).toMatchObject({
-			issuer: identityProvider.issuer.url,
 			accountId: externalId,
 			providerId: "workforce",
 			userId: provisionedUserId,

@@ -1,4 +1,6 @@
 ---
+icon: pluginsSSO
+sidebarTitle: "SSO"
 title: Single Sign-On (SSO)
 description: Integrate Single Sign-On (SSO) with your application.
 ---
@@ -91,7 +93,7 @@ A redirect URL will be automatically generated using the provider ID. For instan
   When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
 </Callout>
 
-Better Auth identifies an OIDC account by the configured `issuer` and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject. Provider aliases that return the same issuer and subject resolve to one external identity; this identity deduplication does not create independent grant or provider lifecycle records for each alias.
+Better Auth identifies an OIDC account by the provider ID and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject.
 
 #### Example
 
@@ -418,7 +420,7 @@ Database writes made through the transaction adapter during resolution, account 
 
 To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
 
-Better Auth identifies a SAML account by the IdP entity ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
+Better Auth identifies a SAML account by the provider ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
 
 Applications that need to pin the IdP authority while storing a SAML connection can derive it through the same metadata parser used by SAML authentication:
 
@@ -1561,6 +1563,8 @@ The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both *
 
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
+
+When upgrading to purpose-prefixed verification identifiers or purpose-specific state-cookie keys, restart pending SP-initiated SAML sign-ins and upgrade participating servers together. These flows use Better Auth-generated relay state. Unsolicited IdP-initiated flows do not use that state and are not affected by its format change. See the [verification storage upgrade guidance](/docs/reference/options#verification) and [state-cookie upgrade guidance](/docs/reference/options#storestatestrategy).
 
 Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
 

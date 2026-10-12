@@ -36,6 +36,7 @@ import {
 	vi,
 } from "vitest";
 import { getMigrations } from "../../better-auth/src/db/get-migration";
+import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
@@ -566,19 +567,11 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 			};
 			const queryValue = (value: unknown) =>
 				typeof value === "string" ? value : undefined;
-			const templateOverrides: MockSAMLTemplateOverrides = {
-				audience: queryValue(req.query.audience),
-				destination: queryValue(req.query.destination),
-				inResponseTo:
-					req.query.idpInitiated === "true"
-						? ""
-						: req.query.echoAuthnRequest === "true"
-							? undefined
-							: "null",
-				subjectRecipient: queryValue(req.query.recipient),
-			};
+			const idpInitiated = req.query.idpInitiated === "true";
 			const parsedRequest =
-				req.query.echoAuthnRequest === "true"
+				!idpInitiated &&
+				!options.wantAuthnRequestsSigned &&
+				typeof req.query.SAMLRequest === "string"
 					? await idp.parseLoginRequest(sp, "redirect", {
 							query: req.query,
 						})
@@ -590,11 +583,17 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 						sigAlg: parsedRequest.sigAlg,
 					}
 				: { extract: {} };
-			if (req.query.echoAuthnRequest === "true") {
-				const requestId = requestInfo.extract.request?.id;
-				templateOverrides.inResponseTo =
-					typeof requestId === "string" ? requestId : "";
-			}
+			const requestId = requestInfo.extract.request?.id;
+			const templateOverrides: MockSAMLTemplateOverrides = {
+				audience: queryValue(req.query.audience),
+				destination: queryValue(req.query.destination),
+				inResponseTo: idpInitiated
+					? ""
+					: typeof requestId === "string"
+						? requestId
+						: "null",
+				subjectRecipient: queryValue(req.query.recipient),
+			};
 			const { context, entityEndpoint } = (await idp.createLoginResponse(
 				sp,
 				requestInfo,
@@ -6565,9 +6564,6 @@ describe("SAML E2E: SP-initiated flow", () => {
 			| Record<string, any>
 			| undefined;
 		expect(ssoAccount).toBeDefined();
-		expect(ssoAccount!.issuer).toBe(
-			"http://localhost:8081/api/sso/saml2/idp/metadata",
-		);
 		expect(ssoAccount!.accountId).toBe("test@email.com");
 
 		// 7. Verify the user exists and is linked
@@ -6631,8 +6627,7 @@ describe("SAML user resolution HTTP", () => {
 	function persistedSAMLConfiguration() {
 		return {
 			issuer: "https://service.example.com/saml",
-			entryPoint:
-				"http://localhost:8081/api/sso/saml2/idp/post?echoAuthnRequest=true",
+			entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
 			cert: extractSigningCertificateFromMetadata(idpMetadata),
 			idpMetadata: {
 				entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
@@ -7390,7 +7385,6 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 				userId: selectedUser.id,
@@ -7542,7 +7536,6 @@ describe("SAML user resolution HTTP", () => {
 		});
 		expect(accounts).toEqual([
 			expect.objectContaining({
-				issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
 				accountId: "test@email.com",
 				providerId: "workforce-saml",
 			}),
@@ -7573,7 +7566,7 @@ describe("SAML user resolution HTTP", () => {
 		if (relayStateCase === "legacy") {
 			const context = await instance.auth.$context;
 			const verification = await context.internalAdapter.findVerificationValue(
-				signIn.relayState,
+				getAuthStateVerificationIdentifier(signIn.relayState),
 			);
 			expect(verification).not.toBeNull();
 			const storedState = JSON.parse(verification!.value) as Record<

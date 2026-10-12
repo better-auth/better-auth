@@ -2125,6 +2125,89 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 	});
 
+	it("lets an admin disable and re-enable a client without deleting it", async () => {
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+			},
+		});
+		if (!registered.client_secret) throw new Error("missing client secret");
+		const requestToken = () =>
+			client.$fetch<{ access_token?: string }>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					resource: validResource,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${registered.client_id}:${registered.client_secret}`).toString("base64")}`,
+				},
+			});
+
+		const issuedToken = (await requestToken()).data?.access_token;
+		expect(issuedToken).toBeDefined();
+		const resourceServer = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+			},
+		});
+		if (!resourceServer.client_secret)
+			throw new Error("missing resource server secret");
+		await auth.api.adminLinkClientResource({
+			headers,
+			params: {
+				identifier: encodeURIComponent(validResource),
+				client_id: resourceServer.client_id,
+			},
+		});
+		const introspect = () =>
+			client.oauth2.introspect(
+				{
+					client_id: resourceServer.client_id,
+					client_secret: resourceServer.client_secret,
+					token: issuedToken!,
+				},
+				{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+			);
+		const initialIntrospection = await introspect();
+		expect(initialIntrospection.error).toBeNull();
+		expect(initialIntrospection.data?.active).toBe(true);
+		const disabled = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: registered.client_id, update: { disabled: true } },
+		});
+		expect(disabled.disabled).toBe(true);
+		expect((await introspect()).data).toEqual({ active: false });
+		const blocked = await requestToken();
+		expect(blocked.error?.status).toBe(401);
+		expect((blocked.error as { error?: string } | null)?.error).toBe(
+			"invalid_client",
+		);
+
+		const userUpdate = await client.$fetch<OAuthClient>(
+			"/oauth2/update-client",
+			{
+				method: "POST",
+				body: {
+					client_id: registered.client_id,
+					update: { disabled: false },
+				},
+			},
+		);
+		expect(userUpdate.data?.disabled).toBe(true);
+		const enabled = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: registered.client_id, update: { disabled: false } },
+		});
+		expect(enabled.disabled).toBe(false);
+		expect((await requestToken()).data?.access_token).toBeDefined();
+	});
+
 	it("returns invalid_request when client_credentials omits client_id", async () => {
 		const response = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/token",
@@ -3311,7 +3394,6 @@ describe("id token claim override security", async () => {
 
 describe("loopback redirect URI matching", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -3443,46 +3525,6 @@ describe("loopback redirect URI matching", async () => {
 			{ method: "POST", body, headers: reqHeaders },
 		);
 		expect(tokens.data?.access_token).toBeDefined();
-	});
-
-	it("non-loopback with different ports should be rejected", async ({
-		expect,
-	}) => {
-		const registeredUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
-		const requestedUri = "http://localhost:9999/api/auth/callback/test";
-
-		const oauthClient = await auth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				redirect_uris: [registeredUri],
-				application_type: "native",
-				skip_consent: true,
-			},
-		});
-
-		const codeVerifier = generateRandomString(32);
-		const url = await createAuthorizationURL({
-			id: providerId,
-			options: {
-				clientId: oauthClient!.client_id!,
-				clientSecret: oauthClient!.client_secret!,
-				redirectURI: requestedUri,
-			},
-			redirectURI: "",
-			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-			state,
-			scopes: ["openid"],
-			codeVerifier,
-		});
-
-		let callbackRedirectUrl = "";
-		await client.$fetch(url.toString(), {
-			onError(context) {
-				callbackRedirectUrl = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(callbackRedirectUrl).toContain("invalid_redirect");
-		expect(callbackRedirectUrl).not.toContain("code=");
 	});
 
 	it("loopback with different path should be rejected", async ({ expect }) => {

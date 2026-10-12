@@ -4,6 +4,8 @@ import { Client } from "typesense";
 import type { DocumentRecord } from "typesense-fumadocs-adapter";
 import { sync } from "typesense-fumadocs-adapter";
 
+const typesenseCollectionName = "better-auth-docs";
+
 export function getTypesenseSyncSkipReason(env: NodeJS.ProcessEnv) {
 	const url = env.NEXT_PUBLIC_TYPESENSE_SERVER_URL;
 	const adminKey = env.TYPESENSE_ADMIN_API_KEY;
@@ -49,39 +51,44 @@ async function main() {
 
 	const filePath = ".next/server/app/api/docs/static.json.body";
 	if (!fs.existsSync(filePath)) {
-		console.log("[Typesense] build output not found, skipping sync.");
-		return;
+		throw new Error("Typesense build output was not found.");
 	}
 
-	try {
-		const serverUrl = new URL(url);
-		const content = fs.readFileSync(filePath, "utf8");
-		const records = JSON.parse(content) as DocumentRecord[];
-
-		const client = new Client({
-			nodes: [
-				{
-					host: serverUrl.hostname,
-					port:
-						Number(serverUrl.port) ||
-						(serverUrl.protocol === "https:" ? 443 : 80),
-					protocol: serverUrl.protocol.replace(":", ""),
-				},
-			],
-			apiKey: adminKey,
-			connectionTimeoutSeconds: 30,
-		});
-
-		await sync(client, {
-			typesenseCollectionName: "better-auth-docs",
-			documents: records,
-		});
-		console.log(`[Typesense] search updated: ${records.length} records`);
-	} catch (error) {
-		console.warn("[Typesense] failed to sync index, continuing build:", error);
+	const serverUrl = new URL(url);
+	const content = fs.readFileSync(filePath, "utf8");
+	const records = JSON.parse(content) as DocumentRecord[];
+	if (records.length === 0) {
+		throw new Error("Typesense build output contains no records.");
 	}
+
+	const client = new Client({
+		nodes: [
+			{
+				host: serverUrl.hostname,
+				port:
+					Number(serverUrl.port) ||
+					(serverUrl.protocol === "https:" ? 443 : 80),
+				protocol: serverUrl.protocol.replace(":", ""),
+			},
+		],
+		apiKey: adminKey,
+		connectionTimeoutSeconds: 30,
+	});
+
+	await sync(client, {
+		typesenseCollectionName,
+		documents: records,
+	});
+	const collection = await client
+		.collections(typesenseCollectionName)
+		.retrieve();
+	if (collection.num_documents === 0) {
+		throw new Error("Typesense search index is empty after sync.");
+	}
+
+	console.log(`[Typesense] search updated: ${records.length} records`);
 }
 
 if (import.meta.main) {
-	void main();
+	await main();
 }

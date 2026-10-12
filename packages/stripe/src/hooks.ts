@@ -46,7 +46,14 @@ export async function onCheckoutSessionCompleted(
 	try {
 		const client = options.stripeClient;
 		const checkoutSession = event.data.object as Stripe.Checkout.Session;
-		if (checkoutSession.mode === "setup" || !options.subscription?.enabled) {
+		/**
+		 * Only `subscription` mode is currently supported.
+		 * @see https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-mode
+		 */
+		if (
+			checkoutSession.mode !== "subscription" ||
+			!options.subscription?.enabled
+		) {
 			return;
 		}
 		const subscription = await client.subscriptions.retrieve(
