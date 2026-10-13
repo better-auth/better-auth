@@ -638,11 +638,21 @@ describe("SSO OIDC user resolution HTTP", () => {
 		const instance = await signInWithRetriedTransaction(
 			{
 				secondaryStorage: {
-					get: (key: string) => store.get(key) ?? null,
-					set: (key: string, value: string) => {
+					get: async (key: string) => store.get(key) ?? null,
+					getAndDelete: async (key: string) => {
+						const value = store.get(key) ?? null;
+						store.delete(key);
+						return value;
+					},
+					set: async (key: string, value: string) => {
 						store.set(key, value);
 					},
-					delete: (key: string) => {
+					increment: async (key: string) => {
+						const value = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(value));
+						return value;
+					},
+					delete: async (key: string) => {
 						store.delete(key);
 					},
 				},
