@@ -126,47 +126,12 @@ function oidcIdentityBoundaryChanged(
 	return hasChangedField(current, updated, OIDC_IDENTITY_BOUNDARY_FIELDS);
 }
 
-function samlTrustAnchors(
-	identityProvider: ReturnType<typeof createIdP>["entityMeta"],
-) {
-	const certificates = identityProvider.getX509Certificate("signing");
-	return (
-		Array.isArray(certificates)
-			? certificates
-			: certificates
-				? [certificates]
-				: []
-	)
-		.map((certificate) => normalizePem(certificate) ?? certificate)
-		.sort();
-}
-
-function samlTrustAnchorsChanged(
-	current: SAMLConfig,
-	updated: SAMLConfig,
-	currentIdentityProvider: ReturnType<
-		typeof createIdP
-	>["entityMeta"] = createIdP(current).entityMeta,
-	updatedIdentityProvider: ReturnType<
-		typeof createIdP
-	>["entityMeta"] = createIdP(updated).entityMeta,
-): boolean {
-	return identityValueChanged(
-		samlTrustAnchors(currentIdentityProvider),
-		samlTrustAnchors(updatedIdentityProvider),
-	);
-}
-
 function samlIdentityBoundaryChanged(
 	current: SAMLConfig,
 	updated: SAMLConfig,
-	currentIdentityProvider: ReturnType<
-		typeof createIdP
-	>["entityMeta"] = createIdP(current).entityMeta,
-	updatedIdentityProvider: ReturnType<
-		typeof createIdP
-	>["entityMeta"] = createIdP(updated).entityMeta,
 ): boolean {
+	const currentIdentityProvider = createIdP(current).entityMeta;
+	const updatedIdentityProvider = createIdP(updated).entityMeta;
 	let currentServiceProvider: ReturnType<
 		typeof parseSAMLServiceProviderMetadata
 	> | null;
@@ -217,6 +182,31 @@ function samlIdentityBoundaryChanged(
 	);
 }
 
+/**
+ * Signing certificates change who can sign assertions, so the mutation guard
+ * sees them as an authentication-boundary change, but they do not change which
+ * IdP identities linked accounts belong to.
+ */
+function samlTrustAnchorsChanged(
+	current: SAMLConfig,
+	updated: SAMLConfig,
+): boolean {
+	const trustAnchors = (config: SAMLConfig) => {
+		const certificates =
+			createIdP(config).entityMeta.getX509Certificate("signing");
+		return (
+			Array.isArray(certificates)
+				? certificates
+				: certificates
+					? [certificates]
+					: []
+		)
+			.map((certificate) => normalizePem(certificate) ?? certificate)
+			.sort();
+	};
+	return identityValueChanged(trustAnchors(current), trustAnchors(updated));
+}
+
 function parseConfigSnapshot<T>(
 	config: T | string | null | undefined,
 	configType: "SAML" | "OIDC",
@@ -249,7 +239,10 @@ function ssoProviderIdentityBoundaryChanged(
 	if (
 		currentSamlConfig &&
 		(!updatedSamlConfig ||
-			samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig))
+			// An unchanged config skips the metadata parses on every sign-in.
+			(identityValueChanged(currentSamlConfig, updatedSamlConfig) &&
+				(samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig) ||
+					samlTrustAnchorsChanged(currentSamlConfig, updatedSamlConfig))))
 	) {
 		return true;
 	}
@@ -899,7 +892,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					let providerIdentityBoundaryChanged =
 						body.issuer !== undefined &&
 						body.issuer !== existingProvider.issuer;
-					let isAuthenticationBoundaryChange = providerIdentityBoundaryChanged;
+					let trustAnchorsChanged = false;
 
 					if (body.issuer !== undefined) {
 						updateData.issuer = body.issuer;
@@ -955,31 +948,15 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						validateCertSources(updatedSamlConfig);
 						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
 						assertSAMLServiceProviderMetadataPolicy(updatedSamlConfig);
-						const currentIdentityProvider =
-							createIdP(currentSamlConfig).entityMeta;
-						const updatedIdentityProvider =
-							createIdP(updatedSamlConfig).entityMeta;
-
 						if (
-							samlIdentityBoundaryChanged(
-								currentSamlConfig,
-								updatedSamlConfig,
-								currentIdentityProvider,
-								updatedIdentityProvider,
-							)
+							samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)
 						) {
 							providerIdentityBoundaryChanged = true;
 						}
-						if (
-							samlTrustAnchorsChanged(
-								currentSamlConfig,
-								updatedSamlConfig,
-								currentIdentityProvider,
-								updatedIdentityProvider,
-							)
-						) {
-							isAuthenticationBoundaryChange = true;
-						}
+						trustAnchorsChanged = samlTrustAnchorsChanged(
+							currentSamlConfig,
+							updatedSamlConfig,
+						);
 
 						updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 					}
@@ -1052,8 +1029,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						{
 							action: "update",
 							isAuthenticationBoundaryChange:
-								isAuthenticationBoundaryChange ||
-								providerIdentityBoundaryChanged,
+								providerIdentityBoundaryChanged || trustAnchorsChanged,
 						},
 						existingProvider,
 						trx,
