@@ -132,6 +132,8 @@ export interface SAMLConfig {
 	/**
 	 * Provider-level post-auth redirect URL for IdP-initiated or fallback SAML
 	 * flows when no RelayState callback URL is available.
+	 *
+	 * Not an ACS on 1.7. IdP-initiated post-login redirect only.
 	 */
 	callbackUrl?: string | undefined;
 	/**

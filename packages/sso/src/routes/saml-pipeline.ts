@@ -21,6 +21,7 @@ import {
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
+	SAML_HTTP_POST_BINDING,
 	validateAudience,
 	validateInResponseTo,
 	validateSAMLAlgorithms,
@@ -208,10 +209,7 @@ function toArray<T>(value: T | T[] | undefined): T[] {
 	return value ? [value] : [];
 }
 
-/**
- * @internal
- */
-export function getExpectedSAMLRecipients(
+function getExpectedSAMLRecipients(
 	config: SAMLConfig,
 	baseURL: string,
 	providerId: string,
@@ -434,8 +432,9 @@ export async function processSAMLResponse(
 		sp.entityMeta.getEntityID(),
 		parsedSamlConfig.audience,
 	];
-	const assertionConsumerServiceUrl =
-		sp.entityMeta.getAssertionConsumerService("post");
+	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
+		SAML_HTTP_POST_BINDING,
+	);
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
 		ctx.context.baseURL,
