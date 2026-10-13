@@ -5,7 +5,7 @@ import type {
 } from "better-auth/oauth2";
 import { createDpopReplayStore } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
-import type { JWTPayload } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	createMcpProtectedRequestHandler,
 	validateMcpResource,
@@ -27,6 +27,16 @@ export interface RequireMcpAuthOptions {
 	 * server's resolved base URL.
 	 */
 	jwksUrl?: string;
+	/**
+	 * Custom JWKS fetch source or async resolver. When omitted and co-located with
+	 * `auth`, resolves JWKS in-process without network requests.
+	 */
+	jwksFetch?: string | (() => Promise<JSONWebKeySet | undefined>);
+	/**
+	 * Cache key object for function-based JWKS lookups. Defaults to `auth`
+	 * when resolving in-process.
+	 */
+	jwksCacheKey?: object;
 	/**
 	 * Scopes to advertise in the `WWW-Authenticate` challenge (RFC 6750),
 	 * hinting which scopes the client should request. Defaults to the enforced
@@ -108,7 +118,43 @@ export const requireMcpAuth = <
 		}
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
-		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
+
+		const authWithEndpoints = auth as unknown as {
+			api?: {
+				getJwks?: () => Promise<unknown>;
+			};
+			handler?: (request: Request) => Promise<Response>;
+		};
+		let resolvedJwksFetch = opts?.jwksFetch;
+		let resolvedJwksCacheKey = opts?.jwksCacheKey;
+
+		if (!resolvedJwksFetch && !opts?.jwksUrl) {
+			if (typeof authWithEndpoints.api?.getJwks === "function") {
+				resolvedJwksFetch = async () => {
+					const res = (await authWithEndpoints.api!.getJwks!()) as
+						| { response?: JSONWebKeySet }
+						| JSONWebKeySet
+						| undefined;
+					return (
+						res && "response" in res && res.response ? res.response : res
+					) as JSONWebKeySet | undefined;
+				};
+				resolvedJwksCacheKey = resolvedJwksCacheKey ?? auth;
+			} else if (typeof authWithEndpoints.handler === "function") {
+				resolvedJwksFetch = async () => {
+					const res = await authWithEndpoints.handler!(
+						new Request(`${baseURL}/jwks`),
+					);
+					if (!res.ok) return undefined;
+					return (await res.json()) as JSONWebKeySet;
+				};
+				resolvedJwksCacheKey = resolvedJwksCacheKey ?? auth;
+			}
+		}
+
+		const jwksUrl =
+			opts?.jwksUrl ?? (resolvedJwksFetch ? undefined : `${baseURL}/jwks`);
+
 		return createMcpProtectedRequestHandler(
 			{
 				issuer,
@@ -117,6 +163,8 @@ export const requireMcpAuth = <
 				challengeScopes: opts?.challengeScopes,
 				isScopeSatisfied: opts?.isScopeSatisfied,
 				jwksUrl,
+				jwksFetch: resolvedJwksFetch,
+				jwksCacheKey: resolvedJwksCacheKey,
 				dpop: {
 					proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
 					signingAlgorithms: opts?.dpop?.signingAlgorithms,

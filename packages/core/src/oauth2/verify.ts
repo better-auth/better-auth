@@ -176,6 +176,14 @@ export interface VerifyAccessTokenOptions {
 	) => boolean;
 	/** Required to verify access token locally */
 	jwksUrl?: string;
+	/** Jwks url or promise of a Jwks */
+	jwksFetch?: string | (() => Promise<JSONWebKeySet | undefined>);
+	/**
+	 * Stable object to cache the result of a function `jwksFetch` under,
+	 * with the same TTL and kid-miss refetch rules as string sources.
+	 * Without it, a function source is fetched on every verification.
+	 */
+	jwksCacheKey?: object;
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
 }
@@ -360,10 +368,12 @@ async function verifyAccessTokenPayload(
 ) {
 	let payload: JWTPayload | undefined;
 	// Locally verify
-	if (opts.jwksUrl && !opts?.remoteVerify?.force) {
+	const jwksSource = opts.jwksFetch ?? opts.jwksUrl;
+	if (jwksSource && !opts?.remoteVerify?.force) {
 		try {
 			payload = await verifyJwsAccessToken(token, {
-				jwksFetch: opts.jwksUrl,
+				jwksFetch: jwksSource,
+				jwksCacheKey: opts.jwksCacheKey,
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {

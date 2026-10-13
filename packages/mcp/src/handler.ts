@@ -9,7 +9,7 @@ import {
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
-import type { JWTPayload, JWTVerifyOptions } from "jose";
+import type { JSONWebKeySet, JWTPayload, JWTVerifyOptions } from "jose";
 
 export interface McpProtectedRequestHandlerOptions {
 	/** Expected authorization-server issuer for the access token. */
@@ -23,6 +23,10 @@ export interface McpProtectedRequestHandlerOptions {
 	jwtVerifyOptions?: Omit<JWTVerifyOptions, "issuer" | "audience">;
 	/** URL of the authorization server's JSON Web Key Set. */
 	jwksUrl?: string;
+	/** Function returning the JWKS or string URL for token verification. */
+	jwksFetch?: string | (() => Promise<JSONWebKeySet | undefined>);
+	/** Cache key object for function-based JWKS lookups. */
+	jwksCacheKey?: object;
 	/** Remote introspection settings for opaque or remotely checked tokens. */
 	remoteVerify?: {
 		introspectUrl: string;
@@ -143,6 +147,8 @@ export const createMcpProtectedRequestHandler = (
 			audience: options.audience,
 		},
 		jwksUrl: options.jwksUrl,
+		jwksFetch: options.jwksFetch,
+		jwksCacheKey: options.jwksCacheKey,
 		remoteVerify: options.remoteVerify,
 		requiredScopes: options.requiredScopes,
 		isScopeSatisfied: options.isScopeSatisfied,
