@@ -1,6 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
+import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
-import type { Account, DBTransactionAdapter, User } from "better-auth";
+import type {
+	Account,
+	BetterAuthOptions,
+	DBTransactionAdapter,
+	User,
+} from "better-auth";
 import { getHttpTestInstance } from "better-auth/test";
 import { Kysely } from "kysely";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -534,6 +540,75 @@ describe("SSO OIDC user resolution HTTP", () => {
 		expect(committedSignIn.callback.headers.get("location")).toBe(
 			`${instance.baseURL}/employee`,
 		);
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 */
+	it("sends one verification email when the adapter runs the sign-in transaction again", async ({
+		onTestFinished,
+	}) => {
+		subject = "retried-sign-in";
+		email = "retried-sign-in@example.com";
+		emailVerified = false;
+		const sendVerificationEmail = vi.fn();
+		const sqlite = new DatabaseSync(":memory:");
+		const db = new Kysely({
+			dialect: new NodeSqliteDialect({ database: sqlite }),
+		});
+		onTestFinished(() => db.destroy());
+		const transientAbort = new Error("transient abort");
+		let abortsLeft = 1;
+		const createAdapter = kyselyAdapter(db, {
+			type: "sqlite",
+			transaction: true,
+		});
+		// Aborts the first attempt after its callback, the way MongoDB aborts a
+		// transaction with a transient error and the driver runs it again.
+		const retryingAdapter = (options: BetterAuthOptions) => {
+			const adapter = createAdapter(options);
+			return {
+				...adapter,
+				transaction: async <R>(
+					callback: (trx: DBTransactionAdapter) => Promise<R>,
+				): Promise<R> => {
+					try {
+						return await adapter.transaction(async (trx) => {
+							const result = await callback(trx);
+							if (abortsLeft-- > 0) throw transientAbort;
+							return result;
+						});
+					} catch (error) {
+						if (error !== transientAbort) throw error;
+						return adapter.transaction(callback);
+					}
+				},
+			};
+		};
+		const instance = await getHttpTestInstance(
+			{
+				database: retryingAdapter,
+				emailVerification: { sendOnSignUp: true, sendVerificationEmail },
+				plugins: [sso({ defaultSSO: [provider()] })],
+				trustedOrigins: [identityProvider.issuer.url!],
+			},
+			{ disableTestUser: true },
+		);
+		onTestFinished(() => instance.server.close());
+		await (
+			await getMigrations({
+				...instance.auth.options,
+				database: { db, type: "sqlite" },
+			})
+		).runMigrations();
+
+		const signIn = await completeSignIn(instance.baseURL);
+
+		expect(signIn.callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(abortsLeft).toBe(0);
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 

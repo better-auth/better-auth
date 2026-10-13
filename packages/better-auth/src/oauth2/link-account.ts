@@ -605,22 +605,12 @@ export async function handleOAuthUserInfo(
 		(c.context.options.emailVerification?.sendOnSignUp ??
 			requireEmailVerification)
 	) {
-		await dispatchVerificationEmail(
-			c,
-			user,
-			callbackURL,
-			opts.deferNonDatabaseWrites,
-		);
+		await dispatchVerificationEmail(c, user, callbackURL);
 	}
 
 	if (requireEmailVerification && !user.emailVerified) {
 		if (!isRegister && c.context.options.emailVerification?.sendOnSignIn) {
-			await dispatchVerificationEmail(
-				c,
-				user,
-				callbackURL,
-				opts.deferNonDatabaseWrites,
-			);
+			await dispatchVerificationEmail(c, user, callbackURL);
 		}
 		return {
 			error: OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED,
@@ -668,7 +658,6 @@ async function dispatchVerificationEmail(
 	c: GenericEndpointContext,
 	user: User,
 	callbackURL: string | undefined,
-	deferUntilAfterTransaction?: boolean | undefined,
 ) {
 	const sendVerificationEmail =
 		c.context.options.emailVerification?.sendVerificationEmail;
@@ -700,11 +689,9 @@ async function dispatchVerificationEmail(
 			c.context.logger.error("Failed to send OAuth verification email", e);
 		}
 	};
-	if (deferUntilAfterTransaction) {
-		await queueAfterTransactionHook(send);
-	} else {
-		await send();
-	}
+	// Inside a transaction the work can roll back or, on MongoDB, run again, so
+	// the email waits for the commit. Outside one, the hook runs at once.
+	await queueAfterTransactionHook(send);
 }
 
 /**
