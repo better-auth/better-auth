@@ -220,7 +220,7 @@ function parseConfigSnapshot<T>(
 	return config;
 }
 
-function ssoProviderIdentityBoundaryChanged(
+function ssoProviderAuthBoundaryChanged(
 	current: ProviderIdentitySnapshot,
 	updated: ProviderIdentitySnapshot,
 ): boolean {
@@ -362,7 +362,7 @@ export async function lockSSOProviderForAccountLink(
 		});
 	}
 
-	if (ssoProviderIdentityBoundaryChanged(provider, lockedProvider)) {
+	if (ssoProviderAuthBoundaryChanged(provider, lockedProvider)) {
 		throw new APIError("CONFLICT", {
 			code: "SSO_PROVIDER_CHANGED",
 			message: "SSO provider changed while account linking was in progress",
