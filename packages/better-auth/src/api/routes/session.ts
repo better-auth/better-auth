@@ -681,8 +681,10 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
  * the request as the client sent it, so it is the source of truth for which
  * cookies the response would actually expire.
  *
- * When there is no `Request` (server-side `auth.api.*` calls), no plugin can
- * have rewritten the headers, so the signed cookie is the original one.
+ * When there is no `Request` (server-side `auth.api.*` calls), plugins *can*
+ * still have rewritten `ctx.headers` in flight, so the source of truth there
+ * is `originalCookieHeader` (captured by `dispatchAuthEndpoint` before any
+ * before-hook ran), not `ctx.headers`.
  *
  * Returns `false` when the original request carries no session-token cookie
  * (bearer-only clients) so non-browser callers get a clean `Set-Cookie`-free
