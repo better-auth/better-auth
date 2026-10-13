@@ -804,14 +804,14 @@ function buildSeedUpdate(
  * used to keep the expected startup seed failure quiet.
  *
  * Covers SQLite ("no such table"), Postgres ("relation X does not exist"),
- * MySQL ("Table X does not exist" / contracted form), and the Drizzle
- * adapter's missing-model error.
+ * MySQL ("Table X does not exist" / contracted form), and the Drizzle and
+ * Prisma adapters' missing-model errors.
  */
 // TODO(#11725): remove with startup seeding, together with
 // logStartupSeedFailure and the seed state below.
 // cspell:ignore-next-line doesn
 const MISSING_TABLE_PATTERN =
-	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist|not found in the schema object/i;
+	/no such table|relation.*does not exist|table.*does(?: not|n'?t) exist|model.*(?:does not exist|was not found in the schema)/i;
 
 /**
  * Logs a failed startup seed. Missing tables are expected before migrations
@@ -820,8 +820,16 @@ const MISSING_TABLE_PATTERN =
  * @internal
  */
 export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
-	const message = error instanceof Error ? error.message : String(error);
-	if (MISSING_TABLE_PATTERN.test(message)) {
+	// Drizzle keeps the driver message on `cause`; its own message is the SQL.
+	let missingTable = false;
+	let current: unknown = error;
+	while (current && !missingTable) {
+		missingTable = MISSING_TABLE_PATTERN.test(
+			current instanceof Error ? current.message : String(current),
+		);
+		current = current instanceof Error ? current.cause : undefined;
+	}
+	if (missingTable) {
 		ctx.logger.debug(
 			"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
 		);
@@ -839,19 +847,29 @@ interface SeedState {
 }
 
 /**
- * Per-adapter state for the lazy-seed path. A module-level boolean would let
- * one Better Auth instance suppress seeding for every later instance in the same
- * process. Endpoint `AuthContext` objects are not guaranteed to be stable across
- * requests, so keying by the adapter keeps one seed state per backing store.
+ * Lazy-seed state per adapter and plugin options. A module-level boolean would
+ * let one Better Auth instance suppress seeding for every later instance in the
+ * same process. Endpoint `AuthContext` objects are not guaranteed to be stable
+ * across requests, so the adapter identifies the backing store, and the options
+ * object separates instances that share an adapter but configure different
+ * `resources`.
  */
-let seedStates = new WeakMap<object, SeedState>();
+let seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
 
-function getSeedState(ctx: AuthContext): SeedState {
-	const key = ctx.adapter as object;
-	const existing = seedStates.get(key);
+function getSeedState(
+	ctx: AuthContext,
+	opts: OAuthOptions<Scope[]>,
+): SeedState {
+	const adapterKey = ctx.adapter as object;
+	let byOptions = seedStates.get(adapterKey);
+	if (!byOptions) {
+		byOptions = new WeakMap<object, SeedState>();
+		seedStates.set(adapterKey, byOptions);
+	}
+	const existing = byOptions.get(opts);
 	if (existing) return existing;
 	const created: SeedState = { completed: false, promise: null };
-	seedStates.set(key, created);
+	byOptions.set(opts, created);
 	return created;
 }
 
@@ -862,7 +880,7 @@ function getSeedState(ctx: AuthContext): SeedState {
  * @internal
  */
 export function resetSeedStateForTests(): void {
-	seedStates = new WeakMap<object, SeedState>();
+	seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
 }
 
 /**
@@ -945,23 +963,25 @@ export async function seedResources(
 					model: modelName,
 					data: buildSeedRow(input, now),
 				});
+				continue;
 			} catch (err) {
 				// A concurrent boot inserted the row between our findOne and create.
 				// Re-reading is adapter-agnostic; error shapes differ per driver.
-				const raced = await ctx.adapter.findOne<OAuthResource>({
-					model: modelName,
-					where,
-				});
+				// Without a row to show, the insert error is the one to report.
+				const raced = await ctx.adapter
+					.findOne<OAuthResource>({ model: modelName, where })
+					.catch(() => null);
 				if (!raced) throw err;
 			}
-			continue;
 		}
 
+		// Reached for existing rows, and for a row a concurrent boot inserted,
+		// so `merge` and `overwrite` still apply this config.
 		if (mode === "insertOnly") continue;
 
 		await ctx.adapter.update({
 			model: modelName,
-			where: [{ field: "identifier", value: input.identifier }],
+			where,
 			update: buildSeedUpdate(input, mode, now),
 		});
 	}
@@ -985,7 +1005,7 @@ export async function seedResourcesOnce(
 ): Promise<void> {
 	// Explicit boolean / null comparisons keep Biome's `noMisusedPromises`
 	// rule happy — these are flag variables, not Promise checks.
-	const state = getSeedState(ctx);
+	const state = getSeedState(ctx, opts);
 	if (state.completed === true) return;
 	if (state.promise !== null) return state.promise;
 	state.promise = seedResources(ctx, opts)
