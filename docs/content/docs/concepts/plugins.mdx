@@ -417,8 +417,7 @@ const myPlugin = () => {
                 pathMatcher: (path) => {
                     return path === "/my-plugin/hello-world"
                 },
-                limit: 10,
-                window: 60,
+                policy: fixedWindow({ limit: 10, windowMs: 60_000 }),
             }
         ]
     } satisfies BetterAuthPlugin

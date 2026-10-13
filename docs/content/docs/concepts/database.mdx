@@ -147,7 +147,7 @@ export const auth = betterAuth({
 
 ## Secondary Storage
 
-Secondary storage in Better Auth allows you to use key-value stores for managing session data, verification records, rate limiting counters, and other short-lived auth data. This can be useful when you want to offload the storage of intensive records to a high performance storage or even RAM.
+Secondary storage in Better Auth allows you to use key-value stores for managing session data, verification records, and other short-lived auth data. This can be useful when you want to offload the storage of intensive records to a high performance store or RAM.
 
 ### Implementation
 
@@ -324,6 +324,8 @@ export const auth = betterAuth({
 
 When implementing secondary storage directly, prefix its keys to avoid
 collisions with other applications sharing the same Redis database.
+
+Rate limiting requires a dedicated atomic `RateLimitStorage`; generic secondary storage is not used for rate-limit state. See [Rate Limit](/docs/concepts/rate-limit#custom-atomic-storage).
 
 ## Core Schema
 
