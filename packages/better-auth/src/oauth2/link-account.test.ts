@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import * as coreEnv from "@better-auth/core/env";
 import type {
 	DiscordProfile,
 	GoogleProfile,
@@ -2708,5 +2709,33 @@ describe("oauth2 - account-linking logs use the configured logger", async () => 
 			"Unable to link account",
 			expect.anything(),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11321
+	 */
+	it("forwards the pre-account takeover diagnostic warning to the custom logger", async () => {
+		const email = "logger-warning-11321@example.com";
+		await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Logger Warning User",
+		});
+
+		const isDevSpy = vi.spyOn(coreEnv, "isDevelopment").mockReturnValue(true);
+		try {
+			await signInWithGoogle(email);
+
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("GHSA-g38m-r43w-p2q7"),
+			);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("requireLocalEmailVerified: false"),
+			);
+		} finally {
+			isDevSpy.mockRestore();
+		}
 	});
 });

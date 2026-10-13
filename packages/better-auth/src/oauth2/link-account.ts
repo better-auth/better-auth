@@ -295,9 +295,15 @@ export async function handleOAuthUserInfo(
 					accountLinking?.disableImplicitLinking === true)
 			) {
 				if (isDevelopment()) {
-					c.context.logger.warn(
-						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
-					);
+					if (requireLocalEmailVerified && !dbUser.user.emailVerified) {
+						c.context.logger.warn(
+							`User already exists with email ${userInfo.email} but the existing account is not verified (emailVerified: false). Implicit linking to ${account.providerId} was blocked to prevent pre-account takeover (GHSA-g38m-r43w-p2q7). To allow linking to unverified local users, set account.accountLinking.requireLocalEmailVerified: false, or verify the local user's email. See https://www.better-auth.com/docs/concepts/users-accounts#forced-linking`,
+						);
+					} else {
+						c.context.logger.warn(
+							`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
+						);
+					}
 				}
 				return {
 					error: "account not linked",
