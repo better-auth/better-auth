@@ -689,7 +689,14 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
  * response rather than expiry headers for cookies they never held.
  */
 async function revokedSessionOwnsRequestCookies(
-	ctx: GenericEndpointContext,
+	/**
+	 * The endpoint context. On a server-side `auth.api.*` dispatch the context
+	 * additionally carries `originalCookieHeader` (see dispatchAuthEndpoint):
+	 * the cookie header as the caller sent it, captured before any before-hook
+	 * could rewrite it. The intersection keeps the helper usable from plain
+	 * request contexts too, where `ctx.request` holds the untouched cookies.
+	 */
+	ctx: GenericEndpointContext & { originalCookieHeader?: string | undefined },
 	revokedToken: string,
 ): Promise<boolean> {
 	let cookieHeader: string | null = null;
@@ -697,10 +704,12 @@ async function revokedSessionOwnsRequestCookies(
 		// original request cookies; plugin before-hooks may have rewritten
 		// ctx.headers, but ctx.request stays as the client sent it
 		cookieHeader = ctx.request.headers.get("cookie");
-	} else if (!ctx.headers?.get("authorization")) {
-		// server-side auth.api call without an Authorization header: nothing
-		// could have swapped the session cookie, so ctx.headers is original
-		cookieHeader = ctx.headers?.get("cookie") ?? null;
+	} else if (typeof ctx.originalCookieHeader === "string") {
+		// server-side auth.api call: the dispatch captured the cookie header
+		// before any before-hook ran, so a bearer token that was swapped into
+		// ctx.headers in flight cannot make an unrelated session's cookie look
+		// like the revoked one (or hide the revoked one).
+		cookieHeader = ctx.originalCookieHeader;
 	}
 	if (!cookieHeader) {
 		return false;

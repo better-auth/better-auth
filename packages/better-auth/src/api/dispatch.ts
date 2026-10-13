@@ -39,6 +39,15 @@ export type DispatchContext = Partial<
 type InternalContext = DispatchContext & {
 	path?: string | undefined;
 	asResponse?: boolean | undefined;
+	/**
+	 * The `cookie` header exactly as the caller sent it, captured before any
+	 * before-hook runs. Plugins like `bearer` rewrite `headers`' session-token
+	 * cookie to the Authorization token in flight; a cookie-expiry decision
+	 * made after the hooks must compare against the cookies the client
+	 * actually holds, not the rewritten ones. Undefined when the dispatch
+	 * carried no cookie header at all.
+	 */
+	originalCookieHeader?: string | undefined;
 };
 
 const defuReplaceArrays = createDefu((obj, key, value) => {
@@ -347,6 +356,9 @@ export async function dispatchAuthEndpoint(
 		},
 		path: endpoint.path,
 		headers: input.headers ? new Headers(input.headers) : undefined,
+		originalCookieHeader: input.headers
+			? (new Headers(input.headers).get("cookie") ?? undefined)
+			: undefined,
 	};
 
 	return withSpan(

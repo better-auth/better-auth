@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CookieAttributes } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies";
 import { bearer } from "../../plugins/bearer";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -267,5 +268,58 @@ describe("session revocation clears cookies", () => {
 			fetchOptions: { headers },
 		});
 		expect(sessionAfter.data).toBeNull();
+	});
+
+	it("auth.api.revokeSession (server-side, no Request) expires the cookies when the cookie and the bearer token are the same session", async () => {
+		// greptile review: a server calls auth.api.revokeSession with
+		// headers but no request. When the Authorization header names the
+		// SAME session the cookie jar holds, the revocation must still
+		// expire the cookies: the bearer plugin swaps the session cookie
+		// inside ctx.headers in flight, so the decision must be made
+		// against the cookie header the caller actually sent, which the
+		// dispatch captures before any before-hook runs. The old guard
+		// skipped every call carrying an Authorization header, so the
+		// revoked session's cookies survived - and with cookie caching
+		// on, getSession kept resolving the revoked session.
+		const { client, auth, signInWithTestUser, cookieSetter } =
+			await getTestInstance({
+				session: { cookieCache },
+				plugins: [bearer()],
+			});
+		const { headers } = await signInWithTestUser();
+		const sessionBefore = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = sessionBefore.data!.session!.token;
+		expect(sessionToken).toBeDefined();
+
+		// the server call carries both the browser cookie and an
+		// Authorization header for the same session, but no Request
+		const serverHeaders = new Headers(headers);
+		serverHeaders.set("authorization", `Bearer ${sessionToken}`);
+
+		const result = (await auth.api.revokeSession({
+			body: { token: sessionToken },
+			headers: serverHeaders,
+			returnHeaders: true,
+		})) as unknown as { headers: Headers | null };
+
+		// parse each Set-Cookie entry on its own: a collapsed
+		// `get("set-cookie")` (or a "; "-joined array) loses the comma
+		// boundaries splitSetCookieHeader splits on, silently folding the
+		// second expiry cookie into the first one's attributes
+		const setCookieEntries = result.headers?.getSetCookie?.() ?? [];
+		const responseCookies = new Map<string, CookieAttributes>();
+		for (const entry of setCookieEntries) {
+			for (const [name, attributes] of parseSetCookieHeader(entry)) {
+				responseCookies.set(name, attributes);
+			}
+		}
+		expect(responseCookies.get("better-auth.session_token")?.["max-age"]).toBe(
+			0,
+		);
+		expect(responseCookies.get("better-auth.session_data")?.["max-age"]).toBe(
+			0,
+		);
 	});
 });
