@@ -168,16 +168,16 @@ export function appendURLSegments(
  * @throws TypeError if parsing fails or a relative input changes authority.
  */
 export function appendQueryParams(
-	input: string,
+	url: string,
 	params: URLSearchParams,
 ): string {
-	if (!input) {
+	if (!url) {
 		throw new TypeError("Expected an absolute or root-relative URL");
 	}
-	const { base, search, hash } = parseURLReference(input);
+	const { base, search, hash } = parseURLReference(url);
 	const query = params.toString();
 	if (!query) {
-		return input;
+		return url;
 	}
 	const prefix = search || "?";
 	const separator = prefix === "?" || prefix.endsWith("&") ? "" : "&";
