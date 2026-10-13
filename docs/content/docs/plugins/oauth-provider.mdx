@@ -1252,6 +1252,23 @@ oauthProvider({
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
 
+Configured resources are written to the `oauthResource` table when the auth instance starts. `resourceSeedMode` decides what happens to a row that already exists. If the write fails because the database is unreachable or the table has not been migrated yet, the error is logged and the write is retried on the first request that needs a resource. Requests that do not use resources, such as sign-in and session checks, are not affected.
+
+<Callout type="warn">
+  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that need the resource fail until you declare `allowedScopes` with every scope clients may request for it. This includes the resource `mcp()` adds; declare it in `resources` with the same identifier:
+
+  ```ts title="auth.ts"
+  mcp({
+    loginPage: "/sign-in",
+    consentPage: "/consent",
+    resource: "https://api.example.com/mcp",
+    resources: [
+      { identifier: "https://api.example.com/mcp", allowedScopes: ["openid", "profile", "offline_access"] },
+    ],
+  })
+  ```
+</Callout>
+
 Dynamic registration can attach protected resources to the new client in the same transaction as the client row. `clientRegistrationDefaultResources` adds server-owned defaults to every registration. `clientRegistrationAllowedResources` lists additional resources a client may request; the effective allowlist is the union of the default and allowed lists. Defaults appear first, duplicates are removed, and every configured value must also be present in `resources`.
 
 ```ts title="auth.ts"

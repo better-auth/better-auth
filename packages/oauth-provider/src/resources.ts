@@ -411,6 +411,7 @@ export async function resolveResourcePolicy(
 	//     "any requested scope is acceptable here").
 	let effectiveScopes: string[] = [...params.requestedScopes];
 	for (const row of resolved) {
+		// FIXME(#11725): treat a stored [] as unset once [] is rejected on input.
 		if (row.allowedScopes === null || row.allowedScopes === undefined) {
 			continue;
 		}
@@ -669,10 +670,10 @@ export function invalidateResourceCache(identifier?: string): void {
  * Looks up an {@link OAuthResource} by `identifier`, consulting the in-process
  * cache when the identifier is in {@link OAuthOptions.cachedResources}.
  *
- * Triggers the lazy seed via {@link seedResourcesOnce} on first call — this
- * is the safety net for deployments where migrations run after plugin init
- * (so seeding at init couldn't see the table yet). The seed is idempotent
- * and coalesced, so the cost is paid only once per process.
+ * Triggers the lazy seed via {@link seedResourcesOnce} on first call — the
+ * retry path when the startup seed failed (database unreachable, or
+ * migrations run after plugin init). The seed is idempotent and coalesced,
+ * so the cost is paid only once per process.
  *
  * Returns a defensive copy so callers can't mutate cached state.
  *
@@ -683,7 +684,8 @@ export async function getResource(
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
 ): Promise<OAuthResource | null> {
-	// Lazy-seed safety net for the migration-ordering case.
+	// Retries a startup seed that failed; no-op once it has succeeded.
+	// TODO(#11725): merge the configured entry here instead of seeding rows.
 	await seedResourcesOnce(ctx.context, opts);
 
 	if (opts.cachedResources?.has(identifier)) {
@@ -741,6 +743,8 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
+		// FIXME(#11725): Prisma list columns reject null and read a stored
+		// NULL back as [], so "no restriction" cannot round-trip there.
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
@@ -796,15 +800,38 @@ function buildSeedUpdate(
 
 /**
  * Pattern matched against adapter errors to detect the "table not yet
- * created" case — i.e. migrations haven't been run. When matched, the
- * caller treats the seed as deferred (will retry on first resource access).
+ * created" case — i.e. migrations or `auth generate` haven't run. Only
+ * used to keep the expected startup seed failure quiet.
  *
  * Covers SQLite ("no such table"), Postgres ("relation X does not exist"),
- * and MySQL ("Table X does not exist" / contracted form).
+ * MySQL ("Table X does not exist" / contracted form), and the Drizzle
+ * adapter's missing-model error.
  */
+// TODO(#11725): remove with startup seeding, together with
+// logStartupSeedFailure and the seed state below.
 // cspell:ignore-next-line doesn
 const MISSING_TABLE_PATTERN =
-	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist/i;
+	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist|not found in the schema object/i;
+
+/**
+ * Logs a failed startup seed. Missing tables are expected before migrations
+ * and stay quiet; anything else is an error worth seeing.
+ *
+ * @internal
+ */
+export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
+	const message = error instanceof Error ? error.message : String(error);
+	if (MISSING_TABLE_PATTERN.test(message)) {
+		ctx.logger.debug(
+			"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
+		);
+		return;
+	}
+	ctx.logger.error(
+		"oauth-provider: could not seed `resources` at startup; retrying on first resource access.",
+		error,
+	);
+}
 
 interface SeedState {
 	completed: boolean;
@@ -855,13 +882,11 @@ export function resetSeedStateForTests(): void {
  *
  * Race-safety: the `identifier` column carries a UNIQUE constraint, so two
  * processes booting simultaneously can each attempt the insert — one wins,
- * the other catches the constraint error and treats it as a no-op.
+ * the other re-reads the row and treats the failed insert as a no-op.
  *
- * Migration ordering: at plugin `init` time, tables may not exist yet
- * (Better Auth's test harness, and many deployment setups, run migrations
- * after auth construction). Seeding tolerates "no such table" errors and
- * defers — the lazy {@link seedResourcesOnce} path picks up the work on
- * the first resource access.
+ * Throws on storage errors, including a missing table. Callers go through
+ * {@link seedResourcesOnce}, which resets so the next resource access
+ * retries (e.g. after migrations run).
  *
  * Idempotent: safe to call multiple times.
  *
@@ -907,22 +932,11 @@ export async function seedResources(
 			const { signingAlgorithm: _, ...rest } = input;
 			input = rest as typeof input;
 		}
-		let existing: OAuthResource | null;
-		try {
-			existing = await ctx.adapter.findOne<OAuthResource>({
-				model: modelName,
-				where: [{ field: "identifier", value: input.identifier }],
-			});
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			if (MISSING_TABLE_PATTERN.test(message)) {
-				logger.debug(
-					"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
-				);
-				return;
-			}
-			throw err;
-		}
+		const where = [{ field: "identifier", value: input.identifier }];
+		const existing = await ctx.adapter.findOne<OAuthResource>({
+			model: modelName,
+			where,
+		});
 		const now = new Date();
 
 		if (!existing) {
@@ -932,23 +946,13 @@ export async function seedResources(
 					data: buildSeedRow(input, now),
 				});
 			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				// Race with a concurrent boot — another process inserted between
-				// our findOne and create. The UNIQUE constraint protects us; treat
-				// the conflict as a no-op so init doesn't fail.
-				if (/unique|duplicate|UNIQUE/i.test(message)) {
-					logger.debug(
-						`oauth-provider: resource ${input.identifier} already inserted by a concurrent process — skipping.`,
-					);
-					continue;
-				}
-				if (MISSING_TABLE_PATTERN.test(message)) {
-					logger.debug(
-						"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
-					);
-					return;
-				}
-				throw err;
+				// A concurrent boot inserted the row between our findOne and create.
+				// Re-reading is adapter-agnostic; error shapes differ per driver.
+				const raced = await ctx.adapter.findOne<OAuthResource>({
+					model: modelName,
+					where,
+				});
+				if (!raced) throw err;
 			}
 			continue;
 		}
