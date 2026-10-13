@@ -497,9 +497,9 @@ export const auth = betterAuth({
 
 #### Disable Implicit Linking
 
-By default, when a user signs in with an OAuth provider whose email matches an existing user (and either the provider verified the email or it is in `trustedProviders`), Better Auth automatically links the OAuth account to that user. Set `disableImplicitLinking: true` to turn this off. With this option enabled:
+By default, when a user signs in with an OAuth provider whose email matches an existing user (provided the existing local account has `emailVerified: true` and either the provider verified the email or it is in `trustedProviders`), Better Auth automatically links the OAuth account to that user. Set `disableImplicitLinking: true` to turn this off. With this option enabled:
 
-* Same-email OAuth sign-ins for an existing user are rejected with the [`account_not_linked`](/docs/reference/errors/account_not_linked) error instead of being silently linked, even when the provider is in `trustedProviders` or the email is verified.
+* Same-email OAuth sign-ins for an existing user are rejected with the [`account_not_linked`](/docs/reference/errors/account_not_linked) error instead of being silently linked, even when the local account is verified and the provider is in `trustedProviders` or the email is verified.
 * New users (no existing user with that email) can still sign up via OAuth.
 * An already-authenticated user can still link providers explicitly via [`linkSocial()`](#manually-linking-accounts).
 
