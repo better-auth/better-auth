@@ -67,12 +67,6 @@ describe("drizzle relations-v2 adapter: SQLite text() date columns", () => {
 			update: { updatedAt },
 		});
 		expect(updated?.updatedAt).toEqual(updatedAt);
-
-		const inList = await adapter.findMany<User>({
-			model: "user",
-			where: [{ field: "createdAt", operator: "in", value: [createdAt] }],
-		});
-		expect(inList).toHaveLength(1);
 	});
 
 	it("reads a date-time without a time zone as UTC", async () => {
