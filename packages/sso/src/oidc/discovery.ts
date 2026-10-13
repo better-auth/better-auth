@@ -580,14 +580,7 @@ export function validateDiscoveryDocument(
 		);
 	}
 
-	const discoveredIssuer = doc.issuer.endsWith("/")
-		? doc.issuer.slice(0, -1)
-		: doc.issuer;
-	const expectedIssuer = configuredIssuer.endsWith("/")
-		? configuredIssuer.slice(0, -1)
-		: configuredIssuer;
-
-	if (discoveredIssuer !== expectedIssuer) {
+	if (doc.issuer !== configuredIssuer) {
 		throw new DiscoveryError(
 			"issuer_mismatch",
 			`Discovered issuer "${doc.issuer}" does not match configured issuer "${configuredIssuer}"`,
