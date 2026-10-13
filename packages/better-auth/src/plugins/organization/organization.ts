@@ -286,8 +286,8 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			);
 
 			return ctx.json({
-				error: null,
-				success: result,
+				error: result.error ?? null,
+				success: result.success,
 			});
 		},
 	);
