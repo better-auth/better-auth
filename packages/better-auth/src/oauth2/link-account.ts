@@ -624,7 +624,10 @@ export async function handleOAuthUserInfo(
 		undefined,
 		undefined,
 		undefined,
-		{ deferSecondaryStorageWrites: opts.deferNonDatabaseWrites === true },
+		// Inside a transaction the work can roll back or, on MongoDB, run again,
+		// so the cached copy waits for the commit. Outside one it is written at
+		// once.
+		{ deferSecondaryStorageWrites: true },
 	);
 	if (!session) {
 		return {

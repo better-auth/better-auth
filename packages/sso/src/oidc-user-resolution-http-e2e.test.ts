@@ -544,28 +544,25 @@ describe("SSO OIDC user resolution HTTP", () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 * Signs in through an adapter that aborts the first transaction attempt
+	 * after its callback, the way MongoDB aborts a transaction with a
+	 * transient error and the driver runs it again.
 	 */
-	it("sends one verification email when the adapter runs the sign-in transaction again", async ({
-		onTestFinished,
-	}) => {
-		subject = "retried-sign-in";
-		email = "retried-sign-in@example.com";
-		emailVerified = false;
-		const sendVerificationEmail = vi.fn();
+	async function signInWithRetriedTransaction(
+		authOptions: Partial<BetterAuthOptions>,
+		registerCleanup: (cleanup: () => Promise<void>) => void,
+	) {
 		const sqlite = new DatabaseSync(":memory:");
 		const db = new Kysely({
 			dialect: new NodeSqliteDialect({ database: sqlite }),
 		});
-		onTestFinished(() => db.destroy());
+		registerCleanup(() => db.destroy());
 		const transientAbort = new Error("transient abort");
 		let abortsLeft = 1;
 		const createAdapter = kyselyAdapter(db, {
 			type: "sqlite",
 			transaction: true,
 		});
-		// Aborts the first attempt after its callback, the way MongoDB aborts a
-		// transaction with a transient error and the driver runs it again.
 		const retryingAdapter = (options: BetterAuthOptions) => {
 			const adapter = createAdapter(options);
 			return {
@@ -588,14 +585,14 @@ describe("SSO OIDC user resolution HTTP", () => {
 		};
 		const instance = await getHttpTestInstance(
 			{
+				...authOptions,
 				database: retryingAdapter,
-				emailVerification: { sendOnSignUp: true, sendVerificationEmail },
 				plugins: [sso({ defaultSSO: [provider()] })],
 				trustedOrigins: [identityProvider.issuer.url!],
 			},
 			{ disableTestUser: true },
 		);
-		onTestFinished(() => instance.server.close());
+		registerCleanup(() => instance.server.close());
 		await (
 			await getMigrations({
 				...instance.auth.options,
@@ -604,12 +601,64 @@ describe("SSO OIDC user resolution HTTP", () => {
 		).runMigrations();
 
 		const signIn = await completeSignIn(instance.baseURL);
-
 		expect(signIn.callback.headers.get("location")).toBe(
 			`${instance.baseURL}/employee`,
 		);
 		expect(abortsLeft).toBe(0);
+		return instance;
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 */
+	it("sends one verification email when the adapter runs the sign-in transaction again", async ({
+		onTestFinished,
+	}) => {
+		subject = "retried-sign-in";
+		email = "retried-sign-in@example.com";
+		emailVerified = false;
+		const sendVerificationEmail = vi.fn();
+		await signInWithRetriedTransaction(
+			{ emailVerification: { sendOnSignUp: true, sendVerificationEmail } },
+			onTestFinished,
+		);
+
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 */
+	it("caches one session when the adapter runs the sign-in transaction again", async ({
+		onTestFinished,
+	}) => {
+		subject = "retried-cached-sign-in";
+		email = "retried-cached-sign-in@example.com";
+		const store = new Map<string, string>();
+		const instance = await signInWithRetriedTransaction(
+			{
+				secondaryStorage: {
+					get: (key: string) => store.get(key) ?? null,
+					set: (key: string, value: string) => {
+						store.set(key, value);
+					},
+					delete: (key: string) => {
+						store.delete(key);
+					},
+				},
+				session: { storeSessionInDatabase: true },
+			},
+			onTestFinished,
+		);
+
+		const sessions = await instance.db.findMany<{ token: string }>({
+			model: "session",
+		});
+		expect(sessions).toHaveLength(1);
+		const cachedTokens = [...store.keys()].filter(
+			(key) => !key.startsWith("active-sessions-"),
+		);
+		expect(cachedTokens).toEqual([sessions[0]!.token]);
 	});
 
 	it("keeps case-distinct OIDC subjects as different account keys", async ({
