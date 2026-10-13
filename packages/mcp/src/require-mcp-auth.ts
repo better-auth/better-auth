@@ -183,13 +183,17 @@ export const requireMcpAuth = <
 		if (!resolvedJwksFetch && !opts?.jwksUrl) {
 			if (typeof authWithEndpoints.api?.getJwks === "function") {
 				resolvedJwksFetch = async () => {
-					const res = (await authWithEndpoints.api!.getJwks!()) as
-						| { response?: JSONWebKeySet }
-						| JSONWebKeySet
-						| undefined;
-					return (
-						res && "response" in res && res.response ? res.response : res
-					) as JSONWebKeySet | undefined;
+					try {
+						const res = (await authWithEndpoints.api!.getJwks!()) as
+							| { response?: JSONWebKeySet }
+							| JSONWebKeySet
+							| undefined;
+						return (
+							res && "response" in res && res.response ? res.response : res
+						) as JSONWebKeySet | undefined;
+					} catch {
+						return undefined;
+					}
 				};
 				resolvedJwksCacheKey = resolvedJwksCacheKey ?? auth;
 			} else if (typeof authWithEndpoints.handler === "function") {

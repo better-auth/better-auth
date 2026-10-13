@@ -408,10 +408,7 @@ async function verifyAccessTokenPayload(
 					error.status === "UNAUTHORIZED"
 				) {
 					throw error;
-				} else if (
-					error.message === "No jwks found" ||
-					error.message.startsWith("Jwks failed:")
-				) {
+				} else if (error.message === "No jwks found") {
 					throw new APIError("UNAUTHORIZED", {
 						message: "invalid access token",
 					});

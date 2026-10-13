@@ -108,9 +108,7 @@ function toChallengeResponse(
 	opts?: Parameters<typeof createResourceServerChallenge>[2],
 ): Response {
 	const authError =
-		error instanceof Error &&
-		(error.message === "No jwks found" ||
-			error.message.startsWith("Jwks failed:"))
+		error instanceof Error && error.message === "No jwks found"
 			? new APIError("UNAUTHORIZED", { message: "invalid access token" })
 			: error;
 	const challenge = createResourceServerChallenge(authError, resource, opts);

@@ -808,6 +808,29 @@ describe("verifyBearerToken", () => {
 		}
 	});
 
+	it("should propagate remote JWKS fetch errors as server errors without masking as 401", async () => {
+		vi.resetModules();
+		const { verifyBearerToken: verify } = await import("./verify");
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		mockedFetch.mockResolvedValueOnce(
+			new Response("Gateway Timeout", {
+				status: 504,
+				statusText: "Gateway Timeout",
+			}),
+		);
+
+		await expect(
+			verify(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toThrow("Jwks failed: Gateway Timeout");
+
+		mockedFetch.mockReset();
+		vi.resetModules();
+	});
+
 	describe("remote introspection audience validation", () => {
 		const introspectUrl = `${issuer}/oauth2/introspect`;
 		const remoteVerify = {

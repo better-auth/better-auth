@@ -573,6 +573,65 @@ describe("requireMcpAuth", () => {
 			);
 		});
 
+		it("returns undefined from in-process jwksFetch and challenges cleanly when auth.api.getJwks rejects", async () => {
+			const { generateKeyPair, exportJWK, SignJWT } = await import("jose");
+			const actualOAuth2 =
+				await vi.importActual<typeof import("better-auth/oauth2")>(
+					"better-auth/oauth2",
+				);
+			verifyAccessTokenRequest.mockImplementation(
+				actualOAuth2.verifyAccessTokenRequest,
+			);
+
+			const keyPair = await generateKeyPair("RS256", { extractable: true });
+			const publicJwk = await exportJWK(keyPair.publicKey);
+			publicJwk.kid = "test-key-api-err";
+
+			const baseURL = "https://app.example.com/api/auth";
+			const resource = "https://app.example.com/api/auth";
+
+			const token = await new SignJWT({ sub: "user-1" })
+				.setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
+				.setIssuer(baseURL)
+				.setAudience(resource)
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(keyPair.privateKey);
+
+			const auth: AuthStub & {
+				api: {
+					getJwks: () => Promise<unknown>;
+				};
+			} = {
+				options: { baseURL: "https://app.example.com" },
+				$context: Promise.resolve({
+					baseURL,
+					internalAdapter: internalAdapterStub,
+				}),
+				api: {
+					getJwks: vi.fn().mockRejectedValue(
+						new APIError("NOT_FOUND", {
+							message: "remote jwks url configured",
+						}),
+					),
+				},
+			};
+
+			const response = await requireMcpAuth(auth, async () =>
+				Response.json({ ok: true }),
+			)(
+				new Request("https://app.example.com/mcp", {
+					headers: { Authorization: `Bearer ${token}` },
+				}),
+			);
+
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(
+				`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth"`,
+			);
+			expect(auth.api.getJwks).toHaveBeenCalledOnce();
+		});
+
 		it("resolves custom jwksPath from JWT plugin options and queries it via auth.handler", async () => {
 			const { generateKeyPair, exportJWK, SignJWT } = await import("jose");
 			const actualOAuth2 =
