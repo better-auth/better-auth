@@ -17,6 +17,9 @@
       "default": "./dist/index.mjs"
     }
   },
+  "dependencies": {
+    "zod": "catalog:"
+  },
   "devDependencies": {
     "tsdown": "catalog:"
   }
