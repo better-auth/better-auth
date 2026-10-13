@@ -420,6 +420,9 @@ describe("have-i-been-pwned with admin create-user", async () => {
 	const ctx = await auth.$context;
 
 	it("should not create a user when admin create-user uses a compromised password", async () => {
+		const compromisedPassword = "123456789";
+		await mockBreached(compromisedPassword);
+
 		const adminEmail = `admin-${Date.now()}@example.com`;
 		const adminPassword = `Str0ng!P@ssw0rd-${Date.now()}`;
 		await client.signUp.email({
@@ -432,9 +435,6 @@ describe("have-i-been-pwned with admin create-user", async () => {
 		const { headers } = await signInWithUser(adminEmail, adminPassword);
 
 		const uniqueEmail = `test-${Date.now()}@example.com`;
-		const compromisedPassword = "123456789";
-		await mockBreached(compromisedPassword);
-
 		const result = await client.admin.createUser(
 			{
 				email: uniqueEmail,
