@@ -1,7 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { AccountKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { mergeScopes } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
@@ -16,18 +15,17 @@ import {
 	OAUTH_CALLBACK_ERROR_CODES,
 } from "../../oauth2/errors";
 import {
-	applyUpdateUserInfoOnLink,
 	handleOAuthUserInfo,
+	linkOAuthAccount,
 } from "../../oauth2/link-account";
 import {
 	generateIdTokenNonce,
 	generateState,
 	parseState,
 } from "../../oauth2/state";
-import { getOAuthCallbackPath, setTokenUtil } from "../../oauth2/utils";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
-import { assertValidUserInfo } from "../../utils/validate-user-info";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -261,112 +259,30 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("No callback URL found");
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CALLBACK_URL);
 		}
+		const accountData = {
+			...accountKey,
+			...tokens,
+			scope: tokens.scopes?.join(","),
+		};
 
 		if (link) {
-			// Link-account creates no user row, so the gate runs here rather than
-			// inside createUser.
-			try {
-				await assertValidUserInfo(c, {
-					user: {
-						...userInfo,
-						id: link.userId,
-						email: userInfo.email ?? undefined,
-					},
-					source: {
-						action: "link-account",
-						method: "oauth",
-						oauth: {
-							providerId: provider.id,
-							profile: providerProfile,
-						},
-					},
-				});
-			} catch (e) {
-				if (isAPIError(e) && e.body?.code) {
-					throw redirectOnError(e.body.code, e.body.message);
-				}
-				throw e;
+			const linkResult = await linkOAuthAccount(c, {
+				link,
+				userInfo,
+				account: accountData,
+				profile: providerProfile,
+				scopes: tokens.scopes,
+			});
+			if (!linkResult.linked) {
+				return redirectOnError(linkResult.error.code, linkResult.error.message);
 			}
-			const isTrustedProvider = c.context.trustedProviders.includes(
-				provider.id,
-			);
-			if (
-				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
-			) {
-				c.context.logger.error("Unable to link account - untrusted provider");
-				return redirectOnError(
-					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
-				);
-			}
-
-			if (
-				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
-				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
-			) {
-				return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_DOES_NOT_MATCH);
-			}
-
-			const existingAccount =
-				await c.context.internalAdapter.findAccountByKey(accountKey);
-
-			if (existingAccount) {
-				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
-					);
-				}
-				const mergedScope = mergeScopes(existingAccount.scope, tokens.scopes);
-				const updateData = Object.fromEntries(
-					Object.entries({
-						providerId: provider.id,
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken,
-						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-						scope: mergedScope || undefined,
-					}).filter(([_, value]) => value !== undefined),
-				);
-				await c.context.internalAdapter.updateAccount(
-					existingAccount.id,
-					updateData,
-				);
-			} else {
-				const newAccount = await c.context.internalAdapter.createAccount({
-					userId: link.userId,
-					...accountKey,
-					...tokens,
-					accessToken: await setTokenUtil(tokens.accessToken, c.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-					scope: tokens.scopes?.join(","),
-				});
-				if (!newAccount) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
-					);
-				}
-			}
-			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
-			let toRedirectTo: string;
-			try {
-				const url = callbackURL;
-				toRedirectTo = url.toString();
-			} catch {
-				toRedirectTo = callbackURL;
-			}
-			throw c.redirect(toRedirectTo);
+			throw c.redirect(callbackURL);
 		}
 
 		if (!userInfo.email) {
 			c.context.logger.error(missingEmailLogMessage(provider.id));
 			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
-		const accountData = {
-			...accountKey,
-			...tokens,
-			scope: tokens.scopes?.join(","),
-		};
 		let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 		try {
 			result = await handleOAuthUserInfo(c, {

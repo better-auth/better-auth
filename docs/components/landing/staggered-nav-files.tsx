@@ -600,7 +600,7 @@ export function StaggeredNavFiles() {
 						className="relative flex-1"
 						onMouseEnter={openProducts}
 						onMouseLeave={closeProducts}
-						onFocus={openProducts}
+						onFocus={() => clearTimeout(productsTimeout.current)}
 						onBlur={closeOnBlurOutside(() => setProductsOpen(false))}
 						onKeyDown={dismissOnEscape(
 							() => setProductsOpen(false),
@@ -611,6 +611,7 @@ export function StaggeredNavFiles() {
 							ref={productsTriggerRef}
 							type="button"
 							aria-expanded={productsOpen}
+							aria-controls={productsOpen ? "nav-products-menu" : undefined}
 							onClick={() => setProductsOpen((open) => !open)}
 							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
 								isProductsPage
@@ -650,6 +651,7 @@ export function StaggeredNavFiles() {
 						<AnimatePresence>
 							{productsOpen && (
 								<motion.div
+									id="nav-products-menu"
 									initial={{ opacity: 0, y: -4 }}
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
@@ -735,7 +737,7 @@ export function StaggeredNavFiles() {
 						className="relative flex-1"
 						onMouseEnter={openResources}
 						onMouseLeave={closeResources}
-						onFocus={openResources}
+						onFocus={() => clearTimeout(resourcesTimeout.current)}
 						onBlur={closeOnBlurOutside(() => setResourcesOpen(false))}
 						onKeyDown={dismissOnEscape(
 							() => setResourcesOpen(false),
@@ -746,6 +748,7 @@ export function StaggeredNavFiles() {
 							ref={resourcesTriggerRef}
 							type="button"
 							aria-expanded={resourcesOpen}
+							aria-controls={resourcesOpen ? "nav-resources-menu" : undefined}
 							onClick={() => setResourcesOpen((open) => !open)}
 							className={`group/tab flex w-full items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer transition-colors duration-150 ${
 								isResourcePage
@@ -785,6 +788,7 @@ export function StaggeredNavFiles() {
 						<AnimatePresence>
 							{resourcesOpen && (
 								<motion.div
+									id="nav-resources-menu"
 									initial={{ opacity: 0, y: -4 }}
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}

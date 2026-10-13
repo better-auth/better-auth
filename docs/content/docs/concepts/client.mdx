@@ -501,6 +501,8 @@ export function SessionCard({ initialSession }: Props) {
   * Passing `null` is safe. It will be ignored and `useSession` will fetch as usual.
 </Callout>
 
+In React, auth query hooks such as `useSession` and `useListOrganizations` return their initial pending state during server rendering and hydration, then update to the current client state. This keeps streamed components consistent with their server HTML even if another component has already fetched or hydrated the query. Keep using the server-fetched session as a fallback, as shown above, to display it during hydration. Custom plugin stores that do not use `useAuthQuery` retain their existing snapshot behavior.
+
 ### Plugins
 
 You can extend the client with plugins to add more functionality. Plugins can add new functions to the client or modify existing ones.

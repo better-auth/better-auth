@@ -2,7 +2,7 @@ name: Backport
 
 on:
   pull_request_target:
-    types: [closed, labeled]
+    types: [closed]
   issue_comment:
     types: [created]
 

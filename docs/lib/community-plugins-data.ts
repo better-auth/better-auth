@@ -397,4 +397,48 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/qamarq.png",
 		},
 	},
+	{
+		name: "@eusend_dev/better-auth",
+		url: "https://github.com/eusend-dev/eusend-better-auth",
+		description:
+			"Auth emails (verification, password reset, OTP, magic link, organization invitations) through eusend, an EU-hosted email API, with brandable templates, non-blocking sends, and optional contact sync for verified users.",
+		author: {
+			name: "eusend",
+			github: "eusend-dev",
+			avatar: "https://github.com/eusend-dev.png",
+		},
+	},
+	{
+		name: "@stellartools/betterauth-adapter",
+		url: "https://github.com/payrouteshq/stellartools",
+		description:
+			"Integrate Stellar blockchain payments to your Better Auth setup.",
+		author: {
+			name: "Emmanuel Odii",
+			github: "devodii",
+			avatar: "https://github.com/devodii.png",
+		},
+	},
+	{
+		name: "@octopi-ai/better-enrollment",
+		url: "https://github.com/OctopiAI/better-enrollment",
+		description:
+			"Invite-only sign-ups, role-merging invite links, and organization invites. Supports private (email-bound) and public (shareable, capped, revocable) invites, organization seat limits, and an append-only audit trail.",
+		author: {
+			name: "Talat Mahmud",
+			github: "FalconiZzare",
+			avatar: "https://github.com/FalconiZzare.png",
+		},
+	},
+	{
+		name: "good-webhooks",
+		url: "https://github.com/pplytas/good-webhooks",
+		description:
+			"Authenticated webhook endpoint management with typed client APIs, scoped permissions, signing-secret rotation, and optional self-hosted delivery. Currently in beta with a frozen public API.",
+		author: {
+			name: "Panagiotis Plytas",
+			github: "pplytas",
+			avatar: "https://github.com/pplytas.png",
+		},
+	},
 ];

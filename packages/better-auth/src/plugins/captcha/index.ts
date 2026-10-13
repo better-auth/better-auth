@@ -58,6 +58,14 @@ export const captcha = (options: CaptchaOptions) =>
 					return undefined;
 				}
 
+				if (options.provider === Providers.VERCEL_BOTID) {
+					return await verifyHandlers.vercelBotId({
+						request,
+						checkBotId: options.checkBotId,
+						validateRequest: options.validateRequest,
+					});
+				}
+
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
 				}

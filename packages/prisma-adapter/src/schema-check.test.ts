@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	getExpectedSchema,
+	runtimeSchemaCheckFor,
 	SchemaMismatchError,
 	schemaCheckFor,
 } from "@better-auth/core/db/internal";
@@ -51,6 +52,45 @@ function withAccountFields(...extra: Field[]): PrismaRuntimeDataModel {
 describe("findPrismaSchemaProblems", () => {
 	it("accepts a data model generated for this configuration", () => {
 		expect(findPrismaSchemaProblems(dataModelFor({}), {})).toEqual([]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11310
+	 */
+	describe("Prisma client model names", () => {
+		it("accepts capitalized custom model names", () => {
+			const options: BetterAuthOptions = {
+				user: { modelName: "Account" },
+				session: { modelName: "Session" },
+				account: { modelName: "AuthIdentity" },
+				verification: { modelName: "Verification" },
+			};
+
+			expect(findPrismaSchemaProblems(dataModelFor(options), options)).toEqual(
+				[],
+			);
+		});
+
+		it("preserves lower-camel plugin model names", () => {
+			const options: BetterAuthOptions = {
+				plugins: [
+					{
+						id: "oauth",
+						schema: {
+							oauthClient: {
+								fields: {
+									clientId: { type: "string" },
+								},
+							},
+						},
+					},
+				],
+			};
+
+			expect(findPrismaSchemaProblems(dataModelFor(options), options)).toEqual(
+				[],
+			);
+		});
 	});
 
 	it("reports a model the client does not expose", () => {
@@ -125,24 +165,25 @@ describe("prismaAdapter", () => {
 
 	it("registers a check the first request awaits", async () => {
 		await expect(
-			schemaCheckFor(adapterFor({ _runtimeDataModel: dataModelFor({}) }))?.(),
+			runtimeSchemaCheckFor(
+				adapterFor({ _runtimeDataModel: dataModelFor({}) }),
+			)?.(),
 		).resolves.toBeUndefined();
 
 		const { Account: _account, ...models } = dataModelFor({}).models;
 		await expect(
-			schemaCheckFor(adapterFor({ _runtimeDataModel: { models } }))?.(),
+			runtimeSchemaCheckFor(adapterFor({ _runtimeDataModel: { models } }))?.(),
 		).rejects.toThrow(SchemaMismatchError);
 	});
 
-	it("registers nothing without a data model or when disabled", () => {
+	it("requires a data model and keeps explicit checks when runtime validation is disabled", async () => {
+		expect(runtimeSchemaCheckFor(adapterFor({}))).toBeUndefined();
 		expect(schemaCheckFor(adapterFor({}))).toBeUndefined();
-		expect(
-			schemaCheckFor(
-				adapterFor(
-					{ _runtimeDataModel: dataModelFor({}) },
-					{ advanced: { database: { validateSchema: false } } },
-				),
-			),
-		).toBeUndefined();
+		const adapter = adapterFor(
+			{ _runtimeDataModel: dataModelFor({}) },
+			{ advanced: { database: { validateSchema: false } } },
+		);
+		expect(runtimeSchemaCheckFor(adapter)).toBeUndefined();
+		await expect(schemaCheckFor(adapter)?.()).resolves.toBeUndefined();
 	});
 });

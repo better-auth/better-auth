@@ -400,6 +400,18 @@ export const jwksTableFields = [
 		type: "string",
 		description: "The private part of the web key",
 	},
+    {
+		name: "alg",
+		type: "string",
+		description: "The JWS algorithm this web key signs with",
+        isOptional: true,
+	},
+    {
+		name: "crv",
+		type: "string",
+		description: "The elliptic curve this web key was generated on",
+        isOptional: true,
+	},
 	{
 		name: "createdAt",
 		type: "Date",

@@ -1,7 +1,7 @@
 export * from "@better-auth/core/db";
 export * from "./field";
 export * from "./field-converter";
-export * from "./get-schema";
+export { getSchema } from "./get-schema";
 export * from "./internal-adapter";
 export * from "./revoke-unproven-account-access";
 export * from "./schema";

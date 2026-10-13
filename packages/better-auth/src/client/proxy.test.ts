@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { organizationClient } from "../plugins/organization/client";
 import { getClientConfig } from "./config";
 import { createDynamicPathProxy } from "./proxy";
 
@@ -135,5 +136,45 @@ describe("createDynamicPathProxy", () => {
 		expect(signalSet).toHaveBeenCalledTimes(1);
 
 		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9710
+	 */
+	it("refreshes the organization signal once for auth and organization paths", async () => {
+		const { $fetch, pluginPathMethods, pluginsAtoms, atomListeners } =
+			getClientConfig({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl: async () => Response.json({}),
+				},
+				plugins: [organizationClient()],
+			});
+
+		const activeOrgSignal = pluginsAtoms.$activeOrgSignal;
+		if (!activeOrgSignal) throw new Error("Active org signal missing");
+		const updates = vi.fn();
+		onTestFinished(activeOrgSignal.listen(updates));
+
+		const proxy = createDynamicPathProxy(
+			{} as {
+				signIn: { email: () => Promise<unknown> };
+				signUp: { email: () => Promise<unknown> };
+				organization: { setActive: () => Promise<unknown> };
+			},
+			$fetch,
+			pluginPathMethods,
+			pluginsAtoms,
+			atomListeners,
+		);
+
+		await proxy.signIn.email();
+		await vi.waitFor(() => expect(updates).toHaveBeenCalledTimes(1));
+
+		await proxy.signUp.email();
+		await vi.waitFor(() => expect(updates).toHaveBeenCalledTimes(2));
+
+		await proxy.organization.setActive();
+		await vi.waitFor(() => expect(updates).toHaveBeenCalledTimes(3));
 	});
 });

@@ -73,7 +73,6 @@
     "fumadocs-mdx": "^15.0.12",
     "fumadocs-typescript": "^5.2.6",
     "fumadocs-ui": "16.12.0",
-    "geist": "^1.7.2",
     "gray-matter": "^4.0.3",
     "hast-util-to-jsx-runtime": "^2.3.6",
     "input-otp": "^1.4.2",

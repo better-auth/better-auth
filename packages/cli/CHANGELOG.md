@@ -1,5 +1,25 @@
 # auth
 
+## 1.7.7
+
+### Patch Changes
+
+- Updated dependencies [[`4186e36`](https://github.com/better-auth/better-auth/commit/4186e36d1505f881585dea03353a4fc4ff864474), [`8620aa9`](https://github.com/better-auth/better-auth/commit/8620aa94fdb9e158824cbba0d0fcf364143c56fe), [`55cb92e`](https://github.com/better-auth/better-auth/commit/55cb92e940e6ac26e746bbb06b92c445050cdb09), [`69defbc`](https://github.com/better-auth/better-auth/commit/69defbcabae430ca48e4ff1088c52a051566905e), [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a), [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a)]:
+  - better-auth@1.7.7
+  - @better-auth/core@1.7.7
+  - @better-auth/telemetry@1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11314](https://github.com/better-auth/better-auth/pull/11314) [`dcaa5a7`](https://github.com/better-auth/better-auth/commit/dcaa5a7869d83204a5cdac5ca2092a8fd218f062) Thanks [@bytaesu](https://github.com/bytaesu)! - Add read-only `check` and `check schema` commands to validate the configured adapter schema on demand.
+
+- Updated dependencies [[`af88385`](https://github.com/better-auth/better-auth/commit/af883851ae9c3b55c0d8240fabea3dc797cd5cd0), [`2fa501c`](https://github.com/better-auth/better-auth/commit/2fa501cdf9e022d5f7241fabce1a67f1828d777b), [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5), [`3d0efa3`](https://github.com/better-auth/better-auth/commit/3d0efa308d575c4aa184d65deaf29f2626add8fd), [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da), [`8853419`](https://github.com/better-auth/better-auth/commit/88534192c1d0fd62b108b568243a134e6df61ab1), [`2ee1545`](https://github.com/better-auth/better-auth/commit/2ee1545f244d87e5edd6a003b48b90a5539f8afa), [`fc45d08`](https://github.com/better-auth/better-auth/commit/fc45d08b26ac8e433fc7899a12be392cc52735ba)]:
+  - better-auth@1.7.6
+  - @better-auth/core@1.7.6
+  - @better-auth/telemetry@1.7.6
+
 ## 1.7.5
 
 ### Patch Changes
