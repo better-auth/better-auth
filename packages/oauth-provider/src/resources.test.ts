@@ -129,8 +129,27 @@ describe("seedResources (integration via plugin init)", () => {
 			policyVersion: 1,
 			accessTokenTtl: null,
 			signingAlgorithm: null,
-			allowedScopes: null,
+			allowedScopes: [],
 		});
+	});
+
+	/**
+	 * Seeding must not write null into `allowedScopes`: the Prisma adapter
+	 * maps it to a non-nullable scalar list and rejects the insert, which
+	 * crashed init before the first resource row existed.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10867
+	 */
+	it("seeds allowedScopes as an array, never null", async () => {
+		const { auth } = await bootWithResourcesOption({
+			resources: ["https://api.example.com/no-allowlist"],
+		});
+		const row = await readResource(
+			auth,
+			"https://api.example.com/no-allowlist",
+		);
+		expect(row?.allowedScopes).toEqual([]);
+		expect(row?.allowedScopes).not.toBeNull();
 	});
 
 	it("seeds object-form `resources` entries with explicit policy", async () => {
@@ -257,7 +276,7 @@ describe("seedResources (integration via plugin init)", () => {
 		expect(row).toMatchObject({
 			name: identifier, // overwrite uses identifier as default name
 			accessTokenTtl: 120,
-			allowedScopes: null, // cleared
+			allowedScopes: [], // cleared
 		});
 	});
 });

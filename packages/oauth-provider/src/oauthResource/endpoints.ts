@@ -61,7 +61,7 @@ function buildResourceRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		allowedScopes: input.allowedScopes ?? null,
+		allowedScopes: input.allowedScopes ?? [],
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
@@ -192,6 +192,7 @@ export async function updateResourceEndpoint(
 			update[key] = ctx.body[key];
 		}
 	}
+	if (update.allowedScopes === null) update.allowedScopes = [];
 
 	await ctx.context.adapter.update<OAuthResource>({
 		model: resourceModel(opts),
