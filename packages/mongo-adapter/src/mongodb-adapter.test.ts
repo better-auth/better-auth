@@ -1,5 +1,11 @@
 import type { Db } from "mongodb";
-import { MongoClient, MongoServerError, ObjectId, UUID } from "mongodb";
+import {
+	MongoClient,
+	MongoErrorLabel,
+	MongoServerError,
+	ObjectId,
+	UUID,
+} from "mongodb";
 import { describe, expect, it, vi } from "vitest";
 import { mongodbAdapter } from "./mongodb-adapter";
 
@@ -137,13 +143,11 @@ describe("mongodb-adapter", () => {
 		const db = client.db("test");
 		// NoSuchTransaction: the server has nothing left open, so the abort
 		// failing must not replace the error the caller needs to see.
-		const command = vi
-			.fn()
-			.mockRejectedValue(
-				Object.assign(new MongoServerError({ errmsg: "no such transaction" }), {
-					code: 251,
-				}),
-			);
+		const command = vi.fn().mockRejectedValue(
+			Object.assign(new MongoServerError({ errmsg: "no such transaction" }), {
+				code: 251,
+			}),
+		);
 		vi.spyOn(client, "db").mockReturnValue({ command } as unknown as Db);
 		const adapter = mongodbAdapter(db, { client })({});
 		const transaction = adapter.options?.adapterConfig.transaction;
@@ -153,6 +157,70 @@ describe("mongodb-adapter", () => {
 
 		await expect(transaction(async () => "ok")).rejects.toBe(commitError);
 		expect(command).toHaveBeenCalledOnce();
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
+	});
+
+	it("does not send an abort when the failure came before the commit", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commit = vi.spyOn(session, "commitTransaction");
+		// A transaction that never started leaves nothing open on the server, and
+		// reports itself the same way a failed commit does.
+		vi.spyOn(session, "inTransaction").mockReturnValue(false);
+		const abort = vi.spyOn(session, "abortTransaction");
+		const end = vi.spyOn(session, "endSession");
+		const db = client.db("test");
+		const command = vi.fn().mockResolvedValue({ ok: 1 });
+		vi.spyOn(client, "db").mockReturnValue({ command } as unknown as Db);
+		const adapter = mongodbAdapter(db, { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		const callbackError = new Error("the work failed");
+		await expect(
+			transaction(async () => {
+				throw callbackError;
+			}),
+		).rejects.toBe(callbackError);
+		expect(commit).not.toHaveBeenCalled();
+		expect(abort).not.toHaveBeenCalled();
+		expect(command).not.toHaveBeenCalled();
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
+	});
+
+	it("retries the abort once when it fails with a retryable write", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commitError = new MongoServerError({
+			errmsg: "commit did not complete",
+		});
+		vi.spyOn(session, "commitTransaction").mockRejectedValue(commitError);
+		vi.spyOn(session, "inTransaction").mockReturnValue(false);
+		const end = vi.spyOn(session, "endSession");
+		const db = client.db("test");
+		// The driver retries `abortTransaction()` itself on a transient error, so
+		// the raw command has to do the same or the transaction stays open.
+		const retryable = new MongoServerError({ errmsg: "connection reset" });
+		retryable.addErrorLabel(MongoErrorLabel.RetryableWriteError);
+		const command = vi
+			.fn()
+			.mockRejectedValueOnce(retryable)
+			.mockResolvedValueOnce({ ok: 1 });
+		vi.spyOn(client, "db").mockReturnValue({ command } as unknown as Db);
+		const adapter = mongodbAdapter(db, { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(transaction(async () => "ok")).rejects.toBe(commitError);
+		expect(command).toHaveBeenCalledTimes(2);
 		expect(end).toHaveBeenCalledOnce();
 		await client.close();
 	});
