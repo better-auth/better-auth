@@ -10,18 +10,23 @@ function isStringColumn(column: unknown): boolean {
 }
 
 /**
- * Converts a `Date` bound for a string column into the UTC text Drizzle's own
- * date mode writes: ISO 8601, or `YYYY-MM-DD HH:MM:SS.mmm` for MySQL, which
- * rejects the `T` and `Z`. Other values are returned unchanged.
+ * Converts a `Date` bound for a string column, or each `Date` in an `in` /
+ * `not_in` list, into the UTC text Drizzle's own date mode writes: ISO 8601,
+ * or `YYYY-MM-DD HH:MM:SS.mmm` for MySQL, which rejects the `T` and `Z`.
+ * Other values are returned unchanged.
  */
 export function toDriverDate(
 	value: unknown,
 	column: unknown,
 	provider: "pg" | "mysql" | "sqlite",
 ): unknown {
-	if (!(value instanceof Date) || !isStringColumn(column)) return value;
-	const iso = value.toISOString();
-	return provider === "mysql" ? iso.replace("T", " ").replace("Z", "") : iso;
+	if (!isStringColumn(column)) return value;
+	const format = (item: unknown) => {
+		if (!(item instanceof Date)) return item;
+		const iso = item.toISOString();
+		return provider === "mysql" ? iso.replace("T", " ").replace("Z", "") : iso;
+	};
+	return Array.isArray(value) ? value.map(format) : format(value);
 }
 
 const DATE_TIME_WITHOUT_OFFSET =

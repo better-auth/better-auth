@@ -67,5 +67,22 @@ describe("drizzle relations-v2 adapter: SQLite text() date columns", () => {
 			update: { updatedAt },
 		});
 		expect(updated?.updatedAt).toEqual(updatedAt);
+
+		const inList = await adapter.findMany<User>({
+			model: "user",
+			where: [{ field: "createdAt", operator: "in", value: [createdAt] }],
+		});
+		expect(inList).toHaveLength(1);
+	});
+
+	it("reads a date-time without a time zone as UTC", async () => {
+		sqliteDb.exec(
+			"INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('naive', 'Naive', 'naive@example.com', 0, '2026-01-16 16:50:54.888', '2026-01-16 16:50:54.888')",
+		);
+		const user = await adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: "naive" }],
+		});
+		expect(user?.createdAt).toEqual(createdAt);
 	});
 });

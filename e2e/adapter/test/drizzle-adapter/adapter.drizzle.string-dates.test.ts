@@ -20,7 +20,9 @@ beforeAll(() => {
 	process.env.TZ = "America/Los_Angeles";
 });
 afterAll(() => {
-	process.env.TZ = originalTZ;
+	// Assigning undefined would store the string "undefined".
+	if (originalTZ === undefined) delete process.env.TZ;
+	else process.env.TZ = originalTZ;
 });
 
 const pgDate = (name: string) =>

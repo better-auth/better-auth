@@ -16,6 +16,13 @@ describe("toDriverDate", () => {
 		);
 	});
 
+	it("converts each Date in an in / not_in list", () => {
+		expect(
+			toDriverDate([date, date], { dataType: "string" }, "sqlite"),
+		).toEqual(["2026-01-16T16:50:54.888Z", "2026-01-16T16:50:54.888Z"]);
+		expect(toDriverDate([date], { dataType: "date" }, "pg")).toEqual([date]);
+	});
+
 	it("leaves date-mode columns and non-Date values alone", () => {
 		expect(toDriverDate(date, { dataType: "date" }, "pg")).toBe(date);
 		expect(toDriverDate(date, { dataType: "object date" }, "pg")).toBe(date);
