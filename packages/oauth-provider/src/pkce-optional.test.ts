@@ -713,7 +713,7 @@ describe("PKCE optional - consistency checks", async () => {
 			body,
 			headers,
 			onError(context) {
-				expect(context.response.status).toBe(401);
+				expect(context.response.status).toBe(400);
 			},
 		});
 
@@ -761,7 +761,7 @@ describe("PKCE optional - consistency checks", async () => {
 			body,
 			headers,
 			onError(context) {
-				expect(context.response.status).toBe(401);
+				expect(context.response.status).toBe(400);
 			},
 		});
 
@@ -771,6 +771,10 @@ describe("PKCE optional - consistency checks", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11723
+	 * @see https://datatracker.ietf.org/doc/html/rfc7636#section-4.6
+	 */
 	it("mismatched PKCE challenge should fail", async () => {
 		// Authorize with PKCE
 		const codeVerifier = generateRandomString(64);
@@ -819,12 +823,13 @@ describe("PKCE optional - consistency checks", async () => {
 				body,
 				headers,
 				onError(context) {
-					expect(context.response.status).toBe(401);
+					expect(context.response.status).toBe(400);
 				},
 			},
 		);
 
 		expect(tokenResponse.error).toBeDefined();
+		expect((tokenResponse.error as any).error).toBe("invalid_grant");
 		expect((tokenResponse.error as any).error_description).toContain(
 			"code verification failed",
 		);
