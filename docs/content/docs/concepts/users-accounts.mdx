@@ -478,7 +478,7 @@ You can specify a list of "trusted providers." When a user logs in using a trust
 <Callout type="warn">
   By default, Better Auth requires the **local database account** to have `emailVerified: true` before implicitly linking any OAuth account, even for providers listed in `trustedProviders`. This gate protects against Pre-Account Takeover ([GHSA-g38m-r43w-p2q7](https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7)), where an attacker registers an unverified account using a victim's email address and hijacks the account when the victim signs in with social login.
 
-  If your application does not verify local email addresses and you explicitly accept this risk, you can disable this requirement by setting `account: { accountLinking: { requireLocalEmailVerified: false } }`.
+  If your application does not verify local email addresses and you explicitly accept this risk, you can disable this requirement by setting `account: { accountLinking: { requireLocalEmailVerified: false } }`. Note that `requireLocalEmailVerified: false` is a **deprecated** temporary escape hatch that will be removed in the next minor release when the gate becomes unconditional.
 </Callout>
 
 ```ts title="auth.ts"
@@ -489,7 +489,7 @@ export const auth = betterAuth({
         accountLinking: {
             enabled: true,
             trustedProviders: ["google", "github"],
-            // requireLocalEmailVerified: false // Optional: allows linking when local user is unverified
+            // requireLocalEmailVerified: false // Deprecated: temporary escape hatch for unverified local accounts
         }
     },
 });

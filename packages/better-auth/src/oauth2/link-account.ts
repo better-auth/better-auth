@@ -287,17 +287,28 @@ export async function handleOAuthUserInfo(
 			// the gate unconditional.
 			const requireLocalEmailVerified =
 				accountLinking?.requireLocalEmailVerified ?? true;
+			const isImplicitLinkingBlockedByConfig =
+				accountLinking?.enabled === false ||
+				accountLinking?.disableImplicitLinking === true;
+			const isProviderUnverified =
+				!isTrustedProvider && !userInfo.emailVerified;
+			const isLocalEmailUnverifiedGate =
+				requireLocalEmailVerified && !dbUser.user.emailVerified;
+
 			if (
 				!opts.selectedUser &&
-				((!isTrustedProvider && !userInfo.emailVerified) ||
-					(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
-					accountLinking?.enabled === false ||
-					accountLinking?.disableImplicitLinking === true)
+				(isProviderUnverified ||
+					isLocalEmailUnverifiedGate ||
+					isImplicitLinkingBlockedByConfig)
 			) {
 				if (isDevelopment()) {
-					if (requireLocalEmailVerified && !dbUser.user.emailVerified) {
+					if (
+						isLocalEmailUnverifiedGate &&
+						!isImplicitLinkingBlockedByConfig &&
+						!isProviderUnverified
+					) {
 						c.context.logger.warn(
-							`User already exists with email ${userInfo.email} but the existing account is not verified (emailVerified: false). Implicit linking to ${account.providerId} was blocked to prevent pre-account takeover (GHSA-g38m-r43w-p2q7). To allow linking to unverified local users, set account.accountLinking.requireLocalEmailVerified: false, or verify the local user's email. See https://www.better-auth.com/docs/concepts/users-accounts#forced-linking`,
+							`User already exists but the existing account is not verified (emailVerified: false). Implicit linking to ${account.providerId} was blocked to prevent pre-account takeover (GHSA-g38m-r43w-p2q7). To allow linking to unverified local users, set account.accountLinking.requireLocalEmailVerified: false, or verify the local user's email. See https://www.better-auth.com/docs/concepts/users-accounts#forced-linking`,
 						);
 					} else {
 						c.context.logger.warn(
