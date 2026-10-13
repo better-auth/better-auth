@@ -11,7 +11,6 @@ import { assignOrganizationFromProvider } from "../linking";
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
-	SAML_HTTP_POST_BINDING,
 	validateSAMLAlgorithms,
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
@@ -384,7 +383,7 @@ export async function processSAMLResponse(
 		parsedSamlConfig.audience,
 	];
 	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
-		SAML_HTTP_POST_BINDING,
+		saml.Constants.wording.binding.post,
 	);
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
