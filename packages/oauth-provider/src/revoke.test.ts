@@ -465,6 +465,10 @@ describe("oauth revoke", async () => {
 		}
 		// Second revocation of the same (now revoked) token: the family
 		// teardown still runs, but the response is 200 per RFC 7009.
+		// To prove the teardown really ran (and the 200 is not vacuous),
+		// mint a second active pair for the same user and client first:
+		// the repeated revocation must tear that pair down too.
+		const secondPair = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
 				client_id: oauthClient?.client_id,
@@ -481,6 +485,29 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+
+		// The second pair is dead: its refresh grant fails with
+		// invalid_grant, so the repeated revocation removed the whole
+		// family and not just the already-revoked submitted token.
+		const refreshSecondPair = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: secondPair.data?.refresh_token!,
+					client_id: oauthClient?.client_id!,
+					client_secret: oauthClient?.client_secret!,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshSecondPair.error?.status).toBe(400);
+		expect((refreshSecondPair.error as { error?: string })?.error).toBe(
+			"invalid_grant",
+		);
 	});
 
 	it("returns 200 for a refresh_token sent with token_type_hint access_token", async () => {
@@ -834,19 +861,55 @@ describe("oauth revoke - decrypt failures inside the search loop (cubic P2/P3)",
 		expect(revocation.error?.status).toBe(500);
 	});
 
-	it("returns 200 when the decrypt callback rejects a malformed token with a plain Error (unrecognized token, not a 500)", async () => {
-		// cubic finding 3: `formatRefreshToken.decrypt` is user-supplied and
-		// commonly throws a plain Error for malformed input. The old loop
-		// let that escape to the outer handler, turning an unrecognized
-		// token into a 500. RFC 7009 section 2.2 requires a 200.
+	it("returns 500 when the decrypt callback fails with a plain Error (fail closed like introspection)", async () => {
+		// greptile review: a plain Error from the user-supplied decrypt
+		// callback is ambiguous - a malformed token and a decrypt backend
+		// outage both throw one. Answering 200 would report a successful
+		// revocation while the token may still be active, with no reason
+		// for the client to retry. Fail closed, exactly like introspect.ts
+		// treats the same decodeRefreshToken failure: the error surfaces
+		// as a 500. Deployments that want malformed tokens answered with
+		// the RFC 7009 200 classify them with a 400-class APIError (the
+		// numeric-400 test below).
 		const { client, registered } = await createDecryptInstance(() => {
-			throw new Error("malformed token payload");
+			throw new Error("decrypt backend unavailable");
 		});
 		const revocation = await client.oauth2.revoke(
 			{
 				client_id: registered?.client_id,
 				client_secret: registered?.client_secret,
 				token: "not-a-valid-wrapped-token",
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error?.status).toBe(500);
+	});
+
+	it("returns 200 when the decrypt callback classifies a foreign token with a numeric APIError(400)", async () => {
+		// greptile review: APIError accepts both named ("BAD_REQUEST") and
+		// numeric (400) spellings, and `.status` keeps whichever spelling
+		// the thrower used. A decrypt callback classifying "not one of my
+		// tokens" as `new APIError(400, ...)` previously escaped the
+		// named-status comparison and surfaced as a hard 400 instead of
+		// the RFC 7009 section 2.2 200. The fix compares `statusCode`,
+		// so both spellings continue the search and end in the 200.
+		const { client, registered } = await createDecryptInstance(() => {
+			throw new APIError(400, {
+				error_description: "not one of my tokens",
+				error: "invalid_request",
+			});
+		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: registered?.client_id,
+				client_secret: registered?.client_secret,
+				token: "a-well-formed-foreign-token",
 				token_type_hint: "refresh_token",
 			},
 			{
@@ -917,6 +980,12 @@ describe("oauth revoke - jwt-formatted refresh token (cubic P2 null short-circui
 											{
 												...privateJwk,
 												d: undefined,
+												// jose never emits key_ops from exportJWK (verified for
+												// Ed25519/ES256/RS256 private JWKs), but pin the derived
+												// verification key to its use so a future jose that does
+												// export signing-only key_ops cannot silently break the
+												// verify inside decrypt.
+												key_ops: ["verify"],
 												alg,
 												kid: jwkRow?.id,
 											},

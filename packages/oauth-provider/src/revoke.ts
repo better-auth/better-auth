@@ -289,6 +289,16 @@ async function revokeAccessToken(
 	});
 }
 
+/**
+ * Whether the error is a 400-class APIError, independent of the spelling the
+ * thrower used: better-call's APIError accepts both a named status
+ * ("BAD_REQUEST") and a numeric one (400), and `.status` keeps the original
+ * spelling while `.statusCode` is always the number.
+ */
+function isBadRequestClass(error: APIError): boolean {
+	return error.statusCode === 400;
+}
+
 export async function revokeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -362,17 +372,20 @@ export async function revokeEndpoint(
 				refreshToken = await decodeRefreshToken(opts, token);
 			} catch (error) {
 				// The refresh-token format is deployment-defined (prefix
-				// check + optional user-supplied decrypt). A token that
-				// fails to decode is an unrecognized token (RFC 7009
-				// section 2.2: still a 200), not an internal failure: let
-				// the search continue instead of returning a 500.
-				if (error instanceof APIError) {
-					throw error;
-				}
-				throw new APIError("BAD_REQUEST", {
-					error_description: "refresh token not found",
-					error: "invalid_request",
-				});
+				// check + optional user-supplied decrypt), so a decode
+				// failure is not necessarily a backend error: a 400-class
+				// APIError is how a deployment classifies "this is not one
+				// of my tokens" (the docs' decode examples throw exactly
+				// that for tokens in the wrong format). Propagate the error
+				// and let the loop's catch do the classification - 400-class
+				// continues the search per RFC 7009 section 2.2, anything
+				// else surfaces. Converting a failure into a lookup miss
+				// HERE would be wrong twice over: a plain Error from a
+				// user-supplied decrypt callback (a key store that is down)
+				// would be answered with a 200 while the token stays active,
+				// and introspect.ts already fails closed on the same
+				// decodeRefreshToken error.
+				throw error;
 			}
 			return await revokeRefreshToken(
 				ctx,
@@ -408,11 +421,15 @@ export async function revokeEndpoint(
 					if (error.body?.error === "unsupported_token_type") {
 						throw error;
 					}
-					// Only a not-found/already-revoked BAD_REQUEST means
+					// Only a not-found/already-revoked 400-class error means
 					// "keep searching as the other type". Any other status is
 					// a backend or protocol failure that must not be masked
-					// by a 200.
-					if (error.status !== "BAD_REQUEST") {
+					// by a 200. `statusCode` is compared because APIError
+					// accepts both named ("BAD_REQUEST") and numeric (400)
+					// statuses and `.status` holds whichever spelling the
+					// thrower used; a numeric 400 would otherwise escape as
+					// a hard 400 instead of continuing the search.
+					if (!isBadRequestClass(error)) {
 						throw error;
 					}
 					continue;
@@ -438,10 +455,12 @@ export async function revokeEndpoint(
 			// RFC 7009 §2.2: the server responds with 200 if the token has been
 			// revoked successfully or if the client submitted an invalid token.
 			// `APIError#name` is always "APIError" (better-call), so the status
-			// field is the discriminator. 400s from token lookup/revocation
-			// become a successful empty response; other statuses (e.g. the 401
-			// invalid_client) still surface.
-			if (error.status === "BAD_REQUEST") {
+			// is the discriminator - via `statusCode` so both the named
+			// ("BAD_REQUEST") and numeric (400) spellings behave identically.
+			// 400s from token lookup/revocation become a successful empty
+			// response; other statuses (e.g. the 401 invalid_client) still
+			// surface.
+			if (isBadRequestClass(error)) {
 				return null;
 			}
 			throw error;
