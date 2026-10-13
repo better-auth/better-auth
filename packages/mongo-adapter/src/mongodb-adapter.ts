@@ -8,6 +8,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
 import {
@@ -59,6 +60,13 @@ export interface MongoDBAdapterConfig {
 	 *   you must explicitly set `transaction: false`.
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether the adapter natively supports JSON objects.
+	 * When true, JSON fields are stored as native BSON objects/subdocuments instead of serialized JSON strings.
+	 *
+	 * @default false
+	 */
+	supportsJSON?: boolean | undefined;
 }
 
 export const mongodbAdapter = (
@@ -756,6 +764,7 @@ export const mongodbAdapter = (
 			},
 			supportsArrays: true,
 			supportsNumericIds: false,
+			supportsJSON: config?.supportsJSON ?? false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
@@ -865,6 +874,13 @@ export const mongodbAdapter = (
 						});
 					}
 					return data;
+				}
+				if (
+					config?.supportsJSON &&
+					fieldAttributes.type === "json" &&
+					typeof data === "string"
+				) {
+					return safeJSONParse(data) ?? data;
 				}
 				return data;
 			},
