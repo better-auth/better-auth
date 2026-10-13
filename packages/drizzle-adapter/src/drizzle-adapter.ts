@@ -1231,11 +1231,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
-			supportsJSON:
-				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
-					? true
-					: false,
-			supportsArrays: config.provider === "pg" ? true : false,
+			// SQLite JSON-mode columns serialize JSON and arrays in Drizzle.
+			// Pre-serializing here would encode those values twice.
+			supportsJSON: config.provider === "pg" || config.provider === "sqlite",
+			supportsArrays: config.provider === "pg" || config.provider === "sqlite",
 			customTransformOutput: ({ data, fieldAttributes }) => {
 				// not all providers support dates
 				// one such example case is https://github.com/better-auth/better-auth/issues/7819

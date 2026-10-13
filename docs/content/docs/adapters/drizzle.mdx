@@ -305,4 +305,10 @@ export const db = drizzle({
 
 ## Additional Information
 
+### SQLite JSON fields
+
+For SQLite, define JSON, `string[]`, and `number[]` fields with `text("column_name", { mode: "json" })`, as in the generated schema. The adapter passes these values to Drizzle without serializing them; Drizzle handles serialization and parsing.
+
+If an earlier adapter version stored double-encoded JSON, migrate the affected values to a single JSON encoding before reading them with this version. This change does not rewrite existing data.
+
 * If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
