@@ -328,18 +328,31 @@ async function verifyAndConsumePhoneNumberOTP(
 ) {
 	const { phoneNumber, code } = body;
 	if (opts.verifyOTP) {
-		const isValid = await opts.verifyOTP({ phoneNumber, code }, ctx);
-		if (!isValid) {
-			throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
-		}
-
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			phoneNumber,
-		);
+		await verifyWithCustomOTP(ctx, opts.verifyOTP, body, phoneNumber);
 		return;
 	}
 
 	await verifyPhoneNumberOTP(ctx, opts, phoneNumber, code);
+}
+
+/**
+ * Checks the code with the configured `verifyOTP` and drops the code stored
+ * under `identifier`, so it cannot be used after the custom check.
+ */
+async function verifyWithCustomOTP(
+	ctx: GenericEndpointContext,
+	verifyOTP: NonNullable<RequiredPhoneNumberOptions["verifyOTP"]>,
+	body: {
+		phoneNumber: string;
+		code: string;
+	},
+	identifier: string,
+) {
+	const isValid = await verifyOTP(body, ctx);
+	if (!isValid) {
+		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+	}
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
 }
 
 /**
@@ -801,7 +814,18 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			// which counts the attempt and throws; a correct one is consumed inside
 			// the reset transaction.
 			let otpConsumed = false;
-			if (
+			if (opts.verifyOTP) {
+				// A provider check spends its code, so reject a bad password first.
+				assertPasswordNotTooShort(ctx, ctx.body.newPassword);
+				assertPasswordNotTooLong(ctx, ctx.body.newPassword);
+				await verifyWithCustomOTP(
+					ctx,
+					opts.verifyOTP,
+					{ phoneNumber: ctx.body.phoneNumber, code: ctx.body.otp },
+					phoneResetIdentifier,
+				);
+				otpConsumed = true;
+			} else if (
 				!(await matchesUsableStoredPhoneNumberOTP(
 					ctx,
 					opts,

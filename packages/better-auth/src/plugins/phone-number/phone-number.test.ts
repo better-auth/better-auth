@@ -1539,6 +1539,57 @@ describe("custom verifyOTP", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10697
+	 */
+	it("should not spend the provider code when the new password is rejected", async () => {
+		const resetPhoneNumber = "+1222333555";
+		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
+		mockVerifyOTP.mockResolvedValueOnce(true);
+		await client.phoneNumber.verify({
+			phoneNumber: resetPhoneNumber,
+			code: "123456",
+		});
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: resetPhoneNumber,
+		});
+		mockVerifyOTP.mockClear();
+
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: resetPhoneNumber,
+			otp: "999999",
+			newPassword: "short",
+		});
+
+		expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
+		expect(mockVerifyOTP).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10697
+	 */
+	it("should reject a reset code that custom verifyOTP refuses", async () => {
+		const resetPhoneNumber = "+1222333666";
+		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
+		mockVerifyOTP.mockResolvedValueOnce(true);
+		await client.phoneNumber.verify({
+			phoneNumber: resetPhoneNumber,
+			code: "123456",
+		});
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: resetPhoneNumber,
+		});
+		mockVerifyOTP.mockResolvedValueOnce(false);
+
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: resetPhoneNumber,
+			otp: "999999",
+			newPassword: "new-password-123",
+		});
+
+		expect(res.error?.code).toBe("INVALID_OTP");
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9754
 	 */
 	it("should delegate server-side consumption to custom verifyOTP without an internal record", async () => {
