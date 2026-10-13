@@ -634,14 +634,17 @@ describe("uuid support", () => {
  * @see https://github.com/better-auth/better-auth/issues/7540
  */
 describe("json support", () => {
-	it("should store JSON fields as native objects in MongoDB when supportsJSON is true", async () => {
-		const insertedDocs: Record<string, unknown>[] = [];
+	it("should store JSON fields as native BSON objects/arrays on insert and return them on read when supportsJSON is true", async () => {
+		let insertedDoc: Record<string, unknown> | null = null;
 		const insertOne = vi.fn(async (doc: Record<string, unknown>) => {
-			insertedDocs.push(doc);
+			insertedDoc = doc;
 			return { insertedId: doc._id };
 		});
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => (insertedDoc ? [insertedDoc] : [])),
+		}));
 		const db = {
-			collection: vi.fn(() => ({ insertOne })),
+			collection: vi.fn(() => ({ insertOne, aggregate })),
 		} as unknown as Db;
 
 		const adapter = mongodbAdapter(db, {
@@ -677,21 +680,39 @@ describe("json support", () => {
 			},
 		});
 
-		expect(insertedDocs).toHaveLength(1);
-		expect(typeof insertedDocs[0]?.metadata).toBe("object");
-		expect(insertedDocs[0]?.metadata).toEqual(testData);
+		expect(insertedDoc).not.toBeNull();
+		const doc = insertedDoc as unknown as Record<string, unknown>;
+		expect(typeof doc?.metadata).toBe("object");
+		expect(doc?.metadata).toEqual(testData);
 		expect(created).not.toBeNull();
 		expect((created as Record<string, unknown>).metadata).toEqual(testData);
+
+		const result = await adapter.findOne({
+			model: "testModel",
+			where: [
+				{
+					field: "id",
+					value: (created as Record<string, unknown>).id as string,
+				},
+			],
+		});
+
+		expect(result).not.toBeNull();
+		expect(typeof (result as Record<string, unknown>).metadata).toBe("object");
+		expect((result as Record<string, unknown>).metadata).toEqual(testData);
 	});
 
 	it("should default supportsJSON to false and store JSON fields as strings when omitted", async () => {
-		const insertedDocs: Record<string, unknown>[] = [];
+		let insertedDoc: Record<string, unknown> | null = null;
 		const insertOne = vi.fn(async (doc: Record<string, unknown>) => {
-			insertedDocs.push(doc);
+			insertedDoc = doc;
 			return { insertedId: doc._id };
 		});
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => (insertedDoc ? [insertedDoc] : [])),
+		}));
 		const db = {
-			collection: vi.fn(() => ({ insertOne })),
+			collection: vi.fn(() => ({ insertOne, aggregate })),
 		} as unknown as Db;
 
 		const adapter = mongodbAdapter(db, { transaction: false })({
@@ -712,26 +733,45 @@ describe("json support", () => {
 		});
 
 		const testData = { foo: "bar", count: 42 };
-		await adapter.create({
+		const created = await adapter.create({
 			model: "testModel",
 			data: {
 				metadata: testData,
 			},
 		});
 
-		expect(insertedDocs).toHaveLength(1);
-		expect(typeof insertedDocs[0]?.metadata).toBe("string");
-		expect(JSON.parse(insertedDocs[0]?.metadata as string)).toEqual(testData);
+		expect(insertedDoc).not.toBeNull();
+		const doc = insertedDoc as unknown as Record<string, unknown>;
+		expect(typeof doc?.metadata).toBe("string");
+		expect(JSON.parse(doc?.metadata as string)).toEqual(testData);
+		expect(created).not.toBeNull();
+		expect((created as Record<string, unknown>).metadata).toEqual(testData);
+
+		const result = await adapter.findOne({
+			model: "testModel",
+			where: [
+				{
+					field: "id",
+					value: (created as Record<string, unknown>).id as string,
+				},
+			],
+		});
+
+		expect(result).not.toBeNull();
+		expect((result as Record<string, unknown>).metadata).toEqual(testData);
 	});
 
 	it("should preserve stringification when supportsJSON is explicitly false", async () => {
-		const insertedDocs: Record<string, unknown>[] = [];
+		let insertedDoc: Record<string, unknown> | null = null;
 		const insertOne = vi.fn(async (doc: Record<string, unknown>) => {
-			insertedDocs.push(doc);
+			insertedDoc = doc;
 			return { insertedId: doc._id };
 		});
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => (insertedDoc ? [insertedDoc] : [])),
+		}));
 		const db = {
-			collection: vi.fn(() => ({ insertOne })),
+			collection: vi.fn(() => ({ insertOne, aggregate })),
 		} as unknown as Db;
 
 		const adapter = mongodbAdapter(db, {
@@ -755,195 +795,31 @@ describe("json support", () => {
 		});
 
 		const testData = { foo: "bar", count: 42 };
-		await adapter.create({
+		const created = await adapter.create({
 			model: "testModel",
 			data: {
 				metadata: testData,
 			},
 		});
 
-		expect(insertedDocs).toHaveLength(1);
-		expect(typeof insertedDocs[0]?.metadata).toBe("string");
-		expect(JSON.parse(insertedDocs[0]?.metadata as string)).toEqual(testData);
-	});
+		expect(insertedDoc).not.toBeNull();
+		const docExplicit = insertedDoc as unknown as Record<string, unknown>;
+		expect(typeof docExplicit?.metadata).toBe("string");
+		expect(JSON.parse(docExplicit?.metadata as string)).toEqual(testData);
+		expect(created).not.toBeNull();
+		expect((created as Record<string, unknown>).metadata).toEqual(testData);
 
-	it("should parse legacy stringified JSON documents even when supportsJSON is true", async () => {
-		const legacyDoc = {
-			_id: new ObjectId(),
-			metadata: JSON.stringify({ migrated: false, tags: ["legacy", "v1"] }),
-		};
-
-		const aggregate = vi.fn(() => ({
-			toArray: vi.fn(async () => [legacyDoc]),
-		}));
-		const db = {
-			collection: vi.fn(() => ({ aggregate })),
-		} as unknown as Db;
-
-		const adapter = mongodbAdapter(db, {
-			transaction: false,
-			supportsJSON: true,
-		})({
-			plugins: [
+		const result = await adapter.findOne({
+			model: "testModel",
+			where: [
 				{
-					id: "test",
-					schema: {
-						testModel: {
-							fields: {
-								metadata: {
-									type: "json",
-								},
-							},
-						},
-					},
+					field: "id",
+					value: (created as Record<string, unknown>).id as string,
 				},
 			],
 		});
 
-		const result = await adapter.findOne({
-			model: "testModel",
-			where: [{ field: "id", value: legacyDoc._id.toHexString() }],
-		});
-
 		expect(result).not.toBeNull();
-		expect(typeof (result as Record<string, unknown>).metadata).toBe("object");
-		expect((result as Record<string, unknown>).metadata).toEqual({
-			migrated: false,
-			tags: ["legacy", "v1"],
-		});
-	});
-
-	it("should safely return raw string without crashing when document contains malformed JSON under supportsJSON: true", async () => {
-		const malformedDoc = {
-			_id: new ObjectId(),
-			metadata: "{ malformed json",
-		};
-
-		const aggregate = vi.fn(() => ({
-			toArray: vi.fn(async () => [malformedDoc]),
-		}));
-		const db = {
-			collection: vi.fn(() => ({ aggregate })),
-		} as unknown as Db;
-
-		const adapter = mongodbAdapter(db, {
-			transaction: false,
-			supportsJSON: true,
-		})({
-			plugins: [
-				{
-					id: "test",
-					schema: {
-						testModel: {
-							fields: {
-								metadata: {
-									type: "json",
-								},
-							},
-						},
-					},
-				},
-			],
-		});
-
-		const result = await adapter.findOne({
-			model: "testModel",
-			where: [{ field: "id", value: malformedDoc._id.toHexString() }],
-		});
-
-		expect(result).not.toBeNull();
-		expect((result as Record<string, unknown>).metadata).toBe(
-			"{ malformed json",
-		);
-	});
-
-	it("should parse legacy literal 'null' string to null under supportsJSON: true", async () => {
-		const nullDoc = {
-			_id: new ObjectId(),
-			metadata: "null",
-		};
-
-		const aggregate = vi.fn(() => ({
-			toArray: vi.fn(async () => [nullDoc]),
-		}));
-		const db = {
-			collection: vi.fn(() => ({ aggregate })),
-		} as unknown as Db;
-
-		const adapter = mongodbAdapter(db, {
-			transaction: false,
-			supportsJSON: true,
-		})({
-			plugins: [
-				{
-					id: "test",
-					schema: {
-						testModel: {
-							fields: {
-								metadata: {
-									type: "json",
-								},
-							},
-						},
-					},
-				},
-			],
-		});
-
-		const result = await adapter.findOne({
-			model: "testModel",
-			where: [{ field: "id", value: nullDoc._id.toHexString() }],
-		});
-
-		expect(result).not.toBeNull();
-		expect((result as Record<string, unknown>).metadata).toBeNull();
-	});
-
-	it("should preserve scalar strings as strings under supportsJSON: true", async () => {
-		const scalarDocs = [
-			{ _id: new ObjectId(), metadata: "123" },
-			{ _id: new ObjectId(), metadata: "true" },
-			{ _id: new ObjectId(), metadata: "plain string" },
-		];
-
-		for (const doc of scalarDocs) {
-			const aggregate = vi.fn(() => ({
-				toArray: vi.fn(async () => [doc]),
-			}));
-			const db = {
-				collection: vi.fn(() => ({ aggregate })),
-			} as unknown as Db;
-
-			const adapter = mongodbAdapter(db, {
-				transaction: false,
-				supportsJSON: true,
-			})({
-				plugins: [
-					{
-						id: "test",
-						schema: {
-							testModel: {
-								fields: {
-									metadata: {
-										type: "json",
-									},
-								},
-							},
-						},
-					},
-				],
-			});
-
-			const result = await adapter.findOne({
-				model: "testModel",
-				where: [{ field: "id", value: doc._id.toHexString() }],
-			});
-
-			expect(result).not.toBeNull();
-			expect((result as Record<string, unknown>).metadata).toBe(doc.metadata);
-			expect(typeof (result as Record<string, unknown>).metadata).toBe(
-				"string",
-			);
-		}
+		expect((result as Record<string, unknown>).metadata).toEqual(testData);
 	});
 });

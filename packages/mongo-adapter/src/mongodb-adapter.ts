@@ -8,7 +8,6 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
 import {
@@ -62,11 +61,11 @@ export interface MongoDBAdapterConfig {
 	transaction?: boolean | undefined;
 	/**
 	 * Whether the adapter natively supports JSON objects.
-	 * When true, JSON fields are stored as native BSON objects/subdocuments instead of serialized JSON strings.
+	 * When true, JSON fields are stored as native BSON objects and subdocuments instead of serialized JSON strings.
 	 *
 	 * Note: Enabling this option on an existing database does not automatically migrate pre-existing
-	 * stringified documents in MongoDB. Existing documents with stringified JSON will be parsed on read,
-	 * but query filters expecting native BSON objects will not match legacy string rows until migrated.
+	 * stringified documents in MongoDB. Pre-existing stringified documents require migration before querying
+	 * with native BSON filters.
 	 *
 	 * @default false
 	 */
@@ -878,19 +877,6 @@ export const mongodbAdapter = (
 						});
 					}
 					return data;
-				}
-				if (
-					config?.supportsJSON &&
-					fieldAttributes.type === "json" &&
-					typeof data === "string"
-				) {
-					const trimmed = data.trim();
-					if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-						return safeJSONParse(data) ?? data;
-					}
-					if (trimmed === "null") {
-						return null;
-					}
 				}
 				return data;
 			},
