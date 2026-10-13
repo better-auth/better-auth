@@ -127,7 +127,11 @@ async function fetchJwks(
 					return res.data;
 				})
 			: await jwksFetch();
-	if (!jwks) throw new Error("No jwks found");
+	if (!jwks) {
+		throw new APIError("UNAUTHORIZED", {
+			message: "invalid access token",
+		});
+	}
 	return jwks;
 }
 
@@ -310,7 +314,11 @@ async function getJwksForVerification(
 		const cacheKey = opts.jwksCacheKey;
 		if (!cacheKey) {
 			const jwks = await opts.jwksFetch();
-			if (!jwks) throw new Error("No jwks found");
+			if (!jwks) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "invalid access token",
+				});
+			}
 			return { jwks, fromCache: false, kid };
 		}
 		const cached = functionJwksCache.get(cacheKey);
@@ -326,7 +334,11 @@ async function getJwksForVerification(
 			};
 		}
 		const jwks = await opts.jwksFetch();
-		if (!jwks) throw new Error("No jwks found");
+		if (!jwks) {
+			throw new APIError("UNAUTHORIZED", {
+				message: "invalid access token",
+			});
+		}
 		const fetchedAt = Date.now();
 		functionJwksCache.set(cacheKey, {
 			jwks,
@@ -388,6 +400,18 @@ async function verifyAccessTokenPayload(
 					if (isJoseInfrastructureError(error)) {
 						throw error;
 					}
+					throw new APIError("UNAUTHORIZED", {
+						message: "invalid access token",
+					});
+				} else if (
+					error instanceof APIError &&
+					error.status === "UNAUTHORIZED"
+				) {
+					throw error;
+				} else if (
+					error.message === "No jwks found" ||
+					error.message.startsWith("Jwks failed:")
+				) {
 					throw new APIError("UNAUTHORIZED", {
 						message: "invalid access token",
 					});

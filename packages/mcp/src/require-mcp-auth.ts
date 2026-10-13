@@ -110,7 +110,8 @@ export const requireMcpAuth = <
 		// the auth context so the verified issuer and audience match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
-		const { baseURL, internalAdapter } = await auth.$context;
+		const context = await auth.$context;
+		const { baseURL, internalAdapter } = context;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `createMcpProtectedRequestHandler` with explicit verification options.",
@@ -118,6 +119,57 @@ export const requireMcpAuth = <
 		}
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
+
+		const ctxPlugin =
+			(
+				context as unknown as {
+					getPlugin?: (id: string) => {
+						options?: { jwks?: { jwksPath?: string } };
+					} | null;
+					plugins?: Array<{
+						id?: string;
+						options?: { jwks?: { jwksPath?: string } };
+					}>;
+				}
+			)?.getPlugin?.("jwt") ??
+			(
+				context as unknown as {
+					plugins?: Array<{
+						id?: string;
+						options?: { jwks?: { jwksPath?: string } };
+					}>;
+				}
+			)?.plugins?.find?.((p) => p?.id === "jwt");
+		const optionsPlugin = (
+			auth.options as unknown as {
+				plugins?: Array<{
+					id?: string;
+					options?: { jwks?: { jwksPath?: string } };
+				}>;
+			}
+		)?.plugins?.find?.((p) => p?.id === "jwt");
+		const jwtPluginOptions = ctxPlugin?.options ?? optionsPlugin?.options;
+
+		let customJwksPath = jwtPluginOptions?.jwks?.jwksPath;
+		if (!customJwksPath && opts?.jwksUrl) {
+			try {
+				const parsed = new URL(opts.jwksUrl, baseURL);
+				customJwksPath = parsed.pathname;
+			} catch {
+				// keep undefined
+			}
+		}
+
+		const jwksPath = customJwksPath
+			? customJwksPath.startsWith("/")
+				? customJwksPath
+				: `/${customJwksPath}`
+			: "/jwks";
+
+		const baseWithoutTrailing = baseURL.endsWith("/")
+			? baseURL.slice(0, -1)
+			: baseURL;
+		const defaultJwksUrl = `${baseWithoutTrailing}${jwksPath}`;
 
 		const authWithEndpoints = auth as unknown as {
 			api?: {
@@ -143,7 +195,7 @@ export const requireMcpAuth = <
 			} else if (typeof authWithEndpoints.handler === "function") {
 				resolvedJwksFetch = async () => {
 					const res = await authWithEndpoints.handler!(
-						new Request(`${baseURL}/jwks`),
+						new Request(defaultJwksUrl),
 					);
 					if (!res.ok) return undefined;
 					return (await res.json()) as JSONWebKeySet;
@@ -153,7 +205,7 @@ export const requireMcpAuth = <
 		}
 
 		const jwksUrl =
-			opts?.jwksUrl ?? (resolvedJwksFetch ? undefined : `${baseURL}/jwks`);
+			opts?.jwksUrl ?? (resolvedJwksFetch ? undefined : defaultJwksUrl);
 
 		return createMcpProtectedRequestHandler(
 			{

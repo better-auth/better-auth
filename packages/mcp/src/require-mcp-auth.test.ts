@@ -1,6 +1,6 @@
 import { createInsufficientScopeError } from "better-auth/oauth2";
 import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireMcpAuth } from "./require-mcp-auth";
 
@@ -514,12 +514,36 @@ describe("requireMcpAuth", () => {
 		});
 
 		it("returns undefined from in-process jwksFetch and challenges cleanly when auth.handler returns non-ok", async () => {
+			const { generateKeyPair, exportJWK, SignJWT } = await import("jose");
+			const actualOAuth2 =
+				await vi.importActual<typeof import("better-auth/oauth2")>(
+					"better-auth/oauth2",
+				);
+			verifyAccessTokenRequest.mockImplementation(
+				actualOAuth2.verifyAccessTokenRequest,
+			);
+
+			const keyPair = await generateKeyPair("RS256", { extractable: true });
+			const publicJwk = await exportJWK(keyPair.publicKey);
+			publicJwk.kid = "test-key-1";
+
+			const baseURL = "https://app.example.com/api/auth";
+			const resource = "https://app.example.com/api/auth";
+
+			const token = await new SignJWT({ sub: "user-1" })
+				.setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
+				.setIssuer(baseURL)
+				.setAudience(resource)
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(keyPair.privateKey);
+
 			const auth: AuthStub & {
 				handler: (request: Request) => Promise<Response>;
 			} = {
 				options: { baseURL: "https://app.example.com" },
 				$context: Promise.resolve({
-					baseURL: "https://app.example.com/api/auth",
+					baseURL,
 					internalAdapter: internalAdapterStub,
 				}),
 				handler: vi
@@ -529,30 +553,11 @@ describe("requireMcpAuth", () => {
 					),
 			};
 
-			let passedJwksFetch:
-				| (() => Promise<JSONWebKeySet | undefined>)
-				| undefined;
-			verifyAccessTokenRequest.mockImplementation(
-				async (
-					_input,
-					options: { jwksFetch?: () => Promise<JSONWebKeySet | undefined> },
-				) => {
-					passedJwksFetch = options.jwksFetch;
-					const jwks = await options.jwksFetch?.();
-					if (!jwks) {
-						throw new APIError("UNAUTHORIZED", {
-							message: "invalid access token signature",
-						});
-					}
-					return { sub: "user-1" };
-				},
-			);
-
 			const response = await requireMcpAuth(auth, async () =>
 				Response.json({ ok: true }),
 			)(
 				new Request("https://app.example.com/mcp", {
-					headers: { Authorization: "Bearer access-token" },
+					headers: { Authorization: `Bearer ${token}` },
 				}),
 			);
 
@@ -560,11 +565,88 @@ describe("requireMcpAuth", () => {
 			expect(response.headers.get("WWW-Authenticate")).toBe(
 				`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth"`,
 			);
-			expect(passedJwksFetch).toBeDefined();
 			expect(auth.handler).toHaveBeenCalledOnce();
-			const resolvedJwks = await passedJwksFetch!();
-			expect(resolvedJwks).toBeUndefined();
-			expect(auth.handler).toHaveBeenCalledTimes(2);
+			expect(auth.handler).toHaveBeenCalledWith(
+				expect.objectContaining({
+					url: "https://app.example.com/api/auth/jwks",
+				}),
+			);
+		});
+
+		it("resolves custom jwksPath from JWT plugin options and queries it via auth.handler", async () => {
+			const { generateKeyPair, exportJWK, SignJWT } = await import("jose");
+			const actualOAuth2 =
+				await vi.importActual<typeof import("better-auth/oauth2")>(
+					"better-auth/oauth2",
+				);
+			verifyAccessTokenRequest.mockImplementation(
+				actualOAuth2.verifyAccessTokenRequest,
+			);
+
+			const keyPair = await generateKeyPair("RS256", { extractable: true });
+			const publicJwk = await exportJWK(keyPair.publicKey);
+			publicJwk.kid = "custom-key-1";
+			publicJwk.alg = "RS256";
+
+			const baseURL = "https://app.example.com/api/auth";
+			const resource = "https://app.example.com/api/auth";
+
+			const token = await new SignJWT({ sub: "user-custom" })
+				.setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
+				.setIssuer(baseURL)
+				.setAudience(resource)
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(keyPair.privateKey);
+
+			const auth = {
+				options: {
+					baseURL: "https://app.example.com",
+					plugins: [
+						{
+							id: "jwt",
+							options: {
+								jwks: {
+									jwksPath: "/.well-known/jwks.json",
+								},
+							},
+						},
+					],
+				},
+				$context: Promise.resolve({
+					baseURL,
+					internalAdapter: internalAdapterStub,
+				}),
+				handler: vi.fn().mockImplementation(async (req: Request) => {
+					if (
+						req.url === "https://app.example.com/api/auth/.well-known/jwks.json"
+					) {
+						return Response.json({ keys: [publicJwk] });
+					}
+					return new Response("Not Found", { status: 404 });
+				}),
+			};
+
+			let verifiedSub: string | undefined;
+			const response = await requireMcpAuth(
+				auth as unknown as AuthStub,
+				async (_req, claims) => {
+					verifiedSub = claims.sub;
+					return Response.json({ ok: true });
+				},
+			)(
+				new Request("https://app.example.com/mcp", {
+					headers: { Authorization: `Bearer ${token}` },
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(verifiedSub).toBe("user-custom");
+			expect(auth.handler).toHaveBeenCalledWith(
+				expect.objectContaining({
+					url: "https://app.example.com/api/auth/.well-known/jwks.json",
+				}),
+			);
 		});
 
 		it("honors explicit jwksUrl over in-process auth resolution", async () => {

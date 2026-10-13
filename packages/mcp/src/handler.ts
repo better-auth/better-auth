@@ -9,6 +9,7 @@ import {
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
+import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload, JWTVerifyOptions } from "jose";
 
 export interface McpProtectedRequestHandlerOptions {
@@ -106,7 +107,13 @@ function toChallengeResponse(
 	resource: string,
 	opts?: Parameters<typeof createResourceServerChallenge>[2],
 ): Response {
-	const challenge = createResourceServerChallenge(error, resource, opts);
+	const authError =
+		error instanceof Error &&
+		(error.message === "No jwks found" ||
+			error.message.startsWith("Jwks failed:"))
+			? new APIError("UNAUTHORIZED", { message: "invalid access token" })
+			: error;
+	const challenge = createResourceServerChallenge(authError, resource, opts);
 	if (!challenge) throw error;
 	const headers = new Headers(challenge.headers as HeadersInit);
 	headers.set("Content-Type", "application/json");
