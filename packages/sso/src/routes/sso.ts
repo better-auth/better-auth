@@ -1523,33 +1523,13 @@ async function handleOIDCCallback(
 		const value = claims[claim];
 		return typeof value === "string" && value.length > 0 ? value : undefined;
 	};
-	const readEmailClaim = (
-		claims: Record<string, unknown>,
-		claim: string,
-	): string | undefined => {
-		const parseCandidate = (val: unknown): string | undefined => {
-			if (typeof val === "string" && val.length > 0) {
-				return val;
-			}
-			if (Array.isArray(val)) {
-				const candidate = val.find(
-					(item) => typeof item === "string" && item.length > 0,
-				);
-				if (typeof candidate === "string") {
-					return candidate;
-				}
-			}
-			return undefined;
-		};
-
-		const direct = parseCandidate(claims[claim]);
-		if (direct) {
-			return direct;
-		}
-		if (claim === "email") {
-			return parseCandidate(claims.emails);
-		}
-		return undefined;
+	// Some IdPs send a list of addresses, such as Azure AD B2C's `emails`.
+	const readEmailClaim = (claims: Record<string, unknown>) => {
+		const value = claims[mapping.email || "email"];
+		const email = Array.isArray(value)
+			? value.find((item) => typeof item === "string" && item.length > 0)
+			: value;
+		return typeof email === "string" && email.length > 0 ? email : undefined;
 	};
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
@@ -1631,7 +1611,7 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: readStringClaim(rawUserInfo, "sub"),
-			email: readEmailClaim(rawUserInfo, mapping.email || "email"),
+			email: readEmailClaim(rawUserInfo),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
@@ -1651,7 +1631,7 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: idToken.sub,
-			email: readEmailClaim(idToken, mapping.email || "email"),
+			email: readEmailClaim(idToken),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						idToken[mapping.emailVerified || "email_verified"],

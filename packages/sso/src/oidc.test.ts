@@ -640,310 +640,51 @@ describe("SSO", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11630
 	 */
-	it("should support email claims returned as an array (Azure AD B2C)", async () => {
+	it("reads the email from a mapped array claim in the ID token (Azure AD B2C)", async () => {
 		const { headers } = await signInWithTestUser();
-
 		await auth.api.registerSSOProvider({
 			body: {
-				providerId: "emails-array-oidc-provider",
+				providerId: "b2c-emails-array",
 				issuer: server.issuer.url!,
-				domain: "emails-array-test.com",
+				domain: "b2c-emails-array.com",
 				oidcConfig: {
-					clientId: "emails-array-test-client",
-					clientSecret: "test-client-secret",
-					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
-					pkce: false,
-				},
-			},
-			headers,
-		});
-
-		const originalUserinfoListeners =
-			server.service.listeners("beforeUserinfo");
-		const originalTokenListeners =
-			server.service.listeners("beforeTokenSigning");
-
-		server.service.removeAllListeners("beforeUserinfo");
-		server.service.removeAllListeners("beforeTokenSigning");
-
-		const testEmail = "b2c-user@example.com";
-
-		// Azure AD B2C sends `emails: ["b2c-user@example.com"]` instead of `email`
-		server.service.on("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				emails: [testEmail],
-				name: "B2C Test User",
-				sub: "b2c-array-sub",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
-		});
-
-		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.emails = [testEmail];
-			token.payload.email_verified = true;
-			token.payload.name = "B2C Test User";
-			token.payload.sub = "b2c-array-sub";
-		});
-
-		try {
-			const signInHeaders = new Headers();
-			const res = await authClient.signIn.sso({
-				providerId: "emails-array-oidc-provider",
-				callbackURL: "/dashboard",
-				fetchOptions: {
-					throw: true,
-					onSuccess: cookieSetter(signInHeaders),
-				},
-			});
-
-			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
-				res.url,
-				signInHeaders,
-			);
-			expect(callbackURL).toContain("/dashboard");
-
-			const session = await auth.api.getSession({
-				headers: callbackHeaders,
-			});
-			expect(session?.user.email).toBe(testEmail);
-		} finally {
-			server.service.removeAllListeners("beforeUserinfo");
-			server.service.removeAllListeners("beforeTokenSigning");
-			for (const listener of originalUserinfoListeners) {
-				server.service.on("beforeUserinfo", listener);
-			}
-			for (const listener of originalTokenListeners) {
-				server.service.on("beforeTokenSigning", listener);
-			}
-		}
-	});
-
-	it("should support email claims returned as an array in ID token without userInfoEndpoint (Azure AD B2C)", async () => {
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			body: {
-				providerId: "emails-array-idtoken-provider",
-				issuer: server.issuer.url!,
-				domain: "emails-array-idtoken-test.com",
-				oidcConfig: {
-					clientId: "emails-array-idtoken-client",
+					clientId: "b2c-emails-array-client",
 					clientSecret: "test-client-secret",
 					skipDiscovery: true,
 					authorizationEndpoint: `${server.issuer.url!}/authorize`,
 					tokenEndpoint: `${server.issuer.url!}/token`,
 					jwksEndpoint: `${server.issuer.url!}/jwks`,
 					pkce: false,
+					mapping: { email: "emails" },
 				},
 			},
 			headers,
 		});
-
 		const originalTokenListeners =
 			server.service.listeners("beforeTokenSigning");
 		server.service.removeAllListeners("beforeTokenSigning");
-
-		const testEmail = "b2c-idtoken-user@example.com";
-
 		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.emails = [testEmail];
-			token.payload.email_verified = true;
-			token.payload.name = "B2C IDToken User";
-			token.payload.sub = "b2c-idtoken-sub";
+			token.payload.sub = "b2c-emails-array-sub";
+			token.payload.name = "Jane Doe";
+			token.payload.emails = ["", "jane@b2c-emails-array.com"];
 		});
-
 		try {
 			const signInHeaders = new Headers();
 			const res = await authClient.signIn.sso({
-				providerId: "emails-array-idtoken-provider",
+				providerId: "b2c-emails-array",
 				callbackURL: "/dashboard",
-				fetchOptions: {
-					throw: true,
-					onSuccess: cookieSetter(signInHeaders),
-				},
+				fetchOptions: { throw: true, onSuccess: cookieSetter(signInHeaders) },
 			});
-
-			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
 				res.url,
 				signInHeaders,
 			);
 			expect(callbackURL).toContain("/dashboard");
-
-			const session = await auth.api.getSession({
-				headers: callbackHeaders,
-			});
-			expect(session?.user.email).toBe(testEmail);
+			const session = await auth.api.getSession({ headers: sessionHeaders });
+			expect(session?.user.email).toBe("jane@b2c-emails-array.com");
+			expect(session?.user.emailVerified).toBe(false);
 		} finally {
 			server.service.removeAllListeners("beforeTokenSigning");
-			for (const listener of originalTokenListeners) {
-				server.service.on("beforeTokenSigning", listener);
-			}
-		}
-	});
-
-	it("should support explicit mapping of email to an array claim (mapping.email: 'emails')", async () => {
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			body: {
-				providerId: "mapped-emails-array-provider",
-				issuer: server.issuer.url!,
-				domain: "mapped-emails-array-test.com",
-				oidcConfig: {
-					clientId: "mapped-emails-array-client",
-					clientSecret: "test-client-secret",
-					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
-					pkce: false,
-					mapping: {
-						email: "emails",
-						emailVerified: "email_verified",
-						name: "name",
-						image: "picture",
-					},
-				},
-			},
-			headers,
-		});
-
-		const originalUserinfoListeners =
-			server.service.listeners("beforeUserinfo");
-		const originalTokenListeners =
-			server.service.listeners("beforeTokenSigning");
-
-		server.service.removeAllListeners("beforeUserinfo");
-		server.service.removeAllListeners("beforeTokenSigning");
-
-		const testEmail = "mapped-array-user@example.com";
-
-		server.service.on("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				emails: ["", testEmail],
-				name: "Mapped Array User",
-				sub: "mapped-array-sub",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
-		});
-
-		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.emails = ["", testEmail];
-			token.payload.email_verified = true;
-			token.payload.name = "Mapped Array User";
-			token.payload.sub = "mapped-array-sub";
-		});
-
-		try {
-			const signInHeaders = new Headers();
-			const res = await authClient.signIn.sso({
-				providerId: "mapped-emails-array-provider",
-				callbackURL: "/dashboard",
-				fetchOptions: {
-					throw: true,
-					onSuccess: cookieSetter(signInHeaders),
-				},
-			});
-
-			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
-				res.url,
-				signInHeaders,
-			);
-			expect(callbackURL).toContain("/dashboard");
-
-			const session = await auth.api.getSession({
-				headers: callbackHeaders,
-			});
-			expect(session?.user.email).toBe(testEmail);
-		} finally {
-			server.service.removeAllListeners("beforeUserinfo");
-			server.service.removeAllListeners("beforeTokenSigning");
-			for (const listener of originalUserinfoListeners) {
-				server.service.on("beforeUserinfo", listener);
-			}
-			for (const listener of originalTokenListeners) {
-				server.service.on("beforeTokenSigning", listener);
-			}
-		}
-	});
-
-	it("should fallback to emails claim when email claim is an empty string or null", async () => {
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			body: {
-				providerId: "empty-email-fallback-provider",
-				issuer: server.issuer.url!,
-				domain: "empty-email-fallback-test.com",
-				oidcConfig: {
-					clientId: "empty-email-fallback-client",
-					clientSecret: "test-client-secret",
-					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
-					pkce: false,
-				},
-			},
-			headers,
-		});
-
-		const originalUserinfoListeners =
-			server.service.listeners("beforeUserinfo");
-		const originalTokenListeners =
-			server.service.listeners("beforeTokenSigning");
-
-		server.service.removeAllListeners("beforeUserinfo");
-		server.service.removeAllListeners("beforeTokenSigning");
-
-		const testEmail = "empty-fallback-user@example.com";
-
-		// Provider emits email: "" alongside valid emails: [testEmail]
-		server.service.on("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "",
-				emails: [testEmail],
-				name: "Empty Fallback User",
-				sub: "empty-fallback-sub",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
-		});
-
-		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.email = "";
-			token.payload.emails = [testEmail];
-			token.payload.email_verified = true;
-			token.payload.name = "Empty Fallback User";
-			token.payload.sub = "empty-fallback-sub";
-		});
-
-		try {
-			const signInHeaders = new Headers();
-			const res = await authClient.signIn.sso({
-				providerId: "empty-email-fallback-provider",
-				callbackURL: "/dashboard",
-				fetchOptions: {
-					throw: true,
-					onSuccess: cookieSetter(signInHeaders),
-				},
-			});
-
-			const { callbackURL, headers: callbackHeaders } = await simulateOAuthFlow(
-				res.url,
-				signInHeaders,
-			);
-			expect(callbackURL).toContain("/dashboard");
-
-			const session = await auth.api.getSession({
-				headers: callbackHeaders,
-			});
-			expect(session?.user.email).toBe(testEmail);
-		} finally {
-			server.service.removeAllListeners("beforeUserinfo");
-			server.service.removeAllListeners("beforeTokenSigning");
-			for (const listener of originalUserinfoListeners) {
-				server.service.on("beforeUserinfo", listener);
-			}
 			for (const listener of originalTokenListeners) {
 				server.service.on("beforeTokenSigning", listener);
 			}
