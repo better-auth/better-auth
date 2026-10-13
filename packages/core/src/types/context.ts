@@ -1,3 +1,4 @@
+import type { RateLimitPolicy } from "@better-auth/rate-limit";
 import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
@@ -420,13 +421,9 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			logger: ReturnType<typeof createLogger>;
 			rateLimit: {
 				enabled: boolean;
-				window: number;
-				max: number;
-				storage: "memory" | "database" | "secondary-storage";
-			} & Omit<
-				BetterAuthRateLimitOptions,
-				"enabled" | "window" | "max" | "storage"
-			>;
+				policy: RateLimitPolicy;
+				storage: "memory" | "database";
+			} & Omit<BetterAuthRateLimitOptions, "enabled" | "policy" | "storage">;
 			adapter: DBAdapter<Options>;
 			/**
 			 * Confirms the database can hold what this configuration writes.

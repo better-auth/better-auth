@@ -169,6 +169,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@better-auth/rate-limit": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@cloudflare/workers-types": "^4.20250121.0",

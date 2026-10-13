@@ -66,4 +66,7 @@ export default defineConfig({
 	treeshake: true,
 	clean: true,
 	unbundle: true,
+	deps: {
+		alwaysBundle: ["@better-auth/rate-limit"],
+	},
 });

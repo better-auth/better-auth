@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { fixedWindow } from "@better-auth/rate-limit";
 import * as z from "zod";
 import { formCsrfMiddleware, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -497,8 +498,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 						path.startsWith("/magic-link/verify")
 					);
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 5,
+				policy: fixedWindow({
+					limit: opts.rateLimit?.max || 5,
+					windowMs: (opts.rateLimit?.window || 60) * 1_000,
+				}),
 			},
 		],
 		options,

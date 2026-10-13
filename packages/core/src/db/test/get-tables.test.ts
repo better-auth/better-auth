@@ -250,6 +250,39 @@ describe("getAuthTables", () => {
 		expect(tables.verification).toBeDefined();
 	});
 
+	it("should expose algorithm-neutral database rate-limit fields", () => {
+		const tables = getAuthTables({ rateLimit: { storage: "database" } });
+
+		expect(tables.rateLimit?.fields).toMatchObject({
+			key: { unique: true },
+			state: { type: "string", required: true },
+			expiresAt: { type: "number", bigint: true, index: true },
+			revision: { type: "number", required: true },
+		});
+		expect(tables.rateLimit?.fields.count).toBeUndefined();
+		expect(tables.rateLimit?.fields.lastRequest).toBeUndefined();
+	});
+
+	it("should not add a database table for custom rate-limit storage", () => {
+		const tables = getAuthTables({
+			rateLimit: {
+				storage: "database",
+				customStorage: {
+					async consume() {
+						return {
+							allowed: true,
+							remaining: 0,
+							retryAfterMs: null,
+							resetAt: 0,
+						};
+					},
+				},
+			},
+		});
+
+		expect(tables.rateLimit).toBeUndefined();
+	});
+
 	it("should propagate disableMigration from a plugin schema onto the table", () => {
 		const tables = getAuthTables({
 			plugins: [

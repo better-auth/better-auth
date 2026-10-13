@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { fixedWindow } from "@better-auth/rate-limit";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db/adapter-kysely";
@@ -513,7 +514,7 @@ describe("base context creation", () => {
 			expect(res.rateLimit.storage).toBe("memory");
 		});
 
-		it("should use secondary-storage when secondaryStorage is provided", async () => {
+		it("should not couple rate limiting to secondary storage", async () => {
 			const res = await initBase({
 				secondaryStorage: {
 					get: vi.fn(),
@@ -523,24 +524,22 @@ describe("base context creation", () => {
 					delete: vi.fn(),
 				},
 			});
-			expect(res.rateLimit.storage).toBe("secondary-storage");
+			expect(res.rateLimit.storage).toBe("memory");
 		});
 
-		it("should use default window and max values", async () => {
+		it("should use the default fixed-window policy", async () => {
 			const res = await initBase({});
-			expect(res.rateLimit.window).toBe(10);
-			expect(res.rateLimit.max).toBe(100);
+			expect(res.rateLimit.policy).toEqual(
+				fixedWindow({ limit: 100, windowMs: 10_000 }),
+			);
 		});
 
-		it("should allow custom rate limit values", async () => {
+		it("should allow a custom rate-limit policy", async () => {
+			const policy = fixedWindow({ limit: 500, windowMs: 60_000 });
 			const res = await initBase({
-				rateLimit: {
-					window: 60,
-					max: 500,
-				},
+				rateLimit: { policy },
 			});
-			expect(res.rateLimit.window).toBe(60);
-			expect(res.rateLimit.max).toBe(500);
+			expect(res.rateLimit.policy).toBe(policy);
 		});
 	});
 
@@ -1289,16 +1288,15 @@ describe("base context creation", () => {
 		});
 
 		it("should handle rate limiting when enabled is explicitly set", async () => {
+			const policy = fixedWindow({ limit: 50, windowMs: 30_000 });
 			const res = await initBase({
 				rateLimit: {
 					enabled: true,
-					window: 30,
-					max: 50,
+					policy,
 				},
 			});
 			expect(res.rateLimit.enabled).toBe(true);
-			expect(res.rateLimit.window).toBe(30);
-			expect(res.rateLimit.max).toBe(50);
+			expect(res.rateLimit.policy).toBe(policy);
 		});
 
 		it("should respect custom storage for rate limiting", async () => {
@@ -1937,7 +1935,7 @@ describe("base context creation", () => {
 			});
 
 			expect(ctx.secondaryStorage).toBe(mockStorage);
-			expect(ctx.rateLimit.storage).toBe("secondary-storage");
+			expect(ctx.rateLimit.storage).toBe("memory");
 		});
 
 		it("should set session to null initially", async () => {

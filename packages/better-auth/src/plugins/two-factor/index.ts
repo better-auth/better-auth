@@ -4,6 +4,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { fixedWindow } from "@better-auth/rate-limit";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
@@ -613,8 +614,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				pathMatcher(path) {
 					return path.startsWith("/two-factor/");
 				},
-				window: 10,
-				max: 3,
+				policy: fixedWindow({ limit: 3, windowMs: 10_000 }),
 			},
 		],
 		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,

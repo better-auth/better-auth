@@ -56,7 +56,9 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 		>,
 	);
 
-	const shouldAddRateLimitTable = options.rateLimit?.storage === "database";
+	const shouldAddRateLimitTable =
+		options.rateLimit?.storage === "database" &&
+		options.rateLimit.customStorage === undefined;
 	const rateLimitTable = {
 		rateLimit: {
 			modelName: options.rateLimit?.modelName || "rateLimit",
@@ -67,17 +69,22 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 					required: true,
 					fieldName: options.rateLimit?.fields?.key || "key",
 				},
-				count: {
-					type: "number",
+				state: {
+					type: "string",
 					required: true,
-					fieldName: options.rateLimit?.fields?.count || "count",
+					fieldName: options.rateLimit?.fields?.state || "state",
 				},
-				lastRequest: {
+				expiresAt: {
 					type: "number",
 					bigint: true,
 					required: true,
-					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
-					defaultValue: () => Date.now(),
+					index: true,
+					fieldName: options.rateLimit?.fields?.expiresAt || "expiresAt",
+				},
+				revision: {
+					type: "number",
+					required: true,
+					fieldName: options.rateLimit?.fields?.revision || "revision",
 				},
 			},
 		},

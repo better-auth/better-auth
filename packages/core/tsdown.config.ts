@@ -27,6 +27,7 @@ export default defineConfig({
 		"./src/instrumentation/pure.index.ts",
 	],
 	deps: {
+		alwaysBundle: ["@better-auth/rate-limit"],
 		neverBundle: ["@better-auth/core/async_hooks"],
 	},
 	env: {

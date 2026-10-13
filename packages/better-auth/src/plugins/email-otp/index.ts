@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { fixedWindow } from "@better-auth/rate-limit";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -44,6 +45,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 	} satisfies EmailOTPOptions;
 
 	const sendVerificationOTPAction = sendVerificationOTP(opts);
+	const rateLimitPolicy = fixedWindow({
+		limit: opts.rateLimit?.max || 3,
+		windowMs: (opts.rateLimit?.window || 60) * 1_000,
+	});
 
 	return {
 		id: "email-otp",
@@ -132,64 +137,55 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				pathMatcher(path) {
 					return path === "/email-otp/send-verification-otp";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/check-verification-otp";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/verify-email";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/sign-in/email-otp";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/request-password-reset";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/reset-password";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/forget-password/email-otp";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/request-email-change";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/change-email";
 				},
-				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max || 3,
+				policy: rateLimitPolicy,
 			},
 		],
 		options,
