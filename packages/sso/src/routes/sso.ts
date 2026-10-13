@@ -355,7 +355,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 																description: "Additional field mappings",
 															},
 														},
-														required: ["email", "name"],
 													},
 												},
 												required: [

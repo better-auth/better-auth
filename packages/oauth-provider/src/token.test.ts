@@ -2125,6 +2125,89 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 	});
 
+	it("lets an admin disable and re-enable a client without deleting it", async () => {
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+			},
+		});
+		if (!registered.client_secret) throw new Error("missing client secret");
+		const requestToken = () =>
+			client.$fetch<{ access_token?: string }>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					resource: validResource,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${registered.client_id}:${registered.client_secret}`).toString("base64")}`,
+				},
+			});
+
+		const issuedToken = (await requestToken()).data?.access_token;
+		expect(issuedToken).toBeDefined();
+		const resourceServer = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+			},
+		});
+		if (!resourceServer.client_secret)
+			throw new Error("missing resource server secret");
+		await auth.api.adminLinkClientResource({
+			headers,
+			params: {
+				identifier: encodeURIComponent(validResource),
+				client_id: resourceServer.client_id,
+			},
+		});
+		const introspect = () =>
+			client.oauth2.introspect(
+				{
+					client_id: resourceServer.client_id,
+					client_secret: resourceServer.client_secret,
+					token: issuedToken!,
+				},
+				{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+			);
+		const initialIntrospection = await introspect();
+		expect(initialIntrospection.error).toBeNull();
+		expect(initialIntrospection.data?.active).toBe(true);
+		const disabled = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: registered.client_id, update: { disabled: true } },
+		});
+		expect(disabled.disabled).toBe(true);
+		expect((await introspect()).data).toEqual({ active: false });
+		const blocked = await requestToken();
+		expect(blocked.error?.status).toBe(401);
+		expect((blocked.error as { error?: string } | null)?.error).toBe(
+			"invalid_client",
+		);
+
+		const userUpdate = await client.$fetch<OAuthClient>(
+			"/oauth2/update-client",
+			{
+				method: "POST",
+				body: {
+					client_id: registered.client_id,
+					update: { disabled: false },
+				},
+			},
+		);
+		expect(userUpdate.data?.disabled).toBe(true);
+		const enabled = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: registered.client_id, update: { disabled: false } },
+		});
+		expect(enabled.disabled).toBe(false);
+		expect((await requestToken()).data?.access_token).toBeDefined();
+	});
+
 	it("returns invalid_request when client_credentials omits client_id", async () => {
 		const response = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/token",

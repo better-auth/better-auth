@@ -12,6 +12,7 @@ import { getDate } from "../../utils/date";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
+	resetCredentialPassword,
 } from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
@@ -795,7 +796,27 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		},
 		async (ctx) => {
 			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
-			await verifyPhoneNumberOTP(ctx, opts, phoneResetIdentifier, ctx.body.otp);
+			// Check the code without spending it, so a rejected password leaves it
+			// usable. A wrong or unusable code goes through verifyPhoneNumberOTP,
+			// which counts the attempt and throws; a correct one is consumed inside
+			// the reset transaction.
+			let otpConsumed = false;
+			if (
+				!(await matchesUsableStoredPhoneNumberOTP(
+					ctx,
+					opts,
+					phoneResetIdentifier,
+					ctx.body.otp,
+				))
+			) {
+				await verifyPhoneNumberOTP(
+					ctx,
+					opts,
+					phoneResetIdentifier,
+					ctx.body.otp,
+				);
+				otpConsumed = true;
+			}
 			const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 				model: "user",
 				where: [
@@ -816,32 +837,26 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			const account = await ctx.context.internalAdapter.findCredentialAccount(
+			await resetCredentialPassword(
+				ctx,
 				user.id,
+				hashedPassword,
+				otpConsumed
+					? undefined
+					: () =>
+							verifyPhoneNumberOTP(
+								ctx,
+								opts,
+								phoneResetIdentifier,
+								ctx.body.otp,
+							),
 			);
-			if (!account) {
-				await ctx.context.internalAdapter.createAccount({
-					userId: user.id,
-					providerId: "credential",
-					accountId: user.id,
-					password: hashedPassword,
-				});
-			} else {
-				await ctx.context.internalAdapter.updatePassword(
-					user.id,
-					hashedPassword,
-				);
-			}
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 				await ctx.context.options.emailAndPassword.onPasswordReset(
 					{ user },
 					ctx.request,
 				);
-			}
-
-			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-				await ctx.context.internalAdapter.deleteUserSessions(user.id);
 			}
 
 			return ctx.json({
@@ -914,6 +929,26 @@ async function verifyPhoneNumberOTP(
 		});
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
+}
+
+/**
+ * Reports whether the provided code matches a stored, unexpired record with
+ * attempts left, without consuming it or counting an attempt.
+ */
+async function matchesUsableStoredPhoneNumberOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredPhoneNumberOptions,
+	identifier: string,
+	providedCode: string,
+): Promise<boolean> {
+	const existing =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!existing || existing.expiresAt < new Date()) return false;
+	const [otpValue, rawAttempts] = existing.value.split(":");
+	if (parseVerificationAttempts(rawAttempts) >= (opts?.allowedAttempts ?? 3)) {
+		return false;
+	}
+	return otpValue === providedCode;
 }
 
 function parseVerificationAttempts(value: string | undefined) {
