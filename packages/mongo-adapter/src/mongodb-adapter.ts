@@ -64,6 +64,10 @@ export interface MongoDBAdapterConfig {
 	 * Whether the adapter natively supports JSON objects.
 	 * When true, JSON fields are stored as native BSON objects/subdocuments instead of serialized JSON strings.
 	 *
+	 * Note: Enabling this option on an existing database does not automatically migrate pre-existing
+	 * stringified documents in MongoDB. Existing documents with stringified JSON will be parsed on read,
+	 * but query filters expecting native BSON objects will not match legacy string rows until migrated.
+	 *
 	 * @default false
 	 */
 	supportsJSON?: boolean | undefined;
@@ -880,7 +884,13 @@ export const mongodbAdapter = (
 					fieldAttributes.type === "json" &&
 					typeof data === "string"
 				) {
-					return safeJSONParse(data) ?? data;
+					const trimmed = data.trim();
+					if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+						return safeJSONParse(data) ?? data;
+					}
+					if (trimmed === "null") {
+						return null;
+					}
 				}
 				return data;
 			},

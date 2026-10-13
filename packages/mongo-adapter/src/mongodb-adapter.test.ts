@@ -856,4 +856,94 @@ describe("json support", () => {
 			"{ malformed json",
 		);
 	});
+
+	it("should parse legacy literal 'null' string to null under supportsJSON: true", async () => {
+		const nullDoc = {
+			_id: new ObjectId(),
+			metadata: "null",
+		};
+
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => [nullDoc]),
+		}));
+		const db = {
+			collection: vi.fn(() => ({ aggregate })),
+		} as unknown as Db;
+
+		const adapter = mongodbAdapter(db, {
+			transaction: false,
+			supportsJSON: true,
+		})({
+			plugins: [
+				{
+					id: "test",
+					schema: {
+						testModel: {
+							fields: {
+								metadata: {
+									type: "json",
+								},
+							},
+						},
+					},
+				},
+			],
+		});
+
+		const result = await adapter.findOne({
+			model: "testModel",
+			where: [{ field: "id", value: nullDoc._id.toHexString() }],
+		});
+
+		expect(result).not.toBeNull();
+		expect((result as Record<string, unknown>).metadata).toBeNull();
+	});
+
+	it("should preserve scalar strings as strings under supportsJSON: true", async () => {
+		const scalarDocs = [
+			{ _id: new ObjectId(), metadata: "123" },
+			{ _id: new ObjectId(), metadata: "true" },
+			{ _id: new ObjectId(), metadata: "plain string" },
+		];
+
+		for (const doc of scalarDocs) {
+			const aggregate = vi.fn(() => ({
+				toArray: vi.fn(async () => [doc]),
+			}));
+			const db = {
+				collection: vi.fn(() => ({ aggregate })),
+			} as unknown as Db;
+
+			const adapter = mongodbAdapter(db, {
+				transaction: false,
+				supportsJSON: true,
+			})({
+				plugins: [
+					{
+						id: "test",
+						schema: {
+							testModel: {
+								fields: {
+									metadata: {
+										type: "json",
+									},
+								},
+							},
+						},
+					},
+				],
+			});
+
+			const result = await adapter.findOne({
+				model: "testModel",
+				where: [{ field: "id", value: doc._id.toHexString() }],
+			});
+
+			expect(result).not.toBeNull();
+			expect((result as Record<string, unknown>).metadata).toBe(doc.metadata);
+			expect(typeof (result as Record<string, unknown>).metadata).toBe(
+				"string",
+			);
+		}
+	});
 });
