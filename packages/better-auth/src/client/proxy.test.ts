@@ -1,9 +1,120 @@
 // @vitest-environment happy-dom
 
+import type { ClientFetchOption } from "@better-auth/core";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { organizationClient } from "../plugins/organization/client";
 import { getClientConfig } from "./config";
 import { createDynamicPathProxy } from "./proxy";
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11727
+ */
+describe("request method options", () => {
+	type RequestArgs = {
+		value?: string;
+		query?: Record<string, string>;
+		fetchOptions?: ClientFetchOption;
+	};
+
+	function getProxy(knownPathMethods: Record<string, "GET" | "POST"> = {}) {
+		const customFetchImpl = vi.fn(async () => Response.json({ ok: true }));
+		const { $fetch } = getClientConfig({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const proxy = createDynamicPathProxy(
+			{} as {
+				test: (
+					args?: RequestArgs,
+					options?: ClientFetchOption,
+				) => Promise<unknown>;
+			},
+			$fetch,
+			knownPathMethods,
+			{},
+			undefined,
+		);
+		return { proxy, customFetchImpl };
+	}
+
+	it.each([
+		{ method: "POST", args: {}, body: "{}" },
+		{ method: "PATCH", args: { value: "test" }, body: '{"value":"test"}' },
+		{ method: "GET", args: { value: "test" }, body: null },
+	])("uses $method from the second argument", async ({
+		method,
+		args,
+		body,
+	}) => {
+		const { proxy, customFetchImpl } = getProxy();
+		await proxy.test(args, { method });
+		expect(customFetchImpl).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ method, body }),
+		);
+	});
+
+	it("includes a body supplied in the second argument", async () => {
+		const { proxy, customFetchImpl } = getProxy();
+		await proxy.test(undefined, { method: "POST", body: { value: "test" } });
+		expect(customFetchImpl).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ method: "POST", body: '{"value":"test"}' }),
+		);
+	});
+
+	it.each([
+		{ method: "POST", args: {} },
+		{ method: "GET", args: { value: "test" } },
+	])("uses $method from nested fetch options", async ({ method, args }) => {
+		const { proxy, customFetchImpl } = getProxy();
+		await proxy.test({ ...args, fetchOptions: { method } });
+		expect(customFetchImpl).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ method }),
+		);
+	});
+
+	it("prefers nested fetch options when both arguments specify a method", async () => {
+		const { proxy, customFetchImpl } = getProxy();
+		await proxy.test({ fetchOptions: { method: "POST" } }, { method: "GET" });
+		expect(customFetchImpl).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ method: "POST" }),
+		);
+	});
+
+	it.each([
+		"GET",
+		"POST",
+	] as const)("preserves the known %s method over request options", async (method) => {
+		const { proxy, customFetchImpl } = getProxy({ "/test": method });
+		const otherMethod = method === "GET" ? "POST" : "GET";
+		await proxy.test(
+			{ fetchOptions: { method: otherMethod } },
+			{ method: otherMethod },
+		);
+		expect(customFetchImpl).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ method }),
+		);
+	});
+
+	it.each([
+		{ args: {}, method: "GET" },
+		{ args: { value: "test" }, method: "POST" },
+	])("still infers $method without an explicit method", async ({
+		args,
+		method,
+	}) => {
+		const { proxy, customFetchImpl } = getProxy();
+		await proxy.test(args);
+		expect(customFetchImpl).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ method }),
+		);
+	});
+});
 
 describe("createDynamicPathProxy", () => {
 	afterEach(() => {
