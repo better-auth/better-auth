@@ -8,4 +8,4 @@ If you pass `client` to `mongodbAdapter` on a replica set, concurrent requests t
 
 Because a retry runs the work again, `databaseHooks` `before` hooks can run more than once for one request on MongoDB. `after` hooks still run once, after the commit. Keep calls to external services in `after` hooks.
 
-On every adapter, the verification email for an email sign-up or a new social or SSO account, and the `onExistingUserSignUp` callback, now run after the sign-up is saved. A sign-up that rolls back no longer sends an email.
+On every adapter, the verification email for an email sign-up or a new social or SSO account is now sent after the account is saved, and `onExistingUserSignUp` runs after the sign-up request's transaction completes. A sign-up that rolls back no longer sends an email.
