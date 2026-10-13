@@ -348,7 +348,10 @@ async function verifyWithCustomOTP(
 	},
 	identifier: string,
 ) {
-	const isValid = await verifyOTP(body, ctx);
+	const isValid = await verifyOTP(
+		{ phoneNumber: body.phoneNumber, code: body.code },
+		ctx,
+	);
 	if (!isValid) {
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}

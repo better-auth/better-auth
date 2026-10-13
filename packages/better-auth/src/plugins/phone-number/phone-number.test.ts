@@ -1578,15 +1578,26 @@ describe("custom verifyOTP", async () => {
 		await client.phoneNumber.requestPasswordReset({
 			phoneNumber: resetPhoneNumber,
 		});
+		// Submit the stored code, which the built-in check would accept, so only
+		// the custom verifier can reject it.
+		const ctx = await auth.$context;
+		const stored = await ctx.internalAdapter.findVerificationValue(
+			`${resetPhoneNumber}-request-password-reset`,
+		);
+		const storedCode = stored!.value.split(":")[0]!;
 		mockVerifyOTP.mockResolvedValueOnce(false);
 
 		const res = await client.phoneNumber.resetPassword({
 			phoneNumber: resetPhoneNumber,
-			otp: "999999",
+			otp: storedCode,
 			newPassword: "new-password-123",
 		});
 
 		expect(res.error?.code).toBe("INVALID_OTP");
+		expect(mockVerifyOTP).toHaveBeenCalledWith(
+			{ phoneNumber: resetPhoneNumber, code: storedCode },
+			expect.anything(),
+		);
 	});
 
 	/**
