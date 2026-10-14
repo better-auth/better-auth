@@ -4,12 +4,17 @@ import {
 	resolveResourcePolicy,
 	toResourceList,
 } from "@better-auth/oauth-provider/internal";
+import { BetterAuthError } from "better-auth";
 import { APIError } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
 import { BC_AUTHORIZE_PATH } from "./constants";
 import { CIBA_ERROR_CODES } from "./error-codes";
-import type { CibaDeliveryMode, CibaOptions } from "./types";
+import type {
+	AuthorizationDetail,
+	CibaDeliveryMode,
+	CibaOptions,
+} from "./types";
 import {
 	getCibaClientMetadata,
 	getCibaProviderApi,
@@ -57,6 +62,8 @@ export function createBcAuthorize(
 				login_hint_token: z.string().optional(),
 				binding_message: z.string().max(256).optional(),
 				client_notification_token: z.string().max(1024).optional(),
+				acr_values: z.string().optional(),
+				authorization_details: z.string().optional(),
 				requested_expiry: z.coerce.number().int().positive().optional(),
 				resource: z
 					.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
@@ -103,7 +110,10 @@ export function createBcAuthorize(
 			// validation. The bound grant type enforces CIBA registration.
 			const { client, clientId } = await getCibaProviderApi(
 				ctx,
-			).authenticateClient({ scopes, requireCredentials: true });
+			).authenticateClient({
+				scopes,
+				requireCredentials: !options.allowPublicClients,
+			});
 
 			const { deliveryMode, notificationEndpoint } =
 				getCibaClientMetadata(client);
@@ -154,6 +164,10 @@ export function createBcAuthorize(
 				throw invalidRequest(CIBA_ERROR_CODES.UNSUPPORTED_HINT.message);
 			}
 
+			const authorizationDetails = parseAuthorizationDetails(
+				ctx.body.authorization_details,
+				options.authorizationDetailsTypes,
+			);
 			const resources = toResourceList(ctx.body.resource);
 			await resolveResourcePolicy(ctx, getOAuthOptions(ctx), {
 				resource: resources,
@@ -172,25 +186,49 @@ export function createBcAuthorize(
 				);
 			}
 
+			const request = {
+				clientId,
+				userId: user.id,
+				scope: scopes.join(" "),
+				bindingMessage: ctx.body.binding_message,
+				acrValues: ctx.body.acr_values,
+				authorizationDetails,
+				resources,
+			};
+			const validated = await options.validateRequest?.({
+				request,
+				client,
+				ctx,
+			});
+			const additionalFields = pickDeclaredFields(
+				validated?.additionalFields,
+				options,
+			);
+
 			const expiresIn = Math.min(
 				ctx.body.requested_expiry ?? settings.expiresIn,
 				settings.expiresIn,
 			);
 			const authReqId = generateRandomString(32, "a-z", "A-Z", "0-9");
-			await ctx.context.adapter.create({
+			const created = await ctx.context.adapter.create<{ id: string }>({
 				model: "cibaRequest",
 				data: {
+					...additionalFields,
+					...request,
 					authReqId: await hashAuthReqId(ctx, authReqId),
-					clientId,
-					userId: user.id,
-					scope: scopes.join(" "),
-					bindingMessage: ctx.body.binding_message,
 					resources: resources ?? null,
 					status: "pending",
-					clientNotificationToken:
-						deliveryMode === "ping"
-							? ctx.body.client_notification_token
-							: undefined,
+					// Ping clients keep what the callback needs, so a completion by
+					// request_id can still send it.
+					...(deliveryMode === "ping"
+						? {
+								clientNotificationToken: ctx.body.client_notification_token,
+								encryptedAuthReqId: await symmetricEncrypt({
+									key: ctx.context.secretConfig,
+									data: authReqId,
+								}),
+							}
+						: {}),
 					pollingInterval: settings.interval * 1000,
 					expiresAt: new Date(Date.now() + expiresIn * 1000),
 					createdAt: new Date(),
@@ -202,11 +240,9 @@ export function createBcAuthorize(
 			await ctx.context.runInBackgroundOrAwait(
 				options.sendNotification(
 					{
-						userId: user.id,
-						clientId,
+						...request,
+						requestId: created.id,
 						clientName: client.name,
-						scope: scopes.join(" "),
-						bindingMessage: ctx.body.binding_message,
 						approvalUrl: approvalUrl.toString(),
 					},
 					ctx,
@@ -220,4 +256,54 @@ export function createBcAuthorize(
 			});
 		},
 	);
+}
+
+/**
+ * Parses RFC 9396 `authorization_details` (§2): a JSON array of objects, each
+ * with a `type` the deployment accepts.
+ */
+function parseAuthorizationDetails(
+	value: string | undefined,
+	types: string[] | undefined,
+): AuthorizationDetail[] | undefined {
+	if (value === undefined) return undefined;
+	const reject = (description: string): never => {
+		throw invalidRequest(description, "invalid_authorization_details");
+	};
+	if (!types?.length) reject("authorization_details is not supported");
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(value);
+	} catch {
+		reject("authorization_details must be JSON");
+	}
+	if (!Array.isArray(parsed) || parsed.length === 0) {
+		reject("authorization_details must be a non-empty array");
+	}
+	for (const detail of parsed as unknown[]) {
+		const type =
+			detail && typeof detail === "object" && !Array.isArray(detail)
+				? (detail as { type?: unknown }).type
+				: undefined;
+		if (typeof type !== "string" || !types?.includes(type)) {
+			reject(`Unsupported authorization_details type: ${String(type)}`);
+		}
+	}
+	return parsed as AuthorizationDetail[];
+}
+
+/** Keeps only the `additionalFields` the deployment declared in `schema`. */
+function pickDeclaredFields(
+	fields: Record<string, unknown> | undefined,
+	options: CibaOptions,
+): Record<string, unknown> {
+	if (!fields) return {};
+	const declared = options.schema?.cibaRequest?.additionalFields ?? {};
+	const undeclared = Object.keys(fields).filter((name) => !(name in declared));
+	if (undeclared.length > 0) {
+		throw new BetterAuthError(
+			`CIBA validateRequest returned undeclared additionalFields: ${undeclared.join(", ")}`,
+		);
+	}
+	return fields;
 }

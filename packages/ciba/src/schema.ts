@@ -1,4 +1,6 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { mergeSchema } from "better-auth/db";
+import type { CibaOptions } from "./types";
 
 /**
  * A pending backchannel authentication request.
@@ -45,6 +47,16 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			/** Space-separated `acr_values` the client requested. */
+			acrValues: {
+				type: "string",
+				required: false,
+			},
+			/** RFC 9396 `authorization_details`, validated against configured types. */
+			authorizationDetails: {
+				type: "json",
+				required: false,
+			},
 			/** RFC 8707 resource indicators the issued token is bound to. */
 			resources: {
 				type: "string[]",
@@ -60,6 +72,14 @@ export const schema = {
 			 * the server notifies the client's registered notification endpoint.
 			 */
 			clientNotificationToken: {
+				type: "string",
+				required: false,
+			},
+			/**
+			 * The `auth_req_id`, encrypted with the server secret, kept only for ping
+			 * clients so a completion by `request_id` can still send the ping.
+			 */
+			encryptedAuthReqId: {
 				type: "string",
 				required: false,
 			},
@@ -88,3 +108,22 @@ export const schema = {
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
+
+/** The plugin schema with the deployment's renames and `additionalFields`. */
+export function getCibaSchema(options: CibaOptions["schema"]) {
+	// Copy each field: mergeSchema writes renames onto the field objects.
+	const fields = Object.fromEntries(
+		Object.entries(schema.cibaRequest.fields).map(([name, field]) => [
+			name,
+			{ ...field },
+		]),
+	);
+	return mergeSchema(
+		{
+			cibaRequest: {
+				fields: { ...fields, ...options?.cibaRequest?.additionalFields },
+			},
+		},
+		options,
+	);
+}

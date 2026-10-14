@@ -4,27 +4,23 @@ import type { OAuthOptions, Scope } from "@better-auth/oauth-provider";
 import { getOAuthProviderApi } from "@better-auth/oauth-provider";
 import { parseClientMetadata } from "@better-auth/oauth-provider/internal";
 import { BetterAuthError } from "better-auth";
+import { symmetricDecrypt } from "better-auth/crypto";
 import { CIBA_GRANT_TYPE } from "./constants";
-import type { CibaDeliveryMode } from "./types";
+import type { CibaDeliveryMode, CibaRequest } from "./types";
 
-export interface CibaRequest {
-	id: string;
-	/** The hashed `auth_req_id`. */
-	authReqId: string;
-	clientId: string;
-	userId: string;
-	scope: string;
-	bindingMessage?: string | null;
-	resources?: string[] | null;
-	status: "pending" | "approved" | "denied";
+/** The stored row, including fields hooks never see. */
+export interface StoredCibaRequest extends CibaRequest {
 	clientNotificationToken?: string | null;
-	authTime?: Date | null;
+	encryptedAuthReqId?: string | null;
 	/** Milliseconds. */
 	pollingInterval: number;
 	lastPolledAt?: Date | null;
-	expiresAt: Date;
-	createdAt: Date;
 }
+
+/** Identifies a request by the raw `auth_req_id` or by its internal id. */
+export type CibaRequestIdentifier =
+	| { authReqId: string; requestId?: undefined }
+	| { requestId: string; authReqId?: undefined };
 
 // Matches the back-channel logout dispatch timeout.
 const NOTIFICATION_TIMEOUT_MS = 5_000;
@@ -47,20 +43,32 @@ export function getCibaProviderApi(ctx: GenericEndpointContext) {
 	return getOAuthProviderApi(ctx, getOAuthOptions(ctx), CIBA_GRANT_TYPE);
 }
 
-/** Looks up a request by the raw `auth_req_id` the client or approval link holds. */
 export async function findCibaRequest(
 	ctx: GenericEndpointContext,
-	authReqId: string,
-): Promise<CibaRequest | null> {
-	return ctx.context.adapter.findOne<CibaRequest>({
+	identifier: CibaRequestIdentifier,
+): Promise<StoredCibaRequest | null> {
+	return ctx.context.adapter.findOne<StoredCibaRequest>({
 		model: "cibaRequest",
 		where: [
-			{
-				field: "authReqId",
-				value: await hashAuthReqId(ctx, authReqId),
-			},
+			identifier.requestId !== undefined
+				? { field: "id", value: identifier.requestId }
+				: {
+						field: "authReqId",
+						value: await hashAuthReqId(ctx, identifier.authReqId),
+					},
 		],
 	});
+}
+
+/** Strips the fields only the plugin reads before a row reaches a hook. */
+export function toCibaRequest({
+	clientNotificationToken: _token,
+	encryptedAuthReqId: _encrypted,
+	pollingInterval: _interval,
+	lastPolledAt: _lastPolled,
+	...request
+}: StoredCibaRequest): CibaRequest {
+	return request;
 }
 
 export async function hashAuthReqId(
@@ -125,20 +133,24 @@ export function isSupportedDeliveryMode(
  */
 export async function pingClient(
 	ctx: GenericEndpointContext,
-	request: CibaRequest,
-	authReqId: string,
+	request: StoredCibaRequest,
 ): Promise<void> {
-	if (!request.clientNotificationToken) return;
+	if (!request.clientNotificationToken || !request.encryptedAuthReqId) return;
 	// The decision is already committed, so a failed lookup must not fail it.
 	let endpoint: string | undefined;
+	let authReqId: string;
 	try {
 		const client = await getCibaProviderApi(ctx).getClient(request.clientId);
 		endpoint = client
 			? getCibaClientMetadata(client).notificationEndpoint
 			: undefined;
+		authReqId = await symmetricDecrypt({
+			key: ctx.context.secretConfig,
+			data: request.encryptedAuthReqId,
+		});
 	} catch (error) {
 		ctx.context.logger.warn(
-			`CIBA ping skipped: could not load client ${request.clientId}`,
+			`CIBA ping skipped: could not prepare the ping for client ${request.clientId}`,
 			error,
 		);
 		return;

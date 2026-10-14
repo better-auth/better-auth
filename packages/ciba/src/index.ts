@@ -1,11 +1,11 @@
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
-import { cibaApprove, cibaDeny, cibaRequest } from "./approval";
+import { createApprovalEndpoints } from "./approval";
 import { createBcAuthorize } from "./bc-authorize";
 import { BC_AUTHORIZE_PATH, CIBA_GRANT_TYPE } from "./constants";
 import { CIBA_ERROR_CODES } from "./error-codes";
-import { cibaGrantHandler } from "./grant-handler";
-import { schema } from "./schema";
+import { createCibaGrantHandler } from "./grant-handler";
+import { getCibaSchema } from "./schema";
 import type { CibaOptions } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
@@ -22,7 +22,8 @@ declare module "@better-auth/core" {
  * `oauthProvider()`. A client starts a request at the backchannel endpoint, the
  * user approves on a separate device, and the client collects tokens at the
  * token endpoint, either by polling (`poll`) or after the server notifies it
- * (`ping`).
+ * (`ping`). Trusted server code can complete a request with
+ * `auth.api.completeCibaRequest`.
  *
  * Requires the `oauth-provider` and `jwt` plugins.
  *
@@ -37,22 +38,26 @@ export const ciba = (options: CibaOptions) => {
 	return {
 		id: "ciba",
 		version: PACKAGE_VERSION,
-		schema,
+		schema: getCibaSchema(options.schema),
 		init(ctx) {
 			extendOAuthProvider(ctx, {
-				grants: { [CIBA_GRANT_TYPE]: cibaGrantHandler },
+				grants: { [CIBA_GRANT_TYPE]: createCibaGrantHandler(options) },
 				metadata: ({ ctx: endpointCtx }) => ({
 					backchannel_authentication_endpoint: `${endpointCtx.context.baseURL}${BC_AUTHORIZE_PATH}`,
 					backchannel_token_delivery_modes_supported: settings.deliveryModes,
 					backchannel_user_code_parameter_supported: false,
+					...(options.authorizationDetailsTypes?.length
+						? {
+								authorization_details_types_supported:
+									options.authorizationDetailsTypes,
+							}
+						: {}),
 				}),
 			});
 		},
 		endpoints: {
 			bcAuthorize: createBcAuthorize(options, settings),
-			cibaRequest,
-			cibaApprove,
-			cibaDeny,
+			...createApprovalEndpoints(options),
 		},
 		// Each backchannel request notifies a user, so it gets a tighter limit
 		// than the generic per-IP default.
@@ -70,7 +75,11 @@ export const ciba = (options: CibaOptions) => {
 export { CIBA_GRANT_TYPE } from "./constants";
 export { CIBA_ERROR_CODES } from "./error-codes";
 export type {
+	AuthorizationDetail,
+	CibaDecision,
 	CibaDeliveryMode,
 	CibaOptions,
+	CibaRequest,
+	CibaRequestInput,
 	SendNotificationData,
 } from "./types";

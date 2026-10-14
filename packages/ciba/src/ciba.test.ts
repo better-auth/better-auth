@@ -375,6 +375,31 @@ describe("ciba backchannel request validation", () => {
 		expect(res.body.error).toBe("invalid_request");
 	});
 
+	it("rejects a public client by default", async () => {
+		const client = await createClient(
+			{ backchannel_token_delivery_mode: "poll" },
+			{ token_endpoint_auth_method: "none" },
+		);
+		const res = await bcAuthorize(
+			{
+				client_id: client.client_id,
+				scope: "openid",
+				login_hint: testUser.email,
+			},
+			null,
+		);
+		expect(res.body.error).toBe("invalid_client");
+	});
+
+	it("rejects authorization_details when no types are configured", async () => {
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			authorization_details: JSON.stringify([{ type: "payment_initiation" }]),
+		});
+		expect(res.body.error).toBe("invalid_authorization_details");
+	});
+
 	it("rejects an unauthenticated client", async () => {
 		const res = await bcAuthorize(
 			{
@@ -421,6 +446,26 @@ describe("ciba backchannel request validation", () => {
 });
 
 describe("ciba approval endpoints", () => {
+	it("lists pending requests and approves one by request_id", async () => {
+		const authReqId = await start({ binding_message: "Code 12" });
+		const pending = await auth.api.cibaRequests({ headers });
+		const listed = pending.find((r) => r.binding_message === "Code 12");
+		expect(listed?.request_id).toBeDefined();
+		expect(JSON.stringify(pending)).not.toContain(authReqId);
+		const requestId = listed?.request_id as string;
+		expect(
+			await auth.api.cibaRequest({ headers, query: { request_id: requestId } }),
+		).toMatchObject({ request_id: requestId, status: "pending" });
+		await auth.api.cibaApprove({ headers, body: { request_id: requestId } });
+		expect((await poll(authReqId)).status).toBe(200);
+	});
+
+	it("requires exactly one of auth_req_id or request_id", async () => {
+		await expect(
+			auth.api.cibaApprove({ headers, body: {} }),
+		).rejects.toMatchObject({ statusCode: 400 });
+	});
+
 	it("shows the request to its owner only", async () => {
 		const authReqId = await start({ binding_message: "Code 77", resource });
 		const details = await auth.api.cibaRequest({
