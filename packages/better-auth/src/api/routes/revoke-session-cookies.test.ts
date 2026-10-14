@@ -322,4 +322,104 @@ describe("session revocation clears cookies", () => {
 			0,
 		);
 	});
+
+	it("revokeSessions does not expire the cookies when the bearer token is another user's", async () => {
+		// the batch endpoint's bearer edge case: the request authorizes with
+		// one user's bearer token while the cookie jar holds a different
+		// user's session. deleteUserSessions removes only the bearer user's
+		// sessions, so the response must not expire the other user's cookies,
+		// and the other user's session must survive the revocation.
+		const { client, signInWithTestUser, signInWithUser, cookieSetter } =
+			await getTestInstance({
+				session: { cookieCache },
+				plugins: [bearer()],
+			});
+		await client.signUp.email({
+			name: "other user",
+			email: "other-user@example.com",
+			password: "other-user-123456",
+		});
+		const { headers: otherHeaders } = await signInWithUser(
+			"other-user@example.com",
+			"other-user-123456",
+		);
+		const otherSession = await client.getSession({
+			fetchOptions: {
+				headers: otherHeaders,
+				onSuccess: cookieSetter(otherHeaders),
+			},
+		});
+		expect(otherSession.data?.session?.token).toBeDefined();
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const bearerToken = currentSession.data!.session!.token;
+
+		// the request authorizes as the test user, but the cookie jar holds
+		// the other user's session
+		const requestHeaders = new Headers(otherHeaders);
+		requestHeaders.set("authorization", `Bearer ${bearerToken}`);
+
+		let setCookieHeader = "";
+		const revokeRes = await client.revokeSessions({
+			fetchOptions: {
+				headers: requestHeaders,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+		expect(revokeRes.data?.status).toBe(true);
+
+		const responseCookies = parseSetCookieHeader(setCookieHeader);
+		// the other user's session token cookie is not the caller's to expire
+		expect(responseCookies.has("better-auth.session_token")).toBe(false);
+		// the cookie cache may legitimately appear as a refresh (see the
+		// single-session tests), so only assert it is not an expiry
+		expect(
+			responseCookies.get("better-auth.session_data")?.["max-age"],
+		).not.toBe(0);
+
+		// the other user's session is untouched and keeps validating
+		const otherSessionAfter = await client.getSession({
+			fetchOptions: { headers: otherHeaders },
+		});
+		expect(otherSessionAfter.data?.session?.token).toBe(
+			otherSession.data!.session!.token,
+		);
+	});
+
+	it("revokeSessions leaves a bearer-only caller's response free of expiry cookies", async () => {
+		// the batch endpoint's twin of the helper's bearer-only contract: a
+		// caller that holds no session cookie at all must not receive
+		// Set-Cookie expiry headers for cookies it never had
+		const { client, signInWithTestUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache },
+			plugins: [bearer()],
+		});
+		const { headers } = await signInWithTestUser();
+		const sessionBefore = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const bearerToken = sessionBefore.data!.session!.token;
+
+		let setCookieHeader = "";
+		const revokeRes = await client.revokeSessions({
+			fetchOptions: {
+				headers: { authorization: `Bearer ${bearerToken}` },
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+		expect(revokeRes.data?.status).toBe(true);
+
+		const responseCookies = parseSetCookieHeader(setCookieHeader);
+		expect(responseCookies.has("better-auth.session_token")).toBe(false);
+		expect(
+			responseCookies.get("better-auth.session_data")?.["max-age"],
+		).not.toBe(0);
+	});
 });

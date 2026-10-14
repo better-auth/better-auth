@@ -672,8 +672,8 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 	);
 
 /**
- * Whether the session-token cookie the *original* request carried matches the
- * revoked session's token.
+ * The session-token cookie the *original* request carried, with its signature
+ * verified - or `null` when the request holds none.
  *
  * `ctx.headers` (and therefore `ctx.getSignedCookie`) reflects the effective
  * session, which the bearer plugin can swap for the Authorization token while
@@ -686,11 +686,11 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
  * is `originalCookieHeader` (captured by `dispatchAuthEndpoint` before any
  * before-hook ran), not `ctx.headers`.
  *
- * Returns `false` when the original request carries no session-token cookie
+ * Returns `null` when the original request carries no session-token cookie
  * (bearer-only clients) so non-browser callers get a clean `Set-Cookie`-free
  * response rather than expiry headers for cookies they never held.
  */
-async function revokedSessionOwnsRequestCookies(
+async function requestSessionCookieToken(
 	/**
 	 * The endpoint context. On a server-side `auth.api.*` dispatch the context
 	 * additionally carries `originalCookieHeader` (see dispatchAuthEndpoint):
@@ -699,8 +699,7 @@ async function revokedSessionOwnsRequestCookies(
 	 * request contexts too, where `ctx.request` holds the untouched cookies.
 	 */
 	ctx: GenericEndpointContext & { originalCookieHeader?: string | undefined },
-	revokedToken: string,
-): Promise<boolean> {
+): Promise<string | null> {
 	let cookieHeader: string | null = null;
 	if (ctx.request) {
 		// original request cookies; plugin before-hooks may have rewritten
@@ -714,24 +713,25 @@ async function revokedSessionOwnsRequestCookies(
 		cookieHeader = ctx.originalCookieHeader;
 	}
 	if (!cookieHeader) {
-		return false;
+		// bearer-only clients hold no session cookie
+		return null;
 	}
 	const signedValue = parseCookies(cookieHeader).get(
 		ctx.context.authCookies.sessionToken.name,
 	);
 	if (!signedValue) {
-		return false;
+		return null;
 	}
 	// the cookie holds `token.signature`; the signature is appended after the
 	// last dot (session tokens are alphanumeric, see generateId)
 	const dotIndex = signedValue.lastIndexOf(".");
 	const cookieToken = dotIndex > 0 ? signedValue.substring(0, dotIndex) : "";
-	if (!cookieToken || cookieToken !== revokedToken) {
-		return false;
+	if (!cookieToken) {
+		return null;
 	}
-	// verify the signature so a cookie cannot claim ownership of a session
-	// the caller does not hold by pairing a foreign token with a valid
-	// signature of a different value
+	// verify the signature so a cookie cannot claim a session the caller does
+	// not hold by pairing a foreign token with a valid signature of a
+	// different value
 	const signature = signedValue.substring(dotIndex + 1);
 	try {
 		const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
@@ -739,10 +739,25 @@ async function revokedSessionOwnsRequestCookies(
 			cookieToken,
 			signature,
 		);
-		return isValid;
+		return isValid ? cookieToken : null;
 	} catch {
-		return false;
+		return null;
 	}
+}
+
+/**
+ * Whether the session-token cookie the *original* request carried matches the
+ * revoked session's token.
+ *
+ * Returns `false` when the original request carries no session-token cookie
+ * (bearer-only clients) so non-browser callers get a clean `Set-Cookie`-free
+ * response rather than expiry headers for cookies they never held.
+ */
+async function revokedSessionOwnsRequestCookies(
+	ctx: GenericEndpointContext & { originalCookieHeader?: string | undefined },
+	revokedToken: string,
+): Promise<boolean> {
+	return (await requestSessionCookieToken(ctx)) === revokedToken;
 }
 
 /**
@@ -869,13 +884,27 @@ export const revokeSessions = createAuthEndpoint(
 	},
 	async (ctx) => {
 		try {
+			// Every session of the caller is about to be revoked, so the
+			// session the original request's cookie holds - read from the
+			// original header, because a bearer token may have been swapped
+			// into ctx.headers in flight, and looked up BEFORE the delete,
+			// because the delete removes it - decides whether the response
+			// expires the session (and cookie cache) cookies, matching what
+			// sign-out does. Only a cookie session that belongs to the
+			// caller may be expired: with an Authorization token for one
+			// user and a cookie jar holding a different user's session,
+			// deleteUserSessions removes only the bearer user's sessions,
+			// and a bearer-only caller holds no cookies to expire at all.
+			const cookieSessionToken = await requestSessionCookieToken(ctx);
+			const cookieSession = cookieSessionToken
+				? await ctx.context.internalAdapter.findSession(cookieSessionToken)
+				: null;
 			await ctx.context.internalAdapter.deleteUserSessions(
 				ctx.context.session.user.id,
 			);
-			// the current session is revoked along with every other one, so
-			// expire the session (and cookie cache) cookies in the response,
-			// matching what sign-out does
-			deleteSessionCookie(ctx);
+			if (cookieSession?.session.userId === ctx.context.session.user.id) {
+				deleteSessionCookie(ctx);
+			}
 		} catch (error) {
 			ctx.context.logger.error(
 				error && typeof error === "object" && "name" in error
