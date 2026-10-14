@@ -583,4 +583,96 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 		expect(remainingSessions.length).toBeGreaterThan(0);
 		expect(remainingAccounts.length).toBeGreaterThan(0);
 	});
+
+	it("deleteManyWithHooks restricts deleteMany to preloaded IDs and skips deletion when preloadedEntities is empty", async () => {
+		const deleteManySpy = vi.fn().mockResolvedValue(2);
+		const mockAdapter: Partial<DBAdapter> = {
+			findMany: vi.fn(),
+			deleteMany: deleteManySpy,
+		};
+
+		const withHooks = getWithHooks(mockAdapter as any, {
+			options: {} as any,
+			hooks: [],
+		});
+
+		// 1. With non-empty preloadedEntities, where clause is scoped to preloaded IDs
+		await withHooks.deleteManyWithHooks(
+			[{ field: "userId", value: "user-123" }],
+			"session",
+			undefined,
+			{
+				preloadedEntities: [
+					{ id: "s1", userId: "user-123" },
+					{ id: "s2", userId: "user-123" },
+				],
+			},
+		);
+
+		expect(deleteManySpy).toHaveBeenCalledWith({
+			model: "session",
+			where: [
+				{ field: "userId", value: "user-123" },
+				{ field: "id", operator: "in", value: ["s1", "s2"] },
+			],
+		});
+
+		deleteManySpy.mockClear();
+
+		// 2. With empty preloadedEntities, adapter.deleteMany is NOT called
+		const result = await withHooks.deleteManyWithHooks(
+			[{ field: "userId", value: "user-123" }],
+			"session",
+			undefined,
+			{
+				preloadedEntities: [],
+			},
+		);
+
+		expect(deleteManySpy).not.toHaveBeenCalled();
+		expect(result).toBe(0);
+	});
+
+	it("deleteWithHooks restricts delete to preloaded entity ID and skips deletion when preloadedEntity is null", async () => {
+		const deleteSpy = vi.fn().mockResolvedValue(true);
+		const mockAdapter: Partial<DBAdapter> = {
+			findMany: vi.fn(),
+			delete: deleteSpy,
+		};
+
+		const withHooks = getWithHooks(mockAdapter as any, {
+			options: {} as any,
+			hooks: [],
+		});
+
+		// 1. With preloadedEntity, where is restricted to { field: "id", value: id }
+		await withHooks.deleteWithHooks(
+			[{ field: "email", value: "test@example.com" }],
+			"user",
+			undefined,
+			{
+				preloadedEntity: { id: "u-123", email: "test@example.com" },
+			},
+		);
+
+		expect(deleteSpy).toHaveBeenCalledWith({
+			model: "user",
+			where: [{ field: "id", value: "u-123" }],
+		});
+
+		deleteSpy.mockClear();
+
+		// 2. With null preloadedEntity, adapter.delete is NOT called
+		const result = await withHooks.deleteWithHooks(
+			[{ field: "email", value: "test@example.com" }],
+			"user",
+			undefined,
+			{
+				preloadedEntity: null,
+			},
+		);
+
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(result).toBeNull();
+	});
 });

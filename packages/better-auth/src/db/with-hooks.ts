@@ -340,13 +340,18 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
+		const targetWhere =
+			options?.preloadedEntity && "id" in options.preloadedEntity
+				? [{ field: "id", value: (options.preloadedEntity as any).id }]
+				: where;
+
 		const shouldRunAdapterDelete =
 			!customDeleteFn || customDeleteFn.executeMainFn;
 		const deleted =
 			shouldRunAdapterDelete && entityToDelete
 				? await (await getCurrentAdapter(adapter)).delete({
 						model,
-						where,
+						where: targetWhere,
 					})
 				: customDeleted;
 
@@ -392,11 +397,33 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
+		if (
+			options?.preloadedEntities !== undefined &&
+			entitiesToDelete.length === 0
+		) {
+			return customDeleted ?? 0;
+		}
+
+		let targetWhere = where;
+		if (
+			options?.preloadedEntities !== undefined &&
+			entitiesToDelete.every((e: any) => e && "id" in e)
+		) {
+			targetWhere = [
+				...where,
+				{
+					field: "id",
+					operator: "in",
+					value: entitiesToDelete.map((e: any) => e.id),
+				},
+			];
+		}
+
 		const deleted =
 			!customDeleteFn || customDeleteFn.executeMainFn
 				? await (await getCurrentAdapter(adapter)).deleteMany({
 						model,
-						where,
+						where: targetWhere,
 					})
 				: customDeleted;
 
