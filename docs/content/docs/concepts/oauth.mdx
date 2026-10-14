@@ -546,7 +546,7 @@ Disables the use of the ID token for sign-in. By default, it's enabled for some 
 A custom function to verify the ID token. Receives the token, an optional nonce, and the request endpoint context so you can branch on headers or other request data.
 
 <Callout type="warn">
-  Providing `verifyIdToken` **replaces** the provider's built-in verification (signature, issuer, audience, and expiry). Your callback must perform those checks itself. Client-supplied headers such as `x-platform` are attacker-controlled — use them only to select which audience (or other claim) to verify against, not as proof of identity on their own.
+  Providing `verifyIdToken` **replaces** the provider's built-in verification (signature, issuer, audience, and expiry, which allows 30 seconds of clock skew). Your callback must perform those checks itself. Client-supplied headers such as `x-platform` are attacker-controlled — use them only to select which audience (or other claim) to verify against, not as proof of identity on their own.
 </Callout>
 
 ```ts title="auth.ts"
