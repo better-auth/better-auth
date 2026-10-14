@@ -517,13 +517,25 @@ describe("release changeset collection", () => {
 
 			expect(result.status, result.stderr).toBe(0);
 			expect(result.stdout).toContain(
-				"Loaded 1 changeset descriptions, 0 orphans",
+				"Loaded 2 changeset descriptions, 0 orphans",
 			);
-			expect(result.stdout).toContain('"prNumber": 42');
-			expect(result.stdout).toContain(
-				"Require an explicit migration after the release.\\n\\nAlso validate the migration target.",
+			const context = JSON.parse(
+				result.stdout.slice(result.stdout.indexOf("{")),
 			);
-			expect(result.stdout).not.toContain('"prNumber": null');
+			expect(context).toMatchObject({
+				"pr-42": {
+					changesetDescription:
+						"Require an explicit migration after the release.",
+					prNumber: 42,
+					changeType: "breaking",
+				},
+				"pr-42:second-intent": {
+					title: "require explicit migration",
+					changesetDescription: "Also validate the migration target.",
+					prNumber: 42,
+					changeType: "fix",
+				},
+			});
 		} finally {
 			rmSync(fixture.workspace, { recursive: true });
 		}

@@ -211,18 +211,6 @@ interface ChangesetEntry {
 	packageNames: string[];
 }
 
-function mergeChangesetEntries(
-	first: ChangesetEntry,
-	second: ChangesetEntry,
-): ChangesetEntry {
-	return {
-		id: first.id,
-		description: `${first.description}\n\n${second.description}`,
-		breaking: first.breaking || second.breaking,
-		packageNames: [...new Set([...first.packageNames, ...second.packageNames])],
-	};
-}
-
 /** Orphan titles come from a changeset's first line, which can be a paragraph. */
 function toReleaseTitle(line: string): string {
 	if (line.length <= releaseTitleMaxLength) return line;
@@ -378,11 +366,11 @@ function buildChangesetIndex(
 	previousTag: string,
 	version: string,
 ): {
-	byPR: Map<number, ChangesetEntry>;
+	byPR: Map<number, ChangesetEntry[]>;
 	orphans: ChangesetEntry[];
 	byDescription: Map<string, ChangesetEntry>;
 } {
-	const byPR = new Map<number, ChangesetEntry>();
+	const byPR = new Map<number, ChangesetEntry[]>();
 	const orphans: ChangesetEntry[] = [];
 	const byDescription = new Map<string, ChangesetEntry>();
 
@@ -429,12 +417,8 @@ function buildChangesetIndex(
 			? Number(prMatch[1])
 			: findChangesetSourcePR(id, effectiveRef);
 		if (prNumber) {
-			// A PR can add several changesets; they share one PR-titled entry.
-			const existing = byPR.get(prNumber);
-			byPR.set(
-				prNumber,
-				existing ? mergeChangesetEntries(existing, entry) : entry,
-			);
+			// A PR can add several changesets; each keeps the PR's title.
+			byPR.set(prNumber, [...(byPR.get(prNumber) ?? []), entry]);
 		} else {
 			orphans.push(entry);
 			const firstLine = description.split("\n")[0]!.trim().toLowerCase();
@@ -657,9 +641,10 @@ export async function collectEntries(
 		orphans: changesetOrphans,
 		byDescription: changesetByDesc,
 	} = buildChangesetIndex(changesetRef, previousTag, version);
-	if (changesetByPR.size > 0 || changesetOrphans.length > 0) {
+	const prChangesetCount = [...changesetByPR.values()].flat().length;
+	if (prChangesetCount > 0 || changesetOrphans.length > 0) {
 		console.log(
-			`  Loaded ${changesetByPR.size} changeset descriptions, ${changesetOrphans.length} orphans`,
+			`  Loaded ${prChangesetCount} changeset descriptions, ${changesetOrphans.length} orphans`,
 		);
 	}
 
@@ -681,58 +666,51 @@ export async function collectEntries(
 		// metadata for that entry.
 		const subject = parsed.subject.replace(/\s*\(#\d+\)$/, "").trim();
 		const descMatch = changesetByDesc.get(subject.toLowerCase());
-		const changeset = changesetByPR.get(prNumber) ?? descMatch;
+		const changesets =
+			changesetByPR.get(prNumber) ?? (descMatch ? [descMatch] : []);
 		if (descMatch) consumedOrphans.add(descMatch);
-		if (!changeset) continue;
+		if (changesets.length === 0) continue;
 
 		seenPRs.add(prNumber);
 
-		let author = "unknown";
-		let title: string;
-		let domain: string;
-		let packageName: string;
-		let breaking = parsed.breaking;
-
-		const changesetDescription = changeset.description;
-		if (changeset.breaking) breaking = true;
-
-		title = subject;
-		domain = resolveDomain(parsed.scope || undefined, []);
-		packageName =
-			changeset.packageNames.length === 1
-				? changeset.packageNames[0]!
-				: resolvePackage(parsed.scope || undefined, []);
-
 		const prInfo = await fetchPR(github, prNumber);
-		if (prInfo) {
-			author = prInfo.author;
-			title = prInfo.title;
-			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
-			packageName =
+		const author = prInfo?.author ?? "unknown";
+		const title = prInfo?.title ?? subject;
+		const domain = prInfo
+			? classifyEntry(prInfo, parsed.scope || undefined, prInfo.files)
+			: resolveDomain(parsed.scope || undefined, []);
+
+		for (const [index, changeset] of changesets.entries()) {
+			const breaking =
+				parsed.breaking ||
+				changeset.breaking ||
+				!!prInfo?.labels.includes("breaking");
+			const packageName =
 				changeset.packageNames.length === 1
 					? changeset.packageNames[0]!
-					: resolvePackage(parsed.scope || undefined, prInfo.files);
-			if (prInfo.labels.includes("breaking")) breaking = true;
-		}
+					: resolvePackage(parsed.scope || undefined, prInfo?.files ?? []);
+			const releasePackages =
+				changeset.packageNames.length > 0
+					? [...new Set(changeset.packageNames)]
+					: [packageName];
+			// The first changeset keeps the plain PR key; later ones need their own.
+			const rewriteKey =
+				index === 0 ? `pr-${prNumber}` : `pr-${prNumber}:${changeset.id}`;
 
-		const releasePackages =
-			changeset.packageNames.length > 0
-				? [...new Set(changeset.packageNames)]
-				: [packageName];
-
-		for (const releasePackage of releasePackages) {
-			entries.push({
-				id: `pr-${prNumber}:${releasePackage}`,
-				rewriteKey: `pr-${prNumber}`,
-				title,
-				changesetDescription,
-				prNumber,
-				author,
-				domain,
-				packageName: releasePackage,
-				changeType: classifyChangeType(parsed.type, breaking),
-				breaking,
-			});
+			for (const releasePackage of releasePackages) {
+				entries.push({
+					id: `${rewriteKey}:${releasePackage}`,
+					rewriteKey,
+					title,
+					changesetDescription: changeset.description,
+					prNumber,
+					author,
+					domain,
+					packageName: releasePackage,
+					changeType: classifyChangeType(parsed.type, breaking),
+					breaking,
+				});
+			}
 		}
 	}
 
