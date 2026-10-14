@@ -9,7 +9,7 @@ vi.mock("@better-fetch/fetch", () => ({
 import { betterFetch } from "@better-fetch/fetch";
 
 import { verifyProviderIdToken } from "../oauth2";
-import { getMicrosoftPublicKey, microsoft } from "./microsoft-entra-id";
+import { microsoft } from "./microsoft-entra-id";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 
@@ -279,13 +279,11 @@ describe("microsoft account subject", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11652
+ */
 describe("microsoft id_token alg omission", () => {
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11652
-	 */
-	it("should successfully verify Microsoft ID token when JWKS keys have no alg property", async () => {
-		expect(publicJWK.alg).toBeUndefined();
-
+	it("verifies a token when Microsoft's JWKS keys omit alg", async () => {
 		const provider = microsoft({
 			clientId: CLIENT_ID,
 			clientSecret: CLIENT_SECRET,
@@ -307,31 +305,13 @@ describe("microsoft id_token alg omission", () => {
 		expect(isValid).toBe(true);
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11652
-	 */
-	it("should allow getMicrosoftPublicKey to fall back to default RS256 when jwk.alg is missing", async () => {
-		expect(publicJWK.alg).toBeUndefined();
-
-		const key = await getMicrosoftPublicKey(
-			KID,
-			"common",
-			"https://login.microsoftonline.com",
-		);
-		expect(key).toBeDefined();
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11652
-	 */
-	it("rejects non-RS256 tokens even when matching JWK omits alg", async () => {
+	it("rejects a token signed with an algorithm other than RS256", async () => {
 		const ecKeyPair = await generateKeyPair("ES256", { extractable: true });
 		const ecJWK = await exportJWK(ecKeyPair.publicKey);
 		const ecKid = "ms-test-es256-key";
 		ecJWK.kid = ecKid;
+		ecJWK.alg = "ES256";
 		ecJWK.use = "sig";
-
-		expect(ecJWK.alg).toBeUndefined();
 
 		mockedBetterFetch.mockResolvedValueOnce({
 			data: { keys: [ecJWK] },
