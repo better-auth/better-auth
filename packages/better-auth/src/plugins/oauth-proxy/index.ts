@@ -43,29 +43,12 @@ import { getOAuthCallbackPath } from "../../oauth2/utils";
 import {
 	getAuthStateVerificationIdentifier,
 	parseGenericState,
+	stateDataSchema,
 } from "../../state";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import { checkSkipProxy, resolveCurrentURL, stripTrailingSlash } from "./utils";
-
-const stateDataSchema = z.looseObject({
-	callbackURL: z.string(),
-	codeVerifier: z.string(),
-	errorURL: z.string().optional(),
-	newUserURL: z.string().optional(),
-	expiresAt: z.number(),
-	oauthState: z.string().optional(),
-	link: z
-		.object({
-			email: z.string(),
-			userId: z.coerce.string(),
-		})
-		.optional(),
-	requestSignUp: z.boolean().optional(),
-	idTokenNonce: z.string().optional(),
-	serverContext: z.record(z.string(), z.unknown()).optional(),
-});
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
