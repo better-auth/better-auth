@@ -2039,6 +2039,68 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).toContain("error=signup_disabled");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11296
+	 */
+	it("accepts a SAML response addressed to the callbackUrl ACS", async () => {
+		const { auth: authCallbackAcs, signInWithTestUser } = await getTestInstance(
+			{ plugins: [sso()] },
+		);
+		const { headers } = await signInWithTestUser();
+		const callbackAcsUrl = "http://localhost:3000/saml/legacy-acs";
+
+		await authCallbackAcs.api.registerSSOProvider({
+			body: {
+				providerId: "saml-callback-acs-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: callbackAcsUrl,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: {},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const idpResponseUrl = new URL(
+			"http://localhost:8081/api/sso/saml2/idp/post",
+		);
+		idpResponseUrl.searchParams.set("audience", "http://localhost:8081");
+		idpResponseUrl.searchParams.set("destination", callbackAcsUrl);
+		idpResponseUrl.searchParams.set("recipient", callbackAcsUrl);
+		let samlResponse: MockSAMLResponse | undefined;
+		await betterFetch(idpResponseUrl.toString(), {
+			onSuccess: async (context) => {
+				samlResponse = (await context.data) as MockSAMLResponse;
+			},
+		});
+		expect(samlResponse).toBeDefined();
+
+		const response = await authCallbackAcs.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-callback-acs-provider",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse!.samlResponse,
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe(callbackAcsUrl);
+	});
+
 	it("rejects a SAML assertion whose audience does not match this SP", async () => {
 		const { auth: authAudience, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
