@@ -1955,6 +1955,35 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		);
 	});
 
+	it("records no empty scope for a device code requested without scopes", async () => {
+		resolveReference = () => "org_1";
+		const { headers, user } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid offline_access",
+			},
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: created!.client_id, resource },
+		});
+
+		const consent = await openDeviceConsent(client, user_code, headers);
+		expect(consent.has("scope")).toBe(false);
+		await answerDeviceConsent(client, user_code, headers);
+		const stored = await db.findOne<{ scopes: string[] }>({
+			model: "oauthConsent",
+			where: [
+				{ field: "clientId", value: created!.client_id },
+				{ field: "userId", value: user.id },
+			],
+		});
+		expect(stored?.scopes).toEqual([]);
+	});
+
 	it("denies the device from the consent page", async () => {
 		const { device_code, user_code, headers, poll } = await startDevice();
 

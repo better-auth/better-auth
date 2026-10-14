@@ -238,7 +238,7 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
 
 #### Approve the device
 
-The user approves an OAuth device code on the same sign-in, post-login, and consent pages as an authorization request. Your verification page collects the user code and sends the browser to `/oauth2/authorize` with it:
+The user approves an OAuth device code on the same sign-in, account selection, post-login, and consent pages as an authorization request. Your verification page collects the user code and sends the browser to `/oauth2/authorize` with it:
 
 ```ts title="app/device/page.tsx"
 window.location.href = `${authBaseURL}/oauth2/authorize?user_code=${encodeURIComponent(userCode)}`;

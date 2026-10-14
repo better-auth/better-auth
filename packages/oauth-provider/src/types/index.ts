@@ -413,7 +413,7 @@ export interface OAuthUserInfoExtensionInput {
  * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
  * option).
  *
- * All five kinds live on one object so a single protocol plugin (for example
+ * All six kinds live on one object so a single protocol plugin (for example
  * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
  * claims) registers atomically and the host validates the combined surface in
  * one place. Every field is independently optional, so a single-concern plugin
@@ -428,6 +428,9 @@ export interface OAuthUserInfoExtensionInput {
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
  *   both contribute resolves to the first-registered extension.
+ *
+ * `clientDiscovery` sources run in registration order, and `interactionRequests`
+ * parameters must also be disjoint across extensions.
  */
 export interface OAuthProviderExtension {
 	/**
@@ -491,19 +494,31 @@ export interface OAuthProviderExtension {
 }
 
 /**
+ * Parameters signed into each interaction page. An authorization request
+ * carries its `redirect_uri`; other interaction requests have none and add
+ * their own identifying parameter, such as `user_code`.
+ */
+export type OAuthInteractionQuery = Omit<
+	OAuthAuthorizationQuery,
+	"redirect_uri"
+> & {
+	redirect_uri?: string | undefined;
+};
+
+/**
  * A request the user reviews through the `/oauth2/authorize` sign-in,
  * account selection, signup, post-login, and consent pages.
  */
 export interface OAuthInteractionRequest {
 	/** Signed into each interaction page; carries `prompt` and `max_age`. */
-	query: OAuthAuthorizationQuery;
+	query: OAuthInteractionQuery;
 	client: SchemaClient<Scope[]>;
 	/**
 	 * Records the approval once every interaction is complete and returns the
 	 * URL to send the user to.
 	 */
 	approve: (approval: {
-		query: OAuthAuthorizationQuery;
+		query: OAuthInteractionQuery;
 		userId: string;
 		sessionId: string;
 		authTime: number;
@@ -523,7 +538,7 @@ export interface OAuthInteractionRequestHandler {
 		ctx: GenericEndpointContext;
 		opts: OAuthOptions<Scope[]>;
 		value: string;
-		signedQuery?: OAuthAuthorizationQuery | undefined;
+		signedQuery?: OAuthInteractionQuery | undefined;
 	}) => Promise<OAuthInteractionRequest>;
 	/**
 	 * Records a denial from the consent page and returns the URL to send the

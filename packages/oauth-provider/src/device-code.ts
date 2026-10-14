@@ -20,7 +20,6 @@ import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
 import { getOAuthProviderApi } from "./token";
 import type {
-	OAuthAuthorizationQuery,
 	OAuthExtensionGrantHandlerInput,
 	OAuthInteractionRequestHandler,
 	OAuthProviderExtension,
@@ -246,19 +245,19 @@ function deviceApprovalRequest(
 			if (client.disabled) {
 				tokenError("BAD_REQUEST", "client_disabled", "client is disabled");
 			}
-			const query: Partial<OAuthAuthorizationQuery> & { user_code: string } = {
+			// The consent page may have narrowed the scopes of a signed query.
+			const scopes = parseScopes(signedQuery?.scope ?? deviceCode.scope);
+			const query = {
 				user_code: deviceCode.userCode,
 				client_id: client.clientId,
-				// The consent page may have narrowed the scopes of a signed query.
-				scope: parseScopes(signedQuery?.scope ?? deviceCode.scope).join(" "),
+				scope: scopes.length ? scopes.join(" ") : undefined,
 				resource: deviceCode.resources ?? [],
 				// RFC 8628 section 5.4: always show consent for a device, even when
 				// consent is stored or the client skips it.
 				prompt: signedQuery ? signedQuery.prompt : "consent",
 			};
 			return {
-				// Device requests never use prompt=none, so no redirect_uri is read.
-				query: query as OAuthAuthorizationQuery,
+				query,
 				client,
 				approve: async (approval) => {
 					await decideDeviceCode(ctx, {

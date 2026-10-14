@@ -382,9 +382,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						{
 							name: "client_id",
 							in: "query",
-							required: true,
+							required: false,
 							schema: { type: "string" },
-							description: "OAuth 2.1 client ID",
+							description:
+								"OAuth 2.1 client ID, required for authorization requests (not for user_code)",
 						},
 						{
 							name: "redirect_uri",

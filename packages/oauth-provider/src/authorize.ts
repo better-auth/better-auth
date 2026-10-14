@@ -27,6 +27,7 @@ import { getSupportedClaims } from "./standard-claims";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
+	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
 	Scope,
@@ -63,9 +64,9 @@ export type OAuthRedirectResult = {
 	url: string;
 };
 
-function removeMaxAgeFromAuthorizationQuery(
-	query: OAuthAuthorizationQuery,
-): OAuthAuthorizationQuery {
+function removeMaxAgeFromAuthorizationQuery<
+	Query extends { max_age?: number | undefined },
+>(query: Query): Omit<Query, "max_age"> {
 	const { max_age: _maxAge, ...queryWithoutMaxAge } = query;
 	return queryWithoutMaxAge;
 }
@@ -163,19 +164,21 @@ export const handleRedirect = (
 function redirectWithPromptNoneError(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	query: OAuthAuthorizationQuery,
+	query: OAuthInteractionQuery,
 	error: OAuthErrorCode,
 	description: string,
 ) {
 	return handleRedirect(
 		ctx,
-		formatErrorURL(
-			query.redirect_uri,
-			error,
-			description,
-			query.state,
-			getIssuer(ctx, opts),
-		),
+		query.redirect_uri
+			? formatErrorURL(
+					query.redirect_uri,
+					error,
+					description,
+					query.state,
+					getIssuer(ctx, opts),
+				)
+			: getErrorURL(ctx, error, description),
 	);
 }
 
@@ -811,6 +814,8 @@ export async function authorizeEndpoint(
 		approve: (approval) =>
 			redirectWithAuthorizationCode(ctx, opts, {
 				...approval,
+				// An authorization request always carries its validated redirect_uri.
+				query: approval.query as OAuthAuthorizationQuery,
 				clientId: client.clientId,
 				resource: toResourceList(approval.query.resource) ?? [],
 			}),
