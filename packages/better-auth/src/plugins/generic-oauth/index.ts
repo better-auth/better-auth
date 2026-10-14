@@ -97,7 +97,9 @@ type PendingDiscovery = Map<
 
 /**
  * Providers skipped because startup discovery failed. Init stores them on each auth
- * instance's context, so one plugin object can serve several instances.
+ * instance's context, so one plugin object can serve several instances. It is a context
+ * field rather than a WeakMap because requests see copies of the context, and a later
+ * plugin may replace `socialProviders`.
  */
 const getPendingDiscovery = (ctx: AuthContext) =>
 	(ctx as AuthContext & { genericOAuthPendingDiscovery?: PendingDiscovery })
@@ -522,7 +524,8 @@ export const genericOAuth = <const ID extends string>(
 
 	// Concurrent requests share one retry, and a failed retry stays pending.
 	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
-		const pending = getPendingDiscovery(ctx)?.get(providerId);
+		const pendingDiscovery = getPendingDiscovery(ctx);
+		const pending = pendingDiscovery?.get(providerId);
 		if (!pending) return;
 		pending.attempt ??= buildProviders(
 			[pending.config],
@@ -531,7 +534,7 @@ export const genericOAuth = <const ID extends string>(
 		)
 			.then(([provider]) => {
 				if (!provider) return;
-				getPendingDiscovery(ctx)?.delete(providerId);
+				pendingDiscovery?.delete(providerId);
 				ctx.socialProviders.unshift(provider);
 			})
 			.finally(() => {
@@ -543,13 +546,14 @@ export const genericOAuth = <const ID extends string>(
 	// only after a request names it; resolve the account here if that becomes a need.
 	const requestedProviderId = (context: {
 		body?: { provider?: unknown; providerId?: unknown } | undefined;
-		params?: { id?: unknown; providerId?: unknown } | undefined;
+		query?: { provider?: unknown } | undefined;
+		params?: { id?: unknown } | undefined;
 	}) => {
 		const id =
 			context.body?.provider ??
 			context.body?.providerId ??
-			context.params?.id ??
-			context.params?.providerId;
+			context.query?.provider ??
+			context.params?.id;
 		return typeof id === "string" ? id : undefined;
 	};
 
@@ -589,8 +593,7 @@ export const genericOAuth = <const ID extends string>(
 							requestedProviderId(context) ?? "",
 						) === true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const providerId = requestedProviderId(ctx);
-						if (providerId) await retryDiscovery(ctx.context, providerId);
+						await retryDiscovery(ctx.context, requestedProviderId(ctx) ?? "");
 					}),
 				},
 			],
