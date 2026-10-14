@@ -1247,6 +1247,74 @@ describe("sign-up verification email and the transaction", () => {
 		return { db, sendVerificationEmail, signUp };
 	}
 
+	async function duplicateSignUpWith(
+		abortedAttempts: 0 | 1 | 2,
+		onExistingUserSignUp = vi.fn(),
+	) {
+		const now = new Date();
+		const db: Record<string, Record<string, unknown>[]> = {
+			user: [
+				{
+					id: "existing-user",
+					email: "existing@test.com",
+					name: "Existing",
+					emailVerified: true,
+					image: null,
+					createdAt: now,
+					updatedAt: now,
+				},
+			],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+			database: abortingMemoryAdapter(db, abortedAttempts),
+			// The generic duplicate response is what calls onExistingUserSignUp.
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+				onExistingUserSignUp,
+			},
+		});
+		const signUp = auth.api.signUpEmail({
+			body: {
+				email: "existing@test.com",
+				password: "password123",
+				name: "Someone",
+			},
+		});
+		return { onExistingUserSignUp, signUp };
+	}
+
+	it("calls onExistingUserSignUp once when the adapter runs the callback again after an abort", async () => {
+		const { onExistingUserSignUp, signUp } = await duplicateSignUpWith(1);
+
+		await expect(signUp).resolves.toBeDefined();
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not call onExistingUserSignUp when the transaction rolls back", async () => {
+		const { onExistingUserSignUp, signUp } = await duplicateSignUpWith(2);
+
+		await expect(signUp).rejects.toThrow("transient abort");
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("returns the generic response when onExistingUserSignUp throws synchronously", async () => {
+		const { onExistingUserSignUp, signUp } = await duplicateSignUpWith(
+			0,
+			vi.fn(() => {
+				throw new Error("mailer down");
+			}),
+		);
+
+		await expect(signUp).resolves.toBeDefined();
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
 	it("sends the email once when the adapter runs the callback again after an abort", async () => {
 		const { db, sendVerificationEmail, signUp } = await signUpWith(1);
 

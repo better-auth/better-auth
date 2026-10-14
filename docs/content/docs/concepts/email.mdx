@@ -34,7 +34,7 @@ To enable email verification, you need to pass a function that sends a verificat
 
 and a `request` object as the second parameter.
 
-During a sign-up, Better Auth calls `sendVerificationEmail` after the new account is saved, so a sign-up that fails sends no email. If the function throws, the sign-up still succeeds and the error is logged. To reject a sign-up, use a `user.create.before` [database hook](/docs/concepts/database#database-hooks).
+During a sign-up, Better Auth calls `sendVerificationEmail` after the new account is saved, so a sign-up that rolls back sends no email. A request can still fail after the email is sent if the account stays saved, for example on an adapter without transactions or when a `session` `after` hook throws. If the function throws, the sign-up still succeeds and the error is logged. To reject a sign-up, use a `user.create.before` [database hook](/docs/concepts/database#database-hooks).
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
