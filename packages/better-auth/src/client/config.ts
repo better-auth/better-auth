@@ -62,6 +62,7 @@ export const getClientConfig = (
 	const baseURL =
 		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
 		resolvePublicAuthUrl(options?.basePath) ??
+		options?.basePath ??
 		"/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
