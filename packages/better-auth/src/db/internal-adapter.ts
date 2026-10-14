@@ -448,42 +448,85 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
+			class VetoRollbackError extends Error {}
 			const sessionReferences = await getActiveSessionReferences(userId);
-			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-					"session",
-					undefined,
-				);
-			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"account",
-				undefined,
-			);
+			let isDeleted = false;
+			try {
+				await runWithTransaction(adapter, async () => {
+					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+						model: "user",
+						where: [{ field: "id", value: userId }],
+					});
+					if (!user) {
+						return;
+					}
 
-			const deletedUser = await deleteWithHooks(
-				[
-					{
-						field: "id",
-						value: userId,
-					},
-				],
-				"user",
-				undefined,
-			);
-			if (deletedUser !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
+					// Queue the cache eviction BEFORE any child after-hooks, guarded by isDeleted
+					await queueAfterTransactionHook(
+						async () => {
+							if (isDeleted) {
+								await deleteCachedUserSessions(userId, sessionReferences);
+							}
+						},
+						{
+							onError(error) {
+								logger.error(
+									`Failed to delete cached user sessions for user ${userId}`,
+									error,
+								);
+							},
+						},
+					);
+
+					if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+						const deletedSessions = await deleteManyWithHooks(
+							[
+								{
+									field: "userId",
+									value: userId,
+								},
+							],
+							"session",
+							undefined,
+						);
+						if (deletedSessions === null) {
+							throw new VetoRollbackError();
+						}
+					}
+					const deletedAccounts = await deleteManyWithHooks(
+						[
+							{
+								field: "userId",
+								value: userId,
+							},
+						],
+						"account",
+						undefined,
+					);
+					if (deletedAccounts === null) {
+						throw new VetoRollbackError();
+					}
+
+					const deletedUser = await deleteWithHooks(
+						[
+							{
+								field: "id",
+								value: userId,
+							},
+						],
+						"user",
+						undefined,
+					);
+					if (deletedUser === null) {
+						throw new VetoRollbackError();
+					}
+					isDeleted = true;
+				});
+			} catch (error) {
+				if (error instanceof VetoRollbackError) {
+					return;
+				}
+				throw error;
 			}
 		},
 		createSession: async (

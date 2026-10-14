@@ -262,18 +262,12 @@ export function getWithHooks(
 			| undefined,
 	) {
 		const context = tryGetCurrentAuthEndpointContext();
-		let entityToDelete: T | null = null;
-
-		try {
-			const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
-				model,
-				where,
-				limit: 1,
-			});
-			entityToDelete = entities[0] || null;
-		} catch {
-			// If we can't find the entity, we'll still proceed with deletion
-		}
+		const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
+			model,
+			where,
+			limit: 1,
+		});
+		const entityToDelete = entities[0] || null;
 
 		if (entityToDelete) {
 			for (const { source, hooks } of hooksEntries) {
@@ -346,16 +340,12 @@ export function getWithHooks(
 			| undefined,
 	) {
 		const context = tryGetCurrentAuthEndpointContext();
-		let entitiesToDelete: T[] = [];
-
-		try {
-			entitiesToDelete = await (await getCurrentAdapter(adapter)).findMany<T>({
-				model,
-				where,
-			});
-		} catch {
-			// If we can't find the entities, we'll still proceed with deletion
-		}
+		const entitiesToDelete = await (
+			await getCurrentAdapter(adapter)
+		).findMany<T>({
+			model,
+			where,
+		});
 
 		for (const entity of entitiesToDelete) {
 			for (const { source, hooks } of hooksEntries) {
