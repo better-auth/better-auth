@@ -182,11 +182,13 @@ function createChangesetStateFixture(
 }
 
 interface ReleaseFixtureOptions {
+	longOrphanChangeset?: string;
 	mergeVersionPR?: boolean;
 	consumeLaterChangeset?: boolean;
 	includePRWithoutChangeset?: boolean;
 	splitVersionCommit?: boolean;
 	separateChangesetCommit?: boolean;
+	secondChangesetInPR?: string;
 	staleReleaseTag?: boolean;
 	supersedeChangeset?: boolean;
 	uppercaseChangesetId?: boolean;
@@ -236,6 +238,19 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 		git(workspace, ["add", "."]);
 		git(workspace, ["commit", "-m", "chore: add release changeset"]);
 	}
+	if (options.secondChangesetInPR) {
+		writeFixtureFile(
+			workspace,
+			".changeset/second-intent.md",
+			[
+				"---",
+				'"better-auth": patch',
+				"---",
+				"",
+				options.secondChangesetInPR,
+			].join("\n"),
+		);
+	}
 	writeFixtureFile(
 		workspace,
 		"packages/better-auth/src/session.ts",
@@ -280,6 +295,26 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 		]);
 	}
 
+	if (options.longOrphanChangeset) {
+		writeFixtureFile(
+			workspace,
+			".changeset/long-orphan.md",
+			[
+				"---",
+				'"better-auth": patch',
+				"---",
+				"",
+				options.longOrphanChangeset,
+			].join("\n"),
+		);
+		git(workspace, ["add", "."]);
+		git(workspace, ["commit", "-m", "chore: add long orphan changeset"]);
+		rmSync(resolve(workspace, ".changeset/long-orphan.md"));
+	}
+
+	if (options.secondChangesetInPR) {
+		rmSync(resolve(workspace, ".changeset/second-intent.md"));
+	}
 	rmSync(resolve(workspace, changesetPath));
 	if (options.splitVersionCommit) {
 		git(workspace, ["add", "."]);
@@ -464,6 +499,58 @@ describe("release changeset collection", () => {
 				"Require an explicit migration after the release.",
 			);
 			expect(result.stdout).toContain('"changeType": "breaking"');
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("keeps the PR title for every changeset a PR adds", () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			secondChangesetInPR: "Also validate the migration target.",
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain(
+				"Loaded 1 changeset descriptions, 0 orphans",
+			);
+			expect(result.stdout).toContain('"prNumber": 42');
+			expect(result.stdout).toContain(
+				"Require an explicit migration after the release.\\n\\nAlso validate the migration target.",
+			);
+			expect(result.stdout).not.toContain('"prNumber": null');
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("shortens orphan titles taken from a long first line", () => {
+		const longLine =
+			`Orphan changes ${"keep working across restarts ".repeat(30)}`.trim();
+		const fixture = createReleaseWithFollowUpCommit({
+			longOrphanChangeset: longLine,
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			const title = result.stdout.match(
+				/"title": "(Orphan changes[^"]*)"/,
+			)?.[1];
+			expect(title).toBeDefined();
+			expect(title!.length).toBeLessThanOrEqual(500);
+			expect(title).toMatch(/\w…$/);
+			expect(longLine.startsWith(`${title!.slice(0, -1)} `)).toBe(true);
+			expect(result.stdout).toContain(`"changesetDescription": "${longLine}"`);
 		} finally {
 			rmSync(fixture.workspace, { recursive: true });
 		}

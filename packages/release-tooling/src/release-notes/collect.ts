@@ -11,7 +11,11 @@ import { parseConventionalHeader } from "../conventional-header.ts";
 import { gitSucceeds, runGit } from "../git.ts";
 import type { GitHubReader } from "../github.ts";
 import type { PackageReleaseMetadata, ReleaseEntry } from "./schema.ts";
-import { parseSchema, prereleaseStateSchema } from "./schema.ts";
+import {
+	parseSchema,
+	prereleaseStateSchema,
+	releaseTitleMaxLength,
+} from "./schema.ts";
 
 interface PRInfo {
 	author: string;
@@ -205,6 +209,26 @@ interface ChangesetEntry {
 	description: string;
 	breaking: boolean;
 	packageNames: string[];
+}
+
+function mergeChangesetEntries(
+	first: ChangesetEntry,
+	second: ChangesetEntry,
+): ChangesetEntry {
+	return {
+		id: first.id,
+		description: `${first.description}\n\n${second.description}`,
+		breaking: first.breaking || second.breaking,
+		packageNames: [...new Set([...first.packageNames, ...second.packageNames])],
+	};
+}
+
+/** Orphan titles come from a changeset's first line, which can be a paragraph. */
+function toReleaseTitle(line: string): string {
+	if (line.length <= releaseTitleMaxLength) return line;
+	const cut = line.slice(0, releaseTitleMaxLength - 1);
+	const wordEnd = cut.lastIndexOf(" ");
+	return `${(wordEnd > 0 ? cut.slice(0, wordEnd) : cut).trimEnd()}…`;
 }
 
 function findChangesetSourcePR(id: string, ref: string): number | null {
@@ -401,17 +425,20 @@ function buildChangesetIndex(
 		};
 
 		const prMatch = id.match(/^pr-(\d+)$/);
-		if (prMatch) {
-			byPR.set(Number(prMatch[1]), entry);
+		const prNumber = prMatch
+			? Number(prMatch[1])
+			: findChangesetSourcePR(id, effectiveRef);
+		if (prNumber) {
+			// A PR can add several changesets; they share one PR-titled entry.
+			const existing = byPR.get(prNumber);
+			byPR.set(
+				prNumber,
+				existing ? mergeChangesetEntries(existing, entry) : entry,
+			);
 		} else {
-			const sourcePrNumber = findChangesetSourcePR(id, effectiveRef);
-			if (sourcePrNumber && !byPR.has(sourcePrNumber)) {
-				byPR.set(sourcePrNumber, entry);
-			} else {
-				orphans.push(entry);
-				const firstLine = description.split("\n")[0]!.trim().toLowerCase();
-				if (firstLine) byDescription.set(firstLine, entry);
-			}
+			orphans.push(entry);
+			const firstLine = description.split("\n")[0]!.trim().toLowerCase();
+			if (firstLine) byDescription.set(firstLine, entry);
 		}
 	}
 
@@ -735,7 +762,7 @@ export async function collectEntries(
 			entries.push({
 				id: `${changeset.id}:${releasePackage}`,
 				rewriteKey: changeset.id,
-				title: changeset.description.split("\n")[0]!,
+				title: toReleaseTitle(changeset.description.split("\n")[0]!),
 				changesetDescription: changeset.description,
 				prNumber: null,
 				author: "unknown",
