@@ -495,6 +495,28 @@ export const auth = betterAuth({
 
 Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
+When set to `true`, access tokens and refresh tokens are encrypted with your Better Auth `secret`. To control how tokens are encrypted, for example to use a dedicated key or an external key management service, pass your own `encrypt` and `decrypt` functions instead. Both can be synchronous or asynchronous.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	account: {
+		encryptOAuthTokens: {
+			encrypt: async (token) => {
+				return await myKms.encrypt(token);
+			},
+			decrypt: async (token) => {
+				return await myKms.decrypt(token);
+			},
+		},
+	},
+})
+```
+
+<Callout type="warn">
+  `decrypt` receives every stored token as-is, including tokens that were stored before you configured the custom functions. If you are migrating from plain text tokens or from `encryptOAuthTokens: true`, make sure `decrypt` can handle those existing values.
+</Callout>
+
 ### `updateAccountOnSignIn`
 
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)

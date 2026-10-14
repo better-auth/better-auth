@@ -1,10 +1,14 @@
-import type { AuthContext } from "@better-auth/core";
-import { describe, expect, it } from "vitest";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { describe, expect, it, vi } from "vitest";
 import { symmetricEncrypt } from "../crypto";
 import { decryptOAuthToken, setTokenUtil } from "./utils";
 
 // Mock minimal AuthContext for testing
-function createMockContext(encryptOAuthTokens: boolean): AuthContext {
+function createMockContext(
+	encryptOAuthTokens: NonNullable<
+		BetterAuthOptions["account"]
+	>["encryptOAuthTokens"],
+): AuthContext {
 	return {
 		secret: "test-secret-key-for-encryption",
 		secretConfig: "test-secret-key-for-encryption",
@@ -160,5 +164,65 @@ describe("setTokenUtil", () => {
 		const decrypted = await decryptOAuthToken(encrypted as string, ctx);
 
 		expect(decrypted).toBe(originalToken);
+	});
+});
+
+describe("custom encrypt and decrypt functions", () => {
+	const createCustomContext = () => {
+		const encrypt = vi.fn(async (token: string) => `custom:${btoa(token)}`);
+		const decrypt = vi.fn(async (token: string) =>
+			atob(token.slice("custom:".length)),
+		);
+		return { ctx: createMockContext({ encrypt, decrypt }), encrypt, decrypt };
+	};
+
+	it("should encrypt tokens with the custom encrypt function", async () => {
+		const { ctx, encrypt } = createCustomContext();
+		const result = await setTokenUtil("test-token", ctx);
+
+		expect(encrypt).toHaveBeenCalledWith("test-token");
+		expect(result).toBe(`custom:${btoa("test-token")}`);
+	});
+
+	it("should decrypt tokens with the custom decrypt function", async () => {
+		const { ctx, decrypt } = createCustomContext();
+		const encrypted = await setTokenUtil("test-token", ctx);
+		const result = await decryptOAuthToken(encrypted as string, ctx);
+
+		expect(decrypt).toHaveBeenCalledWith(encrypted);
+		expect(result).toBe("test-token");
+	});
+
+	it("should support synchronous functions", async () => {
+		const ctx = createMockContext({
+			encrypt: (token) => token.split("").reverse().join(""),
+			decrypt: (token) => token.split("").reverse().join(""),
+		});
+		const encrypted = await setTokenUtil("test-token", ctx);
+
+		expect(encrypted).toBe("nekot-tset");
+		expect(await decryptOAuthToken(encrypted as string, ctx)).toBe(
+			"test-token",
+		);
+	});
+
+	it("should pass every stored token to decrypt regardless of its format", async () => {
+		const decrypt = vi.fn((token: string) => token);
+		const ctx = createMockContext({ encrypt: (token) => token, decrypt });
+		const plainToken = "ya29.a0ARW5m7hQ_some_oauth_token";
+
+		await decryptOAuthToken(plainToken, ctx);
+		expect(decrypt).toHaveBeenCalledWith(plainToken);
+	});
+
+	it("should not call the custom functions for empty tokens", async () => {
+		const { ctx, encrypt, decrypt } = createCustomContext();
+
+		expect(await setTokenUtil(null, ctx)).toBe(null);
+		expect(await setTokenUtil(undefined, ctx)).toBe(undefined);
+		expect(await setTokenUtil("", ctx)).toBe("");
+		expect(await decryptOAuthToken("", ctx)).toBe("");
+		expect(encrypt).not.toHaveBeenCalled();
+		expect(decrypt).not.toHaveBeenCalled();
 	});
 });
