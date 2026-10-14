@@ -779,27 +779,38 @@ test.describe("Next.js token exchange demo (RFC 8693)", () => {
 
 		await test.step("a self-registered client the user never approved cannot exchange the user's token", async () => {
 			// The demo links every DCR client to <BASE>/api/mcp
-			// (clientRegistrationDefaultResources), so this client counts as a
-			// resource server for the token's audience. Without the user's consent
-			// for it, the exchange is refused. The unit tests cover a client that is
-			// outside the token's audience.
+			// (clientRegistrationDefaultResources) and to nothing else, so this
+			// client counts as a resource server for the token's audience but may
+			// not target the downstream API. Aimed at the MCP resource itself, it
+			// passes the target check and is stopped by the consent rule. The unit
+			// tests cover a client that is outside the token's audience.
 			const deputy = await registerClient(browserContext.request, {
 				client_name: "Unrelated confidential exchanger",
 				token_endpoint_auth_method: "client_secret_basic",
 				grant_types: [TOKEN_EXCHANGE_GRANT],
 				scope: "profile email",
 			});
-			const response = await exchange(
+			const deputyCredentials = {
+				client_id: readString(deputy, "client_id"),
+				client_secret: readString(deputy, "client_secret"),
+			};
+			const unlinkedTarget = await exchange(
+				"self-registered client targets an unlinked resource",
+				"RFC 8693 §2.2.2, RFC 8707 §2",
+				exchangeForm(subjectToken),
+				deputyCredentials,
+			);
+			expectOAuthError(unlinkedTarget, 400, "invalid_target");
+			const withoutConsent = await exchange(
 				"self-registered client without the user's consent",
 				"RFC 8693 §2.2.2, §5",
-				exchangeForm(subjectToken),
-				{
-					client_id: readString(deputy, "client_id"),
-					client_secret: readString(deputy, "client_secret"),
-				},
+				exchangeForm(subjectToken, { resource: runtime.mcpResource }),
+				deputyCredentials,
 			);
-			expectOAuthError(response, 400, "invalid_request");
-			expect(String(response.body.error_description)).toContain("consented");
+			expectOAuthError(withoutConsent, 400, "invalid_request");
+			expect(String(withoutConsent.body.error_description)).toContain(
+				"consented",
+			);
 		});
 
 		await test.step("public clients cannot use the grant (RFC 8693 §2.1)", async () => {
