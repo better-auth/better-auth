@@ -1127,6 +1127,13 @@ async function createUserTokens(
 			? Math.floor(params.maxExpiresAt.getTime() / 1000)
 			: Number.POSITIVE_INFINITY,
 	);
+	// A cap that has already passed would mint a token that is born expired.
+	if (defaultExp <= iat) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: "the token this grant derives from has expired",
+		});
+	}
 	const scopeExp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>

@@ -5,7 +5,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
 import { resetSeedStateForTests, seedResourcesOnce } from "./resources";
@@ -425,6 +425,28 @@ describe("oauthTokenExchange", () => {
 				error: "invalid_request",
 				error_description: "subject_token is invalid",
 			});
+		}
+	});
+
+	it("refuses to issue when the subject token expires during the exchange", async () => {
+		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario({
+			// Simulates a slow policy check that outlasts the subject token.
+			allowExchange: ({ subjectToken }) => {
+				vi.useFakeTimers({ toFake: ["Date"] });
+				vi.setSystemTime((subjectToken.exp! + 1) * 1000);
+				return true;
+			},
+		});
+		const subject = await userTokenForMcp();
+		try {
+			const { data, error } = await exchangeAs(mcpServer, subject.access_token);
+			expect(data).toBeNull();
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description: "the token this grant derives from has expired",
+			});
+		} finally {
+			vi.useRealTimers();
 		}
 	});
 
