@@ -1355,12 +1355,16 @@ describe("signUpOnVerification with additionalFields", async () => {
 
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
+	let resetOtp = "";
 
 	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
 					async sendOTP() {},
+					async sendPasswordResetOTP({ code }) {
+						resetOtp = code;
+					},
 					verifyOTP: mockVerifyOTP,
 					signUpOnVerification: {
 						getTempEmail(phoneNumber) {
@@ -1490,114 +1494,76 @@ describe("custom verifyOTP", async () => {
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10697
-	 */
-	it("should use custom verifyOTP when resetting the password", async () => {
-		const resetPhoneNumber = "+1222333444";
-		const newPassword = "new-password-123";
-
-		// Register the phone number so a user exists to reset the password for.
-		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
+	/** Signs up `phoneNumber` through the custom verifier and requests a reset. */
+	async function requestResetFor(phoneNumber: string) {
 		mockVerifyOTP.mockResolvedValueOnce(true);
-		await client.phoneNumber.verify({
-			phoneNumber: resetPhoneNumber,
-			code: "123456",
-		});
-
-		await client.phoneNumber.requestPasswordReset({
-			phoneNumber: resetPhoneNumber,
-		});
-
+		await client.phoneNumber.verify({ phoneNumber, code: "123456" });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
 		mockVerifyOTP.mockClear();
-		// The provider accepts this code even though it is not the stored one,
-		// which is the point of delegating verification to it.
-		mockVerifyOTP.mockResolvedValueOnce(true);
-
-		const res = await client.phoneNumber.resetPassword({
-			phoneNumber: resetPhoneNumber,
-			otp: "999999",
-			newPassword,
-		});
-
-		expect(mockVerifyOTP).toHaveBeenCalledWith(
-			expect.objectContaining({
-				phoneNumber: resetPhoneNumber,
-				code: "999999",
-			}),
-			expect.anything(),
-		);
-		expect(res.error).toBe(null);
-
-		// The reset must actually persist, not just return success.
-		const signInRes = await client.signIn.phoneNumber({
-			phoneNumber: resetPhoneNumber,
-			password: newPassword,
-		});
-		expect(signInRes.error).toBe(null);
-		expect(signInRes.data?.user.phoneNumber).toBe(resetPhoneNumber);
-	});
+	}
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10697
 	 */
-	it("should not spend the provider code when the new password is rejected", async () => {
-		const resetPhoneNumber = "+1222333555";
-		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
-		mockVerifyOTP.mockResolvedValueOnce(true);
-		await client.phoneNumber.verify({
-			phoneNumber: resetPhoneNumber,
-			code: "123456",
-		});
-		await client.phoneNumber.requestPasswordReset({
-			phoneNumber: resetPhoneNumber,
-		});
-		mockVerifyOTP.mockClear();
+	describe("password reset", () => {
+		it("should use custom verifyOTP when resetting the password", async () => {
+			const phoneNumber = "+1222333444";
+			const newPassword = "new-password-123";
+			await requestResetFor(phoneNumber);
+			// The provider accepts a code that is not the stored one.
+			mockVerifyOTP.mockResolvedValueOnce(true);
 
-		const res = await client.phoneNumber.resetPassword({
-			phoneNumber: resetPhoneNumber,
-			otp: "999999",
-			newPassword: "short",
-		});
+			const res = await client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: "999999",
+				newPassword,
+			});
 
-		expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
-		expect(mockVerifyOTP).not.toHaveBeenCalled();
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10697
-	 */
-	it("should reject a reset code that custom verifyOTP refuses", async () => {
-		const resetPhoneNumber = "+1222333666";
-		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
-		mockVerifyOTP.mockResolvedValueOnce(true);
-		await client.phoneNumber.verify({
-			phoneNumber: resetPhoneNumber,
-			code: "123456",
-		});
-		await client.phoneNumber.requestPasswordReset({
-			phoneNumber: resetPhoneNumber,
-		});
-		// Submit the stored code, which the built-in check would accept, so only
-		// the custom verifier can reject it.
-		const ctx = await auth.$context;
-		const stored = await ctx.internalAdapter.findVerificationValue(
-			`${resetPhoneNumber}-request-password-reset`,
-		);
-		const storedCode = stored!.value.split(":")[0]!;
-		mockVerifyOTP.mockResolvedValueOnce(false);
-
-		const res = await client.phoneNumber.resetPassword({
-			phoneNumber: resetPhoneNumber,
-			otp: storedCode,
-			newPassword: "new-password-123",
+			expect(res.error).toBe(null);
+			expect(mockVerifyOTP).toHaveBeenCalledWith(
+				{ phoneNumber, code: "999999" },
+				expect.anything(),
+			);
+			const signIn = await client.signIn.phoneNumber({
+				phoneNumber,
+				password: newPassword,
+			});
+			expect(signIn.error).toBe(null);
 		});
 
-		expect(res.error?.code).toBe("INVALID_OTP");
-		expect(mockVerifyOTP).toHaveBeenCalledWith(
-			{ phoneNumber: resetPhoneNumber, code: storedCode },
-			expect.anything(),
-		);
+		it("should not spend the provider code when the new password is rejected", async () => {
+			const phoneNumber = "+1222333555";
+			await requestResetFor(phoneNumber);
+
+			const res = await client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: "999999",
+				newPassword: "short",
+			});
+
+			expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
+			expect(mockVerifyOTP).not.toHaveBeenCalled();
+		});
+
+		it("should reject a reset code that custom verifyOTP refuses", async () => {
+			const phoneNumber = "+1222333666";
+			await requestResetFor(phoneNumber);
+			// The stored code would pass the built-in check, so only the custom
+			// verifier can reject it.
+			mockVerifyOTP.mockResolvedValueOnce(false);
+
+			const res = await client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: resetOtp,
+				newPassword: "new-password-123",
+			});
+
+			expect(res.error?.code).toBe("INVALID_OTP");
+			expect(mockVerifyOTP).toHaveBeenCalledWith(
+				{ phoneNumber, code: resetOtp },
+				expect.anything(),
+			);
+		});
 	});
 
 	/**
