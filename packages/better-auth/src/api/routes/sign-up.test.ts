@@ -1321,7 +1321,15 @@ describe("sign-up verification email and the transaction", () => {
 		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
 	});
 
-	it("mints the verification token after the commit, so slow after hooks don't expire it", async () => {
+	it("mints the verification token after the commit, so slow after hooks don't expire it", async ({
+		onTestFinished,
+	}) => {
+		// Only Date is faked, so the clock moves only when the hook moves it.
+		vi.useFakeTimers({ toFake: ["Date"] });
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		const expiresIn = 3600;
 		let token = "";
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
@@ -1335,7 +1343,7 @@ describe("sign-up verification email and the transaction", () => {
 			emailAndPassword: { enabled: true },
 			emailVerification: {
 				sendOnSignUp: true,
-				expiresIn: 1,
+				expiresIn,
 				sendVerificationEmail: async (data) => {
 					token = data.token;
 				},
@@ -1343,8 +1351,10 @@ describe("sign-up verification email and the transaction", () => {
 			databaseHooks: {
 				user: {
 					create: {
-						// Outlasts the token's expiry; it runs before the queued email.
-						after: () => new Promise((resolve) => setTimeout(resolve, 1100)),
+						// Runs before the queued email and outlasts the token's lifetime.
+						after: async () => {
+							vi.setSystemTime(Date.now() + (expiresIn + 60) * 1000);
+						},
 					},
 				},
 			},
