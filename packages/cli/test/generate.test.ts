@@ -874,6 +874,86 @@ model Directory_user {
 			);
 			expect(sqliteSchema.code).not.toMatch(/withTimezone/);
 		});
+
+		it("should keep emitting bare timestamps when useTimestamptz is explicitly false", async () => {
+			const schema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: {
+					advanced: {
+						database: {
+							useTimestamptz: false,
+						},
+					},
+				} as BetterAuthOptions,
+			});
+			expect(schema.code).toContain('timestamp("created_at")');
+			expect(schema.code).toContain('timestamp("expires_at")');
+			expect(schema.code).not.toMatch(/withTimezone/);
+		});
+
+		it("should leave non-date columns untouched when useTimestamptz is true", async () => {
+			const schema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: {
+					advanced: {
+						database: {
+							useTimestamptz: true,
+						},
+					},
+				} as BetterAuthOptions,
+			});
+			expect(schema.code).toContain('text("token")');
+			expect(schema.code).toContain('text("email")');
+			expect(schema.code).toContain('boolean("email_verified")');
+		});
+
+		it("should generate byte-identical code on repeated runs with useTimestamptz enabled", async () => {
+			const flagged = {
+				advanced: {
+					database: {
+						useTimestamptz: true,
+					},
+				},
+			} as BetterAuthOptions;
+			const first = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: flagged,
+			});
+			const second = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: flagged,
+			});
+			expect(second.code).toBe(first.code);
+		});
+
+		it("should return bare timestamps when regenerating without the flag after a flagged run", async () => {
+			const flagged = {
+				advanced: {
+					database: {
+						useTimestamptz: true,
+					},
+				},
+			} as BetterAuthOptions;
+			const withFlag = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: flagged,
+			});
+			expect(withFlag.code).toContain(
+				'timestamp("expires_at", { withTimezone: true })',
+			);
+			const withoutFlag = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: {} as BetterAuthOptions,
+			});
+			expect(withoutFlag.code).toContain('timestamp("expires_at")');
+			expect(withoutFlag.code).not.toMatch(/withTimezone/);
+		});
 	});
 
 	it("should generate Drizzle compound indexes with physical field names", async () => {

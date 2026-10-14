@@ -216,7 +216,7 @@ export const auth = betterAuth({
 });
 ```
 
-With this enabled, `npx auth@latest generate` emits `timestamp("<column>", { withTimezone: true })` for every date column. SQLite and MySQL output is unchanged.
+With this enabled, `npx auth@latest generate` emits `timestamp("<column>", { withTimezone: true })` for every date column. SQLite and MySQL output is unchanged. Set this flag under `advanced.database` only; a same-named setting under `DrizzleAdapterConfig` has no effect. Adapters that provide a custom `createSchema` — including Relations v2 (`@better-auth/drizzle-adapter/relations-v2`) — bypass this mapping and are unaffected by the flag.
 
 Regenerating the schema only changes the generated file. If your tables already exist with `timestamp without time zone` columns, migrate each date column explicitly — for example:
 
@@ -225,7 +225,7 @@ ALTER TABLE "session"
   ALTER COLUMN "expires_at" TYPE timestamptz USING "expires_at" AT TIME ZONE 'UTC';
 ```
 
-Repeat for every date column (`created_at`, `updated_at`, `access_token_expires_at`, `refresh_token_expires_at`, ...).
+Repeat for every date column (`created_at`, `updated_at`, `access_token_expires_at`, `refresh_token_expires_at`, ...). The `AT TIME ZONE 'UTC'` conversion assumes existing values were written in UTC (the Better Auth default); columns with non-UTC writers need per-column review before migrating.
 
 For a string column, Better Auth writes the date in UTC: ISO 8601 (`2026-01-16T16:50:54.888Z`), or `2026-01-16 16:50:54.888` on MySQL. It reads a value without a time zone as UTC. On PostgreSQL, `timestamp({ mode: "string", withTimezone: true })` stores an absolute instant, and the values it returns carry an offset, so reading them does not depend on that rule.
 

@@ -469,7 +469,9 @@ export type BetterAuthAdvancedOptions = {
 				 * of the reader's time zone.
 				 *
 				 * PostgreSQL and Drizzle generator only. SQLite and MySQL
-				 * output is unchanged. Existing databases are untouched;
+				 * output is unchanged. Set under `advanced.database` only;
+				 * a same-named key in `DrizzleAdapterConfig` has no effect.
+				 * Existing databases are untouched;
 				 * adopters must migrate existing columns manually
 				 * (see the Drizzle adapter docs).
 				 *
