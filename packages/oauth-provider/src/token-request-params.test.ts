@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -5,12 +6,14 @@ import { oauthProvider } from "./oauth";
 
 const baseURL = "http://localhost:3000";
 const resource = "https://api.example.com";
+const echoGrant = "urn:test:params:grant-type:echo";
 
 /**
  * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
  * @see https://datatracker.ietf.org/doc/html/rfc8707#section-2
  */
 describe("token endpoint request parameters", async () => {
+	let observedAudience: unknown;
 	const { auth, signInWithTestUser } = await getTestInstance({
 		baseURL,
 		plugins: [
@@ -22,6 +25,20 @@ describe("token endpoint request parameters", async () => {
 				clientPrivileges: ({ action }) =>
 					action === "create" ||
 					action === "configure-client-credentials-scopes",
+				extensions: [
+					{
+						grants: {
+							[echoGrant]: async ({ ctx }) => {
+								observedAudience = (ctx.body as { audience?: unknown })
+									.audience;
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_grant",
+									error_description: "echo grant issues no tokens",
+								});
+							},
+						},
+					},
+				],
 			}),
 		],
 	});
@@ -120,13 +137,56 @@ describe("token endpoint request parameters", async () => {
 		expect(response.headers.get("cache-control")).toBe("no-store");
 	});
 
-	it("allows the audience parameter to repeat", async () => {
-		const { response } = await postToken([
-			["grant_type", "client_credentials"],
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+	 */
+	it("passes every repeated audience to the grant handler", async () => {
+		await postToken([
+			["grant_type", echoGrant],
 			["audience", "https://a.example.com"],
+			["audience", ""],
 			["audience", "https://b.example.com"],
 		]);
+		expect(observedAudience).toEqual([
+			"https://a.example.com",
+			"https://b.example.com",
+		]);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
+	 */
+	it.each([
+		[
+			"an empty scope after a valid one",
+			[
+				["grant_type", "client_credentials"],
+				["scope", "m2m:read"],
+				["scope", ""],
+			],
+		],
+		[
+			"an empty scope before a valid one",
+			[
+				["grant_type", "client_credentials"],
+				["scope", ""],
+				["scope", "m2m:read"],
+			],
+		],
+		[
+			"an empty grant_type after a valid one",
+			[
+				["grant_type", "client_credentials"],
+				["grant_type", ""],
+			],
+		],
+	] as [
+		string,
+		[string, string][],
+	][])("treats %s as omitted", async (_label, params) => {
+		const { response, body } = await postToken(params);
 		expect(response.status).toBe(200);
+		expect(body.access_token).toBeDefined();
 	});
 
 	/**

@@ -59,8 +59,6 @@ import {
 	getSignedQueryIssuedAt,
 	isSessionFreshForSignedQuery,
 	postLoginClearedParam,
-	readFormParams,
-	rejectRepeatedParams,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
@@ -68,8 +66,6 @@ import {
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
-
-const resourceListSchema = z.array(ResourceUriSchema).min(1);
 
 /**
  * Default scopes advertised and accepted when a configuration sets none. Shared
@@ -879,10 +875,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					// The handler re-reads the raw form body to reject repeated
-					// parameters and recover every RFC 8707 `resource` value,
-					// which needs a second readable copy of the body.
+					// `formParams` re-reads the raw form body.
 					cloneRequest: true,
+					// RFC 8707 §2 and RFC 8693 §2.1 let these repeat.
+					formParams: { repeatable: ["resource", "audience"] },
 					body: z
 						.object({
 							grant_type: z.string().trim().min(1),
@@ -895,8 +891,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							redirect_uri: SafeUrlSchema.optional(),
 							refresh_token: z.string().optional(),
 							resource: z
-								// RFC 6749 §3.2: an empty value counts as omitted.
-								.union([ResourceUriSchema, resourceListSchema, z.literal("")])
+								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
 								.optional(),
 							scope: z.string().optional(),
 						})
@@ -1051,29 +1046,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					// better-call keeps only the last value of a repeated form key,
-					// so read the raw body to enforce parameter cardinality. The
-					// in-process auth.api.* path has no Request body to re-read.
-					const form = ctx.request
-						? await readFormParams(ctx.request)
-						: undefined;
-					if (ctx.body.resource === "") ctx.body.resource = undefined;
-					if (form) {
-						// RFC 8707 §2 and RFC 8693 §2.1 let these repeat.
-						rejectRepeatedParams(form, ["resource", "audience"]);
-						const resources = form.getAll("resource").filter(Boolean);
-						if (resources.length > 0) {
-							const parsed = resourceListSchema.safeParse(resources);
-							if (!parsed.success) {
-								throw new APIError("BAD_REQUEST", {
-									error: "invalid_target",
-									error_description: "Invalid resource indicator",
-								});
-							}
-							ctx.body.resource =
-								parsed.data.length > 1 ? parsed.data : parsed.data[0];
-						}
-					}
 					return tokenEndpoint(ctx, opts);
 				},
 			),
@@ -1081,8 +1053,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/introspect",
 				{
 					method: "POST",
-					// Parameter cardinality is enforced from the raw form body.
+					// `formParams` re-reads the raw form body.
 					cloneRequest: true,
+					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1215,10 +1188,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					const form = ctx.request
-						? await readFormParams(ctx.request)
-						: undefined;
-					if (form) rejectRepeatedParams(form);
 					return introspectEndpoint(ctx, opts);
 				},
 			),
@@ -1226,8 +1195,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/revoke",
 				{
 					method: "POST",
-					// Parameter cardinality is enforced from the raw form body.
+					// `formParams` re-reads the raw form body.
 					cloneRequest: true,
+					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1308,10 +1278,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					const form = ctx.request
-						? await readFormParams(ctx.request)
-						: undefined;
-					if (form) rejectRepeatedParams(form);
 					return revokeEndpoint(ctx, opts);
 				},
 			),

@@ -176,14 +176,32 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			});
 		});
 
-		it("treats an empty repeated value as omitted", async () => {
-			const { status } = await postWithBasicAuth("/oauth2/introspect", [
-				["token", "opaque-token"],
-				["token_type_hint", ""],
-				["token_type_hint", "access_token"],
-			]);
+		it.each([
+			[
+				"before",
+				[
+					["token", ""],
+					["token", "opaque-token"],
+				],
+			],
+			[
+				"after",
+				[
+					["token", "opaque-token"],
+					["token", ""],
+				],
+			],
+		] as [
+			string,
+			[string, string][],
+		][])("treats an empty value %s a valid one as omitted", async (_label, params) => {
+			const { status, body } = await postWithBasicAuth(
+				"/oauth2/introspect",
+				params,
+			);
 
 			expect(status).toBe(200);
+			expect(body).toEqual({ active: false });
 		});
 	});
 

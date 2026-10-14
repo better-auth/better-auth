@@ -564,27 +564,33 @@ export async function readFormParams(
 }
 
 /**
- * Rejects a form parameter sent more than once with `invalid_request`
- * (RFC 6749 §3.2). Empty values count as omitted. `repeatable` names the
- * parameters a specification lets repeat, such as RFC 8707 `resource`.
+ * Builds a request body from raw form parameters under RFC 6749 §3.2: a
+ * parameter sent without a value counts as omitted, and a parameter sent more
+ * than once is rejected with `invalid_request`. A name in `repeatable`, such
+ * as RFC 8707 `resource`, keeps every value as an array when it repeats.
  *
  * @internal
  */
-export function rejectRepeatedParams(
+export function formParamsToBody(
 	params: URLSearchParams,
 	repeatable: readonly string[] = [],
-) {
+): Record<string, string | string[]> {
+	const body: Record<string, string | string[]> = {};
 	for (const name of new Set(params.keys())) {
-		if (
-			!repeatable.includes(name) &&
-			params.getAll(name).filter(Boolean).length > 1
-		) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_request",
-				error_description: `${name} must not be repeated`,
-			});
+		const values = params.getAll(name).filter(Boolean);
+		if (values.length === 1) {
+			body[name] = values[0]!;
+		} else if (values.length > 1) {
+			if (!repeatable.includes(name)) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description: `${name} must not be repeated`,
+				});
+			}
+			body[name] = values;
 		}
 	}
+	return body;
 }
 
 /**

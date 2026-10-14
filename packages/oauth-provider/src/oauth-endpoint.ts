@@ -7,6 +7,7 @@ import type {
 } from "better-call";
 import { APIError } from "better-call";
 import * as z from "zod";
+import { formParamsToBody, readFormParams } from "./utils";
 
 /**
  * Canonical OAuth 2.0 / OpenID Connect error codes. The union is the single
@@ -112,6 +113,14 @@ export interface OAuthEndpointExtras<
 	 * @default "invalid_request"
 	 */
 	defaultError?: OAuthErrorCode;
+	/**
+	 * Rebuilds the body from the raw form before validation, because the form
+	 * parser keeps only the last value of a repeated key. Empty values count as
+	 * omitted and repeated parameters return `invalid_request` (RFC 6749 §3.2),
+	 * except the names in `repeatable`, which become arrays. Requires
+	 * `cloneRequest: true`.
+	 */
+	formParams?: { repeatable?: readonly string[] };
 }
 
 /**
@@ -145,10 +154,11 @@ export function createOAuthEndpoint<
 		onValidationError: userHook,
 		errorCodesByField,
 		defaultError = "invalid_request",
+		formParams,
 		...rest
 	} = options;
 
-	if (!redirectOnError) {
+	if (!redirectOnError && !formParams) {
 		// Schema validation runs before the handler that applies
 		// `metadata.noStore`, so validation errors attach the headers here.
 		const noStore =
@@ -167,9 +177,6 @@ export function createOAuthEndpoint<
 		return createAuthEndpoint(path, forwarded, handler);
 	}
 
-	// Bind so the non-null narrowing from the guard above survives into `validateSlot`;
-	// TS drops narrowing when crossing into a nested function declaration.
-	const redirect = redirectOnError;
 	const {
 		body: bodySchema,
 		query: querySchema,
@@ -196,23 +203,29 @@ export function createOAuthEndpoint<
 				issues: result.error.issues,
 			});
 		}
-		return {
-			ok: false,
-			response: redirect({
-				...mapIssuesToOAuthError(
-					result.error.issues,
-					errorCodesByField,
-					defaultError,
-				),
-				ctx,
-			}),
-		};
+		const error = mapIssuesToOAuthError(
+			result.error.issues,
+			errorCodesByField,
+			defaultError,
+		);
+		if (!redirectOnError) throw new APIError("BAD_REQUEST", error);
+		return { ok: false, response: redirectOnError({ ...error, ctx }) };
 	}
 
 	return createAuthEndpoint(
 		path,
 		forwarded as unknown as Options,
 		async (ctx) => {
+			const form =
+				formParams && ctx.request
+					? await readFormParams(ctx.request)
+					: undefined;
+			if (form) {
+				(ctx as { body: unknown }).body = formParamsToBody(
+					form,
+					formParams?.repeatable,
+				);
+			}
 			const body = await validateSlot(ctx, "body", bodySchema);
 			if (!body.ok) return body.response;
 			const query = await validateSlot(ctx, "query", querySchema);
