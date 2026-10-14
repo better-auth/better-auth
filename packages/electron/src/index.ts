@@ -29,10 +29,9 @@ declare module "@better-auth/core" {
 }
 
 export const electron = (options?: ElectronOptions | undefined) => {
-	const opts = {
+	const { cookiePrefix: _, ...opts } = {
 		codeExpiresIn: 300, // 5 minutes
 		redirectCookieExpiresIn: 120, // 2 minutes
-		cookiePrefix: "better-auth",
 		clientID: "electron",
 		...(options || {}),
 	};
@@ -72,7 +71,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_PKCE);
 		}
 
-		const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
+		const redirectCookieName = `${ctx.context.options.advanced?.cookiePrefix || "better-auth"}.${opts.clientID}`;
 
 		const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
 		const codeExpiresInMs = opts.codeExpiresIn * 1000;
@@ -109,7 +108,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					matcher: (ctx) => !hookMatcher(ctx),
 					handler: createAuthMiddleware(async (ctx) => {
 						const transferCookie = await ctx.getSignedCookie(
-							`${opts.cookiePrefix}.transfer_token`,
+							`${ctx.context.options.advanced?.cookiePrefix || "better-auth"}.transfer_token`,
 							ctx.context.secret,
 						);
 						if (!ctx.context.newSession?.session || !transferCookie) {
