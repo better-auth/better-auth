@@ -413,8 +413,15 @@ export const genericOAuth = <const ID extends string>(
 				},
 				async validateAuthorizationCode(data) {
 					if (c.getToken) {
+						const effectiveRedirectURI = c.redirectURI || data.redirectURI;
+						const effectiveCodeVerifier =
+							(c.pkce ?? true) ? data.codeVerifier : undefined;
 						return applyDefaultAccessTokenExpiry(
-							await c.getToken(data),
+							await c.getToken({
+								...data,
+								redirectURI: effectiveRedirectURI,
+								codeVerifier: effectiveCodeVerifier,
+							}),
 							c.accessTokenExpiresIn,
 						);
 					}

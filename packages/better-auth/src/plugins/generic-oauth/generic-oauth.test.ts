@@ -5686,3 +5686,110 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 		).toBe("/callback/custom-oauth-test");
 	});
 });
+
+/**
+ * A custom `getToken` exchange must receive the provider's configured
+ * `redirectURI` (falling back to the callback URI) and must only receive a
+ * `codeVerifier` when PKCE is enabled. The raw callback values were previously
+ * forwarded verbatim, causing `redirect_uri_mismatch` failures and strict-IdP
+ * rejections when `pkce: false`.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11559
+ */
+describe("generic-oauth custom getToken redirectURI + PKCE forwarding", () => {
+	const callbackRedirectURI =
+		"http://localhost:3000/api/auth/callback/gettoken-args";
+	const mintedVerifier = "minted-verifier";
+
+	async function captureGetTokenArgs(
+		providerId: string,
+		config: { redirectURI?: string | undefined; pkce?: boolean | undefined },
+	) {
+		let captured:
+			| {
+					code: string;
+					redirectURI: string;
+					codeVerifier?: string | undefined;
+					deviceId?: string | undefined;
+			  }
+			| undefined;
+		const { auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+							authorizationUrl: "https://idp.example.com/authorize",
+							redirectURI: config.redirectURI,
+							pkce: config.pkce,
+							getToken: async (data) => {
+								captured = data;
+								return { accessToken: "test-access-token" };
+							},
+						},
+					],
+				}),
+			],
+		});
+		const context = await auth.$context;
+		const provider = await getAwaitableValue(context.socialProviders, {
+			value: providerId,
+		});
+		expect(provider).toBeDefined();
+		await provider?.validateAuthorizationCode({
+			code: "test-code",
+			redirectURI: callbackRedirectURI,
+			codeVerifier: mintedVerifier,
+			deviceId: "test-device-id",
+		});
+		return captured;
+	}
+
+	it("getToken redirectURI: forwards the configured redirectURI", async () => {
+		const captured = await captureGetTokenArgs("gettoken-redirect-custom", {
+			redirectURI: "https://app.example.com/oauth/callback",
+		});
+		expect(captured?.redirectURI).toBe(
+			"https://app.example.com/oauth/callback",
+		);
+		expect(captured?.code).toBe("test-code");
+		expect(captured?.deviceId).toBe("test-device-id");
+	});
+
+	it("getToken redirectURI: falls back to the callback URI when unconfigured", async () => {
+		const captured = await captureGetTokenArgs("gettoken-redirect-default", {});
+		expect(captured?.redirectURI).toBe(callbackRedirectURI);
+	});
+
+	it("getToken PKCE: passes undefined codeVerifier when pkce is false", async () => {
+		const captured = await captureGetTokenArgs("gettoken-pkce-off", {
+			pkce: false,
+		});
+		expect(captured?.codeVerifier).toBeUndefined();
+	});
+
+	it("getToken PKCE: forwards codeVerifier by default", async () => {
+		const captured = await captureGetTokenArgs("gettoken-pkce-default", {});
+		expect(captured?.codeVerifier).toBe(mintedVerifier);
+	});
+
+	it("getToken PKCE: forwards codeVerifier when pkce is explicitly true", async () => {
+		const captured = await captureGetTokenArgs("gettoken-pkce-on", {
+			pkce: true,
+		});
+		expect(captured?.codeVerifier).toBe(mintedVerifier);
+	});
+
+	it("getToken redirectURI + PKCE: forwards configured URI and passes undefined verifier", async () => {
+		const captured = await captureGetTokenArgs("gettoken-combined", {
+			redirectURI: "https://app.example.com/oauth/callback",
+			pkce: false,
+		});
+		expect(captured?.redirectURI).toBe(
+			"https://app.example.com/oauth/callback",
+		);
+		expect(captured?.codeVerifier).toBeUndefined();
+	});
+});
