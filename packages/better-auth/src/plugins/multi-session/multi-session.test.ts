@@ -4,6 +4,128 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { multiSession } from ".";
 import { multiSessionClient } from "./client";
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11713
+ */
+describe("multi-session database fallback", () => {
+	async function createDeviceSessions() {
+		const store = new Map<string, string>();
+		const { auth, client, cookieSetter, testUser } = await getTestInstance(
+			{
+				plugins: [multiSession()],
+				session: { storeSessionInDatabase: true },
+				secondaryStorage: {
+					get: (key) => store.get(key) ?? null,
+					set(key, value) {
+						store.set(key, value);
+					},
+					getAndDelete(key) {
+						const value = store.get(key) ?? null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			},
+			{ clientOptions: { plugins: [multiSessionClient()] } },
+		);
+		const headers = new Headers();
+		const first = await client.signIn.email(testUser, {
+			onSuccess: cookieSetter(headers),
+		});
+		const second = await client.signUp.email(
+			{ email: "second@test.com", password: "password", name: "Second user" },
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		expect(first.error).toBeNull();
+		expect(second.error).toBeNull();
+		expect(second.data?.token).toBeTypeOf("string");
+		const firstToken = first.data!.token;
+		const secondToken = second.data!.token!;
+		const before = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers },
+		});
+		expect(before.data).toHaveLength(2);
+
+		return {
+			auth,
+			client,
+			cookieSetter,
+			headers,
+			store,
+			firstToken,
+			secondToken,
+		};
+	}
+
+	it("lists database-backed device sessions after cache eviction", async () => {
+		const { client, headers, store, firstToken, secondToken } =
+			await createDeviceSessions();
+		store.clear();
+
+		const listed = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers },
+		});
+		expect(listed.error).toBeNull();
+		expect(listed.data?.map(({ session }) => session.token).sort()).toEqual(
+			[firstToken, secondToken].sort(),
+		);
+	});
+
+	it("activates a remaining database session after revoking the active session", async () => {
+		const {
+			auth,
+			client,
+			cookieSetter,
+			headers,
+			store,
+			firstToken,
+			secondToken,
+		} = await createDeviceSessions();
+		store.clear();
+
+		const current = await client.getSession({ fetchOptions: { headers } });
+		expect(current.data?.session.token).toBe(secondToken);
+		const revoked = await client.multiSession.revoke(
+			{ sessionToken: secondToken },
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		expect(revoked.error).toBeNull();
+		const { internalAdapter } = await auth.$context;
+		expect(await internalAdapter.findSession(secondToken)).toBeNull();
+
+		const active = await client.getSession({ fetchOptions: { headers } });
+		expect(active.data?.session.token).toBe(firstToken);
+	});
+
+	it("selects the first held session after revocation across mixed cache hits", async () => {
+		const { client, cookieSetter, headers, store, firstToken } =
+			await createDeviceSessions();
+		const third = await client.signUp.email(
+			{ email: "third@test.com", password: "password", name: "Third user" },
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		expect(third.error).toBeNull();
+		expect(third.data?.token).toBeTypeOf("string");
+		store.delete(firstToken);
+
+		const revoked = await client.multiSession.revoke(
+			{ sessionToken: third.data!.token! },
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		expect(revoked.error).toBeNull();
+		const active = await client.getSession({ fetchOptions: { headers } });
+		expect(active.data?.session.token).toBe(firstToken);
+	});
+});
+
 describe("multi-session", async () => {
 	const { client, testUser, cookieSetter } = await getTestInstance(
 		{

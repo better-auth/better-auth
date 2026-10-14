@@ -8,8 +8,9 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
+import { logger } from "@better-auth/core/env";
 import type { ClientSession, Db, MongoClient } from "mongodb";
-import { ObjectId, UUID } from "mongodb";
+import { MongoError, MongoErrorLabel, ObjectId, UUID } from "mongodb";
 import {
 	escapeForMongoRegex,
 	insensitiveContains,
@@ -28,6 +29,52 @@ class MongoAdapterError extends Error {
 	) {
 		super(message);
 		this.name = "MongoAdapterError";
+	}
+}
+
+/**
+ * NoSuchTransaction (251) and TransactionCommitted (256) both mean the server
+ * has nothing left open, so the abort has already achieved what it was for.
+ */
+const ABORT_SETTLED_CODES = new Set([251, 256]);
+
+/**
+ * Abort a transaction whose commit did not complete, as a command on its own
+ * session.
+ *
+ * `session.abortTransaction()` is retried by the driver on a transient error;
+ * a raw command is not, and giving up after one attempt would leave the
+ * transaction open until `transactionLifetimeLimitSeconds` — the leak this is
+ * here to close. So a retryable write is tried once more.
+ *
+ * The abort is best-effort either way: the caller's original error is the one
+ * that must surface, so a failure here is only logged.
+ */
+async function abortTransactionCommand(
+	client: MongoClient,
+	session: ClientSession,
+): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			await client.db("admin").command({ abortTransaction: 1 }, { session });
+			return;
+		} catch (abortError) {
+			const code = (abortError as { code?: number })?.code;
+			if (code !== undefined && ABORT_SETTLED_CODES.has(code)) {
+				return;
+			}
+			const retryable =
+				abortError instanceof MongoError &&
+				abortError.hasErrorLabel(MongoErrorLabel.RetryableWriteError);
+			if (retryable && attempt === 0) {
+				continue;
+			}
+			logger.error(
+				"Failed to abort a MongoDB transaction whose commit did not complete",
+				abortError,
+			);
+			return;
+		}
 	}
 }
 
@@ -764,6 +811,7 @@ export const mongodbAdapter = (
 							}
 
 							const session = config.client.startSession();
+							let commitAttempted = false;
 
 							try {
 								session.startTransaction();
@@ -778,11 +826,25 @@ export const mongodbAdapter = (
 
 								const result = await cb(adapter);
 
+								commitAttempted = true;
 								await session.commitTransaction();
 								return result;
 							} catch (err) {
 								if (session.inTransaction()) {
 									await session.abortTransaction();
+								} else if (commitAttempted) {
+									// A commit that failed in flight leaves the transaction
+									// open on the server, but the driver no longer reports the
+									// session as being in one, so `abortTransaction()` is not
+									// an option. Send the abort as a command on the same
+									// session so the server does not hold the writes until
+									// `transactionLifetimeLimitSeconds`.
+									//
+									// Only a failed commit can leave that state behind: if the
+									// transaction never started, or failed before the commit,
+									// there is nothing open and sending the command would just
+									// produce a second error to log.
+									await abortTransactionCommand(config.client, session);
 								}
 								throw err;
 							} finally {
