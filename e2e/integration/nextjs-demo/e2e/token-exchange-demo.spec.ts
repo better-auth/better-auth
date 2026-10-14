@@ -909,17 +909,17 @@ test.describe("Next.js token exchange demo (RFC 8693)", () => {
 		expect(scopeList(approved.scope)).toContain("read:organization");
 
 		// Switching the active organization does not move tokens the user
-		// already approved for Acme into Globex.
-		const globexId = await createOrganization(
+		// already approved for Acme into Beta.
+		const betaId = await createOrganization(
 			browserContext.request,
 			runtime.baseURL,
-			"Globex",
+			"Beta",
 		);
 		const switched = await browserContext.request.post(
 			`${runtime.baseURL}/api/auth/organization/set-active`,
 			{
 				headers: { origin: runtime.baseURL },
-				data: { organizationId: globexId },
+				data: { organizationId: betaId },
 			},
 		);
 		expect(switched.ok(), await switched.text()).toBe(true);
