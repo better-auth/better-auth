@@ -467,74 +467,74 @@ describe("private_key_jwt authentication", async () => {
 				],
 			}),
 		},
-	])("does not cache a $name discovery-owned JWKS response", async ({
-		name,
-		jwks,
-	}) => {
-		const clientId = `https://${name}-remote-jwks.example.com/client.json`;
-		const jwksUri = `https://${name}-remote-jwks.example.com/jwks.json`;
-		const audience = `https://${name}-provider.example.com/oauth2/token`;
-		let serveValidJwks = false;
-		const transport = vi.fn().mockImplementation(() =>
-			Promise.resolve(
-				Response.json(
-					serveValidJwks
-						? {
-								keys: [
-									{
-										...rsaPublicJwk,
-										kid: "remote-validation-key",
-										alg: "RS256",
-									},
-								],
-							}
-						: jwks(),
+	])(
+		"does not cache a $name discovery-owned JWKS response",
+		async ({ name, jwks }) => {
+			const clientId = `https://${name}-remote-jwks.example.com/client.json`;
+			const jwksUri = `https://${name}-remote-jwks.example.com/jwks.json`;
+			const audience = `https://${name}-provider.example.com/oauth2/token`;
+			let serveValidJwks = false;
+			const transport = vi.fn().mockImplementation(() =>
+				Promise.resolve(
+					Response.json(
+						serveValidJwks
+							? {
+									keys: [
+										{
+											...rsaPublicJwk,
+											kid: "remote-validation-key",
+											alg: "RS256",
+										},
+									],
+								}
+							: jwks(),
+					),
 				),
-			),
-		);
-		const provider = await createDiscoveredClientVerifier({
-			baseURL: new URL(audience).origin,
-			clientId,
-			clientDiscoveryId: `${name}-remote-jwks-discovery`,
-			fetchClientMetadataResource: transport,
-			jwksUri,
-		});
-
-		await expect(
-			verifyClientAssertion(
-				provider.ctx,
-				provider.opts,
-				await signDiscoveredClientAssertion({
-					audience,
-					clientId,
-					key: rsaPrivateKey,
-					keyId: "remote-validation-key",
-				}),
-				CLIENT_ASSERTION_TYPE,
+			);
+			const provider = await createDiscoveredClientVerifier({
+				baseURL: new URL(audience).origin,
 				clientId,
-				audience,
-			),
-		).rejects.toBeDefined();
-		expect(transport).toHaveBeenCalledTimes(1);
+				clientDiscoveryId: `${name}-remote-jwks-discovery`,
+				fetchClientMetadataResource: transport,
+				jwksUri,
+			});
 
-		serveValidJwks = true;
-		await expect(
-			verifyClientAssertion(
-				provider.ctx,
-				provider.opts,
-				await signDiscoveredClientAssertion({
-					audience,
+			await expect(
+				verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					await signDiscoveredClientAssertion({
+						audience,
+						clientId,
+						key: rsaPrivateKey,
+						keyId: "remote-validation-key",
+					}),
+					CLIENT_ASSERTION_TYPE,
 					clientId,
-					key: rsaPrivateKey,
-					keyId: "remote-validation-key",
-				}),
-				CLIENT_ASSERTION_TYPE,
-				clientId,
-				audience,
-			),
-		).resolves.toEqual({ clientId });
-		expect(transport).toHaveBeenCalledTimes(2);
-	});
+					audience,
+				),
+			).rejects.toBeDefined();
+			expect(transport).toHaveBeenCalledTimes(1);
+
+			serveValidJwks = true;
+			await expect(
+				verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					await signDiscoveredClientAssertion({
+						audience,
+						clientId,
+						key: rsaPrivateKey,
+						keyId: "remote-validation-key",
+					}),
+					CLIENT_ASSERTION_TYPE,
+					clientId,
+					audience,
+				),
+			).resolves.toEqual({ clientId });
+			expect(transport).toHaveBeenCalledTimes(2);
+		},
+	);
 
 	it("should exchange code with valid private_key_jwt assertion", async () => {
 		const codeVerifier = generateRandomString(32);
@@ -991,73 +991,75 @@ describe("private_key_jwt authentication", async () => {
 			audience: [customIssuer, "https://unrelated.example.com/introspect"],
 		},
 		{ name: "endpoint audience", audience: introspectEndpoint },
-	])("should introspect an access token using private_key_jwt with $name", async ({
-		audience,
-	}) => {
-		const codeVerifier = generateRandomString(32);
-		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
-		const tokens = await exchangeCodeForTokens({
-			code,
-			codeVerifier,
-			assertion: await signAssertion(),
-		});
-		expect(tokens.data?.access_token).toBeDefined();
+	])(
+		"should introspect an access token using private_key_jwt with $name",
+		async ({ audience }) => {
+			const codeVerifier = generateRandomString(32);
+			const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+			const tokens = await exchangeCodeForTokens({
+				code,
+				codeVerifier,
+				assertion: await signAssertion(),
+			});
+			expect(tokens.data?.access_token).toBeDefined();
 
-		const result = await client.$fetch<{
-			active?: boolean;
-			client_id?: string;
-		}>("/oauth2/introspect", {
-			method: "POST",
-			body: new URLSearchParams({
-				client_id: assertionClient.client_id,
-				client_assertion_type:
-					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-				client_assertion: await signAssertion({ aud: audience }),
-				token: tokens.data?.access_token ?? "",
-				token_type_hint: "access_token",
-			}),
-			headers: { "content-type": "application/x-www-form-urlencoded" },
-		});
+			const result = await client.$fetch<{
+				active?: boolean;
+				client_id?: string;
+			}>("/oauth2/introspect", {
+				method: "POST",
+				body: new URLSearchParams({
+					client_id: assertionClient.client_id,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: await signAssertion({ aud: audience }),
+					token: tokens.data?.access_token ?? "",
+					token_type_hint: "access_token",
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
 
-		expect(result.data?.active).toBe(true);
-		expect(result.data?.client_id).toBe(assertionClient.client_id);
-	});
+			expect(result.data?.active).toBe(true);
+			expect(result.data?.client_id).toBe(assertionClient.client_id);
+		},
+	);
 
 	it.each([
 		{ name: "issuer audience", audience: customIssuer },
 		{ name: "endpoint audience", audience: revokeEndpoint },
-	])("should revoke a refresh token using private_key_jwt with $name", async ({
-		audience,
-	}) => {
-		const codeVerifier = generateRandomString(32);
-		const code = await getAuthCode(assertionClient.client_id, codeVerifier, [
-			"openid",
-			"profile",
-			"offline_access",
-		]);
-		const tokens = await exchangeCodeForTokens({
-			code,
-			codeVerifier,
-			assertion: await signAssertion(),
-		});
-		expect(tokens.data?.refresh_token).toBeDefined();
+	])(
+		"should revoke a refresh token using private_key_jwt with $name",
+		async ({ audience }) => {
+			const codeVerifier = generateRandomString(32);
+			const code = await getAuthCode(assertionClient.client_id, codeVerifier, [
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			const tokens = await exchangeCodeForTokens({
+				code,
+				codeVerifier,
+				assertion: await signAssertion(),
+			});
+			expect(tokens.data?.refresh_token).toBeDefined();
 
-		const result = await client.$fetch("/oauth2/revoke", {
-			method: "POST",
-			body: new URLSearchParams({
-				client_id: assertionClient.client_id,
-				client_assertion_type:
-					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-				client_assertion: await signAssertion({ aud: audience }),
-				token: tokens.data?.refresh_token ?? "",
-				token_type_hint: "refresh_token",
-			}),
-			headers: { "content-type": "application/x-www-form-urlencoded" },
-		});
+			const result = await client.$fetch("/oauth2/revoke", {
+				method: "POST",
+				body: new URLSearchParams({
+					client_id: assertionClient.client_id,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: await signAssertion({ aud: audience }),
+					token: tokens.data?.refresh_token ?? "",
+					token_type_hint: "refresh_token",
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
 
-		expect(result.data).toBe(null);
-		expect(result.error).toBe(null);
-	});
+			expect(result.data).toBe(null);
+			expect(result.error).toBe(null);
+		},
+	);
 });
 
 describe("isPrivateHostname", () => {
