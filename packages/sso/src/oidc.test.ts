@@ -813,6 +813,9 @@ describe("SSO disable implicit sign in", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9412
+	 */
 	it("should not create user with SSO provider when sign ups are disabled", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({
@@ -831,7 +834,7 @@ describe("SSO disable implicit sign in", async () => {
 		expect(callbackURL).not.toContain("error=signup disabled");
 		const url = new URL(callbackURL);
 		expect(url.pathname).toBe("/api/auth/error");
-		expect(url.searchParams.get("error")).toBe("signup disabled");
+		expect(url.searchParams.get("error")).toBe("signup_disabled");
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
