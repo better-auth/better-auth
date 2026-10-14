@@ -1,5 +1,14 @@
 # auth
 
+## 1.7.9
+
+### Patch Changes
+
+- Updated dependencies [[`6edaa61`](https://github.com/better-auth/better-auth/commit/6edaa61e629625909a97d191809473030f24a2b6)]:
+  - better-auth@1.7.9
+  - @better-auth/core@1.7.9
+  - @better-auth/telemetry@1.7.9
+
 ## 1.7.8
 
 ### Patch Changes
