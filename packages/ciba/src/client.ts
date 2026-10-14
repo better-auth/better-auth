@@ -3,10 +3,9 @@ import type { ciba } from "./index";
 import { PACKAGE_VERSION } from "./version";
 
 /**
- * Client plugin for CIBA. Exposes the approval-page actions on the auth client:
- * `ciba.request()` (GET request details), `ciba.authorize()`, and
- * `ciba.reject()`. The agent-facing backchannel endpoint is a server-to-server
- * call and is not surfaced here.
+ * Client plugin for the CIBA approval page: `ciba.request()`,
+ * `ciba.approve()`, and `ciba.deny()`. The backchannel endpoint is a
+ * server-to-server call and is not exposed here.
  */
 export const cibaClient = () => {
 	return {

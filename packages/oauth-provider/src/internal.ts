@@ -11,8 +11,18 @@ export {
 	validatePublicClientJwks,
 } from "./client-jwks";
 export { isForbiddenCimdClientMetadataField } from "./client-metadata";
+export { createOAuthEndpoint } from "./oauth-endpoint";
 export {
 	type OAuthClientRegistrationResult,
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,
 } from "./register";
+export {
+	extractRepeatedResourceFromForm,
+	resolveResourcePolicy,
+} from "./resources";
+export {
+	parseClientMetadata,
+	toResourceList,
+	validateClientScopes,
+} from "./utils";

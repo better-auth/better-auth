@@ -289,6 +289,9 @@ export type * from "../../utils/time";
 export {
 	type DeviceCodeRedemptionAuthorization,
 	type DeviceCodeRedemptionResult,
+	type PolledAuthorizationRecord,
+	type PolledAuthorizationRedemptionResult,
 	redeemDeviceCode,
+	redeemPolledAuthorization,
 } from "./routes";
 export type { DeviceCode } from "./schema";

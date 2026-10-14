@@ -14,7 +14,7 @@ This is the flow to reach for when the thing requesting access cannot open a bro
 * A call-center system where the agent triggers a login the customer approves on their phone.
 * A kiosk, smart device, or terminal that should never collect the user's credentials directly.
 
-The plugin extends [`@better-auth/oauth-provider`](./oauth-provider). It adds the backchannel endpoint, the polling grant, and the approval endpoints your UI calls, and it requires `oauth-provider` and `jwt` to be installed.
+The plugin extends [`@better-auth/oauth-provider`](./oauth-provider). It adds the backchannel endpoint, the CIBA grant at the token endpoint, and the approval endpoints your UI calls. It requires `oauth-provider` and `jwt`.
 
 ## How the flow works
 
@@ -28,7 +28,7 @@ Four parties take part, and they map directly onto the endpoints below.
 The user's authentication and the client's token request never share a device or a browser, which is what makes the flow safe for clients that cannot be trusted with credentials.
 
 <Callout type="info">
-  Three delivery modes are supported (CIBA §4): **poll** (the client polls the token endpoint), **ping** (the server notifies the client that the request is ready, then the client polls), and **push** (the server delivers the token set to the client's notification endpoint). The deployment opts into modes with `deliveryModes`, and each client registers the one it uses.
+  Two token delivery modes are supported (CIBA §5). In **poll** mode the client polls the token endpoint. In **ping** mode the server also calls the client's registered notification endpoint when the user decides, and the client then polls once. Enable ping with `deliveryModes`; each client registers the mode it uses. Push mode is not supported.
 </Callout>
 
 ## Installation
@@ -63,12 +63,12 @@ The user's authentication and the client's token request never share a device or
         }),
         ciba({ // [!code highlight]
           approvalPage: "/ciba/approve", // [!code highlight]
-          sendNotification: async ({ userId, clientName, approvalUrl }) => { // [!code highlight]
+          sendNotification: async ({ userId, clientName, bindingMessage, approvalUrl }) => { // [!code highlight]
             const user = await getUser(userId); // [!code highlight]
             await sendEmail({ // [!code highlight]
               to: user.email, // [!code highlight]
               subject: `${clientName ?? "An application"} wants to sign in as you`, // [!code highlight]
-              body: `Approve or deny this request: ${approvalUrl}`, // [!code highlight]
+              body: `${bindingMessage ?? ""}\nApprove or deny: ${approvalUrl}`, // [!code highlight]
             }); // [!code highlight]
           }, // [!code highlight]
         }), // [!code highlight]
@@ -78,15 +78,21 @@ The user's authentication and the client's token request never share a device or
   </Step>
 
   <Step>
+    ### Migrate the database
+
+    The plugin adds a `cibaRequest` model. Generate or apply it with the [CLI](/docs/concepts/cli).
+  </Step>
+
+  <Step>
     ### Build the approval page
 
-    CIBA leaves the user's approval experience to you, so the page at `approvalPage` is your application's UI. It reads the request details, shows them to the signed-in user, and calls the approve or reject endpoint. The [Approval page](#approval-page) section shows the client calls.
+    CIBA leaves the user's approval experience to you, so the page at `approvalPage` is your application's UI. It reads the request, shows it to the signed-in user, and calls the approve or deny endpoint. The [Approval page](#approval-page) section shows the client calls.
   </Step>
 </Steps>
 
-## Register a client for the CIBA grant
+## Register a client
 
-A client can use the backchannel flow only when it is registered for the CIBA grant type. Add the grant URI to the client's `grant_types`. CIBA clients are confidential by default, so the client also receives a `client_secret` it uses to authenticate.
+A client can use the backchannel flow only when it is registered for the CIBA grant type and declares its delivery mode in the `backchannel_token_delivery_mode` metadata (CIBA §4). The client must authenticate, so it needs a `client_secret` or another confidential authentication method.
 
 ```ts title="register-client.ts"
 const client = await auth.api.adminCreateOAuthClient({
@@ -94,14 +100,26 @@ const client = await auth.api.adminCreateOAuthClient({
   body: {
     client_name: "Scheduling Agent",
     grant_types: ["urn:openid:params:grant-type:ciba"],
+    metadata: { backchannel_token_delivery_mode: "poll" },
   },
 });
 // store client.client_id and client.client_secret for the agent
 ```
 
+A ping-mode client also registers the endpoint the server calls:
+
+```ts
+metadata: {
+  backchannel_token_delivery_mode: "ping",
+  backchannel_client_notification_endpoint: "https://agent.example.com/ciba",
+},
+```
+
+The notification endpoint must be an absolute `https` URL on a publicly routable host, with no credentials or fragment. Requests from a client whose endpoint does not meet these rules are rejected.
+
 ## The client (agent) side
 
-The client starts a request at the backchannel endpoint, then polls the token endpoint until the user responds. Both calls authenticate the client; the example uses HTTP Basic, which carries the `client_id` and `client_secret`.
+The client starts a request at the backchannel endpoint, then polls the token endpoint until the user responds. Both calls are form-encoded and authenticate the client; the example uses HTTP Basic.
 
 ```ts title="agent.ts"
 const basic = btoa(`${clientId}:${clientSecret}`);
@@ -111,16 +129,17 @@ const start = await fetch("https://auth.example.com/api/auth/oauth2/bc-authorize
   method: "POST",
   headers: {
     authorization: `Basic ${basic}`,
-    "content-type": "application/json",
+    "content-type": "application/x-www-form-urlencoded",
   },
-  body: JSON.stringify({
+  body: new URLSearchParams({
     scope: "openid profile",
     login_hint: "ada@example.com",
+    binding_message: "Code 4821",
   }),
 }).then((r) => r.json());
 // => { auth_req_id, expires_in, interval }
 
-// 2. Poll the token endpoint until the user approves.
+// 2. Poll the token endpoint until the user decides.
 let interval = start.interval;
 async function poll() {
   const res = await fetch("https://auth.example.com/api/auth/oauth2/token", {
@@ -140,7 +159,7 @@ async function poll() {
     return;
   }
   if (body.error === "slow_down") {
-    interval += 5; // each slow_down raises the floor; keep the larger interval
+    interval += 5; // CIBA §11: wait at least 5 more seconds from now on
     setTimeout(poll, interval * 1000);
     return;
   }
@@ -149,153 +168,149 @@ async function poll() {
 }
 ```
 
-The client must wait at least `interval` seconds between polls. Polling faster returns `slow_down` and raises the interval by 5 seconds, so honor the larger interval from then on.
+A ping-mode client sends a `client_notification_token` with the backchannel request. When the user approves or denies, the server POSTs `{ "auth_req_id": "..." }` to the registered endpoint with `Authorization: Bearer <client_notification_token>`, and the client then polls once. The server makes one attempt; if it fails, the client can still poll.
 
 ## Approval page
 
-Your approval page resolves the request from the `auth_req_id` query parameter, shows it to the signed-in user, and submits their decision. The approve and reject calls require a session, and the session user must be the user the request was created for.
+Your approval page reads the `auth_req_id` query parameter, shows the request to the signed-in user, and submits their decision. All three calls require a session, and the session user must be the user the request was created for.
 
 ```ts title="approve.tsx"
 import { createAuthClient } from "better-auth/client";
-import { cibaClient } from "@better-auth/ciba";
+import { cibaClient } from "@better-auth/ciba/client";
 
 const authClient = createAuthClient({ plugins: [cibaClient()] });
 
-// Read the pending request to display it.
 const { data } = await authClient.ciba.request({
   query: { auth_req_id },
 });
-// => { client_name, scope, binding_message, status, expires_at }
+// => { client_id, client_name, scope, binding_message, resources, status, expires_at }
 
 // On the user's decision:
-await authClient.ciba.authorize({ auth_req_id });
+await authClient.ciba.approve({ auth_req_id });
 // or
-await authClient.ciba.reject({ auth_req_id });
+await authClient.ciba.deny({ auth_req_id });
 ```
 
-The `auth_req_id` is a high-entropy value that doubles as the secret for reading the request, so the link you send the user does not expose anything an attacker could guess. Approving or rejecting still requires the user's own session, so a leaked link alone cannot complete a request.
-
-A first-party UI that lists a user's own pending requests, rather than opening a per-request link, never holds the raw `auth_req_id`, since only its hash is stored. Such a UI approves or rejects by `request_id` (the request's id), which is interchangeable with `auth_req_id` on the `authorize` and `reject` calls. The session still enforces ownership, so this is not a weaker credential for the resource owner.
+Show the `binding_message` so the user can match it with what the client displays. Approval records the creation time of the approving session as the ID token's `auth_time`, the same rule the authorization code flow uses.
 
 ## Sender-constrained tokens (DPoP)
 
-DPoP, [Demonstrating Proof of Possession](./oauth-provider), binds an access token to a key the client holds, so a stolen token is useless to anyone who cannot sign with that key. If the client presents a DPoP proof on its token poll, the issued token is bound to its key (`cnf.jkt`) and returned as `token_type: "DPoP"`. No extra CIBA configuration is needed, since the binding flows through the shared token pipeline.
+DPoP, [Demonstrating Proof of Possession](./oauth-provider), binds an access token to a key the client holds. If the client presents a DPoP proof on its token poll, the issued token is bound to its key (`cnf.jkt`) and returned as `token_type: "DPoP"`. No CIBA configuration is needed.
 
 ## Endpoints
 
 ### `POST /oauth2/bc-authorize`
 
-Starts a backchannel request. Authenticates the client and returns the `auth_req_id`.
+Starts a backchannel request. Accepts `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and the polling `interval`.
 
-| Parameter          | Required | Description                                                                                             |
-| ------------------ | -------- | ------------------------------------------------------------------------------------------------------- |
-| `scope`            | yes      | Space-delimited scopes. Must include `openid`.                                                          |
-| `login_hint`       | yes      | Identifies the user. By default an email, resolved through `resolveUser`.                               |
-| `binding_message`  | no       | A short plain-text message shown on both devices to bind the session.                                   |
-| `resource`         | no       | An [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource indicator the token is scoped to. |
-| `requested_expiry` | no       | Requested request lifetime in seconds, capped at `requestExpiry`.                                       |
-
-The response contains `auth_req_id`, `expires_in`, and the polling `interval`.
+| Parameter                   | Required  | Description                                                                                                      |
+| --------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
+| `scope`                     | yes       | Space-delimited scopes. Must include `openid`.                                                                   |
+| `login_hint`                | yes       | Identifies the user. By default an email, resolved through `resolveUser`.                                        |
+| `binding_message`           | no        | Up to 256 characters of plain text shown on both devices.                                                        |
+| `client_notification_token` | ping only | Up to 1024 characters. Sent back as a bearer token on the ping callback.                                         |
+| `resource`                  | no        | One or more [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource indicators the token is bound to. |
+| `requested_expiry`          | no        | Requested lifetime in seconds, capped at `expiresIn`.                                                            |
 
 ### `POST /oauth2/token`
 
-The standard token endpoint. With `grant_type` set to `urn:openid:params:grant-type:ciba` and an `auth_req_id`, it returns the tokens once the user approves, or one of the poll errors below.
+The standard token endpoint. With `grant_type` set to `urn:openid:params:grant-type:ciba` and an `auth_req_id`, it returns the tokens once the user approves, or one of the poll errors below. Each `auth_req_id` issues tokens once.
 
 ### `GET /ciba/request`
 
-Returns the request details for your approval page: `client_name`, `scope`, `binding_message`, `status`, and `expires_at`. Identified by the `auth_req_id` query parameter; no session required.
+Returns the request for your approval page. Requires the owning user's session.
 
-### `POST /ciba/authorize` and `POST /ciba/reject`
+### `POST /ciba/approve` and `POST /ciba/deny`
 
-Approve or deny a pending request. Both require an authenticated session, and the session user must own the request. Identify the request with exactly one of `auth_req_id` (the raw token, from the approval link) or `request_id` (the request's id, for a first-party UI that lists the user's own requests). Push delivery must use `auth_req_id`, since the pushed token set echoes it back to the client.
+Approve or deny a pending request by `auth_req_id`. Both require the owning user's session. Only the first decision applies.
 
 ## Options
 
 export const cibaOptionsType = {
 	sendNotification: {
-		type: "(data, request?) => void | Promise<void>",
+		type: "(data, ctx) => void | Promise<void>",
 		description:
-			"Notify the user of a pending request on a separate channel (email, push, SMS). Receives `{ userId, clientId, clientName, scope, bindingMessage, approvalUrl }`. Runs fire-and-forget: a thrown error is logged and the request still returns its `auth_req_id`, so delivery never blocks the client.",
+			"Notify the user of a pending request on a separate channel. Receives `{ userId, clientId, clientName, scope, bindingMessage, approvalUrl }`. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A rejected promise is logged, and the client still receives its `auth_req_id`.",
 	},
 	approvalPage: {
 		type: "string",
 		description:
-			"Path of your approval page. The `auth_req_id` is appended as a query parameter to build the `approvalUrl` passed to `sendNotification`. This page is your application's UI; there is no default.",
+			"Path or URL of your approval page. The `auth_req_id` is appended as a query parameter to build `approvalUrl`.",
 	},
-	requestExpiry: {
+	deliveryModes: {
+		type: '("poll" | "ping")[]',
+		default: '["poll"]',
+		description:
+			"Delivery modes the server accepts, advertised as `backchannel_token_delivery_modes_supported`.",
+	},
+	expiresIn: {
 		type: "number",
 		default: "300",
 		description:
-			"Lifetime of a backchannel request in seconds. A request not approved in this window expires, and the client receives `expired_token`.",
+			"Lifetime of a backchannel request in seconds. A client can ask for less with `requested_expiry`.",
 	},
-	pollingInterval: {
+	interval: {
 		type: "number",
 		default: "5",
 		description:
-			"Minimum seconds the client must wait between token polls, returned as `interval` in the backchannel response.",
+			"Minimum seconds between token polls, returned as `interval`. A faster poll gets `slow_down`.",
 	},
 	resolveUser: {
 		type: "(loginHint, ctx) => { id } | null | Promise<{ id } | null>",
 		default: "email lookup",
 		description:
-			"Resolve the user a `login_hint` identifies. Defaults to an email lookup. Return `null` when no user matches; the client then receives `unknown_user_id`.",
-	},
-	requireConfidentialClient: {
-		type: "boolean",
-		default: "true",
-		description:
-			"Require the client to authenticate with credentials. Set to `false` only if a deployment genuinely needs public clients on the backchannel.",
+			"Resolve the user a `login_hint` identifies. Return `null` when no user matches; the client then receives `unknown_user_id`.",
 	},
 };
 
 <TypeTable type={cibaOptionsType} />
 
+To add claims to CIBA access tokens, use the OAuth provider's `customAccessTokenClaims` option, which applies to every grant.
+
 ## Error handling
 
-The backchannel endpoint and the token poll use distinct error vocabularies, both defined in [CIBA §13](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#auth_error_response).
+The backchannel endpoint returns the [CIBA §13](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#auth_error_response) errors `invalid_request`, `invalid_scope`, `invalid_client`, `unauthorized_client`, `invalid_binding_message`, or `unknown_user_id`, plus `invalid_target` for an unknown resource.
 
-The backchannel endpoint (`/oauth2/bc-authorize`) returns `invalid_request`, `invalid_scope`, `invalid_client`, `unauthorized_client`, `invalid_binding_message`, or `unknown_user_id`.
+The token poll returns one of:
 
-The token poll (`/oauth2/token`) returns one of:
-
-| Error                   | Meaning                                                                           |
-| ----------------------- | --------------------------------------------------------------------------------- |
-| `authorization_pending` | The user has not responded yet. Keep polling.                                     |
-| `slow_down`             | Polling too fast. Increase the interval by 5 seconds.                             |
-| `access_denied`         | The user denied the request.                                                      |
-| `expired_token`         | The `auth_req_id` expired before approval.                                        |
-| `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already consumed. |
+| Error                   | Meaning                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `authorization_pending` | The user has not responded yet. Keep polling.                                 |
+| `slow_down`             | Polling too fast. Wait at least 5 more seconds between polls from now on.     |
+| `access_denied`         | The user denied the request.                                                  |
+| `expired_token`         | The `auth_req_id` expired before the user decided.                            |
+| `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already used. |
 
 ## Schema
 
-The plugin adds one model, `cibaRequest`, holding the state of each pending request. Generate or migrate it with the [CLI](/docs/concepts/cli) as you would any other plugin schema.
+The plugin adds one model, `cibaRequest`:
 
-| Field             | Type   | Description                                                                                                        |
-| ----------------- | ------ | ------------------------------------------------------------------------------------------------------------------ |
-| `authReqId`       | string | The SHA-256 hash of the `auth_req_id`. The raw value is returned to the client and never stored.                   |
-| `clientId`        | string | The client that started the request.                                                                               |
-| `userId`          | string | The user being asked to authenticate.                                                                              |
-| `scope`           | string | The requested scopes.                                                                                              |
-| `bindingMessage`  | string | The optional binding message.                                                                                      |
-| `resource`        | string | The optional resource indicator.                                                                                   |
-| `status`          | string | `pending`, `approved`, or `rejected`. A redeemed request is deleted (single-use), so there is no `consumed` state. |
-| `deliveryMode`    | string | The client's registered delivery mode: `poll`, `ping`, or `push`.                                                  |
-| `pollingInterval` | number | The current minimum poll interval, raised on `slow_down`.                                                          |
-| `lastPolledAt`    | date   | When the client last polled.                                                                                       |
-| `expiresAt`       | date   | When the request expires.                                                                                          |
-| `createdAt`       | date   | When the request was created.                                                                                      |
+| Field                     | Type      | Description                                                                          |
+| ------------------------- | --------- | ------------------------------------------------------------------------------------ |
+| `authReqId`               | string    | The `auth_req_id`, hashed like the provider's tokens. The raw value is never stored. |
+| `clientId`                | string    | The client that started the request.                                                 |
+| `userId`                  | string    | The user being asked to authenticate.                                                |
+| `scope`                   | string    | The requested scopes.                                                                |
+| `bindingMessage`          | string    | The optional binding message.                                                        |
+| `resources`               | string\[] | The optional resource indicators.                                                    |
+| `status`                  | string    | `pending`, `approved`, or `denied`. An issued request is deleted.                    |
+| `clientNotificationToken` | string    | The ping-mode client's notification token.                                           |
+| `authTime`                | date      | Creation time of the approving session, issued as `auth_time`.                       |
+| `pollingInterval`         | number    | Minimum time between polls, in milliseconds.                                         |
+| `lastPolledAt`            | date      | When the client last polled.                                                         |
+| `expiresAt`               | date      | When the request expires.                                                            |
+| `createdAt`               | date      | When the request was created.                                                        |
 
 ## Security
 
-* **The `auth_req_id` is stored hashed.** The client receives the raw value, the database keeps only its SHA-256 hash, so a leaked table cannot be used to poll for tokens. This matches how the OAuth provider stores access and refresh tokens.
-* **Token issuance is single-use and race-safe.** Redeeming an approved request deletes it and returns the deleted row in one atomic step (delete-and-return), so of two concurrent polls only one claims the request and mints a token set.
-* **Clients are confidential by default.** The backchannel and poll requests both authenticate the client and confirm it is registered for the CIBA grant, so a public or unregistered client cannot drive the flow unless you opt in with `requireConfidentialClient: false`.
-* **Credential responses are never cached.** The backchannel response carries `Cache-Control: no-store`, and the token response does the same, so proxies and browsers do not retain them.
-* **Binding messages are plain text.** A `binding_message` with control characters is rejected with `invalid_binding_message`. Render it as text in your approval UI so a malicious value cannot inject markup.
+* **The `auth_req_id` is stored hashed**, using the provider's token storage, so a leaked table cannot be used to poll for tokens.
+* **Token issuance is single-use and race-safe.** Polling uses the same state machine as the [device authorization grant](./device-authorization): an approved request is claimed and deleted in one atomic step, so of two concurrent polls only one gets tokens.
+* **Clients must authenticate.** The backchannel request and every poll authenticate the client and check that it is registered for the CIBA grant (CIBA §7.1). Public clients cannot use the flow.
+* **The ping callback cannot reach internal hosts.** The server only calls a registered `https` endpoint on a publicly routable host and does not follow redirects.
+* **Binding messages are plain text.** A `binding_message` with control characters is rejected. Render it as text in your approval UI.
 
 ## Current limitations
 
-The following are planned:
-
-* **User hints.** Only `login_hint` is accepted; `id_token_hint` and `login_hint_token` are not yet supported.
-* **Rich Authorization Requests.** `authorization_details` ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) is accepted, validated, and passed to your `buildAccessTokenClaims` hook, but the plugin does not place it in the token response on its own.
+* Only `login_hint` is supported; `id_token_hint` and `login_hint_token` are rejected.
+* Push delivery, `user_code`, signed authentication requests, `acr_values`, and `authorization_details` ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) are not supported. `acr_values` is ignored, which matches the voluntary `acr_values` semantics of OIDC.
+* Client registration metadata is read from the client's `metadata` and checked when the client starts a request, not when it registers.

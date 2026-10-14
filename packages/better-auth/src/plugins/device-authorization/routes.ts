@@ -501,11 +501,171 @@ export interface DeviceCodeRedemptionResult<
 	user: User;
 }
 
+/** Fields the shared polling state machine reads from a pending authorization. */
+export interface PolledAuthorizationRecord {
+	id: string;
+	/** `pending` until the user decides, then `approved` or `denied`. */
+	status: string;
+	/** The approving user, set once the request is approved. */
+	userId?: string | null | undefined;
+	expiresAt: Date;
+	lastPolledAt?: Date | null | undefined;
+	/** Minimum time between polls, in milliseconds. */
+	pollingInterval?: number | null | undefined;
+}
+
+export interface PolledAuthorizationRedemptionResult<
+	PolledRecord extends PolledAuthorizationRecord,
+	AuthorizationContext,
+	RedemptionContext,
+> {
+	claimed: PolledRecord & { userId: string };
+	authorizationContext: AuthorizationContext;
+	redemptionContext: RedemptionContext;
+	user: User;
+}
+
 /**
- * Runs the RFC 8628 polling and one-time claim state machine shared by every
- * token issuer. Issuers supply ownership checks and grant-specific validation,
- * but cannot bypass expiry, polling, denial, or atomic consumption.
+ * Runs the polling and one-time claim state machine shared by decoupled grants
+ * whose client polls the token endpoint while the user decides on another
+ * device: RFC 8628 device codes and OpenID CIBA poll and ping requests. Issuers
+ * supply ownership checks and grant-specific validation, but cannot bypass
+ * expiry, polling, denial, or atomic consumption.
  */
+export async function redeemPolledAuthorization<
+	PolledRecord extends PolledAuthorizationRecord,
+	AuthorizationContext,
+	RedemptionContext,
+>(input: {
+	ctx: GenericEndpointContext;
+	model: string;
+	/** Locates the record from the credential the client polls with. */
+	where: Where[];
+	/** Error descriptions that name the polled credential. */
+	messages: { invalid: string; expired: string; invalidStatus: string };
+	authorizeRedemption: (
+		record: PolledRecord,
+	) =>
+		| DeviceCodeRedemptionAuthorization<AuthorizationContext>
+		| Promise<DeviceCodeRedemptionAuthorization<AuthorizationContext>>;
+	prepareRedemption: (
+		record: PolledRecord,
+		authorizationContext: AuthorizationContext,
+	) => RedemptionContext | Promise<RedemptionContext>;
+}): Promise<
+	PolledAuthorizationRedemptionResult<
+		PolledRecord,
+		AuthorizationContext,
+		RedemptionContext
+	>
+> {
+	const { ctx, model, messages } = input;
+	const record = await ctx.context.adapter.findOne<PolledRecord>({
+		model,
+		where: input.where,
+	});
+	if (!record) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_grant",
+			error_description: messages.invalid,
+		});
+	}
+
+	const authorization = await input.authorizeRedemption(record);
+	if (record.lastPolledAt && record.pollingInterval) {
+		const timeSinceLastPoll =
+			Date.now() - new Date(record.lastPolledAt).getTime();
+		if (timeSinceLastPoll < record.pollingInterval) {
+			throw new APIError("BAD_REQUEST", {
+				error: "slow_down",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
+			});
+		}
+	}
+
+	await ctx.context.adapter.update({
+		model,
+		where: [{ field: "id", value: record.id }],
+		update: { lastPolledAt: new Date() },
+	});
+
+	if (record.expiresAt < new Date()) {
+		await ctx.context.adapter.delete({
+			model,
+			where: [{ field: "id", value: record.id }],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error: "expired_token",
+			error_description: messages.expired,
+		});
+	}
+
+	if (record.status === "pending") {
+		throw new APIError("BAD_REQUEST", {
+			error: "authorization_pending",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING.message,
+		});
+	}
+
+	if (record.status === "denied") {
+		await ctx.context.adapter.delete({
+			model,
+			where: [{ field: "id", value: record.id }],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error: "access_denied",
+			error_description: DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED.message,
+		});
+	}
+
+	if (record.status !== "approved" || !record.userId) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: messages.invalidStatus,
+		});
+	}
+
+	const redemptionContext = await input.prepareRedemption(
+		record,
+		authorization.context,
+	);
+	const user = await ctx.context.internalAdapter.findUserById(record.userId);
+	if (!user) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
+		});
+	}
+	// Keep every fallible validation and lookup before this destructive claim.
+	// Credential side effects remain after it so concurrent polls cannot both
+	// issue from the same code.
+	const claimed = await ctx.context.adapter.consumeOne<PolledRecord>({
+		model,
+		where: [
+			{ field: "id", value: record.id },
+			authorization.ownershipWhere,
+			{ field: "status", value: "approved" },
+		],
+	});
+	if (!claimed?.userId) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_grant",
+			error_description: messages.invalid,
+		});
+	}
+
+	return {
+		claimed: claimed as PolledRecord & { userId: string },
+		authorizationContext: authorization.context,
+		redemptionContext,
+		user,
+	};
+}
+
+/** Redeems an RFC 8628 device code through {@link redeemPolledAuthorization}. */
 export async function redeemDeviceCode<
 	DeviceCodeFields extends Record<string, unknown>,
 	AuthorizationContext,
@@ -529,120 +689,24 @@ export async function redeemDeviceCode<
 		RedemptionContext
 	>
 > {
-	const deviceCodeRecord = await input.ctx.context.adapter.findOne<
-		DeviceCode & DeviceCodeFields
+	const { claimed, ...result } = await redeemPolledAuthorization<
+		DeviceCode & DeviceCodeFields,
+		AuthorizationContext,
+		RedemptionContext
 	>({
+		ctx: input.ctx,
 		model: "deviceCode",
 		where: [{ field: "deviceCode", value: input.deviceCode }],
-	});
-	if (!deviceCodeRecord) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_grant",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
-		});
-	}
-
-	const authorization = await input.authorizeRedemption(deviceCodeRecord);
-	if (deviceCodeRecord.lastPolledAt && deviceCodeRecord.pollingInterval) {
-		const timeSinceLastPoll =
-			Date.now() - new Date(deviceCodeRecord.lastPolledAt).getTime();
-		if (timeSinceLastPoll < deviceCodeRecord.pollingInterval) {
-			throw new APIError("BAD_REQUEST", {
-				error: "slow_down",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
-			});
-		}
-	}
-
-	await input.ctx.context.adapter.update({
-		model: "deviceCode",
-		where: [{ field: "id", value: deviceCodeRecord.id }],
-		update: { lastPolledAt: new Date() },
-	});
-
-	if (deviceCodeRecord.expiresAt < new Date()) {
-		await input.ctx.context.adapter.delete({
-			model: "deviceCode",
-			where: [{ field: "id", value: deviceCodeRecord.id }],
-		});
-		throw new APIError("BAD_REQUEST", {
-			error: "expired_token",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
-		});
-	}
-
-	if (deviceCodeRecord.status === "pending") {
-		throw new APIError("BAD_REQUEST", {
-			error: "authorization_pending",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING.message,
-		});
-	}
-
-	if (deviceCodeRecord.status === "denied") {
-		await input.ctx.context.adapter.delete({
-			model: "deviceCode",
-			where: [{ field: "id", value: deviceCodeRecord.id }],
-		});
-		throw new APIError("BAD_REQUEST", {
-			error: "access_denied",
-			error_description: DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED.message,
-		});
-	}
-
-	if (deviceCodeRecord.status !== "approved" || !deviceCodeRecord.userId) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "server_error",
-			error_description:
+		messages: {
+			invalid: DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+			expired: DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
+			invalidStatus:
 				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS.message,
-		});
-	}
-
-	const redemptionContext = await input.prepareRedemption(
-		deviceCodeRecord,
-		authorization.context,
-	);
-	const user = await input.ctx.context.internalAdapter.findUserById(
-		deviceCodeRecord.userId,
-	);
-	if (!user) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "server_error",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
-		});
-	}
-	// Keep every fallible validation and lookup before this destructive claim.
-	// Credential side effects remain after it so concurrent polls cannot both
-	// issue from the same code.
-	const claimedDeviceCode = await input.ctx.context.adapter.consumeOne<
-		DeviceCode & DeviceCodeFields
-	>({
-		model: "deviceCode",
-		where: [
-			{ field: "id", value: deviceCodeRecord.id },
-			authorization.ownershipWhere,
-			{ field: "status", value: "approved" },
-		],
+		},
+		authorizeRedemption: input.authorizeRedemption,
+		prepareRedemption: input.prepareRedemption,
 	});
-	if (!claimedDeviceCode?.userId) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_grant",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
-		});
-	}
-
-	return {
-		claimedDeviceCode: claimedDeviceCode as DeviceCode &
-			DeviceCodeFields & { userId: string },
-		authorizationContext: authorization.context,
-		redemptionContext,
-		user,
-	};
+	return { claimedDeviceCode: claimed, ...result };
 }
 
 export const deviceToken = <Grant extends DeviceAuthorizationGrant | undefined>(
