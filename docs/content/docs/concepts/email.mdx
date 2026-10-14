@@ -34,6 +34,8 @@ To enable email verification, you need to pass a function that sends a verificat
 
 and a `request` object as the second parameter.
 
+During a sign-up, Better Auth calls `sendVerificationEmail` after the new account is saved, so a sign-up that fails sends no email. If the function throws, the sign-up still succeeds and the error is logged. To reject a sign-up, use a `user.create.before` [database hook](/docs/concepts/database#database-hooks).
+
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
 import { sendEmail } from './email'; // your email sending function
@@ -208,6 +210,8 @@ export const auth = betterAuth({
 ### Callback on duplicate sign-up attempt
 
 The `onExistingUserSignUp` callback is triggered when someone tries to sign up with an email that already exists. This is useful for notifying the existing user that someone attempted to register with their email address.
+
+It runs after the sign-up request's database work completes. If it throws, the error is logged and the request still returns the generic response.
 
 <Callout>
   This callback is only called when `emailAndPassword.requireEmailVerification` is set to `true`, which enables the generic duplicate response (synthetic user) instead of throwing a duplicate-email error.
