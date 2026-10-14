@@ -791,6 +791,91 @@ model Directory_user {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9920
+	 */
+	describe("drizzle timestamptz opt-in", () => {
+		const pgAdapter = () =>
+			drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+				},
+			)({} as BetterAuthOptions);
+
+		it("should emit withTimezone timestamps for pg date columns when useTimestamptz is true", async () => {
+			const schema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: {
+					advanced: {
+						database: {
+							useTimestamptz: true,
+						},
+					},
+				} as BetterAuthOptions,
+			});
+			expect(schema.code).toContain(
+				'timestamp("expires_at", { withTimezone: true })',
+			);
+			expect(schema.code).toContain(
+				'timestamp("created_at", { withTimezone: true })',
+			);
+			// No bare pg timestamp literal may remain once opted in.
+			expect(schema.code).not.toMatch(/timestamp\("[^"]+"\)/);
+		});
+
+		it("should keep emitting bare timestamps for pg date columns by default", async () => {
+			const schema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: pgAdapter(),
+				options: {} as BetterAuthOptions,
+			});
+			expect(schema.code).toContain('timestamp("created_at")');
+			expect(schema.code).toContain('timestamp("expires_at")');
+			expect(schema.code).not.toMatch(/withTimezone/);
+		});
+
+		it("should leave mysql and sqlite output unchanged when useTimestamptz is true", async () => {
+			const baseOptions = {
+				advanced: {
+					database: {
+						useTimestamptz: true,
+					},
+				},
+			} as BetterAuthOptions;
+			const mysqlSchema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: drizzleAdapter(
+					{},
+					{
+						provider: "mysql",
+						schema: {},
+					},
+				)({} as BetterAuthOptions),
+				options: baseOptions,
+			});
+			expect(mysqlSchema.code).toContain('timestamp("created_at", { fsp: 3 })');
+			expect(mysqlSchema.code).not.toMatch(/withTimezone/);
+			const sqliteSchema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				)({} as BetterAuthOptions),
+				options: baseOptions,
+			});
+			expect(sqliteSchema.code).toContain(
+				'integer("created_at", { mode: "timestamp_ms" })',
+			);
+			expect(sqliteSchema.code).not.toMatch(/withTimezone/);
+		});
+	});
+
 	it("should generate Drizzle compound indexes with physical field names", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
