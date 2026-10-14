@@ -126,9 +126,9 @@ export async function userInfoEndpoint(
 			accessTokenAuthorization.token,
 		);
 
-	// The DPoP `htm`/`htu` check needs the real request method and URL. Without a
-	// `ctx.request` (a programmatic `auth.api` call) the sender-constraint cannot
-	// be verified, so fail closed for a DPoP-bound token rather than assume "GET".
+	// The DPoP `htm` check needs the real request method. Without a `ctx.request`
+	// (a programmatic `auth.api` call) the sender-constraint cannot be verified,
+	// so fail closed for a DPoP-bound token rather than assume "GET".
 	if (getDpopJktFromPayload(jwt) && !ctx.request) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description:
