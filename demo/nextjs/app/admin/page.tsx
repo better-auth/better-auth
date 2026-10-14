@@ -116,12 +116,16 @@ function AdminDashboard() {
 		e.preventDefault();
 		setIsLoading("create");
 		try {
-			await authClient.admin.createUser({
+			const { error } = await authClient.admin.createUser({
 				email: newUser.email,
 				password: newUser.password,
 				name: newUser.name,
 				role: newUser.role,
 			});
+			if (error) {
+				toast.error(error.message || "Failed to create user");
+				return;
+			}
 			toast.success("User created successfully");
 			setNewUser({ email: "", password: "", name: "", role: "user" });
 			setIsDialogOpen(false);
@@ -138,7 +142,11 @@ function AdminDashboard() {
 	const handleDeleteUser = async (id: string) => {
 		setIsLoading(`delete-${id}`);
 		try {
-			await authClient.admin.removeUser({ userId: id });
+			const { error } = await authClient.admin.removeUser({ userId: id });
+			if (error) {
+				toast.error(error.message || "Failed to delete user");
+				return;
+			}
 			toast.success("User deleted successfully");
 			await queryClient.invalidateQueries({
 				queryKey: ["users"],
@@ -153,7 +161,13 @@ function AdminDashboard() {
 	const handleRevokeSessions = async (id: string) => {
 		setIsLoading(`revoke-${id}`);
 		try {
-			await authClient.admin.revokeUserSessions({ userId: id });
+			const { error } = await authClient.admin.revokeUserSessions({
+				userId: id,
+			});
+			if (error) {
+				toast.error(error.message || "Failed to revoke sessions");
+				return;
+			}
 			toast.success("Sessions revoked for user");
 		} catch (error: any) {
 			toast.error(error.message || "Failed to revoke sessions");
@@ -165,7 +179,13 @@ function AdminDashboard() {
 	const handleImpersonateUser = async (id: string) => {
 		setIsLoading(`impersonate-${id}`);
 		try {
-			await authClient.admin.impersonateUser({ userId: id });
+			const { error } = await authClient.admin.impersonateUser({
+				userId: id,
+			});
+			if (error) {
+				toast.error(error.message || "Failed to impersonate user");
+				return;
+			}
 			toast.success("Impersonated user");
 			router.push("/dashboard");
 		} catch (error: any) {
@@ -182,11 +202,15 @@ function AdminDashboard() {
 			if (!banForm.expirationDate) {
 				throw new Error("Expiration date is required");
 			}
-			await authClient.admin.banUser({
+			const { error } = await authClient.admin.banUser({
 				userId: banForm.userId,
 				banReason: banForm.reason,
 				banExpiresIn: banForm.expirationDate.getTime() - Date.now(),
 			});
+			if (error) {
+				toast.error(error.message || "Failed to ban user");
+				return;
+			}
 			toast.success("User banned successfully");
 			setIsBanDialogOpen(false);
 			await queryClient.invalidateQueries({
