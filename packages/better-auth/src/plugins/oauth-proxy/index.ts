@@ -11,6 +11,10 @@ import type { AccountKey } from "@better-auth/core/db";
 import { accountSchema, userSchema } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
+import { managedNonce, utf8ToBytes } from "@noble/ciphers/utils.js";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -18,7 +22,12 @@ import { setOAuthState } from "../../api/state/oauth";
 import { parseJSON } from "../../client/parser";
 import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import {
+	formatEnvelope,
+	parseEnvelope,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../crypto";
 import type { EncryptionPurpose } from "../../crypto/purpose";
 import { derivePurposeKey } from "../../crypto/purpose";
 import {
@@ -31,7 +40,6 @@ import {
 	linkOAuthAccount,
 } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
-import type { StateData } from "../../state";
 import {
 	getAuthStateVerificationIdentifier,
 	parseGenericState,
@@ -40,6 +48,24 @@ import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import { checkSkipProxy, resolveCurrentURL, stripTrailingSlash } from "./utils";
+
+const stateDataSchema = z.looseObject({
+	callbackURL: z.string(),
+	codeVerifier: z.string(),
+	errorURL: z.string().optional(),
+	newUserURL: z.string().optional(),
+	expiresAt: z.number(),
+	oauthState: z.string().optional(),
+	link: z
+		.object({
+			email: z.string(),
+			userId: z.coerce.string(),
+		})
+		.optional(),
+	requestSignUp: z.boolean().optional(),
+	idTokenNonce: z.string().optional(),
+	serverContext: z.record(z.string(), z.unknown()).optional(),
+});
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -95,7 +121,7 @@ export interface OAuthProxyOptions {
  * Encrypted state package for cross-origin OAuth proxy flow
  * @internal
  */
-type OAuthProxyStatePackage = {
+export type OAuthProxyStatePackage = {
 	state: string;
 	/**
 	 * The OAuth state, encrypted under the proxy-state purpose key, not the
@@ -104,6 +130,141 @@ type OAuthProxyStatePackage = {
 	 */
 	stateCookie: string;
 	isOAuthProxy: boolean;
+};
+
+const COMPACT_STATE_PREFIX = "ba_c.";
+const MAX_DECOMPRESSED_BYTES = 64 * 1024; // 64 KB ceiling
+
+const deflateBytes = async (data: Uint8Array): Promise<Uint8Array> => {
+	const cs = new CompressionStream("deflate-raw");
+	const writer = cs.writable.getWriter();
+	await writer.write(data as unknown as BufferSource);
+	await writer.close();
+	return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+};
+
+const inflateBytes = async (data: Uint8Array): Promise<Uint8Array | null> => {
+	try {
+		const ds = new DecompressionStream("deflate-raw");
+		const writer = ds.writable.getWriter();
+		const writePromise = (async () => {
+			try {
+				await writer.write(data as unknown as BufferSource);
+				await writer.close();
+			} catch {
+				// DecompressionStream may reject/abort on invalid input
+			}
+		})();
+		const reader = ds.readable.getReader();
+		const chunks: Uint8Array[] = [];
+		let totalLength = 0;
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			totalLength += value.byteLength;
+			if (totalLength > MAX_DECOMPRESSED_BYTES) {
+				try {
+					await reader.cancel();
+				} catch {
+					// Ignore cancellation error
+				}
+				return null;
+			}
+			chunks.push(value);
+		}
+		await writePromise;
+		const result = new Uint8Array(totalLength);
+		let offset = 0;
+		for (const chunk of chunks) {
+			result.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		return result;
+	} catch {
+		return null;
+	}
+};
+
+const encryptRawBytes = async (
+	secret: string,
+	data: Uint8Array,
+): Promise<Uint8Array> => {
+	const keyAsBytes = await createHash("SHA-256").digest(secret);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
+	return chacha.encrypt(data);
+};
+
+const decryptRawBytes = async (
+	secret: string,
+	ciphertext: Uint8Array,
+): Promise<Uint8Array> => {
+	const keyAsBytes = await createHash("SHA-256").digest(secret);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
+	return chacha.decrypt(ciphertext);
+};
+
+/** @internal */
+export const packCompactState = async (
+	key: string | SecretConfig,
+	payload: OAuthProxyStatePackage,
+): Promise<string> => {
+	const jsonBytes = utf8ToBytes(JSON.stringify(payload));
+	const compressed = await deflateBytes(jsonBytes);
+	if (typeof key === "string") {
+		const ciphertext = await encryptRawBytes(key, compressed);
+		return `${COMPACT_STATE_PREFIX}${base64Url.encode(ciphertext, {
+			padding: false,
+		})}`;
+	}
+	const secret = key.keys.get(key.currentVersion);
+	if (!secret) {
+		throw new Error(`Secret version ${key.currentVersion} not found in keys`);
+	}
+	const ciphertext = await encryptRawBytes(secret, compressed);
+	const encoded = base64Url.encode(ciphertext, { padding: false });
+	return `${COMPACT_STATE_PREFIX}${formatEnvelope(key.currentVersion, encoded)}`;
+};
+
+/** @internal */
+export const unpackCompactState = async (
+	key: string | SecretConfig,
+	data: string,
+): Promise<OAuthProxyStatePackage | null> => {
+	if (!data.startsWith(COMPACT_STATE_PREFIX)) {
+		return null;
+	}
+	const payload = data.slice(COMPACT_STATE_PREFIX.length);
+	try {
+		let decryptedBytes: Uint8Array;
+		if (typeof key === "string") {
+			const cipherBytes = base64Url.decode(payload);
+			decryptedBytes = await decryptRawBytes(key, cipherBytes);
+		} else {
+			const envelope = parseEnvelope(payload);
+			if (envelope) {
+				const secret = key.keys.get(envelope.version);
+				if (!secret) {
+					return null;
+				}
+				const cipherBytes = base64Url.decode(envelope.ciphertext);
+				decryptedBytes = await decryptRawBytes(secret, cipherBytes);
+			} else if (key.legacySecret) {
+				const cipherBytes = base64Url.decode(payload);
+				decryptedBytes = await decryptRawBytes(key.legacySecret, cipherBytes);
+			} else {
+				return null;
+			}
+		}
+		const decompressed = await inflateBytes(decryptedBytes);
+		if (!decompressed) {
+			return null;
+		}
+		return parseJSON<OAuthProxyStatePackage>(
+			new TextDecoder().decode(decompressed),
+		);
+	} catch {
+		return null;
+	}
 };
 
 /**
@@ -418,15 +579,25 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						// Try to decrypt and parse OAuth proxy state package
+						// Try to decrypt and parse OAuth proxy state package (compact or legacy format)
 						let statePackage: OAuthProxyStatePackage | undefined;
+						let isCompact = false;
 						try {
-							const decryptedPackage = await symmetricDecrypt({
-								key: getEncryptionKey(ctx, "oauth-proxy-package"),
-								data: state,
-							});
-							statePackage =
-								parseJSON<OAuthProxyStatePackage>(decryptedPackage);
+							const compact = await unpackCompactState(
+								getEncryptionKey(ctx, "oauth-proxy-package"),
+								state,
+							);
+							if (compact) {
+								statePackage = compact;
+								isCompact = true;
+							} else {
+								const decryptedPackage = await symmetricDecrypt({
+									key: getEncryptionKey(ctx, "oauth-proxy-package"),
+									data: state,
+								});
+								statePackage =
+									parseJSON<OAuthProxyStatePackage>(decryptedPackage);
+							}
 						} catch {
 							// State is either a regular (non-proxy) state, or an encrypted proxy
 							// package that can't be decrypted (e.g. different secrets on preview vs production).
@@ -457,14 +628,19 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 						const { code, error, user: userData } = query.data;
 
-						// Decrypt state to get codeVerifier and callbackURL
-						let stateData: StateData;
+						// Restore state to get codeVerifier and callbackURL
+						// If compact, parse stateCookie directly; if legacy, decrypt with purpose "oauth-proxy-state"
+						let rawStateData: unknown;
 						try {
-							const decryptedState = await symmetricDecrypt({
-								key: getEncryptionKey(ctx, "oauth-proxy-state"),
-								data: statePackage.stateCookie,
-							});
-							stateData = parseJSON<StateData>(decryptedState);
+							if (isCompact) {
+								rawStateData = parseJSON(statePackage.stateCookie);
+							} else {
+								const decryptedState = await symmetricDecrypt({
+									key: getEncryptionKey(ctx, "oauth-proxy-state"),
+									data: statePackage.stateCookie,
+								});
+								rawStateData = parseJSON(decryptedState);
+							}
 						} catch (e) {
 							ctx.context.logger.error(
 								"Failed to decrypt OAuth proxy state cookie:",
@@ -472,6 +648,16 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							);
 							return;
 						}
+
+						const validatedState = stateDataSchema.safeParse(rawStateData);
+						if (!validatedState.success) {
+							ctx.context.logger.warn(
+								"OAuth proxy state data validation failed",
+								validatedState.error,
+							);
+							return;
+						}
+						const stateData = validatedState.data;
 
 						const errorURL =
 							stateData.errorURL ||
@@ -702,24 +888,20 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								return;
 							}
 
-							// Encrypt the state under the proxy-state key, then wrap it in a
-							// package encrypted under the separate proxy-package key.
-							const stateCookie = await symmetricEncrypt({
-								key: getEncryptionKey(ctx, "oauth-proxy-state"),
-								data: plaintextState,
-							});
+							// Pack the OAuth state into a compact single-envelope state parameter
+							// encrypted under the proxy-package key (single-layer encryption).
 							const statePackage: OAuthProxyStatePackage = {
 								state: originalState,
-								stateCookie,
+								stateCookie: plaintextState,
 								isOAuthProxy: true,
 							};
-							const encryptedPackage = await symmetricEncrypt({
-								key: getEncryptionKey(ctx, "oauth-proxy-package"),
-								data: JSON.stringify(statePackage),
-							});
+							const compactPackage = await packCompactState(
+								getEncryptionKey(ctx, "oauth-proxy-package"),
+								statePackage,
+							);
 
-							// Replace state parameter with encrypted package
-							oauthURL.searchParams.set("state", encryptedPackage);
+							// Replace state parameter with compact encrypted package
+							oauthURL.searchParams.set("state", compactPackage);
 
 							// Update response with modified URL
 							ctx.context.returned = {
