@@ -1302,3 +1302,111 @@ describe("oauth-provider extensions", async () => {
 		});
 	});
 });
+
+describe("oauth-provider client metadata extensions", async () => {
+	const baseURL = "http://localhost:3000";
+	const redirectUri = "https://client.example.com/callback";
+	const invalid = { body: { error: "invalid_client_metadata" } };
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+			}),
+			{
+				id: "client-metadata-extension",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientMetadata: {
+							fields: ["example_mode"],
+							validate: ({ metadata }) => {
+								if (
+									metadata.example_mode !== undefined &&
+									metadata.example_mode !== "ok"
+								) {
+									throw new APIError("BAD_REQUEST", {
+										error: "invalid_client_metadata",
+										error_description: "example_mode must be ok",
+									});
+								}
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("stores only declared fields from dynamic registration", async () => {
+		const body = {
+			redirect_uris: [redirectUri],
+			example_mode: "ok",
+			disabled: true,
+			metadata: { injected: true },
+			unknown_field: "ignored",
+		};
+		const client = await auth.api.registerOAuthClient({ headers, body });
+		expect(Reflect.get(client, "example_mode")).toBe("ok");
+		expect(client.disabled).not.toBe(true);
+		expect(Reflect.get(client, "injected")).toBeUndefined();
+		expect(Reflect.get(client, "unknown_field")).toBeUndefined();
+	});
+
+	it("rejects invalid declared fields at dynamic registration", async () => {
+		const body = { redirect_uris: [redirectUri], example_mode: "bad" };
+		await expect(
+			auth.api.registerOAuthClient({ headers, body }),
+		).rejects.toMatchObject(invalid);
+	});
+
+	it("rejects invalid metadata at admin create and update", async () => {
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					metadata: { example_mode: "bad" },
+				},
+			}),
+		).rejects.toMatchObject(invalid);
+
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], metadata: { example_mode: "ok" } },
+		});
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: client.client_id,
+					update: { metadata: { example_mode: "bad" } },
+				},
+			}),
+		).rejects.toMatchObject(invalid);
+	});
+
+	it("rejects an extension that claims a core client field", async () => {
+		await expect(
+			getTestInstance({
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+					{
+						id: "reserved-client-metadata-extension",
+						init(ctx) {
+							extendOAuthProvider(ctx, {
+								clientMetadata: { fields: ["redirect_uris"] },
+							});
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			}),
+		).rejects.toThrow("client metadata field is reserved: redirect_uris");
+	});
+});

@@ -2,6 +2,7 @@ import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
+import type { OAuthClientRegistrationMetadata } from "../register";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
 import type {
@@ -480,6 +481,33 @@ export interface OAuthProviderExtension {
 	 * registry, an attestation header) contributes it here.
 	 */
 	clientDiscovery?: ClientDiscovery | ClientDiscovery[];
+	/**
+	 * Client registration metadata the extension defines, such as CIBA's
+	 * `backchannel_token_delivery_mode`. Extension fields live in the client's
+	 * `metadata`.
+	 */
+	clientMetadata?: {
+		/**
+		 * Top-level registration fields the extension defines. Dynamic client
+		 * registration ignores unrecognized fields (RFC 7591 §2); it keeps these
+		 * and stores them in the client's `metadata`, where admin-created clients
+		 * put them too. Core client fields cannot be claimed.
+		 */
+		fields?: string[];
+		/**
+		 * Validates the extension's fields when a client is registered through
+		 * dynamic registration or created or updated by an admin. Throw an
+		 * `APIError` with `invalid_client_metadata` to reject the client.
+		 */
+		validate?: (input: OAuthClientMetadataExtensionInput) => Awaitable<void>;
+	};
+}
+
+export interface OAuthClientMetadataExtensionInput {
+	/** The client's registration metadata after provider defaults. */
+	client: OAuthClientRegistrationMetadata;
+	/** The client's `metadata`, where extension fields are stored. */
+	metadata: Record<string, unknown>;
 }
 
 /**

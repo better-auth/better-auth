@@ -11,9 +11,11 @@ import { toExpJWT } from "better-auth/plugins";
 import { validatePublicClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
+	getExtensionClientMetadataFields,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 	isExtensionTokenEndpointAuthMethod,
+	validateExtensionClientMetadata,
 } from "./extensions";
 import {
 	normalizeClientCredentialsScopes,
@@ -32,6 +34,7 @@ import type {
 	Scope,
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
+import { clientRegistrationRequestSchema } from "./types/zod";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
@@ -274,11 +277,73 @@ function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
 	}
 }
 
+/**
+ * Rejects a URI the server will POST to unless it is an absolute https URL
+ * with no fragment or credentials on a publicly routable host. Back-channel
+ * endpoints use it as an SSRF guard, since the server, not the browser, calls
+ * them.
+ */
+export function assertPublicHttpsUri(field: string, uri: string): void {
+	const reject = (description: string): never => {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `${field} ${description}`,
+		});
+	};
+	let url: URL;
+	try {
+		url = new URL(uri);
+	} catch {
+		return reject("must be an absolute URL");
+	}
+	// Check the raw value rather than `url.hash`, which is empty for a bare
+	// trailing `#` and would let that fragment delimiter through.
+	if (uri.includes("#")) reject("must not include a fragment component");
+	if (url.protocol !== "https:") reject("must use https");
+	if (url.username || url.password) reject("must not contain credentials");
+	if (isPrivateHostname(url.hostname)) {
+		reject("must not point to a private or reserved address");
+	}
+}
+
+const REGISTRATION_REQUEST_FIELDS = new Set(
+	Object.keys(clientRegistrationRequestSchema.shape),
+);
+
+/**
+ * Splits a dynamic registration request into its core fields and the fields
+ * extensions define, which are stored in the client's `metadata`. Any other
+ * unrecognized field is ignored (RFC 7591 §2), so a registrant cannot set
+ * server-only fields or arbitrary `metadata`.
+ */
+function splitRegistrationRequest(
+	input: Record<string, unknown>,
+	opts: OAuthOptions<Scope[]>,
+): {
+	body: ClientRegistrationRequest;
+	metadata: Record<string, unknown> | undefined;
+} {
+	const extensionFields = getExtensionClientMetadataFields(opts);
+	const body: Record<string, unknown> = {};
+	const metadata: Record<string, unknown> = {};
+	for (const [field, value] of Object.entries(input)) {
+		if (REGISTRATION_REQUEST_FIELDS.has(field)) body[field] = value;
+		else if (extensionFields.has(field)) metadata[field] = value;
+	}
+	return {
+		body: body as ClientRegistrationRequest,
+		metadata: Object.keys(metadata).length ? metadata : undefined,
+	};
+}
+
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<OAuthClientRegistrationResponse> {
-	const body = ctx.body as ClientRegistrationRequest;
+	const { body, metadata } = splitRegistrationRequest(
+		ctx.body as Record<string, unknown>,
+		opts,
+	);
 
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
@@ -352,7 +417,7 @@ export async function registerEndpoint(
 				})
 			: undefined);
 	const response = await createOAuthClientRegistration(ctx, opts, {
-		metadata: body,
+		metadata: { ...body, metadata },
 		registrationSource: "dynamic",
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
@@ -664,47 +729,10 @@ export async function checkOAuthClient(
 					"backchannel_logout_uri requires the jwt plugin (disableJwtPlugin must be false)",
 			});
 		}
-		let url: URL;
-		try {
-			url = new URL(clientWithDefaults.backchannel_logout_uri);
-		} catch {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: "backchannel_logout_uri must be an absolute URL",
-			});
-		}
-		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment
-		// component." Check the raw value rather than `url.hash`, which is empty
-		// for a bare trailing `#` and would let that fragment delimiter through.
-		if (clientWithDefaults.backchannel_logout_uri.includes("#")) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description:
-					"backchannel_logout_uri must not include a fragment component",
-			});
-		}
-		if (url.protocol !== "https:") {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: "backchannel_logout_uri must use https",
-			});
-		}
-		if (url.username || url.password) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description:
-					"backchannel_logout_uri must not contain credentials",
-			});
-		}
-		// SSRF guard: the OP issues an outbound POST to this URI on every
-		// session end, so every target must be publicly routable.
-		if (isPrivateHostname(url.hostname)) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description:
-					"backchannel_logout_uri must not point to a private or reserved address",
-			});
-		}
+		assertPublicHttpsUri(
+			"backchannel_logout_uri",
+			clientWithDefaults.backchannel_logout_uri,
+		);
 	}
 
 	// The browser, not the OP, requests this URI, so the back-channel SSRF
@@ -756,6 +784,11 @@ export async function checkOAuthClient(
 			});
 		}
 	}
+
+	await validateExtensionClientMetadata(opts, {
+		client: clientWithDefaults,
+		metadata: stripReservedOAuthClientMetadataExtensions(client.metadata) ?? {},
+	});
 }
 
 interface CreateOAuthClientRegistrationBaseInput {

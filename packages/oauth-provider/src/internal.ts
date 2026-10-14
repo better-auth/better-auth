@@ -12,6 +12,7 @@ export {
 } from "./client-jwks";
 export { isForbiddenCimdClientMetadataField } from "./client-metadata";
 export {
+	assertPublicHttpsUri,
 	type OAuthClientRegistrationResult,
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,

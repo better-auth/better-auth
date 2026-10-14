@@ -11,7 +11,7 @@ import type {
 	Scope,
 } from "../types";
 import type { GrantType } from "../types/oauth";
-import { getClient, storeClientSecret } from "../utils";
+import { getClient, parseClientMetadata, storeClientSecret } from "../utils";
 import {
 	normalizeClientCredentialsScopes,
 	validateClientCredentialsScopes,
@@ -340,7 +340,12 @@ export async function updateClientEndpoint(
 		}
 	}
 
-	const updatedMetadata = { ...schemaToOAuth(client), ...updates };
+	const updatedMetadata = {
+		...schemaToOAuth(client),
+		...updates,
+		// An update's `metadata` replaces the stored object.
+		metadata: updates.metadata ?? parseClientMetadata(client.metadata),
+	};
 	if (clearsBackchannelLogout) {
 		updatedMetadata.backchannel_logout_uri = undefined;
 		updatedMetadata.backchannel_logout_session_required = undefined;
