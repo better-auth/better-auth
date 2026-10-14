@@ -1,4 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { BetterAuthError } from "better-auth";
 import { mergeSchema } from "better-auth/db";
 import type { CibaOptions } from "./types";
 
@@ -111,6 +112,15 @@ export const schema = {
 
 /** The plugin schema with the deployment's renames and `additionalFields`. */
 export function getCibaSchema(options: CibaOptions["schema"]) {
+	const additionalFields = options?.cibaRequest?.additionalFields ?? {};
+	const conflicting = Object.keys(additionalFields).filter(
+		(name) => name === "id" || name in schema.cibaRequest.fields,
+	);
+	if (conflicting.length > 0) {
+		throw new BetterAuthError(
+			`CIBA additionalFields cannot redefine cibaRequest fields: ${conflicting.join(", ")}`,
+		);
+	}
 	// Copy each field: mergeSchema writes renames onto the field objects.
 	const fields = Object.fromEntries(
 		Object.entries(schema.cibaRequest.fields).map(([name, field]) => [
@@ -121,7 +131,7 @@ export function getCibaSchema(options: CibaOptions["schema"]) {
 	return mergeSchema(
 		{
 			cibaRequest: {
-				fields: { ...fields, ...options?.cibaRequest?.additionalFields },
+				fields: { ...fields, ...additionalFields },
 			},
 		},
 		options,

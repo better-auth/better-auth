@@ -92,7 +92,7 @@ The user's authentication and the client's token request never share a device or
 
 ## Register a client
 
-A client can use the backchannel flow only when it is registered for the CIBA grant type and declares its delivery mode in the `backchannel_token_delivery_mode` metadata (CIBA §4). The client must authenticate, so it needs a `client_secret` or another confidential authentication method.
+A client can use the backchannel flow only when it is registered for the CIBA grant type and declares its delivery mode in the `backchannel_token_delivery_mode` metadata (CIBA §4). By default the client must authenticate, so it needs a `client_secret` or another confidential authentication method. With `allowPublicClients`, a client registered with `token_endpoint_auth_method: "none"` can use the flow too; it sends its `client_id` in the form body of both calls instead of authenticating, so bind its tokens with DPoP.
 
 ```ts title="register-client.ts"
 const client = await auth.api.adminCreateOAuthClient({
@@ -119,7 +119,7 @@ The notification endpoint must be an absolute `https` URL on a publicly routable
 
 ## The client (agent) side
 
-The client starts a request at the backchannel endpoint, then polls the token endpoint until the user responds. Both calls are form-encoded and authenticate the client; the example uses HTTP Basic.
+The client starts a request at the backchannel endpoint, then polls the token endpoint until the user responds. Both calls are form-encoded and authenticate the client; the example uses HTTP Basic. A public client sends `client_id` in each form body instead.
 
 ```ts title="agent.ts"
 const basic = btoa(`${clientId}:${clientSecret}`);
@@ -285,7 +285,7 @@ export const cibaOptionsType = {
 	authorizationDetailsTypes: {
 		type: "string[]",
 		description:
-			"RFC 9396 `authorization_details` types to accept, advertised as `authorization_details_types_supported`. Accepted details are stored, shown to the approver, and returned in the token response and access token. Omit to reject `authorization_details`.",
+			"RFC 9396 `authorization_details` types to accept, advertised as `authorization_details_types_supported`. Accepted details are stored, shown to the approver, and returned in the token response and in JWT access tokens. Omit to reject `authorization_details`.",
 	},
 	resolveUser: {
 		type: "(loginHint, ctx) => { id } | null | Promise<{ id } | null>",
@@ -312,7 +312,7 @@ export const cibaOptionsType = {
 
 <TypeTable type={cibaOptionsType} />
 
-Per-issuance `accessTokenClaims` are signed into JWT access tokens, which the provider issues when the request names a `resource`. Opaque access tokens do not persist them; for claims that every grant and introspection should see, use the provider's `customAccessTokenClaims`.
+Per-issuance `accessTokenClaims` are signed into JWT access tokens, which the provider issues when the request names a `resource`. Opaque access tokens do not persist per-issuance claims, so introspection of an opaque CIBA token omits them and `authorization_details`; request a `resource` when a resource server needs them. For claims that every grant and introspection should see, use the provider's `customAccessTokenClaims`.
 
 ## Error handling
 

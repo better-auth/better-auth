@@ -464,6 +464,32 @@ describe("ciba approval endpoints", () => {
 		await expect(
 			auth.api.cibaApprove({ headers, body: {} }),
 		).rejects.toMatchObject({ statusCode: 400 });
+		const authReqId = await start({ binding_message: "Code both" });
+		const pending = await auth.api.cibaRequests({ headers });
+		const requestId = pending.find(
+			(r) => r.binding_message === "Code both",
+		)?.request_id;
+		await expect(
+			auth.api.cibaApprove({
+				headers,
+				body: { auth_req_id: authReqId, request_id: requestId },
+			}),
+		).rejects.toMatchObject({ statusCode: 400 });
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+	});
+
+	it("refuses additionalFields that redefine a built-in field", () => {
+		expect(() =>
+			ciba({
+				approvalPage: "/approve",
+				sendNotification: () => {},
+				schema: {
+					cibaRequest: {
+						additionalFields: { status: { type: "string" } },
+					},
+				},
+			}),
+		).toThrow("cannot redefine cibaRequest fields: status");
 	});
 
 	it("shows the request to its owner only", async () => {
