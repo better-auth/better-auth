@@ -1292,7 +1292,10 @@ describe("sign-up verification email and the transaction", () => {
 	it("calls onExistingUserSignUp once when the adapter runs the callback again after an abort", async () => {
 		const { onExistingUserSignUp, signUp } = await duplicateSignUpWith(1);
 
-		await expect(signUp).resolves.toBeDefined();
+		await expect(signUp).resolves.toMatchObject({
+			token: null,
+			user: { email: "existing@test.com" },
+		});
 		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
 	});
 
@@ -1311,8 +1314,53 @@ describe("sign-up verification email and the transaction", () => {
 			}),
 		);
 
-		await expect(signUp).resolves.toBeDefined();
+		await expect(signUp).resolves.toMatchObject({
+			token: null,
+			user: { email: "existing@test.com" },
+		});
 		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("mints the verification token after the commit, so slow after hooks don't expire it", async () => {
+		let token = "";
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+			emailAndPassword: { enabled: true },
+			emailVerification: {
+				sendOnSignUp: true,
+				expiresIn: 1,
+				sendVerificationEmail: async (data) => {
+					token = data.token;
+				},
+			},
+			databaseHooks: {
+				user: {
+					create: {
+						// Outlasts the token's expiry; it runs before the queued email.
+						after: () => new Promise((resolve) => setTimeout(resolve, 1100)),
+					},
+				},
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "slow-hook@test.com",
+				password: "password123",
+				name: "Slow",
+			},
+		});
+
+		await expect(
+			auth.api.verifyEmail({ query: { token } }),
+		).resolves.toMatchObject({ status: true });
 	});
 
 	it("sends the email once when the adapter runs the callback again after an abort", async () => {

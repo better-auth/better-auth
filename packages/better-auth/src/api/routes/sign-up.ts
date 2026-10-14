@@ -395,40 +395,38 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const shouldSendVerificationEmail =
 					ctx.context.options.emailVerification?.sendOnSignUp ??
 					ctx.context.options.emailAndPassword.requireEmailVerification;
-				if (shouldSendVerificationEmail) {
-					const token = await createEmailVerificationToken(
-						ctx.context.secret,
-						createdUser.email,
-						undefined,
-						ctx.context.options.emailVerification?.expiresIn,
-					);
+				const sendVerificationEmail =
+					ctx.context.options.emailVerification?.sendVerificationEmail;
+				if (shouldSendVerificationEmail && sendVerificationEmail) {
+					// The transaction can roll back or, on MongoDB, run again, so the
+					// email waits for the commit. The token is minted then, so the wait
+					// doesn't use up its expiry. A throw after the commit is logged.
+					const user = createdUser;
 					const callbackURL = body.callbackURL
 						? encodeURIComponent(body.callbackURL)
 						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-
-					const sendVerificationEmail =
-						ctx.context.options.emailVerification?.sendVerificationEmail;
-					if (sendVerificationEmail) {
-						// The transaction can roll back or, on MongoDB, run again, so the
-						// email waits for the commit. A throw after it is logged.
-						const user = createdUser;
-						const request = safeCloneRequest(ctx.request);
-						await queueAfterTransactionHook(
-							async () => {
-								await ctx.context.runInBackgroundOrAwait(
-									sendVerificationEmail({ user, url, token }, request),
-								);
-							},
-							{
-								onError: (error) =>
-									ctx.context.logger.error(
-										"Failed to send the sign-up verification email",
-										error,
-									),
-							},
-						);
-					}
+					const request = safeCloneRequest(ctx.request);
+					await queueAfterTransactionHook(
+						async () => {
+							const token = await createEmailVerificationToken(
+								ctx.context.secret,
+								user.email,
+								undefined,
+								ctx.context.options.emailVerification?.expiresIn,
+							);
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+							await ctx.context.runInBackgroundOrAwait(
+								sendVerificationEmail({ user, url, token }, request),
+							);
+						},
+						{
+							onError: (error) =>
+								ctx.context.logger.error(
+									"Failed to send the sign-up verification email",
+									error,
+								),
+						},
+					);
 				}
 
 				if (shouldSkipAutoSignIn) {
