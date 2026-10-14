@@ -56,6 +56,18 @@ type SessionFlight = {
 	revision: number;
 };
 
+function isSessionResponse(value: unknown): value is SessionResponse {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function createInvalidSessionResponseError(): BetterFetchError {
+	return Object.assign(new TypeError("Invalid session response"), {
+		status: 200,
+		statusText: "Invalid session response",
+		error: { message: "Invalid session response" },
+	}) as BetterFetchError;
+}
+
 /**
  * Normalize $fetch response: `throw: true` returns data directly,
  * otherwise `{ data, error }`.
@@ -64,15 +76,27 @@ function normalizeSessionResponse(res: unknown): {
 	data: SessionResponse | null;
 	error: unknown;
 } {
+	let data: unknown = res;
+	let error: unknown = null;
 	if (
 		typeof res === "object" &&
 		res !== null &&
 		"data" in res &&
 		"error" in res
 	) {
-		return res as { data: SessionResponse | null; error: unknown };
+		data = res.data;
+		error = res.error;
 	}
-	return { data: res as SessionResponse, error: null };
+	if (error) {
+		return { data: isSessionResponse(data) ? data : null, error };
+	}
+	if (data === null || isSessionResponse(data)) {
+		return { data, error };
+	}
+	return {
+		data: null,
+		error: createInvalidSessionResponseError(),
+	};
 }
 
 function normalizeSessionData(
