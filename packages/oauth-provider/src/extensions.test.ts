@@ -1323,7 +1323,11 @@ describe("oauth-provider client metadata extensions", async () => {
 					extendOAuthProvider(ctx, {
 						clientMetadata: {
 							fields: ["example_mode"],
-							validate: ({ metadata }) => {
+							validate: ({ client, metadata }) => {
+								// Extension fields must reach validators only through `metadata`.
+								if ("metadata" in client || "example_mode" in client) {
+									throw new Error("extension fields leaked into client");
+								}
 								if (
 									metadata.example_mode !== undefined &&
 									metadata.example_mode !== "ok"
