@@ -1136,3 +1136,125 @@ describe("username sign-in password length", async () => {
 		expect(verify).not.toHaveBeenCalled();
 	});
 });
+
+describe("username sign-up without email", async () => {
+	const getTempEmail = vi.fn(
+		(username: string) => `${username}@users.example.invalid`,
+	);
+	const { auth, client } = await getTestInstance({
+		plugins: [username({ getTempEmail })],
+	});
+	const signUp = (body: Record<string, unknown>) =>
+		client.$fetch("/sign-up/email", { method: "POST", body });
+
+	it("signs up with a username only and signs in with it", async () => {
+		const res = await signUp({
+			username: "no_email_user",
+			password: "new-password",
+			name: "No Email",
+		});
+		expect(res.error).toBeNull();
+		const user = await auth.api.signInUsername({
+			body: { username: "no_email_user", password: "new-password" },
+		});
+		expect(user?.user.email).toBe("no_email_user@users.example.invalid");
+		expect(user?.user.emailVerified).toBe(false);
+	});
+
+	it("generates the email from the normalized username", async () => {
+		getTempEmail.mockClear();
+		const res = await signUp({
+			username: "Mixed_Case",
+			password: "new-password",
+			name: "Mixed",
+		});
+		expect(res.error).toBeNull();
+		expect(getTempEmail).toHaveBeenCalledWith("mixed_case");
+	});
+
+	it("keeps an email that is sent with the username", async () => {
+		getTempEmail.mockClear();
+		const res = await signUp({
+			email: "has-email@example.com",
+			username: "has_email",
+			password: "new-password",
+			name: "Has Email",
+		});
+		expect(res.error).toBeNull();
+		expect(getTempEmail).not.toHaveBeenCalled();
+		const user = await auth.api.signInUsername({
+			body: { username: "has_email", password: "new-password" },
+		});
+		expect(user?.user.email).toBe("has-email@example.com");
+	});
+
+	it("still requires an email when there is no username", async () => {
+		getTempEmail.mockClear();
+		const res = await signUp({ password: "new-password", name: "Nobody" });
+		expect(res.error?.status).toBe(400);
+		expect(getTempEmail).not.toHaveBeenCalled();
+	});
+
+	it("rejects an invalid username before generating an email", async () => {
+		getTempEmail.mockClear();
+		const res = await signUp({
+			username: "bad username!",
+			password: "new-password",
+			name: "Bad",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(getTempEmail).not.toHaveBeenCalled();
+	});
+
+	it("rejects a username that is taken before generating an email", async () => {
+		getTempEmail.mockClear();
+		const res = await signUp({
+			username: "no_email_user",
+			password: "new-password",
+			name: "Again",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(getTempEmail).not.toHaveBeenCalled();
+	});
+});
+
+describe("username sign-up without email: async and invalid generators", async () => {
+	it("supports an async getTempEmail", async () => {
+		const { client, auth } = await getTestInstance({
+			plugins: [
+				username({
+					getTempEmail: async (u) => `${u}@async.example.invalid`,
+				}),
+			],
+		});
+		const res = await client.$fetch("/sign-up/email", {
+			method: "POST",
+			body: { username: "async_user", password: "new-password", name: "A" },
+		});
+		expect(res.error).toBeNull();
+		const user = await auth.api.signInUsername({
+			body: { username: "async_user", password: "new-password" },
+		});
+		expect(user?.user.email).toBe("async_user@async.example.invalid");
+	});
+
+	it("rejects a generated value that is not an email", async () => {
+		const { client } = await getTestInstance({
+			plugins: [username({ getTempEmail: () => "not-an-email" })],
+		});
+		const res = await client.$fetch("/sign-up/email", {
+			method: "POST",
+			body: { username: "bad_gen", password: "new-password", name: "B" },
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("still requires an email when getTempEmail is not set", async () => {
+		const { client } = await getTestInstance({ plugins: [username()] });
+		const res = await client.$fetch("/sign-up/email", {
+			method: "POST",
+			body: { username: "no_option", password: "new-password", name: "C" },
+		});
+		expect(res.error?.status).toBe(400);
+	});
+});
