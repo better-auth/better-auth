@@ -16,5 +16,21 @@ export default defineConfig({
 			name: "chromium",
 			use: { ...devices["Desktop Chrome"] },
 		},
+		// Front-channel logout depends on each browser's third-party cookie
+		// rules. CI sets PLAYWRIGHT_CROSS_BROWSER only when that code changes.
+		...(process.env.PLAYWRIGHT_CROSS_BROWSER
+			? [
+					{
+						name: "firefox",
+						use: { ...devices["Desktop Firefox"] },
+						testMatch: "**/e2e/frontchannel-logout.spec.ts",
+					},
+					{
+						name: "webkit",
+						use: { ...devices["Desktop Safari"] },
+						testMatch: "**/e2e/frontchannel-logout.spec.ts",
+					},
+				]
+			: []),
 	],
 });
