@@ -328,7 +328,7 @@ async function verifyAndConsumePhoneNumberOTP(
 ) {
 	const { phoneNumber, code } = body;
 	if (opts.verifyOTP) {
-		await verifyWithCustomOTP(
+		await verifyWithCustomVerifier(
 			ctx,
 			opts.verifyOTP,
 			phoneNumber,
@@ -342,7 +342,7 @@ async function verifyAndConsumePhoneNumberOTP(
 }
 
 /** Checks the code with `verifyOTP`, then drops the code stored under `identifier`. */
-async function verifyWithCustomOTP(
+async function verifyWithCustomVerifier(
 	ctx: GenericEndpointContext,
 	verifyOTP: NonNullable<RequiredPhoneNumberOptions["verifyOTP"]>,
 	phoneNumber: string,
@@ -820,7 +820,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			// inside the reset transaction.
 			let otpConsumed = false;
 			if (opts.verifyOTP) {
-				await verifyWithCustomOTP(
+				await verifyWithCustomVerifier(
 					ctx,
 					opts.verifyOTP,
 					ctx.body.phoneNumber,

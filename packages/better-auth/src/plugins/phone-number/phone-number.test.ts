@@ -1495,7 +1495,7 @@ describe("custom verifyOTP", async () => {
 	});
 
 	/** Signs up `phoneNumber` through the custom verifier and requests a reset. */
-	async function requestResetFor(phoneNumber: string) {
+	async function signUpAndRequestReset(phoneNumber: string) {
 		mockVerifyOTP.mockResolvedValueOnce(true);
 		await client.phoneNumber.verify({ phoneNumber, code: "123456" });
 		await client.phoneNumber.requestPasswordReset({ phoneNumber });
@@ -1509,7 +1509,7 @@ describe("custom verifyOTP", async () => {
 		it("should use custom verifyOTP when resetting the password", async () => {
 			const phoneNumber = "+1222333444";
 			const newPassword = "new-password-123";
-			await requestResetFor(phoneNumber);
+			await signUpAndRequestReset(phoneNumber);
 			// The provider accepts a code that is not the stored one.
 			mockVerifyOTP.mockResolvedValueOnce(true);
 
@@ -1533,7 +1533,7 @@ describe("custom verifyOTP", async () => {
 
 		it("should not spend the provider code when the new password is rejected", async () => {
 			const phoneNumber = "+1222333555";
-			await requestResetFor(phoneNumber);
+			await signUpAndRequestReset(phoneNumber);
 
 			const res = await client.phoneNumber.resetPassword({
 				phoneNumber,
@@ -1547,7 +1547,7 @@ describe("custom verifyOTP", async () => {
 
 		it("should reject a reset code that custom verifyOTP refuses", async () => {
 			const phoneNumber = "+1222333666";
-			await requestResetFor(phoneNumber);
+			await signUpAndRequestReset(phoneNumber);
 			// The stored code would pass the built-in check, so only the custom
 			// verifier can reject it.
 			mockVerifyOTP.mockResolvedValueOnce(false);
