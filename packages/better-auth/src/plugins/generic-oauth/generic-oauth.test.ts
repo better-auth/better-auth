@@ -5412,6 +5412,65 @@ describe("oauth2", async () => {
 		});
 		expect(signUp.token).toEqual(expect.any(String));
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11404
+	 */
+	it("recovers a provider whose startup discovery failed once the IdP is reachable", async () => {
+		let idpUp = false;
+		let discoveryFetches = 0;
+		mswServer.use(
+			http.get(
+				"https://flaky-idp.test/.well-known/openid-configuration",
+				() => {
+					discoveryFetches++;
+					return idpUp
+						? HttpResponse.json({
+								issuer: "https://flaky-idp.test",
+								authorization_endpoint: "https://flaky-idp.test/authorize",
+								token_endpoint: "https://flaky-idp.test/token",
+							})
+						: new HttpResponse(null, { status: 503 });
+				},
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "flaky-idp",
+								clientId: "client",
+								clientSecret: "secret",
+								discoveryUrl:
+									"https://flaky-idp.test/.well-known/openid-configuration",
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const signIn = () =>
+			auth.api.signInSocial({
+				body: { provider: "flaky-idp", callbackURL: "/" },
+			});
+		await expect(signIn()).rejects.toThrow();
+		expect(discoveryFetches).toBe(2);
+		// Concurrent requests share one retry, and a failed retry stays pending.
+		await Promise.all([
+			expect(signIn()).rejects.toThrow(),
+			expect(signIn()).rejects.toThrow(),
+		]);
+		expect(discoveryFetches).toBe(3);
+
+		idpUp = true;
+		const res = await signIn();
+		expect(res.url).toContain("https://flaky-idp.test/authorize");
+		await signIn();
+		expect(discoveryFetches).toBe(4);
+	});
 });
 
 /**
