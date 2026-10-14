@@ -382,8 +382,12 @@ describe("session revocation clears cookies", () => {
 			responseCookies.get("better-auth.session_data")?.["max-age"],
 		).not.toBe(0);
 
-		// the other user's session is untouched and keeps validating
+		// the other user's session is untouched and keeps validating.
+		// Bypass the cookie cache so this read proves the row itself
+		// survived the revocation, not that a session_data cookie can
+		// still vouch for a deleted session.
 		const otherSessionAfter = await client.getSession({
+			query: { disableCookieCache: true },
 			fetchOptions: { headers: otherHeaders },
 		});
 		expect(otherSessionAfter.data?.session?.token).toBe(
@@ -421,5 +425,65 @@ describe("session revocation clears cookies", () => {
 		expect(
 			responseCookies.get("better-auth.session_data")?.["max-age"],
 		).not.toBe(0);
+	});
+
+	it("revokeSessions still expires the caller's cookies when an overlapping revocation removes the cookie session first", async () => {
+		// revocations can overlap: the authoritative middleware read
+		// validates the cookie session, and another request - a second
+		// revoke-sessions from another tab, a sign-out, an admin cleanup -
+		// deletes the row before the endpoint's own lookup runs. The
+		// expiry must not depend on that lookup finding the row: skipping
+		// it would leave the response without the Set-Cookie expiry, and
+		// the browser would keep validating the revoked session from its
+		// session_data cache until the cache expires.
+		const { auth, client, signInWithTestUser, cookieSetter } =
+			await getTestInstance({
+				session: { cookieCache },
+			});
+		const { headers } = await signInWithTestUser();
+		// populate the cookie cache (session_data cookie)
+		const sessionBefore = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const token = sessionBefore.data!.session!.token;
+		expect(token).toBeDefined();
+
+		// simulate the overlap at the store boundary: the first read of
+		// the session (the middleware's authoritative validation) still
+		// finds the row; the next one observes the row already removed
+		// by the overlapping revocation
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const findSessionInStore =
+			internalAdapter.findSession.bind(internalAdapter);
+		const deleteSessionInStore =
+			internalAdapter.deleteSession.bind(internalAdapter);
+		let sessionReads = 0;
+		internalAdapter.findSession = async (sessionToken) => {
+			const session = await findSessionInStore(sessionToken);
+			if (sessionToken === token && session && sessionReads++ > 0) {
+				await deleteSessionInStore(sessionToken);
+				return null;
+			}
+			return session;
+		};
+
+		let setCookieHeader = "";
+		const revokeRes = await client.revokeSessions({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+		expect(revokeRes.data?.status).toBe(true);
+
+		const responseCookies = parseSetCookieHeader(setCookieHeader);
+		expect(responseCookies.get("better-auth.session_token")?.["max-age"]).toBe(
+			0,
+		);
+		expect(responseCookies.get("better-auth.session_data")?.["max-age"]).toBe(
+			0,
+		);
 	});
 });

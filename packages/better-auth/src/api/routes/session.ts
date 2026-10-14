@@ -887,18 +887,29 @@ export const revokeSessions = createAuthEndpoint(
 			// Every session of the caller is about to be revoked, so the
 			// session the original request's cookie holds - read from the
 			// original header, because a bearer token may have been swapped
-			// into ctx.headers in flight, and looked up BEFORE the delete,
-			// because the delete removes it - decides whether the response
+			// into ctx.headers in flight - decides whether the response
 			// expires the session (and cookie cache) cookies, matching what
 			// sign-out does. Only a cookie session that belongs to the
 			// caller may be expired: with an Authorization token for one
 			// user and a cookie jar holding a different user's session,
 			// deleteUserSessions removes only the bearer user's sessions,
 			// and a bearer-only caller holds no cookies to expire at all.
+			// When the cookie holds the very session this request
+			// authenticated with, that already-validated session decides
+			// ownership directly: revocations can overlap, and a second
+			// store lookup that runs after another request removed the row
+			// would find nothing and skip the expiry, leaving the revoked
+			// session's cookies - and the cookie cache still vouching for
+			// it - alive. A cookie holding another session still needs the
+			// lookup, done BEFORE the delete because the delete removes
+			// the caller's sessions, not necessarily that one.
 			const cookieSessionToken = await requestSessionCookieToken(ctx);
-			const cookieSession = cookieSessionToken
-				? await ctx.context.internalAdapter.findSession(cookieSessionToken)
-				: null;
+			const cookieSession =
+				cookieSessionToken === ctx.context.session.session.token
+					? ctx.context.session
+					: cookieSessionToken
+						? await ctx.context.internalAdapter.findSession(cookieSessionToken)
+						: null;
 			await ctx.context.internalAdapter.deleteUserSessions(
 				ctx.context.session.user.id,
 			);
