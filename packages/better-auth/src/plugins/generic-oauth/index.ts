@@ -90,6 +90,19 @@ function isClientSecretTokenEndpointAuth(
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
 
+type PendingDiscovery = Map<
+	string,
+	{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
+>;
+
+/**
+ * Providers skipped because startup discovery failed. Init stores them on each auth
+ * instance's context, so one plugin object can serve several instances.
+ */
+const getPendingDiscovery = (ctx: AuthContext) =>
+	(ctx as AuthContext & { genericOAuthPendingDiscovery?: PendingDiscovery })
+		.genericOAuthPendingDiscovery;
+
 async function fetchDiscovery(
 	url: string,
 	headers?: Record<string, string>,
@@ -507,19 +520,9 @@ export const genericOAuth = <const ID extends string>(
 		return genericProviders;
 	};
 
-	// Providers skipped because startup discovery failed, per auth instance, since one
-	// plugin object can serve several. Keyed by the provider list init returns, which is
-	// unique to each instance and is the list a retry adds to. Concurrent requests share
-	// one retry, and a failed retry stays pending.
-	const pendingDiscovery = new WeakMap<
-		object,
-		Map<
-			string,
-			{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
-		>
-	>();
+	// Concurrent requests share one retry, and a failed retry stays pending.
 	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
-		const pending = pendingDiscovery.get(ctx.socialProviders)?.get(providerId);
+		const pending = getPendingDiscovery(ctx)?.get(providerId);
 		if (!pending) return;
 		pending.attempt ??= buildProviders(
 			[pending.config],
@@ -528,7 +531,7 @@ export const genericOAuth = <const ID extends string>(
 		)
 			.then(([provider]) => {
 				if (!provider) return;
-				pendingDiscovery.get(ctx.socialProviders)?.delete(providerId);
+				getPendingDiscovery(ctx)?.delete(providerId);
 				ctx.socialProviders.unshift(provider);
 			})
 			.finally(() => {
@@ -556,14 +559,10 @@ export const genericOAuth = <const ID extends string>(
 		init: async (ctx: AuthContext) => {
 			const genericProviders = await buildProviders(options.config, ctx);
 			const built = new Set(genericProviders.map((p) => p.id));
-			const socialProviders = genericProviders.concat(ctx.socialProviders);
-			pendingDiscovery.set(
-				socialProviders,
-				new Map(
-					options.config
-						.filter((c) => !built.has(c.providerId))
-						.map((c) => [c.providerId, { config: c }]),
-				),
+			const genericOAuthPendingDiscovery: PendingDiscovery = new Map(
+				options.config
+					.filter((c) => !built.has(c.providerId))
+					.map((c) => [c.providerId, { config: c }]),
 			);
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));
@@ -576,16 +575,19 @@ export const genericOAuth = <const ID extends string>(
 			}
 
 			return {
-				context: { socialProviders },
+				context: {
+					socialProviders: genericProviders.concat(ctx.socialProviders),
+					genericOAuthPendingDiscovery,
+				},
 			};
 		},
 		hooks: {
 			before: [
 				{
 					matcher: (context) =>
-						pendingDiscovery
-							.get(context.context.socialProviders)
-							?.has(requestedProviderId(context) ?? "") === true,
+						getPendingDiscovery(context.context)?.has(
+							requestedProviderId(context) ?? "",
+						) === true,
 					handler: createAuthMiddleware(async (ctx) => {
 						const providerId = requestedProviderId(ctx);
 						if (providerId) await retryDiscovery(ctx.context, providerId);

@@ -5479,6 +5479,56 @@ describe("oauth2", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11404
 	 */
+	it("recovers a provider after a later plugin replaces the provider list", async () => {
+		let idpUp = false;
+		mswServer.use(
+			http.get("https://late-idp.test/.well-known/openid-configuration", () =>
+				idpUp
+					? HttpResponse.json({
+							issuer: "https://late-idp.test",
+							authorization_endpoint: "https://late-idp.test/authorize",
+							token_endpoint: "https://late-idp.test/token",
+						})
+					: new HttpResponse(null, { status: 503 }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "late-idp",
+								clientId: "client",
+								clientSecret: "secret",
+								discoveryUrl:
+									"https://late-idp.test/.well-known/openid-configuration",
+							},
+						],
+					}),
+					{
+						id: "replace-provider-list",
+						init: (ctx) => ({
+							context: { socialProviders: [...ctx.socialProviders] },
+						}),
+					},
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const signIn = () =>
+			auth.api.signInSocial({
+				body: { provider: "late-idp", callbackURL: "/" },
+			});
+		await expect(signIn()).rejects.toThrow();
+
+		idpUp = true;
+		expect((await signIn()).url).toContain("https://late-idp.test/authorize");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11404
+	 */
 	it("recovers the provider in every auth instance that shares one plugin object and adapter", async () => {
 		let idpUp = false;
 		mswServer.use(
