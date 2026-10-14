@@ -39,6 +39,35 @@ const baseInput = {
 	redirectURI: baseCallback,
 };
 
+describe("issuer trailing slashes", () => {
+	it.for([
+		["gitlab", "oauth"],
+		["paybin", "oauth2"],
+	] as const)("keeps %s requests under the issuer path", async ([id, path]) => {
+		const provider = socialProviders[id]({
+			...credentials,
+			issuer: "https://idp.example.com/tenant/",
+		});
+		const authorizationURL = await provider.createAuthorizationURL(baseInput);
+		expect(authorizationURL.pathname).toBe(`/tenant/${path}/authorize`);
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "access-token",
+				token_type: "Bearer",
+				expires_in: 3600,
+			},
+			error: null,
+		});
+		await provider.validateAuthorizationCode({
+			...baseInput,
+			code: "auth-code",
+		});
+		expect(mockedBetterFetch.mock.calls[0]?.[0]).toBe(
+			`https://idp.example.com/tenant/${path}/token`,
+		);
+	});
+});
+
 describe("OAuth account identity contract", () => {
 	const providerOptions = {
 		clientId: credentials.clientId,
@@ -241,6 +270,28 @@ describe("microsoft provider", () => {
 });
 
 describe("discord provider", () => {
+	it("preserves animated avatar URLs", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				id: "123456",
+				avatar: "a_0123456789abcdef",
+				global_name: "Discord User",
+				username: "discord-user",
+				email: "user@example.com",
+				verified: true,
+			},
+			error: null,
+		});
+
+		const result = await discord({ ...credentials }).getUserInfo({
+			accessToken: "discord-access-token",
+		});
+
+		expect(result?.user.image).toBe(
+			"https://cdn.discordapp.com/avatars/123456/a_0123456789abcdef.gif",
+		);
+	});
+
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = discord({ ...credentials });
 		const url = await provider.createAuthorizationURL(baseInput);
