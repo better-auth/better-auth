@@ -1,5 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import type { GenericEndpointContext, User } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import { getSessionFromCtx, originCheck } from "better-auth/api";
@@ -72,16 +73,19 @@ function isMeteredPrice(price: Stripe.Price | undefined): boolean {
 }
 
 /**
- * Converts a relative URL to an absolute URL using baseURL.
+ * Converts a relative URL using the configured application base URL.
  * @internal
  */
 function getUrl(ctx: GenericEndpointContext, url: string) {
 	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
 		return url;
 	}
-	return `${ctx.context.options.baseURL}${
-		url.startsWith("/") ? url : `/${url}`
-	}`;
+	const configuredBaseURL = ctx.context.options.baseURL;
+	const baseURL =
+		typeof configuredBaseURL === "string"
+			? configuredBaseURL
+			: new URL(ctx.context.baseURL).origin;
+	return `${baseURL}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 /**
@@ -1091,6 +1095,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				...additionalParams
 			} = params?.params ?? {};
 
+			const successURL = appendQueryParams(
+				appendURLPath(ctx.context.baseURL, "/subscription/success"),
+				new URLSearchParams({ callbackURL: ctx.body.successUrl }),
+			);
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
@@ -1111,17 +1119,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									customer_email: user.email,
 								}),
 						locale: ctx.body.locale ?? additionalParams.locale,
-						success_url: getUrl(
-							ctx,
-							`${
-								ctx.context.baseURL
-							}/subscription/success?callbackURL=${encodeURIComponent(
-								ctx.body.successUrl,
-								// {CHECKOUT_SESSION_ID} is a string literal; do not change it!
-								// the actual Session ID is returned in the query parameter when your customer
-								// is redirected to the success page.
-							)}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
-						),
+						// Stripe replaces this {CHECKOUT_SESSION_ID} string placeholder after checkout.
+						success_url: `${successURL}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
 						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 						line_items: [
 							// Base price

@@ -1720,6 +1720,63 @@ describe("stripe checkout", () => {
 			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 	});
+	/** @see https://docs.stripe.com/api/checkout/sessions/create */
+	describe("checkout URL composition", () => {
+		test.for([
+			{
+				name: "trailing custom auth path",
+				baseURL: "http://localhost:3000/custom/auth/",
+				successPath: "/custom/auth/subscription/success",
+			},
+			{
+				name: "dynamic base URL",
+				baseURL: { allowedHosts: ["localhost:3000"] },
+				successPath: "/api/auth/subscription/success",
+			},
+			{
+				name: "double-slash return path",
+				baseURL: "http://localhost:3000",
+				successPath: "/api/auth/subscription/success",
+				cancelUrl: "//evil.example/cancel",
+				expectedCancelURL: "http://localhost:3000//evil.example/cancel",
+			},
+		])("creates checkout URLs for $name", async (scenario, {
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const {
+				baseURL,
+				successPath,
+				cancelUrl = "/billing?tab=plans",
+				expectedCancelURL = "http://localhost:3000/billing?tab=plans",
+			} = scenario;
+			const { client, signInWithTestUser } = await getTestInstance(
+				{ database: memory, baseURL, plugins: [stripe(stripeOptions)] },
+				{ clientOptions: { plugins: [stripeClient({ subscription: true })] } },
+			);
+			const { headers } = await signInWithTestUser();
+			const successUrl = "/billing/complete?tab=a+b";
+			await client.subscription.upgrade({
+				plan: "starter",
+				cancelUrl,
+				successUrl,
+				fetchOptions: { headers, throw: true },
+			});
+
+			const checkout =
+				stripeMock.checkout.sessions.create.mock.calls.at(-1)?.[0];
+			expect(checkout?.cancel_url).toBe(expectedCancelURL);
+			expect.assert(checkout?.success_url);
+			const redirect = new URL(checkout.success_url);
+			expect(redirect.pathname).toBe(successPath);
+			expect(redirect.searchParams.get("callbackURL")).toBe(successUrl);
+			expect(checkout.success_url).toContain(
+				"checkoutSessionId={CHECKOUT_SESSION_ID}",
+			);
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9129
 	 * @see https://github.com/better-auth/better-auth/issues/9130
