@@ -2540,19 +2540,18 @@ describe("updateSession plugin authority fields", async () => {
 		plugins: [organization({ teams: { enabled: true } }), admin()],
 	});
 
-	it.each([
-		"activeOrganizationId",
-		"activeTeamId",
-		"impersonatedBy",
-	])("should reject forging the %s session field", async (field) => {
-		const { runWithUser } = await signInWithTestUser();
-		await runWithUser(async () => {
-			const res = await client.updateSession({
-				[field]: "forged-value",
-			} as any);
-			expect(res.error?.status).toBe(400);
-		});
-	});
+	it.each(["activeOrganizationId", "activeTeamId", "impersonatedBy"])(
+		"should reject forging the %s session field",
+		async (field) => {
+			const { runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				const res = await client.updateSession({
+					[field]: "forged-value",
+				} as any);
+				expect(res.error?.status).toBe(400);
+			});
+		},
+	);
 });
 
 describe("update-session cookie cache revocation", async () => {

@@ -325,17 +325,17 @@ describe("validateCimdMetadata", () => {
 				client_name: "MCP Client",
 			},
 		},
-	])("requires $name for the MCP 2026-07-28 metadata profile", ({
-		metadata,
-		name,
-	}) => {
-		const result = validateCimdMetadata(fetchUrl, metadata, {
-			metadataProfile: "mcp-2026-07-28",
-		});
+	])(
+		"requires $name for the MCP 2026-07-28 metadata profile",
+		({ metadata, name }) => {
+			const result = validateCimdMetadata(fetchUrl, metadata, {
+				metadataProfile: "mcp-2026-07-28",
+			});
 
-		expect(result.valid).toBe(false);
-		expect(result.error).toContain(name);
-	});
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain(name);
+		},
+	);
 
 	it("rejects when client_id != fetchUrl", () => {
 		const result = validateCimdMetadata(fetchUrl, {
@@ -686,18 +686,18 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
-	it.each([
-		"com.example.app:callback",
-		"com.example.app:///callback",
-	])("rejects a private-use redirect URI without the single-slash form: %s", (redirectUri) => {
-		const result = validateCimdMetadata(fetchUrl, {
-			client_id: fetchUrl,
-			client_name: "Invalid Private-use Client",
-			redirect_uris: [redirectUri],
-		});
-		expect(result.valid).toBe(false);
-		expect(result.error).toContain("redirect_uris");
-	});
+	it.each(["com.example.app:callback", "com.example.app:///callback"])(
+		"rejects a private-use redirect URI without the single-slash form: %s",
+		(redirectUri) => {
+			const result = validateCimdMetadata(fetchUrl, {
+				client_id: fetchUrl,
+				client_name: "Invalid Private-use Client",
+				redirect_uris: [redirectUri],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("redirect_uris");
+		},
+	);
 
 	it("rejects malformed reverse-domain private-use redirect schemes", () => {
 		for (const redirectUri of [
@@ -931,51 +931,52 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
-	it.each([
-		"client_uri",
-		"logo_uri",
-		"tos_uri",
-		"policy_uri",
-	])("rejects credentials in %s", (field) => {
-		const result = validateCimdMetadata(
-			fetchUrl,
-			validMetadata(fetchUrl, {
-				[field]: "https://user:password@example.com/resource",
-			}),
-		);
-		expect(result.valid).toBe(false);
-		expect(result.error).toContain(field);
-	});
+	it.each(["client_uri", "logo_uri", "tos_uri", "policy_uri"])(
+		"rejects credentials in %s",
+		(field) => {
+			const result = validateCimdMetadata(
+				fetchUrl,
+				validMetadata(fetchUrl, {
+					[field]: "https://user:password@example.com/resource",
+				}),
+			);
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain(field);
+		},
+	);
 
-	it.each([
-		"tos_uri",
-		"policy_uri",
-	])("rejects javascript and private targets in %s", (field) => {
-		for (const value of ["javascript:alert(1)", "https://127.0.0.1/resource"]) {
+	it.each(["tos_uri", "policy_uri"])(
+		"rejects javascript and private targets in %s",
+		(field) => {
+			for (const value of [
+				"javascript:alert(1)",
+				"https://127.0.0.1/resource",
+			]) {
+				const result = validateCimdMetadata(
+					fetchUrl,
+					validMetadata(fetchUrl, { [field]: value }),
+				);
+				expect(result.valid).toBe(false);
+				expect(result.error).toContain(field);
+			}
+		},
+	);
+
+	it.each(["backchannel_logout_uri", "backchannel_logout_session_required"])(
+		"rejects CIMD back-channel metadata: %s",
+		(field) => {
+			const value =
+				field === "backchannel_logout_uri"
+					? "https://client.example.com/backchannel"
+					: true;
 			const result = validateCimdMetadata(
 				fetchUrl,
 				validMetadata(fetchUrl, { [field]: value }),
 			);
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain(field);
-		}
-	});
-
-	it.each([
-		"backchannel_logout_uri",
-		"backchannel_logout_session_required",
-	])("rejects CIMD back-channel metadata: %s", (field) => {
-		const value =
-			field === "backchannel_logout_uri"
-				? "https://client.example.com/backchannel"
-				: true;
-		const result = validateCimdMetadata(
-			fetchUrl,
-			validMetadata(fetchUrl, { [field]: value }),
-		);
-		expect(result.valid).toBe(false);
-		expect(result.error).toContain(field);
-	});
+		},
+	);
 
 	it("returns warning for query string in fetchUrl", () => {
 		const urlWithQuery = "https://example.com/client-metadata.json?v=1";
@@ -998,12 +999,12 @@ describe("validateCimdMetadata", () => {
 		);
 	});
 
-	it.each([
-		"https://example.com",
-		"https://example.com?version=1",
-	])("rejects an authority-only Client Identifier URL: %s", (clientId) => {
-		expect(validateClientIdUrl(clientId)).toContain("path");
-	});
+	it.each(["https://example.com", "https://example.com?version=1"])(
+		"rejects an authority-only Client Identifier URL: %s",
+		(clientId) => {
+			expect(validateClientIdUrl(clientId)).toContain("path");
+		},
+	);
 
 	it("rejects non-object metadata", () => {
 		expect(validateCimdMetadata(fetchUrl, null).valid).toBe(false);

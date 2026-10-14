@@ -2,6 +2,11 @@ import { decodeProtectedHeader, jwtVerify } from "jose";
 import type { GenericEndpointContext } from "../types";
 import type { OAuthProvider, ProviderOptions } from "./oauth-provider";
 
+/**
+ * Clock skew allowed on `exp`, `nbf`, and `iat`, matching openid-client and oauth4webapi.
+ */
+export const ID_TOKEN_CLOCK_TOLERANCE_SECONDS = 30;
+
 type ProviderWithIdTokenConfig = Pick<OAuthProvider, "idToken" | "options">;
 
 async function sha256Hex(value: string) {
@@ -97,6 +102,7 @@ export async function verifyProviderIdToken(
 			audience: config.audience,
 			algorithms: config.algorithms ?? (alg ? [alg] : undefined),
 			maxTokenAge: config.maxTokenAge,
+			clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
 		});
 		if (
 			nonce &&
