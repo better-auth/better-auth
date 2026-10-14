@@ -1,3 +1,4 @@
+import type { APIError } from "better-call";
 import type { JWK, JWTPayload } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -257,6 +258,27 @@ describe("verifyDpopProof", () => {
 				remoteVerifyOptions(),
 			),
 		).rejects.toThrow("authorization scheme must be Bearer or DPoP");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10857
+	 */
+	it("reports an unsupported scheme as absent credentials, not a failed token", async () => {
+		// RFC 6750 §3.1 groups an unsupported authentication method with requests
+		// that lack any authentication information, which carry no error code.
+		// Sending one makes a resource server answer a `Basic` header with a
+		// token-failure challenge for credentials that were never a token.
+		const error = await verifyAccessTokenRequest(
+			{ authorizationHeader: "Basic dXNlcjpwYXNz", method, url },
+			remoteVerifyOptions(),
+		).then(
+			() => undefined,
+			(thrown: APIError) => thrown,
+		);
+
+		expect(error?.body).toEqual({
+			message: "authorization scheme must be Bearer or DPoP",
+		});
 	});
 });
 
