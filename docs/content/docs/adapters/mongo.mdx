@@ -38,6 +38,10 @@ export const auth = betterAuth({
 });
 ```
 
+When two requests write the same document at the same time, MongoDB aborts one of the transactions with a write conflict and expects the application to retry it. The adapter retries such a transaction for up to 120 seconds, so a request under heavy contention can take longer instead of failing. To lower that limit, set the `timeoutMS` option on your `MongoClient`. It also applies to every other operation on that client.
+
+A retry runs the whole operation again, including `before` [database hooks](/docs/concepts/database#database-hooks) and plugin callbacks that receive the transaction. Send emails and call other services from `after` hooks, which run once, after the commit.
+
 ### Standalone server
 
 A standalone MongoDB server does not support transactions. Create `db` with `MongoClient` and pass it to the adapter without the `client` option:

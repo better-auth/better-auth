@@ -202,11 +202,12 @@ describe("oauth authorize loopback port variance", () => {
 		expectAuthorizationCodeRedirect(location, requestedRedirect);
 	});
 
-	it.each(
-		rejectedRedirects,
-	)("rejects a changed $component", async (testCase) => {
-		const location = await authorizeRedirect(testCase.redirectUri);
+	it.each(rejectedRedirects)(
+		"rejects a changed $component",
+		async (testCase) => {
+			const location = await authorizeRedirect(testCase.redirectUri);
 
-		expectRejectedRedirect(location, testCase.error);
-	});
+			expectRejectedRedirect(location, testCase.error);
+		},
+	);
 });
