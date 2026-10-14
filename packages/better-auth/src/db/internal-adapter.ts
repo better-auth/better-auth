@@ -77,6 +77,7 @@ export const createInternalAdapter = (
 		deleteWithHooks,
 		deleteManyWithHooks,
 		consumeOneWithHooks,
+		runDeleteBeforeHooks,
 	} = getWithHooks(adapter, ctx);
 
 	/**
@@ -448,86 +449,111 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
-			class VetoRollbackError extends Error {}
 			const sessionReferences = await getActiveSessionReferences(userId);
 			let isDeleted = false;
-			try {
-				await runWithTransaction(adapter, async () => {
-					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-						model: "user",
-						where: [{ field: "id", value: userId }],
-					});
-					if (!user) {
+			await runWithTransaction(adapter, async () => {
+				const currentAdapter = await getCurrentAdapter(adapter);
+				const users = await currentAdapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+					limit: 1,
+				});
+				const user = users[0] || null;
+				if (!user) {
+					return;
+				}
+
+				const shouldDeleteSessionsFromDb =
+					!secondaryStorage || options.session?.storeSessionInDatabase;
+
+				const sessions = shouldDeleteSessionsFromDb
+					? await currentAdapter.findMany<Session>({
+							model: "session",
+							where: [{ field: "userId", value: userId }],
+						})
+					: [];
+
+				const accounts = await currentAdapter.findMany<Account>({
+					model: "account",
+					where: [{ field: "userId", value: userId }],
+				});
+
+				for (const session of sessions) {
+					const allowed = await runDeleteBeforeHooks(session, "session");
+					if (!allowed) {
 						return;
 					}
+				}
 
-					// Queue the cache eviction BEFORE any child after-hooks, guarded by isDeleted
-					await queueAfterTransactionHook(
-						async () => {
-							if (isDeleted) {
-								await deleteCachedUserSessions(userId, sessionReferences);
-							}
-						},
-						{
-							onError(error) {
-								logger.error(
-									`Failed to delete cached user sessions for user ${userId}`,
-									error,
-								);
-							},
-						},
-					);
-
-					if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-						const deletedSessions = await deleteManyWithHooks(
-							[
-								{
-									field: "userId",
-									value: userId,
-								},
-							],
-							"session",
-							undefined,
-						);
-						if (deletedSessions === null) {
-							throw new VetoRollbackError();
-						}
+				for (const account of accounts) {
+					const allowed = await runDeleteBeforeHooks(account, "account");
+					if (!allowed) {
+						return;
 					}
-					const deletedAccounts = await deleteManyWithHooks(
+				}
+
+				const userAllowed = await runDeleteBeforeHooks(user, "user");
+				if (!userAllowed) {
+					return;
+				}
+
+				// Queue the cache eviction BEFORE any child after-hooks, guarded by isDeleted
+				await queueAfterTransactionHook(
+					async () => {
+						if (isDeleted) {
+							await deleteCachedUserSessions(userId, sessionReferences);
+						}
+					},
+					{
+						onError(error) {
+							logger.error(
+								`Failed to delete cached user sessions for user ${userId}`,
+								error,
+							);
+						},
+					},
+				);
+
+				if (shouldDeleteSessionsFromDb) {
+					await deleteManyWithHooks(
 						[
 							{
 								field: "userId",
 								value: userId,
 							},
 						],
-						"account",
+						"session",
 						undefined,
+						{ preloadedEntities: sessions, skipBeforeHooks: true },
 					);
-					if (deletedAccounts === null) {
-						throw new VetoRollbackError();
-					}
-
-					const deletedUser = await deleteWithHooks(
-						[
-							{
-								field: "id",
-								value: userId,
-							},
-						],
-						"user",
-						undefined,
-					);
-					if (deletedUser === null) {
-						throw new VetoRollbackError();
-					}
-					isDeleted = true;
-				});
-			} catch (error) {
-				if (error instanceof VetoRollbackError) {
-					return;
 				}
-				throw error;
-			}
+
+				await deleteManyWithHooks(
+					[
+						{
+							field: "userId",
+							value: userId,
+						},
+					],
+					"account",
+					undefined,
+					{ preloadedEntities: accounts, skipBeforeHooks: true },
+				);
+
+				await deleteWithHooks(
+					[
+						{
+							field: "id",
+							value: userId,
+						},
+					],
+					"user",
+					undefined,
+					{ preloadedEntity: user, skipBeforeHooks: true },
+				);
+
+				isDeleted = true;
+			});
 		},
 		createSession: async (
 			userId: string,

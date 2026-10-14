@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { runWithTransaction } from "@better-auth/core/context";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
@@ -422,5 +423,164 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 			where: [{ field: "userId", value: user.id }],
 		});
 		expect(remainingSessions).toHaveLength(0);
+	});
+
+	it("internalAdapter.deleteUser respects veto hook without deleting sessions or accounts when transactions are disabled (transaction: false)", async () => {
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						before: async () => {
+							return false; // veto
+						},
+					},
+				},
+			},
+		});
+
+		const { user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const internalAdapter = ctx.internalAdapter;
+
+		// Configure adapter as non-transactional: writes are immediate and cannot rollback
+		if (ctx.adapter.options?.adapterConfig) {
+			ctx.adapter.options.adapterConfig.transaction = false;
+		}
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation(async (cb: any) =>
+			cb(ctx.adapter),
+		);
+
+		const deleteSpy = vi.spyOn(ctx.adapter, "delete");
+		const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+		await internalAdapter.deleteUser(user.id);
+
+		// Zero DB delete writes should occur when vetoed
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(deleteManySpy).not.toHaveBeenCalled();
+
+		// User, sessions, and accounts must remain intact
+		const remainingUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(remainingUser).not.toBeNull();
+
+		const remainingSessions = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const remainingAccounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(remainingSessions.length).toBeGreaterThan(0);
+		expect(remainingAccounts.length).toBeGreaterThan(0);
+	});
+
+	it("internalAdapter.deleteUser respects account veto hook without deleting sessions when transactions are disabled", async () => {
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			databaseHooks: {
+				account: {
+					delete: {
+						before: async () => {
+							return false; // veto
+						},
+					},
+				},
+			},
+		});
+
+		const { user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const internalAdapter = ctx.internalAdapter;
+
+		if (ctx.adapter.options?.adapterConfig) {
+			ctx.adapter.options.adapterConfig.transaction = false;
+		}
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation(async (cb: any) =>
+			cb(ctx.adapter),
+		);
+
+		const deleteSpy = vi.spyOn(ctx.adapter, "delete");
+		const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(deleteManySpy).not.toHaveBeenCalled();
+
+		const remainingSessions = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const remainingAccounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(remainingSessions.length).toBeGreaterThan(0);
+		expect(remainingAccounts.length).toBeGreaterThan(0);
+	});
+
+	it("internalAdapter.deleteUser respects veto hook inside outer runWithTransaction without committing child deletions", async () => {
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						before: async () => {
+							return false; // veto
+						},
+					},
+				},
+			},
+		});
+
+		const { user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const internalAdapter = ctx.internalAdapter;
+
+		const deleteSpy = vi.spyOn(ctx.adapter, "delete");
+		const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+		// Run deleteUser inside an outer transaction that commits successfully
+		await runWithTransaction(ctx.adapter, async () => {
+			await internalAdapter.deleteUser(user.id);
+		});
+
+		// Zero DB writes occurred inside the outer transaction
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(deleteManySpy).not.toHaveBeenCalled();
+
+		const remainingUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(remainingUser).not.toBeNull();
+
+		const remainingSessions = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const remainingAccounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(remainingSessions.length).toBeGreaterThan(0);
+		expect(remainingAccounts.length).toBeGreaterThan(0);
 	});
 });
