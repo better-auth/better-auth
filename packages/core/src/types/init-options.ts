@@ -729,7 +729,7 @@ export type BetterAuthOptions = {
 					 * @param token the token to send the verification email to
 					 */
 					data: {
-						user: User;
+						user: User & Record<string, unknown>;
 						url: string;
 						token: string;
 					},
@@ -771,7 +771,7 @@ export type BetterAuthOptions = {
 				 * @param request the request object
 				 */
 				beforeEmailVerification?: (
-					user: User,
+					user: User & Record<string, unknown>,
 					request?: Request,
 				) => Promise<void>;
 				/**
@@ -780,7 +780,7 @@ export type BetterAuthOptions = {
 				 * @param request the request object
 				 */
 				afterEmailVerification?: (
-					user: User,
+					user: User & Record<string, unknown>,
 					request?: Request,
 				) => Promise<void>;
 		  }
@@ -833,7 +833,11 @@ export type BetterAuthOptions = {
 					 * @param token the token to send to the user (could be used instead of sending the url
 					 * if you need to redirect the user to custom route)
 					 */
-					data: { user: User; url: string; token: string },
+					data: {
+						user: User & Record<string, unknown>;
+						url: string;
+						token: string;
+					},
 					/**
 					 * The request object
 					 */
@@ -853,7 +857,7 @@ export type BetterAuthOptions = {
 				 * storage has been attempted.
 				 */
 				onPasswordReset?: (
-					data: { user: User },
+					data: { user: User & Record<string, unknown> },
 					request?: Request,
 				) => Promise<void>;
 				/**
@@ -897,7 +901,7 @@ export type BetterAuthOptions = {
 					/**
 					 * @param user the existing user from the database
 					 */
-					data: { user: User },
+					data: { user: User & Record<string, unknown> },
 					request?: Request,
 				) => Promise<void>;
 				/**
@@ -997,7 +1001,7 @@ export type BetterAuthOptions = {
 					 */
 					sendChangeEmailConfirmation?: (
 						data: {
-							user: User;
+							user: User & Record<string, unknown>;
 							newEmail: string;
 							url: string;
 							token: string;
@@ -1027,7 +1031,7 @@ export type BetterAuthOptions = {
 					 */
 					sendDeleteAccountVerification?: (
 						data: {
-							user: User;
+							user: User & Record<string, unknown>;
 							url: string;
 							token: string;
 						},
@@ -1038,13 +1042,19 @@ export type BetterAuthOptions = {
 					 *
 					 * to interrupt with error you can throw `APIError`
 					 */
-					beforeDelete?: (user: User, request?: Request) => Promise<void>;
+					beforeDelete?: (
+						user: User & Record<string, unknown>,
+						request?: Request,
+					) => Promise<void>;
 					/**
 					 * A function that is called after a user is deleted.
 					 *
 					 * This is useful for cleaning up user data
 					 */
-					afterDelete?: (user: User, request?: Request) => Promise<void>;
+					afterDelete?: (
+						user: User & Record<string, unknown>,
+						request?: Request,
+					) => Promise<void>;
 					/**
 					 * The expiration time for the delete token.
 					 *

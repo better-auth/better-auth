@@ -447,4 +447,80 @@ describe("any-poisoning guards", () => {
 		expectTypeOf<Codes>().not.toBeAny();
 		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11192
+	 * Callbacks that receive the user from the database should expose
+	 * `user.additionalFields` on their param types via `User & Record<string, unknown>`,
+	 * matching what the callbacks get at runtime while strictly avoiding any-poisoning.
+	 */
+	it("email and lifecycle callbacks should expose additionalFields on user param without any-poisoning", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					locale: {
+						type: "string",
+						required: false,
+						defaultValue: "en",
+					},
+				},
+				changeEmail: {
+					enabled: true,
+					sendChangeEmailConfirmation: async ({ user }) => {
+						expectTypeOf(user.locale).not.toBeAny();
+						expectTypeOf(user.locale).toBeUnknown();
+						expectTypeOf(user.email).toBeString();
+					},
+				},
+				deleteUser: {
+					enabled: true,
+					sendDeleteAccountVerification: async ({ user }) => {
+						expectTypeOf(user.locale).not.toBeAny();
+						expectTypeOf(user.locale).toBeUnknown();
+					},
+					beforeDelete: async (user) => {
+						expectTypeOf(user.locale).not.toBeAny();
+						expectTypeOf(user.locale).toBeUnknown();
+					},
+					afterDelete: async (user) => {
+						expectTypeOf(user.locale).not.toBeAny();
+						expectTypeOf(user.locale).toBeUnknown();
+					},
+				},
+			},
+			emailVerification: {
+				sendVerificationEmail: async ({ user }) => {
+					expectTypeOf(user.locale).not.toBeAny();
+					expectTypeOf(user.locale).toBeUnknown();
+					expectTypeOf(user.email).toBeString();
+					expectTypeOf(user.id).toBeString();
+				},
+				beforeEmailVerification: async (user) => {
+					expectTypeOf(user.locale).not.toBeAny();
+					expectTypeOf(user.locale).toBeUnknown();
+				},
+				afterEmailVerification: async (user) => {
+					expectTypeOf(user.locale).not.toBeAny();
+					expectTypeOf(user.locale).toBeUnknown();
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+				sendResetPassword: async ({ user }) => {
+					expectTypeOf(user.locale).not.toBeAny();
+					expectTypeOf(user.locale).toBeUnknown();
+					expectTypeOf(user.email).toBeString();
+				},
+				onPasswordReset: async ({ user }) => {
+					expectTypeOf(user.locale).not.toBeAny();
+					expectTypeOf(user.locale).toBeUnknown();
+				},
+				onExistingUserSignUp: async ({ user }) => {
+					expectTypeOf(user.locale).not.toBeAny();
+					expectTypeOf(user.locale).toBeUnknown();
+				},
+			},
+		});
+		expectTypeOf<typeof auth.$Infer.Session.user>().toHaveProperty("locale");
+	});
 });
