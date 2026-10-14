@@ -61,7 +61,8 @@ function buildResourceRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		// FIXME(#11725): same null limit as buildSeedRow in resources.ts.
+		// FIXME(#11725): Prisma list columns reject null and read a stored
+		// NULL back as [], so "no restriction" cannot round-trip there.
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,

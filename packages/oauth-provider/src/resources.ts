@@ -684,7 +684,6 @@ export async function getResource(
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
 ): Promise<OAuthResource | null> {
-	// Retries a startup seed that failed; no-op once it has succeeded.
 	// TODO(#11725): merge the configured entry here instead of seeding rows.
 	await seedResourcesOnce(ctx.context, opts);
 
@@ -743,8 +742,8 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		// FIXME(#11725): Prisma list columns reject null and read a stored
-		// NULL back as [], so "no restriction" cannot round-trip there.
+		// FIXME(#11725): same null limit as buildResourceRow in
+		// oauthResource/endpoints.ts.
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
@@ -798,6 +797,8 @@ function buildSeedUpdate(
 	return update;
 }
 
+// TODO(#11725): remove with startup seeding, together with
+// logStartupSeedFailure and the seed state below.
 /**
  * Pattern matched against adapter errors to detect the "table not yet
  * created" case — i.e. migrations or `auth generate` haven't run. Only
@@ -807,8 +808,6 @@ function buildSeedUpdate(
  * MySQL ("Table X does not exist" / contracted form), and the Drizzle and
  * Prisma adapters' missing-model errors.
  */
-// TODO(#11725): remove with startup seeding, together with
-// logStartupSeedFailure and the seed state below.
 // cspell:ignore-next-line doesn
 const MISSING_TABLE_PATTERN =
 	/no such table|relation.*does not exist|table.*does(?: not|n'?t) exist|model.*(?:does not exist|was not found in the schema)/i;
@@ -821,9 +820,10 @@ const MISSING_TABLE_PATTERN =
  */
 export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
 	// Drizzle keeps the driver message on `cause`; its own message is the SQL.
+	// The depth bound guards against a `cause` cycle.
 	let missingTable = false;
 	let current: unknown = error;
-	while (current && !missingTable) {
+	for (let depth = 0; current && !missingTable && depth < 5; depth++) {
 		missingTable = MISSING_TABLE_PATTERN.test(
 			current instanceof Error ? current.message : String(current),
 		);
@@ -988,14 +988,10 @@ export async function seedResources(
 }
 
 /**
- * Idempotent, coalesced wrapper around {@link seedResources} for the
- * lazy-seed path. Safe to call from every resource lookup — the first call
- * runs the seed, concurrent calls await the same promise, and subsequent
- * calls become no-ops.
- *
- * The endpoint context shape (`{ context: AuthContext }`) is what
- * `getResource` receives, so this is a convenience overload that unwraps
- * for callers.
+ * Idempotent, coalesced wrapper around {@link seedResources}, called from
+ * plugin `init` and from every resource lookup. The first call runs the
+ * seed, concurrent calls await the same promise, and calls after a success
+ * are no-ops. A failure resets the state so the next call retries.
  *
  * @internal
  */
