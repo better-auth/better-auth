@@ -231,6 +231,8 @@ async function createJwtAccessToken(
 		iat?: number;
 		exp?: number;
 		sid?: string;
+		/** Consent reference from `postLogin.consentReferenceId`. */
+		referenceId?: string;
 		/**
 		 * Per-resource signing config resolved by {@link resolveResourcePolicy}.
 		 * `null` falls back to the JWT plugin's primary key.
@@ -280,6 +282,9 @@ async function createJwtAccessToken(
 			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
+			// AS-owned, like `sid`: grants derived from this token (token exchange)
+			// read the consent reference back from here.
+			reference_id: overrides?.referenceId,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
@@ -1115,7 +1120,13 @@ async function createUserTokens(
 	const baseExpiry = user
 		? (opts.accessTokenExpiresIn ?? 3600)
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
-	const defaultExp = iat + baseExpiry;
+	// Every other expiry is min()-ed against this, so the cap holds for them too.
+	const defaultExp = Math.min(
+		iat + baseExpiry,
+		params.maxExpiresAt
+			? Math.floor(params.maxExpiresAt.getTime() / 1000)
+			: Number.POSITIVE_INFINITY,
+	);
 	const scopeExp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
@@ -1260,6 +1271,7 @@ async function createUserTokens(
 						iat,
 						exp,
 						sid: sessionId,
+						referenceId,
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,

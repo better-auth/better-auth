@@ -210,6 +210,12 @@ export interface OAuthTokenIssueParams {
 	 * is stamped after, and cannot be overridden by, contributed claims.
 	 */
 	confirmation?: Confirmation;
+	/**
+	 * Latest time the access token may expire. The authorization server issues
+	 * the earlier of this and its configured lifetime, so a grant derived from
+	 * another token (for example RFC 8693 token exchange) cannot outlive it.
+	 */
+	maxExpiresAt?: Date;
 }
 
 export interface OAuthTokenResponse {

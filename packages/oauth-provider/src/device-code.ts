@@ -26,7 +26,9 @@ import {
 	getClient,
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
+	parseScopes,
 	toAudienceClaim,
+	tokenError,
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
@@ -77,22 +79,6 @@ type OAuthDeviceCodeFields = {
 	oauthClientId?: string | null;
 	resources?: string[] | null;
 };
-
-function tokenError(
-	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
-	error: string,
-	errorDescription: string,
-): never {
-	throw new APIError(status, {
-		error,
-		error_description: errorDescription,
-	});
-}
-
-function parseScopes(scope: string | null | undefined): string[] {
-	const normalized = scope?.trim();
-	return normalized ? normalized.split(/\s+/) : [];
-}
 
 /**
  * Exchanges an approved RFC 8628 device code for an OAuth token set. Unlike the

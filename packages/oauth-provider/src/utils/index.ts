@@ -22,6 +22,7 @@ import type {
 	ClientDiscovery,
 	Confirmation,
 	GrantType,
+	OAuthConsent,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -667,6 +668,72 @@ export function clientAllowsGrant(
 		return true;
 	}
 	return allowedGrants.includes(grantType);
+}
+
+/**
+ * Throws an OAuth error response (RFC 6749 §5.2).
+ *
+ * @internal
+ */
+export function tokenError(
+	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
+	error: string,
+	errorDescription: string,
+): never {
+	throw new APIError(status, {
+		error,
+		error_description: errorDescription,
+	});
+}
+
+/**
+ * Splits a space-delimited OAuth `scope` value (RFC 6749 §3.3).
+ *
+ * @internal
+ */
+export function parseScopes(scope: string | null | undefined): string[] {
+	const normalized = scope?.trim();
+	return normalized ? normalized.split(/\s+/) : [];
+}
+
+/**
+ * Where clause for a user's stored consents to a client. `referenceId`
+ * `undefined` matches any consent reference; `null` matches only consent stored
+ * without one.
+ *
+ * @internal
+ */
+export function consentWhere(
+	clientId: string,
+	userId: string,
+	referenceId: string | null | undefined,
+) {
+	return [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+		...(referenceId !== undefined
+			? [{ field: "referenceId", value: referenceId }]
+			: []),
+	];
+}
+
+/**
+ * Whether a stored consent covers every requested scope and resource. Shared by
+ * authorization and grants that need prior consent, so the coverage rule cannot
+ * drift between them. Each caller still chooses which consent rows to check.
+ *
+ * @internal
+ */
+export function consentCovers(
+	consent: Pick<OAuthConsent<Scope[]>, "scopes" | "resources">,
+	scopes: readonly string[],
+	resources: readonly string[],
+): boolean {
+	const consentedResources = consent.resources ?? [];
+	return (
+		scopes.every((scope) => consent.scopes.includes(scope)) &&
+		resources.every((resource) => consentedResources.includes(resource))
+	);
 }
 
 /**

@@ -34,6 +34,8 @@ import { authorizationQuerySchema, SafeUrlSchema } from "./types/zod";
 
 import {
 	clientAllowsGrant,
+	consentCovers,
+	consentWhere,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,
@@ -925,52 +927,19 @@ export async function authorizeEndpoint(
 	}
 	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
 		model: "oauthConsent",
-		where: [
-			{
-				field: "clientId",
-				value: client.clientId,
-			},
-			{
-				field: "userId",
-				value: session.user.id,
-			},
-			...(referenceId
-				? [
-						{
-							field: "referenceId",
-							value: referenceId,
-						},
-					]
-				: []),
-		],
+		where: consentWhere(
+			client.clientId,
+			session.user.id,
+			referenceId || undefined,
+		),
 	});
 
+	// Prompt again whenever a requested scope, claim, or resource is not covered.
 	if (
 		!consent ||
-		!requestedScopes.every((val) => consent.scopes.includes(val)) ||
+		!consentCovers(consent, requestedScopes, requestedResources) ||
 		!requestedUserInfoClaims.every((claim) =>
 			(consent.requestedUserInfoClaims ?? []).includes(claim),
-		)
-	) {
-		if (promptNone) {
-			return redirectWithPromptNoneError(
-				ctx,
-				opts,
-				query,
-				"consent_required",
-				"End-User consent is required",
-			);
-		}
-		return redirectWithPromptCode(ctx, opts, "consent", {
-			sessionId: session.session.id,
-		});
-	}
-
-	// Prompt again whenever a requested resource is not covered by stored consent.
-	const consentedResources = consent?.resources ?? [];
-	if (
-		requestedResources.some(
-			(requestedResource) => !consentedResources.includes(requestedResource),
 		)
 	) {
 		if (promptNone) {

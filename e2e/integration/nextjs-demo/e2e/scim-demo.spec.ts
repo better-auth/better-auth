@@ -1,51 +1,26 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import type { DemoProcess } from "./demo-runtime";
+import {
+	createOrganization,
+	getAvailablePort,
+	migrateDemoDatabase,
+	startNextDevServer,
+	stopProcess,
+} from "./demo-runtime";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
-const demoDirectory = resolve(process.cwd(), "../../demo/nextjs");
 
-interface NextDemoRuntime {
+interface NextDemoRuntime extends DemoProcess {
 	baseURL: string;
 	databasePath: string;
-	process: ChildProcessWithoutNullStreams;
-	readOutput: () => string;
 	temporaryDirectory: string;
-}
-
-async function getAvailablePort(): Promise<number> {
-	const server = createServer();
-	const port = await new Promise<number>((resolvePort, reject) => {
-		server.once("error", reject);
-		server.listen(0, "127.0.0.1", () => {
-			const address = server.address();
-			if (address && typeof address === "object") {
-				resolvePort(address.port);
-				return;
-			}
-			reject(new Error("Could not reserve a port for the Next.js demo"));
-		});
-	});
-	await new Promise<void>((resolveClose, reject) => {
-		server.close((error) => (error ? reject(error) : resolveClose()));
-	});
-	return port;
-}
-
-async function stopProcess(
-	child: ChildProcessWithoutNullStreams | undefined,
-): Promise<void> {
-	if (!child?.pid || child.exitCode !== null) return;
-	const { terminate } = await import("@better-auth-test/test-utils/playwright");
-	await terminate(child.pid);
 }
 
 async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
@@ -69,82 +44,11 @@ async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
 			"e2e-scim-demo-oidc-client-secret-at-least-thirty-two-characters",
 		SCIM_DEMO_OIDC_SIGNING_PRIVATE_KEY: undefined,
 	};
-	let output = "";
-	let demoProcess: ChildProcessWithoutNullStreams | undefined;
 	try {
-		const migration = spawn(
-			"node",
-			[
-				"--experimental-strip-types",
-				"--input-type=module",
-				"--eval",
-				[
-					'import { getMigrations } from "better-auth/db/migration";',
-					'const { auth } = await import("./lib/auth.ts");',
-					"const { runMigrations } = await getMigrations(auth.options);",
-					"await runMigrations();",
-				].join("\n"),
-			],
-			{ cwd: demoDirectory, env: environment, stdio: "pipe" },
-		);
-		migration.stdout.on("data", (chunk) => {
-			output += chunk.toString();
-		});
-		migration.stderr.on("data", (chunk) => {
-			output += chunk.toString();
-		});
-		const migrationExitCode = await new Promise<number | null>(
-			(resolveExit, reject) => {
-				migration.once("error", reject);
-				migration.once("exit", resolveExit);
-			},
-		);
-		if (migrationExitCode !== 0) {
-			throw new Error(`Next.js demo migration failed:\n${output}`);
-		}
-
-		demoProcess = spawn(
-			"pnpm",
-			["dev", "--hostname", "127.0.0.1", "--port", String(port)],
-			{
-				cwd: demoDirectory,
-				detached: true,
-				env: environment,
-				stdio: "pipe",
-			},
-		);
-		demoProcess.stdout.on("data", (chunk) => {
-			output += chunk.toString();
-		});
-		demoProcess.stderr.on("data", (chunk) => {
-			output += chunk.toString();
-		});
-		const deadline = Date.now() + 60_000;
-		while (Date.now() < deadline) {
-			if (demoProcess.exitCode !== null) {
-				throw new Error(`Next.js demo exited before startup:\n${output}`);
-			}
-			try {
-				const response = await fetch(`${baseURL}/sign-in`, {
-					signal: AbortSignal.timeout(1_000),
-				});
-				if (response.ok) {
-					return {
-						baseURL,
-						databasePath,
-						process: demoProcess,
-						readOutput: () => output,
-						temporaryDirectory,
-					};
-				}
-			} catch {
-				// The development server has not bound its port yet.
-			}
-			await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
-		}
-		throw new Error(`Next.js demo did not start:\n${output}`);
+		await migrateDemoDatabase(environment);
+		const demo = await startNextDevServer(port, environment);
+		return { ...demo, baseURL, databasePath, temporaryDirectory };
 	} catch (error) {
-		await stopProcess(demoProcess);
 		await rm(temporaryDirectory, { recursive: true, force: true });
 		throw error;
 	}
@@ -165,34 +69,6 @@ async function signUp(
 		},
 	);
 	expect(response.ok(), await response.text()).toBe(true);
-}
-
-async function createOrganization(
-	request: APIRequestContext,
-	baseURL: string,
-	name: string,
-): Promise<string> {
-	const response = await request.post(
-		`${baseURL}/api/auth/organization/create`,
-		{
-			headers: { origin: baseURL },
-			data: {
-				name,
-				slug: `${name.toLowerCase().replaceAll(" ", "-")}-${Date.now()}`,
-			},
-		},
-	);
-	const body: unknown = await response.json();
-	expect(response.ok(), JSON.stringify(body)).toBe(true);
-	if (
-		typeof body !== "object" ||
-		body === null ||
-		!("id" in body) ||
-		typeof body.id !== "string"
-	) {
-		throw new Error("Organization create did not return an ID");
-	}
-	return body.id;
 }
 
 function managementURL(baseURL: string, organizationId: string): string {

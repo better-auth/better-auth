@@ -1499,6 +1499,8 @@ oauthProvider({
 
 `client.referenceId` is the client's owner, set at registration by `clientReference` or by an [initial access token](#dynamic-client-registration) during protected dynamic registration. It is not the top-level `referenceId` that both callbacks also receive, which is the consent reference from `postLogin.consentReferenceId`.
 
+When `postLogin.consentReferenceId` returns a consent reference, the provider also puts it in the access token as the `reference_id` claim, and introspection returns it for opaque access tokens and refresh tokens. The provider owns this claim, so a claim contributor cannot set or override it. [Token exchange](#keep-the-organization-the-user-approved) uses it to keep the reference on exchanged tokens. Resource servers can read it too, but a claim you derive in `customAccessTokenClaims` keeps your own name and shape.
+
 Opaque-token introspection re-derives contributor claims without `grantType` or `sessionId`, so base any claim needed at introspection on the client, scopes, and resources. `customAccessTokenClaims` and per-resource `customClaims` override a contributor claim with the same name; see [Claim precedence](#claim-precedence).
 
 An organization claim does not prove that the client is still connected. A JWT keeps its claims until it expires, so a resource server that must react to a disabled client right away should introspect the token, which reports tokens of disabled clients as inactive.
@@ -1727,10 +1729,13 @@ export const customOAuthExtension = () =>
           "urn:example:params:oauth:grant-type:custom": async ({
             provider,
           }) => {
-            const { client } = await provider.authenticateClient();
+            const scopes = ["openid"];
+            // Passing the scopes checks them against the client's registered
+            // scopes. Without them, the call only authenticates the client.
+            const { client } = await provider.authenticateClient({ scopes });
             return provider.issueTokens({
               client,
-              scopes: ["openid"],
+              scopes,
               tokenResponse: {
                 issued_token_type:
                   "urn:ietf:params:oauth:token-type:access_token",
@@ -1745,6 +1750,10 @@ export const customOAuthExtension = () =>
     },
   }) satisfies BetterAuthPlugin;
 ```
+
+`issueTokens` does not re-check what it is given: the grant handler must validate scopes, the user, and resources before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
+
+Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. Registration accepts only grant types the instance supports, so registering a client for an extension grant on an instance without that plugin fails with `invalid_client_metadata` and `unsupported grant_type`.
 
 Extension contributions follow two disciplines:
 
@@ -1789,11 +1798,164 @@ Three claim surfaces resolve contributions in a fixed order. Across all three, t
 
 | Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                    |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing                                                      |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`) and the provider-owned `cnf` and `reference_id`, stripped before signing      |
 | ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names |
 | UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                            |
 
-Per-issuance `accessTokenClaims` are JWT-only: an opaque access token persists no per-issuance claims, so they do not reappear at introspection. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
+Per-issuance `accessTokenClaims` are signed into JWT access tokens, so introspecting a JWT access token returns them. An opaque access token persists no per-issuance claims, so introspecting it does not return them. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
+
+### Token exchange
+
+A service that receives a user's access token sometimes needs to call another API as that user. Forwarding the token fails the API's audience check and gives the API more access than it needs. Token exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693)) lets the service trade the token at the token endpoint for a new access token for the other API. The new token has the same user as `sub`, the downstream API as `aud`, and the exchanging service as `client_id`.
+
+The exchanged token impersonates the user: it represents the user and does not name the service as an actor (`act`). A typical case is an MCP server that receives a token for itself and calls a downstream API.
+
+#### Set up token exchange
+
+Add `oauthTokenExchange()` after `oauthProvider()`, and list both the resource the service receives tokens for and the resource it calls:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+import { oauthProvider, oauthTokenExchange } from "@better-auth/oauth-provider"; // [!code highlight]
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      resources: ["https://mcp.example.com", "https://api.example.com"],
+    }),
+    oauthTokenExchange(), // [!code highlight]
+  ],
+});
+```
+
+The grant `urn:ietf:params:oauth:grant-type:token-exchange` is then advertised in `grant_types_supported`. RFC 8693 defines no other discovery metadata.
+
+Register the exchanging service as a confidential client with `TOKEN_EXCHANGE_GRANT_TYPE`. Public clients cannot exchange tokens.
+
+```ts title="register-exchanging-client.ts"
+import { TOKEN_EXCHANGE_GRANT_TYPE } from "@better-auth/oauth-provider";
+
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    client_name: "MCP server",
+    grant_types: [TOKEN_EXCHANGE_GRANT_TYPE],
+    token_endpoint_auth_method: "client_secret_basic",
+    scope: "read write",
+    resources: ["https://mcp.example.com", "https://api.example.com"],
+    skip_consent: true,
+  },
+});
+```
+
+The client's linked [resources](#resources) do two jobs here:
+
+* Linking `https://mcp.example.com` lets the client exchange tokens whose audience is that resource, which are the tokens it receives.
+* Linking `https://api.example.com` lets the client request tokens for that resource.
+
+`skip_consent` decides whether the user must have approved the exchanging client:
+
+* With `skip_consent: true`, which only an admin can set, the client may exchange any token it is allowed to receive. Use it for first-party services.
+* Otherwise, the user must already have a stored consent for this client that covers the requested scopes and resources, for example from an earlier authorization code flow with that client. Without one, the exchange fails with `invalid_request`. A client created through [dynamic registration](#dynamic-client-registration) cannot set `skip_consent`, so it can only reach what the user has already approved for it.
+
+#### Exchange a token
+
+The service sends the user's token as `subject_token` and names the target with `resource`:
+
+```http
+POST /api/auth/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <exchanging client credentials>
+
+grant_type=urn:ietf:params:oauth:grant-type:token-exchange
+&subject_token=<the user's access token for https://mcp.example.com>
+&subject_token_type=urn:ietf:params:oauth:token-type:access_token
+&resource=https://api.example.com
+&scope=read
+```
+
+```json
+{
+  "access_token": "eyJ...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 58,
+  "expires_at": 1767225658,
+  "scope": "read"
+}
+```
+
+| Parameter                         | Behavior                                                                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `subject_token`                   | Required. An active access token this server issued                                                                                                          |
+| `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                            |
+| `resource`                        | Required, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource linked to the client |
+| `scope`                           | Optional. Defaults to the subject token's scopes without `openid` and `offline_access`                                                                       |
+| `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                   |
+| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                      |
+| `audience`                        | Not supported. Sending it returns `invalid_target`; name targets with `resource`                                                                             |
+
+With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
+
+If the request carries a `DPoP` proof, the exchanged token is bound to that key and `token_type` is `DPoP`, as described in [DPoP sender-constrained tokens](#dpop-sender-constrained-tokens). A proof is required when the exchanging client or the target resource requires DPoP-bound tokens.
+
+#### Exchange rules
+
+The provider applies these rules to every exchange, before your `allowExchange` policy:
+
+| Rule                                                                                                                                                  | Why                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
+| The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
+| The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
+| The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
+| Each target resource is registered, enabled, and linked to the client                                                                                 | The client's resource policy still applies, including each resource's `allowedScopes`                               |
+| A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
+| The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                           | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
+| No refresh token or ID token is issued                                                                                                                | The service must exchange again when the token expires                                                              |
+
+Scope names are global across resources. A `read` scope on the MCP server and a `read` scope on the API are the same scope, so restrict what a resource accepts with its `allowedScopes`.
+
+#### Errors
+
+| Condition                                                                                                                                                                                            | Error                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Missing or invalid subject token, unsupported `subject_token_type`, `actor_token` or `actor_token_type`, unsupported `requested_token_type`, missing `resource`, missing consent, or a policy denial | `400 invalid_request`     |
+| A scope the subject token or the client does not have, or `openid` or `offline_access`                                                                                                               | `400 invalid_scope`       |
+| An unknown, disabled, or unlinked resource, or the `audience` parameter                                                                                                                              | `400 invalid_target`      |
+| Failed client authentication                                                                                                                                                                         | `invalid_client`          |
+| A client not registered for the token-exchange grant                                                                                                                                                 | `400 unauthorized_client` |
+
+#### Keep the organization the user approved
+
+When `postLogin.consentReferenceId` picks a reference during authorization, such as the [organization](#organizations) the user approved, the exchanged token keeps the subject token's reference. It does not switch to the user's current active organization. `customAccessTokenClaims` receives the same `referenceId`, so a claim you derive from it carries over to the downstream API, and a client that does not skip consent needs a stored consent under that same reference. The provider reads the reference from the subject token's [`reference_id`](#claims) claim, so no extra configuration is needed.
+
+#### Add your own policy
+
+`allowExchange` runs after every built-in rule passes. Return `false` to deny the exchange with `invalid_request`, or throw an `APIError` to return a different OAuth error. It receives the authenticated `client`, the `user`, the requested `resources` and `scopes`, the inherited `referenceId`, and `subjectToken`, the subject token's introspection payload.
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  allowExchange: ({ client, resources }) =>
+    client.clientId === process.env.MCP_SERVER_CLIENT_ID &&
+    resources.every((resource) => resource === "https://api.example.com"),
+});
+```
+
+#### Limitations
+
+* **No delegation.** `actor_token` is rejected, and exchanged tokens carry no `act` claim. The exchanging service is identified only by `client_id`.
+* **No `audience` parameter.** Name targets with `resource`.
+* **No refresh tokens** are issued for exchanged tokens.
+* **Own access tokens only.** ID tokens, refresh tokens, and tokens from other issuers cannot be exchanged.
+* **Signing out and local JWT verification.** Signing out makes exchanged tokens inactive at introspection. A resource server that verifies JWT access tokens locally against the JWKS keeps accepting them until `exp`, which is never later than the subject token's `exp`.
+* **Subject tokens without a session.** An access token refreshed from an `offline_access` refresh token after the user signed out carries no `sid`, so a token exchanged from it is not tied to a session and lasts until its `exp`. Return `false` from `allowExchange` when `subjectToken.sid` is missing if exchanges must always end with the session.
+* **`may_act` is not evaluated.**
+* **Registration default resources.** `clientRegistrationDefaultResources` links every dynamically registered client to those resources. Such a client then counts as a resource server for tokens whose audience is one of them, so the audience rule does not tell it apart from your own service. The consent rule still limits it to what the user approved for that client.
 
 ### Organizations
 
@@ -2084,6 +2246,8 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
 Use the [`@better-auth/mcp` plugin](/docs/plugins/mcp) when an MCP server is one of your protected resources. It builds on this OAuth Provider and adds MCP defaults, RFC 9728 protected resource metadata, and route helpers that return the authorization challenge MCP clients expect.
 
 `mcp()` is the OAuth Provider for that Better Auth instance, so do not register both `mcp()` and `oauthProvider()`. It accepts the OAuth Provider options directly. Use `requireMcpAuth` when the MCP route shares the auth instance, or `createMcpProtectedRequestHandler` when the resource server runs separately.
+
+An MCP server that calls a downstream API for the user must not pass the user's token through. Exchange it for a token to that API with [token exchange](#token-exchange) instead.
 
 The MCP plugin can also support a separate registered CLI through the device grant. MCP clients keep their discovery-driven authorization code flow, while the CLI asks the same provider for a resource-bound token through device authorization. See [Add device authorization for your own CLI](/docs/plugins/mcp#add-device-authorization-for-your-own-cli).
 

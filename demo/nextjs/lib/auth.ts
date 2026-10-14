@@ -35,6 +35,11 @@ import {
 } from "./scim-demo.ts";
 import { resolveSCIMDemoSSOUser } from "./scim-demo-employee.ts";
 import { getSCIMDemoOIDCProvider } from "./scim-demo-oidc.ts";
+import {
+	createTokenExchangeDemoPlugins,
+	getTokenExchangeDemoRegistrationOptions,
+	getTokenExchangeDemoResources,
+} from "./token-exchange-demo.ts";
 
 const DEMO_SQLITE_CONTENTION_TIMEOUT_MS = 5_000;
 
@@ -422,7 +427,9 @@ const authOptions = {
 				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
 				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
 					"/api/mcp",
+				...getTokenExchangeDemoResources(),
 			],
+			...getTokenExchangeDemoRegistrationOptions(),
 			selectAccount: {
 				page: "/oauth/select-account",
 				shouldRedirect: async ({ headers }) => {
@@ -485,6 +492,7 @@ const authOptions = {
 				},
 			},
 		}),
+		...createTokenExchangeDemoPlugins(),
 		electron(),
 	],
 	trustedOrigins: [
