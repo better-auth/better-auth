@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import { getOAuthServerContext, setOAuthState } from "../api/state/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
@@ -84,7 +85,8 @@ export async function generateState(
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body?.state;
 	const errorURL =
-		c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		c.context.options.onAPIError?.errorURL ||
+		appendURLPath(c.context.baseURL, "/error");
 
 	let parsedData: StateData;
 

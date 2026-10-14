@@ -9,6 +9,7 @@ import {
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
 import { mergeScopes } from "@better-auth/core/oauth2";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
@@ -199,7 +200,8 @@ export async function handleOAuthUserInfo(
 				e,
 			);
 			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+				c.context.options.onAPIError?.errorURL ||
+				appendURLPath(c.context.baseURL, "/error");
 			redirectOnError(c, errorURL, "internal_server_error");
 		});
 	if (accountOwner?.kind === "orphaned") {
@@ -263,7 +265,8 @@ export async function handleOAuthUserInfo(
 			e,
 		);
 		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			c.context.options.onAPIError?.errorURL ||
+			appendURLPath(c.context.baseURL, "/error");
 		redirectOnError(c, errorURL, "internal_server_error");
 	});
 	let user = dbUser?.user;
@@ -683,9 +686,10 @@ async function dispatchVerificationEmail(
 				undefined,
 				c.context.options.emailVerification?.expiresIn,
 			);
-			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-				callbackURL || "/",
-			)}`;
+			const url = appendQueryParams(
+				appendURLPath(c.context.baseURL, "/verify-email"),
+				new URLSearchParams({ token, callbackURL: callbackURL || "/" }),
+			);
 			await c.context.runInBackgroundOrAwait(
 				sendVerificationEmail(
 					{

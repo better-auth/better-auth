@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
@@ -517,11 +518,13 @@ export const deleteUser = createAuthEndpoint(
 							1000,
 				),
 			});
-			const url = `${
-				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
-				ctx.body.callbackURL || "/",
-			)}`;
+			const url = appendQueryParams(
+				appendURLPath(ctx.context.baseURL, "/delete-user/callback"),
+				new URLSearchParams({
+					token,
+					callbackURL: ctx.body.callbackURL || "/",
+				}),
+			);
 			await ctx.context.runInBackgroundOrAwait(
 				ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 					{
@@ -802,11 +805,13 @@ export const changeEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-					ctx.body.callbackURL || "/",
-				)}`;
+				const url = appendQueryParams(
+					appendURLPath(ctx.context.baseURL, "/verify-email"),
+					new URLSearchParams({
+						token,
+						callbackURL: ctx.body.callbackURL || "/",
+					}),
+				);
 				await ctx.context.runInBackgroundOrAwait(
 					canSendVerification(
 						{
@@ -840,11 +845,13 @@ export const changeEmail = createAuthEndpoint(
 					requestType: "change-email-confirmation",
 				},
 			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-				ctx.body.callbackURL || "/",
-			)}`;
+			const url = appendQueryParams(
+				appendURLPath(ctx.context.baseURL, "/verify-email"),
+				new URLSearchParams({
+					token,
+					callbackURL: ctx.body.callbackURL || "/",
+				}),
+			);
 			await ctx.context.runInBackgroundOrAwait(
 				canSendConfirmation(
 					{
@@ -877,11 +884,13 @@ export const changeEmail = createAuthEndpoint(
 				requestType: "change-email-verification",
 			},
 		);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-			ctx.body.callbackURL || "/",
-		)}`;
+		const url = appendQueryParams(
+			appendURLPath(ctx.context.baseURL, "/verify-email"),
+			new URLSearchParams({
+				token,
+				callbackURL: ctx.body.callbackURL || "/",
+			}),
+		);
 		await ctx.context.runInBackgroundOrAwait(
 			canSendVerification(
 				{

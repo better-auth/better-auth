@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { appendQueryParams } from "@better-auth/core/utils/url";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
@@ -62,10 +62,10 @@ export async function sendVerificationEmailFn(
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const callbackURL = ctx.body.callbackURL
-		? encodeURIComponent(ctx.body.callbackURL)
-		: encodeURIComponent("/");
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+	const url = appendQueryParams(
+		appendURLPath(ctx.context.baseURL, "/verify-email"),
+		new URLSearchParams({ token, callbackURL: ctx.body.callbackURL || "/" }),
+	);
 	// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors (see #8757).
 	// This path only runs once a real unverified user is known, so timing here does not weaken the unauthenticated anti-enumeration behavior above.
 	await ctx.context.options.emailVerification.sendVerificationEmail(
@@ -344,10 +344,13 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.options.emailVerification?.expiresIn,
 						{ requestType: "change-email-verification" },
 					);
-					const updateCallbackURL = ctx.query.callbackURL
-						? encodeURIComponent(ctx.query.callbackURL)
-						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
+					const url = appendQueryParams(
+						appendURLPath(ctx.context.baseURL, "/verify-email"),
+						new URLSearchParams({
+							token: newToken,
+							callbackURL: ctx.query.callbackURL || "/",
+						}),
+					);
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
@@ -444,15 +447,19 @@ export const verifyEmail = createAuthEndpoint(
 						ctx.context.secret,
 						parsed.updateTo,
 					);
-					const updateCallbackURL = ctx.query.callbackURL
-						? encodeURIComponent(ctx.query.callbackURL)
-						: encodeURIComponent("/");
+					const url = appendQueryParams(
+						appendURLPath(ctx.context.baseURL, "/verify-email"),
+						new URLSearchParams({
+							token: newToken,
+							callbackURL: ctx.query.callbackURL || "/",
+						}),
+					);
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
 								{
 									user: updatedUser,
-									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
+									url,
 									token: newToken,
 								},
 								safeCloneRequest(ctx.request),

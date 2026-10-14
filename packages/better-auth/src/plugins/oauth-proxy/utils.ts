@@ -1,15 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { getOrigin, trimTrailingSlashes } from "../../utils/url";
+import { getOrigin } from "../../utils/url";
 import type { OAuthProxyOptions } from "./index";
-
-/**
- * Strip trailing slashes from URL to prevent double slashes
- */
-export function stripTrailingSlash(url: string | undefined): string {
-	if (!url) return "";
-	return trimTrailingSlashes(url);
-}
 
 /**
  * Get base URL from vendor-specific environment variables

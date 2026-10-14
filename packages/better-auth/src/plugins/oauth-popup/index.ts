@@ -18,6 +18,7 @@ import {
 } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { generateIdTokenNonce } from "../../oauth2/state";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { generateGenericState, INTERNAL_STATE_KEYS } from "../../state";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
@@ -253,7 +254,7 @@ const oauthPopupStart = createAuthEndpoint(
 				state,
 				codeVerifier,
 				idTokenNonce,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
 			});
 		} catch (error) {

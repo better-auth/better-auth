@@ -4,6 +4,7 @@ import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
@@ -388,10 +389,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
-					const callbackURL = body.callbackURL
-						? encodeURIComponent(body.callbackURL)
-						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+					const url = appendQueryParams(
+						appendURLPath(ctx.context.baseURL, "/verify-email"),
+						new URLSearchParams({
+							token,
+							callbackURL: body.callbackURL || "/",
+						}),
+					);
 
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(

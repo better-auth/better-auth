@@ -11,6 +11,7 @@ import type { AccountKey } from "@better-auth/core/db";
 import { accountSchema, userSchema } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -37,9 +38,9 @@ import {
 	parseGenericState,
 } from "../../state";
 import { isAPIError } from "../../utils/is-api-error";
-import { getOrigin } from "../../utils/url";
+import { getBaseURL, getOrigin, trimTrailingSlashes } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
-import { checkSkipProxy, resolveCurrentURL, stripTrailingSlash } from "./utils";
+import { checkSkipProxy, resolveCurrentURL } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -61,6 +62,7 @@ export interface OAuthProxyOptions {
 	currentURL?: string | undefined;
 	/**
 	 * If a request in a production url it won't be proxied.
+	 * The configured auth basePath is appended to this application URL.
 	 *
 	 * default to `BETTER_AUTH_URL`
 	 */
@@ -187,13 +189,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			},
 		},
 		async (ctx) => {
-			const baseURLStr =
-				typeof ctx.context.options.baseURL === "string"
-					? ctx.context.options.baseURL
-					: getOrigin(ctx.context.baseURL) || "";
 			const defaultErrorURL =
 				ctx.context.options.onAPIError?.errorURL ||
-				`${stripTrailingSlash(baseURLStr)}/api/auth/error`;
+				appendURLPath(ctx.context.baseURL, "/error");
 
 			const encryptedProfile = ctx.query.profile;
 			if (!encryptedProfile) {
@@ -390,16 +388,25 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						// Override baseURL to production so redirect_uri points to production
 						// This ensures OAuth provider callbacks go to the production server
 						if (productionURL) {
-							const productionBaseURL = `${stripTrailingSlash(productionURL)}${ctx.context.options.basePath || "/api/auth"}`;
-							ctx.context.baseURL = productionBaseURL;
+							const authPath = ctx.context.options.basePath || "/api/auth";
+							ctx.context.baseURL = appendURLPath(
+								trimTrailingSlashes(productionURL),
+								authPath.startsWith("/") ? authPath : `/${authPath}`,
+							);
 						}
 
 						// Construct proxy callback URL
-						const newCallbackURL = `${stripTrailingSlash(currentURL.origin)}${
-							ctx.context.options.basePath || "/api/auth"
-						}/callback/${providerId}/oauth-proxy?callbackURL=${encodeURIComponent(
-							originalCallbackURL,
-						)}`;
+						const proxyBaseURL =
+							getBaseURL(currentURL.origin, ctx.context.options.basePath) ??
+							currentURL.origin;
+						const proxyCallbackURL = appendURLPath(
+							proxyBaseURL,
+							`/callback/${providerId}/oauth-proxy`,
+						);
+						const newCallbackURL = appendQueryParams(
+							proxyCallbackURL,
+							new URLSearchParams({ callbackURL: originalCallbackURL }),
+						);
 
 						ctx.body.callbackURL = newCallbackURL;
 					}),
@@ -476,7 +483,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						const errorURL =
 							stateData.errorURL ||
 							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.baseURL}/error`;
+							appendURLPath(ctx.context.baseURL, "/error");
 
 						if (
 							stateData.oauthState !== undefined &&

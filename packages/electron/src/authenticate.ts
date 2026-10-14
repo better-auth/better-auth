@@ -1,6 +1,7 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
 import { APIError, getBaseURL, safeJSONParse } from "better-auth";
@@ -69,7 +70,7 @@ export async function requestAuth(
 				message: "Base URL is required to use provider-based sign-in.",
 			});
 		}
-		url = new URL(`${baseURL}/electron/init-oauth-proxy`);
+		url = new URL(appendURLPath(baseURL, "/electron/init-oauth-proxy"));
 		for (const [key, value] of Object.entries(cfg)) {
 			url.searchParams.set(
 				key,

@@ -30,7 +30,7 @@ const resolvePublicAuthUrl = (basePath?: string) => {
 					? ""
 					: "https://";
 				const url = new URL(`${protocol}${process.env.VERCEL_URL}`);
-				return `${url.origin}${path}`;
+				return path ? getBaseURL(url.origin, path) : url.origin;
 			} catch {
 				// ignore invalid Vercel URL
 			}

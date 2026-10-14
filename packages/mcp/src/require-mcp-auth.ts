@@ -1,4 +1,5 @@
 import type { Awaitable } from "@better-auth/core";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type {
 	DpopReplayReservations,
 	DpopReplayStore,
@@ -108,7 +109,7 @@ export const requireMcpAuth = <
 		}
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
-		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
+		const jwksUrl = opts?.jwksUrl ?? appendURLPath(baseURL, "/jwks");
 		return createMcpProtectedRequestHandler(
 			{
 				issuer,

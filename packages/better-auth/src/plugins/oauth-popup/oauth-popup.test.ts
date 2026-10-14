@@ -113,6 +113,26 @@ describe("oauth popup server flow", async () => {
 		return { startRes, callbackRes, cookies };
 	}
 
+	/** @see https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1.2.3 */
+	it("uses the provider's custom callback path", async ({ onTestFinished }) => {
+		const context = await auth.$context;
+		const provider = context.socialProviders.find(
+			(entry) => entry.id === providerId,
+		);
+		expect.assert(provider);
+		const originalPath = provider.callbackPath;
+		onTestFinished(() => {
+			provider.callbackPath = originalPath;
+		});
+		provider.callbackPath = "/callback/custom/provider";
+		const response = await auth.handler(new Request(startUrl));
+		const location = response.headers.get("location");
+		expect.assert(location);
+		expect(new URL(location).searchParams.get("redirect_uri")).toBe(
+			"http://localhost:3000/api/auth/callback/custom/provider",
+		);
+	});
+
 	it("redirects to the provider and sets the opener marker cookie", async () => {
 		const { startRes } = await runPopupFlow();
 		expect(startRes.headers.get("set-cookie")).toContain(
