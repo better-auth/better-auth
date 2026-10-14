@@ -2,12 +2,13 @@
 
 import { Check, Loader2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useSessionQuery } from "@/data/user/session-query";
 import { authClient } from "@/lib/auth-client";
+import { deviceClients } from "@/lib/device-clients";
 
 export default function Page() {
 	const router = useRouter();
@@ -17,6 +18,33 @@ export default function Page() {
 	const [isApprovePending, startApproveTransition] = useTransition();
 	const [isDenyPending, startDenyTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
+	const [request, setRequest] = useState<{
+		client_id: string;
+		scope?: string;
+	} | null>(null);
+
+	useEffect(() => {
+		setRequest(null);
+		setError(null);
+		if (!session || !userCode) return;
+		let active = true;
+		void authClient
+			.device({ query: { user_code: userCode } })
+			.then(({ data, error }) => {
+				if (!active) return;
+				if (!data?.client_id) {
+					setError(
+						error?.message ||
+							"This code is invalid, expired, or was claimed by another session.",
+					);
+					return;
+				}
+				setRequest({ client_id: data.client_id, scope: data.scope });
+			});
+		return () => {
+			active = false;
+		};
+	}, [session, userCode]);
 
 	const handleApprove = () => {
 		if (!userCode) return;
@@ -74,6 +102,33 @@ export default function Page() {
 						</div>
 
 						<div className="rounded-lg bg-muted p-4">
+							<p className="text-sm font-medium">Requesting client</p>
+							{request ? (
+								<>
+									<p>
+										{deviceClients.get(request.client_id) ??
+											"Unrecognized client"}
+									</p>
+									<p className="font-mono text-xs text-muted-foreground">
+										ID sent by the device: {request.client_id}
+									</p>
+								</>
+							) : (
+								<p>Loading...</p>
+							)}
+						</div>
+
+						<div className="rounded-lg bg-muted p-4">
+							<p className="text-sm font-medium">Requested scopes</p>
+							<p>{request ? request.scope || "None" : "Loading..."}</p>
+						</div>
+
+						<p className="text-sm text-muted-foreground">
+							Approve only if this code is showing right now on a device you
+							have.
+						</p>
+
+						<div className="rounded-lg bg-muted p-4">
 							<p className="text-sm font-medium">Signed in as</p>
 							<p>{session.user.email}</p>
 						</div>
@@ -103,7 +158,7 @@ export default function Page() {
 							<Button
 								onClick={handleApprove}
 								className="flex-1"
-								disabled={isApprovePending}
+								disabled={isApprovePending || !request}
 							>
 								{isApprovePending ? (
 									<Loader2 className="h-4 w-4 animate-spin" />
