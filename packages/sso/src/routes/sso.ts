@@ -1524,13 +1524,13 @@ async function handleOIDCCallback(
 		return typeof value === "string" && value.length > 0 ? value : undefined;
 	};
 	// Some IdPs send a list of addresses, such as Azure AD B2C's `emails`.
-	const readEmailClaim = (claims: Record<string, unknown>) => {
-		const value = claims[mapping.email || "email"];
-		const email = Array.isArray(value)
-			? value.find((item) => typeof item === "string" && item.length > 0)
-			: value;
-		return typeof email === "string" && email.length > 0 ? email : undefined;
-	};
+	const readEmailClaim = (claims: Record<string, unknown>) =>
+		[claims[mapping.email || "email"]]
+			.flat()
+			.find(
+				(value): value is string =>
+					typeof value === "string" && value.length > 0,
+			);
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
 	let rawProfile: Record<string, unknown> | undefined;
