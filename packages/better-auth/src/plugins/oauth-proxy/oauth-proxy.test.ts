@@ -949,6 +949,106 @@ describe("oauth-proxy", async () => {
 			expect(unpackedMissingVersion).toBeNull();
 		});
 
+		it("round-trips payload within 64 KB decompression limit and rejects payload exceeding 64 KB", async () => {
+			const secret = "test-secret-key-32-bytes-long!!";
+
+			// 1. Payload expanding to ~60 KB (< 64 KB) packs and unpacks cleanly
+			const withinLimitPayload = {
+				state: "state-within-limit",
+				stateCookie: JSON.stringify({
+					callbackURL: "/dashboard",
+					codeVerifier: "code-verifier-60kb",
+					expiresAt: Date.now() + 60000,
+					serverContext: {
+						padding: "a".repeat(60 * 1024),
+					},
+				}),
+				isOAuthProxy: true,
+			};
+			const packedWithin = await packCompactState(secret, withinLimitPayload);
+			const unpackedWithin = await unpackCompactState(secret, packedWithin);
+			expect(unpackedWithin).not.toBeNull();
+			expect(unpackedWithin?.state).toBe("state-within-limit");
+			expect(unpackedWithin?.stateCookie).toBe(withinLimitPayload.stateCookie);
+
+			// 2. Payload expanding to > 64 KB (~70 KB) returns null safely without hanging
+			const oversizedPayload = {
+				state: "state-oversized",
+				stateCookie: JSON.stringify({
+					callbackURL: "/dashboard",
+					codeVerifier: "code-verifier-70kb",
+					expiresAt: Date.now() + 60000,
+					serverContext: {
+						padding: "a".repeat(70 * 1024),
+					},
+				}),
+				isOAuthProxy: true,
+			};
+			const packedOversized = await packCompactState(secret, oversizedPayload);
+			const unpackedOversized = await unpackCompactState(
+				secret,
+				packedOversized,
+			);
+			expect(unpackedOversized).toBeNull();
+		});
+
+		it("supports node:zlib fallback when CompressionStream / DecompressionStream are unavailable", async () => {
+			const secret = "test-secret-key-32-bytes-long!!";
+			const originalCS = globalThis.CompressionStream;
+			const originalDS = globalThis.DecompressionStream;
+
+			try {
+				// Simulate runtime without web streams (e.g. Node 16)
+				// @ts-expect-error simulating runtime without CompressionStream
+				globalThis.CompressionStream = undefined;
+				// @ts-expect-error simulating runtime without DecompressionStream
+				globalThis.DecompressionStream = undefined;
+
+				const payload = {
+					state: "zlib-fallback-state",
+					stateCookie: JSON.stringify({
+						callbackURL: "/dashboard",
+						codeVerifier: "code-verifier-zlib",
+						expiresAt: Date.now() + 60000,
+						serverContext: {
+							padding: "z".repeat(10 * 1024),
+						},
+					}),
+					isOAuthProxy: true,
+				};
+
+				const packed = await packCompactState(secret, payload);
+				expect(packed.startsWith("ba_c.")).toBe(true);
+
+				const unpacked = await unpackCompactState(secret, packed);
+				expect(unpacked).not.toBeNull();
+				expect(unpacked?.state).toBe("zlib-fallback-state");
+
+				// Oversized payload through zlib fallback returns null safely
+				const oversized = {
+					state: "zlib-oversized",
+					stateCookie: JSON.stringify({
+						callbackURL: "/dashboard",
+						codeVerifier: "code-verifier-zlib-oversized",
+						expiresAt: Date.now() + 60000,
+						serverContext: {
+							padding: "z".repeat(70 * 1024),
+						},
+					}),
+					isOAuthProxy: true,
+				};
+				const packedOversized = await packCompactState(secret, oversized);
+				const unpackedOversized = await unpackCompactState(
+					secret,
+					packedOversized,
+				);
+				expect(unpackedOversized).toBeNull();
+			} finally {
+				globalThis.CompressionStream = originalCS;
+				globalThis.DecompressionStream = originalDS;
+			}
+		});
+
 		it("should work on same origin without proxy", async () => {
 			const { client, cookieSetter } = await getTestInstance({
 				database: undefined, // Stateless mode

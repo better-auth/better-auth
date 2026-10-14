@@ -118,15 +118,22 @@ export interface OAuthProxyOptions {
 }
 
 /**
- * Encrypted state package for cross-origin OAuth proxy flow
+ * State package for cross-origin OAuth proxy flow.
+ *
+ * In compact packages (`ba_c.`), `stateCookie` holds the plaintext `StateData` JSON string,
+ * which is confidential and authenticated via the single outer AEAD encryption envelope.
+ *
+ * In legacy packages, `stateCookie` holds the inner ciphertext encrypted under the
+ * `oauth-proxy-state` purpose key.
  * @internal
  */
 export type OAuthProxyStatePackage = {
 	state: string;
 	/**
-	 * The OAuth state, encrypted under the proxy-state purpose key, not the
-	 * per-environment `oauth_state` cookie key. Production decrypts it with
-	 * the same purpose key for either state strategy.
+	 * In compact packages (`ba_c.`), holds the plaintext `StateData` JSON string,
+	 * protected by the single outer AEAD envelope.
+	 * In legacy packages, holds the inner ciphertext encrypted under the `oauth-proxy-state`
+	 * purpose key.
 	 */
 	stateCookie: string;
 	isOAuthProxy: boolean;
@@ -136,53 +143,88 @@ const COMPACT_STATE_PREFIX = "ba_c.";
 const MAX_DECOMPRESSED_BYTES = 64 * 1024; // 64 KB ceiling
 
 const deflateBytes = async (data: Uint8Array): Promise<Uint8Array> => {
-	const cs = new CompressionStream("deflate-raw");
-	const writer = cs.writable.getWriter();
-	await writer.write(data as unknown as BufferSource);
-	await writer.close();
-	return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+	if (typeof CompressionStream !== "undefined") {
+		const cs = new CompressionStream("deflate-raw");
+		const writer = cs.writable.getWriter();
+		await writer.write(data as unknown as BufferSource);
+		await writer.close();
+		return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+	}
+	try {
+		const zlib = await import("node:zlib");
+		if (typeof zlib.deflateRawSync === "function") {
+			const deflated = zlib.deflateRawSync(data);
+			return new Uint8Array(
+				deflated.buffer,
+				deflated.byteOffset,
+				deflated.byteLength,
+			);
+		}
+	} catch {
+		// node:zlib unavailable in this runtime
+	}
+	throw new Error("No compression stream or zlib implementation available");
 };
 
 const inflateBytes = async (data: Uint8Array): Promise<Uint8Array | null> => {
-	try {
-		const ds = new DecompressionStream("deflate-raw");
-		const writer = ds.writable.getWriter();
-		const writePromise = (async () => {
-			try {
-				await writer.write(data as unknown as BufferSource);
-				await writer.close();
-			} catch {
-				// DecompressionStream may reject/abort on invalid input
-			}
-		})();
-		const reader = ds.readable.getReader();
-		const chunks: Uint8Array[] = [];
-		let totalLength = 0;
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			totalLength += value.byteLength;
-			if (totalLength > MAX_DECOMPRESSED_BYTES) {
+	if (typeof DecompressionStream !== "undefined") {
+		try {
+			const ds = new DecompressionStream("deflate-raw");
+			const writer = ds.writable.getWriter();
+			const writePromise = (async () => {
 				try {
-					await reader.cancel();
+					await writer.write(data as unknown as BufferSource);
+					await writer.close();
 				} catch {
-					// Ignore cancellation error
+					// DecompressionStream may reject/abort on invalid input
 				}
-				return null;
+			})();
+			const reader = ds.readable.getReader();
+			const chunks: Uint8Array[] = [];
+			let totalLength = 0;
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				totalLength += value.byteLength;
+				if (totalLength > MAX_DECOMPRESSED_BYTES) {
+					try {
+						await reader.cancel();
+					} catch {
+						// Ignore cancellation error
+					}
+					return null;
+				}
+				chunks.push(value);
 			}
-			chunks.push(value);
+			await writePromise;
+			const result = new Uint8Array(totalLength);
+			let offset = 0;
+			for (const chunk of chunks) {
+				result.set(chunk, offset);
+				offset += chunk.byteLength;
+			}
+			return result;
+		} catch {
+			return null;
 		}
-		await writePromise;
-		const result = new Uint8Array(totalLength);
-		let offset = 0;
-		for (const chunk of chunks) {
-			result.set(chunk, offset);
-			offset += chunk.byteLength;
+	}
+	try {
+		const zlib = await import("node:zlib");
+		if (typeof zlib.inflateRawSync === "function") {
+			const inflated = zlib.inflateRawSync(data, {
+				maxOutputLength: MAX_DECOMPRESSED_BYTES,
+			});
+			return new Uint8Array(
+				inflated.buffer,
+				inflated.byteOffset,
+				inflated.byteLength,
+			);
 		}
-		return result;
 	} catch {
+		// Decompression failed, exceeded limit, or node:zlib unavailable
 		return null;
 	}
+	return null;
 };
 
 const encryptRawBytes = async (
