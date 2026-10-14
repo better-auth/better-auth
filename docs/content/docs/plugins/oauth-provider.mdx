@@ -1773,7 +1773,7 @@ extendOAuthProvider(ctx, {
 });
 ```
 
-Dynamic registration ignores top-level fields it does not recognize (RFC 7591 §2). Fields an extension declares are the exception: a registrant sends them as top-level fields and the provider stores them in `metadata`. A registrant cannot set any other `metadata` key. An admin sets the same fields inside `metadata`. Core client fields such as `redirect_uris` cannot be declared. `validate` receives the registration metadata after defaults (`client`) and the client's `metadata`.
+Dynamic registration ignores top-level fields it does not recognize (RFC 7591 §2). Fields an extension declares are the exception: a registrant sends them as top-level fields and the provider stores them in `metadata`. A registrant cannot set any other `metadata` key. An admin sets the same fields inside `metadata`. An extension cannot declare a core client field such as `redirect_uris` or a server-owned field such as `disabled`, `reference_id`, or `client_credentials_scopes`; the provider rejects these at setup. `validate` receives the registration metadata after defaults (`client`) and the client's `metadata`.
 
 #### Provider capabilities outside a grant
 
