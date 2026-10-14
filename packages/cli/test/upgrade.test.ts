@@ -139,25 +139,25 @@ describe("upgradeAction", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11072
 	 */
-	it.each([
-		"catalog:",
-		"file:../better-auth",
-	])("skips unsupported dependency specifier %s", async (specifier) => {
-		const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
-		mockGetPackageInfo.mockReturnValue({
-			dependencies: {
-				"better-auth": specifier,
-			},
-		});
+	it.each(["catalog:", "file:../better-auth"])(
+		"skips unsupported dependency specifier %s",
+		async (specifier) => {
+			const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+			mockGetPackageInfo.mockReturnValue({
+				dependencies: {
+					"better-auth": specifier,
+				},
+			});
 
-		await upgradeAction({ cwd: process.cwd(), yes: true });
+			await upgradeAction({ cwd: process.cwd(), yes: true });
 
-		expect(warning).toHaveBeenCalledWith(
-			expect.stringContaining("Automatic upgrades require a semver range"),
-		);
-		expect(mockDetectPackageManager).not.toHaveBeenCalled();
-		expect(mockInstallDependencies).not.toHaveBeenCalled();
-	});
+			expect(warning).toHaveBeenCalledWith(
+				expect.stringContaining("Automatic upgrades require a semver range"),
+			);
+			expect(mockDetectPackageManager).not.toHaveBeenCalled();
+			expect(mockInstallDependencies).not.toHaveBeenCalled();
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10760

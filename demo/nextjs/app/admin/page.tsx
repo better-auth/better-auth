@@ -125,7 +125,7 @@ function AdminDashboard() {
 			toast.success("User created successfully");
 			setNewUser({ email: "", password: "", name: "", role: "user" });
 			setIsDialogOpen(false);
-			queryClient.invalidateQueries({
+			await queryClient.invalidateQueries({
 				queryKey: ["users"],
 			});
 		} catch (error: any) {
@@ -140,7 +140,7 @@ function AdminDashboard() {
 		try {
 			await authClient.admin.removeUser({ userId: id });
 			toast.success("User deleted successfully");
-			queryClient.invalidateQueries({
+			await queryClient.invalidateQueries({
 				queryKey: ["users"],
 			});
 		} catch (error: any) {
@@ -189,7 +189,7 @@ function AdminDashboard() {
 			});
 			toast.success("User banned successfully");
 			setIsBanDialogOpen(false);
-			queryClient.invalidateQueries({
+			await queryClient.invalidateQueries({
 				queryKey: ["users"],
 			});
 		} catch (error: any) {
@@ -445,17 +445,14 @@ function AdminDashboard() {
 																		);
 																		setIsLoading(undefined);
 																	},
-																	onSuccess() {
-																		queryClient.invalidateQueries({
+																	async onSuccess() {
+																		await queryClient.invalidateQueries({
 																			queryKey: ["users"],
 																		});
 																		toast.success("User unbanned successfully");
 																	},
 																},
 															);
-															queryClient.invalidateQueries({
-																queryKey: ["users"],
-															});
 														} else {
 															setIsBanDialogOpen(true);
 														}

@@ -214,9 +214,12 @@ describe("isNativePrivateUseRedirectUri", () => {
 		"cursor://anysphere.cursor-mcp",
 		"cursor://anysphere.cursor-mcp?x=1",
 		"myapp:/callback",
-	])("rejects %s, which has neither a host and path nor a reverse-domain scheme", (uri) => {
-		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
-	});
+	])(
+		"rejects %s, which has neither a host and path nor a reverse-domain scheme",
+		(uri) => {
+			expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
+		},
+	);
 
 	it.each([
 		"https://example.com/cb",
