@@ -9,7 +9,8 @@ import {
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
-import type { JWTPayload, JWTVerifyOptions } from "jose";
+import { APIError } from "better-call";
+import type { JSONWebKeySet, JWTPayload, JWTVerifyOptions } from "jose";
 
 export interface McpProtectedRequestHandlerOptions {
 	/** Expected authorization-server issuer for the access token. */
@@ -23,6 +24,10 @@ export interface McpProtectedRequestHandlerOptions {
 	jwtVerifyOptions?: Omit<JWTVerifyOptions, "issuer" | "audience">;
 	/** URL of the authorization server's JSON Web Key Set. */
 	jwksUrl?: string;
+	/** Function returning the JWKS or string URL for token verification. */
+	jwksFetch?: string | (() => Promise<JSONWebKeySet | undefined>);
+	/** Cache key object for function-based JWKS lookups. */
+	jwksCacheKey?: object;
 	/** Remote introspection settings for opaque or remotely checked tokens. */
 	remoteVerify?: {
 		introspectUrl: string;
@@ -102,7 +107,11 @@ function toChallengeResponse(
 	resource: string,
 	opts?: Parameters<typeof createResourceServerChallenge>[2],
 ): Response {
-	const challenge = createResourceServerChallenge(error, resource, opts);
+	const authError =
+		error instanceof Error && error.message === "No jwks found"
+			? new APIError("UNAUTHORIZED", { message: "invalid access token" })
+			: error;
+	const challenge = createResourceServerChallenge(authError, resource, opts);
 	if (!challenge) throw error;
 	const headers = new Headers(challenge.headers as HeadersInit);
 	headers.set("Content-Type", "application/json");
@@ -143,6 +152,8 @@ export const createMcpProtectedRequestHandler = (
 			audience: options.audience,
 		},
 		jwksUrl: options.jwksUrl,
+		jwksFetch: options.jwksFetch,
+		jwksCacheKey: options.jwksCacheKey,
 		remoteVerify: options.remoteVerify,
 		requiredScopes: options.requiredScopes,
 		isScopeSatisfied: options.isScopeSatisfied,
