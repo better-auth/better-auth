@@ -100,6 +100,20 @@ describe("oauth credential responses carry no-store", async () => {
 		expect(response?.headers.get("Pragma")).toBe("no-cache");
 	});
 
+	// Schema validation rejects this before the handler runs.
+	it("sets no-store on a token validation error response", async () => {
+		const response = await auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams(),
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
+		expect(response.headers.get("Pragma")).toBe("no-cache");
+	});
+
 	// RFC 7591 §3.2.1: registration returns 201 and a client_secret to protect.
 	it("sets 201 and no-store on a registration response", async () => {
 		let response: Response | undefined;

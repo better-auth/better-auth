@@ -553,7 +553,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields return `invalid_request`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
 
 #### DPoP sender-constrained tokens
 
@@ -727,7 +727,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 ### Introspect Endpoint
 
-[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
+[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
@@ -752,7 +752,7 @@ The two formats differ in one way. An opaque token is recomputed on each call, s
 
 ### Revoke Endpoint
 
-[RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
+[RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
 What the endpoint does depends on the token type:
 

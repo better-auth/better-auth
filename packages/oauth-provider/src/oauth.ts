@@ -41,7 +41,6 @@ import * as oauthConsentEndpoints from "./oauthConsent";
 import * as oauthResourceEndpoints from "./oauthResource";
 import { registerEndpoint } from "./register";
 import {
-	extractRepeatedResourceFromForm,
 	logEnforcePerClientResourcesResolution,
 	logStartupSeedFailure,
 	seedResourcesOnce,
@@ -883,14 +882,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					// RFC 8707 §2 allows the client to repeat the `resource`
-					// parameter. better-call's form-body parser collapses
-					// repeated keys (last-write-wins) so we re-parse the raw
-					// body in the handler to recover the full list. That
-					// requires the underlying request body to be readable a
-					// second time, which only works when better-call clones
-					// the request before its own parse.
-					cloneRequest: true,
+					// RFC 8707 §2 and RFC 8693 §2.1 let these repeat.
+					formParams: { repeatable: ["resource", "audience"] },
 					body: z
 						.object({
 							grant_type: z.string().trim().min(1),
@@ -1058,20 +1051,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					// RFC 8707 §2 conformance — recover repeated `resource`
-					// values from the raw body before delegating to the token
-					// pipeline. Only patches `ctx.body.resource` when the raw
-					// form actually carried multiple entries; the
-					// single-value path (and the in-process auth.api.* call
-					// path where there is no Request body to re-read) is left
-					// untouched. See `extractRepeatedResourceFromForm` in
-					// resources.ts for rationale.
-					if (ctx.request) {
-						const repeated = await extractRepeatedResourceFromForm(ctx.request);
-						if (repeated && repeated.length > 1) {
-							ctx.body.resource = repeated;
-						}
-					}
 					return tokenEndpoint(ctx, opts);
 				},
 			),
@@ -1079,8 +1058,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/introspect",
 				{
 					method: "POST",
-					// Credential cardinality is enforced from the raw form body.
-					cloneRequest: true,
+					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1220,8 +1198,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/revoke",
 				{
 					method: "POST",
-					// Credential cardinality is enforced from the raw form body.
-					cloneRequest: true,
+					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
