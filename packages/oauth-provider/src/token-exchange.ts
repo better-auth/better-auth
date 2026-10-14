@@ -87,19 +87,16 @@ async function exchangeToken(
 	) {
 		deny("requested_token_type is not supported");
 	}
-	// shortcut: targets are RFC 8707 resources; map `audience` to registered
-	// resources when clients that only send `audience` need it.
-	if (body.audience !== undefined) {
-		// RFC 8693 §2.2.2: refusing a target named by `audience` is invalid_target.
-		tokenError(
-			"BAD_REQUEST",
-			"invalid_target",
-			"audience is not supported; use resource",
-		);
-	}
-	// The token route already collects repeated `resource` values.
-	const resources = toResourceList(body.resource as string | string[]);
-	if (!resources) deny("resource is required");
+	// RFC 8693 §2.1 names targets by `resource` or by logical `audience`; both
+	// must be registered resource identifiers here. The token route already
+	// collects repeated values of each.
+	const resources = [
+		...new Set([
+			...(toResourceList(body.resource as string | string[]) ?? []),
+			...(toResourceList(body.audience as string | string[]) ?? []),
+		]),
+	];
+	if (resources.length === 0) deny("resource or audience is required");
 
 	// Confidential clients only, and only when registered for this grant.
 	const { client, confirmation } = await provider.authenticateClient();

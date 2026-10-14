@@ -1887,15 +1887,15 @@ curl https://auth.example.com/api/auth/oauth2/token \
 }
 ```
 
-| Parameter                         | Behavior                                                                                                                                                     |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `subject_token`                   | Required. An active access token this server issued                                                                                                          |
-| `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                            |
-| `resource`                        | Required, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource linked to the client |
-| `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                              |
-| `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                   |
-| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                      |
-| `audience`                        | Not supported. Sending it returns `invalid_target`; name targets with `resource`                                                                             |
+| Parameter                         | Behavior                                                                                                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subject_token`                   | Required. An active access token this server issued                                                                                                                                    |
+| `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                                                      |
+| `resource`                        | Required unless `audience` is sent, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource linked to the client |
+| `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                                                        |
+| `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                                             |
+| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                                                |
+| `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                        |
 
 With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
 
@@ -1920,17 +1920,17 @@ Scope names are global across resources. A `read` scope on the MCP server and a 
 
 #### Errors
 
-| Condition                                                                                                                                                                                            | Error                     |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Missing or invalid subject token, unsupported `subject_token_type`, `actor_token` or `actor_token_type`, unsupported `requested_token_type`, missing `resource`, missing consent, or a policy denial | `400 invalid_request`     |
-| A scope the subject token or the client does not have, or `openid` or `offline_access`                                                                                                               | `400 invalid_scope`       |
-| An unknown, disabled, or unlinked resource, or the `audience` parameter                                                                                                                              | `400 invalid_target`      |
-| Failed client authentication                                                                                                                                                                         | `invalid_client`          |
-| A client not registered for the token-exchange grant                                                                                                                                                 | `400 unauthorized_client` |
+| Condition                                                                                                                                                                                                           | Error                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Missing or invalid subject token, unsupported `subject_token_type`, `actor_token` or `actor_token_type`, unsupported `requested_token_type`, neither `resource` nor `audience`, missing consent, or a policy denial | `400 invalid_request`     |
+| A scope the subject token or the client does not have, or `openid` or `offline_access`                                                                                                                              | `400 invalid_scope`       |
+| An unknown, disabled, or unlinked resource or `audience` value                                                                                                                                                      | `400 invalid_target`      |
+| Failed client authentication                                                                                                                                                                                        | `invalid_client`          |
+| A client not registered for the token-exchange grant                                                                                                                                                                | `400 unauthorized_client` |
 
 #### Keep the organization the user approved
 
-When `postLogin.consentReferenceId` picks a reference during authorization, such as the [organization](#organizations) the user approved, the exchanged token keeps the subject token's reference. It does not switch to the user's current active organization. `customAccessTokenClaims` receives the same `referenceId`, so a claim you derive from it carries over to the downstream API, and a client that does not skip consent needs a stored consent under that same reference. The provider reads the reference from the subject token's [`reference_id`](#claims) claim, so no extra configuration is needed.
+When `postLogin.consentReferenceId` picks a reference during authorization, such as the [organization](#organizations) the user approved, the exchanged token keeps the subject token's reference. It does not switch to the user's current active organization. `customAccessTokenClaims` receives the same `referenceId`, so a claim you derive from it carries over to the downstream API, and a client that does not skip consent needs a stored consent under that same reference. The provider reads the reference from the subject token's [`reference_id`](#claims) claim, so no extra configuration is needed. An exchange cannot change the organization: to act in another one, the user authorizes the client for that organization.
 
 #### Add your own policy
 
@@ -1947,7 +1947,6 @@ oauthTokenExchange({
 #### Limitations
 
 * **No delegation.** `actor_token` is rejected, and exchanged tokens carry no `act` claim. The exchanging service is identified only by `client_id`.
-* **No `audience` parameter.** Name targets with `resource`.
 * **No refresh tokens** are issued for exchanged tokens.
 * **Own access tokens only.** ID tokens, refresh tokens, and tokens from other issuers cannot be exchanged.
 * **Signing out and local JWT verification.** Signing out makes exchanged tokens inactive at introspection. A resource server that verifies JWT access tokens locally against the JWKS keeps accepting them until `exp`, which is never later than the subject token's `exp`.

@@ -667,6 +667,22 @@ test.describe("Next.js token exchange demo (RFC 8693)", () => {
 			expect(decodeJwt(readString(again.body, "access_token")).jti).not.toBe(
 				claims.jti,
 			);
+
+			// RFC 8693 §2.1: a client may name the target by `audience` instead.
+			const byAudience = await exchange(
+				"token exchange naming the target by audience",
+				"RFC 8693 §2.1",
+				exchangeForm(subjectToken, {
+					resource: undefined,
+					audience: runtime.apiURL,
+				}),
+			);
+			expect(byAudience.status, JSON.stringify(byAudience.body)).toBe(200);
+			expect(
+				audienceList(
+					decodeJwt(readString(byAudience.body, "access_token")).aud,
+				),
+			).toEqual([runtime.apiURL]);
 		});
 
 		await test.step("RFC 8693 §2.2.2 / RFC 6749 §5.2: error responses", async () => {
@@ -723,9 +739,12 @@ test.describe("Next.js token exchange demo (RFC 8693)", () => {
 					error: "invalid_request",
 				},
 				{
-					name: "audience parameter (use resource)",
+					name: "audience that names no registered resource",
 					rfc: "RFC 8693 §2.1, §2.2.2",
-					form: exchangeForm(subjectToken, { audience: runtime.apiURL }),
+					form: exchangeForm(subjectToken, {
+						resource: undefined,
+						audience: "http://127.0.0.1:1/unknown",
+					}),
 					error: "invalid_target",
 				},
 				{

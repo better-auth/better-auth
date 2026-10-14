@@ -531,16 +531,25 @@ describe("oauthTokenExchange", () => {
 		expect(decodeJwt(data!.access_token).aud).toEqual([api, other]);
 	});
 
-	it("rejects audience with invalid_target", async () => {
-		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario();
+	it("accepts audience values that name registered resources", async () => {
+		const { mcpServer, userTokenForMcp, exchangeAs, postToken } =
+			await bootScenario();
 		const subject = await userTokenForMcp();
-		const { error } = await exchangeAs(mcpServer, subject.access_token, {
+		const { data, error } = await postToken({
+			grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+			client_id: mcpServer.client_id,
+			client_secret: mcpServer.client_secret!,
+			subject_token: subject.access_token,
+			subject_token_type: ACCESS_TOKEN_TYPE,
 			audience: api,
 		});
-		expect(error).toMatchObject({
-			error: "invalid_target",
-			error_description: "audience is not supported; use resource",
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).aud).toBe(api);
+
+		const unknown = await exchangeAs(mcpServer, subject.access_token, {
+			audience: "https://unknown.example.com",
 		});
+		expect(unknown.error?.error).toBe("invalid_target");
 	});
 
 	it("ends the exchanged token with the user's session", async () => {
@@ -714,7 +723,7 @@ describe("oauthTokenExchange", () => {
 		});
 		expect(error).toMatchObject({
 			error: "invalid_request",
-			error_description: "resource is required",
+			error_description: "resource or audience is required",
 		});
 	});
 });
