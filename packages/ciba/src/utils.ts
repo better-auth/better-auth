@@ -129,8 +129,20 @@ export async function pingClient(
 	authReqId: string,
 ): Promise<void> {
 	if (!request.clientNotificationToken) return;
-	const client = await getCibaProviderApi(ctx).getClient(request.clientId);
-	const endpoint = client && getCibaClientMetadata(client).notificationEndpoint;
+	// The decision is already committed, so a failed lookup must not fail it.
+	let endpoint: string | undefined;
+	try {
+		const client = await getCibaProviderApi(ctx).getClient(request.clientId);
+		endpoint = client
+			? getCibaClientMetadata(client).notificationEndpoint
+			: undefined;
+	} catch (error) {
+		ctx.context.logger.warn(
+			`CIBA ping skipped: could not load client ${request.clientId}`,
+			error,
+		);
+		return;
+	}
 	if (!endpoint) {
 		ctx.context.logger.warn(
 			`CIBA ping skipped: client ${request.clientId} has no valid notification endpoint`,

@@ -1204,9 +1204,6 @@ importers:
 
   packages/ciba:
     dependencies:
-      '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.5.0
       better-call:
         specifier: 'catalog:'
         version: 1.4.2(zod@4.5.4)
@@ -1220,6 +1217,9 @@ importers:
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../oauth-provider
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.5.0
       better-auth:
         specifier: workspace:*
         version: link:../better-auth

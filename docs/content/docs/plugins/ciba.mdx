@@ -306,7 +306,7 @@ The plugin adds one model, `cibaRequest`:
 * **The `auth_req_id` is stored hashed**, using the provider's token storage, so a leaked table cannot be used to poll for tokens.
 * **Token issuance is single-use and race-safe.** Polling uses the same state machine as the [device authorization grant](./device-authorization): an approved request is claimed and deleted in one atomic step, so of two concurrent polls only one gets tokens.
 * **Clients must authenticate.** The backchannel request and every poll authenticate the client and check that it is registered for the CIBA grant (CIBA §7.1). Public clients cannot use the flow.
-* **The ping callback cannot reach internal hosts.** The server only calls a registered `https` endpoint on a publicly routable host and does not follow redirects.
+* **The ping callback checks the endpoint host and does not follow redirects.** The server only calls a registered `https` endpoint whose host is not a private or reserved address, the same check as `backchannel_logout_uri`. The check does not resolve DNS, so register endpoints you trust and restrict outbound network access where you can.
 * **Binding messages are plain text.** A `binding_message` with control characters is rejected. Render it as text in your approval UI.
 
 ## Current limitations

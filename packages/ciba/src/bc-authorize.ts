@@ -1,3 +1,4 @@
+import { ResourceUriSchema } from "@better-auth/oauth-provider";
 import {
 	createOAuthEndpoint,
 	resolveResourcePolicy,
@@ -57,14 +58,19 @@ export function createBcAuthorize(
 				binding_message: z.string().max(256).optional(),
 				client_notification_token: z.string().max(1024).optional(),
 				requested_expiry: z.coerce.number().int().positive().optional(),
-				resource: z.union([z.string(), z.array(z.string())]).optional(),
+				resource: z
+					.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+					.optional(),
 			}),
 			// Re-reads the raw form: repeated parameters are rejected (RFC 6749
 			// §3.2) except RFC 8707 `resource`, and client authentication reads the
 			// body again.
 			formParams: { repeatable: ["resource"] },
 			// Validation failures use the CIBA §13 error envelope.
-			errorCodesByField: { binding_message: "invalid_binding_message" },
+			errorCodesByField: {
+				binding_message: "invalid_binding_message",
+				resource: { invalid: "invalid_target" },
+			},
 			metadata: {
 				noStore: true,
 				// CIBA §7.1: the request is form-encoded.

@@ -65,7 +65,7 @@ function basicAuth(client: OAuthClient): string {
 }
 
 /** The provider's default token hash, used to reach rows by raw auth_req_id. */
-async function hashed(authReqId: string): Promise<string> {
+async function hashAuthReqId(authReqId: string): Promise<string> {
 	const digest = await createHash("SHA-256").digest(
 		new TextEncoder().encode(authReqId),
 	);
@@ -76,7 +76,7 @@ async function expireRequest(authReqId: string) {
 	const ctx = await auth.$context;
 	await ctx.adapter.update({
 		model: "cibaRequest",
-		where: [{ field: "authReqId", value: await hashed(authReqId) }],
+		where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
 		update: { expiresAt: new Date(Date.now() - 1000) },
 	});
 }
@@ -317,6 +317,7 @@ describe("ciba backchannel request validation", () => {
 			"unknown_user_id",
 		],
 		["two hints", { id_token_hint: "token" }, "invalid_request"],
+		["a malformed resource", { resource: "not a uri" }, "invalid_target"],
 		[
 			"an unknown resource",
 			{ resource: "https://other.example" },
