@@ -2435,6 +2435,89 @@ kBGIJYs=
 			expect(updated.oidcConfig?.clientIdLastFour).toBe("****t123");
 		});
 
+		it("allows SAML post-login redirect updates when linked account rows exist", async () => {
+			let isAuthenticationBoundaryChange: boolean | undefined;
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, {
+					guardProviderMutation(input) {
+						if (input.action === "update") {
+							isAuthenticationBoundaryChange =
+								input.isAuthenticationBoundaryChange;
+						}
+					},
+				});
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "my-saml-provider");
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			data.account.push({
+				id: "linked-saml-account",
+				userId: user!.id,
+				providerId: "my-saml-provider",
+				accountId: "saml-account-id",
+			});
+
+			const response = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					samlConfig: { callbackUrl: "https://app.example.com/after-login" },
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(200);
+			expect(isAuthenticationBoundaryChange).toBe(false);
+			const storedProvider = data.ssoProvider.find(
+				(provider) => provider.providerId === "my-saml-provider",
+			);
+			expect(
+				safeJsonParse<SAMLConfig>(storedProvider?.samlConfig ?? "")
+					?.callbackUrl,
+			).toBe("https://app.example.com/after-login");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11471
+		 */
+		it("allows SAML signing-certificate rotation when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "my-saml-provider");
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			data.account.push({
+				id: "linked-saml-account",
+				userId: user!.id,
+				providerId: "my-saml-provider",
+				accountId: "saml-account-id",
+			});
+
+			for (const samlConfig of [
+				{ cert: [TEST_CERT, "rotated-signing-certificate"] },
+				{ cert: "rotated-signing-certificate" },
+				{ idpMetadata: { cert: "next-signing-certificate" } },
+			]) {
+				const response = await auth.api.updateSSOProvider({
+					body: { providerId: "my-saml-provider", samlConfig },
+					headers,
+					asResponse: true,
+				});
+				expect(response.status).toBe(200);
+			}
+		});
+
 		it("allows OIDC client secret updates when linked account rows exist", async () => {
 			const { auth, getAuthHeaders, createOIDCProviderData, data } =
 				createTestAuth(false);
