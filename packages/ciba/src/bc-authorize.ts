@@ -1,6 +1,5 @@
 import {
 	createOAuthEndpoint,
-	extractRepeatedResourceFromForm,
 	resolveResourcePolicy,
 	toResourceList,
 } from "@better-auth/oauth-provider/internal";
@@ -60,9 +59,10 @@ export function createBcAuthorize(
 				requested_expiry: z.coerce.number().int().positive().optional(),
 				resource: z.union([z.string(), z.array(z.string())]).optional(),
 			}),
-			// Client authentication and repeated `resource` values re-read the raw
-			// form body.
-			cloneRequest: true,
+			// Re-reads the raw form: repeated parameters are rejected (RFC 6749
+			// §3.2) except RFC 8707 `resource`, and client authentication reads the
+			// body again.
+			formParams: { repeatable: ["resource"] },
 			// Validation failures use the CIBA §13 error envelope.
 			errorCodesByField: { binding_message: "invalid_binding_message" },
 			metadata: {
@@ -148,10 +148,7 @@ export function createBcAuthorize(
 				throw invalidRequest(CIBA_ERROR_CODES.UNSUPPORTED_HINT.message);
 			}
 
-			const resources = toResourceList(
-				(ctx.request && (await extractRepeatedResourceFromForm(ctx.request))) ??
-					ctx.body.resource,
-			);
+			const resources = toResourceList(ctx.body.resource);
 			await resolveResourcePolicy(ctx, getOAuthOptions(ctx), {
 				resource: resources,
 				clientId,

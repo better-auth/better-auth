@@ -13,6 +13,7 @@ import { CIBA_GRANT_TYPE, ciba } from "./index";
 
 const baseURL = "http://localhost:3000";
 const resource = "https://api.example.com";
+const secondResource = "https://files.example.com";
 const notificationEndpoint = "https://client.example.com/ciba";
 const INTERVAL = 2;
 
@@ -26,7 +27,7 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				resources: [resource],
+				resources: [resource, secondResource],
 				enforcePerClientResources: false,
 			}),
 			ciba({
@@ -278,6 +279,20 @@ describe("ciba poll mode", () => {
 		expect(introspection.cnf).toEqual({ jkt: await deriveDpopJkt(publicJwk) });
 	});
 
+	it("binds the token to every repeated resource (RFC 8707)", async () => {
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			resource: [resource, secondResource],
+		});
+		const authReqId = res.body.auth_req_id as string;
+		await approve(authReqId);
+		const issued = await poll(authReqId);
+		expect(decodeJwt(issued.body.access_token as string).aud).toEqual(
+			expect.arrayContaining([resource, secondResource]),
+		);
+	});
+
 	it("binds the token to a requested resource", async () => {
 		const authReqId = await start({ resource });
 		await approve(authReqId);
@@ -328,6 +343,15 @@ describe("ciba backchannel request validation", () => {
 		const res = await bcAuthorize(params);
 		expect(res.status).toBe(400);
 		expect(res.body.error).toBe(error);
+	});
+
+	it("rejects a repeated parameter other than resource", async () => {
+		const res = await bcAuthorize({
+			scope: ["openid", "openid profile"],
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid_request");
 	});
 
 	it("rejects a JSON body (CIBA §7.1)", async () => {

@@ -17,10 +17,7 @@ export {
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,
 } from "./register";
-export {
-	extractRepeatedResourceFromForm,
-	resolveResourcePolicy,
-} from "./resources";
+export { resolveResourcePolicy } from "./resources";
 export {
 	parseClientMetadata,
 	toResourceList,
