@@ -1007,6 +1007,52 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				});
 			}
 
+			// A reused pending subscription may still have checkout sessions from
+			// earlier attempts. Two paid sessions create two Stripe subscriptions
+			// for one record, so open ones are expired, and a completed one whose
+			// webhook has not arrived yet ends the request.
+			if (
+				incompleteSubscription &&
+				!activeOrTrialingSubscription &&
+				customerId
+			) {
+				let isCheckoutCompleted = false;
+				try {
+					for await (const previousSession of client.checkout.sessions.list({
+						customer: customerId,
+						limit: 100,
+					})) {
+						if (
+							previousSession.mode !== "subscription" ||
+							subscriptionMetadata.get(previousSession.metadata)
+								.subscriptionId !== incompleteSubscription.id
+						) {
+							continue;
+						}
+						if (previousSession.status === "complete") {
+							isCheckoutCompleted = true;
+						}
+						if (previousSession.status === "open") {
+							await client.checkout.sessions.expire(previousSession.id);
+						}
+					}
+				} catch (e) {
+					// A session that can no longer be expired may have just been paid,
+					// so a new one must not be created next to it.
+					const error = e as { message?: string; code?: string };
+					throw ctx.error("BAD_REQUEST", {
+						message: error.message,
+						code: error.code,
+					});
+				}
+				if (isCheckoutCompleted) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.CHECKOUT_ALREADY_COMPLETED,
+					);
+				}
+			}
+
 			let subscription: Subscription | undefined =
 				activeOrTrialingSubscription || incompleteSubscription;
 
