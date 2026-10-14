@@ -29,6 +29,7 @@ export type {
 	TokenType,
 } from "./oauth";
 export type { ClientRegistrationRequest } from "./zod";
+export type { OAuthClientRegistrationMetadata };
 
 export type StoreTokenType =
 	| "access_token"
@@ -491,22 +492,30 @@ export interface OAuthProviderExtension {
 		 * Top-level registration fields the extension defines. Dynamic client
 		 * registration ignores unrecognized fields (RFC 7591 §2); it keeps these
 		 * and stores them in the client's `metadata`, where admin-created clients
-		 * put them too. Core client fields cannot be claimed.
+		 * put them too. Client metadata documents do not carry them yet. Core and
+		 * server-owned client fields cannot be claimed.
 		 */
 		fields?: string[];
 		/**
 		 * Validates the extension's fields when a client is registered through
-		 * dynamic registration or created or updated by an admin. Throw an
-		 * `APIError` with `invalid_client_metadata` to reject the client.
+		 * dynamic registration or a client metadata document, or created or
+		 * updated by an admin. Throw an `APIError` with `invalid_client_metadata`
+		 * to reject the client.
 		 */
 		validate?: (input: OAuthClientMetadataExtensionInput) => Awaitable<void>;
 	};
 }
 
 export interface OAuthClientMetadataExtensionInput {
-	/** The client's registration metadata after provider defaults. */
-	client: OAuthClientRegistrationMetadata;
-	/** The client's `metadata`, where extension fields are stored. */
+	/**
+	 * The client's core registration metadata after provider defaults. Read
+	 * extension fields from `metadata`, not from here.
+	 */
+	client: Omit<OAuthClientRegistrationMetadata, "metadata">;
+	/**
+	 * The client's `metadata` as it will be stored, with reserved client field
+	 * names removed. Extension fields are read from here.
+	 */
 	metadata: Record<string, unknown>;
 }
 

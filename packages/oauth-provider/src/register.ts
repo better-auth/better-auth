@@ -283,7 +283,7 @@ function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
  * endpoints use it as an SSRF guard, since the server, not the browser, calls
  * them.
  */
-export function assertPublicHttpsUri(field: string, uri: string): void {
+export function assertPublicRoutableHttpsUri(field: string, uri: string): void {
 	const reject = (description: string): never => {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
@@ -729,7 +729,7 @@ export async function checkOAuthClient(
 					"backchannel_logout_uri requires the jwt plugin (disableJwtPlugin must be false)",
 			});
 		}
-		assertPublicHttpsUri(
+		assertPublicRoutableHttpsUri(
 			"backchannel_logout_uri",
 			clientWithDefaults.backchannel_logout_uri,
 		);
