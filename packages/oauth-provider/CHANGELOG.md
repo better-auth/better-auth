@@ -1,5 +1,37 @@
 # @better-auth/oauth-provider
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11625](https://github.com/better-auth/better-auth/pull/11625) [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
+  - On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+  - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
+
+  With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
+
+- [#10956](https://github.com/better-auth/better-auth/pull/10956) [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78) Thanks [@disbell](https://github.com/disbell)! - Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs with a host and a path, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+  Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
+
+  Pairwise clients (`subject_type: "pairwise"`) cannot use these host-bearing custom-scheme redirect URIs. Web clients are unaffected: they still accept only `https` redirect URIs on non-loopback hosts.
+
+- [#11658](https://github.com/better-auth/better-auth/pull/11658) [`847acd0`](https://github.com/better-auth/better-auth/commit/847acd02bb2d6d17e757ab2b44a837fa0c3ba669) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you configure `clientPrivileges`, the callback now receives `clientId` when a user reads, updates, deletes, rotates the secret of, or configures scopes on an existing client. You can use it to allow or deny actions per client among users who share a `clientReference`. Before, the callback could not tell which client the request targeted. `clientId` is absent for creating and listing clients, and the callback still cannot grant access to a client owned by someone else, apart from the existing scope-only updates through `adminUpdateOAuthClient`. Existing callbacks keep working unchanged.
+
+- [#10266](https://github.com/better-auth/better-auth/pull/10266) [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9) Thanks [@shiminshen](https://github.com/shiminshen)! - Projects that enable `exactOptionalPropertyTypes` can use the `oauthProvider()` and `mcp()` plugins again. Since 1.7.0, adding either plugin to `betterAuth()` failed to type-check with a TS2322 error.
+
+- [#11654](https://github.com/better-auth/better-auth/pull/11654) [`1a9be41`](https://github.com/better-auth/better-auth/commit/1a9be41d184ee2fcbc7f39b1ef1ab5cb492f7147) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorized client owners can pause and resume an OAuth client by updating its `disabled` field through `adminUpdateOAuthClient`. A disabled client cannot obtain new tokens, and token introspection reports its existing tokens as inactive.
+
+- [#11655](https://github.com/better-auth/better-auth/pull/11655) [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you register OAuth clients from your server with `adminCreateOAuthClient`, you can now pass `resources` to link the new client to protected resources in the same call. Previously you created the client first and then called `adminLinkClientResource` for each resource. When `resourcePrivileges` is configured, it is called with the `link` action for each requested resource, and a missing or disabled resource rejects the registration with `invalid_target`. Dynamic client registration and `adminLinkClientResource` are unchanged.
+
+- [#11655](https://github.com/better-auth/better-auth/pull/11655) [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource identifiers created with `adminCreateOAuthResource` or listed in the `resources` option now follow the same rules as the `resource` parameter in token and registration requests. An identifier with an empty fragment (`https://api.example.com/#`) or a `javascript:`, `data:`, or `vbscript:` scheme is rejected, and startup seeding skips it with a warning. Token requests already rejected these identifiers, so no working resource is affected. Setups with a custom `identifierValidator` are unaffected.
+
+- [#11726](https://github.com/better-auth/better-auth/pull/11726) [`aaf0d7d`](https://github.com/better-auth/better-auth/commit/aaf0d7da3e854ab6e19c184b682308d4f024e4f0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps that configure protected resources, through `resources` in `oauthProvider()` or `resource` in `mcp()`, keep working when the resource table cannot be written at startup. Since 1.7.0, a database that was briefly unreachable, a table that was not migrated yet, or two instances starting at the same time made every auth route fail until the process restarted, and `auth generate` failed for Drizzle projects. The auth instance now starts, logs the error through your configured `logger`, and writes the resources on the first request that needs one.
+
+  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes`, including the one `mcp()` adds, still cannot be stored. The app now starts, but requests that use any configured resource fail until you declare `allowedScopes` for that resource.
+
 ## 1.7.7
 
 ### Patch Changes
