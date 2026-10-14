@@ -240,9 +240,12 @@ function ssoProviderAuthBoundaryChanged(
 		if (!updatedSamlConfig) {
 			return true;
 		}
-		const changes = samlBoundaryChanges(currentSamlConfig, updatedSamlConfig);
-		if (changes.identity || changes.trustAnchors) {
-			return true;
+		// An unchanged config skips the metadata parses on every sign-in.
+		if (identityValueChanged(currentSamlConfig, updatedSamlConfig)) {
+			const changes = samlBoundaryChanges(currentSamlConfig, updatedSamlConfig);
+			if (changes.identity || changes.trustAnchors) {
+				return true;
+			}
 		}
 	}
 
