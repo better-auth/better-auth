@@ -42,7 +42,8 @@ import { registerEndpoint } from "./register";
 import {
 	extractRepeatedResourceFromForm,
 	logEnforcePerClientResourcesResolution,
-	seedResources,
+	logStartupSeedFailure,
+	seedResourcesOnce,
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
@@ -519,11 +520,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Seed `oauthResource` rows from plugin config. Idempotent and
-			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
-			// is empty. Tolerates
-			// "table not yet created" errors and defers to lazy-seed.
-			await seedResources(ctx, opts);
+			// Seed `oauthResource` rows from plugin config. A failure must not
+			// reject init (a failed init is cached and breaks every route);
+			// `getResource` retries the seed on first resource access.
+			// TODO(#11725): remove database I/O from init. Resolve configured
+			// resources at lookup time and create a row only when a link needs one.
+			await seedResourcesOnce(ctx, opts).catch((error: unknown) =>
+				logStartupSeedFailure(ctx, error),
+			);
 
 			// Record which default applied to `enforcePerClientResources` so
 			// admins can see it in startup logs. Pure resolution lives in
