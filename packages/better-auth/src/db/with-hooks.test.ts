@@ -1,7 +1,9 @@
+import { DatabaseSync } from "node:sqlite";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
+import { getMigrations } from "./get-migration";
 import { getWithHooks } from "./with-hooks";
 
 /**
@@ -187,7 +189,10 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 	});
 
 	it("internalAdapter.deleteUser does not delete sessions/accounts when user is not found or vetoed", async () => {
-		const { auth } = await getTestInstance({
+		const database = new DatabaseSync(":memory:");
+		(await getMigrations({ database })).runMigrations();
+		const { auth, db } = await getTestInstance({
+			database,
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -198,30 +203,61 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 		const ctx = await auth.$context;
 		const internalAdapter = ctx.internalAdapter;
 
-		let childDeleteCalled = false;
-		const origDeleteMany = ctx.adapter.deleteMany;
-		vi.spyOn(ctx.adapter, "deleteMany").mockImplementation(
-			async (args: any) => {
-				if (args?.model === "session" || args?.model === "account") {
-					childDeleteCalled = true;
-				}
-				return origDeleteMany(args);
-			},
-		);
-		const origDelete = ctx.adapter.delete;
-		vi.spyOn(ctx.adapter, "delete").mockImplementation(async (args: any) => {
-			if (args?.model === "user") {
-				childDeleteCalled = true;
-			}
-			return origDelete(args);
-		});
+		// Seed orphaned session and account for a non-existent user
+		const missingUserId = "non-existent-user-id";
+		database.exec("PRAGMA foreign_keys = OFF");
+		try {
+			await db.create({
+				model: "session",
+				data: {
+					id: "orphaned-session-id",
+					userId: missingUserId,
+					token: "orphaned-session-token",
+					expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				forceAllowId: true,
+			});
+			await db.create({
+				model: "account",
+				data: {
+					id: "orphaned-account-id",
+					userId: missingUserId,
+					accountId: "orphaned-account-provider-id",
+					providerId: "credential",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				forceAllowId: true,
+			});
+		} finally {
+			database.exec("PRAGMA foreign_keys = ON");
+		}
+
+		const deleteSpy = vi.spyOn(ctx.adapter, "delete");
+		const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
 
 		// Should resolve without error when user doesn't exist
 		await expect(
-			internalAdapter.deleteUser("non-existent-user-id"),
+			internalAdapter.deleteUser(missingUserId),
 		).resolves.toBeUndefined();
 
-		expect(childDeleteCalled).toBe(false);
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(deleteManySpy).not.toHaveBeenCalled();
+
+		// Verify orphaned session and account rows still exist in DB
+		const sessions = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: missingUserId }],
+		});
+		expect(sessions.length).toBe(1);
+
+		const accounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: missingUserId }],
+		});
+		expect(accounts.length).toBe(1);
 	});
 
 	it("internalAdapter.deleteUser respects veto hook on user deletion", async () => {
@@ -380,5 +416,11 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 			where: [{ field: "id", value: user.id }],
 		});
 		expect(remainingUser).toBeNull();
+
+		const remainingSessions = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(remainingSessions).toHaveLength(0);
 	});
 });
