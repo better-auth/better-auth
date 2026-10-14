@@ -778,7 +778,8 @@ export async function authorizeEndpoint(
 
 	// `resource` was already validated above via resolveResourcePolicy (entity
 	// + legacy fallback aware). Just normalize it for downstream consent/binding.
-	const requestedResources = toResourceList(query.resource) ?? [];
+	const resources = toResourceList(query.resource);
+	const requestedResources = resources ?? [];
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
@@ -838,6 +839,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
+			resources: resources ? [...resources] : undefined,
 		});
 		if (selectedAccountRedirect) {
 			if (promptNone) {
@@ -860,6 +862,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
+			resources: resources ? [...resources] : undefined,
 		});
 		if (signupRedirect) {
 			if (promptNone) {
@@ -883,6 +886,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
+			resources: resources ? [...resources] : undefined,
 		});
 		if (postLoginRedirect) {
 			if (promptNone) {
@@ -909,6 +913,7 @@ export async function authorizeEndpoint(
 		user: session.user,
 		session: session.session,
 		scopes: requestedScopes,
+		resources: resources ? [...resources] : undefined,
 	});
 
 	// Can skip consent (unless forced by prompt above)
