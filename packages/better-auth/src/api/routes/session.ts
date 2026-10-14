@@ -34,6 +34,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
+			// The handler never reads a request body (POST is just a refresh
+			// trigger for deferSessionRefresh). Skip body parsing so a bodyless
+			// POST with no content-type header isn't rejected by the media-type
+			// check.
+			disableBody: true,
 			metadata: {
 				openapi: {
 					operationId: "getSession",

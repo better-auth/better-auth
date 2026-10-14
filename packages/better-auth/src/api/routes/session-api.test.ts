@@ -2252,6 +2252,44 @@ describe("deferSessionRefresh", async () => {
 		).rejects.toThrow("POST method requires deferSessionRefresh to be enabled");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should not return 415 for a bodyless POST /get-session with no content-type", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				deferSessionRefresh: true,
+			},
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		const cookie = signInRes.headers.getSetCookie()[0]!;
+
+		// Node/Next.js/Nuxt send a bodyless POST as a non-null, empty stream
+		// with no content-type header, which is what better-call's router sees.
+		const req = new Request("http://localhost:3000/api/auth/get-session", {
+			method: "POST",
+			headers: { cookie },
+			body: new ReadableStream({
+				start(controller) {
+					controller.close();
+				},
+			}),
+			duplex: "half",
+		} as RequestInit & { duplex: "half" });
+
+		const res = await auth.handler(req);
+
+		expect(res.status).not.toBe(415);
+		expect(res.status).toBe(200);
+	});
+
 	it("should not delete expired session on GET when deferSessionRefresh is enabled", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
