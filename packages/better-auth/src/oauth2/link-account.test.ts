@@ -1868,7 +1868,6 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.issuer).toBe("local:oauth:github");
 		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 
@@ -1883,6 +1882,59 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
+	});
+});
+
+describe("oauth2 - ambiguous account identity", () => {
+	it("does not issue a session for an ambiguous provider key", async () => {
+		const { auth } = await getTestInstance(
+			{
+				logger: { disabled: true },
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		for (const name of ["first", "second"]) {
+			const user = await ctx.internalAdapter.createUser(
+				{ name, email: `${name}@ambiguous-account.test` },
+				{ method: "test" },
+			);
+			await ctx.internalAdapter.createAccount({
+				userId: user.id,
+				providerId: "google",
+				accountId: "shared-subject",
+			});
+		}
+		const token = await signJWT(
+			{
+				sub: "shared-subject",
+				email: "second@ambiguous-account.test",
+				email_verified: true,
+				name: "Second",
+				iss: "https://accounts.google.com",
+				aud: "test",
+			},
+			DEFAULT_SECRET,
+		);
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider: "google", idToken: { token } }),
+			}),
+		);
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toContain(
+			"error=internal_server_error",
+		);
+		expect(await ctx.adapter.findMany({ model: "session" })).toEqual([]);
 	});
 });
 
@@ -1920,7 +1972,6 @@ describe("oauth2 - orphaned account identity", () => {
 				model: "account",
 				data: {
 					providerId: "google",
-					issuer: "https://accounts.google.com",
 					accountId,
 					userId: "missing-account-owner",
 					createdAt: new Date(),
@@ -2119,7 +2170,7 @@ describe("oauth2 - providers without email", async () => {
 
 	// Preserve existing coverage for custom profile mapping that only augments
 	// optional fields without removing the provider account identifier.
-	describe("with mapProfileToUser synthesizing email", async () => {
+	describe("with mapProfileToUser creating a placeholder email", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				discord: {
@@ -2127,7 +2178,7 @@ describe("oauth2 - providers without email", async () => {
 					clientSecret: "test",
 					enabled: true,
 					mapProfileToUser: (profile) => ({
-						email: profile.email ?? `${profile.id}@discord.placeholder.local`,
+						email: profile.email ?? `${profile.id}@discord.placeholder.invalid`,
 					}),
 				},
 			},
@@ -2135,7 +2186,7 @@ describe("oauth2 - providers without email", async () => {
 
 		const ctx = await auth.$context;
 
-		it("signs in a Discord phone-only user with a synthesized email", async () => {
+		it("signs in a Discord phone-only user with a placeholder email", async () => {
 			const discordId = "920138789012345001";
 			mockDiscordToken(discordId, "phoneonly");
 
@@ -2163,13 +2214,13 @@ describe("oauth2 - providers without email", async () => {
 
 			expect(redirectLocation).not.toContain("error");
 
-			const synthesizedEmail = `${discordId}@discord.placeholder.local`;
+			const placeholderEmail = `${discordId}@discord.placeholder.invalid`;
 			const user = await ctx.adapter.findOne<User>({
 				model: "user",
-				where: [{ field: "email", value: synthesizedEmail }],
+				where: [{ field: "email", value: placeholderEmail }],
 			});
 			expect(user).toBeTruthy();
-			expect(user?.email).toBe(synthesizedEmail);
+			expect(user?.email).toBe(placeholderEmail);
 
 			const accounts = await ctx.adapter.findMany<{
 				providerId: string;

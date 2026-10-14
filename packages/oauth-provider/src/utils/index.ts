@@ -221,6 +221,11 @@ function getTrustedClientCache(
 	return cache;
 }
 
+/**
+ * Verify the signature and expiration of an OAuth query issued by this provider.
+ * Use the provider's current auth secret on the server before displaying a
+ * consent page. A valid signature does not replace client or session checks.
+ */
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
 	secret: string,

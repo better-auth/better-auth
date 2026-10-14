@@ -7,7 +7,6 @@ import {
   boolean,
   int,
   index,
-  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 export const custom_user = mysqlTable("custom_user", {
@@ -46,8 +45,7 @@ export const custom_account = mysqlTable(
   "custom_account",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    issuer: varchar("issuer", { length: 191 }).notNull(),
-    accountId: varchar("account_id", { length: 191 }).notNull(),
+    accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()
@@ -64,13 +62,7 @@ export const custom_account = mysqlTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [
-    uniqueIndex("custom_account_issuer_accountId_uidx").on(
-      table.issuer,
-      table.accountId,
-    ),
-    index("custom_account_userId_idx").on(table.userId),
-  ],
+  (table) => [index("custom_account_userId_idx").on(table.userId)],
 );
 
 export const custom_verification = mysqlTable(

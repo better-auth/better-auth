@@ -155,7 +155,7 @@ describe("internal adapter test", async () => {
 		],
 	} satisfies BetterAuthOptions;
 	beforeAll(async () => {
-		(await getMigrations(opts)).runMigrations();
+		await (await getMigrations(opts)).runMigrations();
 	});
 	afterEach(async () => {
 		vi.clearAllMocks();
@@ -173,7 +173,6 @@ describe("internal adapter test", async () => {
 			},
 			{
 				providerId: "provider",
-				issuer: "local:provider",
 				accountId: "account",
 				accessTokenExpiresAt: new Date(),
 				refreshTokenExpiresAt: new Date(),
@@ -195,7 +194,6 @@ describe("internal adapter test", async () => {
 				id: "2",
 				userId: expect.any(String),
 				providerId: "provider",
-				issuer: "local:provider",
 				accountId: "account",
 				accessToken: null,
 				refreshToken: null,
@@ -239,7 +237,6 @@ describe("internal adapter test", async () => {
 					},
 					{
 						providerId: "provider",
-						issuer: "local:provider",
 						accountId: "account",
 						accessTokenExpiresAt: new Date(),
 						refreshTokenExpiresAt: new Date(),
@@ -919,12 +916,11 @@ describe("internal adapter test", async () => {
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider",
-			issuer: "https://issuer.example.com",
 			accountId: "test-account-id-1",
 		});
 
 		let foundAccount = await internalAdapter.findAccountByKey({
-			issuer: account.issuer,
+			providerId: account.providerId,
 			accountId: account.accountId,
 		});
 		expect(foundAccount).toBeDefined();
@@ -932,10 +928,39 @@ describe("internal adapter test", async () => {
 		await internalAdapter.deleteAccount(account.id);
 
 		foundAccount = await internalAdapter.findAccountByKey({
-			issuer: account.issuer,
+			providerId: account.providerId,
 			accountId: account.accountId,
 		});
 		expect(foundAccount).toBeNull();
+	});
+
+	it.each([
+		false,
+		true,
+	])("rejects ambiguous account keys with joins=%s", async (joins) => {
+		const { auth } = await getTestInstance(
+			{ advanced: { database: { joins } } },
+			{ disableTestUser: true },
+		);
+		const { internalAdapter: accounts } = await auth.$context;
+		for (const name of ["first", "second"]) {
+			const user = await accounts.createUser(
+				{ name, email: `${name}@ambiguous-account.test` },
+				{ method: "test" },
+			);
+			await accounts.createAccount({
+				userId: user.id,
+				providerId: "tenant",
+				accountId: "shared-subject",
+			});
+		}
+		const key = { providerId: "tenant", accountId: "shared-subject" };
+		await expect(accounts.findAccountByKey(key)).rejects.toThrow(
+			'Multiple accounts match the same accountId for provider "tenant".',
+		);
+		await expect(accounts.findAccountOwnerByKey(key)).rejects.toThrow(
+			'Multiple accounts match the same accountId for provider "tenant".',
+		);
 	});
 
 	it("finds an account owner by the exact account key", async () => {
@@ -957,40 +982,23 @@ describe("internal adapter test", async () => {
 		const firstAccount = await internalAdapter.createAccount({
 			userId: firstUser.id,
 			providerId: "first-provider-configuration",
-			issuer: "https://first-issuer.example.com",
 			accountId,
 		});
 		const secondAccount = await internalAdapter.createAccount({
 			userId: secondUser.id,
 			providerId: "second-provider-configuration",
-			issuer: "https://second-issuer.example.com",
 			accountId,
-		});
-		await expect(
-			internalAdapter.createAccount({
-				userId: secondUser.id,
-				providerId: "another-provider-configuration",
-				issuer: firstAccount.issuer,
-				accountId,
-			}),
-		).rejects.toThrow();
-
-		await internalAdapter.updateAccount(firstAccount.id, {
-			providerId: "renamed-provider-configuration",
 		});
 
 		await expect(
 			internalAdapter.findAccountByKey({
-				issuer: firstAccount.issuer,
+				providerId: firstAccount.providerId,
 				accountId,
 			}),
-		).resolves.toMatchObject({
-			id: firstAccount.id,
-			providerId: "renamed-provider-configuration",
-		});
+		).resolves.toMatchObject({ id: firstAccount.id });
 		await expect(
 			internalAdapter.findAccountOwnerByKey({
-				issuer: secondAccount.issuer,
+				providerId: secondAccount.providerId,
 				accountId,
 			}),
 		).resolves.toMatchObject({
@@ -1003,7 +1011,7 @@ describe("internal adapter test", async () => {
 		});
 		await expect(
 			internalAdapter.findAccountOwnerByKey({
-				issuer: "https://missing-issuer.example.com",
+				providerId: "missing-provider-configuration",
 				accountId,
 			}),
 		).resolves.toBeNull();
@@ -1017,7 +1025,6 @@ describe("internal adapter test", async () => {
 				return await internalAdapter.createAccount({
 					userId: "missing-account-owner",
 					providerId: "orphaned-provider",
-					issuer: "https://issuer.example.com",
 					accountId: "orphaned-subject",
 				});
 			} finally {
@@ -1027,7 +1034,7 @@ describe("internal adapter test", async () => {
 
 		await expect(
 			internalAdapter.findAccountOwnerByKey({
-				issuer: account.issuer,
+				providerId: account.providerId,
 				accountId: account.accountId,
 			}),
 		).resolves.toMatchObject({
@@ -1047,7 +1054,6 @@ describe("internal adapter test", async () => {
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: user.id,
 			password: "password-hash",
 		});
@@ -1075,14 +1081,12 @@ describe("internal adapter test", async () => {
 		await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider-1",
-			issuer: "local:test-provider-1",
 			accountId: "test-account-id-2",
 		});
 
 		await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider-2",
-			issuer: "local:test-provider-2",
 			accountId: "test-account-id-3",
 		});
 
@@ -1255,6 +1259,47 @@ describe("internal adapter test", async () => {
 				),
 			),
 		).rejects.toThrow("secondary storage unavailable");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11642
+	 */
+	it("keeps a secondary-only session write inside the transaction even when deferral is requested", async () => {
+		const testMap = new Map<string, string>();
+		const secondaryStorage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...secondaryStorage,
+				set: async () => {
+					throw new Error("secondary storage unavailable");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				const user = await testCtx.internalAdapter.createUser(
+					{
+						name: "rolled-back-user",
+						email: "rolled-back@example.com",
+					},
+					{ method: "test" },
+				);
+				await testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				);
+			}),
+		).rejects.toThrow("secondary storage unavailable");
+		expect(
+			await testCtx.internalAdapter.findUserByEmail("rolled-back@example.com"),
+		).toBeNull();
 	});
 
 	/**
@@ -2378,6 +2423,41 @@ describe("internal adapter test", async () => {
 					expiresAt: new Date(Date.now() + 60_000),
 				}),
 			).rejects.toThrow(/requires database-backed verification storage/);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10624
+		 */
+		describe("with configured id strategies", () => {
+			it("yields exactly one winner when ids are uuids", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "uuid" } },
+				});
+				const reserve = () =>
+					adapter.reserveVerificationValue({
+						identifier: "reserve:uuid-race",
+						value: "jti-uuid",
+						expiresAt: new Date(Date.now() + 60_000),
+					});
+
+				const results = await Promise.all([reserve(), reserve(), reserve()]);
+				expect(results.filter((r) => r === true)).toHaveLength(1);
+				expect(await reserve()).toBe(false);
+			});
+
+			it("keeps reserving when ids are database-generated numbers", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "serial" } },
+				});
+
+				await expect(
+					adapter.reserveVerificationValue({
+						identifier: "reserve:serial",
+						value: "jti-serial",
+						expiresAt: new Date(Date.now() + 60_000),
+					}),
+				).resolves.toBe(true);
+			});
 		});
 	});
 

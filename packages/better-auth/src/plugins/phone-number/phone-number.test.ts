@@ -504,7 +504,6 @@ describe("phone auth flow", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 		const emailSignIn = await client.signIn.email({
@@ -846,7 +845,6 @@ describe("reset password flow attempts", async () => {
 		).resolves.toMatchObject({
 			userId,
 			providerId: "credential",
-			issuer: "local:credential",
 			accountId: userId,
 		});
 	});
@@ -865,7 +863,7 @@ describe("reset password session revocation", async () => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client, sessionSetter } = await getTestInstance(
+	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			emailAndPassword: {
 				enabled: true,
@@ -941,6 +939,69 @@ describe("reset password session revocation", async () => {
 			},
 		});
 		expect(sessionAfter.data).toBe(null);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	it("keeps the old password and sessions when session revocation fails", async () => {
+		const phoneNumber = "+251911000001";
+		const headers = new Headers();
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify(
+			{ phoneNumber, code: otp },
+			{ onSuccess: sessionSetter(headers) },
+		);
+		const ctx = await auth.$context;
+		const revoke = vi
+			.spyOn(ctx.internalAdapter, "deleteUserSessions")
+			.mockRejectedValue(new Error("session store unavailable"));
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const resetRes = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: resetOtp,
+			newPassword: "new-secure-password",
+		});
+		revoke.mockRestore();
+
+		expect(resetRes.error?.status).toBe(500);
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "new-secure-password",
+		});
+		expect(signInRes.error).not.toBeNull();
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user).toBeTruthy();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10632
+	 */
+	it("leaves the OTP usable when the new password is rejected", async () => {
+		const phoneNumber = "+251911000002";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+		const ctx = await auth.$context;
+		const hash = vi
+			.spyOn(ctx.password, "hash")
+			.mockRejectedValueOnce(new Error("password rejected"));
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const resetWith = (newPassword: string) =>
+			client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: resetOtp,
+				newPassword,
+			});
+
+		expect((await resetWith("pwned-password")).error).not.toBeNull();
+		hash.mockRestore();
+		expect((await resetWith("safe-password")).data?.status).toBe(true);
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "safe-password",
+		});
+		expect(signInRes.data).not.toBeNull();
 	});
 });
 
@@ -1502,5 +1563,51 @@ describe("phone-number validateUserInfo provisioning gate", async () => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("phone_blocked");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("phone-number sign-in password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [phoneNumber()],
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "long-password@test.com",
+				password: "password",
+				name: "Long Password",
+				phoneNumber: "+251911121314",
+			},
+		});
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.signInPhoneNumber({
+				body: {
+					phoneNumber: "+251911121314",
+					password: "x".repeat(129),
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
 	});
 });

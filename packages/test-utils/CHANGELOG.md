@@ -1,5 +1,35 @@
 # @better-auth/test-utils
 
+## 1.7.7
+
+## 1.7.6
+
+## 1.7.5
+
+## 1.7.4
+
+### Patch Changes
+
+- [#11205](https://github.com/better-auth/better-auth/pull/11205) [`3f890eb`](https://github.com/better-auth/better-auth/commit/3f890eb631e0278045b3b5b40d29b11bd9d4c332) Thanks [@bytaesu](https://github.com/bytaesu)! - Support Vitest 5 in the testing utilities while retaining support for previously supported Vitest versions.
+
+## 1.7.3
+
+### Patch Changes
+
+- [#10762](https://github.com/better-auth/better-auth/pull/10762) [`b7aeed8`](https://github.com/better-auth/better-auth/commit/b7aeed84ce9b8dbec22fc5fc97995b75d8063d9c) Thanks [@starslingdev](https://github.com/apps/starslingdev)! - Adapter test suites now run significantly faster. Cleanup between tests no longer re-deletes rows it has already removed, so suites spend far less time waiting on redundant database round trips.
+
+- [#11153](https://github.com/better-auth/better-auth/pull/11153) [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
+
+  If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
+
+## 1.7.2
+
+## 1.7.1
+
+## 1.7.0
+
+## 1.7.0-rc.6
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4
@@ -55,6 +85,30 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+  - better-auth@1.6.30
+
+## 1.6.29
+
+### Patch Changes
+
+- Updated dependencies [[`e6e1b4e`](https://github.com/better-auth/better-auth/commit/e6e1b4e8146a84d2a2c5fe2c497c81d03dfc2ad3)]:
+  - better-auth@1.6.29
+  - @better-auth/core@1.6.29
+
+## 1.6.28
+
+### Patch Changes
+
+- Updated dependencies [[`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b), [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982)]:
+  - better-auth@1.6.28
+  - @better-auth/core@1.6.28
 
 ## 1.6.27
 

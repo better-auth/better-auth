@@ -12,36 +12,52 @@ import {
 	MessageCircle,
 } from "lucide-react";
 import type { MouseEventHandler } from "react";
-import {
-	useEffect,
-	useEffectEvent,
-	useRef,
-	useState,
-	useTransition,
-} from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 function useCopyButton(
 	onCopy: () => void | Promise<void>,
+	failureMessage: string,
 ): [checked: boolean, onClick: MouseEventHandler] {
 	const [checked, setChecked] = useState(false);
 	const timeoutRef = useRef<number | null>(null);
+	const operationRef = useRef(0);
 
-	const onClick: MouseEventHandler = useEffectEvent(() => {
-		if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-		const res = Promise.resolve(onCopy());
+	const onClick: MouseEventHandler = () => {
+		const operation = ++operationRef.current;
+		if (timeoutRef.current !== null) {
+			window.clearTimeout(timeoutRef.current);
+			timeoutRef.current = null;
+		}
+		setChecked(false);
+		const res = Promise.resolve().then(onCopy);
 
-		void res.then(() => {
-			setChecked(true);
-			timeoutRef.current = window.setTimeout(() => {
+		void res.then(
+			() => {
+				if (operationRef.current !== operation) return;
+				setChecked(true);
+				timeoutRef.current = window.setTimeout(() => {
+					if (operationRef.current !== operation) return;
+					setChecked(false);
+					timeoutRef.current = null;
+				}, 1500);
+			},
+			(cause: unknown) => {
+				if (operationRef.current !== operation) return;
 				setChecked(false);
-			}, 1500);
-		});
-	});
+				console.error(`${failureMessage}:`, cause);
+				toast.error(failureMessage);
+			},
+		);
+	};
 
 	useEffect(() => {
 		return () => {
-			if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+			operationRef.current++;
+			if (timeoutRef.current !== null) {
+				window.clearTimeout(timeoutRef.current);
+			}
 		};
 	}, []);
 
@@ -54,9 +70,10 @@ const tocAction =
 	"inline-flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-wider whitespace-nowrap transition-all duration-200 text-foreground/60 hover:text-foreground border border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer select-none [&_svg]:size-3";
 
 function CopyMdLinkButton({ markdownUrl }: { markdownUrl: URL }) {
-	const [checked, onClick] = useCopyButton(() => {
-		return navigator.clipboard.writeText(markdownUrl.toString());
-	});
+	const [checked, onClick] = useCopyButton(
+		() => navigator.clipboard.writeText(markdownUrl.toString()),
+		"Failed to copy Markdown link",
+	);
 
 	return (
 		<button
@@ -70,24 +87,25 @@ function CopyMdLinkButton({ markdownUrl }: { markdownUrl: URL }) {
 	);
 }
 
-export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
+export function LLMCopyButton({ markdownUrl }: { markdownUrl: string }) {
 	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
-		const cached = cache.get(rawUrl);
+		const cached = cache.get(markdownUrl);
 
 		if (cached) {
 			await navigator.clipboard.writeText(cached);
 			return;
 		}
 
-		const fetchPromise = fetch(rawUrl).then(async (res) => {
+		const fetchPromise = fetch(markdownUrl).then(async (res) => {
+			if (!res.ok) throw new Error(`Failed to load Markdown: ${res.status}`);
 			const text = await res.text();
-			cache.set(rawUrl, text);
+			cache.set(markdownUrl, text);
 			return text;
 		});
 
 		startTransition(async () => {
-			await fetchPromise;
+			await fetchPromise.catch(() => undefined);
 		});
 
 		const item = new ClipboardItem({
@@ -96,7 +114,7 @@ export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
 			),
 		});
 		await navigator.clipboard.write([item]);
-	});
+	}, "Failed to copy Markdown");
 
 	return (
 		<button

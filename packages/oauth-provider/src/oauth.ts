@@ -26,6 +26,7 @@ import type { BackchannelLogoutPlan } from "./logout";
 import {
 	applyBackchannelLogoutPlan,
 	prepareBackchannelLogoutPlan,
+	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
 import {
@@ -78,6 +79,24 @@ export const DEFAULT_OAUTH_SCOPES = [
 	"email",
 	"offline_access",
 ] as const;
+
+const rpInitiatedLogoutRequestSchema = z.object({
+	id_token_hint: z.string().optional(),
+	client_id: z.string().optional(),
+	post_logout_redirect_uri: SafeUrlSchema.optional(),
+	state: z.string().optional(),
+});
+
+type RPInitiatedLogoutFields = {
+	id_token_hint?: string;
+	client_id?: string;
+	post_logout_redirect_uri?: string;
+	state?: string;
+};
+
+type RPInitiatedLogoutClientInput =
+	| RPInitiatedLogoutFields
+	| { query: RPInitiatedLogoutFields };
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -1413,21 +1432,27 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			oauth2EndSession: createOAuthEndpoint(
 				"/oauth2/end-session",
 				{
-					method: "GET",
-					query: z.object({
-						id_token_hint: z.string(),
-						client_id: z.string().optional(),
-						post_logout_redirect_uri: SafeUrlSchema.optional(),
-						state: z.string().optional(),
-					}),
+					method: ["GET", "POST"],
+					body: rpInitiatedLogoutRequestSchema.optional(),
+					query: rpInitiatedLogoutRequestSchema.optional(),
 					metadata: {
+						noStore: true,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							// Better Auth's generated client sends endpoint bodies as JSON.
+							"application/json",
+						],
+						$Infer: {
+							body: {} as RPInitiatedLogoutClientInput,
+							query: {} as RPInitiatedLogoutFields,
+						},
 						openapi: {
 							description:
-								"RP-Initiated Logout endpoint. Allows clients to notify the OP that the End-User has logged out.",
+								"RP-Initiated Logout endpoint. Accepts standard logout parameters through GET or an application/x-www-form-urlencoded POST body, plus JSON for Better Auth generated-client calls. Requests without a usable id_token_hint may require explicit OP confirmation.",
 							responses: {
 								"200": {
 									description:
-										"Logout successful. May include redirect_uri if post_logout_redirect_uri was provided.",
+										"Logout completed, or an HTML confirmation page was returned for browser navigation. A redirect is used only for an exact registered post_logout_redirect_uri.",
 									content: {
 										"application/json": {
 											schema: {
@@ -1446,6 +1471,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 											},
 										},
+										"text/html": {
+											schema: { type: "string" },
+										},
 									},
 								},
 							},
@@ -1454,6 +1482,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				},
 				async (ctx) => {
 					return rpInitiatedLogoutEndpoint(ctx, opts);
+				},
+			),
+			oauth2EndSessionConfirmation: createOAuthEndpoint(
+				"/oauth2/end-session/confirm",
+				{
+					method: "POST",
+					body: z.object({
+						action: z.literal("confirm"),
+					}),
+					metadata: {
+						noStore: true,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
+						scope: "http",
+					},
+				},
+				async (ctx) => {
+					return rpInitiatedLogoutConfirmationEndpoint(ctx, opts);
 				},
 			),
 			registerOAuthClient: createOAuthEndpoint(

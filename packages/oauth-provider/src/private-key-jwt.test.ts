@@ -17,12 +17,14 @@ import type {
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import {
+	consumeClientAssertion,
 	isPrivateHostname,
 	verifyClientAssertion,
 } from "./utils/client-assertion";
 
 describe("private_key_jwt authentication", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
+	const customIssuer = "https://issuer.example.com";
 	const rpBaseUrl = "http://localhost:5000";
 	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
 	const introspectEndpoint = `${authServerBaseUrl}/api/auth/oauth2/introspect`;
@@ -36,7 +38,7 @@ describe("private_key_jwt authentication", async () => {
 		baseURL: authServerBaseUrl,
 		trustedOrigins: ["https://trusted.example.com"],
 		plugins: [
-			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			jwt({ jwt: { issuer: customIssuer } }),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
@@ -132,7 +134,7 @@ describe("private_key_jwt authentication", async () => {
 
 	async function signAssertion(overrides?: {
 		clientId?: string;
-		aud?: string;
+		aud?: string | string[];
 		exp?: number;
 		jti?: string;
 		kid?: string;
@@ -549,6 +551,23 @@ describe("private_key_jwt authentication", async () => {
 		expect(tokens.data?.token_type).toBe("Bearer");
 	});
 
+	it("should accept the configured issuer as a token audience", async () => {
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+		const assertion = await signAssertion({
+			aud: customIssuer,
+		});
+
+		const tokens = await exchangeCodeForTokens({
+			code,
+			codeVerifier,
+			assertion,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.token_type).toBe("Bearer");
+	});
+
 	it("should exchange code using a trusted jwks_uri", async () => {
 		vi.stubGlobal(
 			"fetch",
@@ -786,6 +805,64 @@ describe("private_key_jwt authentication", async () => {
 		expect(failureCount).toBe(1);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10862
+	 */
+	describe("with configured id strategies", () => {
+		const idStrategyOptions = {
+			loginPage: "/login",
+			consentPage: "/consent",
+		} satisfies OAuthOptions<Scope[]>;
+		const consumeWith = async (
+			generateId: "uuid" | "serial",
+			jti: string,
+			attempts: number,
+		) => {
+			const instance = await getTestInstance({
+				baseURL: authServerBaseUrl,
+				advanced: { database: { generateId } },
+				plugins: [jwt(), oauthProvider(idStrategyOptions)],
+			});
+			const ctx = {
+				context: await instance.auth.$context,
+			} as GenericEndpointContext;
+			const assertion = {
+				namespace: "private_key_jwt:id-strategy-client",
+				payload: {
+					aud: tokenEndpoint,
+					exp: Math.floor(Date.now() / 1000) + 120,
+					jti,
+				},
+				expectedAudience: tokenEndpoint,
+			};
+			return Promise.allSettled(
+				Array.from({ length: attempts }, () =>
+					consumeClientAssertion(ctx, idStrategyOptions, assertion),
+				),
+			);
+		};
+
+		it("accepts a jti exactly once when ids are uuids", async () => {
+			const results = await consumeWith("uuid", crypto.randomUUID(), 3);
+
+			expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+			for (const result of results.filter((r) => r.status === "rejected")) {
+				expect(result.reason).toMatchObject({
+					body: {
+						error: "invalid_client",
+						error_description: "client assertion jti has already been used",
+					},
+				});
+			}
+		});
+
+		it("keeps accepting assertions when ids are database-generated numbers", async () => {
+			const [result] = await consumeWith("serial", crypto.randomUUID(), 1);
+
+			expect(result?.status).toBe("fulfilled");
+		});
+	});
+
 	it("should reject wrong audience", async () => {
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -908,7 +985,15 @@ describe("private_key_jwt authentication", async () => {
 		expect(result.error?.status).toBeLessThan(500);
 	});
 
-	it("should introspect an access token using private_key_jwt authentication", async () => {
+	it.each([
+		{
+			name: "issuer audience array",
+			audience: [customIssuer, "https://unrelated.example.com/introspect"],
+		},
+		{ name: "endpoint audience", audience: introspectEndpoint },
+	])("should introspect an access token using private_key_jwt with $name", async ({
+		audience,
+	}) => {
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
 		const tokens = await exchangeCodeForTokens({
@@ -927,7 +1012,7 @@ describe("private_key_jwt authentication", async () => {
 				client_id: assertionClient.client_id,
 				client_assertion_type:
 					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-				client_assertion: await signAssertion({ aud: introspectEndpoint }),
+				client_assertion: await signAssertion({ aud: audience }),
 				token: tokens.data?.access_token ?? "",
 				token_type_hint: "access_token",
 			}),
@@ -938,7 +1023,12 @@ describe("private_key_jwt authentication", async () => {
 		expect(result.data?.client_id).toBe(assertionClient.client_id);
 	});
 
-	it("should revoke a refresh token using private_key_jwt authentication", async () => {
+	it.each([
+		{ name: "issuer audience", audience: customIssuer },
+		{ name: "endpoint audience", audience: revokeEndpoint },
+	])("should revoke a refresh token using private_key_jwt with $name", async ({
+		audience,
+	}) => {
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier, [
 			"openid",
@@ -958,7 +1048,7 @@ describe("private_key_jwt authentication", async () => {
 				client_id: assertionClient.client_id,
 				client_assertion_type:
 					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-				client_assertion: await signAssertion({ aud: revokeEndpoint }),
+				client_assertion: await signAssertion({ aud: audience }),
 				token: tokens.data?.refresh_token ?? "",
 				token_type_hint: "refresh_token",
 			}),

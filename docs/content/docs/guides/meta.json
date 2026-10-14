@@ -1,0 +1,21 @@
+{
+  "title": "Guides",
+  "icon": "guides",
+  "pages": [
+    "your-first-plugin",
+    "create-a-db-adapter",
+    "browser-extension-guide",
+    "dynamic-base-url",
+    "saml-sso-with-okta",
+    "optimizing-for-performance",
+    "---Upgrade---",
+    "1-7-upgrade-guide",
+    "---Migration---",
+    "next-auth-migration-guide",
+    "auth0-migration-guide",
+    "clerk-migration-guide",
+    "supabase-migration-guide",
+    "workos-migration-guide",
+    "..."
+  ]
+}

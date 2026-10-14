@@ -1,4 +1,6 @@
 ---
+icon: integrationsElectron
+sidebarTitle: "Electron"
 title: Electron Integration
 description: Integrate Better Auth with Electron.
 ---
@@ -309,7 +311,7 @@ function SignIn({
         authClient.signIn.social({
           provider: "google",
           fetchOptions: { query }, // preserve PKCE/state
-        });
+        })
       }
     >
       Sign in with Google
@@ -351,7 +353,7 @@ function Auth() {
         onClick={() =>
           window.requestAuth({
             provider: "google", // sign in with social provider, redirecting directly to the provider
-          });
+          })
         }
       >
         Sign in with Google

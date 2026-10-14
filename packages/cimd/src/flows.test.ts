@@ -144,6 +144,7 @@ describe("CIMD - token exchange flow", async () => {
 		customFetchImpl,
 	} = await getTestInstance({
 		baseURL: authServerBaseUrl,
+		trustedOrigins: ["https://kms.example.com"],
 		plugins: [
 			jwt(),
 			oauthProvider({
@@ -326,6 +327,131 @@ describe("CIMD - token exchange flow", async () => {
 		expect(typeof body.access_token).toBe("string");
 		expect(body.token_type).toBe("Bearer");
 		expect(typeof body.expires_in).toBe("number");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11136
+	 */
+	it("exchanges a private-key JWT code when metadata cannot be cached", async () => {
+		const privateClientMetadataUrl =
+			"https://connect.example.com/connectors/scl_test";
+		const jwksUri = "https://kms.example.com/.well-known/jwks.json";
+		const privateKeyRedirectUri = "http://localhost:5110/callback";
+		const keyId = "vercel-connect-key";
+		const { privateKey, publicKey } = (await crypto.subtle.generateKey(
+			{
+				name: "RSASSA-PKCS1-v1_5",
+				modulusLength: 2048,
+				publicExponent: new Uint8Array([1, 0, 1]),
+				hash: "SHA-256",
+			},
+			true,
+			["sign", "verify"],
+		)) as CryptoKeyPair;
+		const privateKeyJwk = await crypto.subtle.exportKey("jwk", privateKey);
+		const publicKeyJwk = await crypto.subtle.exportKey("jwk", publicKey);
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requestedUrl === privateClientMetadataUrl) {
+					return Promise.resolve(
+						Response.json(
+							{
+								client_id: privateClientMetadataUrl,
+								client_name: "Vercel Connect Client",
+								redirect_uris: [privateKeyRedirectUri],
+								token_endpoint_auth_method: "private_key_jwt",
+								application_type: "native",
+								grant_types: ["authorization_code"],
+								response_types: ["code"],
+								jwks_uri: jwksUri,
+							},
+							{
+								headers: {
+									"cache-control": "private, max-age=0, must-revalidate",
+								},
+							},
+						),
+					);
+				}
+				if (requestedUrl === jwksUri) {
+					return Promise.resolve(
+						Response.json({
+							keys: [
+								{
+									...publicKeyJwk,
+									kid: keyId,
+									alg: "RS256",
+									use: "sig",
+								},
+							],
+						}),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		const code = await extractAuthorizationCode(
+			authedClient,
+			buildAuthorizeUrl(
+				authServerBaseUrl,
+				privateClientMetadataUrl,
+				privateKeyRedirectUri,
+			),
+		);
+		const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+		const assertion = await signPrivateKeyJwtClientAssertion({
+			clientId: privateClientMetadataUrl,
+			tokenEndpoint,
+			privateKeyJwk,
+			kid: keyId,
+			algorithm: "RS256",
+		});
+
+		const tokenResponse = await fetch(tokenEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: privateKeyRedirectUri,
+				client_id: privateClientMetadataUrl,
+				client_assertion_type: CLIENT_ASSERTION_TYPE,
+				client_assertion: assertion,
+				code_verifier: PKCE_VERIFIER,
+			}).toString(),
+		});
+
+		expect(tokenResponse.status).toBe(200);
+		const tokenBody = (await tokenResponse.json()) as Record<string, unknown>;
+		expect(tokenBody.access_token).toEqual(expect.any(String));
+		const discoveryFetchUrls = fetchClientMetadataResource.mock.calls.map(
+			([input]) =>
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url,
+		);
+		expect(
+			discoveryFetchUrls.filter((url) => url === privateClientMetadataUrl)
+				.length,
+		).toBeGreaterThan(1);
+		expect(discoveryFetchUrls).toContain(jwksUri);
 	});
 
 	it("authenticates an uppercase URL client_id with a same-origin jwks_uri", async () => {

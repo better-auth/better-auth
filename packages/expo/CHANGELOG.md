@@ -1,5 +1,57 @@
 # @better-auth/expo
 
+## 1.7.7
+
+## 1.7.6
+
+## 1.7.5
+
+## 1.7.4
+
+### Patch Changes
+
+- [#11200](https://github.com/better-auth/better-auth/pull/11200) [`9b1be99`](https://github.com/better-auth/better-auth/commit/9b1be996a5a30537db12f2e6712e08acf86203c6) Thanks [@bytaesu](https://github.com/bytaesu)! - Clear leftover session data from secure storage after upgrades or sign-out, and prevent corrupted cookies during concurrent updates.
+
+- [#11238](https://github.com/better-auth/better-auth/pull/11238) [`ada6b44`](https://github.com/better-auth/better-auth/commit/ada6b4436de1195876e964b1967d8aef6f163c43) Thanks [@bytaesu](https://github.com/bytaesu)! - Store multibyte session data safely in Expo secure storage.
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11099](https://github.com/better-auth/better-auth/pull/11099) [`fb7c018`](https://github.com/better-auth/better-auth/commit/fb7c018608bdc019c1685e70a878a084602c2fd3) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent Expo apps from sending unauthenticated requests while large stored cookies are being updated, and recover the previous cookie value when an update is interrupted or incomplete.
+
+## 1.7.2
+
+## 1.7.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#9069](https://github.com/better-auth/better-auth/pull/9069) [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Rewrite the generic OAuth plugin as a first-class social provider with OAuth 2.1 security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE required by default (OAuth 2.1), RFC 9207 issuer validation, OIDC auto-discovery with `openid` scope injection, and typed provider IDs.
+
+  **Breaking changes:**
+  - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
+  - `oauth2.link()` replaced by `linkSocial()`
+  - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+  - `genericOAuthClient()` removed; generic OAuth providers now use the standard social client APIs
+  - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+  - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+  - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+  - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
+
+- [#10438](https://github.com/better-auth/better-auth/pull/10438) [`44e04d4`](https://github.com/better-auth/better-auth/commit/44e04d4bbe0d3bb9860265fc88bba835974cbd77) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent Expo apps from crashing synchronously when iOS Keychain storage is unavailable by using asynchronous SecureStore access. `getCookie()` now returns a promise, custom storage implementations must provide both synchronous and asynchronous SecureStore methods, and `storageAdapter.setItem()` is synchronous, so use `setItemAsync()` when the write must be awaited.
+
+### Patch Changes
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10794](https://github.com/better-auth/better-auth/pull/10794) [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore client plugin declaration compatibility for downstream TypeScript consumers.
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4
@@ -63,6 +115,32 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+  - better-auth@1.6.30
+
+## 1.6.29
+
+### Patch Changes
+
+- Updated dependencies [[`e6e1b4e`](https://github.com/better-auth/better-auth/commit/e6e1b4e8146a84d2a2c5fe2c497c81d03dfc2ad3)]:
+  - better-auth@1.6.29
+  - @better-auth/core@1.6.29
+
+## 1.6.28
+
+### Patch Changes
+
+- [#10794](https://github.com/better-auth/better-auth/pull/10794) [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore client plugin declaration compatibility for downstream TypeScript consumers.
+
+- Updated dependencies [[`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b), [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982)]:
+  - better-auth@1.6.28
+  - @better-auth/core@1.6.28
 
 ## 1.6.27
 

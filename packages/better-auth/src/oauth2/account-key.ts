@@ -1,5 +1,4 @@
 import type { AccountKey } from "@better-auth/core/db";
-import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import {
 	APIError,
 	BASE_ERROR_CODES,
@@ -38,23 +37,7 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 		throw new BetterAuthError("OAUTH_ACCOUNT_SUBJECT_INVALID");
 	}
 
-	const accountIssuer = provider.accountIssuer;
-	const issuer =
-		accountIssuer === undefined
-			? createOAuthAccountIssuer(provider.id)
-			: typeof accountIssuer === "function"
-				? await accountIssuer(accountKeyContext)
-				: accountIssuer;
-	if (
-		typeof issuer !== "string" ||
-		issuer.trim().length === 0 ||
-		issuer === "undefined" ||
-		issuer === "null"
-	) {
-		throw new BetterAuthError("OAUTH_ACCOUNT_ISSUER_INVALID");
-	}
-
-	return { issuer, accountId };
+	return { providerId: provider.id, accountId };
 }
 
 /**

@@ -1,4 +1,6 @@
 ---
+icon: pluginsOAuthProvider
+sidebarTitle: "OAuth Provider"
 title: OAuth 2.1 Provider
 description: A Better Auth plugin that enables your auth server to serve as an OAuth 2.1 provider.
 ---
@@ -290,6 +292,17 @@ await auth.api.adminUpdateOAuthClient({
 });
 ```
 
+To pause token issuance without deleting a client, set `disabled` through the server-only update API:
+
+```ts
+await auth.api.adminUpdateOAuthClient({
+  headers,
+  body: { client_id, update: { disabled: true } },
+});
+```
+
+Set `disabled: false` to resume issuance. A disabled client cannot obtain new tokens, and introspection reports its existing tokens as inactive. A resource server that verifies an existing JWT locally must still check current client or application authorization if it needs immediate disconnection; the JWT signature remains valid until expiry. The session-bound `updateOAuthClient` endpoint cannot change `disabled`.
+
 #### Rotate Client Secret
 
 <Callout type="warn">
@@ -438,11 +451,41 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use a claimed `https` URI, an `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]` with any port, or an authority-free private-use URI with a reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)). Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, and routable-host `http` redirects.
+`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use any of these redirect URI forms:
+
+* A claimed `https` URI on a non-loopback host.
+* An `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]`, with any port.
+* An authority-free private-use URI with a reverse-domain scheme, such as `com.example.app:/callback`. This is the form [RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1) recommends.
+* A custom-scheme URI with a host and a path, such as `cursor://anysphere.cursor-mcp/oauth/callback`. The scheme does not need to contain a period. A URI without a path, such as `cursor://anysphere.cursor-mcp`, is rejected.
+
+Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed URIs, loopback `https`, and routable-host `http` redirects. Native clients cannot use the reserved schemes `ws:`, `wss:`, `file:`, `ftp:`, `mailto:`, `javascript:`, `data:`, `vbscript:`, `blob:`, `about:`, or `view-source:`. Any other scheme is accepted in the host-and-path form; an authority-free URI such as `myapp:/callback` still needs a reverse-domain scheme.
 
 Application type is independent of client authentication. For example, a native client may use `client_secret_post`, while a web client may use `token_endpoint_auth_method: "none"`. Authentication capability is derived only from `token_endpoint_auth_method`; the removed `type` and `public` metadata fields are not accepted or returned.
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
+
+Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, so the `web` default rejects the registration. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
+
+| Value             | Omitted `application_type` becomes                                        |
+| ----------------- | ------------------------------------------------------------------------- |
+| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                  |
+| `"native"`        | `native`                                                                  |
+| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme, otherwise `web` |
+
+Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme becomes `native`, so its `http` URIs must still be loopback. A client that lists only `http` and `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  allowUnauthenticatedClientRegistration: true,
+  clientRegistrationDefaultApplicationType: "infer",
+  // ... other options
+})
+```
+
+<Callout type="warn">
+  [RFC 8252 §8.4](https://datatracker.ietf.org/doc/html/rfc8252#section-8.4) says authorization servers SHOULD reject private-use schemes that do not contain a period. Better Auth accepts schemes such as `cursor:` for compatibility with native MCP clients. Any app on a device can register a private-use scheme, so another app may receive the authorization code. PKCE makes an intercepted code unusable without the code verifier. Public clients (`token_endpoint_auth_method: "none"`) always require PKCE. Confidential clients can opt out through `require_pkce: false` or `clientRegistrationRequirePKCE: false`; keep PKCE on for any client that uses a private-use redirect. See [PKCE Configuration](#pkce-configuration).
+</Callout>
 
 Note the following parameters are not yet supported:
 
@@ -578,14 +621,14 @@ grant_type=authorization_code
 
 The assertion JWT must contain:
 
-| Claim | Requirement                                                            |
-| ----- | ---------------------------------------------------------------------- |
-| `iss` | Must be the `client_id`                                                |
-| `sub` | Must be the `client_id`                                                |
-| `aud` | Must be the token endpoint URL                                         |
-| `exp` | Required, must not exceed `assertionMaxLifetime` from now              |
-| `jti` | Required, must be unique (single-use)                                  |
-| `iat` | Optional, but if present must not be older than `assertionMaxLifetime` |
+| Claim | Requirement                                                                                                                                                        |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `iss` | Must be the `client_id`                                                                                                                                            |
+| `sub` | Must be the `client_id`                                                                                                                                            |
+| `aud` | Must contain either the URL of the endpoint receiving the assertion or the OpenID Provider issuer. Use a string or an array containing at least one accepted value |
+| `exp` | Required, must not exceed `assertionMaxLifetime` from now                                                                                                          |
+| `jti` | Required, must be unique (single-use)                                                                                                                              |
+| `iat` | Optional, but if present must not be older than `assertionMaxLifetime`                                                                                             |
 
 Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
 
@@ -686,13 +729,13 @@ The caller must authenticate as a registered client ([RFC 7662 §2.1](https://da
 * it issued the token, or
 * it is a resource server linked to one of the token's resources.
 
-The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic client registration with a `resources` field creates the link for you; otherwise add a row to the `oauthClientResource` table.
+The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic registration and server-only `adminCreateOAuthClient` can link resources during registration; use `adminLinkClientResource` for an existing client.
 
 Any other authenticated client gets `{ active: false }`, the same response as an unknown or expired token, so introspection can't be used to fish for valid tokens. Refresh tokens are stricter: only the client that requested one can introspect it.
 
 #### Which claims come back
 
-Opaque and JWT access tokens return the same claims for the same grant: your `customAccessTokenClaims` and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
+Opaque and JWT access tokens return the same claims for the same grant: extension `claims.accessToken` contributors, your `customAccessTokenClaims`, and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
 
 The two formats differ in one way. An opaque token is recomputed on each call, so introspection shows its current state: change a resource's claims, and the next introspection reflects the change. A JWT carries what was signed at issuance and never changes. Request a JWT (by passing a `resource`) when you want claims frozen at issuance; use an opaque token when you want the current state.
 
@@ -714,11 +757,13 @@ Because a JWT `access_token` cannot be revoked individually, plan for it:
 
 ### End Session Endpoint
 
-[RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
+[OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) lets a relying party ask the provider to end a user's session.
 
-This endpoint allows specified trusted clients to logout remotely.
+The endpoint is available to clients registered with `enable_end_session: true`. It accepts logout parameters in a `GET` query or an `application/x-www-form-urlencoded` `POST` body. Better Auth's generated client sends the same parameters as JSON. A verified `id_token_hint` can end its referenced session immediately. Without a valid hint, Better Auth asks the user to confirm before ending the current session. The same confirmation is required when the hint refers to a different session than the browser session.
 
-To allow rp-initiated logout, a trusted client must specifically be created to perform session logout.
+Better Auth redirects after logout only when `post_logout_redirect_uri` exactly matches a registered URI. It adds `state` only to that verified redirect. An unregistered or query-modified URI does not cause a redirect. Browser navigation receives confirmation, success, and error pages as HTML. API callers receive the protocol response.
+
+Enable this endpoint only for clients you trust:
 
 ```ts title="admin-create-oauth.ts"
 import { auth } from "@/lib/auth"
@@ -732,9 +777,7 @@ await auth.api.adminCreateOAuthClient({
 });
 ```
 
-<Callout type="info">
-  If `disableJwtPlugin: true`, public clients will never be able to logout using this endpoint since no `id_token` is sent.
-</Callout>
+Better Auth protects confirmation with origin and CSRF checks plus a short-lived, signed cookie. When a current session exists, the cookie is tied to it. Successful browser logout returns a logged-out page. Session deletion continues through the normal hooks, including Back-Channel Logout delivery to registered relying parties.
 
 ### Back-Channel Logout
 
@@ -1027,7 +1070,24 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the specified path with `client_id`, `scope`, and, when requested, `claims` query parameters. Use `scope` and `claims.userinfo` to display the complete access request on your consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
+The plugin will redirect the user to the specified path with `client_id`, `scope`, and, when requested, `claims` query parameters. Verify the signed query on the server before displaying the consent screen. Use the same secret that the OAuth provider uses; `auth.$context.secret` resolves the configured secret, including when using versioned `secrets`. Keep it on the server.
+
+```ts title="consent-query.ts"
+import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
+import { auth } from "@/lib/auth";
+
+export async function getVerifiedConsentQuery(request: Request) {
+  const query = new URL(request.url).search.slice(1);
+  const { secret } = await auth.$context;
+  if (!(await verifyOAuthQueryParams(query, secret))) {
+    return null;
+  }
+
+  return new URLSearchParams(query);
+}
+```
+
+Call this helper from your server-side consent route. Return an error response when it returns `null`, and use the returned parameters to render the page. The signature check rejects modified or expired queries. It does not check whether the client exists, whether the user is signed in, or whether the requested scopes are valid. Use `scope` and `claims.userinfo` to display the complete access request on your consent screen. Once the user consents, call `oauth2.consent` to complete the authorization.
 
 ```ts title="consent-page.ts"
 import { authClient } from "@/lib/auth-client"
@@ -1209,7 +1269,27 @@ oauthProvider({
 })
 ```
 
-Explicit resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+Dynamic-registration resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+
+To link resources to a client your server registers, pass `resources` to the server-only `adminCreateOAuthClient` call. The dynamic-registration allowlist does not apply here. Instead, `resourcePrivileges` is called with the `link` action for each requested resource before the client is created. `clientRegistrationDefaultResources` are still added, without a privilege check.
+
+```ts
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    resources: ["https://api.example.com/default"],
+  },
+});
+```
+
+The call creates nothing when a resource is rejected:
+
+* A resource that is not an absolute URI, contains a fragment, or uses a `javascript:`, `data:`, or `vbscript:` scheme fails request validation with `VALIDATION_ERROR`.
+* A resource that does not exist or is disabled returns `400` with `invalid_target`.
+* A `resourcePrivileges` denial returns `401`.
+
+The client and its resource links are written in one transaction when the database adapter supports transactions. On an adapter without them, such as standalone MongoDB, a failed link can leave the client registered without its links. To link a resource to an existing client, use `adminLinkClientResource`.
 
 ### Scopes
 
@@ -1228,6 +1308,55 @@ oauthProvider({
   scopes: [ "openid", "profile", "offline_access", "read:post", "write:post" ],
 })
 ```
+
+### Custom Redirect URI Validation
+
+By default, a requested redirect URI must exactly match one registered for the client. For a native client's registered HTTP loopback URI on `localhost`, `127.0.0.1`, or `[::1]`, the port may vary; the rest of the URI must match. [RFC 8252 recommends an IP literal instead of `localhost`](https://www.rfc-editor.org/rfc/rfc8252.html#section-8.3).
+
+Use `validateRedirectUri` when a client needs a callback URI that cannot be registered in advance. The callback receives the requested URI, that client's registered URIs, and `defaultResult`, which is the result of the built-in matching. It may return a boolean or a promise. Returning `true` accepts the URI, even when `defaultResult` is `false`; returning `false` or throwing rejects it. When the option is omitted, only the built-in matching applies.
+
+To accept preview callbacks for one web client, [register the client](#create-client) with a concrete URI such as `https://app.example.com/api/auth/callback`. The callback does not change registration, and it applies to every client of this OAuth provider. This example extends the default rules only for clients registered with that URI:
+
+```ts title="auth.ts"
+oauthProvider({
+  validateRedirectUri: (uri, registeredUris, defaultResult) => {
+    if (defaultResult) return true;
+    if (!registeredUris.includes('https://app.example.com/api/auth/callback')) {
+      return false;
+    }
+    if (uri.includes('#')) return false;
+
+    try {
+      const url = new URL(uri);
+      return (
+        url.protocol === 'https:' &&
+        url.username === '' &&
+        url.password === '' &&
+        url.hostname.endsWith('.preview.example.com') &&
+        url.port === '' &&
+        url.pathname === '/api/auth/callback' &&
+        url.search === ''
+      );
+    } catch {
+      return false;
+    }
+  },
+})
+```
+
+The early `defaultResult` return preserves registered URI and native loopback behavior. To restrict those defaults, check `defaultResult` together with your additional policy. To replace them, return the result of your own validation without using `defaultResult`.
+
+<Callout type="warn">
+  Custom acceptance relaxes the [exact redirect URI matching required by OAuth security guidance](https://www.rfc-editor.org/rfc/rfc9700.html#section-2.1). Use it only for callback hosts you control, and ensure untrusted contributors cannot deploy a callback under an accepted hostname. The example assumes only trusted clients can register its production callback URI. If untrusted clients can register arbitrary URIs, membership in `registeredUris` does not prove client ownership.
+
+  For newly accepted web callbacks, pin the HTTPS scheme, hostname suffix, port, path, and query. Avoid broad patterns such as `*` or `*.com`. Preserve the built-in checks for native callbacks unless you intend to replace them. The provider rejects malformed URIs, fragments, credentials, and `javascript:`, `data:`, or `vbscript:` schemes before the callback can accept them.
+
+  The callback also decides whether early authorization errors may be redirected to the requested `redirect_uri` ([RFC 6749 §4.1.2.1](https://www.rfc-editor.org/rfc/rfc6749#section-4.1.2.1)). On rejection or exception, errors go to the server error page.
+</Callout>
+
+<Callout type="info">
+  If you use [pairwise subject identifiers](/docs/plugins/oauth-provider#pairwise-subject-identifiers), the sector identifier comes from the client's first registered redirect URI. Every preview or tenant host accepted for that client therefore uses the same `sub`. `sector_identifier_uri` is not supported. If tenants need distinct subject identifiers, register separate clients with distinct redirect URI hosts.
+</Callout>
 
 ### Claims
 
@@ -1268,6 +1397,34 @@ oauthProvider({
   },
 })
 ```
+
+#### Client-Specific Access Token Claims
+
+Use an `extensions[].claims.accessToken` contributor when a claim depends on the client a token is issued to. `customAccessTokenClaims` receives only the client's `metadata`, while a contributor receives the full `client` record, including its `clientId` and `referenceId`.
+
+This example adds the client's organization to tokens for one API. It assumes [`clientReference`](#organizations) assigns each client to an organization, and that clients are linked to the API resource, for example with `resources` on [`adminCreateOAuthClient`](#resources):
+
+```ts title="auth.ts"
+const apiResource = "https://api.example.com";
+
+oauthProvider({
+  resources: [apiResource],
+  extensions: [{
+    claims: {
+      accessToken: ({ client, resources }) => {
+        if (!resources?.includes(apiResource) || !client.referenceId) return {};
+        return { "https://example.com/org": client.referenceId };
+      },
+    },
+  }],
+})
+```
+
+`client.referenceId` is the client's owner, set at registration by `clientReference` or by an [initial access token](#dynamic-client-registration) during protected dynamic registration. It is not the top-level `referenceId` that both callbacks also receive, which is the consent reference from `postLogin.consentReferenceId`.
+
+Opaque-token introspection re-derives contributor claims without `grantType` or `sessionId`, so base any claim needed at introspection on the client, scopes, and resources. `customAccessTokenClaims` and per-resource `customClaims` override a contributor claim with the same name; see [Claim precedence](#claim-precedence).
+
+An organization claim does not prove that the client is still connected. A JWT keeps its claims until it expires, so a resource server that must react to a disabled client right away should introspect the token, which reports tokens of disabled clients as inactive.
 
 #### Custom Token Response Fields
 
@@ -1577,6 +1734,8 @@ To set user-specific permissions and roles on tokens see [Claims](#claims).
 
 To determine whether a logged in user has the ability to perform specific actions in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or `clientReference`.
 
+The callback can only deny an action. Client CRUD still checks ownership after the callback, so returning `true` cannot give a user access to a client owned by another user or another `clientReference`. The one exception is scope configuration on another owner's client through `adminUpdateOAuthClient`: when the update changes only `client_credentials_scopes`, the callback's `update` and `configure-client-credentials-scopes` decisions authorize it without an ownership check.
+
 The following is a basic example that allows all OAuth Client CRUD actions for organization owners assuming ordinary users cannot create clients:
 
 ```ts title="auth.ts"
@@ -1587,6 +1746,28 @@ oauthProvider({
       headers,
     });
     return member.role === 'owner';
+  },
+})
+```
+
+For actions on an existing client (`read`, `update`, `delete`, `rotate`, and `configure-client-credentials-scopes`), the callback also receives `clientId`. It is absent for `create`, `list`, and scope configuration during creation. `clientId` is the `client_id` from the request, so the client may not exist and the value proves nothing about ownership.
+
+Use `clientId` to restrict individual clients among users who share a `clientReference`, such as the members of an organization. In this example, every member can create, list, and read the organization's clients, but only a client's maintainers can change it or configure its scopes. `getClientMaintainers` stands for your own lookup:
+
+```ts title="auth.ts"
+oauthProvider({
+  clientReference: ({ session }) => {
+    return (session?.activeOrganizationId as string | undefined) ?? undefined;
+  },
+  clientPrivileges: async ({ action, user, clientId }) => {
+    if (!user) return false;
+    if (action === "create" || action === "list" || action === "read") {
+      return true;
+    }
+    // Scope configuration during creation has no client ID, so deny it here.
+    if (!clientId) return false;
+    const maintainers = await getClientMaintainers(clientId);
+    return maintainers.includes(user.id);
   },
 })
 ```
@@ -1814,6 +1995,7 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
   **Limitations:**
 
   * `sector_identifier_uri` is not yet supported. All `redirect_uris` for a pairwise client must share the same host. Clients with redirect URIs on different hosts will be rejected at registration.
+  * Pairwise clients cannot use custom-scheme redirect URIs that include a host, such as `app://rp.example.com/callback`. Any app can register a custom scheme, so that host does not identify the client.
   * `pairwiseSecret` must be at least 32 characters long.
   * Rotating `pairwiseSecret` will change all pairwise `sub` values, breaking existing RP sessions. Treat this secret as permanent once set.
 </Callout>
@@ -2304,7 +2486,7 @@ export const oauthConsentTableFields = [
 
 Table Name: `oauthClientAssertion`
 
-Records each `private_key_jwt` client assertion `jti` so it can only be used once. The row id is a digest of the per-client assertion identifier, so a replayed or concurrent assertion collides on the primary key and the database rejects it atomically, even across multiple server processes. A row keeps blocking its id until deleted; `expiresAt` marks when removal is safe, because the assertion it guards has already expired. No scheduled job prunes these rows, so remove expired rows with your own cleanup if the table grows.
+Records each `private_key_jwt` client assertion `jti` so it can only be used once. The row id is a digest of the per-client assertion identifier, so a replayed or concurrent assertion collides on the primary key and the database rejects it atomically, even across multiple server processes. With `advanced.database.generateId: "uuid"` the digest is formatted as a UUID. This check needs string ids: with `"serial"`, the digest cannot be stored as the id and Better Auth logs a warning. A row keeps blocking its id until deleted; `expiresAt` marks when removal is safe, because the assertion it guards has already expired. No scheduled job prunes these rows, so remove expired rows with your own cleanup if the table grows.
 
 export const oauthClientAssertionTableFields = [
   {

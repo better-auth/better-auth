@@ -1,5 +1,31 @@
 # @better-auth/stripe
 
+## 1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11347](https://github.com/better-auth/better-auth/pull/11347) [`f95d5f1`](https://github.com/better-auth/better-auth/commit/f95d5f1c2ccb7f96b189fdb7bc6cfe8d0044d607) Thanks [@rwieruch](https://github.com/rwieruch)! - Fix automatic seat synchronization after an organization cancels and resubscribes, so member changes update the active or trialing subscription even when canceled subscriptions remain in its history.
+
+## 1.7.5
+
+## 1.7.4
+
+## 1.7.3
+
+## 1.7.2
+
+## 1.7.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#9531](https://github.com/better-auth/better-auth/pull/9531) [`75ca6a4`](https://github.com/better-auth/better-auth/commit/75ca6a458547b5c0d60fe9ac86afaf71fc80ba3d) Thanks [@bytaesu](https://github.com/bytaesu)! - The `onSubscriptionCancel` callback's `event` parameter is now required, consistent with the other subscription lifecycle callbacks. Update your callback to declare `event` as a required parameter and remove any `undefined` guards around it.
+
+## 1.7.0-rc.6
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4
@@ -67,6 +93,30 @@
   - @better-auth/core@1.7.0-beta.4
 
 ## 1.7.0-beta.3
+
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+  - better-auth@1.6.30
+
+## 1.6.29
+
+### Patch Changes
+
+- Updated dependencies [[`e6e1b4e`](https://github.com/better-auth/better-auth/commit/e6e1b4e8146a84d2a2c5fe2c497c81d03dfc2ad3)]:
+  - better-auth@1.6.29
+  - @better-auth/core@1.6.29
+
+## 1.6.28
+
+### Patch Changes
+
+- Updated dependencies [[`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b), [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982)]:
+  - better-auth@1.6.28
+  - @better-auth/core@1.6.28
 
 ## 1.6.27
 

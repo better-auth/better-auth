@@ -1,5 +1,81 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.7
+
+### Patch Changes
+
+- [#11331](https://github.com/better-auth/better-auth/pull/11331) [`35d7cd3`](https://github.com/better-auth/better-auth/commit/35d7cd389220f99cfc98ac699e6a42b48313a740) Thanks [@gitmotion](https://github.com/gitmotion)! - Drizzle `incrementOne` now rejects updates when a concurrent write makes the original `where` condition false. This prevents stale updates and counter limits from being exceeded on PostgreSQL. Both the default adapter and `relations-v2` retain the single-row limit.
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+## 1.7.5
+
+### Patch Changes
+
+- [#11263](https://github.com/better-auth/better-auth/pull/11263) [`e18bc83`](https://github.com/better-auth/better-auth/commit/e18bc83172dca1804f0c5c3eff41d65e2849c557) Thanks [@bytaesu](https://github.com/bytaesu)! - Defer Drizzle relation metadata access until a relational query runs, preserving lazy database initialization during application builds.
+
+## 1.7.4
+
+### Patch Changes
+
+- [#11213](https://github.com/better-auth/better-auth/pull/11213) [`b905bfe`](https://github.com/better-auth/better-auth/commit/b905bfe3d97de3c88fc31f7f2820531702df583e) Thanks [@bytaesu](https://github.com/bytaesu)! - Run schema validation for the Drizzle Relations v2 adapter, including configurations that provide only relations, so schema mismatches are reported during initialization.
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11179](https://github.com/better-auth/better-auth/pull/11179) [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate Drizzle schema objects and generated Prisma client models during initialization, including in production, and report mismatches with guidance for fixing them. These checks do not query the database and cannot detect unapplied migrations.
+
+  For Prisma clients whose model metadata omits nullability, `auth generate` reports required fields that Better Auth never writes by reading the existing Prisma schema. Set `advanced.database.validateSchema: false` to disable runtime validation.
+
+## 1.7.2
+
+### Patch Changes
+
+- [#10859](https://github.com/better-auth/better-auth/pull/10859) [`ea77118`](https://github.com/better-auth/better-auth/commit/ea77118d4e00f69ddffed4fb42dfedc08594ea9e) Thanks [@bytaesu](https://github.com/bytaesu)! - Reject missing Drizzle schema fields before building compound `where` clauses, preventing malformed SQL when an application schema is out of date.
+
+- [#10941](https://github.com/better-auth/better-auth/pull/10941) [`5aea9f7`](https://github.com/better-auth/better-auth/commit/5aea9f77284dfb7b187e8e7bec0cebd4b8834123) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent one-to-one joins from failing in Drizzle Relations v1 and v2 when `usePlural` is enabled. Resolve generated and legacy relation keys from Drizzle runtime metadata, including Relations v2 setups without an adapter schema.
+
+## 1.7.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+- [#7169](https://github.com/better-auth/better-auth/pull/7169) [`5d38b13`](https://github.com/better-auth/better-auth/commit/5d38b138c3c73eb06fe247ef6631c66e86ccc92b) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add a `schemaName` option to the Drizzle Relations v2 adapter config. When set on PostgreSQL, schema generation now emits a `pgSchema("...")` namespace and uses namespaced table definitions (for example, `authSchema.user(...)`), matching the v1 CLI generator behavior.
+
+- [#9489](https://github.com/better-auth/better-auth/pull/9489) [`ea06c5a`](https://github.com/better-auth/better-auth/commit/ea06c5a71f448dfc600f1c2f7b0de732730c79cd) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add a new `@better-auth/drizzle-adapter/relations-v2` entry point for projects using Drizzle Relations v2. The schema generator now emits relations using `defineRelationsPart` so the generated auth schema can be merged alongside your app's relations without changing your database structure.
+
+- [#10359](https://github.com/better-auth/better-auth/pull/10359) [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Database joins have moved out of `experimental` into a stable option at `advanced.database.joins` (default: `false`).
+
+  If you previously set `experimental: { joins: true }`, update your config to:
+
+  ```ts
+  advanced: {
+    database: {
+      joins: true,
+    },
+  }
+  ```
+
+  Adapters that support native joins use them when enabled. If an adapter cannot return joined data for a query, Better Auth falls back to additional queries and combines the results. Drizzle and Prisma users should ensure their schema includes the required relations (`npx auth@latest generate`).
+
+### Patch Changes
+
+- [#10770](https://github.com/better-auth/better-auth/pull/10770) [`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Export the generated `pgSchema` binding so drizzle-kit can emit `CREATE SCHEMA` for custom PostgreSQL namespaces.
+
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10770](https://github.com/better-auth/better-auth/pull/10770) [`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Export the generated `pgSchema` binding so drizzle-kit can emit `CREATE SCHEMA` for custom PostgreSQL namespaces.
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4
@@ -74,6 +150,27 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+
+## 1.6.29
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.29
+
+## 1.6.28
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.28
 
 ## 1.6.27
 

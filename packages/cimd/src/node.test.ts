@@ -1,20 +1,26 @@
 import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	lookup: vi.fn(),
 	request: vi.fn(),
 }));
 
-vi.mock("node:dns/promises", () => ({ lookup: mocks.lookup }));
-vi.mock("node:https", () => ({ request: mocks.request }));
+vi.mock(import("node:dns/promises"), () => ({ lookup: mocks.lookup }));
+vi.mock(import("node:https"), () => ({ request: mocks.request }));
 
 import { fetchClientMetadataResource } from "./node";
+
+interface MockLookupAddress {
+	address: string;
+	family: number;
+}
 
 interface MockResponseOptions {
 	body?: string;
 	headers?: Record<string, string>;
+	lookupOptions?: { all?: boolean };
 	status?: number;
 }
 
@@ -25,11 +31,11 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 			requestOptions: {
 				lookup: (
 					hostname: string,
-					options: object,
+					lookupOptions: { all?: boolean },
 					callback: (
 						error: Error | null,
-						address: string,
-						family: number,
+						result: string | MockLookupAddress[],
+						family?: number,
 					) => void,
 				) => void;
 			},
@@ -40,25 +46,35 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 				destroy: (error?: Error) => void;
 			};
 			request.end = () => {
-				requestOptions.lookup("client.example.com", {}, (error) => {
-					if (error) {
-						request.emit("error", error);
-						return;
-					}
-					const response = Readable.from([
-						Buffer.from(options.body ?? "metadata"),
-					]) as Readable & {
-						headers: Record<string, string>;
-						statusCode: number;
-						statusMessage: string;
-					};
-					response.headers = options.headers ?? {
-						"content-type": "application/json",
-					};
-					response.statusCode = options.status ?? 200;
-					response.statusMessage = "OK";
-					onResponse(response);
-				});
+				requestOptions.lookup(
+					"client.example.com",
+					options.lookupOptions ?? {},
+					(error, result) => {
+						if (error) {
+							request.emit("error", error);
+							return;
+						}
+
+						if (options.lookupOptions?.all && !Array.isArray(result)) {
+							request.emit("error", new TypeError("Invalid IP address"));
+							return;
+						}
+
+						const response = Readable.from([
+							Buffer.from(options.body ?? "metadata"),
+						]) as Readable & {
+							headers: Record<string, string>;
+							statusCode: number;
+							statusMessage: string;
+						};
+						response.headers = options.headers ?? {
+							"content-type": "application/json",
+						};
+						response.statusCode = options.status ?? 200;
+						response.statusMessage = "OK";
+						onResponse(response);
+					},
+				);
 			};
 			request.destroy = (error) => {
 				if (error) request.emit("error", error);
@@ -67,11 +83,6 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 		},
 	);
 }
-
-beforeEach(() => {
-	mocks.lookup.mockReset();
-	mocks.request.mockReset();
-});
 
 describe("Node CIMD metadata transport", () => {
 	it("rejects private DNS answers before opening a connection", async () => {
@@ -148,6 +159,26 @@ describe("Node CIMD metadata transport", () => {
 			verbatim: true,
 		});
 		expect(pinnedAddress).toBe("93.184.216.34");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10810
+	 */
+	it("fetches metadata when Node requests all addresses", async () => {
+		mocks.lookup.mockResolvedValue([
+			{ address: "93.184.216.34", family: 4 },
+			{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+		]);
+		mockHttpsResponse({
+			body: "ok",
+			lookupOptions: { all: true },
+		});
+
+		const response = await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+		);
+
+		expect(await response.text()).toBe("ok");
 	});
 
 	it("returns redirect responses without following them", async () => {
